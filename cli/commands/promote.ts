@@ -1,0 +1,170 @@
+// cli/commands/promote.ts — Comparing a candidate against what is in use, and adopting it.
+//
+// Split out of a 1,700-line entry point. The shared ground — session, run transitions,
+// the provider factory, host selection — lives in ../runtime.js and is imported, so a
+// command file reads as one job rather than as a slice of everything.
+
+import type { Budget } from '../../core/inference/client.js';
+import { foldRepairs } from '../../core/architecture/repair-memory.js';
+import { compareOnRule, describeComparison } from '../../core/fidelity/run-observer.js';
+import { rankByObserver, describeRanking } from '../../core/fidelity/rule-observer.js';
+import * as store from '../../core/state/store.js';
+import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
+
+import { DATA, die, argv, flag, MODEL, clientFor , numericFlag} from '../runtime.js';
+
+// ── promote ─────────────────────────────────────────────────────────────────────────────────
+/**
+ * SAY NO TO A CANDIDATE, AND HAVE IT REMEMBERED.
+ *
+ * Without this, a rejection is a thing that happens in a person's head and leaves no trace — so the
+ * only outcomes the system can ever learn from are the ones where it was right. `reject` is what
+ * makes the g9 case (proposed, built, evaluated, rejected) something the loop knows rather than
+ * something a transcript records.
+ */
+export function reject(): void {
+  const name = flag('--skill') ?? die('--skill required');
+  const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const rec = foldRepairs(store.readEvents(L)).find((r) => r.candidateSkillVersionHash === cand)
+    ?? die(`no repair produced ${cand} for ${name}, so there is nothing to reject.`);
+  if (rec.outcome !== 'PENDING') die(`${cand} was already ${rec.outcome.toLowerCase()}. That decision stands; this command does not overturn it.`);
+
+  const note = flag('--why') ?? null;
+  const generations = store.listInvocations(L).filter((r) => r.skillVersionHash === cand).length;
+  const at = new Date().toISOString();
+  store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId: rec.repairId, outcome: 'REJECTED',
+    evaluationBasis: { generations: Math.max(generations, 1), instrument: 'HUMAN_EYE', orderInvariant: null },
+    at, note });
+
+  console.log(`Rejected ${cand} — ${rec.requirementId}: ${rec.from} -> ${rec.to}.`);
+  console.log(`  Recorded against ${rec.evidenceBasis.missContexts} observed miss(es) and ${Math.max(generations, 1)} generation(s).`);
+  console.log(`\nThis will not be retried on evidence no stronger than that. It is NOT ruled out: one generation`);
+  console.log(`is stochastic, so more independent misses or a better instrument would make it a new question.`);
+  if (!note) console.log(`\n  Tip: --why "<what was wrong>" is worth ten seconds — it is what you read next time.`);
+
+  // ── A DIFFERENT STATEMENT, WHICH HAS TO BE MADE DELIBERATELY ────────────────────────────────
+  //
+  // "This candidate is worse" and "never use self-checks for this rule" are not the same claim, and
+  // only the first was made by rejecting. The second is an architectural constraint carrying your
+  // authority, so it is a separate flag that says out loud what is being asserted — never something
+  // the system infers from a rejection.
+  if (argv.includes('--never-this-transition')) {
+    const why = note ?? die('--never-this-transition needs --why: a permanent architectural rule should say why.');
+    store.appendEvent(L, { kind: 'TRANSITION_FORBIDDEN', requirementId: rec.requirementId,
+      from: rec.from, to: rec.to, by: 'expert', reason: why, at });
+    console.log(`\nAND you ruled the move out entirely: ${rec.requirementId} will never move ${rec.from} -> ${rec.to}.`);
+    console.log(`That is a decision about your architecture rather than about this candidate, so no amount of`);
+    console.log(`evidence reopens it. It is yours to withdraw.`);
+  }
+
+  console.log(`\nYour active version is unchanged, and so is your standard.`);
+}
+
+/**
+ * ORDER TWO VERSIONS FOR YOUR ATTENTION. DECIDES NOTHING.
+ *
+ * `improve` ends by telling you to run the candidate and compare — which until now meant reading two
+ * outputs side by side and forming an impression. This does the reading, on the ONE rule the repair
+ * was for, blind and twice with the sides exchanged.
+ *
+ * It cannot promote and does not try. The instrument has never been checked against the user's own
+ * judgement, so its preference is one model's opinion; the only thing the second run establishes is
+ * that it is a STABLE opinion rather than a reading of which text came first.
+ */
+export async function compare(): Promise<void> {
+  const name = flag('--skill') ?? die('--skill required');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
+  const rule = flag('--rule') ?? die('--rule <requirementId> required — a comparison is ON something, and "which is better overall" is the question that rewards fluency.');
+
+  const runs = store.listInvocations(L);
+  const candRun = runs.find((r) => r.skillVersionHash === cand)
+    ?? die(`no invocation of ${cand}. Run it first:\n  atelier invoke --skill ${name} --candidate ${cand} "<the same task>"`);
+  // the champion run must be THE SAME TASK, or the comparison is between two different questions
+  const champRun = runs.find((r) => r.skillVersionHash !== cand && r.inputHash === candRun.inputHash)
+    ?? die(`no run of your current version on the same task. A comparison across different tasks compares the tasks.`);
+
+  const sv = store.getSkillVersion(L, cand) ?? die(`no SkillVersion ${cand}.`);
+  const std = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
+  const req = std.requirements.find((r) => r.requirementId === rule)
+    ?? die(`${rule} is not in this standard. Rules: ${std.requirements.map((r) => r.requirementId).join(', ')}`);
+
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.3), maxCalls: numericFlag('--max-calls', 8) };
+  const client = clientFor(flag('--model') ?? MODEL);
+  const c = await compareOnRule(client, budget, candRun.invocationId, candRun.input, req.statement,
+    champRun.output, candRun.output);
+
+  console.log(`\n${describeComparison(c, req.statement)}`);
+  // The ranking's first key is a rule-specific proxy, and Atelier has none — so the order is the
+  // observer's alone. Printed anyway because the half that still bites without a proxy is the tie
+  // report, and a tie at the top means any pick from it is arbitrary.
+  const ranked = rankByObserver([
+    { candidateId: `candidate:${cand.slice(0, 8)}`, result: c.result, proxy: 'UNKNOWN' },
+    { candidateId: `current:${champRun.skillVersionHash.slice(0, 8)}`,
+      result: c.result === 'CANDIDATE_COMPLIES_BETTER' ? 'CHAMPION_COMPLIES_BETTER'
+        : c.result === 'CHAMPION_COMPLIES_BETTER' ? 'CANDIDATE_COMPLIES_BETTER' : c.result,
+      proxy: 'UNKNOWN' },
+  ]);
+  if (c.orderInvariant) console.log(`${describeRanking(ranked)}\n`);
+  console.log(`($${c.costUsd.toFixed(4)})  You decide:  atelier promote --skill ${name} --candidate ${cand}`);
+}
+
+/**
+ * ADOPT A CANDIDATE. MOVES A POINTER. MINTS NOTHING.
+ *
+ * If promotion built anything, the person would be adopting an artifact they never saw — and the
+ * provenance bug Atelier exists to prevent would live in the adoption step itself. So promote reads
+ * an existing SkillVersion and writes `active.json`. That is all it does.
+ *
+ * IT REFUSES A CANDIDATE NOBODY RAN. "The exact package evaluated is the exact package promoted" is
+ * only checkable if an evaluation happened, and the record of an evaluation is an InvocationRecord
+ * against that SkillVersion. Without one there is no evidence the person saw anything, and adopting
+ * on the strength of a diff they were shown in a terminal is not the same claim.
+ */
+export function promote(): void {
+  const name = flag('--skill') ?? die('--skill required');
+  const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const sv = store.getSkillVersion(L, cand) ?? die(`no SkillVersion ${cand} for ${name}.`);
+  const prevActive = store.getActive(L);
+
+  const runs = store.listInvocations(L).filter((r) => r.skillVersionHash === cand);
+  if (!runs.length) {
+    die(`${cand} has never been invoked. Promotion adopts what a person evaluated, and there is no record of anyone running this. Do that first:\n  atelier invoke --skill ${name} --candidate ${cand} "<the same task>"`);
+  }
+  // AND NOT ONLY BY THE PROCESS THAT MADE IT. "Someone ran it" was satisfied by a search harness
+  // invoking its own candidate — the optimizer's account of its own work, standing in for evidence a
+  // person saw something.
+  if (selfEvaluatedOnly(runs.map((r) => r.provenance))) {
+    die(`PROMOTION REFUSED: every run of ${cand} was made by the optimizer evaluating its own candidate.\n`
+      + `That is the process that produced it reporting on itself. Run it yourself and look at the output:\n`
+      + `  atelier invoke --skill ${name} --candidate ${cand} "<the same task>"`);
+  }
+  // the strongest available account anchors the package-identity check, not whichever came back first
+  const evaluated = rankForPromotion(runs)[0];
+  if (evaluated.servedPackageHash !== sv.materializedHash) {
+    die(`PROMOTION REFUSED: invocation ${evaluated.invocationId} served package ${evaluated.servedPackageHash} but ${cand} claims ${sv.materializedHash}. The thing that was evaluated is not the thing being promoted.`);
+  }
+
+  const prevSv = prevActive ? store.getSkillVersion(L, prevActive) : null;
+  if (prevSv && prevSv.standardVersionHash !== sv.standardVersionHash) {
+    die(`PROMOTION REFUSED: ${cand} is bound to StandardVersion ${sv.standardVersionHash} but ${prevActive} is bound to ${prevSv.standardVersionHash}. Promoting would silently move what good means; that is not what this command does.`);
+  }
+
+  store.setActive(L, cand);
+  const promotedRepair = foldRepairs(store.readEvents(L)).find((r) => r.candidateSkillVersionHash === cand && r.outcome === 'PENDING');
+  if (promotedRepair) {
+    store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId: promotedRepair.repairId, outcome: 'PROMOTED',
+      evaluationBasis: { generations: runs.length, instrument: 'HUMAN_EYE', orderInvariant: null },
+      at: new Date().toISOString(), note: null });
+  }
+  store.appendEvent(L, { kind: 'PROMOTED', at: new Date().toISOString(), skillVersionHash: cand,
+    supersededActive: prevActive, evaluatedInvocation: evaluated.invocationId, packageHash: sv.materializedHash });
+
+  console.log(`\nPromoted ${cand}.`);
+  console.log(`  evaluated on   ${evaluated.invocationId}  (package ${evaluated.servedPackageHash})`);
+  console.log(`  promoted       package ${sv.materializedHash}  — the same one, which is the point`);
+  console.log(`  StandardVersion ${sv.standardVersionHash}  — unchanged`);
+  console.log(`  previous       ${prevActive ?? '(none)'} remains in history:  atelier rollback --to ${prevActive ?? ''}`);
+}

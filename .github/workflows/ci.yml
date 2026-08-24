@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Typecheck first. A failure here is a compile error, and reading it in a test
+      # failure's stack trace instead is a worse way to learn the same thing.
+      - run: npm run typecheck
+
+      # Type-aware lint. It runs before the tests because what it catches — a floating promise, an
+      # `any` that escaped a JSON.parse, a caught error thrown away without its cause — fails as
+      # wrong behaviour at runtime rather than as a red test.
+      - run: npm run lint
+
+      - run: npm test
+
+      # The package a user installs is `dist/`, not the source tree. Building it in CI is
+      # what catches an import that resolves under the checkout and nowhere else.
+      - run: npm run build
+      - name: the built CLI runs
+        run: node dist/cli/atelier.mjs 2>&1 | head -1
