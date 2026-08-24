@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2023", "module": "NodeNext", "moduleResolution": "NodeNext",
+    "strict": true, "declaration": false, "outDir": "./dist", "rootDir": ".",
+    // Beyond `strict`. Each of these was measured at zero cost on this tree before being turned
+    // on, and `noUnusedLocals` found 218 unused imports left behind when the CLI monolith was
+    // split — every command file had inherited the whole original import list, so each one
+    // appeared to depend on the entire system.
+    "noUnusedLocals": true, "noUnusedParameters": true,
+    "noImplicitOverride": true, "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true, "esModuleInterop": true, "allowImportingTsExtensions": false
+  },
+  "include": ["core/**/*.ts", "cli/**/*.mts", "cli/**/*.ts", "renderers/**/*.ts", "adapters/**/*.ts", "providers/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["dist"]
+}

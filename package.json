@@ -1,0 +1,65 @@
+{
+  "name": "@yannickyamo/atelier",
+  "version": "0.1.0",
+  "description": "Turn expert judgment into an executable AI skill. A master's standard, executed by other hands.",
+  "type": "module",
+  "bin": {
+    "atelier": "./dist/cli/atelier.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "build:plugins": "tsx plugins/build-plugins.mts",
+    "pretest": "npm run build:plugins",
+    "acceptance:carriers": "tsx scripts/carrier-acceptance.mts",
+    "ablation:carrier": "tsx scripts/ablation-carrier.mts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yannickYamo/atelier.git"
+  },
+  "homepage": "https://github.com/yannickYamo/atelier#readme",
+  "bugs": {
+    "url": "https://github.com/yannickYamo/atelier/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "skills",
+    "llm",
+    "claude",
+    "codex",
+    "expert-systems",
+    "prompt-compiler",
+    "agent-skills"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.9.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^3.2.4"
+  }
+}
