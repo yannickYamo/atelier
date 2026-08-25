@@ -37,6 +37,7 @@
 
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Requirement } from '../state/canonical-state.js';
+import { assertRealizationGraph } from '../state/canonical-state.js';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
@@ -145,6 +146,11 @@ export const roleFor = (r: Requirement): GateRole => {
   // report what you find, leave the draft alone. That is a usable preview and it cannot be mistaken
   // for a ratified skill, without adding a state to keep consistent.
   if (!isConfirmed(r)) return 'OBSERVE';
+  // A REALIZATION IS NEVER AN OBLIGATION. The decision it realizes carries that, and enforcing both
+  // would issue two commands for one choice. Stated HERE rather than in the component branch, because
+  // a rule that lives in one function and is restated in five places will be wrong in at least one of
+  // them — which this file has already paid for once, in the other direction.
+  if (r.realizes) return 'OBSERVE';
   switch (r.materiality) {
     // The expert said an output breaking this is not thereby worse. It may be shown; it may not bind.
     case 'PREFERRED':
@@ -191,6 +197,31 @@ export function componentFor(r: Requirement): ArchitectureComponent {
       gateRole: roleFor(r),
       rationale: 'observed in the work and confirmed by nobody — shown as an instance of what the '
         + 'author does, never as an instruction. Ratify it and it can begin to bind.',
+    };
+  }
+
+  // ── A LINKED REALIZATION IS EVIDENCE OF FORM, NOT A SECOND COMMAND ───────────────────────
+  //
+  // Read before materiality, because the RELATION decides what this is. The parent decision carries
+  // the obligation; this carries how the author characteristically lands it. Compiling both as
+  // instructions would issue two commands for one choice and weight the form equally with the
+  // decision it serves — which is how "end the beat on a short declarative" stops being taste and
+  // becomes a rule about sentence length.
+  //
+  // EXAMPLE regardless of materiality, and OBSERVE regardless of it too. For form, showing beats
+  // telling: a paragraph describing cadence is a worse carrier of cadence than one instance of it.
+  // The author still says how tightly the form binds — that is `realizationTolerance`, and it is the
+  // question the packet asks about a realization instead of asking whether it is REQUIRED.
+  if (r.realizes) {
+    return {
+      id: `realizes:${r.realizes}:${r.requirementId}`,
+      carries: [r.requirementId],
+      carrier: 'EXAMPLE',
+      sensor: 'NONE',
+      gateRole: roleFor(r),
+      rationale: `one way the author realizes ${r.realizes}. Shown as evidence of form, not issued as a `
+        + `second instruction — ${r.realizes} is the obligation and this is how it characteristically `
+        + `lands${r.realizationTolerance ? `; the author marked the form ${r.realizationTolerance}` : ''}.`,
     };
   }
 
@@ -310,6 +341,9 @@ export function componentFor(r: Requirement): ArchitectureComponent {
  */
 export function compileArchitecture(v: StandardVersion): SkillArchitecture {
   assertNothingRejectedIsServed(v);
+  // The graph is checked before anything is compiled: a realization pointing at a missing rule, or a
+  // chain, is a malformed standard and must not reach a package.
+  assertRealizationGraph(v.requirements);
   const components = v.requirements.map(componentFor);
   return {
     architectureHash: sha(JSON.stringify(components.map((c) => [c.id, c.carries, c.carrier, c.sensor, c.gateRole]))),

@@ -135,6 +135,26 @@ export interface Requirement {
   readonly materiality: Materiality | null;
   readonly realizationTolerance: RealizationTolerance | null;
   /**
+   * THE DECISION THIS IS ONE WAY OF CARRYING OUT, when it is a way of carrying out another rule.
+   *
+   * Discovery finds expressive taste at roughly the rate it finds judgmental taste — form, figure,
+   * rhythm, register, pronoun discipline. What it could not do was say that one of those is HOW
+   * another one lands. Read flat, "end the beat on a short declarative that renames the thing" is a
+   * fussy habit and gets rejected. Read as the way a concrete scene is landed, it is the more
+   * interesting half of the pair. That is not a discovery failure; the ratification packet lost it.
+   *
+   * ASSERTED, NEVER INFERRED SILENTLY. Deriving this edge from a model was measured across three
+   * independent runs on one corpus: one rule was given three different parents in three runs, a
+   * standalone preference was captured into a parent twice, and the graph produced a chain the design
+   * forbids. A proposer may offer an edge with its run-stability; only the author's confirmation makes
+   * it structure. Discovery grants no authority, and that rule does not stop applying because the
+   * object being discovered is a relationship.
+   *
+   * `null` is BOTH "a latent decision" and "an expressive preference that stands on its own". Those
+   * are distinguished by materiality and tolerance, which they already carry, not by a third state.
+   */
+  readonly realizes?: string | null;
+  /**
    * A machine-checkable shape this requirement demands of the output, when it demands one.
    *
    * Present only where the requirement genuinely constrains STRUCTURE rather than judgment. Most do
@@ -166,6 +186,37 @@ export type Materiality =
 
 /** Whether the exact realization is the point, or only what it achieves. */
 export type RealizationTolerance = 'STRICT' | 'FUNCTIONALLY_EQUIVALENT' | 'FLEXIBLE';
+
+/**
+ * A realization points at a rule that exists, and never at itself or at another realization.
+ *
+ * One level, deliberately. The measured failure mode when this was derived automatically was chained
+ * edges — A realizes B while B realizes C — which is a hierarchy nobody authored and nobody can
+ * ratify. If a real corpus ever demands depth, that is a decision with evidence behind it; today it
+ * would be graph theory solved in advance of a problem.
+ */
+export function assertRealizationGraph(reqs: readonly Requirement[]): void {
+  const byId = new Map(reqs.map((r) => [r.requirementId, r]));
+  for (const r of reqs) {
+    if (!r.realizes) continue;
+    if (r.realizes === r.requirementId) {
+      throw new Error(`REALIZATION: ${r.requirementId} cannot realize itself.`);
+    }
+    const parent = byId.get(r.realizes);
+    if (!parent) {
+      throw new Error(
+        `REALIZATION: ${r.requirementId} realizes "${r.realizes}", which is not in this standard. `
+        + 'A realization without its decision is a form with nothing to serve.');
+    }
+    if (parent.realizes) {
+      throw new Error(
+        `REALIZATION: ${r.requirementId} realizes ${parent.requirementId}, which itself realizes `
+        + `${parent.realizes}. Chains are not represented — a realization attaches to a decision, and `
+        + 'a decision stands on its own. Point it at the decision, or leave it independent.');
+    }
+  }
+}
+
 
 /**
  * 2. THE TARGET. Immutable. Editing mints a new version; it never amends this one.

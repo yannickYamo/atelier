@@ -65,6 +65,18 @@ export interface ProposedFactor {
   readonly readFrom: readonly string[];
   /** the proposer's own statement of what would show this factor ABSENT. Forces falsifiability. */
   readonly wouldBeAbsentIf: string;
+  /**
+   * A VERBATIM SPAN FROM THE WORK, showing the rule happening.
+   *
+   * The EXAMPLE carrier exists on the argument that showing beats telling, and until this field it had
+   * nothing to show: every compiled example carried the rule's DESCRIPTION, so a carrier whose whole
+   * purpose is demonstration was issuing a second sentence of instruction. It matters most for a
+   * realization — "end the beat on a short declarative that renames the thing" is a paraphrase of a
+   * form, and *"That silence is the product"* is the form.
+   *
+   * Empty when the proposer offered nothing locatable. Verbatim is checked, never trusted.
+   */
+  readonly quote: string;
 }
 
 export interface DiscoveryInput {
@@ -183,6 +195,7 @@ export function toHypotheses(
       description: f.description,
       constructScope: scope,
       appliesWhen: f.appliesWhen,
+      quote: f.quote,
       provenance: { proposedBy, fromGoldens: f.readFrom },
     },
     golden: input.observations.filter(o => o.proposedId === f.proposedId).map(o => o.observation),
