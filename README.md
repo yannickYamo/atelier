@@ -37,20 +37,36 @@ standard is frozen, Atelier can improve the implementation without quietly movin
 
 ## The problem
 
-Examples teach, but they leave the most important thing unsaid.
+Everyone in your company can name the person whose work is the standard. The strategy memo everyone
+copies. The code review that catches the thing nobody else sees. The contract that closes.
 
-Show a model four documents that all open with a concrete scene and it may learn:
+Nobody can say what that person actually does.
+
+Ask them and you get honest, useless answers. *I just know when a claim is earned.* *It depends.*
+*You'd see it if I showed you.* They are not being evasive. The judgment is real and it has never
+been written down, because it was never learned as rules. It accumulated.
+
+So it stays with them. It does not survive their calendar, their notice period, or the fourth person
+you hire. And when you hand their work to a model as examples, the model learns the wrong thing.
+
+Show it four documents that all open with a concrete scene and it learns:
 
 > Always open with a scene.
 
-The expert's actual decision may be:
+What the expert actually does is:
 
 > Use a concrete scene when an abstract mechanism needs to become tangible. Lead directly with the
 > decision when the reader already understands the context.
 
-The difference is not style. It is judgment, scope, and boundary.
+One of those is a rule. The other is a tic. The model cannot tell them apart, because **the examples
+show what the expert did and never show what they decided.** The condition is invisible. The boundary
+is invisible. The reason is invisible. You get a confident imitation with the judgment stripped out,
+and it fails in the exact place judgment was needed.
 
-This gap shows up anywhere two qualified people could make different, defensible choices and one team
+That is the replication problem, and it does not go away with a better model. A stronger model
+produces a more fluent imitation of the same missing thing.
+
+This is the gap anywhere two qualified people could make different defensible choices and one team
 needs those choices made consistently.
 
 | | the judgment that gets lost |
@@ -61,11 +77,16 @@ needs those choices made consistently.
 | **Research and diligence** | which evidence is decision-grade, what should stay uncertain, when a conclusion outruns the data |
 | **Writing** | what to foreground, what to omit, how directly to argue, where tone or form is part of the standard |
 
-The common failure is that the target is never made explicit. Prompts describe behaviour. Memories
-accumulate preferences. Optimizers improve against scores. Fine-tunes bury decisions in weights.
+Every approach to this problem loses the target somewhere. A prompt describes behaviour and cannot
+say when the behaviour stops applying. Memory accumulates preferences until nobody can say which ones
+define the standard. An optimizer improves against a score until the score becomes the objective. A
+fine-tune buries the decisions in weights where no one can read, argue with, or version them.
 
-Atelier starts from a different question. **What exactly does this expert mean by good, and who has the
-authority to change that definition?**
+They share one flaw. **None of them ever writes down what good means, so nothing can tell you when it
+has drifted.**
+
+Atelier starts somewhere else. What exactly does this expert mean by good, who has the authority to
+change that definition, and can I read it?
 
 ---
 
@@ -202,6 +223,54 @@ well supported.
 It also reports recurring behaviour that no candidate accounts for, and it distinguishes "nothing was
 found" from "this was not computed".
 
+### Taste is what you choose, and how you make the choice land
+
+Half of anyone's standard is judgment. The other half is expression, and most systems throw it away
+or copy it blindly.
+
+Atelier looks for both, and keeps the relationship between them. From one real run on a corpus of
+decision memos, two of the fourteen candidates were:
+
+```text
+p7   I drop in one concrete scene of a single user at a single moment
+     to carry the argument's weight, then leave it without elaboration.
+
+p12  When I use an image I end the beat on a short declarative that
+     renames the thing, so the emphasis lands on the reframing.
+```
+
+Read as two rules, p12 is a fussy habit about sentence length and you would reject it. It is not a
+rule. It is **how p7 lands**, and when you say so the pair becomes something a model can actually
+reproduce:
+
+```text
+DECISION          p7   make the abstract mechanism concrete through a scene
+                       REQUIRED
+
+  realized as     p12  end the beat on a short declarative that renames the thing
+                       FUNCTIONALLY_EQUIVALENT
+
+  observed        "They do not file a ticket. They close the tab.
+                   That silence is the product."
+```
+
+The decision carries the obligation. The realization carries the form. You are never asked whether a
+form is REQUIRED, because that question puts two commands on one choice. You are asked **how tightly
+the form binds**: STRICT if the exact realization is part of what you mean, FUNCTIONALLY_EQUIVALENT
+if another form doing the same work is fine, FLEXIBLE if it is characteristic and nothing turns on it.
+
+Expressive preferences that serve no deeper decision stay standalone. Not everything is a realization
+of something, and pretending otherwise is how a system over-intellectualizes style.
+
+**Atelier never infers this link on its own.** That was measured: asked to derive the relationships
+across three independent runs, a model gave one rule three different parents, captured a standalone
+preference into an unrelated one, and produced chains nobody authored. A machine may propose an edge.
+Only you make it structure.
+
+Every example the compiled skill receives is an anchored quote from your own work, checked verbatim
+against the piece it came from. Showing beats telling for form, and a description of a rhythm is not
+a rhythm.
+
 ---
 
 ## Human authority
@@ -233,6 +302,33 @@ STRICT · FUNCTIONALLY_EQUIVALENT · FLEXIBLE
 ```
 
 This is what stops a recurring habit from becoming a hard rule by accident.
+
+### When a rule needs something the runtime does not have
+
+Some rules depend on evidence as well as judgment. *Cite one counted observation from our own
+records* is a real standard and it cannot be followed honestly by a model with no records.
+
+Ask it anyway and you do not get a refusal. You get *"I pulled our last 200 tickets, 63% of them
+were…"* Specific, confident, in your voice, and invented. The rule was followed. The condition that
+makes following it truthful was absent.
+
+So a requirement can name what it needs, and the run stops before the model is asked to solve an
+impossible problem.
+
+```bash
+atelier invoke --skill my-skill "Should we approve two more support agents?"
+
+atelier: MISSING_REQUIRED_EVIDENCE — nothing was generated.
+
+  p2  [REQUIRED]  needs RECORDS("support-ticket-history")
+      rule: I cite one specific counted observation from our own records
+
+  Bind the source:   --with support-ticket-history=./tickets.csv
+```
+
+Nothing was spent, because the absence was knowable before the call. A rule you marked PREFERRED in
+the same position does not stop the run; the behaviour simply does not fire, and Atelier says so
+rather than dropping it silently.
 
 Public work keeps its provenance too. If you adopt a behaviour inferred from someone else's work,
 Atelier records that you adopted it. It does not pretend you ratified that person's standard on their
@@ -278,7 +374,7 @@ The compiler chooses the minimum implementation each ratified requirement needs.
 | `PROSE` | the model should hold the behaviour while it works |
 | `SELF_CHECK` | the model should inspect its own draft before finishing |
 | `EXAMPLE` | showing the behaviour is more faithful than stating it |
-| `OUTPUT_CONTRACT` | the runtime can enforce the shape directly — ask for one with a `shape` on a REQUIRED decision |
+| `OUTPUT_CONTRACT` | the runtime can enforce the shape directly. Ask for one with a `shape` on a REQUIRED decision |
 | `NONE` | the human decided the behaviour is not part of the standard |
 
 Alongside the package, never inside it:
@@ -292,6 +388,33 @@ The manifest records what the compiler emitted. Delivery is measured separately,
 surface that actually ran. **A file existing on disk is not evidence that a model consumed it.** That
 distinction is enforced, because a system can look correct on disk while serving something materially
 different to the model.
+
+### Which parts of your standard this system can keep honest
+
+Not all of it, and `atelier build` tells you which is which instead of implying it can watch
+everything.
+
+```text
+How this standard can be maintained
+
+  p1    I open by rejecting the question's premise rather than answering it
+          observation: you read it
+  p2    I cite one counted observation from our own records
+          observation: no qualified check  (unblocks when "company-records" is bound)
+  p5    Every recommendation carries a verdict and a confidence
+          observation: automatic check
+
+  1 with an automatic check · 6 you would read yourself · 3 with no qualified check
+```
+
+This is not a quality score. A standard about judgment is mostly judgment, and a person is a valid
+way to check one. What it tells you is where Atelier can catch drift on its own and where it cannot,
+which is also what decides whether a repair can be adopted without you.
+
+**How a behaviour is caused and how it is measured are separate questions.** An output contract
+enforces a shape and says nothing about whether a number in it is true. A prose rule may be checkable
+by a test, by you, or by nothing at all. Atelier keeps the two apart rather than assuming a carrier
+implies a sensor.
 
 ---
 
@@ -317,7 +440,7 @@ atelier invoke --skill my-skill \
 **Spend the capability on discovery.** Atelier is provider-agnostic by construction, and exactly one
 thing about it depends on the model: recovering tacit judgment from a corpus is a hard inference
 problem, and how much of it a run recovers tracks how capable the reading model is. That is not a
-limitation waiting to be engineered away — it is why the two halves are configured separately.
+limitation waiting to be engineered away. It is why the two halves are configured separately.
 Discovery happens once. Execution happens forever, and a small model running a compiled standard is
 a legitimate and much cheaper target.
 
@@ -335,8 +458,8 @@ The weaker run returned a full set of confident, well-formed, plausible rules. W
 mostly the *subject matter*: prefer async paths, fix the form before hiring, treat budget as
 secondary. Those describe what the memos were about. Compiled, they produce a skill that applies
 "prefer async solutions" to a legal opinion, because nothing in the rule says it was ever about
-software. It missed the author's most distinctive move — rejecting the question's premise before
-answering it — entirely, in all eleven.
+software. In all eleven it missed the author's most distinctive move, rejecting the question's
+premise before answering it.
 
 It also proposed a rule the author does not hold: *treat absence of evidence as evidence of absence*.
 The corpus does the opposite. A fallacy had been written in the author's voice, ready to be ratified
@@ -368,7 +491,7 @@ Two flags exist because backends genuinely differ, and neither is guessed for yo
 ### What a call costs
 
 Atelier ships no rate card it can keep current. Prices change without notice and differ by region and
-contract, so a table would be stale on the day it shipped — the one that was here was 3x wrong for
+contract, so a table would be stale on the day it shipped. The one that was here was 3x wrong for
 months. You give the rate, in USD per million tokens, and it applies to every provider equally.
 
 ```bash
@@ -376,7 +499,7 @@ atelier create ./goldens --price-in 3 --price-out 15 --cap 5
 ```
 
 Without one, calls are `UNKNOWN_PRICING` rather than free, and a dollar cap that cannot bind refuses
-to pretend it can — bound the run by count instead with `--max-calls`. A model running on your own
+to pretend it can. Bound the run by count instead with `--max-calls`. A model running on your own
 machine is `LOCAL_UNMETERED`: nobody is billing, which is not the same as costing nothing.
 
 `StandardVersion` contains no provider and no model identity. The runtime that served a skill is
@@ -516,6 +639,48 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
+## Command reference
+
+| command | what it does |
+|---|---|
+| `create <path>` | the whole first pass. Reads the work, reserves held-out evidence, discovers, ratifies, compiles |
+| `intake <path>` | read and seal a corpus without discovering yet |
+| `discover` | propose candidate decisions from a sealed corpus |
+| `pending` | show the candidates, with evidence and counterfactuals, before you rule |
+| `ratify --decisions <json>` | rule on every candidate in one batch. Nothing partial |
+| `ratify-one --id <id>` | rule on a single candidate |
+| `add --statement <text>` | add a rule of your own that discovery never proposed |
+| `ratify-close` | mint the StandardVersion from what you kept |
+| `build --name <name>` | compile the standard into a skill and install it |
+| `invoke --skill <name> "<task>"` | run the compiled skill |
+| `inspect --skill <name>` | what is in the standard, and what the package actually serves |
+| `history` / `rollback --to <v>` | every version, and how to go back |
+| `improve --skill <name> --invocation <id> --complaint "<text>"` | propose a repair from a real output |
+| `compare --skill <name>` | put the candidate and the current version side by side |
+| `promote` / `reject --skill <name>` | adopt the candidate, or refuse it and record why |
+| `revert` | undo the last build's file writes, leaving the standard untouched |
+| `confirm --rule <id>` | rule on one inferred behaviour after the skill already works |
+| `reference --skill <name>` | generate against held-out work and seal the blinding |
+| `reference --score --labels <json>` | unblind and score the held-out test |
+| `check [--role discovery\|target]` | verify a backend actually works, and record what was proven |
+| `profiles` | which backends have been verified, and to what stage |
+| `carriers --skill <name> [--host codex]` | what each execution surface really delivers |
+| `status` / `abort` | where the current run is, and how to abandon it |
+
+Flags worth knowing.
+
+| flag | when |
+|---|---|
+| `--reserve <file>` | hold work back before discovery reads it. Only reachable at intake |
+| `--with <name>=<path>` | bind a source a requirement depends on |
+| `--cap <usd>` / `--max-calls <n>` | bound the run. A dollar cap refuses to run against a runtime it cannot bind |
+| `--price-in` / `--price-out` | your rate, USD per million tokens, for any provider |
+| `--discovery-model` / `--target-model` | configure the two halves separately |
+| `--strict-schema off` | for a backend that rejects strict schema enforcement |
+| `--public-source --source-author "<name>"` | learning from someone else's public work |
+
+---
+
 ## Your data
 
 Local by default. No Atelier telemetry and no account. Standards, evidence and generated artifacts stay
@@ -524,20 +689,63 @@ discovery or execution.
 
 ## Architecture
 
-The core is provider and host neutral.
+A requirement is five separate questions, and keeping them separate is most of the design. Each
+column arrived from something that went wrong rather than from a diagram drawn in advance.
 
 ```text
-core/discovery/       evidence-backed candidate decisions
+                            REQUIREMENT
+   ┌────────────┬─────────────┬───────────────┬────────────┬──────────────┐
+   ▼            ▼             ▼               ▼            ▼
+authority   appliesWhen   prerequisites    carrier     observation
+who says    when it       what must        how the     how anyone
+it binds    applies       exist first      behaviour   would know it
+                                           is caused   happened
+```
+
+Collapse any two and you get a familiar failure. Fold observation into carrier and a schema starts
+claiming a citation is true. Fold prerequisites into judgment and a model invents the evidence a rule
+demanded. Fold authority into recurrence and a habit becomes law.
+
+The core is provider and host neutral, and a boundary test keeps it that way.
+
+```text
+core/discovery/       evidence-backed candidate decisions, across framings
 core/coverage/        weak support, blind spots, unresolved boundaries
-core/ratification/    append-only human authority
-core/architecture/    requirement → minimum carrier
-core/delivery/        what each execution surface actually delivers
+core/ratification/    append-only human authority: what you saw, and what you did
+core/architecture/    requirement → minimum carrier, and decisions apart from their realizations
+core/delivery/        what each execution surface actually delivers, per carrier
+core/state/           the six objects, prerequisites, and the request binding
 core/runtime/         provider, model and configuration binding
+core/inference/       the one seam a model reaches through, and the budget that bounds it
 renderers/            SkillPackage generation
 adapters/             host installation
 providers/            inference backends
 ```
 
-A boundary test keeps provider-specific code out of `core/`.
+Four identities, and every one of them exists because assuming it was the same as another cost
+something.
+
+```text
+StandardVersion     what good means             human-owned, immutable, content-addressed
+SkillVersion        how one model produces it   machine-owned, replaceable
+RuntimeBinding      what actually served it     observed, never inherited across a change
+InvocationRequest   what was actually asked     bound, and proven equal to what was served
+```
+
+### Contributing, and what the checks are for
+
+```bash
+npm ci
+npm run typecheck     # strict, plus four flags beyond it
+npm run lint          # type-aware; every disabled rule states its reason
+npm test              # the suite
+npm run build         # what a user installs
+```
+
+CI runs exactly those four and then runs the built binary. The tests worth reading first are
+witnesses rather than units. `tests/atelier-carrier-delivery.test.ts` proves a compiled contract
+reaches the provider. `tests/atelier-reachability.test.ts` walks the import graph and refuses to let
+a module go dark without someone writing down why. `tests/atelier-documented-claims.test.ts` holds
+this file to what the code actually does, which is why the commands above are the commands that exist.
 
 MIT.
