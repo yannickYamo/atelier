@@ -5,8 +5,6 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { assertNotAuthority } from '../../core/state/canonical-state.js';
-import { compileArchitecture } from '../../core/architecture/compile.js';
-import { renderAgentSkill } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
 import { DATA, die, flag, projectDir, pickHost } from '../runtime.js';
@@ -19,8 +17,26 @@ export function inspect(): void {
   const v = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing');
   assertNotAuthority('STANDARD_VERSION', true);
     console.log(`skill ${L.skillName}\nactive SkillVersion ${sv.skillVersionHash}\nowned by StandardVersion ${v.standardVersionHash} [${v.authorityState}] (${v.requirements.length} requirements, minted ${v.mintedAt})`);
-  const ver = pickHost().verifyInstallation(renderAgentSkill(v, compileArchitecture(v), L.skillName, `Writes in the author's own standard (${v.workType})`), projectDir());
-  console.log(ver.present ? (ver.matchesPackage ? 'installed file matches the standard.' : `\nMATERIALIZATION DRIFT: ${ver.detail}\nThe installed file was edited by hand. It now serves something the StandardVersion does not say.`) : `not installed: ${ver.detail}`);
+  // ── CHECK AGAINST WHAT WAS BUILT, NOT AGAINST A RECONSTRUCTION OF IT ────────────────────────
+  //
+  // This used to re-render the package and compare the installed file to that. The re-render took the
+  // description as an argument and reconstructed it as a default, so any skill built with
+  // `--description` failed the comparison and this command reported MATERIALIZATION DRIFT and told the
+  // author their file had been edited by hand. Nothing had been edited. The checker was wrong and it
+  // blamed the user, which is the worst available failure for a command whose whole job is to say
+  // whether you can trust what is installed.
+  //
+  // The package that was built is in the store under `materializedHash`. Read it. A comparison against
+  // re-derived bytes can only ever be as trustworthy as the re-derivation, and there is no reason to
+  // depend on that when the real bytes are on disk.
+  const pkg = store.getPackage(L, sv.materializedHash);
+  if (!pkg) {
+    console.log(`\nCANNOT CHECK: package ${sv.materializedHash} is not in the store, so there is nothing to compare the`);
+    console.log(`installed file against. This SkillVersion predates package persistence. Rebuild it to make it checkable.`);
+  } else {
+    const ver = pickHost().verifyInstallation(pkg, projectDir());
+    console.log(ver.present ? (ver.matchesPackage ? 'installed file matches the package that was built.' : `\nMATERIALIZATION DRIFT: ${ver.detail}\nThe installed file was edited by hand. It now serves something the StandardVersion does not say.`) : `not installed: ${ver.detail}`);
+  }
   for (const r of v.requirements) console.log(`  [${r.kind[0]}] ${r.statement}${/^GENERAL\b/i.test(r.appliesWhen) ? '' : `  (when: ${r.appliesWhen})`}`);
 }
 
@@ -32,13 +48,23 @@ export function historyCmd(): void {
 export function rollback(): void {
   const L: store.StoreLayout = { root: DATA, skillName: flag('--skill') ?? die('--skill required') };
   const to = flag('--to') ?? die('--to <skillVersionHash> required');
-  store.setActive(L, to);
-  const sv = store.getSkillVersion(L, to)!;
-  const v = store.getStandard(L, sv.standardVersionHash)!;
-  const host = pickHost();
-  const r = host.install(renderAgentSkill(v, compileArchitecture(v), L.skillName, `Writes in the author's own standard (${v.workType})`), projectDir());
+  const sv = store.getSkillVersion(L, to) ?? die(`no SkillVersion ${to} for ${L.skillName}.`);
+  // ── REINSTALL THE BYTES THAT VERSION BUILT ──────────────────────────────────────────────────
+  //
+  // Re-rendering here installed a package that was NOT the one this SkillVersion built, because the
+  // description was reconstructed rather than read. Rolling back is a promise that you get the thing
+  // you had; serving a near-copy of it breaks that promise silently and `materializedHash` would have
+  // caught it if anything had consulted it.
+  //
+  // REFUSES rather than approximating. A rollback that cannot reproduce the version is not a rollback.
+  const pkg = store.getPackage(L, sv.materializedHash)
+    ?? die(`package ${sv.materializedHash} is not in the store, so ${to} cannot be reinstalled as it was built. `
+      + `This version predates package persistence. Nothing was changed — the active pointer is untouched.`);
+  const r = pickHost().install(pkg, projectDir());
   if (!r.ok) return void die(`reinstall failed: ${r.reason}`);
-  console.log(`rolled back to ${to}. History is unchanged — this can itself be rolled back.`);
+  store.setActive(L, to);
+  console.log(`rolled back to ${to}. Reinstalled package ${sv.materializedHash}, the one it built.`);
+  console.log(`History is unchanged — this can itself be rolled back.`);
 }
 
 export function feedback(): void {

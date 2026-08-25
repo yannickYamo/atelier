@@ -30,6 +30,21 @@ export function skillNameFrom(raw: string): string {
 /** The only frontmatter keys guaranteed to mean the same thing on every host. */
 export const PORTABLE_FRONTMATTER = ['name', 'description'] as const;
 
+/**
+ * THE DEFAULT DESCRIPTION, IN ONE PLACE.
+ *
+ * It used to be a string literal written out at six call sites. Four of them minted a SkillVersion and
+ * two RE-DERIVED a package for comparison, and because a description reaches the frontmatter it
+ * reaches the package hash — so the two re-derivers built a package that was not the one on disk and
+ * reported the difference as a hand-edited file.
+ *
+ * The re-derivers are gone; they read the stored package now. This exists so the remaining four cannot
+ * drift from each other, and so that a skill about something other than writing is not described as
+ * writing by a literal nobody remembered to change.
+ */
+export const defaultDescription = (workType: string): string =>
+  `Writes in the author's own standard (${workType})`;
+
 /** Carriers this renderer can actually honour. Anything else must refuse, not quietly degrade. */
 const IMPLEMENTED_CARRIERS = new Set<Carrier>(['PROSE', 'SELF_CHECK', 'EXAMPLE', 'OUTPUT_CONTRACT', 'NONE']);
 

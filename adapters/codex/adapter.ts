@@ -9,8 +9,8 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { CarrierDeliveryMatrix } from '../../core/delivery/carrier-delivery.js';
-import type { HostAdapter, HostCapabilities, InstallResult, VerificationResult, ProtocolPolicy, GuardResult } from '../host-adapter.js';
-import type { PortableSkillPackage } from '../../renderers/agent-skill/render.js';
+import type { HostAdapter, HostCapabilities, InstallResult, VerificationResult, ProtocolPolicy, GuardResult, InstallablePackage } from '../host-adapter.js';
+
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
@@ -47,7 +47,7 @@ export class CodexAdapter implements HostAdapter {
     };
   }
 
-  install(pkg: PortableSkillPackage, projectDir: string): InstallResult {
+  install(pkg: InstallablePackage, projectDir: string): InstallResult {
     try {
       const d = this.dir(projectDir, pkg.skillId);
       mkdirSync(d, { recursive: true });
@@ -84,7 +84,7 @@ export class CodexAdapter implements HostAdapter {
         + (policy.reasonIfBlocked ? `Current policy would block: ${policy.reasonIfBlocked}.` : 'No active block.') };
   }
 
-  verifyInstallation(pkg: PortableSkillPackage, projectDir: string): VerificationResult {
+  verifyInstallation(pkg: InstallablePackage, projectDir: string): VerificationResult {
     const root = this.dir(projectDir, pkg.skillId);
     const p = join(root, 'SKILL.md');
     if (!existsSync(p)) return { present: false, matchesPackage: false, detail: `not installed at ${p}` };
