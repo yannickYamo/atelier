@@ -49,7 +49,7 @@ describe('import', () => {
         proposedId: 'f', description: 'd',
         appliesWhen: [{ id: 'w', describe: 'when' }],
         readFrom: plan.goldens.filter(g => g.role === 'PROPOSAL').map(g => g.contextId),
-        wouldBeAbsentIf: 'absent if not present',
+        wouldBeAbsentIf: 'absent if not present', quote: '',
       }],
       observations: plan.goldens.filter(g => g.role === 'HELD_OUT')
         .map(g => ({ proposedId: 'f', observation: { contextId: g.contextId, applicable: true, present: true } })),

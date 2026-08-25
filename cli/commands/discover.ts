@@ -11,6 +11,7 @@ import { describeUnion } from '../../core/discovery/union.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import { runDiscoveryChain } from '../../core/discovery/run-chain.js';
+import { locateSpan } from '../../core/discovery/conformance.js';
 import { type ImportPlan } from '../../core/discovery/chain/corpus-import.js';
 import { runMethodExtraction, describeMethodRun } from '../../core/discovery/run-methods.js';
 import type { Budget } from '../../core/inference/client.js';
@@ -197,7 +198,13 @@ export async function discover(): Promise<void> {
       // right owner for that call anyway.
       kind: 'GENERATIVE' as const, authority: 'DERIVED_UNRATIFIED' as const,
       provenance: sourceProvenance(),
-      evidence: null, evidenceItemId: h.hypothesis.provenance.fromGoldens[0] ?? null,
+      // VERBATIM OR ABSENT. `locateSpan` is the same check the framings path already runs, and a quote
+      // that is not in the named piece is a fabrication with a citation attached — exactly the shape
+      // this system refuses elsewhere. A rule keeps its span or keeps none.
+      ...(() => {
+        const a = anchoredQuote(h.hypothesis.quote, openItems);
+        return { evidence: a?.quote ?? null, evidenceItemId: a?.itemId ?? h.hypothesis.provenance.fromGoldens[0] ?? null };
+      })(),
       // Collected and validated non-empty by the discovery contract since the chain was built, and
       // dropped here until now. It is the one field that lets a person argue with a proposal.
       // a counterfactual the model returned as whitespace must become null; `??` would keep ''.
@@ -367,10 +374,47 @@ export interface RatificationDecision {
   readonly form?: string;
   /** field name to JSON Schema fragment. Only meaningful on a REQUIRED rule. */
   readonly shape?: Record<string, unknown> | string;
+  /**
+   * the id of the rule this one is a way of carrying out.
+   *
+   * Set it and the question changes. A realization is not asked whether it is REQUIRED — its parent
+   * already carries the obligation, and giving the form a second materiality would issue two commands
+   * for one choice. It is asked how tightly the FORM binds, which is `form`.
+   */
+  readonly realizes?: string;
   readonly statement?: string;
   readonly appliesWhen?: string;
   readonly kind?: string;
 }
+
+
+/**
+ * A proposer's quote, kept only when it is genuinely in the piece it names.
+ *
+ * The EXAMPLE carrier's whole argument is that showing beats telling, and until this it had nothing
+ * to show — every compiled example carried the rule's description, so the carrier was telling. A
+ * quote that does not appear in the source would be worse than none: an invented instance with a
+ * citation, which is the failure this programme has already paid for at the evidence layer.
+ */
+const anchoredQuote = (
+  quote: string | undefined, items: readonly { id: string; text: string }[],
+): { quote: string; itemId: string } | null => {
+  const q = (quote ?? '').trim();
+  if (!q) return null;
+  // SEARCHED ACROSS THE PIECES, not checked against a guess. `readFrom` lists every piece the model
+  // read, so its first entry is not the piece the quote came from — measured: a span verbatim in the
+  // fourth piece was being tested against the first and discarded. The item the span is actually IN
+  // is the item to record, and finding it is what makes `evidenceItemId` a fact rather than an
+  // assumption.
+  //
+  // WHITESPACE_NORMALIZED counts. The corpus is hard-wrapped and a model quotes the sentence, not the
+  // line — `locateSpan` already draws that line, and line wrapping is not fabrication.
+  for (const i of items) {
+    const m = locateSpan(q, i.id, items.map((x) => ({ id: x.id, text: x.text })));
+    if (m === 'EXACT' || m === 'WHITESPACE_NORMALIZED') return { quote: q, itemId: i.id };
+  }
+  return null;
+};
 
 export function ratifyBatch(): void {
   const s = loadSession();
@@ -423,6 +467,25 @@ export function ratifyBatch(): void {
     if (mat && !MAT.includes(mat)) die(`${d.id}: materiality must be one of ${MAT.join(' / ')}`);
     if (form && !FORM.includes(form)) die(`${d.id}: form must be one of ${FORM.join(' / ')}`);
 
+    // ── A REALIZATION IS ASKED A DIFFERENT QUESTION ─────────────────────────────────────────
+    //
+    // Flat, an expressive rule reads as a fussy habit and gets rejected; linked, it is how the
+    // decision above it lands. The link changes what the author is being asked. Materiality belongs
+    // to the parent — accepting one here would put a second obligation on a single choice — and what
+    // is genuinely open is whether the exact form matters, which is `form`.
+    const realizes = typeof d.realizes === 'string' && d.realizes.trim() ? d.realizes.trim() : null;
+    if (realizes) {
+      if (realizes === d.id) die(`${d.id}: a rule cannot realize itself.`);
+      const parent = s.proposals.find((x) => x.requirementId === realizes)
+        ?? decided.find((x) => x.requirementId === realizes);
+      if (!parent) die(`${d.id}: realizes "${realizes}", which is not a rule in this draft.`);
+      if (mat) {
+        die(`${d.id}: a realization does not take a materiality — ${realizes} carries the obligation, and a `
+          + `second one here would issue two commands for one choice.\n`
+          + `  What is open is how tightly the FORM binds:  "form":"STRICT" | "FUNCTIONALLY_EQUIVALENT" | "FLEXIBLE"`);
+      }
+    }
+
     // ── AND THE SHAPE, WHERE THE RULE IS ABOUT ONE ──────────────────────────────────────────
     //
     // THE CARRIER THAT COULD NOT BE ASKED FOR. `outputShape` is what turns a required rule into an
@@ -465,6 +528,7 @@ export function ratifyBatch(): void {
       materiality: mat as Requirement['materiality'],
       realizationTolerance: form as Requirement['realizationTolerance'],
       outputShape: shape,
+      realizes,
       ...(d.statement ? { statement: d.statement } : {}), ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}) };
     decided.push(kept);
 

@@ -36,6 +36,8 @@ export interface TasteFactorHypothesis {
   readonly description: string;            // "expert appears to prefer concise directional recommendations"
   readonly constructScope: ConstructScope;
   readonly appliesWhen: readonly Predicate[]; // conditional — taste is Q(y|x,S_u)
+  /** a verbatim span showing the rule happening, when the proposer offered a locatable one */
+  readonly quote?: string;
   readonly provenance: { readonly proposedBy: string; readonly fromGoldens: readonly string[] };
 }
 

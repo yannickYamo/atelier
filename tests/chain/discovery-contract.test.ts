@@ -27,7 +27,7 @@ const factor = (o: Partial<ProposedFactor> = {}): ProposedFactor => ({
   description: 'names the contradiction in the buyer\'s current belief before introducing the position',
   appliesWhen: [{ id: 'buyer_holds_a_prior', describe: 'the buyer already believes something the position must displace' }],
   readFrom: ['g1', 'g2'],
-  wouldBeAbsentIf: 'the draft introduces the position without ever naming what the buyer currently believes',
+  wouldBeAbsentIf: 'the draft introduces the position without ever naming what the buyer currently believes', quote: '',
   ...o,
 });
 

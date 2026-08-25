@@ -48,6 +48,12 @@ const CHAIN_FIELDS = `For each rule give:
                    condition claims to hold everywhere, which is almost never true of taste.
   READ_FROM        which of the pieces above you read it off
   WOULD_BE_ABSENT_IF  what you would see in a piece if this rule were NOT operating
+  QUOTE            a SHORT VERBATIM span from one of the pieces where this rule is visibly happening.
+                   Copy it exactly, character for character — it is checked against the source and
+                   dropped if it does not appear there. Prefer the shortest span that still shows the
+                   rule; one sentence is usually enough, and a clause is often better. This is what a
+                   reader will be SHOWN, so quote the moment the rule is doing its work rather than a
+                   sentence that merely sits near it.
 
 - Up to 12 rules, and FEWER IS BETTER THAN PADDED. State a decision ONCE. If you find
   yourself writing two rules that a person would answer the same way, they are one rule and one of
@@ -91,8 +97,9 @@ export const PROPOSER_SCHEMA: Record<string, unknown> = {
             required: ['id', 'describe'], additionalProperties: false } },
           readFrom: { type: 'array', items: { type: 'string' } },
           wouldBeAbsentIf: { type: 'string' },
+          quote: { type: 'string' },
         },
-        required: ['description', 'appliesWhen', 'readFrom', 'wouldBeAbsentIf'], additionalProperties: false,
+        required: ['description', 'appliesWhen', 'readFrom', 'wouldBeAbsentIf', 'quote'], additionalProperties: false,
       },
     },
   },
@@ -180,6 +187,7 @@ export async function runDiscoveryChain(
       proposedId: '', description: asText(f.description),
       appliesWhen: (f.appliesWhen as ProposedFactor['appliesWhen']),
       readFrom: asTextList(f.readFrom), wouldBeAbsentIf: asText(f.wouldBeAbsentIf),
+      quote: asText(f.quote),
     })).filter((f) => f.description) });
   }
 

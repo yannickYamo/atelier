@@ -273,11 +273,38 @@ mintedAt:        ${v.mintedAt}
   const exampleFiles: Record<string, string> = {};
   for (const x of exampleCarried) {
     const r = x.r;
-    const binding = r.materiality === 'REQUIRED'
-      ? 'This IS required, and the form shown is the point — the author said the exact realization matters.'
-      : 'This is NOT required. It is how the author works. An output that does otherwise is not wrong;\nreach for this when it fits, and do not force it.';
+    // A LINKED REALIZATION SAYS WHOSE FORM IT IS. Without the parent named, the model reads it as one
+    // more thing to do; with it, the obligation stays with the decision and this is how that decision
+    // characteristically lands. `realizationTolerance` is the author's answer to how tightly the form
+    // itself binds, which is the question a realization poses instead of "is this REQUIRED".
+    const tol = r.realizationTolerance;
+    const binding = r.realizes
+      ? `This is not a separate instruction. It is one way the author carries out **${r.realizes}**,\n`
+        + `which is where the obligation sits.\n\n`
+        + (tol === 'STRICT'
+          ? 'The author marked this form STRICT: the exact realization is part of what they mean.'
+          : tol === 'FUNCTIONALLY_EQUIVALENT'
+            ? 'The author marked this FUNCTIONALLY_EQUIVALENT: another form doing the same work is fine.'
+            : tol === 'FLEXIBLE'
+              ? 'The author marked this FLEXIBLE: characteristic, and nothing turns on the exact form.'
+              : 'The author did not say how tightly the form binds. Treat it as characteristic, not required.')
+      : r.materiality === 'REQUIRED'
+        ? 'This IS required, and the form shown is the point — the author said the exact realization matters.'
+        : 'This is NOT required. It is how the author works. An output that does otherwise is not wrong;\nreach for this when it fits, and do not force it.';
+    // SHOWING BEATS TELLING, AND FOR A REALIZATION THAT ORDER IS THE POINT.
+    //
+    // The description is a paraphrase of a form. The span is the form. Leading with the paraphrase
+    // turns the example carrier back into a second sentence of instruction, which is what it was
+    // doing before a span existed to lead with. Where there is no anchored span the file says so
+    // plainly rather than presenting the paraphrase as if it were an instance.
+    const span = r.evidence?.trim();
+    const shown = r.realizes && span
+      ? `> ${span.replace(/\n/g, '\n> ')}\n\nThat is one way the author does it. In their words, the rule is:\n\n${r.statement}\n\n`
+      : r.realizes
+        ? `${r.statement}\n\n*(No verbatim span was anchored for this one, so what follows describes the form\nrather than showing it.)*\n\n`
+        : `${r.statement}\n\n`;
     exampleFiles[`examples/${r.requirementId}.md`] =
-      `# ${r.requirementId}\n\n${r.statement}\n\n`
+      `# ${r.requirementId}${r.realizes ? ` — how ${r.realizes} lands` : ''}\n\n${shown}`
       + (/^GENERAL\b/i.test(r.appliesWhen.trim()) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
       + `${binding}\n\n`
       // THE COUNTERFACTUAL IS NOT SERVED, AND THIS IS THE PLACE IT NEARLY WAS.
@@ -286,7 +313,7 @@ mintedAt:        ${v.mintedAt}
       // AUTHOR something to disagree with at ratification. It is not a second ratified requirement.
       // Rendering it here reads as "avoid X" and would hand an unratified sentence the same carrier
       // as a ratified one — the precise escalation the authority seam exists to refuse.
-      + (r.evidence ? `## How the author did it\n\n> ${r.evidence.replace(/\n/g, '\n> ')}\n` : '');
+      + (r.evidence && !r.realizes ? `## How the author did it\n\n> ${r.evidence.replace(/\n/g, '\n> ')}\n` : '');
   }
 
   // ── OUTPUT CONTRACTS ────────────────────────────────────────────────────────────────────────
