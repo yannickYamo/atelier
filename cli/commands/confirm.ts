@@ -7,7 +7,7 @@
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { authorityStateOf, assertSupersessionRecorded } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
-import { renderAgentSkill, assertPortable } from '../../renderers/agent-skill/render.js';
+import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
 import { sha, DATA, die, argv, flag, projectDir, pickHost } from '../runtime.js';
@@ -47,12 +47,12 @@ export function confirmBoundary(): void {
   assertSupersessionRecorded(next);
 
   const arch = compileArchitecture(next);
-  const desc = `Writes in the author's own standard (${next.workType})`;
+  const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
   const pkg = renderAgentSkill(next, arch, name, desc);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
-    materializedHash: pkg.packageHash, builtAt: new Date().toISOString() };
+    materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
 
   store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
   const host = pickHost();

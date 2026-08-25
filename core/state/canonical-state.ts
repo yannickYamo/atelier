@@ -268,6 +268,18 @@ export interface SkillVersion {
   /** hash of the emitted SKILL.md — proves what was installed, is NEVER read back as authority */
   readonly materializedHash: string;
   readonly builtAt: string;
+  /**
+   * The frontmatter description this version was built with.
+   *
+   * Stored because it is an INPUT to materialization and was previously reconstructed from a default
+   * at every later mint, so a description set once on `build` silently reverted on the next `improve`,
+   * `amend` or `confirm`. Its consumers are those three commands, which inherit it when no new one is
+   * given.
+   *
+   * Optional because SkillVersions minted before 2026-08-24 do not carry it. Absent means "unknown",
+   * and the reader falls back to the default rather than pretending to know.
+   */
+  readonly description?: string;
 }
 
 /** 5. Append-only. Feedback and outcomes accumulate here; nothing here mutates a standard. */

@@ -17,7 +17,7 @@ import { proposeFloor } from '../../core/distinctiveness/contract.js';
 import { resolveFromFrozenText, admitsEvidence } from '../../core/measurement/applicability.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
-import { renderAgentSkill, assertPortable } from '../../renderers/agent-skill/render.js';
+import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 import { type Provenance } from '../../core/fidelity/provenance.js';
 
@@ -176,12 +176,14 @@ export async function improve(): Promise<void> {
   if (may.note) console.log(`\n${may.note}`);
 
   const nextArch = applyEscalation(ranArch, op, sha(JSON.stringify(op) + ranArch.architectureHash));
-  const desc = flag('--description') ?? `Writes in the author's own standard (${ranStandard.workType})`;
+  // INHERITED from the version being repaired. A repair changes the arrangement, never how the
+  // skill describes itself, and reconstructing the default here reverted a description set on build.
+  const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
   const pkg = renderAgentSkill(ranStandard, nextArch, name, desc);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
-    materializedHash: pkg.packageHash, builtAt: new Date().toISOString() };
+    materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
   store.putArchitecture(L, nextArch); store.putPackage(L, pkg); store.putSkillVersion(L, candidate);
   store.appendEvent(L, { kind: 'REPAIR_PROPOSED', repairId: sha(`${op.requirementId}|${op.from}|${op.to}|${candidate.skillVersionHash}`),
     skillName: name, requirementId: op.requirementId, from: op.from, to: op.to,
@@ -196,7 +198,7 @@ export async function improve(): Promise<void> {
   console.log(`  package         ${inv.servedPackageHash} -> ${pkg.packageHash}`);
   console.log(`\nRun it on the same task and compare, then promote or reject the exact one you saw:`);
   console.log(`  atelier invoke --skill ${name} --candidate ${candidate.skillVersionHash} --task ${JSON.stringify(inv.input)}`);
-  console.log(`  atelier promote --skill ${name} --candidate ${candidate.skillVersionHash}`);
+  console.log(`  atelier promote --skill ${name} --candidate ${candidate.skillVersionHash} --why "<what made you pick it>"`);
 }
 
 // ── behaviour study ──────────────────────────────────────────────────────────────────────────

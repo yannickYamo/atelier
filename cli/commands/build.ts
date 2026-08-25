@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
-import { renderAgentSkill, assertPortable, skillNameFrom } from '../../renderers/agent-skill/render.js';
+import { renderAgentSkill, assertPortable, skillNameFrom, defaultDescription } from '../../renderers/agent-skill/render.js';
 import { buildProposal, renderProposal, unconfirmedIn } from '../../core/compiler/proposal.js';
 import { defaultPlan, maintenanceMap, describeMaintenance } from '../../core/coverage/observation.js';
 import { planImprovement, describeImprovement, type UndoRecord } from '../../core/compiler/apply.js';
@@ -53,10 +53,10 @@ export function build(nameArg?: string): void {
   // The arrangement is COMPILED, not derived from the requirement list. That is what lets a skill
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
-  const desc = flag('--description') ?? `Writes in the author's own standard (${v.workType})`;
+  const desc = flag('--description') ?? defaultDescription(v.workType);
   const pkg0 = renderAgentSkill(v, arch, name, desc);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
-    standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString() };
+    standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
   const L: store.StoreLayout = { root: DATA, skillName: name };
   store.initStore(L); store.putEvidence(L, s.evidence ?? die('nothing sealed.')); store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);

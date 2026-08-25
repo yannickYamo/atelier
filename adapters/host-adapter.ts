@@ -4,7 +4,6 @@
 // RATIFIED. That sentence is the whole architecture, and this interface is where it is enforced:
 // nothing an adapter returns can reach a StandardVersion.
 
-import type { PortableSkillPackage } from '../renderers/agent-skill/render.js';
 import type { CarrierDeliveryMatrix } from '../core/delivery/carrier-delivery.js';
 
 export interface HostCapabilities {
@@ -55,6 +54,24 @@ export interface GuardResult {
   readonly artifact: string | null;
 }
 
+/**
+ * WHAT INSTALLING AND VERIFYING ACTUALLY READ.
+ *
+ * Both methods touch `skillId` and `files` and nothing else. Typing them against the full render
+ * output forced every caller to HAVE a render, which is how `inspect` and `rollback` came to
+ * re-derive a package instead of reading the one that was built — and a re-derivation that differs by
+ * a single frontmatter line reads on disk as a hand-edited file.
+ *
+ * A stored package satisfies this. So does a fresh render. The narrower type is what lets the caller
+ * pass the bytes that were actually installed.
+ */
+export interface InstallablePackage {
+  readonly skillId: string;
+  readonly files: Readonly<Record<string, string>>;
+  /** the identity the installed bytes are checked against */
+  readonly packageHash: string;
+}
+
 export interface HostAdapter {
   detect(): HostCapabilities;
   /**
@@ -65,12 +82,12 @@ export interface HostAdapter {
    * `assertDeliveryClaim` refuses a basis that describes a file.
    */
   carrierDelivery(): CarrierDeliveryMatrix;
-  install(pkg: PortableSkillPackage, projectDir: string): InstallResult;
+  install(pkg: InstallablePackage, projectDir: string): InstallResult;
   uninstall(skillId: string, projectDir: string): void;
   /** e.g. "/my-voice <brief>" or "$my-voice <brief>" — identity is skillId, not this string */
   invocationHint(skillId: string): string;
   installProtocolGuards(policy: ProtocolPolicy): GuardResult;
-  verifyInstallation(pkg: PortableSkillPackage, projectDir: string): VerificationResult;
+  verifyInstallation(pkg: InstallablePackage, projectDir: string): VerificationResult;
   persistentStateLocation(): string;
 }
 
