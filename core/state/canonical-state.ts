@@ -63,7 +63,11 @@ export type Provenance =
    * prevent — and it is most tempting in a study designed to prove the system, because a cooperating
    * expert is the expensive part.
    *
-   * A requirement with this provenance is permanently capped at DERIVED_UNRATIFIED.
+   * CEILING: such a requirement may be DERIVED_UNRATIFIED or USER_ADOPTED, and nothing above.
+   * `assertAuthorityCeiling` enforces exactly that. An earlier version of this comment said the cap
+   * was DERIVED_UNRATIFIED alone, which is narrower than the code and wrong in a way that matters: a
+   * reader planning a public-corpus study would conclude adoption was impossible and either abandon
+   * it or reach for EXPERT_RATIFIED, which is the inversion the ceiling exists to stop.
    */
   | 'PUBLIC_BEHAVIOUR_INFERRED';
 export type RuleKind = 'GENERATIVE' | 'BOUNDARY';

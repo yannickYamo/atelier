@@ -128,6 +128,16 @@ describe('the census: nothing is dark by accident', () => {
   // while `ratify` was overwriting a mutable blob, and the held-out reference test, which the README
   // asks contributors to run and which had no command.
   const PARKED: Readonly<Record<string, string>> = {
+    'core/fidelity/conditional-fidelity.ts':
+      'MEASUREMENT INFRASTRUCTURE, PARKED ON PURPOSE UNTIL A STUDY USES IT. It replaces the adherence '
+      + 'endpoint that failed three times: COMPLETE defined as absence of violations, over conditional '
+      + 'rules, scored 100% for every arm across 138 outputs including a base model that won 3 of 46 '
+      + 'contexts, because silence buys an N/A and an N/A cannot be violated. The replacement moves WHO '
+      + 'decides applicability: the expert seals it per context before any output exists, and the scorer '
+      + 'only rules on whether the behaviour appeared. Wiring it to a command before a study has sealed '
+      + 'cases would invent a CLI surface for data that does not exist yet, and the protocol it serves '
+      + 'says explicitly to stop after building the instrument. 24 polarity fixtures pin it in both '
+      + 'directions, including the exact output the old endpoint scored perfect and this one fails.',
     'core/ratification/boundary-answer.ts':
       'Wireable and not yet decided. It fits `atelier confirm --rule <id> --applies-when <condition>` '
       + 'almost exactly, which would give the CLI a scoping act distinct from the authority act it has '
