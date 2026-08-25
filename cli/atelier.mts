@@ -21,7 +21,7 @@ import { inspect, historyCmd, rollback, feedback } from './commands/inspect.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
-import { reject, compare, promote } from './commands/promote.js';
+import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
@@ -49,6 +49,7 @@ const main = async (): Promise<void> => {
     case 'sharpen': return sharpen();
     case 'answer': { answerProbe(); return; }
     case 'promote': { promote(); return; }
+    case 'judgements': { judgements(); return; }
     case 'improve': return improve();
     case 'feedback': { feedback(); return; }
     case 'check': return check();
@@ -79,7 +80,7 @@ const main = async (): Promise<void> => {
     }
     default:
       console.log('atelier create <path>   then: pending · ratify --decisions <json> · ratify-close · build --name <name>');
-      console.log('         also: inspect · history · rollback · revert · compare · reject · feedback · status · improve · enrol · abort');
+      console.log('         also: inspect · history · rollback · revert · compare · reject · judgements · feedback · status · improve · enrol · abort');
       console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
       console.log('   held-out: reference --skill <name>   then: reference --score --labels <json>');
   }
