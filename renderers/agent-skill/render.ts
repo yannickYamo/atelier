@@ -12,7 +12,7 @@
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
 import { createHash } from 'node:crypto';
-import type { StandardVersion } from '../../core/state/canonical-state.js';
+import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
 import { assertArchitectureServesStandard, type SkillArchitecture, type Carrier, type GateRole } from '../../core/architecture/compile.js';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -42,8 +42,61 @@ export const PORTABLE_FRONTMATTER = ['name', 'description'] as const;
  * drift from each other, and so that a skill about something other than writing is not described as
  * writing by a literal nobody remembered to change.
  */
+/**
+ * AUTHORITY-NEUTRAL, AND THAT IS THE POINT.
+ *
+ * This said "Writes in the author's own standard". For a standard inferred from a third party's
+ * public behaviour and adopted by someone else, that is the exact claim `assertAuthorityCeiling`
+ * exists to refuse — appearing in the one place the ceiling never looked, because the ceiling guards
+ * the RECORD and this is the ARTIFACT. The record was right and the served bytes contradicted it.
+ *
+ * Universal rather than conditional. A description that is honest for every provenance cannot drift
+ * into overclaiming when a new one is added.
+ */
 export const defaultDescription = (workType: string): string =>
-  `Writes in the author's own standard (${workType})`;
+  `Applies a compiled standard (${workType})`;
+
+/**
+ * WHERE THE RULE CAME FROM. Never who chose to bind it — that is `authority`, and conflating the two
+ * is what produced the defect this function replaces.
+ *
+ * EXHAUSTIVE BY CONSTRUCTION. The previous version was a ternary whose final branch caught everything
+ * it did not name, so `PUBLIC_BEHAVIOUR_INFERRED` rendered as "rewritten by you": the compiled file
+ * told a reader they had rewritten a rule that was read off a stranger's public work and never
+ * touched. The `never` check below makes adding a provenance value without a rendering policy a
+ * COMPILE ERROR rather than a silent mislabel.
+ */
+/**
+ * Prefix a condition with "when" unless the author already wrote one.
+ *
+ * A ratified `appliesWhen` is the author's text and may not be edited to suit the renderer, so the
+ * renderer accommodates it. Without this, a condition beginning "when uncertainty is material..."
+ * renders as "when when uncertainty is material", in the bytes a model is served.
+ */
+// ─── WHAT PUBLIC EVIDENCE MAY SAY ABOUT A PERSON ───────────────────────────────────────────────
+//
+// The artifact said "It is how the author works." We know a behaviour was OBSERVED in published work
+// and recurred in held-out material. We do not know it defines how that person works, and no corpus
+// can establish it. The gap between "observed in the source" and "how they work" is the whole of the
+// authority distinction, and it had been crossed in the served bytes while the record stayed correct.
+//
+// THE INVARIANT: public evidence may describe what was observed. It may never generalize that
+// observation into a claim about the source person's overall standard or identity.
+
+const condition = (appliesWhen: string): string => {
+  const t = appliesWhen.trim();
+  return /^when\b/i.test(t) ? t : `when ${t}`;
+};
+
+export function provenanceLabel(p: Provenance): string {
+  switch (p) {
+    case 'MACHINE_DISCOVERED': return 'discovered';
+    case 'SUBSTANTIVELY_REWRITTEN': return 'rewritten by you';
+    case 'EXPERT_ADDED': return 'added by you';
+    case 'PUBLIC_BEHAVIOUR_INFERRED': return 'inferred from public work; adopted for this skill';
+    default: { const _exhaustive: never = p; return _exhaustive; }
+  }
+}
 
 /** Carriers this renderer can actually honour. Anything else must refuse, not quietly degrade. */
 const IMPLEMENTED_CARRIERS = new Set<Carrier>(['PROSE', 'SELF_CHECK', 'EXAMPLE', 'OUTPUT_CONTRACT', 'NONE']);
@@ -193,7 +246,7 @@ export function renderAgentSkill(
 
   const line = (r: typeof v.requirements[number], i: number): string => {
     const cond = /^GENERAL\b/i.test(r.appliesWhen.trim()) ? '' : `\n   Applies when: ${r.appliesWhen}`;
-    const prov = r.provenance === 'MACHINE_DISCOVERED' ? 'discovered' : r.provenance === 'EXPERT_ADDED' ? 'added by you' : 'rewritten by you';
+    const prov = provenanceLabel(r.provenance);
     return `${i + 1}. ${r.statement}${cond}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 
@@ -239,9 +292,9 @@ export function renderAgentSkill(
   const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE');
   const always = (r: { appliesWhen: string }): boolean => /^GENERAL\b/i.test(r.appliesWhen.trim());
   const referenceSection = exampleCarried.length
-    ? `\n## Reference material\n\nEach file below shows how the author actually did one of these. Read a file when its condition\napplies to what you are writing; they are instances, not extra instructions.\n\n`
+    ? `\n## Reference material\n\nEach file below shows an observed realization from the source work. Read a file when its condition\napplies to what you are writing; they are instances, not extra instructions.\n\n`
       + exampleCarried.map((x) => `- \`examples/${x.r.requirementId}.md\` — `
-        + (always(x.r) ? 'relevant to any piece of this kind' : `when ${x.r.appliesWhen}`)).join('\n') + '\n'
+        + (always(x.r) ? 'relevant to any piece of this kind' : condition(x.r.appliesWhen))).join('\n') + '\n'
     : '';
 
   const skillMd = `---
@@ -251,8 +304,8 @@ description: ${description}
 
 # ${skillId}
 
-Write as the author of the standard below. Apply it as judgment, not as a checklist — including
-knowing when a rule does not apply.
+Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
+apply.
 
 ## What to do
 
@@ -305,7 +358,7 @@ mintedAt:        ${v.mintedAt}
               : 'The author did not say how tightly the form binds. Treat it as characteristic, not required.')
       : r.materiality === 'REQUIRED'
         ? 'This IS required, and the form shown is the point — the author said the exact realization matters.'
-        : 'This is NOT required. It is how the author works. An output that does otherwise is not wrong;\nreach for this when it fits, and do not force it.';
+        : 'This is NOT required. It is an observed realization from the source material. An output that\ndoes otherwise is not wrong; reach for this when it fits, and do not force it.';
     // SHOWING BEATS TELLING, AND FOR A REALIZATION THAT ORDER IS THE POINT.
     //
     // The description is a paraphrase of a form. The span is the form. Leading with the paraphrase
