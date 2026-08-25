@@ -8,7 +8,7 @@ Thanks for looking. A few things that will make a change easy to accept.
 npm ci
 npm run typecheck     # tsc, strict plus four flags beyond it
 npm run lint          # type-aware eslint; `npm run lint:fix` for the mechanical half
-npm test              # 705 tests, ~2s
+npm test              # 716 tests, ~2s
 npm run build         # what a user installs
 ```
 

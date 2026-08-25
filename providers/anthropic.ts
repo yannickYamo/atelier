@@ -55,6 +55,9 @@ export class AnthropicInferenceClient implements InferenceClient {
     const cost = costOf(this.pricing, usage, false);
     // `res.model` and not `this.modelId`: an alias resolves server-side, and the RuntimeBinding needs
     // to record what answered rather than what we asked for.
-    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost) };
+    // NULL, AND IT IS A PROTOCOL FACT RATHER THAN AN OMISSION. The Messages API does not expose
+    // per-token logprobs, so an instrument that reads a distribution cannot run on this adapter. It
+    // must say which backend it needs instead of quietly producing a weaker reading here.
+    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null };
   }
 }
