@@ -10,6 +10,7 @@ import { compareOnRule, describeComparison } from '../../core/fidelity/run-obser
 import { rankByObserver, describeRanking } from '../../core/fidelity/rule-observer.js';
 import * as store from '../../core/state/store.js';
 import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
+import { foldJudgements, rationalesFor, agreement, describeAgreement, describeJudgements } from '../../core/fidelity/judgement.js';
 
 import { DATA, die, argv, flag, MODEL, clientFor , numericFlag} from '../runtime.js';
 
@@ -36,6 +37,14 @@ export function reject(): void {
   store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId: rec.repairId, outcome: 'REJECTED',
     evaluationBasis: { generations: Math.max(generations, 1), instrument: 'HUMAN_EYE', orderInvariant: null },
     at, note });
+
+  // THE SAME DECISION, WRITTEN WHERE IT CAN BE MEASURED AGAINST THE INSTRUMENT. `REPAIR_SETTLED`
+  // answers "what happened to this repair"; this answers "which output did the expert prefer on this
+  // rule, and why", which is the only question that can ever tell us whether the comparator is
+  // imitating the right thing. Rejecting keeps the champion, so the choice is CHAMPION.
+  store.appendEvent(L, { kind: 'JUDGEMENT_RECORDED', requirementId: rec.requirementId,
+    championSkillVersionHash: rec.sourceSkillVersionHash, candidateSkillVersionHash: cand,
+    choice: 'CHAMPION', rationale: note, at });
 
   console.log(`Rejected ${cand} — ${rec.requirementId}: ${rec.from} -> ${rec.to}.`);
   console.log(`  Recorded against ${rec.evidenceBasis.missContexts} observed miss(es) and ${Math.max(generations, 1)} generation(s).`);
@@ -90,10 +99,28 @@ export async function compare(): Promise<void> {
   const req = std.requirements.find((r) => r.requirementId === rule)
     ?? die(`${rule} is not in this standard. Rules: ${std.requirements.map((r) => r.requirementId).join(', ')}`);
 
+  // ── WHAT YOU ALREADY SAID ABOUT THIS RULE ───────────────────────────────────────────────────
+  //
+  // Shown BEFORE the instrument's reading, on purpose. These are the expert's own words on the same
+  // requirement from earlier decisions, and reading them after a machine verdict would be reading
+  // them as corroboration. They are the standing context the verdict has to survive.
+  const prior = rationalesFor(foldJudgements(store.readEvents(L)), rule);
+  if (prior.length) {
+    console.log(`\nWhat you have said about ${rule} before:`);
+    for (const r of prior.slice(-3)) console.log(`  chose ${r.choice.toLowerCase()} — ${r.rationale}`);
+  }
+
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.3), maxCalls: numericFlag('--max-calls', 8) };
   const client = clientFor(flag('--model') ?? MODEL);
   const c = await compareOnRule(client, budget, candRun.invocationId, candRun.input, req.statement,
     champRun.output, candRun.output);
+
+  // RECORDED WHATEVER IT SAID, including the verdicts that cannot be scored against a human pick.
+  // Keeping only the occasions the observer committed would leave a ledger that flatters it.
+  store.appendEvent(L, { kind: 'COMPARISON_OBSERVED', requirementId: rule,
+    championSkillVersionHash: champRun.skillVersionHash, candidateSkillVersionHash: cand,
+    result: c.result, orderInvariant: c.orderInvariant, lengthRatio: c.lengthRatio,
+    at: new Date().toISOString() });
 
   console.log(`\n${describeComparison(c, req.statement)}`);
   // The ranking's first key is a rule-specific proxy, and Atelier has none — so the order is the
@@ -107,7 +134,9 @@ export async function compare(): Promise<void> {
       proxy: 'UNKNOWN' },
   ]);
   if (c.orderInvariant) console.log(`${describeRanking(ranked)}\n`);
-  console.log(`($${c.costUsd.toFixed(4)})  You decide:  atelier promote --skill ${name} --candidate ${cand}`);
+  console.log(`($${c.costUsd.toFixed(4)})  You decide:  atelier promote --skill ${name} --candidate ${cand} --why "<what made you pick it>"`);
+  console.log(`  That reading is now on file. Your decision completes the pair, and the two together are the`);
+  console.log(`  only evidence that will ever say whether this instrument agrees with you:  atelier judgements --skill ${name}`);
 }
 
 /**
@@ -125,6 +154,19 @@ export async function compare(): Promise<void> {
 export function promote(): void {
   const name = flag('--skill') ?? die('--skill required');
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
+  // ── A PROMOTION WITHOUT A REASON IS A LABEL WITH NO LEARNING SIGNAL ──────────────────────────
+  //
+  // This command already refuses a candidate nobody ran, on the grounds that promotion adopts what a
+  // person EVALUATED and a pointer move is not evidence anyone looked. The same argument reaches one
+  // step further: on a rule no automatic check can measure, the person IS the sensor, and a sensor
+  // that records which way it moved but not what it saw cannot be checked against anything.
+  //
+  // It is also the cheapest thing in the system. One sentence, once per promotion, is the entire cost
+  // of the only expert-labelled corpus this project will ever have.
+  const why = flag('--why') ?? die('--why "<what made you pick it>" is required.\n'
+    + '  Promotion is your judgement on a rule nothing else can measure, so your reason is the reading.\n'
+    + '  It is read back to you the next time you compare on the same rule, and it is what makes the\n'
+    + '  observer checkable against you at all:  atelier judgements --skill ' + name);
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const sv = store.getSkillVersion(L, cand) ?? die(`no SkillVersion ${cand} for ${name}.`);
   const prevActive = store.getActive(L);
@@ -152,14 +194,37 @@ export function promote(): void {
     die(`PROMOTION REFUSED: ${cand} is bound to StandardVersion ${sv.standardVersionHash} but ${prevActive} is bound to ${prevSv.standardVersionHash}. Promoting would silently move what good means; that is not what this command does.`);
   }
 
+  // ── WHICH RULE IS THIS A JUDGEMENT ABOUT? JOINED, NEVER GUESSED ──────────────────────────────
+  //
+  // A comparison is ON something and a promotion is of a whole package, so the rules this decision is
+  // evidence about are the ones actually compared on this exact pair. Those are read from the log.
+  // `--rule` names one explicitly when you promoted without comparing; the repair's own requirement is
+  // the last fallback. When none of the three yields a rule, nothing rule-specific is written, because
+  // a judgement filed against a requirement nobody examined is a fabricated label.
+  const events = store.readEvents(L);
+  const compared = foldJudgements(events)
+    .filter((r) => r.observer && r.candidateSkillVersionHash === cand
+      && r.championSkillVersionHash === (prevActive ?? ''))
+    .map((r) => r.requirementId);
+  const promotedRepair = foldRepairs(events).find((r) => r.candidateSkillVersionHash === cand && r.outcome === 'PENDING');
+  const explicitRule = flag('--rule');
+  const rules = explicitRule ? [explicitRule]
+    : compared.length ? compared
+      : promotedRepair ? [promotedRepair.requirementId] : [];
+
   store.setActive(L, cand);
-  const promotedRepair = foldRepairs(store.readEvents(L)).find((r) => r.candidateSkillVersionHash === cand && r.outcome === 'PENDING');
+  const at = new Date().toISOString();
   if (promotedRepair) {
     store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId: promotedRepair.repairId, outcome: 'PROMOTED',
       evaluationBasis: { generations: runs.length, instrument: 'HUMAN_EYE', orderInvariant: null },
-      at: new Date().toISOString(), note: null });
+      at, note: why });
   }
-  store.appendEvent(L, { kind: 'PROMOTED', at: new Date().toISOString(), skillVersionHash: cand,
+  for (const requirementId of rules) {
+    store.appendEvent(L, { kind: 'JUDGEMENT_RECORDED', requirementId,
+      championSkillVersionHash: prevActive ?? '', candidateSkillVersionHash: cand,
+      choice: 'CANDIDATE', rationale: why, at });
+  }
+  store.appendEvent(L, { kind: 'PROMOTED', at, skillVersionHash: cand,
     supersededActive: prevActive, evaluatedInvocation: evaluated.invocationId, packageHash: sv.materializedHash });
 
   console.log(`\nPromoted ${cand}.`);
@@ -167,4 +232,37 @@ export function promote(): void {
   console.log(`  promoted       package ${sv.materializedHash}  — the same one, which is the point`);
   console.log(`  StandardVersion ${sv.standardVersionHash}  — unchanged`);
   console.log(`  previous       ${prevActive ?? '(none)'} remains in history:  atelier rollback --to ${prevActive ?? ''}`);
+  if (rules.length) {
+    console.log(`\n  Your reason is on file against ${rules.join(', ')}. You will see it the next time you compare on`);
+    console.log(`  ${rules.length > 1 ? 'those rules' : 'that rule'}, and it is now one row in:  atelier judgements --skill ${name}`);
+  } else {
+    console.log(`\n  Your reason was recorded with the promotion but not against any rule, because nothing named what`);
+    console.log(`  this decision was about. Compare first, or pass --rule <requirementId>, and it becomes a row that`);
+    console.log(`  can be checked against the observer.`);
+  }
+}
+
+// ── judgements ──────────────────────────────────────────────────────────────────────────────
+/**
+ * THE LEDGER, AND THE ONE MEASUREMENT IT MAKES POSSIBLE.
+ *
+ * `compare` writes what the instrument said. `promote --why` and `reject --why` write what you said.
+ * This joins them and shows where they landed, which is the first time in this project that the
+ * comparator can be checked against the expert it is imitating rather than described as unchecked.
+ *
+ * It reports cells and withholds a rate below a stated floor, and above that floor it prints the rate
+ * with the two things it does not establish attached to the same paragraph. The disagreements are the
+ * point: a row where the observer preferred one output and you preferred the other, with your reason
+ * beside it, is the only artefact that says what the instrument is actually measuring.
+ */
+export function judgements(): void {
+  const name = flag('--skill') ?? die('--skill required');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const records = foldJudgements(store.readEvents(L));
+  const rule = flag('--rule');
+  const shown = rule ? records.filter((r) => r.requirementId === rule) : records;
+  if (rule && !shown.length) die(`no judgements recorded against ${rule}. Rules with rows: ${[...new Set(records.map((r) => r.requirementId))].join(', ') || '(none)'}`);
+
+  console.log(describeJudgements(shown));
+  console.log(describeAgreement(agreement(shown)));
 }
