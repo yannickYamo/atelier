@@ -19,6 +19,13 @@ export interface InferenceRequest {
   readonly toolDescription: string;
   readonly schema: Record<string, unknown>;
   readonly maxTokens: number;
+  /**
+   * Ask the backend for the distribution over emitted tokens.
+   *
+   * Off by default. Logprobs enlarge every response and only an instrument reads them; a generation
+   * that ignores them would pay for a measurement nobody takes.
+   */
+  readonly wantLogprobs?: boolean;
 }
 
 /**
@@ -68,6 +75,31 @@ export interface InferenceResult {
   readonly cost: InferenceCost;
   /** `budgetUsd(cost)`. Kept as a field because the budget ledger reads it on every call. */
   readonly costUsd: number;
+  /**
+   * THE DISTRIBUTION THE MODEL PUT OVER ITS OWN ANSWER, where the protocol exposes one.
+   *
+   * Every model-based instrument this programme has built asked for a verdict and read ONE TOKEN.
+   * Three produced ZERO abstentions across 150 observations, and the recorded reason is that
+   * abstention was ELICITED — offered as a refusal to answer rather than produced as an answer. A
+   * fourth prompt does not fix that and was ruled out.
+   *
+   * A distribution is a different READOUT, not a different prompt. Asked to place an output on a
+   * graded scale, a model that cannot separate two candidates spreads its mass across neighbouring
+   * scores, and that spread is COMPUTED rather than requested — the property the deterministic floor
+   * has and the model-based instruments did not.
+   *
+   * `null` where the provider does not expose it, which is a constraint rather than a gap:
+   * `/v1/chat/completions` returns `logprobs`; the Anthropic Messages API does not. An instrument
+   * built on this works on some backends and has to say so rather than fail quietly on the others.
+   */
+  readonly logprobs?: readonly TokenLogprobs[] | null;
+}
+
+/** One emitted token and the alternatives the model weighed against it at that position. */
+export interface TokenLogprobs {
+  readonly token: string;
+  readonly logprob: number;
+  readonly top: readonly { readonly token: string; readonly logprob: number }[];
 }
 
 export interface InferenceClient {

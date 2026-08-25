@@ -48,6 +48,7 @@
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { asText } from '../discovery/text.js';
+import { readGraded, describeGraded, SCALE_MIN, SCALE_MAX, type GradedReading } from './graded-readout.js';
 import {
   buildObserverPair, foldObserverPick, type ObserverPick, type ObserverResult,
 } from './rule-observer.js';
@@ -56,15 +57,29 @@ export const PICK_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
     pick: { type: 'string', enum: ['A', 'B', 'EQUAL', 'NEITHER'] },
+    // THE POSITION A DISTRIBUTION CAN BE READ AT. The pick is an enum and an enum cannot express
+    // spread: four members, one token, no room for "I could not separate these". A graded integer
+    // gives the model somewhere to put uncertainty without being asked for uncertainty, and the
+    // logprobs at that position are what `readGraded` reads. The pick still decides; this is a
+    // second reading of the same answer.
+    confidence: { type: 'integer', minimum: SCALE_MIN, maximum: SCALE_MAX },
     why: { type: 'string' },
   },
-  required: ['pick', 'why'], additionalProperties: false,
+  required: ['pick', 'why', 'confidence'], additionalProperties: false,
 };
 
 export interface Comparison {
   /** the folded result of the first orientation — meaningful only when `orderInvariant` */
   readonly result: ObserverResult;
   readonly picks: readonly [ObserverPick, ObserverPick];
+  /**
+   * The distribution the model put over its own answer, in each orientation.
+   *
+   * Reported beside the pick, never folded into it. The pick decides; this is a second and
+   * UNQUALIFIED reading of the same call, kept because an enum cannot express spread and every
+   * model-based instrument here has so far declined to abstain when asked to.
+   */
+  readonly graded: readonly [GradedReading, GradedReading];
   /** did exchanging the sides leave the verdict alone? */
   readonly orderInvariant: boolean;
   /** candidate length ÷ champion length — the confound this check cannot catch */
@@ -77,7 +92,7 @@ export interface Comparison {
 
 const askOnce = async (
   client: InferenceClient, budget: Budget, rendered: string,
-): Promise<{ pick: ObserverPick; why: string }> => {
+): Promise<{ pick: ObserverPick; why: string; graded: GradedReading }> => {
   const r = await spend(budget, 0.05, async () => {
     const x = await client.complete({
       stableBlock: rendered,
@@ -85,12 +100,17 @@ const askOnce = async (
       userMessage: 'Answer now.',
       toolName: 'emit_pick', toolDescription: 'Which answer complies with the rule?',
       schema: PICK_SCHEMA, maxTokens: 400,
+      // ASKED FOR ON THIS CALL AND NO OTHER. The pick is what decides; the distribution is a second,
+      // unqualified reading of the SAME answer, and it is read from the response this call already
+      // makes rather than from an extra one. An instrument that cost a second call would be a second
+      // instrument, and this programme has enough of those.
+      wantLogprobs: true,
     });
     return { value: x, cost: x.cost };
   });
-  const j = r.json as { pick?: string; why?: string } | null;
+  const j = r.json as { pick?: string; why?: string; confidence?: unknown } | null;
   const pick = (['A', 'B', 'EQUAL', 'NEITHER'] as const).find((p) => p === j?.pick) ?? 'EQUAL';
-  return { pick, why: asText(j?.why) };
+  return { pick, why: asText(j?.why), graded: readGraded(r.logprobs) };
 };
 
 /**
@@ -124,7 +144,7 @@ export async function compareOnRule(
         : null;
 
   return {
-    result: ra, picks: [a.pick, b.pick], orderInvariant, lengthRatio, preferredLonger,
+    result: ra, picks: [a.pick, b.pick], graded: [a.graded, b.graded], orderInvariant, lengthRatio, preferredLonger,
     why: orderInvariant ? a.why
       : `the verdict changed when the two answers swapped places (${ra} then ${rb}). It is reading position, not the rule.`,
     costUsd: budget.spentUsd - before,
@@ -151,6 +171,13 @@ export function describeComparison(c: Comparison, ruleStatement: string): string
   let out = `On "${ruleStatement}" — ${headline}.\n\n  ${c.why}\n\n`
     + `The same judgement held when the two answers swapped places, so it is not simply preferring\n`
     + `whichever it saw first.\n`;
+
+  // THE SECOND READING, SHOWN AND NOT USED. It is read from the same call, it has never been
+  // qualified against expert labels, and it moves nothing. Printing it is how it can be measured
+  // later against runs a person also judged; hiding it until it is qualified would guarantee it
+  // never is.
+  const g = c.graded[0];
+  if (g.kind === 'READ') out += `\n${describeGraded(g)}\n`;
 
   if (c.preferredLonger === true) {
     out += `\n**It preferred the longer answer** (${pct} the length of the other). This check cannot tell\n`

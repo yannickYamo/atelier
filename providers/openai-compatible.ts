@@ -111,9 +111,14 @@ export class CapabilityUnsupported extends Error {
   }
 }
 
+/** The wire shape of a logprobs block on this protocol. */
+interface WireLogprobs {
+  content?: { token: string; logprob: number; top_logprobs?: { token: string; logprob: number }[] }[];
+}
+
 interface ChatResponse {
   model?: string;
-  choices?: { finish_reason?: string; message?: {
+  choices?: { finish_reason?: string; logprobs?: WireLogprobs | null; message?: {
     content?: string | null;
     refusal?: string | null;
     tool_calls?: { function?: { name?: string; arguments?: string } }[];
@@ -164,6 +169,10 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
       model: this.cfg.modelId, messages,
       [this.cfg.tokenLimitParam ?? 'max_tokens']: req.maxTokens,
       ...(this.cfg.temperature === undefined ? {} : { temperature: this.cfg.temperature }),
+      // ASKED FOR ONLY WHERE A CALLER WANTS THEM. Logprobs enlarge every response, and a reading
+      // nobody consumes is a cost with no consumer. The instrument that reads a distribution sets
+      // `wantLogprobs`; ordinary generation does not.
+      ...(req.wantLogprobs ? { logprobs: true, top_logprobs: 20 } : {}),
     };
     const strict = this.cfg.strictSchema !== false;
     if (this.mode === 'FORCED_TOOL_CALL') {
@@ -233,7 +242,14 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
     };
     const pricing = this.cfg.pricing !== undefined ? this.cfg.pricing : priceFor(OPENAI_COMPATIBLE_PRICING, this.cfg.modelId);
     const cost = costOf(pricing, usage, this.local);
-    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost) };
+    // MAPPED, NEVER INVENTED. A backend on this protocol that returns nothing here yields null,
+    // which is the honest answer and the one a reader has to handle.
+    const lp = choice.logprobs?.content;
+    const logprobs = lp?.length
+      ? lp.map((t) => ({ token: t.token, logprob: t.logprob,
+          top: (t.top_logprobs ?? []).map((a) => ({ token: a.token, logprob: a.logprob })) }))
+      : null;
+    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs };
   }
 
   private async post(body: unknown, maxTokens: number): Promise<ChatResponse> {
