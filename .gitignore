@@ -8,3 +8,9 @@ plugins/dist/
 # test artifact, never source. In YOUR project this directory is the installed skill and committing
 # it is how a team shares one.
 .claude/
+
+# Internal working documents. Local only — never part of the published repository.
+# Research results, roadmaps and handoffs belong with the work they describe, not in the
+# open-source tree, which ships code and the tests that hold it up.
+/ROADMAP.md
+/PAPER_HANDOFF.md

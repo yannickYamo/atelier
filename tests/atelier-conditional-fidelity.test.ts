@@ -30,12 +30,14 @@ const run = (A: ApplicabilityEntry[], E: ExpressionEntry[], d: DecisionRuling = 
   contextSuccess('B1', 'S', 1, d, REQ, A, E);
 
 describe('the four cells, each fixture with a known answer', () => {
-  it('applies + present = SATISFIED', () => expect(classify('APPLIES', 'PRESENT')).toBe('SATISFIED'));
-  it('applies + absent = MISSED', () => expect(classify('APPLIES', 'ABSENT')).toBe('MISSED'));
-  it('does not apply + present = FALSE_APPLICATION', () =>
-    expect(classify('DOES_NOT_APPLY', 'PRESENT')).toBe('FALSE_APPLICATION'));
-  it('does not apply + absent = CORRECT_RESTRAINT', () =>
-    expect(classify('DOES_NOT_APPLY', 'ABSENT')).toBe('CORRECT_RESTRAINT'));
+  it('applies + present = SATISFIED', () => { expect(classify('APPLIES', 'PRESENT')).toBe('SATISFIED'); });
+  it('applies + absent = MISSED', () => { expect(classify('APPLIES', 'ABSENT')).toBe('MISSED'); });
+  it('does not apply + present = FALSE_APPLICATION', () => {
+    expect(classify('DOES_NOT_APPLY', 'PRESENT')).toBe('FALSE_APPLICATION');
+  });
+  it('does not apply + absent = CORRECT_RESTRAINT', () => {
+    expect(classify('DOES_NOT_APPLY', 'ABSENT')).toBe('CORRECT_RESTRAINT');
+  });
   it('uncertain expression is UNRESOLVED on either side', () => {
     expect(classify('APPLIES', 'UNCERTAIN')).toBe('UNRESOLVED');
     expect(classify('DOES_NOT_APPLY', 'UNCERTAIN')).toBe('UNRESOLVED');
@@ -177,12 +179,12 @@ describe('B and C may not be pooled', () => {
     provenance: 'p', clusterId: 'k', set });
 
   it('refuses a mixed set', () => {
-    expect(() => assertNotPooled([c('B1', 'B_NATURAL'), c('C1', 'C_TARGETED')]))
+    expect(() => { assertNotPooled([c('B1', 'B_NATURAL'), c('C1', 'C_TARGETED')]); })
       .toThrow(/POOLING REFUSED/);
   });
   it('allows either set alone', () => {
-    expect(() => assertNotPooled([c('B1', 'B_NATURAL'), c('B2', 'B_NATURAL')])).not.toThrow();
-    expect(() => assertNotPooled([c('C1', 'C_TARGETED')])).not.toThrow();
+    expect(() => { assertNotPooled([c('B1', 'B_NATURAL'), c('B2', 'B_NATURAL')]); }).not.toThrow();
+    expect(() => { assertNotPooled([c('C1', 'C_TARGETED')]); }).not.toThrow();
   });
 });
 
