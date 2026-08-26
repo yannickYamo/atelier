@@ -22,7 +22,7 @@ import type { Budget } from '../../core/inference/client.js';
 import type { GoldenUnit } from '../../core/golden/golden-unit.js';
 import { runOnce } from './improve.js';
 import { resolveServedSkill } from './invoke.js';
-import { resolveProvenance } from '../../core/fidelity/provenance.js';
+import type { Provenance } from '../../core/fidelity/provenance.js';
 import { DATA, die, flag, argv, clientAndBinding, describeBinding, loadSession , numericFlag} from '../runtime.js';
 
 const PAIRS = (): string => join(DATA, 'reference-pairs.json');
@@ -59,11 +59,28 @@ async function preparePhase(): Promise<void> {
   console.log(`Generating ${reserved.length} held-out attempt(s) with ${describeBinding(binding)}.`);
   console.log('The expert\'s own work is the reference. It is NOT sent to the model.\n');
 
+  // PROVENANCE IS A PROPERTY OF THE INPUT, NOT OF THE SHELL THAT RAN IT.
+  //
+  // A reserved unit is a real task the expert really did, held back before discovery read it. That is
+  // ORGANIC_USE by the definition, and it is the whole point: the reference test is the measurement
+  // that may support a generalisation claim, and only certification-grade inputs can carry one.
+  //
+  // Stated as a typed constant rather than routed through `resolveProvenance`. That helper exists to
+  // parse an UNTRUSTED string — a `--provenance` flag or the harness environment — and it throws on
+  // anything outside the taxonomy. This call site knows its answer at compile time, and laundering a
+  // literal through a string parser is exactly how `'HELD_OUT_REFERENCE'` survived here: not a member
+  // of `Provenance`, unreachable by the type checker, and thrown on the first reserved unit for every
+  // user who ever ran this command. A typed constant cannot fail that way again.
+  //
+  // It is also deliberately NOT env-overridable. A stray ATELIER_PROVENANCE in the shell must not
+  // change what a held-out expert artifact *is*.
+  const provenance: Provenance = 'ORGANIC_USE';
+
   const salt = sv.skillVersionHash;
   const pairs: ReferencePair[] = [];
   for (const u of reserved) {
     const rec = await runOnce(L, sv, servedText, servedHash, delivery, u.task, client, budget, binding,
-      resolveProvenance('HELD_OUT_REFERENCE', process.env), contractFile);
+      provenance, contractFile);
     const goldenSide = sideFor(u.unitId, salt);
     pairs.push({ contextId: u.unitId, task: u.task,
       goldenSide,
