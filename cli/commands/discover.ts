@@ -21,7 +21,7 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
 import { sha, DATA, die, argv, flag, PROPOSER, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor } from '../runtime.js';
-import { priceFor, ANTHROPIC_PRICING } from '../../providers/pricing.js';
+import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
 // The CLI once carried its own proposer prompt and schema here, hardcoded, beside the ones
@@ -113,7 +113,9 @@ export async function discover(): Promise<void> {
   if (rate) {
     console.log(`\nEstimated discovery cost $${lo.toFixed(2)}–$${hi.toFixed(2)}  (${VANTAGES} vantages over `
       + `${poolTok.toLocaleString()} tokens, then ~${RULES} rules checked against ${heldCount} held-out piece(s), `
-      + `at $${rate.inputPerM}/$${rate.outputPerM} per M)`);
+      + `at $${rate.inputPerM}/$${rate.outputPerM} per M, rates as of ${PRICES_CHECKED_ON})`);
+    // The date is not decoration. A built-in rate is a number we wrote down once, and a person
+    // reading a dollar estimate is entitled to know how old it is before trusting it.
   }
   if (rate && hi > budget.capUsd) {
     die(`Estimated up to $${hi.toFixed(2)} and your limit is $${budget.capUsd.toFixed(2)}. NOTHING HAS BEEN SPENT.`

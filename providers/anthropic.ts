@@ -13,8 +13,6 @@ import { budgetUsd } from '../core/inference/client.js';
 import { ANTHROPIC_PRICING, costOf, priceFor, type Pricing } from './pricing.js';
 
 export type { Pricing } from './pricing.js';
-export const PRICING = ANTHROPIC_PRICING;
-
 export class AnthropicInferenceClient implements InferenceClient {
   private readonly client: Anthropic;
   constructor(private readonly modelId: string, apiKey?: string, private readonly pricing: Pricing | null = priceFor(ANTHROPIC_PRICING, modelId)) {
