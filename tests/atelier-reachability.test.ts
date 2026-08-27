@@ -118,6 +118,48 @@ describe('a decision that is not an approval is still a decision', () => {
 // modules equal a list written down here. Not "is anything dark" — dark code is sometimes a
 // deliberate state — but "is anything dark that nobody decided to park". A module may leave the
 // codebase or leave this list; it may not leave silently.
+const PARKED: Readonly<Record<string, string>> = {
+  'core/fidelity/conditional-fidelity.ts':
+    'MEASUREMENT INFRASTRUCTURE, PARKED ON PURPOSE UNTIL A STUDY USES IT. It replaces the adherence '
+    + 'endpoint that failed three times: COMPLETE defined as absence of violations, over conditional '
+    + 'rules, scored 100% for every arm across 138 outputs including a base model that won 3 of 46 '
+    + 'contexts, because silence buys an N/A and an N/A cannot be violated. The replacement moves WHO '
+    + 'decides applicability: the expert seals it per context before any output exists, and the scorer '
+    + 'only rules on whether the behaviour appeared. Wiring it to a command before a study has sealed '
+    + 'cases would invent a CLI surface for data that does not exist yet, and the protocol it serves '
+    + 'says explicitly to stop after building the instrument. 24 polarity fixtures pin it in both '
+    + 'directions, including the exact output the old endpoint scored perfect and this one fails.',
+  'core/ratification/boundary-answer.ts':
+    'Wireable and not yet decided. It fits `atelier confirm --rule <id> --applies-when <condition>` '
+    + 'almost exactly, which would give the CLI a scoping act distinct from the authority act it has '
+    + 'today. That is a new product surface, not a repair, and it wants a deliberate decision rather '
+    + 'than being slipped in behind a reachability fix.',
+  // These three declare their own status in their first line. The reasons below are READ from the
+  // files, not invented here — an earlier version of this list guessed, and guessed wrong about the
+  // two veto modules, calling frozen negative evidence a loose end that should be wired or deleted.
+  'core/fidelity/veto-contract.ts':
+    'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE. v3\'s construct was not established '
+    + '(V3_CONSTRUCT_NOT_ESTABLISHED). Kept unwired and untuned as the record of what was tried: two '
+    + 'observer versions produced zero abstentions across 126 observations, and source inspection ruled '
+    + 'out every mechanical explanation. Deleting it would destroy the evidence that the approach was '
+    + 'tried and what it cost.',
+  'core/fidelity/veto-sensor.ts':
+    'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
+    + 'because it is a record rather than a component: testing an instrument whose construct was not '
+    + 'established would assert behaviour nobody is entitled to rely on.',
+  'core/discovery/chain/discrimination-probe.ts':
+    'DELIBERATELY DARK — DEFERRED BY POLICY. Probes are not fired in the AUTONOMOUS_LOOP_READY '
+    + 'milestone. The planner emits a ProbeSpec on the live path; turning one into a blind, '
+    + 'counterbalanced, manipulation-checked pair is this module\'s job and happens the first time a '
+    + 'probe actually runs.',
+  'core/coverage/abstraction-check.ts':
+    'A verdict type and an authority constant with no producer. The live coverage path reports weak '
+    + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
+  'core/state/policy.ts':
+    'Protocol policy resolution, forty-one lines, reachable only from the conformance test. Whether a '
+    + 'protocol policy is a real axis or a generalisation nobody needed is still open.',
+};
+
 describe('the census: nothing is dark by accident', () => {
   // Deliberately parked, with the reason. Anything here is code we are keeping and not yet serving,
   // and a name in this list is a claim someone made on purpose. The reason is not decoration: the
@@ -127,47 +169,6 @@ describe('the census: nothing is dark by accident', () => {
   // in public: the append-only ratification ledger, which the README names in its architecture block
   // while `ratify` was overwriting a mutable blob, and the held-out reference test, which the README
   // asks contributors to run and which had no command.
-  const PARKED: Readonly<Record<string, string>> = {
-    'core/fidelity/conditional-fidelity.ts':
-      'MEASUREMENT INFRASTRUCTURE, PARKED ON PURPOSE UNTIL A STUDY USES IT. It replaces the adherence '
-      + 'endpoint that failed three times: COMPLETE defined as absence of violations, over conditional '
-      + 'rules, scored 100% for every arm across 138 outputs including a base model that won 3 of 46 '
-      + 'contexts, because silence buys an N/A and an N/A cannot be violated. The replacement moves WHO '
-      + 'decides applicability: the expert seals it per context before any output exists, and the scorer '
-      + 'only rules on whether the behaviour appeared. Wiring it to a command before a study has sealed '
-      + 'cases would invent a CLI surface for data that does not exist yet, and the protocol it serves '
-      + 'says explicitly to stop after building the instrument. 24 polarity fixtures pin it in both '
-      + 'directions, including the exact output the old endpoint scored perfect and this one fails.',
-    'core/ratification/boundary-answer.ts':
-      'Wireable and not yet decided. It fits `atelier confirm --rule <id> --applies-when <condition>` '
-      + 'almost exactly, which would give the CLI a scoping act distinct from the authority act it has '
-      + 'today. That is a new product surface, not a repair, and it wants a deliberate decision rather '
-      + 'than being slipped in behind a reachability fix.',
-    // These three declare their own status in their first line. The reasons below are READ from the
-    // files, not invented here — an earlier version of this list guessed, and guessed wrong about the
-    // two veto modules, calling frozen negative evidence a loose end that should be wired or deleted.
-    'core/fidelity/veto-contract.ts':
-      'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE. v3\'s construct was not established '
-      + '(V3_CONSTRUCT_NOT_ESTABLISHED). Kept unwired and untuned as the record of what was tried: two '
-      + 'observer versions produced zero abstentions across 126 observations, and source inspection ruled '
-      + 'out every mechanical explanation. Deleting it would destroy the evidence that the approach was '
-      + 'tried and what it cost.',
-    'core/fidelity/veto-sensor.ts':
-      'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
-      + 'because it is a record rather than a component: testing an instrument whose construct was not '
-      + 'established would assert behaviour nobody is entitled to rely on.',
-    'core/discovery/chain/discrimination-probe.ts':
-      'DELIBERATELY DARK — DEFERRED BY POLICY. Probes are not fired in the AUTONOMOUS_LOOP_READY '
-      + 'milestone. The planner emits a ProbeSpec on the live path; turning one into a blind, '
-      + 'counterbalanced, manipulation-checked pair is this module\'s job and happens the first time a '
-      + 'probe actually runs.',
-    'core/coverage/abstraction-check.ts':
-      'A verdict type and an authority constant with no producer. The live coverage path reports weak '
-      + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
-    'core/state/policy.ts':
-      'Protocol policy resolution, forty-one lines, reachable only from the conformance test. Whether a '
-      + 'protocol policy is a real axis or a generalisation nobody needed is still open.',
-  };
 
   const resolveImports = (file: string, src: string): string[] =>
     [...src.matchAll(/from\s+'(\.[^']+)'/g)].map((m) => {
@@ -240,5 +241,123 @@ describe('the census: nothing is dark by accident', () => {
     expect(reachable.has(join('core', 'state', 'no-such-module.ts'))).toBe(false);
     expect(shipped().length).toBeGreaterThan(60);        // the walk found the tree, not one file
     expect(reachable.size).toBeGreaterThan(60);          // and the graph, not one node
+  });
+});
+
+// ─── ONE LEVEL DOWN: EXPORTED VALUES NOTHING CALLS ─────────────────────────────────────────────
+//
+// The census above is at MODULE granularity, which is the claim this repository makes publicly. It
+// has a blind spot: a module can be reachable while an exported function inside it is called by
+// nothing at all. `evaluatePairedQualityFloor` sits in a reachable file, and a reader who greps for
+// it finds a quality floor that no path evaluates.
+//
+// So the same rule applies to values: wired, deleted, or listed here with a reason. Types are out of
+// scope — an exported type with no internal consumer is ordinary for a published package, and a type
+// cannot be dark in the way a function can.
+
+const PARKED_VALUES: Readonly<Record<string, string>> = {
+  'core/convergence/promotion.ts:shipsAutonomously':
+    'The predicate for the AUTO_PROMOTE branch. No run reaches that branch yet, by design: every real '
+    + 'run pins at least one gate unqualified, so the reader that would use this has nothing to read.',
+  'core/convergence/state-machine.ts:PHASES':
+    'The ordered phase list. The machine branches on phases individually; this is the enumeration a '
+    + 'caller would iterate, and no caller iterates them yet.',
+  'core/discovery/chain/construct-scope.ts:resolveScope':
+    'Deterministic scope resolution. The single-principal authority model has no scopes, so nothing '
+    + 'queries one. Kept because the organizational version needs exactly this and its semantics '
+    + '(UNKNOWN_SCOPE rather than a permissive default) are the part worth not re-deciding later.',
+  'core/discovery/chain/discovery-contract.ts:partitionByProvenance':
+    'Partitions candidates by citation membership instead of aborting the batch. The chain currently '
+    + 'refuses whole runs rather than splitting them, so no site partitions yet.',
+  'core/discovery/chain/discovery-orchestration.ts:assertProspective':
+    'Refuses a product claim built on cached evidence. No claim path consumes ingest outcomes yet, '
+    + 'which is why it is uncalled rather than why it is unnecessary.',
+  'core/discovery/chain/taste-factor-evidence.ts:recurrenceRate':
+    'Appearances over APPLICABLE contexts. The chain reports counts and lets a person read them; '
+    + 'nothing converts to a rate, and a rate is the shape most likely to be quoted as a finding.',
+  'core/discovery/chain/taste-factor.ts:canVeto':
+    'LAW 4: only a calibrated, ratified factor may veto. The veto mechanism itself is parked one '
+    + 'level up, so its precondition has nothing to gate.',
+  'core/discovery/chain/taste-factor.ts:isRepairApplicable':
+    'Whether a repair operator is qualified beyond the case it was born on. Repair qualification is '
+    + 'recorded but not yet consulted at a decision site.',
+  'core/discovery/conformance.ts:describeConformance':
+    'The human-readable conformance report. The CLI prints its own summary; this is the fuller one '
+    + 'that prints the gap on a pass as well as a failure, and no command calls it.',
+  'core/distinctiveness/floor.ts:requireFrozenEntry':
+    'Fails closed on a missing frozen baseline. Nothing looks up a frozen entry yet, because no '
+    + 'contract dimension has reached ENFORCE.',
+  'core/distinctiveness/floor.ts:evaluatePairedQualityFloor':
+    'The paired composite floor. Parked for the same reason: with no dimension at ENFORCE there is '
+    + 'no bundle to evaluate. This is the function a reader is most likely to mistake for wired.',
+  'core/distinctiveness/floor.ts:explainFloor':
+    'The one line a person reads from a floor result. Nothing produces a floor result to explain.',
+  'core/state/store.ts:getEvidence':
+    'The reader half of putEvidence. Evidence is written at build and never read back through the '
+    + 'store: the CLI carries it in the session instead. The asymmetry is the finding, and this is '
+    + 'listed rather than deleted because the store is a public surface and a write with no read is '
+    + 'the shape a later reader will need.',
+  'core/measurement/longitudinal.ts:evidenceAcross':
+    'Every requirement worst-evidenced first. The controller reads evidence one requirement at a '
+    + 'time; the whole-standard view has no caller.',
+};
+
+describe('an exported value nothing calls is wired, deleted, or listed with a reason', () => {
+  const strip = (s: string): string =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  const srcFiles = ['core', 'cli', 'renderers', 'adapters', 'providers']
+    .flatMap((d) => walkTree(d)).filter((f) => /\.m?ts$/.test(f));
+  // This file names every parked value in PARKED_VALUES. Counting those as uses would make each
+  // entry immediately "referenced" and flip the whole census to stale — the list would erase its own
+  // subject. A census must not read itself.
+  const SELF = join('tests', 'atelier-reachability.test.ts');
+  const testFiles = walkTree('tests').filter((f) => /\.m?ts$/.test(f) && f !== SELF);
+  const bodies = new Map([...srcFiles, ...testFiles].map((f) => [f, strip(readFileSync(f, 'utf8'))]));
+
+  /** Values (not types) exported from src and referenced by no file, including their own. */
+  const darkValues = (): string[] => {
+    const out: string[] = [];
+    for (const f of srcFiles) {
+      const self = bodies.get(f) ?? '';
+      for (const m of self.matchAll(/^export (?:async )?(?:function|const|class) (\w+)/gm)) {
+        const n = m[1];
+        const re = new RegExp(`\\b${n}\\b`);
+        const elsewhere = [...bodies].some(([g, b]) => g !== f && re.test(b));
+        const own = (self.match(new RegExp(`\\b${n}\\b`, 'g')) ?? []).length - 1;
+        if (!elsewhere && own === 0) out.push(`${f}:${n}`);
+      }
+    }
+    return out.sort();
+  };
+
+  it('the census can see exports at all', () => {
+    // Polarity: a regex that stopped matching would make every assertion below vacuous.
+    const anyExport = srcFiles.some((f) => /^export (?:async )?(?:function|const) /m.test(bodies.get(f) ?? ''));
+    expect(anyExport).toBe(true);
+    expect(srcFiles.length).toBeGreaterThan(80);
+  });
+
+  it('every dark value is declared, and nothing is declared that is actually wired', () => {
+    const dark = darkValues();
+    // A module already parked whole is disclosed at that granularity; do not require it twice.
+    const inParkedModule = (k: string): boolean => k.split(':')[0] in PARKED;
+    // Some values carry their own written "no call site yet" note at the definition.
+    const selfDeclared = (k: string): boolean => {
+      const [f, n] = k.split(':');
+      const raw = readFileSync(f, 'utf8');
+      const at = raw.search(new RegExp(`^export (?:async )?(?:function|const|class) ${n}\\b`, 'm'));
+      if (at < 0) return false;
+      const preamble = raw.slice(Math.max(0, at - 900), at);
+      return /not currently called|no call site yet|nothing called it/i.test(preamble);
+    };
+
+    const undeclared = dark.filter((k) => !(k in PARKED_VALUES) && !inParkedModule(k) && !selfDeclared(k));
+    const stale = Object.keys(PARKED_VALUES).filter((k) => !dark.includes(k));
+
+    expect(undeclared, `exported and called by nothing — wire it, delete it, or park it:\n${undeclared.join('\n')}`)
+      .toEqual([]);
+    expect(stale, `listed as dark but something now calls it; remove from PARKED_VALUES:\n${stale.join('\n')}`)
+      .toEqual([]);
   });
 });

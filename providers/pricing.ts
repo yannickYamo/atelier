@@ -82,16 +82,6 @@ export const isLocalBackend = (baseUrl: string): boolean => {
   try { return LOCAL_HOST.test(new URL(baseUrl).host); } catch { return false; }
 };
 
-/**
- * How a built-in rate should be described to a person.
- *
- * `PRICES_CHECKED_ON` was exported, dated, and printed nowhere — so the file's own claim that
- * "entries here are dated" was true of the source and invisible to every user. A rate a person
- * cannot date is a rate they have to trust, which is the opposite of what this module is for.
- */
-export const describeBuiltInRate = (p: Pricing): string =>
-  `$${p.inputPerM}/$${p.outputPerM} per million, built-in rate checked ${PRICES_CHECKED_ON}. `
-  + 'Pass --price-in and --price-out to use your own.';
 
 export const priceFor = (table: Readonly<Record<string, Pricing>>, modelId: string): Pricing | null =>
   table[modelId] ?? null;
