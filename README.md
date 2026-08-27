@@ -769,6 +769,7 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 | `promote` / `reject --skill <name>` | adopt the candidate, or refuse it and record why |
 | `revert` | undo the last build's file writes, leaving the standard untouched |
 | `confirm --rule <id>` | rule on one inferred behaviour after the skill already works |
+| `reference --declare-viewed <ids>` | record that you have read a held-out unit. It is refused from then on, and there is no undo |
 | `sharpen` | for a rule claiming to hold everywhere, write the same passage three ways, too little / about right / overdone, blinded |
 | `answer --pick <n>` / `--none` / `--indifferent` | fold your choice into a typed consequence. A probe answer is evidence, never authority: it routes you to `confirm` or `amend` and never edits the rule |
 | `amend --rule <id>` | change what a rule means. Mints a new StandardVersion with a required reason |

@@ -41,7 +41,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'with',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',
-  'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
+  'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'host', 'id', 'invocation', 'kind',
   'labels', 'max-calls', 'model', 'name', 'note',

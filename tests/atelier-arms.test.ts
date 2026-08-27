@@ -14,6 +14,9 @@ import {
   servedTextFor, armSetHash, MissingArmInput, type ArmInputs, type ArmId,
 } from '../core/reference/arms.js';
 import { mcnemarExactP, scorePairedArms, MIN_DISCORDANT } from '../core/reference/reference-test.js';
+import { auditHoldout, type Consumption } from '../core/reference/holdout-integrity.js';
+import { declareBuilderViewed, markConsumed } from '../core/golden/reservation.js';
+import type { GoldenUnit } from '../core/golden/golden-unit.js';
 
 const inputs = (over: Partial<ArmInputs> = {}): ArmInputs => ({
   compiledSkillText: 'COMPILED',
@@ -143,5 +146,46 @@ describe('the paired test', () => {
     const r = scorePairedArms('T_vs_B1', 6, 1, 10);
     expect(r.n).toBe(17);
     expect(r.p).toBeCloseTo(mcnemarExactP(6, 1), 12);
+  });
+});
+
+describe('the builder can declare a held-out unit contaminated, and cannot undeclare it', () => {
+  const unit = (id: string, consumedBy: Consumption[] = []): GoldenUnit => ({
+    unitId: id, kind: 'PROSE_SECTION', context: 'writing', task: `produce ${id}`,
+    expertAction: 'the expert produced this', artifact: `artifact of ${id}`,
+    provenance: { sourceRef: `/tmp/${id}`, clusterId: 'c1', contextId: id, clusterBasis: 'FILE', consumedBy },
+  });
+
+  it('records BUILDER_VIEWED on the named unit and leaves the others alone', () => {
+    const out = declareBuilderViewed([unit('a'), unit('b')], ['a']);
+    expect(out[0].provenance.consumedBy).toEqual(['BUILDER_VIEWED']);
+    expect(out[1].provenance.consumedBy).toEqual([]);
+  });
+
+  it('is idempotent, so declaring twice does not double-record', () => {
+    const once = declareBuilderViewed([unit('a')], ['a']);
+    const twice = declareBuilderViewed(once, ['a']);
+    expect(twice[0].provenance.consumedBy).toEqual(['BUILDER_VIEWED']);
+  });
+
+  it('is the one consumption allowed on a reserved unit, where markConsumed refuses', () => {
+    const units = [unit('a')];
+    const reservation = { reserved: units, discovery: [], claimScope: 'WITHIN_CLUSTER',
+      bar: 0.15, reservedClaimUnits: 1 } as unknown as Parameters<typeof markConsumed>[1];
+    // every other route is refused on the reserve, because it would be spending it
+    expect(() => markConsumed(units, reservation, ['a'], 'DISCOVERY')).toThrow(/RESERVED EVIDENCE/);
+    // this one is a report that it was already spent, and must be recordable
+    expect(declareBuilderViewed(units, ['a'])[0].provenance.consumedBy).toEqual(['BUILDER_VIEWED']);
+  });
+
+  it('a declared unit is refused by the audit rather than counted clean', () => {
+    const declared = declareBuilderViewed([unit('a'), unit('b')], ['a']);
+    const verdict = auditHoldout(declared.map((u) => ({
+      itemId: u.unitId, path: u.provenance.sourceRef,
+      consumedBy: u.provenance.consumedBy, taskReusableUnderFrozenSplit: true,
+    })), 0.15);
+    expect(verdict.contaminated.map((c) => c.item.itemId)).toEqual(['a']);
+    expect(verdict.clean.map((c) => c.itemId)).toEqual(['b']);
+    expect(verdict.contaminated[0].why).toMatch(/BUILDER_VIEWED/);
   });
 });
