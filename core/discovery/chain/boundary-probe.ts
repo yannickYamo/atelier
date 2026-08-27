@@ -1,10 +1,9 @@
 // PORTED, UNCHANGED EXCEPT IMPORT PATHS.
 //
-//   from     the private predecessor this was extracted from
-//
-// Ported rather than rewritten, and the original kept running while this one earned its callers —
+// Ported rather than rewritten, and the original kept running while this one earned its callers:
 // copy-then-delete in one movement is how a reference implementation is lost before the port has
-// survived use. Parity between the two is pinned by test.
+// survived use. Its behaviour is pinned by this repository's own tests; the tree it came from is
+// not public, and no claim in this repository rests on it.
 //
 // Nothing here does I/O or calls a model. The whole chain is pure, which is why it ports at all: the
 // inference boundary is a PARAMETER, so Atelier supplies its own client and the logic never knew.
@@ -158,7 +157,8 @@ export function blindProbe(
  *
  * "No preference" folds to INDIFFERENT, which is deliberately NOT counter-evidence: the factor
  * simply does not bind in this context. That distinction is the whole reason taste is modelled as
- * Q(y|x,S_u) — a factor can be load-bearing in one context and irrelevant in another, and
+ * Q(y|x,S_u), the quality of y for task x under expert u's standard — a factor can be
+ * load-bearing in one context and irrelevant in another, and
  * collapsing indifference into disagreement would erase the scope information.
  */
 export function foldProbeAnswer(

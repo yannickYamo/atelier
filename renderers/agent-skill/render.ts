@@ -237,9 +237,9 @@ export function renderAgentSkill(
   //
   // These requirements are ALREADY in `gen` or `bound` above and stay there. SELF_CHECK adds a
   // pre-finalize check on top of the generation instruction; it does not move the rule out of the
-  // instructions. The historical compiler chose the other way — `editFor` in
-  // The skill writer in the private predecessor returns METHODOLOGY_PROSE *or* SECTION_CONTRACT,
-  // never both — and inheriting that here would demote a rule from "shape the writing" to "notice
+  // instructions. An earlier compiler chose the other way: its writer returned METHODOLOGY_PROSE
+  // *or* SECTION_CONTRACT and never both, and inheriting that here would demote a rule from
+  // "shape the writing" to "notice
   // afterwards" while calling it an escalation. A carrier may buy MORE support for a requirement.
   // It may never buy less.
   const preFinalize = serves.filter((x) => x.role === 'ENFORCE' && x.carrier === 'SELF_CHECK').map((x) => x.r);

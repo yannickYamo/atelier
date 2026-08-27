@@ -8,7 +8,7 @@
 //
 // ─── EVERY GATE IS SEPARATE, AND EVERY ONE IS EARNED SEPARATELY ────────────────────────────────
 //
-// This is where SSO's acceptance rule is refused. SSO promotes when the judge's wins exceed its
+// This is where the acceptance rule of SSO (Self-Supervised Skill Optimization) is refused. SSO promotes when the judge's wins exceed its
 // losses on unlabeled validation — one unqualified instrument supplying both the optimisation signal
 // and the authority to act on it. What refusing that costs is the list below, and the cost is the
 // point: nothing here can be satisfied by an instrument reporting on its own work.

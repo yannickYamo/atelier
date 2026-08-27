@@ -33,7 +33,7 @@ import { tCrit, sd as sdOf, mean as meanOf } from '../stats/t.js';
 
 // ─── THE CLUSTER-AWARE HALF ────────────────────────────────────────────────────────────────────
 //
-// PORTED from two-phase-estimator.ts. `contextDifferences` there folds adjudicated records through
+// PORTED from the two-phase estimator in the non-public predecessor, whose `contextDifferences` folded adjudicated records through
 // a Horvitz-Thompson rate; Atelier's unit is a per-context mean score, so the FOLD is supplied by the
 // caller and only the inference travels. The interval itself is unchanged.
 
@@ -59,7 +59,7 @@ export interface WitnessInterval {
 
 export function contextClusteredInterval(diffs: readonly ContextDifference[]): WitnessInterval {
   const n = diffs.length;
-  if (n < 3) throw new Error(`two-phase-estimator: ${n} contexts — too few for a context-level interval`);
+  if (n < 3) throw new Error(`contextClusteredInterval: ${n} contexts — too few for a context-level interval`);
   const v = diffs.map((d) => d.delta);
   const mean = meanOf(v);
   const h = tCrit(n - 1, 0.975) * (sdOf(v) / Math.sqrt(n));

@@ -17,7 +17,7 @@
 // `skill-proposal.ts` keys its phrase tables off the first. Porting it as written would import a
 // second vocabulary into a package that already has one, and then require a translation table
 // between them — and the two disagree on more than names. The historical carriers are SUBSTITUTIVE
-// (`skill-writer.ts:55` returns exactly ONE edit per requirement, so SCAFFOLD replaces the prose);
+// (the predecessor skill writer returned exactly ONE edit per requirement, so SCAFFOLD replaces the prose);
 // Atelier's are CUMULATIVE by a deliberate correction, because substituting a self-check for a
 // generation instruction moves a rule from *shape the writing* to *notice afterwards* and calls the
 // weakening an escalation.

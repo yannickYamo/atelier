@@ -93,7 +93,7 @@ export function evidenceFor(
 /**
  * The plain-language readout.
  *
- * Written to be unwelcoming to a reader who wants a number: every strength claim is followed by the
+ * Every strength claim is followed by the
  * denominator it rests on, and a claim that cannot be made says why rather than being omitted.
  */
 export function describeEvidence(e: RequirementEvidence): string {

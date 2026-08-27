@@ -1,7 +1,5 @@
 // PORTED, UNCHANGED EXCEPT IMPORT PATHS.
 //
-//   from     the private predecessor this was extracted from
-//
 // Missed on the first pass: the outward-dependency scan filtered `./`-prefixed imports as siblings,
 // and this is a sibling that was not on the port list. The typechecker caught it immediately, which
 // is the argument for porting against a compiler rather than against a file list.

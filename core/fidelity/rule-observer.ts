@@ -1,9 +1,9 @@
 // atelier/core/fidelity/rule-observer.ts — RANKING CANDIDATES WITHOUT CERTIFYING ONE.
 //
 // PORTED from the rule observer in the private predecessor — the generic half. What is NOT ported,
-// and why, is the more useful half of this header.
+// and why:
 //
-// ─── THE SHAPE I FAILED TO BUILD, ALREADY BUILT ────────────────────────────────────────────────
+// ─── THE SHAPE THAT WAS ALREADY BUILT ────────────────────────────────────────────────
 //
 // An earlier from-scratch observer, since parked in the private predecessor, was
 // TWO-SIDED: it judged each output SATISFIED or VIOLATED. It said SATISFIED 19 times in 33 and

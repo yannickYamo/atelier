@@ -1,7 +1,5 @@
 // PORTED, UNCHANGED. Imports are already siblings in both trees.
 //
-//   from     the private predecessor this was extracted from
-//
 // The METHODOLOGY channel, and the second half of case 2. The taste channel asks what your work
 // implies about your standard; this one asks a question it cannot: **you wrote this method down —
 // does your skill actually carry it?** Different failure class, and a more embarrassing one, because

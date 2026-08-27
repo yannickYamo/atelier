@@ -3,7 +3,7 @@
 //   from   the frozen comparator in the private predecessor (+ its Welch implementation)
 //   audit  a transfer audit of that port concluded PARTIALLY_TRANSFERS
 //
-// I previously reported distinctiveness "confirmed absent everywhere". It was not: I searched for the
+// An earlier pass reported distinctiveness "confirmed absent everywhere". It was not: I searched for the
 // NAME (TSR, distinctiveness) instead of the FUNCTION — what stops a candidate regressing what made
 // the work distinctive. This is that.
 //

@@ -1,10 +1,9 @@
 // PORTED, UNCHANGED EXCEPT IMPORT PATHS.
 //
-//   from     the private predecessor this was extracted from
-//
-// Ported rather than rewritten, and the original kept running while this one earned its callers —
+// Ported rather than rewritten, and the original kept running while this one earned its callers:
 // copy-then-delete in one movement is how a reference implementation is lost before the port has
-// survived use. Parity between the two is pinned by test.
+// survived use. Its behaviour is pinned by this repository's own tests; the tree it came from is
+// not public, and no claim in this repository rests on it.
 //
 // Nothing here does I/O or calls a model. The whole chain is pure, which is why it ports at all: the
 // inference boundary is a PARAMETER, so Atelier supplies its own client and the logic never knew.
@@ -15,9 +14,9 @@
  * read surfaced). Pure types + a TRANSPARENT LEXICOGRAPHIC priority rule — NEVER a
  * collapsed weighted score (anti-AP_v1). Phase 1 only; no autonomous mutation.
  *
- * CONSUMER: the the aggregation stage stage builds `TasteFactorEvidence` from the stage sensors
- * output + expert boundary labels; `assignPriority()` ranks factors; the terminal
- * the discovery chain deliverable is a `SkillStandardBlueprint`.
+ * CONSUMER: the aggregation stage builds `TasteFactorEvidence` from the sensors' output and the
+ * expert's boundary labels; `assignPriority()` ranks the factors; the terminal deliverable of the
+ * discovery chain is a `SkillStandardBlueprint`.
  *
  * THE FOUR EVIDENCE CHANNELS ARE KEPT SEPARATE (the lesson being: proxy is not authority; an LLM
  * "this improves output" and an expert "this is exactly the generic thing I hate" must
@@ -127,7 +126,7 @@ export function assignPriority(e: TasteFactorEvidence): PriorityDecision {
   return { priority, rationale, channels };
 }
 
-// ── Skill Standard Blueprint — the the discovery chain TERMINAL deliverable ──
+// ── Skill Standard Blueprint — the discovery chain's TERMINAL deliverable ──
 export type ImplementationSurface = 'STRUCTURAL_METHODOLOGY' | 'BEHAVIORAL_REQUIREMENT' | 'CONTEXT_SCOPED_CAPABILITY' | 'DELIVERY_TASTE';
 
 export interface BlueprintRequirement {

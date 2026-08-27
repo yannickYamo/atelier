@@ -1,4 +1,4 @@
-// atelier/core/convergence/state-machine.ts — THE LOOP, AND THE NINE WAYS IT CAN HONESTLY END.
+// atelier/core/convergence/state-machine.ts — THE LOOP, AND THE TWELVE WAYS IT CAN HONESTLY END.
 //
 // The pieces exist: invocation, diagnosis, escalation, candidate, repair memory, evidence. What was
 // missing is the thing that walks them and says WHY it stopped. Without it every halt looks the
