@@ -43,6 +43,18 @@
 
 import type { ComponentKind } from '../intake/package.js';
 
+// A SENTINEL THAT CANNOT ACCIDENTALLY MATCH, WRITTEN AS AN ESCAPE RATHER THAN AS A RAW BYTE.
+//
+// The reachability probe asks whether the entry file contains the edit. When there is no entry file
+// the answer must be "no", and `''` gives the opposite: `String.includes('')` is always true, so the
+// guard would pass on precisely the case it exists to catch. A NUL can never occur in the source
+// being searched, so it fails closed.
+//
+// It was previously a literal 0x00 byte in the file. That made `file` report `data`, made `grep -r`
+// skip all 249 lines in silence, and made GitHub refuse to render the diff — so every text audit of
+// this repository had a blind spot exactly here. Same value, two visible characters.
+const NO_ENTRY_SENTINEL = '\0';
+
 /** A concrete, reviewable file change. The adapter decides the bytes; it never applies them. */
 export interface PlacementEdit {
   /** package-relative path the change lands in */
@@ -191,7 +203,7 @@ export const ReferenceDoc: PlacementAdapter = {
   reachabilityProbe: (_post, req) => {
     // Deliberately ignores the post-edit content of the file being written.
     const named = req.entryContent.includes(req.path)
-      || req.entryContent.includes(req.path.split('/').pop() ?? ' ');
+      || req.entryContent.includes(req.path.split('/').pop() ?? NO_ENTRY_SENTINEL);
     return named
       ? { reachable: true, why: `the entry point names ${req.path}, so the host will load it` }
       : { reachable: false, why: `nothing in SKILL.md points at ${req.path} — the host never loads it, so this rule would be installed and dark` };

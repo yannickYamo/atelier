@@ -153,7 +153,7 @@ describe('the builder can declare a held-out unit contaminated, and cannot undec
   const unit = (id: string, consumedBy: Consumption[] = []): GoldenUnit => ({
     unitId: id, kind: 'PROSE_SECTION', context: 'writing', task: `produce ${id}`,
     expertAction: 'the expert produced this', artifact: `artifact of ${id}`,
-    provenance: { sourceRef: `/tmp/${id}`, clusterId: 'c1', contextId: id, clusterBasis: 'FILE', consumedBy },
+    provenance: { sourceRef: `/tmp/${id}`, clusterId: 'c1', contextId: id, clusterBasis: 'OBSERVED_DIRECTORY_BOUNDARY', consumedBy },
   });
 
   it('records BUILDER_VIEWED on the named unit and leaves the others alone', () => {
