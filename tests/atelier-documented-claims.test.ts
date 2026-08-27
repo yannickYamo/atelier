@@ -178,3 +178,35 @@ describe('the CI a contributor is promised is the CI that runs', () => {
     expect(statSync('cli/atelier.mts').size).toBeGreaterThan(0);
   });
 });
+
+describe('what the README links is what the package ships', () => {
+  // The README is the first thing an npm consumer reads and it is inside the tarball. A relative
+  // link from it resolves against the INSTALLED tree, not this repository, so a document that
+  // exists here and is absent from `files` is a broken link for every consumer and for nobody
+  // working on the repo. MEASUREMENTS.md and docs/GLOSSARY.md were exactly that when they landed.
+  const pkg = JSON.parse(read('package.json')) as { files: string[] };
+
+  const localLinks = [...read('README.md').matchAll(/\]\((?!https?:|#)([^)#]+)\)/g)]
+    .map((m) => m[1].trim())
+    .filter((l) => !l.startsWith('.'));
+
+  it('the link scan is not silently matching nothing', () => {
+    expect(localLinks.length).toBeGreaterThan(3);
+    expect(localLinks).toContain('MEASUREMENTS.md');
+  });
+
+  it('every relative link in the README resolves in this repository', () => {
+    const missing = localLinks.filter((l) => !existsSync(l));
+    expect(missing, `README links to files not in the tree: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('every relative link in the README is inside the published package', () => {
+    // npm puts these in the tarball whatever `files` says, and the pack output confirms it.
+    const ALWAYS = ['package.json', 'LICENSE', 'LICENCE'];
+    const shipped = (l: string): boolean =>
+      ALWAYS.includes(l) || pkg.files.some((f) => l === f || l.startsWith(`${f}/`));
+    const orphans = localLinks.filter((l) => !shipped(l));
+    expect(orphans, `add to "files" in package.json, or the link breaks on install: ${orphans.join(', ')}`)
+      .toEqual([]);
+  });
+});
