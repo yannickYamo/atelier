@@ -10,6 +10,31 @@ a run in progress may not be.
 
 ### Fixed
 
+- **The clustered confidence interval was 26% too narrow at n=3**, the smallest sample it admits and
+  the most common one. A second t-table keyed from df=3 fell back to t(3)=3.182 where t(2)=4.303 is
+  correct, so an interval that honestly crosses zero was reported as a decided direction — and that
+  moves `REGRESSED` and `IMPROVED` verdicts. `compare()` compounded it by dividing by one table's
+  value and multiplying by another's for the same quantile.
+- **The t distribution had two implementations**, byte-identical across ninety lines, one of which
+  declared itself the sole owner. They had already drifted at the exact site the project documents as
+  repaired. Both now import `core/stats/t.ts`.
+- **`assertNotAuthority` did not refuse the claims it exists to refuse.** It ANDed its regex with a
+  substring test whose tokens were `this`, `this` and `promotion`, so it fired only on claims
+  containing the stopword. Its own test passed vacuously.
+- **A PREFERRED requirement could fail the primary endpoint**, which its own documentation forbids,
+  because the unscorable-push happened one branch before the REQUIRED guard.
+- **`getArchitecture` returned null after any amend of a confirmed rule**, and the caller read that as
+  "never persisted" and silently recompiled the default arrangement. Ambiguity now refuses.
+- **`--required-n 0`, `--questions abc` and `--cap abc` were silently replaced by defaults**, the same
+  `Number(x) || fallback` bug the runtime documents a fix for, reintroduced in a file that imports it.
+- **A mistyped command exited 0.** `atelier discovr` printed help and reported success, so a script
+  could run a typo in a loop and never learn the work had not happened.
+- **The post-build screen asked the author to re-confirm rules they had already decided.** An optional
+  standard parameter was passed by neither caller, so the filter fell back to selecting on carrier —
+  which is the shape of a TOLERATED component, not an unconfirmed prohibition.
+- A regex alternative that could never match (`\b` is defined over ASCII word characters, so a CJK
+  term inside word boundaries was unreachable rather than supported).
+
 - **A candidate measured worse was authorised for promotion.** `decide()` had no `REGRESSED` branch,
   so a comparison that found the candidate worse fell through to the promotion gates on the same
   terms as one that found it better. `REJECT` was declared in the terminal union and returned from

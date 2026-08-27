@@ -64,7 +64,11 @@ export function intake(path: string, workType: string): void {
   // and the global filename rule threw it away, which is what happened on the first real run against
   // a docs corpus. The remedy printed was "rename the file", which is the product asking the user to
   // work around its own classification.
-  const docsWorkType = /\b(doc|docs|documentation|readme|guide|manual|reference|tutorial|writing about|技术文档)\b/i
+  // `\b` is defined over [A-Za-z0-9_], so a CJK alternative inside word boundaries can never match:
+  // the term was unreachable rather than supported. Matching non-Latin work types needs the boundary
+  // dropped for those alternatives, and that is a real change to the classifier rather than a token
+  // added to a list, so it is not pretended here.
+  const docsWorkType = /\b(doc|docs|documentation|readme|guide|manual|reference|tutorial|writing about)\b/i
     .test(flag('--work-type') ?? '');
   const meta = all.filter((f) => (META_NAME.test(basename(f)) && !docsWorkType) || excl.includes(f));
   const candidates = all.filter((f) => !meta.includes(f)).sort();

@@ -32,6 +32,8 @@ npm run acceptance:carriers -- --host codex
 | C12 | nothing private is published | every tracked file is scanned for paths, documents, SHAs and a hashed vocabulary from the predecessor |
 | C13 | the documents are checked | every command, path, npm script and vocabulary term the docs teach is pinned against the code |
 | C14 | every persisted write is atomic | no shipped module calls `writeFileSync`; a torn ledger tail is reported and a torn middle refuses to be read past |
+| C20 | there is one t distribution | no shipped module declares its own table of critical values, and the clustered interval uses t(df) at the smallest permitted sample |
+| C21 | an unknown command is a failure | a mistyped command exits non-zero and lists what exists, derived from the dispatch table rather than typed beside it |
 | C17 | a candidate measured worse is refused | `REGRESSED` terminates as `REJECT` and never reaches the promotion gates |
 | C18 | no shipped source is binary to a text tool | a NUL byte makes `grep -r` skip a file in silence, so the census would have a blind spot exactly where one was hidden |
 | C19 | the install command names the published package | checked against `package.json` name, in both host plugin trees |

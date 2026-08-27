@@ -201,9 +201,18 @@ async function arm(id: ArmId, tasks: readonly string[], budget: Budget): Promise
 const pct = (n: number, d: number): string => d ? `${((n / d) * 100).toFixed(0)}%` : 'n/a';
 
 const main = async (): Promise<void> => {
-  const n = Math.min(Number(arg('--n') ?? 10), TASKS.length);
+  // Number(undefined ?? 10) is fine; Number('abc') is NaN, and Math.min(NaN, k) is NaN, which would
+// run zero arms and report a clean sheet. Refuse the input instead of computing on it.
+const numeric = (name: string, fallback: number): number => {
+  const raw = arg(name);
+  if (raw === undefined) return fallback;
+  const v = Number(raw);
+  if (!Number.isFinite(v)) { console.error(`${name} must be a number, got "${raw}"`); process.exit(2); }
+  return v;
+};
+const n = Math.min(numeric('--n', 10), TASKS.length);
   const tasks = TASKS.slice(0, n);
-  const budget: Budget = { spentUsd: 0, capUsd: Number(arg('--cap') ?? 1.0), maxCalls: n * 3 + 2 };
+  const budget: Budget = { spentUsd: 0, capUsd: numeric('--cap', 1.0), maxCalls: n * 3 + 2 };
   const { binding } = clientAndBinding('target');
 
   console.log(`Carrier ablation: does a schema buy anything over saying it in words?`);

@@ -8,7 +8,15 @@ const cliSource = (): string => {
   // so they read the whole tree and stay true across a refactor.
   const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
-  return walk('cli').filter((f) => /\.(ts|mts)$/.test(f)).map((f) => readFileSync(f, 'utf8')).join('\n');
+  //
+  // COMMENTS STRIPPED. CONTRIBUTING's own rule is that a test grepping source text "will one day fail
+  // on the comment explaining the very fix it is checking" — and this one did: a comment recording
+  // that `atelier discovr` used to exit 0 was read as the CLI advertising a command named `discovr`.
+  // The assertions below are about what the CLI PRINTS, and a comment prints nothing.
+  const stripComments = (s: string): string =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  return walk('cli').filter((f) => /\.(ts|mts)$/.test(f))
+    .map((f) => stripComments(readFileSync(f, 'utf8'))).join('\n');
 };
 
 /**

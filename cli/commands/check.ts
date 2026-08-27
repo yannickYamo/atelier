@@ -111,7 +111,7 @@ export function carriers(): void {
   if (L) {
     const active = store.getActive(L);
     const sv = active ? store.getSkillVersion(L, active) : null;
-    const arch = sv ? store.getArchitecture(L, sv.architectureHash) : null;
+    const arch = sv ? store.getArchitecture(L, sv.architectureHash, sv.standardVersionHash) : null;
     if (arch) present = [...new Set(arch.components.map((c) => c.carrier))] as Carrier[];
     else console.log(`(no built skill named "${name}" — showing every carrier)\n`);
   }

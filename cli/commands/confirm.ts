@@ -63,6 +63,6 @@ export function confirmBoundary(): void {
     ? `Dropped. "${target.statement}" is no longer part of your standard.`
     : `Confirmed. "${target.statement}" now shapes what your skill writes.`);
   console.log(`StandardVersion ${next.standardVersionHash} (supersedes ${prev.standardVersionHash}) · architecture ${arch.architectureHash}`);
-  const left = observedBoundaries(arch).length;
+  const left = observedBoundaries(arch, next).length;
   console.log(left ? `${left} still observed-only.` : 'Nothing left unconfirmed.');
 }

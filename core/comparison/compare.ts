@@ -22,7 +22,8 @@
 // when `hi < worthwhile`. Anything else is UNDERPOWERED, and the difference is computed from the
 // interval rather than asserted.
 
-import { contextClusteredInterval, resolutionFloor, tCrit95, type ContextDifference, type WitnessInterval } from './resolution.js';
+import { contextClusteredInterval, type ContextDifference, type WitnessInterval } from './resolution.js';
+import { tCrit, resolutionFloor } from '../stats/t.js';
 
 export type ComparisonVerdict =
   /** the candidate is better by an amount worth having, and the interval says so */
@@ -83,7 +84,9 @@ export function compare(input: ComparisonInput): ComparisonResult {
   // The interval half-width IS t_{.975} * SE, so SE recovers by dividing it back out. Computing SE
   // from the raw deltas again would be a second owner of the same quantity.
   const halfWidth = interval.hi - interval.mean;
-  const se = halfWidth / tCrit95(interval.df);
+  // The SAME quantile from the SAME table the interval was built with. This used to divide by
+  // one t-table and then multiply by another's value for the identical quantile.
+  const se = halfWidth / tCrit(interval.df, 0.975);
   const resolution = resolutionFloor(se, interval.df);
 
   // REGRESSED: the whole interval is below zero.

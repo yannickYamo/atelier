@@ -430,11 +430,17 @@ export function assertArchitectureServesStandard(a: SkillArchitecture, v: Standa
 }
 
 /** What the post-build screen asks about: inferred prohibitions, watched but not yet enforced. */
-export const observedBoundaries = (a: SkillArchitecture, v?: StandardVersion): readonly ArchitectureComponent[] => {
+export const observedBoundaries = (a: SkillArchitecture, v: StandardVersion): readonly ArchitectureComponent[] => {
   // BOUNDARIES, not everything that observes. Unconfirmed positive rules now observe too — they are
   // shown as examples — and the post-build screen exists to ask about inferred PROHIBITIONS, whose
   // wrongness suppresses silently. Sweeping the positives in would bury that question in a list.
-  const kindOf = new Map((v?.requirements ?? []).map((r) => [r.requirementId, r.kind]));
+  // The standard was OPTIONAL and neither caller passed it, so `kindOf` was always empty and the
+  // fallback ran every time — selecting on `carrier === 'SELF_CHECK'`, which is exactly the shape a
+  // TOLERATED "protect, never generate" component has. So the screen asked the author to re-confirm
+  // rules they had already decided, which is the opposite of what the note above says it is for.
+  // Required now: both call sites hold the standard, and a filter that cannot see kinds cannot
+  // filter on kind.
+  const kindOf = new Map(v.requirements.map((r) => [r.requirementId, r.kind]));
   return a.components.filter((c) => c.gateRole === 'OBSERVE'
-    && (kindOf.size === 0 ? c.carrier === 'SELF_CHECK' : c.carries.some((id) => kindOf.get(id) === 'BOUNDARY')));
+    && c.carries.some((id) => kindOf.get(id) === 'BOUNDARY'));
 };

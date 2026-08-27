@@ -269,7 +269,10 @@ function scorePhase(): void {
   // The bar and the required n belong to the reservation, which fixed them before any generation.
   const s = loadSession();
   const bar = s.reservation?.bar ?? 0.15;
-  const requiredN = Number(flag('--required-n')) || (s.reservation?.reservedClaimUnits ?? stored.pairs.length);
+  // `Number(x) || fallback` in a file that imports `numericFlag` to avoid exactly this: `--required-n 0`
+  // is falsy and would silently become the reservation's own n, which is the opposite of asking for no
+  // requirement at all.
+  const requiredN = numericFlag('--required-n', s.reservation?.reservedClaimUnits ?? stored.pairs.length);
 
   const r = scoreReference(stored.pairs, labels, bar, requiredN);
 

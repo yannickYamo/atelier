@@ -52,7 +52,7 @@ export async function improve(): Promise<void> {
   // "change what you consider good" — inverting the one law the product exists to hold, in the one
   // place a user would read it.
   if (!invId) {
-    const arch = store.getArchitecture(L, sv.architectureHash) ?? compileArchitecture(prev);
+    const arch = store.getArchitecture(L, sv.architectureHash, sv.standardVersionHash) ?? compileArchitecture(prev);
     console.log(`skill ${name}`);
     console.log(`  standard     ${prev.standardVersionHash} [${prev.authorityState}] — ${prev.requirements.length} requirement(s), THIS DOES NOT CHANGE HERE`);
     console.log(`  architecture ${sv.architectureHash} — ${arch.components.length} component(s), this is what improve moves`);
@@ -138,7 +138,7 @@ export async function improve(): Promise<void> {
   }
 
   // IMPLEMENTATION_MISS — the only route that authorises a change, and only to the arrangement.
-  const ranArch = store.getArchitecture(L, inv.architectureHash) ?? die(`architecture ${inv.architectureHash} missing — this SkillVersion predates architecture persistence.`);
+  const ranArch = store.getArchitecture(L, inv.architectureHash, inv.standardVersionHash) ?? die(`architecture ${inv.architectureHash} missing — this SkillVersion predates architecture persistence.`);
   const carrying = ranArch.components.find((c) => c.carries.includes(d.requirementId!));
   const ev: ServedMissEvidence = { invocationId: inv.invocationId, requirementId: d.requirementId!,
     carrierAtServe: carrying?.carrier ?? 'PROSE', expertConfirmed: true, at: new Date().toISOString() };

@@ -112,7 +112,7 @@ describe('an inferred prohibition does not shape output until someone confirms i
 
   it('observedBoundaries names exactly what the post-build screen must ask about', () => {
     const v = std([positive, unconfirmed, confirmed]);
-    const obs = observedBoundaries(compileArchitecture(v));
+    const obs = observedBoundaries(compileArchitecture(v), v);
     expect(obs.map((c) => c.carries[0])).toEqual(['b1']);
   });
 });

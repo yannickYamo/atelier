@@ -109,7 +109,7 @@ export function amend(): void {
  */
 export async function sharpen(): Promise<void> {
   const name = flag('--skill') ?? die('--skill required');
-  const k = Number(flag('--questions') ?? 2);
+  const k = numericFlag('--questions', 2);
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
   const sv = store.getSkillVersion(L, activeHash)!;
