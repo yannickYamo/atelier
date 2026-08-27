@@ -4,7 +4,8 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, existsSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, resolve, basename, dirname } from 'node:path';
 import { planImport, MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { reserve, type Reservation } from '../../core/golden/reservation.js';
@@ -245,8 +246,8 @@ export function intake(path: string, workType: string): void {
   }
   s = step(s, 'CORPUS_SEALED', { corpusHash });
   saveSession({ ...s, evidence: ev, reservation });
-  writeFileSync(join(DATA, 'corpus-paths.json'), JSON.stringify(files, null, 1));
-  writeFileSync(join(DATA, 'import-plan.json'), JSON.stringify(plan, null, 1));
+  writeAtomic(join(DATA, 'corpus-paths.json'), JSON.stringify(files, null, 1));
+  writeAtomic(join(DATA, 'import-plan.json'), JSON.stringify(plan, null, 1));
 
   // THE SKILL IS BOUND TO THE RUN TOO. An IMPROVE run is a claim about a specific skill, and if that
   // skill changes underneath us the claim silently becomes a claim about something else — the same
@@ -254,7 +255,7 @@ export function intake(path: string, workType: string): void {
   // standard; it is the thing being measured against it.
   if (pkg) {
     const pkgText = pkgFiles.map((r) => `${relToPkg(r.file)}\n${r.text}`).join('\n\u0000\n');
-    writeFileSync(join(DATA, 'skill-package.json'), JSON.stringify({
+    writeAtomic(join(DATA, 'skill-package.json'), JSON.stringify({
       ...pkg, root: pkgRoot === '' ? '.' : pkgRoot, absRoot: join(base, pkgRoot ?? ""), packageHash: sha(pkgText),
       readable: pkgFiles.map((r) => relToPkg(r.file)) }, null, 1));
   }

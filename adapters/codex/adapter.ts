@@ -5,7 +5,8 @@
 // PortableSkillPackage — there is no Codex compilation path, no Codex discovery, no Codex standard.
 //
 // What differs is genuinely only: where skills live, and how a user types the invocation.
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { CarrierDeliveryMatrix } from '../../core/delivery/carrier-delivery.js';
@@ -57,7 +58,7 @@ export class CodexAdapter implements HostAdapter {
       for (const [rel, content] of Object.entries(pkg.files)) {
         const target = join(d, rel);
         mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, content);
+        writeAtomic(target, content);
       }
       return { ok: true, installedAt: d };
     } catch (e) { return { ok: false, reason: (e as Error).message }; }

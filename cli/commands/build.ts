@@ -4,7 +4,8 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
@@ -39,7 +40,7 @@ export function revert(): void {
   const paths = Object.keys(undo.before);
   if (!paths.length) die('the last build wrote nothing, so there is nothing to put back.');
 
-  for (const rel of paths) writeFileSync(join(undo.packageRoot, rel), undo.before[rel]);
+  for (const rel of paths) writeAtomic(join(undo.packageRoot, rel), undo.before[rel]);
   rmSync(f, { force: true });
   console.log(`Put ${paths.length} file(s) back as they were, in ${undo.packageRoot}:`);
   for (const rel of paths) console.log(`  ${rel}`);
@@ -78,7 +79,7 @@ export function build(nameArg?: string): void {
   const review = argv.includes('--review');
   const proposal = buildProposal(name, v.standardVersionHash, v.requirements, arch, alreadyHandled);
   const proposalText = renderProposal(proposal, { gated: review });
-  writeFileSync(join(DATA, 'proposal.md'), proposalText);
+  writeAtomic(join(DATA, 'proposal.md'), proposalText);
   console.log(`\n${proposalText}`);
   const guessed = unconfirmedIn(proposal);
   if (guessed.length) {
@@ -114,8 +115,8 @@ export function build(nameArg?: string): void {
 
     if (plan.edits.length) {
       const undo: UndoRecord = plan.undo;
-      writeFileSync(join(DATA, 'undo.json'), JSON.stringify(undo, null, 1));
-      for (const [rel, text] of Object.entries(plan.resulting)) writeFileSync(join(sp.absRoot, rel), text);
+      writeAtomic(join(DATA, 'undo.json'), JSON.stringify(undo, null, 1));
+      for (const [rel, text] of Object.entries(plan.resulting)) writeAtomic(join(sp.absRoot, rel), text);
       console.log(`Written into ${sp.absRoot}.`);
       console.log(`  atelier revert    puts every one of those files back exactly as it was\n`);
     }

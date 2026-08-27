@@ -8,7 +8,8 @@
 // what was not: no run of this command can establish that a model's TASTE DISCOVERY is any good, and
 // the profile says so in the same breath as the passes.
 
-import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { runProviderConformance, describeProviderConformance } from '../../core/inference/provider-conformance.js';
 import { supportStage, describeProfile, UNMEASURED, type ModelCapabilityProfile } from '../../core/inference/capability.js';
@@ -68,7 +69,7 @@ export async function check(): Promise<void> {
   };
 
   mkdirSync(PROFILES(), { recursive: true });
-  writeFileSync(join(PROFILES(), `${bindingHash(binding)}.json`), JSON.stringify(profile, null, 1));
+  writeAtomic(join(PROFILES(), `${bindingHash(binding)}.json`), JSON.stringify(profile, null, 1));
 
   console.log(describeProfile(profile));
   console.log(`\nSupport stage: ${supportStage(profile)}`);

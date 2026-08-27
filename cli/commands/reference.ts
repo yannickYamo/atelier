@@ -13,7 +13,8 @@
 // does not reveal; `score` unblinds. One command that did both would let the person scoring see which
 // side was theirs, and a result obtained that way is a different result.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { scoreReference, LABELLING_INSTRUCTIONS, UNCERTAIN_HANDLING,
@@ -89,7 +90,7 @@ async function preparePhase(): Promise<void> {
     console.log(`  ${u.unitId} ready`);
   }
 
-  writeFileSync(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, pairs }, null, 1));
+  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, pairs }, null, 1));
 
   console.log(`\n${'─'.repeat(78)}\n${LABELLING_INSTRUCTIONS}\n${'─'.repeat(78)}`);
   for (const p of pairs) {
