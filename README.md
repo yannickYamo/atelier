@@ -9,6 +9,10 @@
 Atelier learns the decisions behind an expert's work, writes them down as an explicit, versioned
 standard, and compiles that standard into the smallest skill a model needs to reproduce it on new work.
 
+The point is to treat a standard the way you already treat a schema or a test: versioned, owned by a
+named person, compiled for whatever runtime is current, and changed only through an explicit act. Your
+implementations can change forever underneath it. What good means moves only when you move it.
+
 The thesis is simple. Expertise is more than knowledge, and the hard part is the judgment around it.
 What matters, what to ignore, which trade-off wins, when a rule bends, and where the boundary sits.
 That judgment usually lives in examples, corrections, habits, and thousands of small decisions an
@@ -601,7 +605,7 @@ The ledger fills from ordinary use. There is nothing to set up and no labelling 
 
 ## What to expect
 
-Atelier is an open research and product preview. The full pipeline runs end to end today.
+Atelier is an open research and product preview. The full pipeline runs end to end today, and one honest caveat on that sentence: the automated suite covers the governance spine and the CLI surface, while the path from a folder of work to a served generation is exercised by hand rather than by a test that calls a model.
 
 ```text
 corpus
@@ -625,6 +629,67 @@ The architecture already enforces the parts that should not depend on a research
 - feedback can trigger an implementation repair but cannot redefine the standard
 
 The broader product thesis is still being tested, deliberately.
+
+---
+
+## What has been tested, including what failed
+
+Three behavioural studies, reported in full because the shape of the result tells you where this helps
+and where it does not.
+
+**Where most rules apply most of the time, a compiled standard beat raw examples.** A standard
+recovered from one maintainer's public review comments, adopted by a language model standing in for
+that maintainer rather than ratified by them, was the majority winner in 15 of 17 held-out pull
+requests under blind comparison, using one eighteenth of the context that the raw examples needed.
+That is the strongest result here and it carries real limits: the maintainer ratified nothing, a
+surrogate both adopted the standard and judged adherence to it, the preregistered primary endpoint
+failed as non-discriminating and was not repaired, and raw examples are a weak baseline. The
+comparison that would separate compiling a ratified standard from competently summarising a corpus,
+a skill induced by pointing a frontier model at the same work at matched token budget, has not been
+run.
+
+**Ratification demonstrably changes what a model does.** Twelve identical statements compiled twice,
+once as unratified observations and once as ratified requirements, served to the same model on 30
+unseen topics: the required structure appeared 11 of 30 times against 29 of 30. Everything but one
+governance field was byte-identical. This is why `create` alone builds a skill that instructs the
+model to do nothing, and it is the mechanism behind that behaviour rather than a policy.
+
+**Where few rules apply to any given case, it did not help.** On early-stage pricing under incomplete
+evidence, with a participating expert who ratified nine required rules and sealed which rules apply to
+which case before any output existed, the compiled standard scored exactly what a bare model scored,
+and exactly what retrieval scored. The result is a preregistered null and it stands unrepaired.
+
+**We tested the obvious repair before building it, and it did not reproduce.** If serving many rules
+at once erodes a model's restraint, selective activation would be the fix. On public data, adding 4,
+11 and 23 irrelevant provisions left restraint statistically intact and pushed errors toward
+*under*-application instead. So the router is not built, unresolved conditions stay marked
+unresolved, and the gap stays visible.
+
+**What that means if you are deciding whether to try this.** Point it at work where your rules apply
+most of the time, which is where the positive result lives: code review, editorial standards, a house
+voice, a report format. Where your judgment is mostly about *when* a rule applies rather than what it
+says, this has no advantage to claim yet, and the honest reason is in the null above.
+
+## What you can reproduce here, and what you cannot
+
+**Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
+52 files and 825 tests. It exercises the governance spine, the compiler, the renderer, delivery
+claims, and the promote/reject/inspect/rollback surface against the shipped binary.
+
+**Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
+ablation that measures structural conformance mechanically across three arms. Its own header states
+which arms are conformant by construction and what a passing verdict does not mean.
+
+**Not in this repository:** the corpora and scored outputs for the three behavioural studies above.
+The code review corpus is public but its adjudication is not reproducible and the generation model was
+not recorded. The pricing corpus is not publishable. The public rule-load control ran against
+LegalBench `sara_entailment` and is reproducible in principle for under nine dollars per variant, but
+its harness is not part of this package.
+
+**What you need to run the pipeline for real:** Node 22 or later, and an API key for one provider.
+A first pass over roughly twenty pieces of work costs single-digit dollars of inference, and
+`create` prices the run and refuses before spending anything if the estimate exceeds `--cap`.
+
 
 > A small corpus of expert work can reveal enough of a person's tacit judgment to build an explicit,
 > human-ratified standard, and that standard can be compiled into a skill that reproduces the person's
@@ -687,7 +752,7 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | command | what it does |
 |---|---|
-| `create <path>` | the whole first pass. Reads the work, reserves held-out evidence, discovers, ratifies, compiles |
+| `create <path>` | the fast first pass. Reads the work, reserves held-out evidence, discovers, compiles. It does **not** ratify: every rule stays `DERIVED_UNRATIFIED`, so the skill it builds instructs the model to do nothing under *What to do*. Use it to see what discovery found, then rule with `pending` and `ratify` |
 | `intake <path>` | read and seal a corpus without discovering yet |
 | `discover` | propose candidate decisions from a sealed corpus |
 | `pending` | show the candidates, with evidence and counterfactuals, before you rule |
@@ -704,6 +769,11 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 | `promote` / `reject --skill <name>` | adopt the candidate, or refuse it and record why |
 | `revert` | undo the last build's file writes, leaving the standard untouched |
 | `confirm --rule <id>` | rule on one inferred behaviour after the skill already works |
+| `sharpen` | for a rule claiming to hold everywhere, write the same passage three ways, too little / about right / overdone, blinded |
+| `answer --pick <n>` / `--none` / `--indifferent` | fold your choice into a typed consequence. A probe answer is evidence, never authority: it routes you to `confirm` or `amend` and never edits the rule |
+| `amend --rule <id>` | change what a rule means. Mints a new StandardVersion with a required reason |
+| `judgements --skill <name> [--rule <id>]` | what you said when you promoted, and how often the instrument agreed |
+| `feedback --invocation <id>` | record a complaint against a real output |
 | `reference --skill <name>` | generate against held-out work and seal the blinding |
 | `reference --score --labels <json>` | unblind and score the held-out test |
 | `check [--role discovery\|target]` | verify a backend actually works, and record what was proven |
