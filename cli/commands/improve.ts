@@ -22,7 +22,8 @@ import * as store from '../../core/state/store.js';
 import { type Provenance } from '../../core/fidelity/provenance.js';
 
 import { intake } from './intake.js';
-import { discover, ratifyClose } from './discover.js';
+import { discover } from './discover.js';
+import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 import { sha, DATA, die, argv, flag, MODEL, clientFor , numericFlag, assertReachable} from '../runtime.js';
 import type { InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';

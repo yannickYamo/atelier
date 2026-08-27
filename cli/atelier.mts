@@ -14,7 +14,8 @@
  */
 import { cmd, argv, die, loadSession, saveSession } from './runtime.js';
 import { intake } from './commands/intake.js';
-import { discover, pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands/discover.js';
+import { discover } from './commands/discover.js';
+import { pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands/ratify.js';
 import { build, revert } from './commands/build.js';
 import { confirmBoundary } from './commands/confirm.js';
 import { inspect, historyCmd, rollback, feedback } from './commands/inspect.js';

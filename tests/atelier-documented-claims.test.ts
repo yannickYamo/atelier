@@ -73,7 +73,9 @@ const walkTs = (dir: string): string[] => readdirSync(dir).flatMap((e) => {
 });
 
 describe('the vocabulary the docs teach is the vocabulary the compiler accepts', () => {
-  const ratify = read('cli/commands/discover.ts');
+  // MAT and FORM are ratification vocabulary and moved with the ratification commands when
+  // discover.ts was split. The variable was already named `ratify`, which is how the seam showed.
+  const ratify = read('cli/commands/ratify.ts');
   const listFrom = (src: string, decl: string): string[] => {
     const m = new RegExp(`const ${decl} = \\[([^\\]]+)\\]`).exec(src);
     return m ? [...m[1].matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]) : [];

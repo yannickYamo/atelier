@@ -184,3 +184,30 @@ export function describeConformance(r: ConformanceReport, modelId: string): stri
     + `So this model is not qualified for discovery; it is qualified to PROPOSE. Its candidates arrive with\n`
     + `evidence you can check, and none of them binds anything until you adopt it.\n`;
 }
+
+/**
+ * The quote a model supplied, paired with the corpus item it is ACTUALLY in, or null.
+ *
+ * Lives here rather than in a command because both `discover` and `ratify` need it and it is a
+ * thin wrapper on `locateSpan` directly above. It used to sit in the CLI file that held both
+ * commands, which is the only reason a single file could hold both.
+ */
+export const anchoredQuote = (
+  quote: string | undefined, items: readonly { id: string; text: string }[],
+): { quote: string; itemId: string } | null => {
+  const q = (quote ?? '').trim();
+  if (!q) return null;
+  // SEARCHED ACROSS THE PIECES, not checked against a guess. `readFrom` lists every piece the model
+  // read, so its first entry is not the piece the quote came from — measured: a span verbatim in the
+  // fourth piece was being tested against the first and discarded. The item the span is actually IN
+  // is the item to record, and finding it is what makes `evidenceItemId` a fact rather than an
+  // assumption.
+  //
+  // WHITESPACE_NORMALIZED counts. The corpus is hard-wrapped and a model quotes the sentence, not the
+  // line — `locateSpan` already draws that line, and line wrapping is not fabrication.
+  for (const i of items) {
+    const m = locateSpan(q, i.id, items.map((x) => ({ id: x.id, text: x.text })));
+    if (m === 'EXACT' || m === 'WHITESPACE_NORMALIZED') return { quote: q, itemId: i.id };
+  }
+  return null;
+};

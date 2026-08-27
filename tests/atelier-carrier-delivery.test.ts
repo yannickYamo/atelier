@@ -371,7 +371,11 @@ describe('a carrier nobody can ask for is a carrier that does not exist', () => 
     console.error = (...a: unknown[]): void => { errs.push(a.join(' ')); };
     try {
       vi.resetModules();
-      const mod = await import('../cli/commands/discover.js');
+      // The ratification commands live in their own file since discover.ts was split; the
+      // exercised function may be in either, so ask both rather than assuming one.
+      const mods = [await import('../cli/commands/ratify.js'), await import('../cli/commands/discover.js')];
+      const mod = mods.find((m) => typeof (m as unknown as Record<string, unknown>)[fn] === 'function')
+        ?? mods[0];
       (mod as unknown as Record<string, () => void>)[fn]();
     } catch (e) {
       error = errs.length ? errs.join('\n') : (e instanceof Error ? e.message : String(e));
