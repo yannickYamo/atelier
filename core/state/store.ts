@@ -12,6 +12,7 @@
 
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
+import { readJson } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
@@ -41,7 +42,7 @@ export function putEvidence(l: StoreLayout, e: ExpertEvidence): void {
 }
 export const getEvidence = (l: StoreLayout): ExpertEvidence | null => {
   const p = join(dirs(l).base, 'evidence.json');
-  return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as ExpertEvidence : null;
+  return existsSync(p) ? readJson<ExpertEvidence>(p, { what: 'sealed evidence', requireKeys: ['evidenceId'] }) : null;
 };
 
 /**
@@ -66,7 +67,7 @@ export function putStandard(l: StoreLayout, v: StandardVersion): void {
 
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
   const p = join(dirs(l).standards, `${hash}.json`);
-  return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as StandardVersion : null;
+  return existsSync(p) ? readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] }) : null;
 };
 
 export function putSkillVersion(l: StoreLayout, s: SkillVersion): void {
@@ -74,7 +75,7 @@ export function putSkillVersion(l: StoreLayout, s: SkillVersion): void {
 }
 export const getSkillVersion = (l: StoreLayout, hash: string): SkillVersion | null => {
   const p = join(dirs(l).versions, `${hash}.json`);
-  return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as SkillVersion : null;
+  return existsSync(p) ? readJson<SkillVersion>(p, { what: 'a SkillVersion', requireKeys: ['skillVersionHash'] }) : null;
 };
 
 /**
@@ -140,12 +141,12 @@ export function putArchitecture(l: StoreLayout, a: SkillArchitecture): void {
 }
 export const getArchitecture = (l: StoreLayout, hash: string, standardVersionHash?: string): SkillArchitecture | null => {
   const direct = standardVersionHash ? join(dirs(l).architectures, `${standardVersionHash}.${hash}.json`) : null;
-  if (direct && existsSync(direct)) return JSON.parse(readFileSync(direct, 'utf8')) as SkillArchitecture;
+  if (direct && existsSync(direct)) return readJson<SkillArchitecture>(direct, { what: 'a skill architecture' });
   // legacy + convenience: fall back to a unique suffix match when the standard is not supplied
   const d = dirs(l).architectures;
   if (!existsSync(d)) return null;
   const hits = readdirSync(d).filter((f) => f === `${hash}.json` || f.endsWith(`.${hash}.json`));
-  if (hits.length === 1) return JSON.parse(readFileSync(join(d, hits[0]), 'utf8')) as SkillArchitecture;
+  if (hits.length === 1) return readJson<SkillArchitecture>(join(d, hits[0]), { what: 'a skill architecture' });
   if (hits.length === 0) return null;
   // AMBIGUOUS IS NOT ABSENT, AND RETURNING null CONFLATED THEM.
   //
@@ -164,7 +165,7 @@ export function putPackage(l: StoreLayout, pkg: StoredPackage): void {
 }
 export const getPackage = (l: StoreLayout, hash: string): StoredPackage | null => {
   const p = join(dirs(l).packages, `${hash}.json`);
-  return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as StoredPackage : null;
+  return existsSync(p) ? readJson<StoredPackage>(p, { what: 'a stored package' }) : null;
 };
 
 /**
@@ -179,14 +180,14 @@ export function putInvocation(l: StoreLayout, r: InvocationRecord): void {
 }
 export const getInvocation = (l: StoreLayout, id: string): InvocationRecord | null => {
   const p = join(dirs(l).invocations, `${id}.json`);
-  return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as InvocationRecord : null;
+  return existsSync(p) ? readJson<InvocationRecord>(p, { what: 'an invocation record' }) : null;
 };
 /** Newest first. */
 export function listInvocations(l: StoreLayout): readonly InvocationRecord[] {
   const d = dirs(l).invocations;
   if (!existsSync(d)) return [];
   return readdirSync(d).filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(join(d, f), 'utf8')) as InvocationRecord)
+    .map((f) => readJson<InvocationRecord>(join(d, f), { what: 'an invocation record' }))
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
@@ -216,7 +217,7 @@ export function listFeedback(l: StoreLayout): readonly FeedbackRecord[] {
   const d = dirs(l).feedback;
   if (!existsSync(d)) return [];
   return readdirSync(d).filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(join(d, f), 'utf8')) as FeedbackRecord)
+    .map((f) => readJson<FeedbackRecord>(join(d, f), { what: 'a feedback record' }))
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
@@ -229,7 +230,7 @@ export function setActive(l: StoreLayout, skillVersionHash: string): void {
 }
 export const getActive = (l: StoreLayout): string | null => {
   const p = join(dirs(l).base, 'active.json');
-  return existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as { skillVersionHash: string }).skillVersionHash : null;
+  return existsSync(p) ? readJson<{ skillVersionHash: string }>(p, { what: 'the active pointer', requireKeys: ['skillVersionHash'] }).skillVersionHash : null;
 };
 
 /** Append-only event log. One JSON object per line; nothing is ever rewritten. */
@@ -276,7 +277,7 @@ export function history(l: StoreLayout): readonly HistoryEntry[] {
   if (!existsSync(d.versions)) return [];
   const active = getActive(l);
   return readdirSync(d.versions).filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(join(d.versions, f), 'utf8')) as SkillVersion)
+    .map((f) => readJson<SkillVersion>(join(d.versions, f), { what: 'a SkillVersion' }))
     .sort((a, b) => b.builtAt.localeCompare(a.builtAt))
     .map((s) => ({ skillVersion: s, standard: getStandard(l, s.standardVersionHash), active: s.skillVersionHash === active }));
 }
@@ -302,7 +303,7 @@ const bindingPath = (l: StoreLayout, skillVersionHash: string): string =>
 
 export function listBindings(l: StoreLayout, skillVersionHash: string): BindingLog['bindings'] {
   const p = bindingPath(l, skillVersionHash);
-  return existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as BindingLog).bindings : [];
+  return existsSync(p) ? readJson<BindingLog>(p, { what: 'the binding log' }).bindings : [];
 }
 
 /**

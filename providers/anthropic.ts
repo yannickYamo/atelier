@@ -9,7 +9,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { InferenceClient, InferenceRequest, InferenceResult } from '../core/inference/client.js';
-import { budgetUsd } from '../core/inference/client.js';
+import { budgetUsd, inferenceTimeoutMs, INFERENCE_MAX_RETRIES } from '../core/inference/client.js';
 import { ANTHROPIC_PRICING, costOf, priceFor, type Pricing } from './pricing.js';
 
 export type { Pricing } from './pricing.js';
@@ -25,7 +25,9 @@ export class AnthropicInferenceClient implements InferenceClient {
         + 'stay on this machine; nothing is sent anywhere except that one call.',
       );
     }
-    this.client = new Anthropic({ apiKey: key });
+    // Retries stated rather than inherited. The SDK's own default is the same number; naming it
+    // here is what lets a reader work out the worst case from this file instead of from the SDK's.
+    this.client = new Anthropic({ apiKey: key, maxRetries: INFERENCE_MAX_RETRIES });
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
@@ -40,6 +42,11 @@ export class AnthropicInferenceClient implements InferenceClient {
       messages: [{ role: 'user', content: req.userMessage }],
       tools: [{ name: req.toolName, description: req.toolDescription, input_schema: req.schema as Anthropic.Tool.InputSchema }],
       tool_choice: { type: 'tool', name: req.toolName },
+    }, {
+      // Per-request, because the bound depends on how much was asked for. Without it this inherits
+      // the SDK's ten-minute default on every call regardless of size, and a stalled discovery run
+      // spends twenty minutes over two retries before saying anything.
+      timeout: inferenceTimeoutMs(req.maxTokens),
     });
 
     const block = res.content.find((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use');

@@ -673,7 +673,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-59 files and 899 tests. It exercises the governance spine, the compiler, the renderer, delivery
+61 files and 923 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -817,6 +817,19 @@ Flags worth knowing.
 Local by default. No Atelier telemetry and no account. Standards, evidence and generated artifacts stay
 on your machine. Data leaves it only when sent to the inference providers you explicitly configure for
 discovery or execution.
+
+Everything lives under `~/.atelier`, or wherever `ATELIER_DATA` points. Compiled skills sit in
+`skills/<name>/` and are shared: any project can invoke one. **The run in progress is per-project**,
+keyed by the working directory, so starting a corpus in one repository does not disturb a
+half-finished ratification in another. `ATELIER_PROJECT_DIR` overrides which project you are in.
+Upgrading from a version with a single global run adopts it into the first project that asks and says
+so.
+
+```text
+~/.atelier
+├── skills/<name>/        compiled skills, shared across projects
+└── sessions/<project>-<hash>.json    one run in flight per project
+```
 
 ## Architecture
 

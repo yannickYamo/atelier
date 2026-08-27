@@ -8,9 +8,10 @@
 // what was not: no run of this command can establish that a model's TASTE DISCOVERY is any good, and
 // the profile says so in the same breath as the passes.
 
-import { mkdirSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, existsSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
+import { readJson } from '../../core/state/read-json.js';
 import { runProviderConformance, describeProviderConformance } from '../../core/inference/provider-conformance.js';
 import { supportStage, describeProfile, UNMEASURED, type ModelCapabilityProfile } from '../../core/inference/capability.js';
 import { bindingHash } from '../../core/runtime/binding.js';
@@ -82,7 +83,7 @@ export function profiles(): void {
   const d = PROFILES();
   if (!existsSync(d)) { console.log('nothing checked yet. Try: atelier check --provider openai-compatible --model <id>'); return; }
   const all = readdirSync(d).filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(join(d, f), 'utf8')) as ModelCapabilityProfile);
+    .map((f) => readJson<ModelCapabilityProfile>(join(d, f), { what: 'a model capability profile' }));
   if (!all.length) { console.log('nothing checked yet.'); return; }
   for (const p of all) {
     console.log(`${p.providerAdapter.padEnd(20)} ${p.backend.padEnd(34)} ${p.modelId.padEnd(30)} ${supportStage(p)}`);

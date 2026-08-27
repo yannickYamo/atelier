@@ -60,6 +60,31 @@ export const unpriced = (): InferenceCost => ({ basis: 'UNKNOWN_PRICING', billin
  */
 export const budgetUsd = (c: InferenceCost): number => c.billingUsd ?? 0;
 
+/**
+ * HOW LONG ONE CALL MAY HANG BEFORE IT IS A FAILURE RATHER THAN A WAIT.
+ *
+ * One owner, because the two providers had different answers and only one of them was deliberate.
+ * The OpenAI-compatible path computed this and could be overridden; the Anthropic path set nothing
+ * and inherited the SDK default of ten minutes, twice over with retries. Same product, same run, a
+ * stalled call costing twenty minutes on one provider and two on the other, and nothing in the
+ * output said which.
+ *
+ * Generous and scaled by what was asked for, because a local model on modest hardware is slow rather
+ * than broken and a long generation legitimately takes longer than a short one. The floor is what
+ * makes a small request fail fast instead of inheriting a ceiling sized for a large one.
+ */
+export const inferenceTimeoutMs = (maxTokens: number): number => Math.max(120_000, maxTokens * 60);
+
+/**
+ * How many times a call is retried before the failure is reported.
+ *
+ * Two, matching the SDK default that was already in force on one path, so this makes the existing
+ * behaviour visible rather than changing it. Stated here so that a person reading a budget can work
+ * out the worst-case wall time — `maxCalls` counts attempts the caller made, not attempts the
+ * transport made underneath it.
+ */
+export const INFERENCE_MAX_RETRIES = 2;
+
 export interface InferenceResult {
   readonly json: unknown;
   /**

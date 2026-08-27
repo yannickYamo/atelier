@@ -4,9 +4,10 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import {mkdirSync, existsSync} from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
+import { readJson } from '../../core/state/read-json.js';
 import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery/run-probes.js';
 import type { Budget } from '../../core/inference/client.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
@@ -159,7 +160,7 @@ export function answerProbe(): void {
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const keyPath = join(DATA, 'skills', name, 'probes', `${ruleId}.key.json`);
   if (!existsSync(keyPath)) die(`no probe for ${ruleId}. Run: atelier sharpen --skill ${name}`);
-  const blind = JSON.parse(readFileSync(keyPath, 'utf8')) as Parameters<typeof foldAnswer>[0]['blind'];
+  const blind = readJson<Parameters<typeof foldAnswer>[0]['blind']>(keyPath, { what: 'a probe key' });
 
   const pick = argv.includes('--none') ? { none: true }
     : argv.includes('--indifferent') ? { noPreference: blind.key.map((k) => k.tag) }

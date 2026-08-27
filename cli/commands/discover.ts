@@ -4,9 +4,10 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
+import { readJson } from '../../core/state/read-json.js';
 import { proposeAcrossFramings } from '../../core/discovery/propose.js';
 import { describeUnion } from '../../core/discovery/union.js';
 import { runDiscoveryChain } from '../../core/discovery/run-chain.js';
@@ -32,7 +33,7 @@ import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/
 export async function discover(): Promise<void> {
   const s = loadSession();
   if (!s.evidence) die('nothing sealed. Run `atelier intake <path>` first.');
-  const files = JSON.parse(readFileSync(join(DATA, 'corpus-paths.json'), 'utf8')) as { id: string; path: string; kind?: string }[];
+  const files = readJson<{ id: string; path: string; kind?: string }[]>(join(DATA, 'corpus-paths.json'), { kind: 'array', what: 'the sealed corpus path list' });
   const textOf = (f: string): string => { const r = extract(f); if (!r.ok) die(r.reason); return (r as { text: string }).text; };
   const ev = s.evidence ?? die('nothing sealed.');
   const items = files.map((f) => ({ id: f.id, text: textOf(f.path) }));
@@ -57,7 +58,7 @@ export async function discover(): Promise<void> {
   // told apart from a description of one example, so the chain refuses rather than producing a
   // weaker version of itself — and we fall back to the single call, saying so plainly. A user with
   // three pieces should know their standard rests on unvalidated proposals.
-  const importPlan = JSON.parse(readFileSync(join(DATA, 'import-plan.json'), 'utf8')) as ImportPlan;
+  const importPlan = readJson<ImportPlan>(join(DATA, 'import-plan.json'), { what: 'the import plan' });
 
   // ── THE RESERVE IS ENFORCED HERE, ON THE ONLY PATH THAT READS ────────────────────────────
   //
@@ -215,7 +216,7 @@ export async function discover(): Promise<void> {
   const methodDocs = new Map(files.filter((f) => f.kind === 'METHODOLOGY').map((f) => [f.id, textOf(f.path)]));
   const pkgPath = join(DATA, 'skill-package.json');
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
-    const sp = JSON.parse(readFileSync(pkgPath, 'utf8')) as { absRoot: string; readable: string[] };
+    const sp = readJson<{ absRoot: string; readable: string[] }>(pkgPath, { what: 'a source package', requireKeys: ['absRoot'] });
     // checked against the WHOLE readable package, not just the SKILL.md — an obligation carried in a
     // template is carried, and reporting it missing because we only looked at one file is a defect
     // in the instrument reported as a defect in the skill.
