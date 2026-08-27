@@ -14,14 +14,17 @@
 // side was theirs, and a result obtained that way is a different result.
 
 import { readFileSync, existsSync } from 'node:fs';
+import * as store from '../../core/state/store.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { scoreReference, LABELLING_INSTRUCTIONS, UNCERTAIN_HANDLING,
+import { scoreReference, LABELLING_INSTRUCTIONS, UNCERTAIN_HANDLING, scorePairedArms,
   type ReferencePair, type ReferenceLabel, type ReferenceJudgement, type Recognition } from '../../core/reference/reference-test.js';
+import { PAIR_KINDS, armsRequiredBy, servedTextFor, armSetHash, MissingArmInput,
+  type ArmId, type ArmInputs } from '../../core/reference/arms.js';
 import type { Budget } from '../../core/inference/client.js';
 import type { GoldenUnit } from '../../core/golden/golden-unit.js';
-import { runOnce } from './improve.js';
+import { runOnce, spendOneWithResult } from './improve.js';
 import { resolveServedSkill } from './invoke.js';
 import type { Provenance } from '../../core/fidelity/provenance.js';
 import { DATA, die, flag, argv, clientAndBinding, describeBinding, loadSession , numericFlag} from '../runtime.js';
@@ -35,8 +38,43 @@ const PAIRS = (): string => join(DATA, 'reference-pairs.json');
  * from the record and a reviewer can verify it was not chosen after the labels came in. It is not
  * meant to be unguessable — it is meant to be FIXED BEFORE the generation and auditable afterwards.
  */
-const sideFor = (unitId: string, salt: string): 'A' | 'B' =>
-  (parseInt(createHash('sha256').update(`${salt}:${unitId}`).digest('hex').slice(0, 8), 16) % 2 === 0 ? 'A' : 'B');
+// Keyed by PAIR KIND as well as unit, so each comparison of the same context gets an independent
+// assignment. Without the pair kind, every pair on one unit would land the same way round and a rater
+// who noticed the pattern once would carry it through the whole sheet.
+const sideFor = (pairKind: string, unitId: string, salt: string): 'A' | 'B' =>
+  (parseInt(createHash('sha256').update(`${salt}:${pairKind}:${unitId}`).digest('hex').slice(0, 8), 16) % 2 === 0 ? 'A' : 'B');
+
+
+/**
+ * The corpus discovery read, for the arm that pastes it into the prompt.
+ *
+ * Deliberately the SAME files, excluding the reserve, because the whole question this arm answers is
+ * whether compiling that material beats simply showing it. Reading a different set would compare two
+ * things at once.
+ */
+function corpusTextForBaseline(): string {
+  const manifest = join(DATA, 'corpus-paths.json');
+  if (!existsSync(manifest)) {
+    die('no corpus manifest — this run has no record of which files discovery read, so the '
+      + 'paste-the-work baseline cannot be built from the same material.');
+  }
+  const files = JSON.parse(readFileSync(manifest, 'utf8')) as { id: string; path: string }[];
+  return files.map((f) => `--- ${f.id} ---\n${readFileSync(f.path, 'utf8')}`).join('\n\n');
+}
+
+/**
+ * The ratified requirements as flat prose. No carriers, no anchored examples, no output contract.
+ *
+ * This is the arm that isolates the compiler from the standard it compiled: same rules, none of the
+ * machinery that decides how each one reaches the model.
+ */
+function standardAsProse(L: store.StoreLayout, standardVersionHash: string): string {
+  const sd = store.getStandard(L, standardVersionHash) ?? die(`standard ${standardVersionHash} is missing from the store.`);
+  const lines = sd.requirements.map((r) => (r.appliesWhen && r.appliesWhen !== 'GENERAL'
+    ? `- ${r.statement} (when: ${r.appliesWhen})`
+    : `- ${r.statement}`));
+  return `Follow these rules.\n\n${lines.join('\n')}`;
+}
 
 export async function reference(): Promise<void> {
   if (argv.includes('--score')) { scorePhase(); return; }
@@ -55,42 +93,88 @@ async function preparePhase(): Promise<void> {
   }
 
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 2.0), maxCalls: reserved.length + 2 };
+
+  // ── THE ARM SET IS FIXED HERE, AND THE BUDGET IS CHECKED AGAINST IT BEFORE ANYTHING IS SPENT ────
+  //
+  // A partial arm set is worse than no run. The missing arm leaves no trace in the output, so a
+  // truncated run reads exactly like a complete one that happened to favour us. That is why this
+  // refuses on budget rather than generating what it can afford.
+  const arms: readonly ArmId[] = armsRequiredBy(PAIR_KINDS);
+  const onePagerPath = flag('--one-pager');
+  const inputs: ArmInputs = {
+    compiledSkillText: servedText,
+    corpusText: corpusTextForBaseline(),
+    standardAsProse: standardAsProse(L, sv.standardVersionHash),
+    // Written by a model reading the corpus. One call, and it is inside the budget rather than free.
+    modelStyleGuide: null,
+    expertOnePager: onePagerPath ? readFileSync(onePagerPath, 'utf8') : null,
+  };
+
+  const perUnit = arms.length;
+  const projected = reserved.length * perUnit + 2;
+  const cap = numericFlag('--cap', 2.0);
+  console.log(`${arms.length} arm(s) x ${reserved.length} held-out unit(s) = ${reserved.length * perUnit} generation(s), plus 1 to write the baseline guide.`);
+  console.log(`  arms: ${arms.join(', ')}`);
+
+  const budget: Budget = { spentUsd: 0, capUsd: cap, maxCalls: projected };
   const { client, binding } = clientAndBinding('target');
-  console.log(`Generating ${reserved.length} held-out attempt(s) with ${describeBinding(binding)}.`);
-  console.log('The expert\'s own work is the reference. It is NOT sent to the model.\n');
 
-  // PROVENANCE IS A PROPERTY OF THE INPUT, NOT OF THE SHELL THAT RAN IT.
-  //
-  // A reserved unit is a real task the expert really did, held back before discovery read it. That is
-  // ORGANIC_USE by the definition, and it is the whole point: the reference test is the measurement
-  // that may support a generalisation claim, and only certification-grade inputs can carry one.
-  //
-  // Stated as a typed constant rather than routed through `resolveProvenance`. That helper exists to
-  // parse an UNTRUSTED string — a `--provenance` flag or the harness environment — and it throws on
-  // anything outside the taxonomy. This call site knows its answer at compile time, and laundering a
-  // literal through a string parser is exactly how `'HELD_OUT_REFERENCE'` survived here: not a member
-  // of `Provenance`, unreachable by the type checker, and thrown on the first reserved unit for every
-  // user who ever ran this command. A typed constant cannot fail that way again.
-  //
-  // It is also deliberately NOT env-overridable. A stray ATELIER_PROVENANCE in the shell must not
-  // change what a held-out expert artifact *is*.
-  const provenance: Provenance = 'ORGANIC_USE';
-
-  const salt = sv.skillVersionHash;
-  const pairs: ReferencePair[] = [];
-  for (const u of reserved) {
-    const rec = await runOnce(L, sv, servedText, servedHash, delivery, u.task, client, budget, binding,
-      provenance, contractFile);
-    const goldenSide = sideFor(u.unitId, salt);
-    pairs.push({ contextId: u.unitId, task: u.task,
-      goldenSide,
-      aText: goldenSide === 'A' ? u.artifact : rec.output,
-      bText: goldenSide === 'A' ? rec.output : u.artifact });
-    console.log(`  ${u.unitId} ready`);
+  // The guide arm has to exist before the loop, because it is one input reused across every unit.
+  if (arms.includes('B2_MODEL_STYLE_GUIDE')) {
+    const guide = await spendOneWithResult(client, budget,
+      'Read the following body of work by one author and write a short guide a writer could follow to '
+      + 'produce more work like it. Rules only, no preamble.',
+      inputs.corpusText, null);
+    (inputs as { modelStyleGuide: string | null }).modelStyleGuide = guide.piece;
+    console.log('  baseline guide written');
   }
 
-  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, pairs }, null, 1));
+  // Refuse now, while nothing has been generated, if an arm cannot be served at all.
+  for (const a of arms) {
+    try { servedTextFor(a, inputs); } catch (e) {
+      if (e instanceof MissingArmInput) die(`${a}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  console.log(`\nGenerating with ${describeBinding(binding)}.`);
+  console.log('The expert\'s own work is the reference. It is NOT sent to the model.\n');
+
+  const provenance: Provenance = 'ORGANIC_USE';
+  const salt = sv.skillVersionHash;
+
+  // arm -> unitId -> output
+  const outputs = new Map<ArmId, Map<string, string>>();
+  for (const a of arms) {
+    const byUnit = new Map<string, string>();
+    for (const u of reserved) {
+      const rec = await runOnce(L, sv, servedTextFor(a, inputs), servedHash, delivery, u.task, client,
+        budget, binding, provenance, a === 'T_ATELIER' ? contractFile : null);
+      byUnit.set(u.unitId, rec.output);
+    }
+    outputs.set(a, byUnit);
+    console.log(`  ${a} ready across ${reserved.length} unit(s)`);
+  }
+
+  const textFor = (side: ArmId | 'GOLDEN', u: GoldenUnit): string =>
+    (side === 'GOLDEN' ? u.artifact : (outputs.get(side)?.get(u.unitId) ?? die(`no output for ${side}/${u.unitId}`)));
+
+  const pairs: ReferencePair[] = [];
+  for (const kind of PAIR_KINDS) {
+    for (const u of reserved) {
+      const leftOnA = sideFor(kind.id, u.unitId, salt) === 'A';
+      pairs.push({
+        contextId: `${kind.id}::${u.unitId}`,
+        task: u.task,
+        goldenSide: leftOnA ? 'A' : 'B',
+        aText: leftOnA ? textFor(kind.left, u) : textFor(kind.right, u),
+        bText: leftOnA ? textFor(kind.right, u) : textFor(kind.left, u),
+      });
+    }
+  }
+
+  const setHash = armSetHash(arms, sv.skillVersionHash);
+  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, armSetHash: setHash, arms, pairs }, null, 1));
 
   console.log(`\n${'─'.repeat(78)}\n${LABELLING_INSTRUCTIONS}\n${'─'.repeat(78)}`);
   for (const p of pairs) {
@@ -105,7 +189,19 @@ async function preparePhase(): Promise<void> {
 
 function scorePhase(): void {
   if (!existsSync(PAIRS())) die(`no prepared pairs at ${PAIRS()}. Run \`atelier reference --skill <name>\` first.`);
-  const stored = JSON.parse(readFileSync(PAIRS(), 'utf8')) as { skillVersionHash: string; pairs: ReferencePair[] };
+  const stored = JSON.parse(readFileSync(PAIRS(), 'utf8')) as {
+    skillVersionHash: string; armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[] };
+
+  // ── LABELS BELONG TO THE ARM SET THEY WERE COLLECTED ON ────────────────────────────────────────
+  //
+  // Re-preparing with a different arm set and scoring with the old labels would silently mix two
+  // comparisons. The hash is over the SET and the skill version, so either changing refuses here
+  // rather than producing a number nobody can attribute.
+  const expected = flag('--arm-set');
+  if (expected && stored.armSetHash && expected !== stored.armSetHash) {
+    die(`these labels were collected on arm set ${expected}, and the prepared pairs are ${stored.armSetHash}. `
+      + 'Scoring across two arm sets would report a comparison that never ran. Re-prepare, or score the run these pairs belong to.');
+  }
   const raw = flag('--labels') ?? die('--labels <json> required — array of {contextId, judgement, recognizedOriginal}');
   let labels: ReferenceLabel[];
   try { labels = JSON.parse(raw) as ReferenceLabel[]; } catch { return void die('--labels is not valid JSON.'); }
@@ -134,9 +230,49 @@ function scorePhase(): void {
   } else {
     console.log('  too few unrecognised pairs to report that subgroup separately.');
   }
+  reportPairedArms(stored, labels);
+
   if (r.decision === 'HELD_OUT_REFERENCE_NONINFERIORITY_ESTABLISHED') {
     console.log('\n  This is product validation for THIS author and THIS corpus. It is not absolute fidelity,');
     console.log('  it does not qualify any autonomous sensor, and it does not make PROMOTE reachable without');
     console.log('  the expert.');
   }
+}
+
+/**
+ * Every comparison the run prepared, scored as a paired test.
+ *
+ * The primary is printed first and labelled, because the whole reason the arm set is an enum is that
+ * the comparison most likely to be skipped is the one that decides the product.
+ */
+function reportPairedArms(
+  stored: { armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[] },
+  labels: readonly ReferenceLabel[],
+): void {
+  if (!stored.armSetHash) return;   // a run prepared before arms existed
+  const byId = new Map(labels.map((l) => [l.contextId, l]));
+
+  console.log(`\n${'─'.repeat(78)}\n  ARM COMPARISONS   arm set ${stored.armSetHash}   (${(stored.arms ?? []).join(', ')})`);
+  for (const kind of PAIR_KINDS) {
+    const mine = stored.pairs.filter((p) => p.contextId.startsWith(`${kind.id}::`));
+    if (!mine.length) continue;
+    let leftWins = 0; let rightWins = 0; let concordant = 0;
+    for (const p of mine) {
+      const l = byId.get(p.contextId);
+      if (!l || l.judgement === 'UNCERTAIN' || l.judgement === 'NO_MATERIAL_DIFFERENCE') { concordant += 1; continue; }
+      // goldenSide records which side carries the pair's LEFT arm, not the golden, once a pair kind
+      // has two generated arms. The field name is inherited; the meaning is "left is on this side".
+      const leftWon = (l.judgement === 'A_BETTER') === (p.goldenSide === 'A');
+      if (leftWon) leftWins += 1; else rightWins += 1;
+    }
+    const r = scorePairedArms(kind.id, leftWins, rightWins, concordant);
+    const tag = kind.primary ? 'PRIMARY  ' : '         ';
+    console.log(`\n  ${tag}${kind.left} vs ${kind.right}`);
+    console.log(`           ${kind.answers}`);
+    console.log(`           ${r.leftWins} : ${r.rightWins} on ${r.leftWins + r.rightWins} discordant of ${r.n} scored`);
+    console.log(r.resolves
+      ? `           exact McNemar p = ${r.p.toFixed(4)}`
+      : "           too few discordant pairs to resolve; no p reported");
+  }
+  console.log('─'.repeat(78));
 }

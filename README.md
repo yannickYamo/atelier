@@ -786,6 +786,8 @@ Flags worth knowing.
 | flag | when |
 |---|---|
 | `--reserve <file>` | hold work back before discovery reads it. Only reachable at intake |
+| `--one-pager <file>` | the expert's own one-page attempt at their rules, for the baseline arm that competes with the product. There is no substitute and no default |
+| `--arm-set <hash>` | at `--score`, refuses labels collected on a different arm set |
 | `--with <name>=<path>` | bind a source a requirement depends on |
 | `--cap <usd>` / `--max-calls <n>` | bound the run. A dollar cap refuses to run against a runtime it cannot bind |
 | `--price-in` / `--price-out` | your rate, USD per million tokens, for any provider |

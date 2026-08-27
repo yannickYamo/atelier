@@ -39,13 +39,13 @@ export const die = (m: string): never => { console.error(`atelier: ${m}`); proce
 // table going stale one flag at a time.
 export const VALUED_OPTIONS: readonly string[] = [
   'with',
-  'api-key-env', 'applies-when', 'backend', 'base-url', 'brief',
+  'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'host', 'id', 'invocation', 'kind',
   'labels', 'max-calls', 'model', 'name', 'note',
-  'pick', 'price-in', 'price-out', 'provenance', 'provider',
+  'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',

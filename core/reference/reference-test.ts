@@ -147,3 +147,72 @@ this and no rule you are being asked to apply.
 Then, and only after you have written your answer: did you RECOGNISE one of them as something you
 wrote? YES / NO / UNSURE. It changes nothing about your first answer; it is recorded so the result can
 be reported honestly rather than described as blind when it was not.`;
+
+// ── THE PAIRED TEST, FOR ARM AGAINST ARM ────────────────────────────────────────────────────────
+//
+// `scoreReference` above answers a one-sample question: how often did the expert prefer their own
+// work, and is that rate under a bar fixed in advance. Arm against arm is a different shape. The same
+// expert judges both arms on the same context, so the contexts are PAIRED and a test that treats the
+// two arms as independent samples throws away the pairing that the design paid for.
+//
+// McNemar is the paired test for a binary outcome, and it is exact here rather than chi-square
+// approximate because n is small by construction: a held-out reserve is a handful of contexts, and
+// the approximation is worst exactly there.
+//
+// Concordant pairs — contexts where both arms won or both lost — carry no information about which arm
+// is better and drop out by construction rather than by anyone choosing to exclude them.
+
+/**
+ * Exact two-sided McNemar on the two discordant counts.
+ *
+ * @param b contexts where the first arm won and the second did not
+ * @param c contexts where the second arm won and the first did not
+ */
+export function mcnemarExactP(b: number, c: number): number {
+  if (!Number.isInteger(b) || !Number.isInteger(c) || b < 0 || c < 0) {
+    throw new Error(`mcnemarExactP: discordant counts must be non-negative integers, got b=${b} c=${c}`);
+  }
+  const n = b + c;
+  // No discordant pair is not "no difference"; it is no information. p = 1 is the honest reading and
+  // the caller is expected to report n alongside it rather than the p on its own.
+  if (n === 0) return 1;
+  const k = Math.min(b, c);
+  let tail = 0;
+  for (let j = 0; j <= k; j += 1) {
+    let coeff = 1;
+    for (let t = 0; t < j; t += 1) coeff = (coeff * (n - t)) / (t + 1);
+    tail += coeff * 0.5 ** n;
+  }
+  return Math.min(1, 2 * tail);
+}
+
+export interface PairedArmResult {
+  readonly pairKind: string;
+  /** contexts scored for both arms */
+  readonly n: number;
+  readonly leftWins: number;
+  readonly rightWins: number;
+  /** ties, uncertain and no-material-difference: counted, and excluded from the test */
+  readonly concordant: number;
+  readonly p: number;
+  /** false when the discordant count is too small for the test to resolve anything */
+  readonly resolves: boolean;
+}
+
+/** Minimum discordant pairs before a McNemar p is worth printing at all. */
+export const MIN_DISCORDANT = 6;
+
+export function scorePairedArms(pairKind: string, leftWins: number, rightWins: number, concordant: number): PairedArmResult {
+  const discordant = leftWins + rightWins;
+  return {
+    pairKind,
+    n: discordant + concordant,
+    leftWins,
+    rightWins,
+    concordant,
+    p: mcnemarExactP(leftWins, rightWins),
+    // Reported rather than hidden. A run with four discordant pairs cannot reach 0.05 two-sided at
+    // any split, so printing a p there invites a reading the arithmetic cannot support.
+    resolves: discordant >= MIN_DISCORDANT,
+  };
+}
