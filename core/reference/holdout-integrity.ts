@@ -37,7 +37,21 @@ export type Consumption =
   /** used in the controlled-contrast construct test */
   | 'C0'
   /** used to tune or qualify any observer or comparator */
-  | 'SENSOR_TUNING';
+  | 'SENSOR_TUNING'
+  /**
+   * READ BY THE PERSON BUILDING THE SYSTEM, DECLARED BY THEM.
+   *
+   * The other nine are recorded by the machinery that did the reading. This one cannot be: nothing
+   * here can observe a person opening a file. It is self-declared, which makes it weaker evidence
+   * and does not make it worthless — a promise in a protocol document has no consequence, and a
+   * declaration here refuses the item at audit without anyone having to remember why.
+   *
+   * It is also the only consumption that may be recorded against a RESERVED unit. Every other route
+   * is refused there, because spending the reserve is the thing the reserve exists to prevent. This
+   * one is not a request to spend it; it is a report that it was already spent, and refusing to
+   * record that would leave the contamination invisible, which is the worse outcome.
+   */
+  | 'BUILDER_VIEWED';
 
 export interface HoldoutCandidate {
   readonly itemId: string;

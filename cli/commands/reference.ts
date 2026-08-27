@@ -22,12 +22,14 @@ import { scoreReference, LABELLING_INSTRUCTIONS, UNCERTAIN_HANDLING, scorePaired
   type ReferencePair, type ReferenceLabel, type ReferenceJudgement, type Recognition } from '../../core/reference/reference-test.js';
 import { PAIR_KINDS, armsRequiredBy, servedTextFor, armSetHash, MissingArmInput,
   type ArmId, type ArmInputs } from '../../core/reference/arms.js';
+import { auditHoldout, type HoldoutCandidate } from '../../core/reference/holdout-integrity.js';
+import { declareBuilderViewed } from '../../core/golden/reservation.js';
 import type { Budget } from '../../core/inference/client.js';
 import type { GoldenUnit } from '../../core/golden/golden-unit.js';
 import { runOnce, spendOneWithResult } from './improve.js';
 import { resolveServedSkill } from './invoke.js';
 import type { Provenance } from '../../core/fidelity/provenance.js';
-import { DATA, die, flag, argv, clientAndBinding, describeBinding, loadSession , numericFlag} from '../runtime.js';
+import { DATA, die, flag, argv, clientAndBinding, describeBinding, loadSession, saveSession, numericFlag } from '../runtime.js';
 
 const PAIRS = (): string => join(DATA, 'reference-pairs.json');
 
@@ -77,8 +79,36 @@ function standardAsProse(L: store.StoreLayout, standardVersionHash: string): str
 }
 
 export async function reference(): Promise<void> {
-  if (argv.includes('--score')) { scorePhase(); return; }
+  if (flag('--declare-viewed')) { declareViewed(); return Promise.resolve(); }
+  if (argv.includes('--score')) { scorePhase(); return Promise.resolve(); }
   return preparePhase();
+}
+
+/**
+ * Record that the builder has read one or more held-out units, and refuse them from then on.
+ *
+ * There is no undo. A unit whose reference the builder has seen cannot become clean again by anyone
+ * changing their mind about how much they remember, and an undo here would be a button for exactly
+ * that.
+ */
+function declareViewed(): void {
+  const ids = (flag('--declare-viewed') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!ids.length) die('--declare-viewed <unitId,unitId> — name the held-out units you have read.');
+  const s = loadSession();
+  const r = s.reservation ?? die('nothing is reserved in this run, so there is no held-out set to declare against.');
+
+  const known = new Set(r.reserved.map((u) => u.unitId));
+  const unknown = ids.filter((id) => !known.has(id));
+  if (unknown.length) {
+    die(`not in the held-out set: ${unknown.join(', ')}\n`
+      + `  reserved here: ${r.reserved.map((u) => u.unitId).join(', ') || '(none)'}`);
+  }
+
+  const reserved = declareBuilderViewed(r.reserved, ids);
+  saveSession({ ...s, reservation: { ...r, reserved } });
+  console.log(`Recorded BUILDER_VIEWED on ${ids.length} unit(s): ${ids.join(', ')}`);
+  console.log('  They are contaminated from now on and `reference` will refuse to spend on them.');
+  console.log('  This cannot be undone, which is the only handling that means anything.');
 }
 
 async function preparePhase(): Promise<void> {
@@ -90,6 +120,29 @@ async function preparePhase(): Promise<void> {
       + '  A reserve has to be taken BEFORE discovery reads the corpus; one chosen now would be evidence\n'
       + '  the standard was already built from.\n'
       + '  Start a run with:  atelier create <path> --reserve <file> [--reserve <file> ...]');
+  }
+
+  // ── THE HOLDOUT IS AUDITED BEFORE A CENT IS SPENT ──────────────────────────────────────────────
+  //
+  // The audit runs from the RECORD of what consumed each unit, not from anyone's judgement about how
+  // much they remember. That ordering is the whole point: an audit run after seeing which units would
+  // be convenient is not an audit, and the temptation to reconstruct one arrives exactly when n is
+  // too small.
+  const candidates: HoldoutCandidate[] = reserved.map((u) => ({
+    itemId: u.unitId,
+    path: u.provenance.sourceRef,
+    consumedBy: u.provenance.consumedBy,
+    taskReusableUnderFrozenSplit: true,
+  }));
+  const audit = auditHoldout(candidates, s.reservation?.bar ?? 0.15);
+  if (audit.contaminated.length) {
+    die(`${audit.contaminated.length} held-out unit(s) are contaminated and cannot carry a comparison:\n`
+      + audit.contaminated.map((c) => `  ${c.item.itemId}: ${c.why}`).join('\n')
+      + '\n  Nothing was generated. A comparison against material that shaped the skill measures the '
+      + 'skill against its own source.');
+  }
+  if (!audit.sufficient) {
+    console.log(`\n  ${audit.terminal}: ${audit.why}\n`);
   }
 
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);

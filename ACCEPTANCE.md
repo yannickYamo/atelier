@@ -32,6 +32,7 @@ npm run acceptance:carriers -- --host codex
 | C12 | nothing private is published | every tracked file is scanned for paths, documents, SHAs and a hashed vocabulary from the predecessor |
 | C13 | the documents are checked | every command, path, npm script and vocabulary term the docs teach is pinned against the code |
 | C14 | every persisted write is atomic | no shipped module calls `writeFileSync`; a torn ledger tail is reported and a torn middle refuses to be read past |
+| C16 | a held-out unit the builder has read is refused | `BUILDER_VIEWED` is recordable against the reserve, where every other consumption is refused, and `reference` audits from the record before spending |
 | C15 | the baseline is an object, not a flag | the arm set is an enum, an arm needing human input refuses rather than substituting, and the set's identity is sealed with the pairs so labels cannot be scored across two runs |
 
 ## CLAUDE CODE, live session, human

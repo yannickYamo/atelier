@@ -166,6 +166,31 @@ export function markConsumed(
 }
 
 /**
+ * Record that the person building the system has read a held-out unit.
+ *
+ * THE ONE CONSUMPTION THAT MAY TOUCH THE RESERVE, and the asymmetry is the point. `markConsumed`
+ * throws on a reserved unit because every route it covers is a request to SPEND the reserve, and
+ * spending it forfeits the only evidence that can ever test whether the standard generalises.
+ *
+ * This is not a request to spend it. It is a report that it was already spent, by a person, outside
+ * anything this code can observe. Routing it through the same refusal would mean the one
+ * contamination nobody else can detect is also the one the record cannot hold — so the item would
+ * stay in the clean set and the audit would pass on evidence the builder had already read.
+ *
+ * Self-declared, therefore weak, and weak is not the same as worthless: the alternative on offer is
+ * a sentence in a protocol document that no command consults. Declaring here has a consequence, and
+ * it is automatic and irreversible for that unit.
+ */
+export function declareBuilderViewed(
+  units: readonly GoldenUnit[], unitIds: readonly string[],
+): readonly GoldenUnit[] {
+  const touch = new Set(unitIds);
+  return units.map((u) => (touch.has(u.unitId) && !u.provenance.consumedBy.includes('BUILDER_VIEWED')
+    ? { ...u, provenance: { ...u.provenance, consumedBy: [...u.provenance.consumedBy, 'BUILDER_VIEWED' as const] } }
+    : u));
+}
+
+/**
  * Units arriving from real use — the Level 2 mechanism.
  *
  * HONEST SCOPE, carried in the type rather than in a footnote: evidence reserved from use is not
