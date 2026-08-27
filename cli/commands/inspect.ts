@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { assertNotAuthority } from '../../core/state/canonical-state.js';
+import { assertNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 
 import { DATA, die, flag, projectDir, pickHost } from '../runtime.js';
@@ -37,7 +37,7 @@ export function inspect(): void {
     const ver = pickHost().verifyInstallation(pkg, projectDir());
     console.log(ver.present ? (ver.matchesPackage ? 'installed file matches the package that was built.' : `\nMATERIALIZATION DRIFT: ${ver.detail}\nThe installed file was edited by hand. It now serves something the StandardVersion does not say.`) : `not installed: ${ver.detail}`);
   }
-  for (const r of v.requirements) console.log(`  [${r.kind[0]}] ${r.statement}${/^GENERAL\b/i.test(r.appliesWhen) ? '' : `  (when: ${r.appliesWhen})`}`);
+  for (const r of v.requirements) console.log(`  [${r.kind[0]}] ${r.statement}${isGeneralScope(r.appliesWhen) ? '' : `  (when: ${r.appliesWhen})`}`);
 }
 
 export function historyCmd(): void {

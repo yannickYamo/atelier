@@ -23,6 +23,7 @@
 // so the confusion has to be deliberate.
 
 import type { Requirement } from '../state/canonical-state.js';
+import { isGeneralScope } from '../state/canonical-state.js';
 import type { GoldenUnit } from '../golden/golden-unit.js';
 
 /** Everything observed about one requirement. Raw signals — no weighting, no arithmetic. */
@@ -97,7 +98,7 @@ export function statesOf(r: Requirement, s: CoverageSignals): readonly CoverageS
   const out: CoverageState[] = [];
   const contexts = uniq(s.contextIds).length;
   const contradictory = s.counterUnitIds.length > 0 && s.supportingUnitIds.length > 0;
-  const generalScope = /^GENERAL\b/i.test(r.appliesWhen.trim());
+  const generalScope = isGeneralScope(r.appliesWhen);
 
   if (contradictory) out.push('CONTRADICTORY');
   if (s.heldOutRecurrence >= 2 && contexts >= 2 && !contradictory) out.push('STRONG_SIGNAL');
