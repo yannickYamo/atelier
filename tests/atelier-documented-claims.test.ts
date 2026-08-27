@@ -105,14 +105,30 @@ describe('the numbers in prose', () => {
     // Counted statically, which undercounts by however many `it`s are generated in a loop. So this
     // asserts a BAND rather than an equality: wide enough to survive a loop, narrow enough that
     // "539" against a suite of 640 fails, which is the drift that actually happened.
-    const declared = /([0-9]{3,}) tests/.exec(read('CONTRIBUTING.md'));
-    expect(declared, 'CONTRIBUTING no longer states a test count').not.toBeNull();
-    const n = Number(declared![1]);
+    // EVERY doc that states a count, not just CONTRIBUTING. The narrow version of this test shipped
+    // while README carried "52 files and 825 tests" against a suite of 54 and 855 — the same drift it
+    // was written to catch, in the one section that tells a reader what they can reproduce.
     const written = walk('tests').filter((f) => f.endsWith('.ts'))
       .reduce((acc, f) => acc + [...read(f).matchAll(/^\s*(?:it|test)\(/gm)].length, 0);
     expect(written, 'no tests found — the counter has stopped counting').toBeGreaterThan(100);
-    expect(n, `CONTRIBUTING says ${n} tests; ${written} are written in tests/`).toBeGreaterThanOrEqual(written);
-    expect(n - written, `CONTRIBUTING says ${n}, only ${written} are written`).toBeLessThanOrEqual(15);
+
+    const stating = DOCS.filter((d) => /([0-9]{3,}) tests/.test(read(d)));
+    expect(stating.length, 'no document states a test count any more').toBeGreaterThan(0);
+    for (const doc of stating) {
+      for (const m of read(doc).matchAll(/([0-9]{3,}) tests/g)) {
+        const n = Number(m[1]);
+        expect(n, `${doc} says ${n} tests; ${written} are written in tests/`).toBeGreaterThanOrEqual(written);
+        expect(n - written, `${doc} says ${n}, only ${written} are written`).toBeLessThanOrEqual(15);
+      }
+    }
+
+    // File counts drift the same way and were never pinned at all.
+    const files = walk('tests').filter((f) => f.endsWith('.test.ts')).length;
+    for (const doc of DOCS) {
+      for (const m of read(doc).matchAll(/([0-9]{2,}) files and [0-9]{3,} tests/g)) {
+        expect(Number(m[1]), `${doc} says ${m[1]} test files; there are ${files}`).toBe(files);
+      }
+    }
   });
 
   it('the node badge matches the engine the package declares', () => {

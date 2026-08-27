@@ -8,7 +8,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
@@ -32,7 +33,8 @@
     "build:plugins": "tsx plugins/build-plugins.mts",
     "pretest": "npm run build:plugins",
     "acceptance:carriers": "tsx scripts/carrier-acceptance.mts",
-    "ablation:carrier": "tsx scripts/ablation-carrier.mts"
+    "ablation:carrier": "tsx scripts/ablation-carrier.mts",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test"
   },
   "repository": {
     "type": "git",

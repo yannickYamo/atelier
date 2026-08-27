@@ -16,6 +16,11 @@ CI runs exactly those four, in that order, and then runs the built binary.
 
 `npm test` builds the plugin trees first, because two tests read them.
 
+The invariants those tests exist to hold are listed in [`ACCEPTANCE.md`](ACCEPTANCE.md), one row per
+named check. If you add a guard, add its row there in the same commit; a guard nobody can find is a
+guard the next person deletes. Security issues go to [`SECURITY.md`](SECURITY.md), and behaviour
+changes to [`CHANGELOG.md`](CHANGELOG.md).
+
 The lint is type-aware, so it needs the TypeScript project and takes a few seconds. It is configured
 to catch what `tsc` cannot: a floating promise, an `any` that escaped a `JSON.parse`, a caught error
 rethrown without its cause. Where a rule is off, `eslint.config.js` says why — a disabled rule with
