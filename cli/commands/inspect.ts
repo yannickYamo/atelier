@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { assertNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
+import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 
 import { DATA, die, flag, projectDir, pickHost } from '../runtime.js';
@@ -15,7 +15,7 @@ export function inspect(): void {
   const active = store.getActive(L) ?? die('no active version.');
   const sv = store.getSkillVersion(L, active)!;
   const v = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing');
-  assertNotAuthority('STANDARD_VERSION', true);
+  assertSourceIsNotAuthority('STANDARD_VERSION', true);
     console.log(`skill ${L.skillName}\nactive SkillVersion ${sv.skillVersionHash}\nowned by StandardVersion ${v.standardVersionHash} [${v.authorityState}] (${v.requirements.length} requirements, minted ${v.mintedAt})`);
   // ── CHECK AGAINST WHAT WAS BUILT, NOT AGAINST A RECONSTRUCTION OF IT ────────────────────────
   //

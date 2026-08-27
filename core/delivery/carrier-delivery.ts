@@ -29,7 +29,16 @@
 //
 // Collapsing it into DELIVERED would rebuild the original bug with a tidier directory name.
 
-export type Carrier = 'PROSE' | 'SELF_CHECK' | 'EXAMPLE' | 'OUTPUT_CONTRACT' | 'NONE';
+/**
+ * Re-exported, not redeclared. This file used to own a second union with the same five members as
+ * the one in `architecture/compile.ts`. TypeScript accepts assignment between two structurally
+ * identical unions, so the duplication was invisible: nothing failed, and nothing would have failed
+ * until a sixth carrier was added to one of them. The compiler would have emitted a carrier this
+ * matrix had no row for, and the delivery check would have reported a complete matrix for an
+ * incomplete one.
+ */
+export type { Carrier } from '../architecture/compile.js';
+import type { Carrier } from '../architecture/compile.js';
 
 /** Who composes the request the model actually receives. */
 export type ExecutionSurface =

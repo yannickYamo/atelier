@@ -1,7 +1,7 @@
 // tests/atelier-golden-unit.test.ts — decision-centric goldens, and the reserve that must survive.
 
 import { describe, it, expect } from 'vitest';
-import { claimUnitCount, clusteringUnaccounted, independentUnitFor, describeEvidence,
+import { claimUnitCount, clusteringUnaccounted, independentUnitFor, describeGoldenEvidence,
   evidenceStateOf, isContaminated, usableAsReference, REGISTERED_UNIT_KINDS, isRegisteredKind, clusterAssignment, clusterCertainty,
   type GoldenUnit, type UnitKind } from '../core/golden/golden-unit.js';
 import { reserve, markConsumed, reserveFromUse, PROSPECTIVE_SCOPE_CAVEAT } from '../core/golden/reservation.js';
@@ -25,19 +25,19 @@ describe('the claimed scope determines the independent unit', () => {
   });
 
   it('says out loud when the two numbers differ — the case that misleads', () => {
-    const d = describeEvidence(prs, 'ACROSS_CLUSTERS');
+    const d = describeGoldenEvidence(prs, 'ACROSS_CLUSTERS');
     expect(d).toMatch(/10 decision\(s\) across 1 artifact/);
     expect(d).toMatch(/\*\*1 claim unit\(s\)\*\*, not 10/);
     expect(d).toMatch(/remain fully usable for discovery/);   // correlated != worthless
     // and stays quiet when they agree
-    expect(describeEvidence([unit('a', 'r1'), unit('b', 'r2')], 'ACROSS_CLUSTERS')).toBe('2 claim unit(s).');
+    expect(describeGoldenEvidence([unit('a', 'r1'), unit('b', 'r2')], 'ACROSS_CLUSTERS')).toBe('2 claim unit(s).');
   });
 
   it('a claim-scope mapping must NOT manufacture independence', () => {
     // 10 within-repo claim units are the right DENOMINATOR and are still dependent. The flag is what
     // stops a caller putting 10 into a binomial and reporting a precision the evidence has not got.
     expect(clusteringUnaccounted(prs, 'WITHIN_CLUSTER')).toBe(true);
-    expect(describeEvidence(prs, 'WITHIN_CLUSTER')).toMatch(/never by putting 10 into a binomial/);
+    expect(describeGoldenEvidence(prs, 'WITHIN_CLUSTER')).toMatch(/never by putting 10 into a binomial/);
     // an across-cluster claim already counts one per cluster, so nothing is left unmodelled
     expect(clusteringUnaccounted(prs, 'ACROSS_CLUSTERS')).toBe(false);
     // and genuinely unclustered evidence raises no flag

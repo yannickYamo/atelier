@@ -1,7 +1,7 @@
 // tests/atelier-coverage.test.ts — StandardCoverage, and the two things it must never do.
 
 import { describe, it, expect } from 'vitest';
-import { coverageFor, coverageOf, statesOf, describeCoverage, assertNotAuthority,
+import { coverageFor, coverageOf, statesOf, describeCoverage, assertCoverageIsNotAuthority,
   COVERAGE_AUTHORITY, signalsFromObservations, type CoverageSignals } from '../core/coverage/standard-coverage.js';
 import type { Requirement } from '../core/state/canonical-state.js';
 import type { GoldenUnit } from '../core/golden/golden-unit.js';
@@ -96,9 +96,9 @@ describe('coverage has NO authority', () => {
   });
 
   it('throws if a caller reaches for certification or ratification', () => {
-    expect(() => { assertNotAuthority('this StandardVersion is certified'); }).toThrow(/cannot support/);
-    expect(() => { assertNotAuthority('promotion is authorised'); }).toThrow(/cannot support/);
-    expect(() => { assertNotAuthority('which ambiguity deserves an active query'); }).not.toThrow();
+    expect(() => { assertCoverageIsNotAuthority('this StandardVersion is certified'); }).toThrow(/cannot support/);
+    expect(() => { assertCoverageIsNotAuthority('promotion is authorised'); }).toThrow(/cannot support/);
+    expect(() => { assertCoverageIsNotAuthority('which ambiguity deserves an active query'); }).not.toThrow();
   });
 });
 

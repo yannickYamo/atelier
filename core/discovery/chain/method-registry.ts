@@ -6,7 +6,7 @@
 
 /**
  * Stage 2 — MethodRegistry. Authority of a methodology = "is this a LEGITIMATE methodology
- * source?" — NOT "should it be used here?". Applicability is evaluated SEPARATELY against
+ * source?" — NOT "should it be used here?". MethodApplicability is evaluated SEPARATELY against
  * the situation (method-registry answers legitimacy; methodology-evidence answers fit).
  * Conflating the two recreates the wiring problem where authored implies use-everywhere.
  *

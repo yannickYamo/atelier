@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { newRun, transition, enrol, terminate, isEnrolled, type Run } from '../core/state/run-state.js';
-import { assertNotAuthority, assertFeedbackDidNotMutate, assertSupersessionRecorded, unconfirmedRate, discoveryRecall, unconditionalRate, type StandardVersion, type Requirement } from '../core/state/canonical-state.js';
+import { assertSourceIsNotAuthority, assertFeedbackDidNotMutate, assertSupersessionRecorded, unconfirmedRate, discoveryRecall, unconditionalRate, type StandardVersion, type Requirement } from '../core/state/canonical-state.js';
 
 const at = (r: Run, s: Run['state']): Run => ({ ...r, state: s });
 const req = (o: Partial<Requirement> & { requirementId: string }): Requirement => ({
@@ -59,9 +59,9 @@ describe('two independent studies — neither on the product path', () => {
 
 describe('GATE 3 — the materialization is never the authority', () => {
   it('REFUSES reading SKILL.md as authority while a StandardVersion exists', () => {
-    expect(() => { assertNotAuthority('SKILL_MD', true); }).toThrow(/compiled materialization/);
-    expect(() => { assertNotAuthority('SKILL_MD', false); }).not.toThrow();
-    expect(() => { assertNotAuthority('STANDARD_VERSION', true); }).not.toThrow();
+    expect(() => { assertSourceIsNotAuthority('SKILL_MD', true); }).toThrow(/compiled materialization/);
+    expect(() => { assertSourceIsNotAuthority('SKILL_MD', false); }).not.toThrow();
+    expect(() => { assertSourceIsNotAuthority('STANDARD_VERSION', true); }).not.toThrow();
   });
 
   it('feedback may not mutate a standard', () => {

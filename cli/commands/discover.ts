@@ -27,23 +27,10 @@ import { priceFor, ANTHROPIC_PRICING } from '../../providers/pricing.js';
 import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationDecision as LedgerDecision } from '../../core/ratification/decision-record.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
-export const PROPOSER_SYSTEM = `You are given several pieces written by one author.
-
-Infer the author's IMPLICIT DECISION RULES — the choices they make repeatedly that a different competent
-writer would make differently. Formal and figurative choices COUNT as decisions.
-
-For each rule give: STATEMENT (one sentence they could recognise as their own), APPLIES_WHEN (the
-condition; say GENERAL only if it truly holds throughout), EVIDENCE (a short verbatim quote), KIND
-(GENERATIVE or BOUNDARY).
-
-- 8 to 12 rules. At least three KIND=BOUNDARY: a place the author could easily have gone further and
-  chose not to, or a move available to them that they consistently decline.
-- Each rule must be FALSIFIABLE — someone could break it on purpose. "Writes clearly" is not a rule.
-- Do not comment on quality. Do not guess at influences or writers they resemble.`;
-
-export const SCHEMA = { type: 'object', properties: { rules: { type: 'array', minItems: 8, maxItems: 12, items: { type: 'object',
-  properties: { statement: { type: 'string' }, appliesWhen: { type: 'string' }, evidence: { type: 'string' }, evidenceItemId: { type: 'string' }, kind: { type: 'string', enum: ['GENERATIVE', 'BOUNDARY'] } },
-  required: ['statement', 'appliesWhen', 'evidence', 'evidenceItemId', 'kind'], additionalProperties: false } } }, required: ['rules'], additionalProperties: false } as Record<string, unknown>;
+// The CLI once carried its own proposer prompt and schema here, hardcoded, beside the ones
+// derived from `framing.ts`. Nothing called them. They are removed rather than kept: a second
+// prompt that no path reaches is a prompt that drifts from the real one in silence, and the
+// next person to wire it would have bypassed the framing owner without noticing.
 
 export async function discover(): Promise<void> {
   const s = loadSession();

@@ -26,12 +26,12 @@ import type { InvocationRecord } from '../state/canonical-state.js';
 import type { Observation } from '../measurement/observation.js';
 import type { RepairRecord, Prohibition, EvidenceBasis, EvaluationBasis } from '../architecture/repair-memory.js';
 import { mayPropose, WEAKEST_EVALUATION } from '../architecture/repair-memory.js';
-import { evidenceFor, describeEvidence, type RequirementEvidence } from '../measurement/longitudinal.js';
+import { evidenceFor, describeRequirementEvidence, type RequirementEvidence } from '../measurement/longitudinal.js';
 import { symptomFrom, routeFor, checkHypothesis, type Symptom, type FailureHypothesis, type EvidenceNeed } from './symptom.js';
 import { decide, unreachableGates, NOTHING_EARNED, type Gates, type Decision } from './state-machine.js';
 import { planNext, describeAction, type NextAction } from './planner.js';
 import { specFor, checkSpec, type ProbeSpec } from './probe.js';
-import { compare, describeComparison, type ComparisonResult } from '../comparison/compare.js';
+import { compare, describeComparisonResult, type ComparisonResult } from '../comparison/compare.js';
 import { resolvePromotion, type PromotionDecision, type PromotionEvidence } from './promotion.js';
 import type { ContextDifference } from '../comparison/resolution.js';
 import type { Carrier } from '../architecture/compile.js';
@@ -184,7 +184,7 @@ export function runSpine(input: SpineInput): SpineState {
 
 /** What `improve` prints: why it is doing what it is doing, in the user's language. */
 export function explainSpine(s: SpineState): string {
-  let out = describeEvidence(s.evidence);
+  let out = describeRequirementEvidence(s.evidence);
   out += `\n  pattern:   ${s.symptom.kind} — ${s.symptom.detail}\n`;
   out += `  route:     ${s.route} — ${s.routeWhy}\n`;
 
@@ -214,7 +214,7 @@ export function explainSpine(s: SpineState): string {
   if (s.probeSpec) {
     out += `             probe ${s.probeSpec.probeId} — ${s.probeSpec.evidenceClass}, provenance ${s.probeSpec.provenance}\n`;
   }
-  if (s.comparison) out += describeComparison(s.comparison);
+  if (s.comparison) out += describeComparisonResult(s.comparison);
   if (s.promotion) {
     out += `  promotion: ${s.promotion.authority}\n    ${s.promotion.why}\n`;
     for (const u of s.promotion.unmet) out += `      unmet: ${u}\n`;

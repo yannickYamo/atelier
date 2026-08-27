@@ -36,9 +36,6 @@ operating — concrete enough that the author could check it and disagree).
 /** The prompt for one vantage. The framing clause is owned by `framing.ts` and varies here alone. */
 export const proposerSystemFor = (framing: FramingId): string => `${framedPreamble(framing)}\n\n${PROPOSER_FIELDS}`;
 
-/** Framing B, preserved as a named export because callers referenced it before framings existed. */
-export const PROPOSER_SYSTEM = proposerSystemFor('B');
-
 export const PROPOSER_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {

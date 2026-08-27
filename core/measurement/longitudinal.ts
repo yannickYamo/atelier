@@ -96,7 +96,7 @@ export function evidenceFor(
  * Every strength claim is followed by the
  * denominator it rests on, and a claim that cannot be made says why rather than being omitted.
  */
-export function describeEvidence(e: RequirementEvidence): string {
+export function describeRequirementEvidence(e: RequirementEvidence): string {
   if (!e.observations) {
     return `${e.requirementId}: delivery ${e.delivery}, behaviour ${e.behavior}.\n`
       + (e.delivery === 'PROVEN'
