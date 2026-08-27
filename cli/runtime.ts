@@ -5,9 +5,10 @@ import { parseArgs } from 'node:util';
 // this repository opens the CLI first. What lives here is the state a command cannot avoid touching:
 // where data goes, how a run advances, and how a model is reached.
 
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import {mkdirSync, existsSync, renameSync} from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
 import type { ExpertEvidence, Requirement } from '../core/state/canonical-state.js';
@@ -416,15 +417,52 @@ export interface Session {
   ledger?: RatificationLedger | null;
 }
 
-const SPATH = join(DATA, 'session.json');
+/**
+ * ONE IN-PROGRESS RUN PER PROJECT, NOT PER MACHINE.
+ *
+ * The session used to live at a single `~/.atelier/session.json`. Skills were already namespaced
+ * under `skills/<name>/`, so finished work never collided — but the run in flight did. Starting a
+ * corpus in one project silently adopted the half-finished run from another, and the only symptom
+ * was an illegal-transition refusal naming a state the person had never put anything into.
+ *
+ * The project is identified by `projectDir()`, which already existed for host selection, so this
+ * introduces no new concept and no new flag: `ATELIER_PROJECT_DIR` overrides it where a caller needs
+ * to. The directory PATH is hashed rather than used as a name so a session cannot be addressed by
+ * guessing, and the readable basename is kept alongside it so `ls sessions/` is legible to a person.
+ */
+export const sessionPath = (): string => {
+  const dir = projectDir();
+  const leaf = (dir.split('/').filter(Boolean).pop() ?? 'root').replace(/[^A-Za-z0-9._-]/g, '-');
+  return join(DATA, 'sessions', `${leaf}-${sha(dir)}.json`);
+};
 
-export const loadSession = (): Session => existsSync(SPATH)
-  ? JSON.parse(readFileSync(SPATH, 'utf8')) as Session
-  : { run: newRun(sha(`${Date.now()}`)), skillName: null, evidence: null, proposals: [], decided: [], reservation: null };
+/** Where the single global session lived before runs were per-project. */
+const LEGACY_SESSION = join(DATA, 'session.json');
+
+const blankSession = (): Session =>
+  ({ run: newRun(sha(`${Date.now()}`)), skillName: null, evidence: null, proposals: [], decided: [], reservation: null });
+
+export const loadSession = (): Session => {
+  const p = sessionPath();
+  if (existsSync(p)) return readJson<Session>(p, { what: "this project's session", requireKeys: ['run'] });
+  // One-time adoption of a pre-existing global run, so an upgrade does not strand work in flight.
+  // It is MOVED, not copied: leaving it readable would let every other project adopt it too, which
+  // is the exact collision this change exists to end.
+  if (existsSync(LEGACY_SESSION)) {
+    const legacy = readJson<Session>(LEGACY_SESSION, { what: 'the previous global session', requireKeys: ['run'] });
+    mkdirSync(dirname(p), { recursive: true });
+    writeAtomic(p, JSON.stringify(legacy, null, 1));
+    renameSync(LEGACY_SESSION, `${LEGACY_SESSION}.migrated`);
+    console.error(`atelier: adopted the previous global run into this project (${p}).`);
+    return legacy;
+  }
+  return blankSession();
+};
 
 export const saveSession = (s: Session): void => {
-  mkdirSync(DATA, { recursive: true });
-  writeAtomic(SPATH, JSON.stringify(s, null, 1));
+  const p = sessionPath();
+  mkdirSync(dirname(p), { recursive: true });
+  writeAtomic(p, JSON.stringify(s, null, 1));
 };
 
 /**

@@ -11,8 +11,8 @@
 // contract that was compiled.
 
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { componentFor, type SkillArchitecture } from '../core/architecture/compile.js';
 import { renderAgentSkill } from '../renderers/agent-skill/render.js';
@@ -347,9 +347,27 @@ describe('a carrier nobody can ask for is a carrier that does not exist', () => 
     provenance: 'MACHINE_DISCOVERED', evidence: 'a span', evidenceItemId: 'w1', wouldBeAbsentIf: 'otherwise',
   });
 
-  const seedSession = (proposals: Requirement[]): string => {
+  /**
+   * Where the runtime will look for this project's session, asked of the runtime rather than
+   * recomputed here. A run is per-project now, so the path is a function of ATELIER_DATA and
+   * ATELIER_PROJECT_DIR together; a copy of that formula in the test would be a second owner of it.
+   */
+  const sessionFileIn = async (dir: string): Promise<string> => {
+    const prior = { data: process.env.ATELIER_DATA, proj: process.env.ATELIER_PROJECT_DIR };
+    process.env.ATELIER_DATA = dir;
+    process.env.ATELIER_PROJECT_DIR = dir;
+    vi.resetModules();
+    const { sessionPath } = await import('../cli/runtime.js');
+    const p = sessionPath();
+    process.env.ATELIER_DATA = prior.data; process.env.ATELIER_PROJECT_DIR = prior.proj;
+    return p;
+  };
+
+  const seedSession = async (proposals: Requirement[]): Promise<string> => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-ratify-'));
-    writeFileSync(join(dir, 'session.json'), JSON.stringify({
+    const file = await sessionFileIn(dir);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({
       run: { id: 'r1', state: 'PROPOSED', enrolments: [], corpusHash: 'abc', events: [] },
       skillName: null, evidence: { evidenceId: 'e1', workType: 'writing', items: [] },
       proposals, decided: [], reservation: null, ledger: null,
@@ -359,8 +377,10 @@ describe('a carrier nobody can ask for is a carrier that does not exist', () => 
 
   /** Run one CLI command with a given argv against a given data dir, capturing stdout and any die(). */
   const runCli = async (dir: string, args: string[], fn: 'ratifyBatch' | 'pending'): Promise<{ printed: string; error: string | null }> => {
-    const prior = { data: process.env.ATELIER_DATA, argv: process.argv, log: console.log, exit: process.exit };
+    const prior = { data: process.env.ATELIER_DATA, proj: process.env.ATELIER_PROJECT_DIR,
+      argv: process.argv, log: console.log, exit: process.exit };
     process.env.ATELIER_DATA = dir;
+    process.env.ATELIER_PROJECT_DIR = dir;
     process.argv = ['node', 'atelier', ...args];
     let printed = ''; let error: string | null = null;
     console.log = (...a: unknown[]): void => { printed += `${a.join(' ')}\n`; };
@@ -381,13 +401,14 @@ describe('a carrier nobody can ask for is a carrier that does not exist', () => 
       error = errs.length ? errs.join('\n') : (e instanceof Error ? e.message : String(e));
     }
     console.log = prior.log; console.error = priorErr; process.exit = prior.exit;
-    process.env.ATELIER_DATA = prior.data; process.argv = prior.argv;
+    process.env.ATELIER_DATA = prior.data; process.env.ATELIER_PROJECT_DIR = prior.proj;
+    process.argv = prior.argv;
     return { printed, error };
   };
 
   const ratifyIn = async (dir: string, decisions: unknown): Promise<{ out: Requirement[]; error: string | null }> => {
     const { error } = await runCli(dir, ['ratify', '--decisions', JSON.stringify(decisions)], 'ratifyBatch');
-    const sess = JSON.parse(readFileSync(join(dir, 'session.json'), 'utf8')) as { decided: Requirement[] };
+    const sess = JSON.parse(readFileSync(await sessionFileIn(dir), 'utf8')) as { decided: Requirement[] };
     return { out: sess.decided, error };
   };
 
@@ -402,7 +423,7 @@ describe('a carrier nobody can ask for is a carrier that does not exist', () => 
   // The property is that a decision a person can type reaches the requirement. So run the command.
   // These drive the real `ratifyBatch` in a temp ATELIER_DATA, through the same JSON a user pastes.
   it('a shape typed on a decision lands on the requirement, through the real command', async () => {
-    const dir = seedSession([proposal('p1'), proposal('p2')]);
+    const dir = await seedSession([proposal('p1'), proposal('p2')]);
     const { out, error } = await ratifyIn(dir, [
       { id: 'p1', decision: 'APPROVE', materiality: 'REQUIRED', shape: { verdict: { type: 'string' } } },
       { id: 'p2', decision: 'APPROVE', materiality: 'PREFERRED' },
@@ -415,22 +436,22 @@ describe('a carrier nobody can ask for is a carrier that does not exist', () => 
   });
 
   it('ratify refuses a shape the runtime would not hold', async () => {
-    const dir = seedSession([proposal('p1')]);
+    const dir = await seedSession([proposal('p1')]);
     const { error } = await ratifyIn(dir, [{ id: 'p1', decision: 'APPROVE', materiality: 'PREFERRED', shape: { v: { type: 'string' } } }]);
     expect(error).toMatch(/only enforceable on a REQUIRED rule/);
   });
 
   it('and refuses a shape that is not an object of field to schema fragment', async () => {
-    expect((await ratifyIn(seedSession([proposal('p1')]), [{ id: 'p1', decision: 'APPROVE', materiality: 'REQUIRED', shape: '{{not json' }])).error)
+    expect((await ratifyIn(await seedSession([proposal('p1')]), [{ id: 'p1', decision: 'APPROVE', materiality: 'REQUIRED', shape: '{{not json' }])).error)
       .toMatch(/not valid JSON/);
-    expect((await ratifyIn(seedSession([proposal('p1')]), [{ id: 'p1', decision: 'APPROVE', materiality: 'REQUIRED', shape: {} }])).error)
+    expect((await ratifyIn(await seedSession([proposal('p1')]), [{ id: 'p1', decision: 'APPROVE', materiality: 'REQUIRED', shape: {} }])).error)
       .toMatch(/object of field name to JSON Schema fragment/);
   });
 
   it('and tells the author the field exists, which is why it stayed empty before', async () => {
     // `pending` is where the author is already deciding what each rule obliges, so it is the only
     // moment the prompt can land. Captured from the command, not read out of its source.
-    const dir = seedSession([proposal('p1')]);
+    const dir = await seedSession([proposal('p1')]);
     const printed = await capturePending(dir);
     expect(printed).toMatch(/If a REQUIRED rule is really about the SHAPE/);
     expect(printed).toMatch(/"shape":\{"verdict"/);

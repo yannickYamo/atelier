@@ -18,6 +18,7 @@ import * as store from '../../core/state/store.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
+import { readJson } from '../../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { scoreReference, LABELLING_INSTRUCTIONS, UNCERTAIN_HANDLING, scorePairedArms,
   type ReferencePair, type ReferenceLabel, type ReferenceJudgement, type Recognition } from '../../core/reference/reference-test.js';
@@ -61,7 +62,7 @@ function corpusTextForBaseline(): string {
     die('no corpus manifest — this run has no record of which files discovery read, so the '
       + 'paste-the-work baseline cannot be built from the same material.');
   }
-  const files = JSON.parse(readFileSync(manifest, 'utf8')) as { id: string; path: string }[];
+  const files = readJson<{ id: string; path: string }[]>(manifest, { kind: 'array', what: 'the corpus manifest' });
   return files.map((f) => `--- ${f.id} ---\n${readFileSync(f.path, 'utf8')}`).join('\n\n');
 }
 
@@ -155,33 +156,49 @@ async function preparePhase(): Promise<void> {
   // refuses on budget rather than generating what it can afford.
   const arms: readonly ArmId[] = armsRequiredBy(PAIR_KINDS);
   const onePagerPath = flag('--one-pager');
+
+  // ── THE PREPARATION CALL IS COUNTED ONLY IF IT IS MADE ─────────────────────────────────────────
+  //
+  // One arm needs an input this system has to generate first: a guide written by a model reading the
+  // corpus. That is one extra call, and whether it happens depends entirely on whether B2 is in the
+  // arm set — which `armsRequiredBy` decides, not this file.
+  //
+  // Three numbers here used to disagree. The line announced "plus 1", the budget reserved 2, and the
+  // call was made 0 times because no pair kind names B2. A person reading the estimate was told about
+  // work that never happened, and the budget carried headroom for a call nobody could trigger. All
+  // three now derive from the same predicate, so the estimate stays true whichever arms are compared.
+  const needsGuide = arms.includes('B2_MODEL_STYLE_GUIDE');
+  const prepCalls = needsGuide ? 1 : 0;
+
+  const { client, binding } = clientAndBinding('target');
+  const perUnit = arms.length;
+  const projected = reserved.length * perUnit + prepCalls;
+  const cap = numericFlag('--cap', 2.0);
+  console.log(`${arms.length} arm(s) x ${reserved.length} held-out unit(s) = ${reserved.length * perUnit} generation(s)`
+    + `${needsGuide ? ', plus 1 to write the baseline guide' : ''}.`);
+  console.log(`  arms: ${arms.join(', ')}`);
+
+  const budget: Budget = { spentUsd: 0, capUsd: cap, maxCalls: projected };
+
+  // The guide has to exist before the loop, because it is one input reused across every unit. It is
+  // built HERE rather than assigned into `inputs` afterwards: ArmInputs is readonly, and the previous
+  // version cast that away to mutate it, which is the kind of edit that survives a type checker and
+  // then surprises the next reader of the type.
+  const modelStyleGuide = needsGuide
+    ? (await spendOneWithResult(client, budget,
+        'Read the following body of work by one author and write a short guide a writer could follow to '
+        + 'produce more work like it. Rules only, no preamble.',
+        corpusTextForBaseline(), null)).piece
+    : null;
+  if (needsGuide) console.log('  baseline guide written');
+
   const inputs: ArmInputs = {
     compiledSkillText: servedText,
     corpusText: corpusTextForBaseline(),
     standardAsProse: standardAsProse(L, sv.standardVersionHash),
-    // Written by a model reading the corpus. One call, and it is inside the budget rather than free.
-    modelStyleGuide: null,
+    modelStyleGuide,
     expertOnePager: onePagerPath ? readFileSync(onePagerPath, 'utf8') : null,
   };
-
-  const perUnit = arms.length;
-  const projected = reserved.length * perUnit + 2;
-  const cap = numericFlag('--cap', 2.0);
-  console.log(`${arms.length} arm(s) x ${reserved.length} held-out unit(s) = ${reserved.length * perUnit} generation(s), plus 1 to write the baseline guide.`);
-  console.log(`  arms: ${arms.join(', ')}`);
-
-  const budget: Budget = { spentUsd: 0, capUsd: cap, maxCalls: projected };
-  const { client, binding } = clientAndBinding('target');
-
-  // The guide arm has to exist before the loop, because it is one input reused across every unit.
-  if (arms.includes('B2_MODEL_STYLE_GUIDE')) {
-    const guide = await spendOneWithResult(client, budget,
-      'Read the following body of work by one author and write a short guide a writer could follow to '
-      + 'produce more work like it. Rules only, no preamble.',
-      inputs.corpusText, null);
-    (inputs as { modelStyleGuide: string | null }).modelStyleGuide = guide.piece;
-    console.log('  baseline guide written');
-  }
 
   // Refuse now, while nothing has been generated, if an arm cannot be served at all.
   for (const a of arms) {
@@ -243,8 +260,9 @@ async function preparePhase(): Promise<void> {
 
 function scorePhase(): void {
   if (!existsSync(PAIRS())) die(`no prepared pairs at ${PAIRS()}. Run \`atelier reference --skill <name>\` first.`);
-  const stored = JSON.parse(readFileSync(PAIRS(), 'utf8')) as {
-    skillVersionHash: string; armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[] };
+  const stored = readJson<{
+    skillVersionHash: string; armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[] }>(
+    PAIRS(), { what: 'the prepared pairs', requireKeys: ['skillVersionHash', 'pairs'] });
 
   // ── LABELS BELONG TO THE ARM SET THEY WERE COLLECTED ON ────────────────────────────────────────
   //

@@ -23,7 +23,7 @@
 // anyway. Nothing in the contract had to change to say that.
 
 import type { InferenceClient, InferenceRequest, InferenceResult } from '../core/inference/client.js';
-import { budgetUsd } from '../core/inference/client.js';
+import { budgetUsd, inferenceTimeoutMs } from '../core/inference/client.js';
 import { OPENAI_COMPATIBLE_PRICING, costOf, isLocalBackend, priceFor, type Pricing } from './pricing.js';
 
 /**
@@ -258,7 +258,7 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
     const ac = new AbortController();
     // A local model on modest hardware is slow rather than broken, so the default is generous and
     // scales with what was asked for. `fetch` alone would hang forever.
-    const t = setTimeout(() => { ac.abort(); }, this.cfg.timeoutMs ?? Math.max(120_000, maxTokens * 60));
+    const t = setTimeout(() => { ac.abort(); }, this.cfg.timeoutMs ?? inferenceTimeoutMs(maxTokens));
     let r: Response;
     try {
       r = await fetch(url, {

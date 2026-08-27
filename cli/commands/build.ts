@@ -4,9 +4,10 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readFileSync, existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
+import { readJson } from '../../core/state/read-json.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, skillNameFrom, defaultDescription } from '../../renderers/agent-skill/render.js';
@@ -36,7 +37,7 @@ import { sha, DATA, die, argv, flag, projectDir, pickHost,
 export function revert(): void {
   const f = join(DATA, 'undo.json');
   if (!existsSync(f)) die('nothing to revert — no build has written into a skill of yours.');
-  const undo = JSON.parse(readFileSync(f, 'utf8')) as UndoRecord;
+  const undo = readJson<UndoRecord>(f, { what: 'an undo record' });
   const paths = Object.keys(undo.before);
   if (!paths.length) die('the last build wrote nothing, so there is nothing to put back.');
 
@@ -50,7 +51,7 @@ export function revert(): void {
 export function build(nameArg?: string): void {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
-  const v = JSON.parse(readFileSync(join(DATA, 'pending-standard.json'), 'utf8')) as StandardVersion;
+  const v = readJson<StandardVersion>(join(DATA, 'pending-standard.json'), { what: 'the pending standard' });
   // The arrangement is COMPILED, not derived from the requirement list. That is what lets a skill
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
@@ -74,7 +75,7 @@ export function build(nameArg?: string): void {
   // precisely so that decision cannot be made silently here.
   const alreadyHandled = new Set<string>(
     existsSync(join(DATA, 'already-handled.json'))
-      ? JSON.parse(readFileSync(join(DATA, 'already-handled.json'), 'utf8')) as string[]
+      ? readJson<string[]>(join(DATA, 'already-handled.json'), { kind: 'array', what: 'the already-handled list' })
       : []);
   const review = argv.includes('--review');
   const proposal = buildProposal(name, v.standardVersionHash, v.requirements, arch, alreadyHandled);
@@ -102,8 +103,8 @@ export function build(nameArg?: string): void {
   // create.
   const pkgFile = join(DATA, 'skill-package.json');
   if (existsSync(pkgFile)) {
-    const sp = JSON.parse(readFileSync(pkgFile, 'utf8')) as
-      { absRoot: string; components: AdaptedComponent[]; skillId: string };
+    const sp = readJson<{ absRoot: string; components: AdaptedComponent[]; skillId: string }>(
+      pkgFile, { what: 'the skill package', requireKeys: ['absRoot', 'components'] });
     const contents = new Map<string, string>();
     for (const c of sp.components) {
       const abs = join(sp.absRoot, c.path);
