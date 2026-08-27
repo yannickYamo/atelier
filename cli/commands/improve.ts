@@ -209,10 +209,6 @@ export async function improve(): Promise<void> {
  * them. Order is randomised per run and the key is written to disk but never printed until a preference
  * is on record — a choice made with the key visible measures the key.
  */
-/** One generation. Kept separate so the study path has no bespoke inference of its own. */
-export async function spendOne(client: InferenceClient, budget: Budget, stable: string, brief: string): Promise<string> {
-  return (await spendOneWithResult(client, budget, stable, brief)).piece;
-}
 
 /** The default shape, used when the package carries no output contract. */
 const FREE_TEXT_SCHEMA: Record<string, unknown> = {

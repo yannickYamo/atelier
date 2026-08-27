@@ -673,12 +673,18 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-56 files and 870 tests. It exercises the governance spine, the compiler, the renderer, delivery
+57 files and 876 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
 ablation that measures structural conformance mechanically across three arms. Its own header states
 which arms are conformant by construction and what a passing verdict does not mean.
+
+**Numbers stated in source comments:** several comments cite a figure from a run whose record is not
+public. Every one of them is listed in [MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. No
+test asserts any of those numbers and no behaviour depends on one, which
+`tests/atelier-measurements-disclosure.test.ts` keeps honest in both directions. Terms and symbols
+the comments use without spelling out are in [docs/GLOSSARY.md](docs/GLOSSARY.md).
 
 **Not in this repository:** the corpora and scored outputs for the three behavioural studies above.
 The code review corpus is public but its adjudication is not reproducible and the generation model was

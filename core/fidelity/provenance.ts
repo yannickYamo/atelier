@@ -51,29 +51,14 @@ export function resolveProvenance(explicit: string | undefined, env: Record<stri
   return hit;
 }
 
-/**
- * Migration for records written before this taxonomy existed.
- *
- * Every one of them was authored to probe or stress the skill, and all of it is DEV evidence. The
- * mapping is explicit rather than defaulted so that reading a legacy record cannot silently produce
- * an ORGANIC_USE it never was.
- */
-export function migrateLegacyOrigin(old: string | undefined): Provenance {
-  switch (old) {
-    case 'PROBE': return 'STRESS_PROBE';
-    case 'GENUINE_USE': return 'ORGANIC_USE';
-    case 'UNDECLARED': case undefined: return 'DEV_PROBE';
-    default: return ALL_PROVENANCE.find((p) => p === old) ?? 'DEV_PROBE';
-  }
-}
 
 /**
  * Was a candidate looked at ONLY by the process that produced it?
  *
  * `promote` refuses a candidate nobody ran, which is the right shape and the wrong strength: it
  * accepts ANY invocation as evidence someone evaluated the thing. A search harness that invokes its
- * own candidate satisfies that gate on its own output. `qualify-observer.mts` and
- * `rerun-observer.mts` both declare `OPTIMIZATION_CONTEXT`, so this is a live path and not a
+ * own candidate satisfies that gate on its own output. Two observers in the predecessor both
+ * declared `OPTIMIZATION_CONTEXT`, so this is a live path and not a
  * hypothetical one.
  *
  * The rule is deliberately narrow. It does NOT say only organic use may promote — that would freeze

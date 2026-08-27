@@ -12,7 +12,7 @@
 // Three authority vocabularies already exist and none of them is replaced here:
 //   canonical-state.ts   Authority            who stands behind a REQUIREMENT
 //   provenance.ts        Provenance           why an INPUT exists
-//   observer.ts          ObserverPermission   what an INSTRUMENT has earned  (OBSERVE|VETO|CERTIFY)
+//   the observer        ObserverPermission   what an INSTRUMENT has earned  (OBSERVE|VETO|CERTIFY)
 //
 // `ObservationAuthority` is `ObserverPermission` plus the two producers that are not instruments at
 // all — a person, and a deterministic check. A fourth parallel enum would be the drift this codebase
@@ -33,7 +33,7 @@
 //
 // ─── AND IT IS A WEIGHTING RULE, NOT AN INDEPENDENCE MODEL ─────────────────────────────────────
 //
-// This is the correction that matters most about this file. Normalised weight is for DESCRIPTIVE
+//  Normalised weight is for DESCRIPTIVE
 // evidence: it stops a context that happened to run ten generations from outweighing one that ran
 // once. It is NOT a sample size. A weight of 4.0 does not mean four independent trials, and no
 // confidence interval, power calculation, resolution estimate or promotion inference may be computed
@@ -120,7 +120,7 @@ export type DomainState = 'PROVEN' | 'UNOBSERVED' | 'OBSERVED_UNQUALIFIED' | 'FA
 /**
  * May these observations support a POSITIVE claim about how the skill behaves?
  *
- * The sibling of `measurement/reliability.ts:assertProductClaimable`, which refuses a claim built
+ * The sibling of the reliability gate in the non-public predecessor, which refused a claim built
  * from cached fixtures. This refuses one built from an instrument that never earned the right to
  * clear anything. Both exist because "we ran the suite" is the sentence that slides into a claim.
  *
@@ -177,9 +177,12 @@ export interface VerdictTally {
 /**
  * THE GUARD ON THE WEIGHTING RULE.
  *
- * Called wherever a weight might be mistaken for a sample size. There is no flag to bypass it: a
- * caller who needs a denominator for an interval needs `independentContexts`, and a caller who needs
- * to rank descriptive evidence needs the weight and never a bound.
+ * NOT CURRENTLY CALLED, and that is worth stating rather than implying otherwise. This existed with
+ * a comment saying it "is called wherever a weight might be mistaken for a sample size", which was
+ * false: nothing called it. It is kept because the sentence it throws is the reason, and a caller who
+ * reaches for a weight as a denominator will find it here — a caller who needs a denominator for an
+ * interval needs `independentContexts`, and one who needs to rank descriptive evidence needs the
+ * weight and never a bound. Wire it at the first site that exposes a weight to arithmetic.
  */
 export function assertNotUsedAsSampleSize(context: string): never {
   throw new Error(

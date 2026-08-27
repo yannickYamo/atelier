@@ -38,7 +38,7 @@
 // win. Leaving that to a convention — "we don't point it at evals" — is leaving it to whoever next
 // widens a glob.
 
-/** The closed component vocabulary. PORTED verbatim from evopackage-adapter.ts / types.ts. */
+/** The closed component vocabulary. PORTED verbatim from the non-public predecessor. */
 export type ComponentKind =
   | 'skill_methodology' | 'delivery_policy' | 'knowledge_unit' | 'agent_instruction' | 'harness'
   | 'context_assembler' | 'tool_router' | 'runtime_config' | 'memory_policy' | 'threshold' | 'evaluator';

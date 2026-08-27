@@ -1,10 +1,9 @@
 // PORTED, UNCHANGED EXCEPT IMPORT PATHS.
 //
-//   from     the private predecessor this was extracted from
-//
-// Ported rather than rewritten, and the original kept running while this one earned its callers —
+// Ported rather than rewritten, and the original kept running while this one earned its callers:
 // copy-then-delete in one movement is how a reference implementation is lost before the port has
-// survived use. Parity between the two is pinned by test.
+// survived use. Its behaviour is pinned by this repository's own tests; the tree it came from is
+// not public, and no claim in this repository rests on it.
 //
 // Nothing here does I/O or calls a model. The whole chain is pure, which is why it ports at all: the
 // inference boundary is a PARAMETER, so Atelier supplies its own client and the logic never knew.

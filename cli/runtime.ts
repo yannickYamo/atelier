@@ -311,8 +311,6 @@ export function clientAndBinding(role: Role, modelOverride?: string): { client: 
   };
 }
 
-export const inferenceClient = (modelId: string, role: Role = 'discovery'): InferenceClient =>
-  clientAndBinding(role, modelId).client;
 
 /** Convenience for the discovery half, which is where most commands spend their calls. */
 export const clientFor = (modelId: string): InferenceClient => clientAndBinding('discovery', modelId).client;

@@ -7,7 +7,7 @@
 // evidence contract does not fit, and the mismatch is not cosmetic:
 //
 //   casesProbed      DISCRIMINATING cases, built to expose the requirement — "typical cases cannot
-//                    separate the arms" (native-failure-prober.ts). We have one arbitrary user task.
+//                    separate the arms" (the native-failure prober). We have one arbitrary user task.
 //   bareFailures     cases where the BARE model violated it. No bare arm is ever run in production.
 //   repairedByProse  of those, how many a LEAN-PROSE arm repaired. There is no two-arm comparison.
 //   expertConfirmed  a blind PAIR label with arm identity sealed. We have a complaint on one output.
