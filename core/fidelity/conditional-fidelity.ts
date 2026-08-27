@@ -144,7 +144,12 @@ export function contextSuccess(
     if (a === undefined) {
       // A requirement with no sealed applicability cannot be scored. Refusing is the only honest
       // move: inferring it here would reintroduce exactly the loophole this module exists to close.
-      why.push(`${r.requirementId}: NO SEALED APPLICABILITY — unscorable`);
+      //
+      // But only a REQUIRED requirement may decide the primary, and this push used to happen one
+      // branch too early — so an unsealed PREFERRED rule failed the endpoint, letting the expressive
+      // layer decide a decision study, which the note above forbids in as many words. Its cell is
+      // still recorded; it just cannot vote.
+      if (isRequired(r)) why.push(`${r.requirementId}: NO SEALED APPLICABILITY — unscorable`);
       continue;
     }
     const cell = classify(a, expr.get(r.requirementId) ?? 'UNCERTAIN');

@@ -145,7 +145,18 @@ export const getArchitecture = (l: StoreLayout, hash: string, standardVersionHas
   const d = dirs(l).architectures;
   if (!existsSync(d)) return null;
   const hits = readdirSync(d).filter((f) => f === `${hash}.json` || f.endsWith(`.${hash}.json`));
-  return hits.length === 1 ? JSON.parse(readFileSync(join(d, hits[0]), 'utf8')) as SkillArchitecture : null;
+  if (hits.length === 1) return JSON.parse(readFileSync(join(d, hits[0]), 'utf8')) as SkillArchitecture;
+  if (hits.length === 0) return null;
+  // AMBIGUOUS IS NOT ABSENT, AND RETURNING null CONFLATED THEM.
+  //
+  // One architectureHash under two standards is the ordinary result of amending a confirmed rule:
+  // same carriers, new standard. This returned null there, and `improve.ts` reads that as "never
+  // persisted" and silently recompiles the default arrangement — losing the stored one, which is the
+  // exact thing this persistence exists to keep. Callers know their standard; the fix is to pass it,
+  // and to refuse rather than guess when they have not.
+  throw new Error(`STORE: architecture ${hash} exists under ${hits.length} standards `
+    + `(${hits.join(', ')}). Pass the standardVersionHash: which one is meant is not recoverable here, `
+    + 'and picking one would silently attribute an arrangement to the wrong standard.');
 };
 
 export function putPackage(l: StoreLayout, pkg: StoredPackage): void {

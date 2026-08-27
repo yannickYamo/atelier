@@ -178,7 +178,7 @@ export function build(nameArg?: string): void {
   // It comes AFTER the skill works, and it asks about one thing only: prohibitions nobody confirmed.
   // Those are the decisions that cannot be checked against the corpus, because the evidence for a
   // prohibition is the thing that is not there.
-  const observed = observedBoundaries(arch);
+  const observed = observedBoundaries(arch, v);
   if (observed.length) {
     const byId = new Map(v.requirements.map((r) => [r.requirementId, r]));
     console.log(`\nOne thing worth a look. I noticed ${observed.length} pattern(s) you seem to avoid.`);

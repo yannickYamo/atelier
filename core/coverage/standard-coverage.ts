@@ -215,8 +215,19 @@ export const COVERAGE_AUTHORITY = {
     + 'it is theirs, and no quantity of observation performs that act.',
 } as const;
 
+/**
+ * Refuse a claim that coverage is authority.
+ *
+ * The predicate used to AND the regex with `claim.includes(c.split(' ')[0])` over `mayNeverSupport`.
+ * Those first tokens are 'this', 'this' and 'promotion' — so in practice the guard fired only on
+ * claims containing the stopword "this", and let through "the requirement is authoritative" and
+ * "coverage certifies the standard", which are exactly the two sentences it exists to refuse. Its
+ * test passed because every case it tried happened to contain the word.
+ *
+ * The regex alone is the check. The example strings stay as documentation of the shape.
+ */
 export function assertNotAuthority(claim: string): void {
-  if (COVERAGE_AUTHORITY.mayNeverSupport.some((c) => claim.includes(c.split(' ')[0]) && /authorit|certif|promot|ratif/i.test(claim))) {
+  if (/authorit|certif|promot|ratif/i.test(claim)) {
     throw new Error(`COVERAGE AUTHORITY: standard coverage cannot support "${claim}". ${COVERAGE_AUTHORITY.why}`);
   }
 }

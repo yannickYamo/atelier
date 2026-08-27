@@ -26,6 +26,41 @@ import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 
+/** Every command the dispatcher answers. Exported so a test can pin it against the docs. */
+export const COMMANDS: readonly string[] = [
+  'abort',
+  'add',
+  'amend',
+  'answer',
+  'build',
+  'carriers',
+  'check',
+  'compare',
+  'confirm',
+  'create',
+  'discover',
+  'enrol',
+  'feedback',
+  'history',
+  'improve',
+  'inspect',
+  'intake',
+  'invoke',
+  'judgements',
+  'pending',
+  'profiles',
+  'promote',
+  'ratify',
+  'ratify-close',
+  'ratify-one',
+  'reference',
+  'reject',
+  'revert',
+  'rollback',
+  'sharpen',
+  'status',
+];
+
 const main = async (): Promise<void> => {
   switch (cmd) {
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
@@ -78,11 +113,26 @@ const main = async (): Promise<void> => {
       console.log(`enrolled in ${kind}.`);
       return;
     }
-    default:
+    default: {
+      // A MISTYPED COMMAND IS AN ERROR, AND THIS USED TO EXIT 0.
+      //
+      // `atelier discovr` printed help and reported success, so a script could run a typo in a loop
+      // and never learn the work had not happened. Help on no argument is a courtesy; help on a wrong
+      // argument is a failure, and the exit code has to say which.
+      //
+      // The list is derived from the dispatch table rather than typed out beside it. The hand-written
+      // version had drifted to omit nine registered commands, including `promote` and `confirm`,
+      // which other commands tell the user to run.
+      const known = COMMANDS.join(' · ');
+      if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
+        die(`unknown command "${cmd}".\n  commands: ${known}`);
+      }
       console.log('atelier create <path>   then: pending · ratify --decisions <json> · ratify-close · build --name <name>');
-      console.log('         also: inspect · history · rollback · revert · compare · reject · judgements · feedback · status · improve · enrol · abort');
+      console.log(`  every command: ${known}`);
       console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
       console.log('   held-out: reference --skill <name>   then: reference --score --labels <json>');
+      return;
+    }
   }
 };
 
