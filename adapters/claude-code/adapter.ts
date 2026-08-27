@@ -1,5 +1,6 @@
 // atelier/adapters/claude-code/adapter.ts — ADAPTER #1. Everything Claude-specific lives here.
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { CarrierDeliveryMatrix } from '../../core/delivery/carrier-delivery.js';
@@ -51,7 +52,7 @@ export class ClaudeCodeAdapter implements HostAdapter {
       for (const [rel, content] of Object.entries(pkg.files)) {
         const target = join(d, rel);
         mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, content);
+        writeAtomic(target, content);
       }
       return { ok: true, installedAt: d };
     } catch (e) { return { ok: false, reason: (e as Error).message }; }

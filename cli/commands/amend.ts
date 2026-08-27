@@ -4,7 +4,8 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery/run-probes.js';
 import type { Budget } from '../../core/inference/client.js';
@@ -134,8 +135,8 @@ export async function sharpen(): Promise<void> {
   for (const [i, c] of picked.entries()) {
     const p = await prepareProbe(client, budget, c, brief, i + 1);
     const sheet = join(dir, `${c.requirementId}.md`);
-    writeFileSync(sheet, p.blind.rendered);
-    writeFileSync(join(dir, `${c.requirementId}.key.json`), JSON.stringify(p.blind, null, 1));
+    writeAtomic(sheet, p.blind.rendered);
+    writeAtomic(join(dir, `${c.requirementId}.key.json`), JSON.stringify(p.blind, null, 1));
     console.log(`\n  ${c.requirementId}  ->  ${sheet}`);
   }
   console.log(`\nOpen the sheet(s), read the versions, then tell me which you would ship:`);

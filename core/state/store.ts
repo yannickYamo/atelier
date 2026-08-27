@@ -10,7 +10,8 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
-import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
+import { writeAtomic } from './fs-atomic.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
@@ -36,7 +37,7 @@ export function initStore(l: StoreLayout): void {
 }
 
 export function putEvidence(l: StoreLayout, e: ExpertEvidence): void {
-  writeFileSync(join(dirs(l).base, 'evidence.json'), JSON.stringify(e, null, 1));
+  writeAtomic(join(dirs(l).base, 'evidence.json'), JSON.stringify(e, null, 1));
 }
 export const getEvidence = (l: StoreLayout): ExpertEvidence | null => {
   const p = join(dirs(l).base, 'evidence.json');
@@ -60,7 +61,7 @@ export function putStandard(l: StoreLayout, v: StandardVersion): void {
     }
     return;
   }
-  writeFileSync(p, JSON.stringify(v, null, 1));
+  writeAtomic(p, JSON.stringify(v, null, 1));
 }
 
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
@@ -69,7 +70,7 @@ export const getStandard = (l: StoreLayout, hash: string): StandardVersion | nul
 };
 
 export function putSkillVersion(l: StoreLayout, s: SkillVersion): void {
-  writeFileSync(join(dirs(l).versions, `${s.skillVersionHash}.json`), JSON.stringify(s, null, 1));
+  writeAtomic(join(dirs(l).versions, `${s.skillVersionHash}.json`), JSON.stringify(s, null, 1));
 }
 export const getSkillVersion = (l: StoreLayout, hash: string): SkillVersion | null => {
   const p = join(dirs(l).versions, `${hash}.json`);
@@ -115,7 +116,7 @@ function putByHash(path: string, hash: string, body: unknown, what: string): voi
     }
     return;
   }
-  writeFileSync(path, text);
+  writeAtomic(path, text);
 }
 
 /**
@@ -213,7 +214,7 @@ export function setActive(l: StoreLayout, skillVersionHash: string): void {
   if (!getSkillVersion(l, skillVersionHash)) {
     throw new Error(`STORE: cannot activate ${skillVersionHash} — no such version. Activation points at history; it does not create it.`);
   }
-  writeFileSync(join(dirs(l).base, 'active.json'), JSON.stringify({ skillVersionHash, at: new Date().toISOString() }, null, 1));
+  writeAtomic(join(dirs(l).base, 'active.json'), JSON.stringify({ skillVersionHash, at: new Date().toISOString() }, null, 1));
 }
 export const getActive = (l: StoreLayout): string | null => {
   const p = join(dirs(l).base, 'active.json');
@@ -224,10 +225,36 @@ export const getActive = (l: StoreLayout): string | null => {
 export function appendEvent(l: StoreLayout, e: EvidenceEvent | Record<string, unknown>): void {
   appendFileSync(join(dirs(l).base, 'events.jsonl'), `${JSON.stringify(e)}\n`);
 }
+// A TORN TAIL IS RECOVERABLE. A TORN MIDDLE IS NOT, AND MUST NOT BE READ PAST.
+//
+// `appendEvent` is the one write in this system that is deliberately not atomic, because an append is
+// the right shape for a ledger. The cost is that an interrupted append can leave a partial final line.
+//
+// Those two damage patterns mean opposite things and must not be handled the same way. A partial LAST
+// line is a crash during a write: every earlier event is intact, the lost record is the one that was
+// still being written, and refusing to start would make one interrupted keystroke brick every command
+// that reads history. A damaged line ANYWHERE ELSE is corruption of a history that claims to be
+// append-only, and reading past it would silently report a ledger missing a record it cannot name.
+// The second case is exactly the failure this project exists to refuse, so it throws.
 export function readEvents(l: StoreLayout): readonly Record<string, unknown>[] {
   const p = join(dirs(l).base, 'events.jsonl');
   if (!existsSync(p)) return [];
-  return readFileSync(p, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
+  const lines = readFileSync(p, 'utf8').split('\n').filter(Boolean);
+  const out: Record<string, unknown>[] = [];
+  lines.forEach((line, i) => {
+    try {
+      out.push(JSON.parse(line) as Record<string, unknown>);
+    } catch {
+      if (i !== lines.length - 1) {
+        throw new Error(`LEDGER: event ${i + 1} of ${lines.length} in ${p} is not valid JSON. This is `
+          + 'corruption in the middle of an append-only history, not a torn tail, and reading past it '
+          + 'would report a history that is missing a record it cannot name.');
+      }
+      process.stderr.write(`atelier: the last line of ${p} is truncated, which is an interrupted `
+        + `append. ${out.length} intact event(s) read; the torn record is lost.\n`);
+    }
+  });
+  return out;
 }
 
 export interface HistoryEntry { readonly skillVersion: SkillVersion; readonly standard: StandardVersion | null; readonly active: boolean }
@@ -284,5 +311,5 @@ export function recordBinding(l: StoreLayout, skillVersionHash: string, binding:
   if (existing.some((b) => b.hash === h)) return;
   mkdirSync(dirs(l).bindings, { recursive: true });
   const next: BindingLog = { bindings: [...existing, { binding, hash: h, firstSeenAt: new Date().toISOString() }] };
-  writeFileSync(bindingPath(l, skillVersionHash), JSON.stringify(next, null, 1));
+  writeAtomic(bindingPath(l, skillVersionHash), JSON.stringify(next, null, 1));
 }

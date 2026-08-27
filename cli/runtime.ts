@@ -5,7 +5,8 @@ import { parseArgs } from 'node:util';
 // this repository opens the CLI first. What lives here is the state a command cannot avoid touching:
 // where data goes, how a run advances, and how a model is reached.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeAtomic } from '../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
@@ -425,7 +426,7 @@ export const loadSession = (): Session => existsSync(SPATH)
 
 export const saveSession = (s: Session): void => {
   mkdirSync(DATA, { recursive: true });
-  writeFileSync(SPATH, JSON.stringify(s, null, 1));
+  writeAtomic(SPATH, JSON.stringify(s, null, 1));
 };
 
 /**

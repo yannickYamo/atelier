@@ -31,6 +31,7 @@ npm run acceptance:carriers -- --host codex
 | C11 | human authority is recorded, not inferred | `ratify` appends to a ledger that stores what was SHOWN and the replacement beside it, and refuses a second decision on one proposal |
 | C12 | nothing private is published | every tracked file is scanned for paths, documents, SHAs and a hashed vocabulary from the predecessor |
 | C13 | the documents are checked | every command, path, npm script and vocabulary term the docs teach is pinned against the code |
+| C14 | every persisted write is atomic | no shipped module calls `writeFileSync`; a torn ledger tail is reported and a torn middle refuses to be read past |
 
 ## CLAUDE CODE, live session, human
 

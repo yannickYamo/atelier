@@ -4,7 +4,8 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { proposeAcrossFramings } from '../../core/discovery/propose.js';
 import { describeUnion } from '../../core/discovery/union.js';
@@ -236,7 +237,7 @@ export async function discover(): Promise<void> {
     try {
       const mrun = await runMethodExtraction(client, budget, methodDocs, skillText, { standardDimensions: [ev.workType] });
       console.log(`\n${describeMethodRun(mrun)}  ($${mrun.costUsd.toFixed(3)})`);
-      writeFileSync(join(DATA, 'method-findings.json'), JSON.stringify(mrun, null, 1));
+      writeAtomic(join(DATA, 'method-findings.json'), JSON.stringify(mrun, null, 1));
     } catch (e) {
       // A failed methodology check must not cost the taste run that already succeeded and was paid for.
       if (e instanceof BudgetExceeded) console.log(`\nSkipped the methodology check — it would exceed the cap. Raise --cap or pass --skip-methods.`);
@@ -613,8 +614,8 @@ export function ratifyClose(): void {
   const stamped = s.ledger ? stampVersion(s.ledger, v.standardVersionHash) : null;
   s = { ...s, ledger: stamped };
   saveSession(s);
-  writeFileSync(join(DATA, 'pending-standard.json'), JSON.stringify(v, null, 1));
-  if (stamped) writeFileSync(join(DATA, 'ratification-ledger.json'), JSON.stringify(stamped, null, 1));
+  writeAtomic(join(DATA, 'pending-standard.json'), JSON.stringify(v, null, 1));
+  if (stamped) writeAtomic(join(DATA, 'ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   console.log(`StandardVersion ${v.standardVersionHash} [${v.authorityState}]: ${kept.length} requirements.`);
   console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  unconditional ${(unconditionalRate(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
   if (stamped?.records.length) {
