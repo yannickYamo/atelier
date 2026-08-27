@@ -19,7 +19,7 @@
 // Coverage ranks EVIDENCE ACQUISITION. It never decides that a machine-proposed requirement is
 // authoritative. STRONG_SIGNAL means "several independent looks agree", not "ratified" — the gap
 // between those two is the entire authority boundary of this product, and a coverage model is
-// exactly the kind of component that erodes it by looking statistical. `assertNotAuthority` exists
+// exactly the kind of component that erodes it by looking statistical. `assertCoverageIsNotAuthority` exists
 // so the confusion has to be deliberate.
 
 import type { Requirement } from '../state/canonical-state.js';
@@ -227,7 +227,7 @@ export const COVERAGE_AUTHORITY = {
  *
  * The regex alone is the check. The example strings stay as documentation of the shape.
  */
-export function assertNotAuthority(claim: string): void {
+export function assertCoverageIsNotAuthority(claim: string): void {
   if (/authorit|certif|promot|ratif/i.test(claim)) {
     throw new Error(`COVERAGE AUTHORITY: standard coverage cannot support "${claim}". ${COVERAGE_AUTHORITY.why}`);
   }

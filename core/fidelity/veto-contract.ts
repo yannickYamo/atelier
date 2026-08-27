@@ -222,17 +222,30 @@ export const NO_VETO_MEANING =
   + 'is a different instrument, with a different contract and a different qualification campaign.';
 
 /** Only APPLIES cases may enter the sensor; the sensor may never revise this. */
-export type Applicability = 'APPLIES' | 'DOES_NOT_APPLY' | 'AMBIGUOUS';
+/**
+ * Whether a requirement bears on an output, as judged by a SENSOR.
+ *
+ * Three types in this tree answer a question of this shape and they are deliberately not one type.
+ * `SealedApplicability` in `conditional-fidelity.ts` is the expert's own ruling, sealed per context
+ * before any output exists, so it is binary and AMBIGUOUS would be a contradiction. This one is a
+ * machine's reading, so AMBIGUOUS is a real answer and `admitsToVetoSensor` is what refuses to
+ * spend a veto on it. `MethodApplicability` in `methodology-evidence.ts` is a different question
+ * entirely: whether a METHOD is required for a situation.
+ *
+ * They shared the name `Applicability` until it was clear that collapsing them would have thrown
+ * away the distinction between what a person decided and what a model guessed.
+ */
+export type SensedApplicability = 'APPLIES' | 'DOES_NOT_APPLY' | 'AMBIGUOUS';
 
 /**
  * The gate between the two inference acts.
  *
- * Applicability is decided WITHOUT the output in view, so a sensor cannot look at a violation and
+ * Applicability here is decided by a SENSOR, without the output in view, so it cannot look at a violation and
  * reclassify the requirement as not-applicable — removing its own failure from its own denominator.
  * AMBIGUOUS is terminal here and is never coerced: an applicability question nobody could answer is
  * not evidence that the rule applied, and it is not evidence that it did not.
  */
-export function admitsToVetoSensor(a: Applicability): { readonly admit: boolean; readonly why: string } {
+export function admitsToVetoSensor(a: SensedApplicability): { readonly admit: boolean; readonly why: string } {
   switch (a) {
     case 'APPLIES': return { admit: true, why: 'the requirement applies to this context' };
     case 'DOES_NOT_APPLY': return { admit: false, why: 'the requirement does not apply here, so there is nothing to block on' };

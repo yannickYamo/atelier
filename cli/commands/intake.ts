@@ -9,7 +9,7 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, resolve, basename, dirname } from 'node:path';
 import { planImport, MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { reserve, type Reservation } from '../../core/golden/reservation.js';
-import { describeEvidence, clusterAssignment, type GoldenUnit } from '../../core/golden/golden-unit.js';
+import { describeGoldenEvidence, clusterAssignment, type GoldenUnit } from '../../core/golden/golden-unit.js';
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
@@ -222,7 +222,7 @@ export function intake(path: string, workType: string): void {
     reservation = r;
     console.log(`\nRESERVED, before anything read them: ${r.reserved.map((u) => u.unitId).join(', ')}`);
     console.log(`  ${r.why}`);
-    console.log(`  ${describeEvidence(r.reserved, 'ACROSS_CLUSTERS')}`);
+    console.log(`  ${describeGoldenEvidence(r.reserved, 'ACROSS_CLUSTERS')}`);
   } else {
     console.log(`\nNOTHING RESERVED. Every piece here is available to discovery, so none of it can later`);
     console.log(`  test whether the standard generalises. That is a fine place to start and it is a`);

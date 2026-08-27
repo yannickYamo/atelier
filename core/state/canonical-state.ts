@@ -464,7 +464,7 @@ export interface FeedbackRecord {
  * the file for display can read it; a caller who needs to know what was ratified reads the
  * StandardVersion, which is a different object with a different hash.
  */
-export function assertNotAuthority(source: 'SKILL_MD' | 'STANDARD_VERSION', hasCanonical: boolean): void {
+export function assertSourceIsNotAuthority(source: 'SKILL_MD' | 'STANDARD_VERSION', hasCanonical: boolean): void {
   if (source === 'SKILL_MD' && hasCanonical) {
     throw new Error(
       'AUTHORITY SOURCE: a generated SKILL.md was read as authority while a StandardVersion exists. '

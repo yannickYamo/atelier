@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { tally, claimability, normalisedWeights, authorityOf, type Observation } from '../core/measurement/observation.js';
-import { evidenceFor, describeEvidence } from '../core/measurement/longitudinal.js';
+import { evidenceFor, describeRequirementEvidence } from '../core/measurement/longitudinal.js';
 import { decide, unreachableGates, NOTHING_EARNED, type Gates } from '../core/convergence/state-machine.js';
 
 const obs = (o: Partial<Observation>): Observation => ({
@@ -38,7 +38,7 @@ describe('nested generations are never independent n', () => {
     const e = evidenceFor('g1', many, [], [], MISS);
     expect(e.observations).toBe(60);
     expect(e.independentContexts).toBe(2);
-    expect(describeEvidence(e)).toContain('NOT independent evidence');
+    expect(describeRequirementEvidence(e)).toContain('NOT independent evidence');
   });
 
   it('names contexts that answered the same task two different ways', () => {
@@ -47,14 +47,14 @@ describe('nested generations are never independent n', () => {
       obs({ contextId: 'c1', generationIndex: 1, verdict: 'NO_VETO' }),
     ], [], [], MISS);
     expect(e.mixedWithinContext).toEqual(['c1']);
-    expect(describeEvidence(e)).toContain('judged both ways');
+    expect(describeRequirementEvidence(e)).toContain('judged both ways');
   });
 
   it('a miss in one context is an anecdote, in several a recurrence', () => {
     const one = evidenceFor('g1', [obs({ verdict: 'VETO' })], [], [], MISS);
-    expect(describeEvidence(one)).toContain('anecdote');
+    expect(describeRequirementEvidence(one)).toContain('anecdote');
     const many = evidenceFor('g1', [obs({ contextId: 'a', verdict: 'VETO' }), obs({ contextId: 'b', verdict: 'VETO' })], [], [], MISS);
-    expect(describeEvidence(many)).toContain('not one bad day');
+    expect(describeRequirementEvidence(many)).toContain('not one bad day');
   });
 });
 

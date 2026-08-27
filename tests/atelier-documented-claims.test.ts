@@ -66,6 +66,12 @@ describe('every path the docs name exists', () => {
   });
 });
 
+const walkTs = (dir: string): string[] => readdirSync(dir).flatMap((e) => {
+  const p = join(dir, e);
+  if (statSync(p).isDirectory()) return e === 'node_modules' ? [] : walkTs(p);
+  return p.endsWith('.ts') ? [p] : [];
+});
+
 describe('the vocabulary the docs teach is the vocabulary the compiler accepts', () => {
   const ratify = read('cli/commands/discover.ts');
   const listFrom = (src: string, decl: string): string[] => {
@@ -86,11 +92,25 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
   });
 
   it('carriers, and all five are named where a reader chooses between them', () => {
-    const carriers = [...read('core/delivery/carrier-delivery.ts')
-      .matchAll(/export type Carrier =\s*((?:\s*\|?\s*'[A-Z_]+')+)/g)]
-      .flatMap((m) => [...m[1].matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]));
+    // The union moved to its owner in architecture/compile.ts, where it is declared one member per
+    // line with a doc block on each. Strip the comments first: a member's prose is not a member.
+    const owner = read('core/architecture/compile.ts')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const decl = /export type Carrier =([\s\S]*?);/.exec(owner);
+    expect(decl, 'the Carrier union no longer parses out of its owner').not.toBeNull();
+    const carriers = [...(decl?.[1] ?? '').matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]);
     expect(carriers.sort()).toEqual(['EXAMPLE', 'NONE', 'OUTPUT_CONTRACT', 'PROSE', 'SELF_CHECK']);
     for (const c of carriers) expect(read('README.md'), `carrier ${c} is undocumented`).toContain(c);
+  });
+
+  it('nothing declares a second Carrier union to drift from the first', () => {
+    // The delivery matrix once owned an identical copy. Two structurally identical unions assign to
+    // each other silently, so the duplication could only have surfaced as a missing matrix row.
+    const owners = ['core', 'cli', 'renderers', 'adapters', 'providers']
+      .flatMap((d) => walkTs(d))
+      .filter((f) => /^\s*export type Carrier\s*=/m.test(read(f)));
+    expect(owners, `Carrier must have one owner:\n${owners.join('\n')}`)
+      .toEqual(['core/architecture/compile.ts']);
   });
 
   it('the decision verbs a reader is offered are the ones ratify accepts', () => {

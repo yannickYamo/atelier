@@ -39,7 +39,7 @@
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { Requirement } from '../state/canonical-state.js';
-import type { Applicability, VetoObservation, VetoEvidence } from './veto-contract.js';
+import type { SensedApplicability, VetoObservation, VetoEvidence } from './veto-contract.js';
 import { checkContract } from './veto-contract.js';
 
 export const V3_VERSION = 'atelier-veto-sensor-v3';
@@ -93,9 +93,9 @@ export async function observeApplicability(
     });
     return { value: x, cost: x.cost };
   });
-  const j = res.json as { applicability?: Applicability; reason?: string } | null;
+  const j = res.json as { applicability?: SensedApplicability; reason?: string } | null;
   // An unreadable instrument authorises nothing, and AMBIGUOUS is the outcome that authorises nothing.
-  const a: Applicability = j?.applicability ?? 'AMBIGUOUS';
+  const a: SensedApplicability = j?.applicability ?? 'AMBIGUOUS';
   const reason = j?.reason ?? 'no parseable verdict';
   if (a !== 'APPLIES') return { admitted: null, applicability: a, reason };
   return { admitted: { [ADMITTED]: true, requirement, applicability: 'APPLIES', reason },

@@ -36,7 +36,7 @@ export interface MethodSituation {
 }
 
 export type Presence = 'PRESENT' | 'ABSENT' | 'UNCLEAR';
-export type Applicability = 'REQUIRED' | 'SUPPORTED' | 'OPTIONAL' | 'INAPPLICABLE' | 'UNKNOWN';
+export type MethodApplicability = 'REQUIRED' | 'SUPPORTED' | 'OPTIONAL' | 'INAPPLICABLE' | 'UNKNOWN';
 export type Execution = 'CORRECT' | 'PARTIAL' | 'INCORRECT' | 'NOT_ASSESSABLE';
 /** The presence × applicability cross — makes MISSING-method failures first-class. */
 export type MethodStatus = 'REQUIRED_AND_PRESENT' | 'REQUIRED_BUT_MISSING' | 'OPTIONAL_AND_PRESENT' | 'INAPPLICABLE_BUT_PRESENT' | 'NOT_APPLICABLE_ABSENT' | 'UNRESOLVED';
@@ -55,7 +55,7 @@ export function assessPresence(m: MethodSpec, outputText: string): Presence {
  * otherwise it carries its declared necessity (REQUIRED/OPTIONAL), with DERIVED methods
  * capped to OPTIONAL (canBeRequired). `UNKNOWN` when the situation under-specifies the contract.
  */
-export function assessContractApplicability(m: MethodSpec, x: MethodSituation): Applicability {
+export function assessContractApplicability(m: MethodSpec, x: MethodSituation): MethodApplicability {
   if (!m.constructScope.standardDimensions.includes(x.standardDimension)) return 'INAPPLICABLE'; // out of the method's scope
   if (m.forbiddenContextTags.some((t) => x.contextTags.includes(t))) return 'INAPPLICABLE';       // forbidden context triggered
   const missingInput = m.requiredInputs.some((r) => !x.availableInputs.includes(r));
@@ -86,7 +86,7 @@ export function assessExecution(m: MethodSpec, outputText: string): ExecutionRes
 }
 
 /** The presence × applicability cross — surfaces REQUIRED_BUT_MISSING (omission) as first-class. */
-export function deriveStatus(presence: Presence, applicability: Applicability): MethodStatus {
+export function deriveStatus(presence: Presence, applicability: MethodApplicability): MethodStatus {
   if (applicability === 'UNKNOWN') return 'UNRESOLVED';
   if (applicability === 'INAPPLICABLE') return presence === 'PRESENT' ? 'INAPPLICABLE_BUT_PRESENT' : 'NOT_APPLICABLE_ABSENT';
   if (applicability === 'REQUIRED') return presence === 'PRESENT' ? 'REQUIRED_AND_PRESENT' : 'REQUIRED_BUT_MISSING';
@@ -102,7 +102,7 @@ export interface MethodologyEvidence {
   readonly methodologyId: string;
   readonly authority: FactorAuthority;
   readonly presence: Presence;
-  readonly applicability: Applicability;         // DETERMINISTIC CONTRACT-CONSISTENCY (labeled below)
+  readonly applicability: MethodApplicability;         // DETERMINISTIC CONTRACT-CONSISTENCY (labeled below)
   readonly applicabilityIs: 'CONTRACT_CONSISTENCY'; // honesty tag: NOT a quality claim
   readonly semanticAppropriateness: 'UNCALIBRATED'; // the genuine "right method for this situation" — deferred, never gates
   readonly status: MethodStatus;

@@ -159,7 +159,7 @@ export function clusteringUnaccounted(units: readonly GoldenUnit[], scope: Claim
 }
 
 /** What a person reads when the two numbers differ, which is the case that misleads. */
-export function describeEvidence(units: readonly GoldenUnit[], scope: ClaimScope): string {
+export function describeGoldenEvidence(units: readonly GoldenUnit[], scope: ClaimScope): string {
   const n = claimUnitCount(units, scope);
   const clusters = new Set(units.map((u) => u.provenance.clusterId)).size;
   const caveat = clusteringUnaccounted(units, scope)

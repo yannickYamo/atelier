@@ -6,7 +6,7 @@
 
 import type { Budget } from '../../core/inference/client.js';
 import { foldRepairs } from '../../core/architecture/repair-memory.js';
-import { compareOnRule, describeComparison } from '../../core/fidelity/run-observer.js';
+import { compareOnRule, describeObservedComparison } from '../../core/fidelity/run-observer.js';
 import { rankByObserver, describeRanking } from '../../core/fidelity/rule-observer.js';
 import * as store from '../../core/state/store.js';
 import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
@@ -122,7 +122,7 @@ export async function compare(): Promise<void> {
     result: c.result, orderInvariant: c.orderInvariant, lengthRatio: c.lengthRatio,
     at: new Date().toISOString() });
 
-  console.log(`\n${describeComparison(c, req.statement)}`);
+  console.log(`\n${describeObservedComparison(c, req.statement)}`);
   // The ranking's first key is a rule-specific proxy, and Atelier has none — so the order is the
   // observer's alone. Printed anyway because the half that still bites without a proxy is the tie
   // report, and a tie at the top means any pick from it is arbitrary.

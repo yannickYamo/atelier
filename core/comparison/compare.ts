@@ -112,7 +112,7 @@ export function compare(input: ComparisonInput): ComparisonResult {
 }
 
 /** What a person reads. Says the unit out loud, because that is the thing usually misread. */
-export function describeComparison(r: ComparisonResult): string {
+export function describeComparisonResult(r: ComparisonResult): string {
   let out = `  ${r.verdict}  over ${r.independentContexts} independent context(s)`;
   out += r.observations !== r.independentContexts
     ? `, ${r.observations} generation(s) — the generations nest inside the contexts and do not add to n\n`

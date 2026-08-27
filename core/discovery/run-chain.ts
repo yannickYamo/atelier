@@ -65,8 +65,8 @@ const CHAIN_FIELDS = `For each rule give:
 /** The chain prompt for one vantage. The framing clause has ONE owner and it is `framing.ts`. */
 export const chainProposerSystemFor = (framing: FramingId): string => `${framedPreamble(framing)}\n\n${CHAIN_FIELDS}`;
 
-/** Framing B, preserved under its original name for callers that predate framings. */
-export const PROPOSER_SYSTEM = chainProposerSystemFor('B');
+/** Framing B, the default vantage. Local: the only caller is the chain below. */
+const PROPOSER_SYSTEM = chainProposerSystemFor('B');
 
 export const PROPOSER_SCHEMA: Record<string, unknown> = {
   type: 'object',

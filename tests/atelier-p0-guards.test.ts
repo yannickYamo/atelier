@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { decide, NOTHING_EARNED } from '../core/convergence/state-machine.js';
-import { assertNotAuthority } from '../core/coverage/standard-coverage.js';
+import { assertCoverageIsNotAuthority } from '../core/coverage/standard-coverage.js';
 import { evidenceFor } from '../core/measurement/longitudinal.js';
 import type { Observation } from '../core/measurement/observation.js';
 
@@ -95,11 +95,11 @@ describe('coverage cannot claim to be authority, whatever the wording', () => {
       'coverage authorises promotion',
       'the rule is ratified by observation',
     ]) {
-      expect(() => { assertNotAuthority(c); }, c).toThrow(/COVERAGE AUTHORITY/);
+      expect(() => { assertCoverageIsNotAuthority(c); }, c).toThrow(/COVERAGE AUTHORITY/);
     }
   });
 
   it('allows an ordinary statement about coverage', () => {
-    expect(() => { assertNotAuthority('nine of twelve requirements have been observed'); }).not.toThrow();
+    expect(() => { assertCoverageIsNotAuthority('nine of twelve requirements have been observed'); }).not.toThrow();
   });
 });

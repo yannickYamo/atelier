@@ -10,7 +10,8 @@
 //
 // ─── THE FIX IS NOT A BETTER RUBRIC. IT IS MOVING WHO DECIDES APPLICABILITY ────────────────────
 //
-// Applicability is sealed BY THE EXPERT, PER CONTEXT, BEFORE ANY OUTPUT EXISTS. The scorer is then
+// Applicability here is sealed BY THE EXPERT, PER CONTEXT, BEFORE ANY OUTPUT EXISTS, which is what
+// the name says and why there is no AMBIGUOUS value to reach for. The scorer is then
 // never asked whether a rule applied — only whether the behaviour was expressed. Silence can no
 // longer buy an N/A, because the N/A was decided before there was anything to be silent about.
 //
@@ -19,7 +20,7 @@
 // is won by a model that never demonstrates it. Both are one-sided. Four cells are not.
 
 /** Sealed by the expert before generation. Never inferred from an output, at any stage. */
-export type Applicability = 'APPLIES' | 'DOES_NOT_APPLY';
+export type SealedApplicability = 'APPLIES' | 'DOES_NOT_APPLY';
 
 /**
  * Whether the behaviour appeared. The ONLY axis a scorer rules on.
@@ -42,7 +43,7 @@ export type Cell =
   /** applicability is known; whether the behaviour landed is not */
   | 'UNRESOLVED';
 
-export function classify(a: Applicability, e: Expression): Cell {
+export function classify(a: SealedApplicability, e: Expression): Cell {
   if (e === 'UNCERTAIN') return 'UNRESOLVED';
   if (a === 'APPLIES') return e === 'PRESENT' ? 'SATISFIED' : 'MISSED';
   return e === 'PRESENT' ? 'FALSE_APPLICATION' : 'CORRECT_RESTRAINT';
@@ -74,7 +75,7 @@ export interface HeldOutCase {
 export interface ApplicabilityEntry {
   readonly caseId: string;
   readonly requirementId: string;
-  readonly applies: Applicability;
+  readonly applies: SealedApplicability;
 }
 
 /** One scorer ruling on one output. Carries no applicability — that was decided already. */

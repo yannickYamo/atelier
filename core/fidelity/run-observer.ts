@@ -152,7 +152,7 @@ export async function compareOnRule(
 }
 
 /** What the user reads. Says what this is worth, in the same breath as saying what it found. */
-export function describeComparison(c: Comparison, ruleStatement: string): string {
+export function describeObservedComparison(c: Comparison, ruleStatement: string): string {
   const pct = `${Math.round(c.lengthRatio * 100)}%`;
 
   if (!c.orderInvariant) {

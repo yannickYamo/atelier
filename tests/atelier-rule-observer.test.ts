@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildObserverPair, foldObserverPick, rankByObserver, describeRanking, NO_PROXY,
 } from '../core/fidelity/rule-observer.js';
-import { compareOnRule, describeComparison } from '../core/fidelity/run-observer.js';
+import { compareOnRule, describeObservedComparison } from '../core/fidelity/run-observer.js';
 import type { InferenceClient, InferenceResult, Budget } from '../core/inference/client.js';
 
 const budget = (): Budget => ({ spentUsd: 0, capUsd: 5 });
@@ -83,14 +83,14 @@ describe('order-invariance — the check that stands in for qualification', () =
     const c = await compareOnRule(stub(['A', 'B']), budget(), ...args);
     expect(c.orderInvariant).toBe(true);
     expect(c.result).toBe('CANDIDATE_COMPLIES_BETTER');
-    expect(describeComparison(c, 'the rule')).toContain('swapped places');
+    expect(describeObservedComparison(c, 'the rule')).toContain('swapped places');
   });
 
   it('POLARITY: a verdict that follows POSITION is reported unusable, not as a preference', async () => {
     // picks A both times — in the reverse orientation "A" is the champion, so it changed its mind.
     const c = await compareOnRule(stub(['A', 'A']), budget(), ...args);
     expect(c.orderInvariant).toBe(false);
-    const text = describeComparison(c, 'the rule');
+    const text = describeObservedComparison(c, 'the rule');
     expect(text).toContain('no usable reading');
     expect(text).toContain('reading position, not the rule');
     expect(text).toContain('Read both outputs yourself');
@@ -108,14 +108,14 @@ describe('order-invariance — the check that stands in for qualification', () =
       'short', 'a considerably longer candidate answer than the champion');
     expect(c.orderInvariant).toBe(true);
     expect(c.preferredLonger).toBe(true);
-    const text = describeComparison(c, 'rule');
+    const text = describeObservedComparison(c, 'rule');
     expect(text).toContain('preferred the longer answer');
     expect(text).toContain('passes it\nevery time');
   });
 
   it('never claims authority, whatever it found', async () => {
     const c = await compareOnRule(stub(['A', 'B']), budget(), ...args);
-    const text = describeComparison(c, 'the rule');
+    const text = describeObservedComparison(c, 'the rule');
     expect(text).toContain('orders your attention');
     expect(text).toContain('carries no authority');
   });
@@ -123,7 +123,7 @@ describe('order-invariance — the check that stands in for qualification', () =
   it('NEITHER is preserved — "the repair did not land" is a real finding', async () => {
     const c = await compareOnRule(stub(['NEITHER', 'NEITHER']), budget(), ...args);
     expect(c.result).toBe('NEITHER_COMPLIES');
-    expect(describeComparison(c, 'the rule')).toContain('repair did not land');
+    expect(describeObservedComparison(c, 'the rule')).toContain('repair did not land');
   });
 });
 
