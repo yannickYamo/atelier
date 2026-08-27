@@ -9,7 +9,11 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "MEASUREMENTS.md",
+    "SECURITY.md",
+    "docs"
   ],
   "engines": {
     "node": ">=22"
