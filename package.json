@@ -13,7 +13,8 @@
     "CONTRIBUTING.md",
     "MEASUREMENTS.md",
     "SECURITY.md",
-    "docs"
+    "docs",
+    "studies"
   ],
   "engines": {
     "node": ">=22"

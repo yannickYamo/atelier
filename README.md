@@ -673,7 +673,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-58 files and 892 tests. It exercises the governance spine, the compiler, the renderer, delivery
+59 files and 899 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -685,6 +685,14 @@ public. Every one of them is listed in [MEASUREMENTS.md](MEASUREMENTS.md) with w
 test asserts any of those numbers and no behaviour depends on one, which
 `tests/atelier-measurements-disclosure.test.ts` keeps honest in both directions. Terms and symbols
 the comments use without spelling out are in [docs/GLOSSARY.md](docs/GLOSSARY.md).
+
+**The preregistrations and study records are in [studies/](studies/README.md).** Eighteen documents,
+sealed before generation and published as sealed: the null, the positive result, the gate that failed
+and was not excepted, and the effect that was real and still did not license the fix it suggested.
+Read them for what they refuse as much as for what they show. One published figure was wrong and is
+marked withdrawn beside what replaced it, because a pooled binomial treated 46 nested observations as
+independent. Two studies use the public comments of real maintainers who were **never contacted and
+have ratified nothing**; they appear as Maintainer A and Maintainer B, as they do in the paper.
 
 **Not in this repository:** the corpora and scored outputs for the three behavioural studies above.
 The code review corpus is public but its adjudication is not reproducible and the generation model was
