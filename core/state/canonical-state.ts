@@ -516,6 +516,29 @@ export const unconfirmedRate = (v: StandardVersion): number =>
 export const discoveryRecall = (v: StandardVersion): number =>
   v.requirements.length === 0 ? 0 : v.requirements.filter((r) => r.provenance === 'MACHINE_DISCOVERED').length / v.requirements.length;
 
+/**
+ * Does this rule apply everywhere, or only under a stated condition?
+ *
+ * THIS IS THE ONE PLACE THAT DECIDES. The question was previously answered at thirteen call sites
+ * with two different rules: twelve tested `/^GENERAL\b/i` against a trimmed value, and the prose
+ * baseline in `cli/commands/reference.ts` tested `!== 'GENERAL'` exactly, case-sensitively and
+ * untrimmed. One of those sites also skipped the trim.
+ *
+ * The divergence was not cosmetic. That baseline is the B3_STANDARD_AS_PROSE arm, whose whole
+ * purpose is to present the SAME standard without the compiler's machinery. A rule written
+ * `general` or `GENERAL ` would have been unconditional to the renderer and conditional to the
+ * baseline, so the two arms would have described the same standard differently and the comparison
+ * between them would have been measuring a formatting disagreement.
+ *
+ * Blank counts as GENERAL. A rule that names no condition applies always; that is the only reading
+ * under which the two former behaviours agree, and it is the sensible one. Blankness is still a
+ * smell, which is what `unconditionalRate` is for.
+ */
+export const isGeneralScope = (appliesWhen: string): boolean => {
+  const v = appliesWhen.trim();
+  return v === '' || /^GENERAL\b/i.test(v);
+};
+
 /** Reported, not enforced: the share of rules that declined to name a condition. */
 export const unconditionalRate = (v: StandardVersion): number =>
-  v.requirements.length === 0 ? 0 : v.requirements.filter((r) => /^GENERAL\b/i.test(r.appliesWhen.trim())).length / v.requirements.length;
+  v.requirements.length === 0 ? 0 : v.requirements.filter((r) => isGeneralScope(r.appliesWhen)).length / v.requirements.length;

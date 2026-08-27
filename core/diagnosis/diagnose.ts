@@ -17,6 +17,7 @@
 // Every ambiguity fails CLOSED to UNCERTAIN, which authorises nothing.
 
 import type { StandardVersion, InvocationRecord, FeedbackRecord } from '../state/canonical-state.js';
+import { isGeneralScope } from '../state/canonical-state.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 
@@ -160,7 +161,7 @@ export const DIAGNOSER_SCHEMA: Record<string, unknown> = {
 
 /** The standard as the diagnoser sees it: ids and statements. No evidence spans, no provenance. */
 export const standardForDiagnosis = (v: StandardVersion): string =>
-  v.requirements.map((r) => `${r.requirementId}. ${r.statement}${/^GENERAL\b/i.test(r.appliesWhen.trim()) ? '' : ` (applies when: ${r.appliesWhen})`}`).join('\n');
+  v.requirements.map((r) => `${r.requirementId}. ${r.statement}${isGeneralScope(r.appliesWhen) ? '' : ` (applies when: ${r.appliesWhen})`}`).join('\n');
 
 export async function diagnose(
   client: InferenceClient, budget: Budget,

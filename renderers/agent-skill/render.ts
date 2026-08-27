@@ -13,6 +13,7 @@
 
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
+import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { assertArchitectureServesStandard, type SkillArchitecture, type Carrier, type GateRole } from '../../core/architecture/compile.js';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -245,7 +246,7 @@ export function renderAgentSkill(
   const preFinalize = serves.filter((x) => x.role === 'ENFORCE' && x.carrier === 'SELF_CHECK').map((x) => x.r);
 
   const line = (r: typeof v.requirements[number], i: number): string => {
-    const cond = /^GENERAL\b/i.test(r.appliesWhen.trim()) ? '' : `\n   Applies when: ${r.appliesWhen}`;
+    const cond = isGeneralScope(r.appliesWhen) ? '' : `\n   Applies when: ${r.appliesWhen}`;
     const prov = provenanceLabel(r.provenance);
     return `${i + 1}. ${r.statement}${cond}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
@@ -290,7 +291,7 @@ export function renderAgentSkill(
   // guarantee for a request is the substitution the carrier exists to prevent. Where a host cannot
   // enforce it, the honest report is UNSUPPORTED, not a paragraph.
   const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE');
-  const always = (r: { appliesWhen: string }): boolean => /^GENERAL\b/i.test(r.appliesWhen.trim());
+  const always = (r: { appliesWhen: string }): boolean => isGeneralScope(r.appliesWhen);
   const referenceSection = exampleCarried.length
     ? `\n## Reference material\n\nEach file below shows an observed realization from the source work. Read a file when its condition\napplies to what you are writing; they are instances, not extra instructions.\n\n`
       + exampleCarried.map((x) => `- \`examples/${x.r.requirementId}.md\` — `
@@ -373,7 +374,7 @@ mintedAt:        ${v.mintedAt}
         : `${r.statement}\n\n`;
     exampleFiles[`examples/${r.requirementId}.md`] =
       `# ${r.requirementId}${r.realizes ? ` — how ${r.realizes} lands` : ''}\n\n${shown}`
-      + (/^GENERAL\b/i.test(r.appliesWhen.trim()) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
+      + (isGeneralScope(r.appliesWhen) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
       + `${binding}\n\n`
       // THE COUNTERFACTUAL IS NOT SERVED, AND THIS IS THE PLACE IT NEARLY WAS.
       //
@@ -407,7 +408,7 @@ mintedAt:        ${v.mintedAt}
   // Deterministic, and deliberately not a semantic router. It records the condition each component
   // already carries so a runtime can exclude what plainly does not apply. Having `appliesWhen` text
   // is not the same as routing on it, and this is the smallest thing that is actually routing.
-  const conditional = carried.filter((x) => !/^GENERAL\b/i.test(x.r.appliesWhen.trim()) && x.carrier !== 'NONE');
+  const conditional = carried.filter((x) => !isGeneralScope(x.r.appliesWhen) && x.carrier !== 'NONE');
   const contextMap: Record<string, string> = conditional.length ? { 'context-map.json': `${JSON.stringify({
     note: 'Serve a component when its condition holds. Unconditional components always serve.',
     components: conditional.map((x) => ({ requirementId: x.r.requirementId, carrier: x.carrier,

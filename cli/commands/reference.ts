@@ -15,6 +15,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
+import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -72,7 +73,7 @@ function corpusTextForBaseline(): string {
  */
 function standardAsProse(L: store.StoreLayout, standardVersionHash: string): string {
   const sd = store.getStandard(L, standardVersionHash) ?? die(`standard ${standardVersionHash} is missing from the store.`);
-  const lines = sd.requirements.map((r) => (r.appliesWhen && r.appliesWhen !== 'GENERAL'
+  const lines = sd.requirements.map((r) => (!isGeneralScope(r.appliesWhen)
     ? `- ${r.statement} (when: ${r.appliesWhen})`
     : `- ${r.statement}`));
   return `Follow these rules.\n\n${lines.join('\n')}`;

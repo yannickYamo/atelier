@@ -19,7 +19,7 @@ import type { Budget } from '../../core/inference/client.js';
 import { BudgetExceeded } from '../../core/inference/client.js';
 import { transition, type Run } from '../../core/state/run-state.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
-import { discoveryRecall, unconditionalRate, unconfirmedRate, authorityStateOf } from '../../core/state/canonical-state.js';
+import { discoveryRecall, unconditionalRate, unconfirmedRate, authorityStateOf, isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
 import { sha, DATA, die, argv, flag, PROPOSER, clientFor, loadSession, saveSession, sourceProvenance, step, type Session, numericFlag, priceOverrideFor } from '../runtime.js';
@@ -249,7 +249,7 @@ export async function discover(): Promise<void> {
   const b = proposals.filter((p) => p.kind === 'BOUNDARY').length;
   console.log(`\n${proposals.length} rule(s)${b ? `, ${b} of them boundaries` : ''}.  ($${budget.spentUsd.toFixed(3)})`);
   for (const p of proposals) {
-    const cond = /^GENERAL\b/i.test(p.appliesWhen.trim()) ? '' : `\n    applies when: ${p.appliesWhen}`;
+    const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    applies when: ${p.appliesWhen}`;
     console.log(`  [${p.requirementId}] ${p.statement}${cond}`);
   }
   console.log(`\nRun \`atelier ratify-close\` to mint the standard, or \`atelier build --name <name>\` if create is doing it for you.`);
@@ -272,7 +272,7 @@ export function pending(): void {
 
   console.log(`${left.length} proposed rule(s). None of them are yours until you say so.\n`);
   for (const p of left) {
-    const cond = /^GENERAL\b/i.test(p.appliesWhen.trim()) ? '' : `\n    when: ${p.appliesWhen}`;
+    const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    when: ${p.appliesWhen}`;
     console.log(`[${p.requirementId}] ${p.kind === 'BOUNDARY' ? 'AVOIDS' : 'DOES'}\n    ${p.statement}${cond}`);
     if (p.evidence) console.log(`    from ${p.evidenceItemId ?? 'your work'}: "${p.evidence.slice(0, 140)}${p.evidence.length > 140 ? '…' : ''}"`);
     // The counterfactual, shown BESIDE the claim. "Yes, that's me" is easy to say about anything;
