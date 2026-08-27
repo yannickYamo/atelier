@@ -1,0 +1,33 @@
+name: Bug report
+description: Something refused when it should not have, or produced something wrong.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Atelier refuses a lot on purpose. If a refusal looks wrong, it still belongs here — a guard
+        that fires on a legitimate run is a defect in the guard.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+    validations: { required: true }
+  - type: textarea
+    id: command
+    attributes:
+      label: The exact command, and its output
+      render: shell
+    validations: { required: true }
+  - type: input
+    id: versions
+    attributes:
+      label: Atelier version, Node version, provider and model
+      placeholder: 0.1.0, node 22.11.0, openai-compatible / groq
+    validations: { required: true }
+  - type: textarea
+    id: state
+    attributes:
+      label: Output of `atelier status`
+      description: Where the run is. Redact anything you cannot share.
+      render: text

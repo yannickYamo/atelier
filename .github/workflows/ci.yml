@@ -5,14 +5,29 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only by default. Nothing in this workflow writes to the repo, and a token that could is a
+# token a compromised action could use.
+permissions:
+  contents: read
+
+# A force-push should cancel the run it superseded rather than queue behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # `engines` claims >=22. Testing only 22 would make that claim about a version nobody ran.
+      matrix:
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
 
@@ -26,6 +41,9 @@ jobs:
       - run: npm run lint
 
       - run: npm test
+
+      # A known-vulnerable transitive dependency is a defect the suite cannot see.
+      - run: npm audit --audit-level=high
 
       # The package a user installs is `dist/`, not the source tree. Building it in CI is
       # what catches an import that resolves under the checkout and nowhere else.

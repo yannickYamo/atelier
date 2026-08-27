@@ -1,0 +1,54 @@
+name: Evidence report
+description: You pointed Atelier at real work. Tell us what it did, including if it failed.
+title: "[evidence] "
+labels: ["evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the contribution the project most needs. A report where it did **not** recover you is
+        worth more than one where it did, because the failure mode we cannot see from here is the
+        flattering stranger: a standard that reads like a plausible expert and is not you.
+
+        Nothing here asks for your corpus. Do not paste client or confidential material.
+  - type: input
+    id: domain
+    attributes:
+      label: Domain
+      description: What kind of work? Code review, memos, contracts, support replies, something else.
+      placeholder: internal strategy memos
+    validations: { required: true }
+  - type: input
+    id: corpus
+    attributes:
+      label: Corpus size
+      description: How many pieces, and roughly how long each. Say if any was AI-assisted.
+      placeholder: 14 memos, 800-2000 words, about half drafted with an assistant
+    validations: { required: true }
+  - type: textarea
+    id: recovered
+    attributes:
+      label: Did it recover you, or a flattering stranger?
+      description: >
+        The useful detail is which proposed rules you REJECTED and why. A rule you rejected tells us
+        more about the discovery step than five you accepted.
+    validations: { required: true }
+  - type: textarea
+    id: heldout
+    attributes:
+      label: Did it hold on work it had never read?
+      description: >
+        If you reserved anything and ran `atelier reference`, paste the verdict line. If you did not
+        reserve, say so — that is a common and honest answer, not a failure to report.
+  - type: textarea
+    id: inspect
+    attributes:
+      label: Output of `atelier inspect --skill <name>`
+      description: Shows which carrier landed each rule and what the package actually serves.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Atelier version and provider
+      placeholder: 0.1.0, anthropic / claude-opus-5
+    validations: { required: true }

@@ -1,0 +1,43 @@
+name: Release
+
+# Tag-triggered, so the artifact published is the one a tag names and not whatever happened to be in
+# a laptop's working tree. The same checks CI runs must pass again here: a tag can be pushed from a
+# commit CI never saw.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  # npm provenance. Worth having on a package by an unknown author that reads a private corpus and
+  # holds a credential: it lets an installer verify the tarball was built from this commit, in this
+  # workflow, rather than uploaded by hand.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+      # The tag and the manifest must agree. A tag that does not match `version` publishes something
+      # nobody can find again from the release.
+      - name: the tag is the version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          test "$TAG" = "$PKG" || {
+            echo "tag $GITHUB_REF_NAME does not match package.json version $PKG"; exit 1; }
+
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
