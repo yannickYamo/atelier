@@ -8,6 +8,21 @@ a run in progress may not be.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A candidate measured worse was authorised for promotion.** `decide()` had no `REGRESSED` branch,
+  so a comparison that found the candidate worse fell through to the promotion gates on the same
+  terms as one that found it better. `REJECT` was declared in the terminal union and returned from
+  nowhere, which is what a missing branch looks like from outside the file.
+- **`core/compiler/placement.ts` was a binary file.** A sentinel written as a raw `0x00` rather than
+  the escape `'\0'` made `grep -r` skip all 249 lines without saying so, and made the diff
+  unrenderable. Same value, two visible characters, and the reason for the sentinel is now written
+  down.
+- **The plugin told every user to install a package that does not exist** (`atelier-cli`), on
+  `SessionStart`, as the first thing a user with a missing binary reads.
+- **`npm run typecheck` failed on a clean checkout** while `npm test` was green, because the build
+  config excludes `tests/` and vitest does not typecheck. CI's first step was red.
+
 ## [0.1.0]
 
 First public release. The pipeline runs end to end: read a corpus, propose candidate requirements

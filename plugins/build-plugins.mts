@@ -59,7 +59,7 @@ set -euo pipefail
 if ! command -v atelier >/dev/null 2>&1; then
   echo "Atelier: 'atelier' is not on PATH. The protocol guarantees (ratification-before-build," >&2
   echo "corpus-freeze, reveal-after-preference) are enforced by that binary, not by instructions." >&2
-  echo "Install it first:  npm install -g atelier-cli" >&2
+  echo "Install it first:  npm install -g @yannickyamo/atelier" >&2
   exit 2
 fi
 exit 0

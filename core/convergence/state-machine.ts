@@ -184,6 +184,22 @@ export function decide(input: CycleInput): Decision {
       blockedBy: ['more independent contexts, or a larger effect'] };
   }
 
+  // ── REGRESSED: MEASURED WORSE, AND THAT IS AN ANSWER RATHER THAN A MISSING ONE ────────────
+  //
+  // This branch was absent, and absent is not neutral here. Every other non-improving verdict has a
+  // return above; without one, REGRESSED fell through to the promotion gates and was authorised on
+  // exactly the same terms as IMPROVED. `REJECT` was declared in the terminal union and returned
+  // from nowhere, which is what a missing branch looks like from the outside.
+  //
+  // It is the one verdict that must never reach the gates, because the gates ask whether the
+  // evidence is good enough to adopt and this evidence is good enough to refuse.
+  if (input.comparison === 'REGRESSED') {
+    return { terminal: 'REJECT', reachedPhase: 'EVALUATE',
+      why: 'the candidate was measured WORSE than the incumbent. That is a result, not a shortfall, '
+        + 'so nothing here is blocked pending more evidence: this repair is refused.',
+      blockedBy: [] };
+  }
+
   // ── THE PROMOTION GATES. Each is separate, and each is earned separately. ─────────────────
   if (g.observerPermission !== 'CERTIFY') {
     blocked.push(`a fidelity observer qualified to CERTIFY (currently ${g.observerPermission})`);
