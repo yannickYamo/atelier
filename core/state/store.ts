@@ -99,6 +99,15 @@ export interface StoredPackage {
   readonly standardVersionHash: string;
   readonly architectureHash: string;
   readonly files: Readonly<Record<string, string>>;
+  /**
+   * Provenance and regression material. NEVER SERVED to a model.
+   *
+   * Declared because it is already written. `putPackage` takes the rendered package whole, so this
+   * has been persisted since the renderer emitted it while the type said otherwise — a type lying by
+   * omission about what is on disk, which is how a reader concludes the manifest is not kept and
+   * recomputes it instead of reading what was actually built.
+   */
+  readonly assurance?: Readonly<Record<string, string>>;
 }
 
 /**

@@ -575,6 +575,31 @@ export const isGeneralScope = (appliesWhen: string): boolean => {
  * all. Nothing may route on this.
  */
 /**
+ * WHAT THE FROZEN TEXT ALONE SAYS ABOUT WHERE A REQUIREMENT GOVERNS.
+ *
+ * Three values and no more, because three is what text can support. A finer reading — separating a
+ * condition a machine could evaluate ("ARR > $1m") from one only a reader can ("when the customer is
+ * asking primarily about risk") — has no syntactic tell, and deriving it from prose would be an
+ * inference wearing a derivation's clothes. When that distinction is needed it becomes a TYPED field
+ * an author sets, not a guess this function makes.
+ *
+ * Planning and display read this. Evidence admissibility does NOT: `canProveApplicableFromText` in
+ * `measurement/applicability.ts` is deliberately stricter, because counting a marginal case as clean
+ * evidence is a costlier mistake than showing a reader a slightly generous label.
+ */
+export type ApplicabilityMode =
+  /** the text says it applies everywhere */
+  | 'GENERAL'
+  /** the text states a condition. Whether anything can EVALUATE that condition is a separate question. */
+  | 'CONDITION_PRESENT'
+  /** there is no text to read. Not a condition, and not general — an absence. */
+  | 'UNRESOLVED';
+
+export const applicabilityModeOf = (appliesWhen: string | null | undefined): ApplicabilityMode =>
+  appliesWhen === null || appliesWhen === undefined ? 'UNRESOLVED'
+    : isGeneralScope(appliesWhen) ? 'GENERAL' : 'CONDITION_PRESENT';
+
+/**
  * WHERE THE CONTENT OF THIS STANDARD CAME FROM.
  *
  * DERIVED, never stored. Every requirement already carries its own `provenance`, so a second field
