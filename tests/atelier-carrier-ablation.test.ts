@@ -85,7 +85,8 @@ describe('mechanism exposure: may this study claim to test a carrier at all', ()
   const facts = (o: Partial<ExposureFacts> = {}): ExposureFacts => ({
     targetRequirementId: 'r2', targetCarrier: 'EXAMPLE', targetAuthority: 'EXPERT_RATIFIED',
     applicabilityBasis: 'GENERAL', contextsExercisingTarget: 16, observationMode: 'STRUCTURAL',
-    controlCarrier: 'PROSE', deliveredAtRuntime: true, normativeSetsMatch: true, ...o,
+    controlCarrier: 'PROSE', deliveredAtRuntime: true, normativeSetsMatch: true,
+    expertSelfConsistency: 0.9, observerKappa: 0.7, scoring: 'AUTOMATIC', ...o,
   });
 
   it('passes only when all eight hold', () => {
@@ -132,6 +133,34 @@ describe('mechanism exposure: may this study claim to test a carrier at all', ()
     expect(checkMechanismExposure(facts({ targetAuthority: 'MACHINE_PROPOSED' })).failed)
       .toContain('TARGET_AUTHORITATIVE');
     expect(checkMechanismExposure(facts({ observationMode: 'HUMAN' })).failed).toContain('OUTCOME_OBSERVABLE');
+  });
+
+  it('FAILS when the expert has never been shown held-out cases', () => {
+    // Ratifying a WORDING is not agreeing on its EXTENSION. An author approved a rule and then
+    // judged cases the wording did not predict; nothing before this condition could see that.
+    const v = checkMechanismExposure(facts({ expertSelfConsistency: null }));
+    expect(v.failed).toContain('EXPERT_EXTENSION_STABLE');
+    expect(v.checks.find((c) => c.id === 'EXPERT_EXTENSION_STABLE')!.detail).toMatch(/never measured/);
+  });
+
+  it('FAILS an observer that cannot recover the boundary', () => {
+    // kappa 0.257 was the measured figure on p6 — "fair", and not an instrument.
+    expect(checkMechanismExposure(facts({ observerKappa: 0.26 })).failed).toContain('OBSERVER_QUALIFIED');
+  });
+
+  it('but a BAD OBSERVER does not sink a GOOD TARGET — the expert can score it blind', () => {
+    // The two conditions are about different things. A target only a person can see is still a
+    // target; it costs the expert's time, not the study's validity.
+    const v = checkMechanismExposure(facts({ observerKappa: 0.26, scoring: 'BLIND_EXPERT' }));
+    expect(v.failed).not.toContain('OBSERVER_QUALIFIED');
+    expect(v.pass).toBe(true);
+  });
+
+  it('and a GOOD OBSERVER does not rescue an UNSTABLE TARGET', () => {
+    // High agreement against labels the expert cannot reproduce means the observer learned noise.
+    const v = checkMechanismExposure(facts({ observerKappa: 0.95, expertSelfConsistency: 0.5 }));
+    expect(v.failed).toContain('EXPERT_EXTENSION_STABLE');
+    expect(v.pass).toBe(false);
   });
 
   it('reports every failure at once rather than the first', () => {
