@@ -47,7 +47,8 @@ export const VALUED_OPTIONS: readonly string[] = [
   'exclude', 'from', 'host', 'id', 'invocation', 'kind',
   'labels', 'max-calls', 'model', 'name', 'note',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
-  'candidates', 'compiled', 'contexts', 'control', 'frozen-at', 'max-tokens', 'out', 'probe-cap', 'prose',
+  'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
+  'observation', 'out', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'seed', 'suite',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'skill', 'source-author', 'statement', 'strict-schema',
@@ -60,6 +61,7 @@ export const VALUED_OPTIONS: readonly string[] = [
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept-new-binding', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
   'bare', 'holdout', 'json', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'delivery-proven',
   'regenerate',
   'review', 'score', 'skip-methods', 'yes',
 ];
