@@ -165,7 +165,24 @@ atelier add --statement "Never open with a preamble that restates the question."
 
 atelier ratify-close --work-type writing
 atelier build --name focus
+
+# What did it actually decide, and why?
+atelier plan --skill focus
 ```
+
+```text
+id   source                   applies         carrier          watched    reaches the model
+------------------------------------------------------------------------------------------
+x1   you wrote it             everywhere      PROSE            instructs  SKILL.md
+x2   you wrote it             on a condition  PROSE            instructs  SKILL.md
+x3   you wrote it             everywhere      PROSE            instructs  SKILL.md
+```
+
+That table is the difference between a generated file and a compiled one. A rule can become an
+instruction the model reads while writing, a check against the finished draft, an example nobody is
+told to follow, a schema the runtime enforces, or **nothing at all** — and `plan` is where you see
+which, per rule, with the reason. A requirement that reaches the model through nothing looks
+identical to every other one in your standard; here it says so.
 
 `--kind` is asked rather than defaulted, because there is no safe guess: a rule meaning *do this*
 recorded as a prohibition reaches the model as a rule against doing it, and nothing would tell you.
@@ -323,7 +340,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-62 files and 947 tests. It exercises the governance spine, the compiler, the renderer, delivery
+63 files and 955 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
