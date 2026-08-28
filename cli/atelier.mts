@@ -18,6 +18,7 @@ import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
 import { skill } from './commands/skill.js';
 import { contract } from './commands/contract.js';
+import { study } from './commands/study.js';
 import { pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands/ratify.js';
 import { build, revert } from './commands/build.js';
 import { confirmBoundary } from './commands/confirm.js';
@@ -36,6 +37,7 @@ export const COMMANDS: readonly string[] = [
   'skill',
   'plan',
   'contract',
+  'study',
   'add',
   'amend',
   'answer',
@@ -84,6 +86,7 @@ const main = async (): Promise<void> => {
     case 'history': { historyCmd(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
+    case 'study': { study(); return; }
     case 'compare': return compare();
     case 'reject': { reject(); return; }
     case 'invoke': return invoke();
