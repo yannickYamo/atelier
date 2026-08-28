@@ -1,0 +1,117 @@
+{
+ "frozenAt": "2026-08-28T05:23:11.417Z",
+ "model": "claude-opus-5",
+ "rules": {
+  "x1": "Lead with the next action the reader must take, before any explanation.",
+  "x2": "Number multi-step work so the reader can stop and resume.",
+  "x3": "Never close with an offer of further help."
+ },
+ "contexts": [
+  {
+   "contextId": "ctx01",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "Write instructions for my parents so they can set up the new wifi router I mailed them. They'll unbox it, connect it to the cable modem, and get their phones and TV online. They're not tech people, so keep it plain and reassuring."
+  },
+  {
+   "contextId": "ctx02",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "Our bakery just hired two weekend helpers who've never made sourdough. Write something they can follow to take a fed starter through mixing, bulk fermentation, shaping, overnight retard, and baking in the deck oven, so loaves are ready by 7am Saturday. They've handled dough before but never timed a long ferment."
+  },
+  {
+   "contextId": "ctx03",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I run a small pottery studio and volunteers keep firing the kiln wrong. Write something they can follow to load a bisque firing safely: stacking greenware on shelves with posts, setting the cones, programming the controller ramp, venting, and knowing when it's cool enough to unload. Most have only thrown pots, never fired."
+  },
+  {
+   "contextId": "ctx04",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I manage a community darkroom and new members keep ruining film. Write something they can follow alone at night to develop a roll of black-and-white 35mm: loading the reel in the changing bag, mixing developer to temperature, agitation timing, stop and fix, washing, and hanging to dry. Most have only shot digital."
+  },
+  {
+   "contextId": "ctx05",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I'm handing off beehive duty at our school garden to three teachers who've never opened a hive. Write something they can follow for a routine summer inspection: suiting up, lighting and using the smoker, cracking the boxes, pulling and reading frames for brood and queen cells, then closing up without crushing bees."
+  },
+  {
+   "contextId": "ctx06",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I'm training a new night auditor at our 40-room hotel. Write something they can work through at 11pm: closing out the day's credit card batch, posting room and tax charges, running the no-show report and charging those cards, backing up the property system, then printing the morning arrivals for the front desk. They've only done check-ins so far."
+  },
+  {
+   "contextId": "ctx07",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I'm handing our sailboat over to a friend borrowing it next month. Write something he can follow to get her off the mooring alone: checking fuel and seacocks, starting the diesel, rigging fenders and lines, slipping the pennant, motoring out of the crowded field, then raising main and jib. He's crewed plenty but never skippered."
+  },
+  {
+   "contextId": "ctx08",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "Our theater's lighting board op quit mid-season. Write something the stage manager can follow before each show: powering up the dimmer racks, loading our saved cue file, patching the two rented movers, running a channel check against the plot, and fixing a dead fixture. She's run sound but never touched the board."
+  },
+  {
+   "contextId": "ctx09",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "Our neighbor watched our dog for two weeks while we were away and refused any payment. Write a short thank-you note we can leave with a bottle of wine on her porch — warm, a little funny, sounds like it came from us and not a card."
+  },
+  {
+   "contextId": "ctx10",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "Our indie board game café is opening downtown next month. Write one short paragraph for the back of our flyer that makes people who've never played anything past Monopoly feel welcome, mentions we have 400 games and a decent espresso machine, and doesn't sound like every other \"come hang out\" ad."
+  },
+  {
+   "contextId": "ctx11",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I restore vintage motorcycles out of a two-bay garage and need a single sentence for the top of my website. Should tell people I mostly work on 1960s–70s British bikes, that I'm slow but obsessive, and scare off anyone wanting a cheap quick fix."
+  },
+  {
+   "contextId": "ctx12",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I'm a marine biologist and just finished a paper on how kelp forests recover after heatwaves. Write one short paragraph I can put on my lab's website that explains the finding to someone with no science background, without dumbing it down or making it sound like a press release."
+  },
+  {
+   "contextId": "ctx13",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "My grandmother's sourdough starter turns 60 this year and I'm putting a small card in each jar I give away to friends. Write one short paragraph telling them where it came from, that she kept it alive through two moves and a hospital stay, and that neglecting it a week won't kill it."
+  },
+  {
+   "contextId": "ctx14",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I'm a divorce mediator opening my own practice. Write one short paragraph for my office's front-desk brochure that tells people what mediation actually feels like — calmer and cheaper than lawyers, but not therapy — without sounding cold or like I'm promising everyone stays friends."
+  },
+  {
+   "contextId": "ctx15",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I hand-dye yarn and sell at fiber festivals. Write the little description that goes on the tag for my new colorway \"Ferry Weather\" — deep grays with a streak of rust — so someone holding the skein feels the fog and the ferry rail without me getting precious about it. Two or three sentences."
+  },
+  {
+   "contextId": "ctx16",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I run a small funeral home and we're printing new condolence cards to send families a month after the service, when everyone else has stopped calling. Write the short message inside — a few sentences, plainspoken, no talk of closure or angels, just something that acknowledges the quiet part."
+  }
+ ],
+ "counts": [
+  {
+   "kind": "SHOULD_FIRE",
+   "n": 8
+  },
+  {
+   "kind": "SHOULD_NOT_APPLY",
+   "n": 8
+  }
+ ]
+}

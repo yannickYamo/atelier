@@ -1,5 +1,13 @@
 # Contract lift, BARE vs INITIAL — CLOSE
 
+> **WITHDRAWN IN PART, 2026-08-28.** Every COVERAGE figure below is withdrawn: the generations
+> behind it were truncated by the model's thinking budget before an answer was written, so what was
+> scored was truncation and not behaviour. 27 of 48 `SHOULD_FIRE` generations ran short; **0 of 48**
+> `SHOULD_NOT_APPLY` generations did. **The restraint findings stand and are unaffected.** The
+> "components oppose each other" framing is not supported, because one component was never measured.
+> See [NEGATIVE_BRANCH_CLOSE.md](NEGATIVE_BRANCH_CLOSE.md) §2, which also reports the fix for the
+> restraint failure this study found.
+
 **Status: CLOSED. The primary is a NULL, and its two components oppose each other.** Per the
 preregistration nothing was rerun, n was not increased, and the suite was not touched after outputs
 existed.
@@ -30,12 +38,16 @@ zero comfortably and is centred on it.
 
 | | bare | skill | Δ | 95% CI |
 |---|---|---|---|---|
-| coverage — `SHOULD_FIRE` (n=8) | 0.083 | 0.250 | **+0.167** | [+0.000, +0.333] |
+| ~~coverage — `SHOULD_FIRE` (n=8)~~ | ~~0.083~~ | ~~0.250~~ | ~~+0.167~~ | **WITHDRAWN — truncated generations** |
 | restraint — `SHOULD_NOT_APPLY` (n=8) | **1.000** | 0.792 | **−0.208** | [−0.500, +0.000] |
 
-**This is the M2 result reproduced on a different standard, a different task family and a different
+~~**This is the M2 result reproduced on a different standard, a different task family and a different
 model.** Compilation raised the behaviour where it belonged and lost it where it did not: coverage up
-0.167, restraint down 0.208, net zero.
+0.167, restraint down 0.208, net zero.~~
+
+**WITHDRAWN.** The "components oppose" reading needs both components and only one was measured. What
+survives is the restraint half: compiling this conditional rule as a one-sided instruction made it
+fire where its condition did not hold. Whether compilation also raised activation is unknown.
 
 The restraint number deserves emphasis. **The bare model was perfect** — 8 of 8 contexts, 24 of 24
 generations, it never numbered a single-step task. The compiled skill broke that in two contexts:
@@ -62,9 +74,9 @@ Majority of three:
 **More regressions than recoveries.** A compiler that maximises visible rule firing while introducing
 regressions is worse than no compiler, and on this suite that is what happened.
 
-The six unresolved contexts are their own finding: on most multi-step tasks **neither arm numbered**.
-Coverage of 0.083 bare and 0.250 skill means the rule mostly did not fire even where it applied. The
-skill helps, from a very low base.
+~~The six unresolved contexts are their own finding: on most multi-step tasks neither arm numbered.~~
+**WITHDRAWN.** Those six are `SHOULD_FIRE` contexts, and their generations were truncated before an
+answer was written. They record nothing about whether the rule fired.
 
 ## 4. Stability
 
@@ -142,4 +154,9 @@ carrying an over-applying rule harder makes it fire more. That refusal is now su
 result rather than by argument.
 
 What this points at is **applicability**, not carrier strength. The compiler renders `Applies when:`
-as prose beside the rule and nothing evaluates it. That is the gap, and it is the same one M2 named.
+as prose beside the rule and nothing evaluates it.
+
+**Resolved, 2026-08-28.** It was narrower than an applicability engine: the prose stated only half of
+the condition. Rendering both branches restored restraint completely — 0.708 → 1.000, Δ +0.292,
+CI [+0.083, +0.500], no regressions — for one sentence in the renderer. See
+[NEGATIVE_BRANCH_CLOSE.md](NEGATIVE_BRANCH_CLOSE.md).
