@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util';
 // this repository opens the CLI first. What lives here is the state a command cannot avoid touching:
 // where data goes, how a run advances, and how a model is reached.
 
-import {mkdirSync, existsSync, renameSync} from 'node:fs';
+import { mkdirSync, existsSync, renameSync, readdirSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { join, dirname } from 'node:path';
 import { readJson } from '../core/state/read-json.js';
@@ -399,9 +399,18 @@ export function pickHost(): HostAdapter {
   return die(`unknown host "${want}". Available: claude-code, codex.`);
 }
 
-// ── session (one active run per data dir; a run is a study, not a session) ────────────────────
+// ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
 export interface Session {
   run: Run; skillName: string | null; evidence: ExpertEvidence | null;
+  /**
+   * The project this run belongs to, recorded so an orphan can be identified.
+   *
+   * The file name carries a hash of the directory PATH, so renaming or moving a project mid-run
+   * leaves the old session unreachable by name and a new empty one in its place. That is recoverable
+   * only if the file says where it came from, and unrecoverable if it does not. Written on save,
+   * optional on read, because sessions predating this field are still valid.
+   */
+  projectDir?: string;
   proposals: Requirement[]; decided: Requirement[];
   /** frozen at intake. Discovery must never read these; `reservedIds` is what the filter consults. */
   reservation?: Reservation | null;
@@ -462,7 +471,22 @@ export const loadSession = (): Session => {
 export const saveSession = (s: Session): void => {
   const p = sessionPath();
   mkdirSync(dirname(p), { recursive: true });
-  writeAtomic(p, JSON.stringify(s, null, 1));
+  writeAtomic(p, JSON.stringify({ ...s, projectDir: projectDir() }, null, 1));
+};
+
+/** Runs in flight under this store, newest first, so an orphaned one can be found by eye. */
+export const listSessions = (): { file: string; projectDir: string | null; here: boolean }[] => {
+  const dir = join(DATA, 'sessions');
+  if (!existsSync(dir)) return [];
+  const mine = sessionPath();
+  return readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => {
+    const full = join(dir, f);
+    // A session that cannot be read is still a session worth listing; the point here is orientation,
+    // and refusing the whole listing because one file is damaged would hide the other four.
+    let recorded: string | null;
+    try { recorded = readJson<Session>(full, { what: 'a session' }).projectDir ?? null; } catch { recorded = null; }
+    return { file: full, projectDir: recorded, here: full === mine };
+  });
 };
 
 /**

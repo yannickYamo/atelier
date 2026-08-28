@@ -119,6 +119,24 @@ export interface PairKind {
   readonly primary: boolean;
 }
 
+/**
+ * EVERY ARM IS COMPARED, OR IT IS NOT AN ARM.
+ *
+ * Three arms — B0, B2 and B3 — were declared here, served by `servedTextFor`, tested for
+ * distinctness, and named by no pair kind. They could never generate. The set advertised six arms
+ * and a run produced three, and nothing in a result said so, which is the same defect this file was
+ * written to prevent one level up: an omitted arm leaves no trace.
+ *
+ * The three that were missing are the three that say WHICH PART OF THE PIPELINE DID THE WORK. With
+ * only T against B1 the run answers "do we beat pasting the corpus" and cannot answer anything else.
+ * B2 is the one that matters most, because it is the comparison an external reader will ask for
+ * first: a capable model reading the same corpus and writing its own guide. Without it, a win over
+ * raw examples is consistent with "compiling a ratified standard works" and equally consistent with
+ * "any competent summary of this corpus works", and those are different products.
+ *
+ * The primary is deliberately unchanged. Which comparison decides the product is a preregistered
+ * choice and not something to revise while fixing a wiring defect.
+ */
 export const PAIR_KINDS: readonly PairKind[] = [
   { id: 'T_vs_B1', left: 'T_ATELIER', right: 'B1_CORPUS_IN_PROMPT', primary: true,
     answers: 'does the pipeline beat pasting the work into the prompt' },
@@ -128,6 +146,12 @@ export const PAIR_KINDS: readonly PairKind[] = [
     answers: 'does it beat the expert\'s own half hour' },
   { id: 'B1_vs_GOLDEN', left: 'B1_CORPUS_IN_PROMPT', right: 'GOLDEN', primary: false,
     answers: 'how good the cheap thing is on its own' },
+  { id: 'T_vs_B2', left: 'T_ATELIER', right: 'B2_MODEL_STYLE_GUIDE', primary: false,
+    answers: 'does a ratified standard beat a capable model\'s own guide to the same corpus' },
+  { id: 'T_vs_B3', left: 'T_ATELIER', right: 'B3_STANDARD_AS_PROSE', primary: false,
+    answers: 'does compiling add anything over serving the same standard as flat prose' },
+  { id: 'T_vs_B0', left: 'T_ATELIER', right: 'B0_BARE', primary: false,
+    answers: 'the floor: does any of this beat asking the model with no standard at all' },
 ];
 
 /** Arms a given set of pair kinds actually requires. Nothing generates an arm nobody compares. */

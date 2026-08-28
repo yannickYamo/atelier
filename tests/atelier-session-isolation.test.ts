@@ -152,3 +152,43 @@ describe('the store itself is still shared', () => {
     expect(JSON.parse(readFileSync(p, 'utf8'))).toHaveProperty('run');
   });
 });
+
+describe('a moved project can find the run it left behind', () => {
+  // Runs are keyed by the project PATH, so renaming a directory mid-run leaves the old session
+  // unreachable by name and a fresh empty one in its place. Silently, before this: the person saw
+  // "decided 0" and had no way to learn their work still existed. The recovery is only possible
+  // because the file records where it came from.
+  it('records which project a run belongs to', async () => {
+    const data = scratch('atelier-rec-data-');
+    const proj = scratch('atelier-rec-proj-');
+    await inProject(data, proj, (rt) => { rt.saveSession(sessionWith([])); });
+    const p = await inProject(data, proj, (rt) => rt.sessionPath());
+    expect((JSON.parse(readFileSync(p, 'utf8')) as { projectDir?: string }).projectDir).toBe(proj);
+  });
+
+  it('lists the other runs in flight, and marks which one is here', async () => {
+    const data = scratch('atelier-rec-data-');
+    const a = scratch('atelier-rec-a-');
+    const b = scratch('atelier-rec-b-');
+    await inProject(data, a, (rt) => { rt.saveSession(sessionWith([{ requirementId: 'x' }])); });
+
+    const fromB = await inProject(data, b, (rt) => (rt as unknown as {
+      listSessions: () => { projectDir: string | null; here: boolean }[] }).listSessions());
+    expect(fromB).toHaveLength(1);
+    expect(fromB[0].projectDir, 'the orphan does not say where it came from').toBe(a);
+    expect(fromB[0].here).toBe(false);
+  });
+
+  it('a damaged session file is still listed, so it does not hide the others', async () => {
+    const data = scratch('atelier-rec-data-');
+    const a = scratch('atelier-rec-a-');
+    const b = scratch('atelier-rec-b-');
+    await inProject(data, a, (rt) => { rt.saveSession(sessionWith([])); });
+    writeFileSync(await inProject(data, a, (rt) => rt.sessionPath()), 'not json at all');
+
+    const fromB = await inProject(data, b, (rt) => (rt as unknown as {
+      listSessions: () => { projectDir: string | null }[] }).listSessions());
+    expect(fromB).toHaveLength(1);
+    expect(fromB[0].projectDir, 'a damaged file should list with no project, not vanish').toBeNull();
+  });
+});

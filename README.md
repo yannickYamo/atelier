@@ -126,6 +126,25 @@ transfer, and improve against, without giving the optimizer authority to redefin
 
 ---
 
+## How it works, in depth
+
+The README is the front door. These are the parts a reader evaluating the design will want, kept out
+of the way of a reader who just wants to run it.
+
+| | |
+|---|---|
+| [How Atelier learns taste](docs/DISCOVERY.md) | Reading decisions out of work, and why recurrence is not a standard |
+| [Human authority](docs/AUTHORITY.md) | The decision verbs, materiality, and what a person alone may do |
+| [From standard to skill](docs/COMPILATION.md) | Carriers, and how a requirement reaches a model |
+| [The model is replaceable](docs/PORTABILITY.md) | Why the standard carries no model identity |
+| [How a skill improves](docs/CONVERGENCE.md) | Getting better without moving the target |
+| [Architecture](docs/ARCHITECTURE.md) | The five questions a requirement separates |
+| [Preregistrations and study records](studies/README.md) | Every study, including the nulls |
+| [Measurements in source comments](MEASUREMENTS.md) | Every figure quoted in a comment, and what it rests on |
+| [Glossary](docs/GLOSSARY.md) | Terms and symbols the comments use |
+
+---
+
 ## Quickstart
 
 ```bash
@@ -180,429 +199,6 @@ codex` to see it.
 
 ---
 
-## How Atelier learns taste
-
-Atelier does not start from a fixed taxonomy of style. It looks for contextual decisions in the work.
-Depending on the domain those may show up as framing, methodology, evidence thresholds, abstraction
-boundaries, risk allocation, word choice, omission, pacing, error semantics, or something the system
-had no name for beforehand.
-
-The object is the decision, not the category.
-
-A candidate looks like this:
-
-```text
-Observed
-  The author challenges the premise before answering,
-  in 4 of 6 pieces.
-
-Candidate
-  Correct the frame before solving when the requested decision
-  rests on an assumption the evidence does not support.
-
-Applies when
-  the question embeds an unsupported assumption
-
-If absent, expect
-  answers that solve the question exactly as asked,
-  even when it was the wrong question
-```
-
-The counterfactual matters because flattering descriptions are easy to accept. A prediction about what
-the expert would do differently is easier to check and to reject.
-
-Atelier also looks for the edge of each behaviour. When would this expert deliberately not do this? A
-standard without boundaries becomes a caricature.
-
-And it tells you where its own evidence is thin, rather than leaving you to guess which candidates are
-well supported.
-
-| what it found | what it asks for |
-|---|---|
-| the rule appears in one document and nowhere else | another piece of work |
-| the evidence is thin and the rule would sound plausible either way | a question built to separate the two answers |
-| the rule claims to hold everywhere and nothing has tested its edge | a boundary probe |
-| two candidates contradict each other | which one is yours |
-
-It also reports recurring behaviour that no candidate accounts for, and it distinguishes "nothing was
-found" from "this was not computed".
-
-### Taste is what you choose, and how you make the choice land
-
-Half of anyone's standard is judgment. The other half is expression, and most systems throw it away
-or copy it blindly.
-
-Atelier looks for both, and keeps the relationship between them. From one real run on a corpus of
-decision memos, two of the fourteen candidates were:
-
-```text
-p7   I drop in one concrete scene of a single user at a single moment
-     to carry the argument's weight, then leave it without elaboration.
-
-p12  When I use an image I end the beat on a short declarative that
-     renames the thing, so the emphasis lands on the reframing.
-```
-
-Read as two rules, p12 is a fussy habit about sentence length and you would reject it. It is not a
-rule. It is **how p7 lands**, and when you say so the pair becomes something a model can actually
-reproduce:
-
-```text
-DECISION          p7   make the abstract mechanism concrete through a scene
-                       REQUIRED
-
-  realized as     p12  end the beat on a short declarative that renames the thing
-                       FUNCTIONALLY_EQUIVALENT
-
-  observed        "They do not file a ticket. They close the tab.
-                   That silence is the product."
-```
-
-The decision carries the obligation. The realization carries the form. You are never asked whether a
-form is REQUIRED, because that question puts two commands on one choice. You are asked **how tightly
-the form binds**: STRICT if the exact realization is part of what you mean, FUNCTIONALLY_EQUIVALENT
-if another form doing the same work is fine, FLEXIBLE if it is characteristic and nothing turns on it.
-
-Expressive preferences that serve no deeper decision stay standalone. Not everything is a realization
-of something, and pretending otherwise is how a system over-intellectualizes style.
-
-**Atelier never infers this link on its own.** That was measured: asked to derive the relationships
-across three independent runs, a model gave one rule three different parents, captured a standalone
-preference into an unrelated one, and produced chains nobody authored. A machine may propose an edge.
-Only you make it structure.
-
-Every example the compiled skill receives is an anchored quote from your own work, checked verbatim
-against the piece it came from. Showing beats telling for form, and a description of a rhythm is not
-a rhythm.
-
----
-
-## Human authority
-
-Doing something repeatedly does not make it a requirement. For every candidate, a person decides
-whether it belongs in the standard.
-
-```text
-APPROVE       it is mine, as stated
-REWRITE       it is mine, but not in those words
-CONTEXTUAL    it is mine only under a condition
-REJECT        it is not part of the standard
-```
-
-For anything kept, Atelier records how much it matters.
-
-| materiality | meaning |
-|---|---|
-| `REQUIRED` | violating it materially worsens the work |
-| `PREFERRED` | wanted, but other valid realizations are acceptable |
-| `EXEMPLAR_ONLY` | characteristic evidence, not an obligation |
-| `TOLERATED` | preserve it where present, do not generate it deliberately |
-| `INCIDENTAL` | observed, but not part of the standard |
-
-Separately, whether the exact form matters.
-
-```text
-STRICT · FUNCTIONALLY_EQUIVALENT · FLEXIBLE
-```
-
-This is what stops a recurring habit from becoming a hard rule by accident.
-
-### When a rule needs something the runtime does not have
-
-Some rules depend on evidence as well as judgment. *Cite one counted observation from our own
-records* is a real standard and it cannot be followed honestly by a model with no records.
-
-Ask it anyway and you do not get a refusal. You get *"I pulled our last 200 tickets, 63% of them
-were…"* Specific, confident, in your voice, and invented. The rule was followed. The condition that
-makes following it truthful was absent.
-
-So a requirement can name what it needs, and the run stops before the model is asked to solve an
-impossible problem.
-
-```bash
-atelier invoke --skill my-skill "Should we approve two more support agents?"
-
-atelier: MISSING_REQUIRED_EVIDENCE — nothing was generated.
-
-  p2  [REQUIRED]  needs RECORDS("support-ticket-history")
-      rule: I cite one specific counted observation from our own records
-
-  Bind the source:   --with support-ticket-history=./tickets.csv
-```
-
-Nothing was spent, because the absence was knowable before the call. A rule you marked PREFERRED in
-the same position does not stop the run; the behaviour simply does not fire, and Atelier says so
-rather than dropping it silently.
-
-Public work keeps its provenance too. If you adopt a behaviour inferred from someone else's work,
-Atelier records that you adopted it. It does not pretend you ratified that person's standard on their
-behalf.
-
-Every one of these decisions is written to an append-only ledger beside the standard, and the ledger
-stores **what you were shown**, not what survived. A rewrite keeps the original wording next to your
-replacement. A rejection is recorded as a rejection rather than as an absence. The standard can
-already tell you what is in it; only the ledger can tell you what a person was looking at and what
-they did about it, and that is not reconstructable afterwards.
-
-> **Atelier may discover a candidate. Only a person can make it authoritative.**
-
----
-
-## From standard to skill
-
-Atelier is a compiler, not a prompt template.
-
-Most standards need only:
-
-```text
-my-skill/
-└── SKILL.md
-```
-
-When the standard demands more, Atelier emits additional carriers:
-
-```text
-my-skill/
-├── SKILL.md
-├── examples/
-│   └── p4.md
-├── contracts/
-│   └── output.schema.json
-└── context-map.json
-```
-
-The compiler chooses the minimum implementation each ratified requirement needs.
-
-| carrier | used when |
-|---|---|
-| `PROSE` | the model should hold the behaviour while it works |
-| `SELF_CHECK` | the model should inspect its own draft before finishing |
-| `EXAMPLE` | showing the behaviour is more faithful than stating it |
-| `OUTPUT_CONTRACT` | the runtime can enforce the shape directly. Ask for one with a `shape` on a REQUIRED decision |
-| `NONE` | the human decided the behaviour is not part of the standard |
-
-Alongside the package, never inside it:
-
-```text
-assurance/
-└── manifest.json    requirement → carrier → emitted artifact
-```
-
-The manifest records what the compiler emitted. Delivery is measured separately, on the execution
-surface that actually ran. **A file existing on disk is not evidence that a model consumed it.** That
-distinction is enforced, because a system can look correct on disk while serving something materially
-different to the model.
-
-### Which parts of your standard this system can keep honest
-
-Not all of it, and `atelier build` tells you which is which instead of implying it can watch
-everything.
-
-```text
-How this standard can be maintained
-
-  p1    I open by rejecting the question's premise rather than answering it
-          observation: you read it
-  p2    I cite one counted observation from our own records
-          observation: no qualified check  (unblocks when "company-records" is bound)
-  p5    Every recommendation carries a verdict and a confidence
-          observation: automatic check
-
-  1 with an automatic check · 6 you would read yourself · 3 with no qualified check
-```
-
-This is not a quality score. A standard about judgment is mostly judgment, and a person is a valid
-way to check one. What it tells you is where Atelier can catch drift on its own and where it cannot,
-which is also what decides whether a repair can be adopted without you.
-
-**How a behaviour is caused and how it is measured are separate questions.** An output contract
-enforces a shape and says nothing about whether a number in it is true. A prose rule may be checkable
-by a test, by you, or by nothing at all. Atelier keeps the two apart rather than assuming a carrier
-implies a sensor.
-
----
-
-## The model is replaceable
-
-Discovery and execution are different jobs. You can learn a standard with one model and run it with
-another.
-
-```bash
-# Discover with the most capable model you can reach...
-atelier create ./goldens \
-  --discovery-provider anthropic \
-  --discovery-model claude-fable-5
-
-# ...then execute the compiled standard somewhere else, for a fraction of the cost.
-atelier invoke --skill my-skill \
-  --target-provider openai-compatible \
-  --target-base-url http://localhost:11434/v1 \
-  --target-model llama3.1 \
-  "Write the recommendation."
-```
-
-**Spend the capability on discovery.** Atelier is provider-agnostic by construction, and exactly one
-thing about it depends on the model: recovering tacit judgment from a corpus is a hard inference
-problem, and how much of it a run recovers tracks how capable the reading model is. That is not a
-limitation waiting to be engineered away. It is why the two halves are configured separately.
-Discovery happens once. Execution happens forever, and a small model running a compiled standard is
-a legitimate and much cheaper target.
-
-A weaker reader does not fail loudly. Two discovery runs over one corpus of five decision memos,
-same prompts, same held-out reserve, different reading model:
-
-| | capable reader | weaker reader |
-|---|---|---|
-| rules proposed | 14 | 11 |
-| the author's signature moves recovered | 4 of 4 | 2 of 4 |
-| rules stated as a decision the author makes | 14 of 14 | 3 of 11 |
-| cost | $0.52 | $0.005 |
-
-The weaker run returned a full set of confident, well-formed, plausible rules. What it returned was
-mostly the *subject matter*: prefer async paths, fix the form before hiring, treat budget as
-secondary. Those describe what the memos were about. Compiled, they produce a skill that applies
-"prefer async solutions" to a legal opinion, because nothing in the rule says it was ever about
-software. In all eleven it missed the author's most distinctive move, rejecting the question's
-premise before answering it.
-
-It also proposed a rule the author does not hold: *treat absence of evidence as evidence of absence*.
-The corpus does the opposite. A fallacy had been written in the author's voice, ready to be ratified
-because it reads plausibly.
-
-**This is the reason ratification is a gate and not a formality.** None of those eleven bind
-anything until a person says so, so a weak reader costs you a longer review rather than a confidently
-wrong standard. The protection is real and it is not total: the architecture stops an unratified rule
-from binding, and it cannot stop a person from approving a plausible one. Discover with the best
-model you can reach, and read the counterfactual on every candidate before you keep it.
-
-Any OpenAI-compatible backend works for either half. Named backends save you a URL.
-
-```bash
-atelier check --provider openai-compatible --backend openrouter \
-  --model anthropic/claude-opus-4 --api-key-env OPENROUTER_API_KEY
-```
-
-`openai` · `openrouter` · `groq` · `together` · `deepseek` · `fireworks` · `ollama` · `vllm` ·
-`llama-cpp`, and anything else through `--base-url`.
-
-Two flags exist because backends genuinely differ, and neither is guessed for you.
-
-| flag | when |
-|---|---|
-| `--strict-schema off` | the backend rejects `strict` schema enforcement. Many self-hosted servers do. The schema then instructs the model rather than validating it, which is weaker, and the run records which you used |
-| `--structured-output json-schema` | the backend accepts a tools array and ignores `tool_choice` |
-
-### What a call costs
-
-Atelier ships no rate card it can keep current. Prices change without notice and differ by region and
-contract, so a table would be stale on the day it shipped. The one that was here was 3x wrong for
-months. You give the rate, in USD per million tokens, and it applies to every provider equally.
-
-```bash
-atelier create ./goldens --price-in 3 --price-out 15 --cap 5
-```
-
-Without one, calls are `UNKNOWN_PRICING` rather than free, and a dollar cap that cannot bind refuses
-to pretend it can. Bound the run by count instead with `--max-calls`. A model running on your own
-machine is `LOCAL_UNMETERED`: nobody is billing, which is not the same as costing nothing.
-
-`StandardVersion` contains no provider and no model identity. The runtime that served a skill is
-tracked separately, so evidence earned by one model cannot silently transfer to another.
-
-That makes the standard portable. Discover with the best model available today, keep the standard, and
-move the implementation when models and runtimes change.
-
-Protocol compatibility is not proof of behavioural quality. Atelier keeps four questions separate.
-
-1. Can it reach the model?
-2. Does the model return the required structure?
-3. Is the cited evidence actually present in the source material?
-4. Is the inferred expert standard any good?
-
-The first three can be checked mechanically, and `atelier check` does exactly that against one backend.
-The fourth still needs human authority.
-
----
-
-## How a skill improves without moving the target
-
-The implementation can change. The standard cannot change itself.
-
-```bash
-atelier invoke --skill my-skill "..."        # produces an invocation id
-
-atelier improve --skill my-skill \
-  --invocation <id> \
-  --complaint "the opening is too abstract"
-
-atelier compare --skill my-skill --rule <requirementId>
-atelier promote --skill my-skill --candidate <hash> --why "it kept the concrete noun"
-atelier rollback --skill my-skill --to <version>
-```
-
-A repair starts from a real output and a concrete complaint. Atelier asks first whether the failure is
-already covered by the ratified standard.
-
-If it is, the implementation is at fault, and Atelier builds a new `SkillVersion`. If it is not, the
-desired target may have changed, and that decision goes back to the human.
-
-**Feedback is evidence, not authority.**
-
-Stability comes from the same separation. One bad output opens a candidate and cannot promote one. Ten
-regenerations of the same task count as one situation. A carrier only escalates when the same miss
-recurs across independent situations. And when the evidence cannot separate two candidates, Atelier
-asks for more instead of declaring a plateau.
-
-The long-term hypothesis is that this lets the implementation improve while the target stays stable.
-Models get better, scaffolding can shrink, and a skill can evolve without quietly changing what the
-expert meant by good.
-
-### Why `promote` makes you type a reason
-
-`compare` asks a model to order two outputs on one rule, blind, twice, with the sides exchanged. That
-model has never been checked against you. Its preference is one opinion, and the second run only
-establishes that it is a stable opinion rather than a reading of which text came first.
-
-`promote --why` is where that gets checked. Your choice and your sentence are written against the same
-pair the observer read, and `atelier judgements` shows where the two landed:
-
-```bash
-atelier judgements --skill my-skill              # the whole ledger
-atelier judgements --skill my-skill --rule p3    # one rule
-```
-
-```
-  agreed              34
-  disagreed           6
-  observer declined   5   (said EQUAL or that neither complied)
-  order-dependent     3   (its verdict flipped when the sides were exchanged)
-
-  85% agreement over 40 comparable pairs.
-```
-
-Three things about that report are deliberate.
-
-It prints no rate below thirty comparable pairs. A fraction over four decisions reads as a rate and is
-not one.
-
-It excludes the comparisons whose verdict flipped when the sides were exchanged. There the instrument
-has already told you its answer tracked position, and scoring that against your pick would move the
-count on a coin flip.
-
-It does not treat the rate as a qualification, and says so on the same screen. A pair only enters the
-ledger because the repair loop generated it and you ruled on it, so the number describes the observer
-on those pairs and not on your standard. Easy pairs dominate any such count, and an instrument that is
-really reading length or fluency will agree on most easy ones.
-
-The disagreements are the part worth reading. Six rows where the observer preferred one output, you
-preferred the other, and your own sentence sits underneath saying why will tell you what the instrument
-is actually measuring. In the run above, every disagreement had the observer preferring a candidate
-between 1.35× and 2.10× longer than the champion.
-
-The ledger fills from ordinary use. There is nothing to set up and no labelling session to schedule.
-
----
-
 ## What to expect
 
 Atelier is an open research and product preview. The full pipeline runs end to end today, and one honest caveat on that sentence: the automated suite covers the governance spine and the CLI surface, while the path from a folder of work to a served generation is exercised by hand rather than by a test that calls a model.
@@ -648,6 +244,29 @@ comparison that would separate compiling a ratified standard from competently su
 a skill induced by pointing a frontier model at the same work at matched token budget, has not been
 run.
 
+**The arms for that comparison now exist, and none of them is optional.** `atelier reference` fixes
+its arm set in code rather than taking it as a flag, because an omitted arm leaves no trace in a
+result and the arm most likely to be dropped is the one most likely to win. Six arms, every one of
+them compared:
+
+| arm | what it is | what a comparison against it answers |
+|---|---|---|
+| `B0_BARE` | the task alone | the floor: does any of this beat asking with no standard |
+| `B1_CORPUS_IN_PROMPT` | the same corpus, pasted in | does the pipeline beat the cheapest thing a competent person would try |
+| `B2_MODEL_STYLE_GUIDE` | a model reads the corpus and writes its own guide | **is this a ratified standard working, or any competent summary working** |
+| `B3_STANDARD_AS_PROSE` | the ratified rules as flat text, no carriers | does compiling add anything over the standard itself |
+| `B4_EXPERT_ONE_PAGER` | what the expert writes in half an hour | does it beat the person's own attempt at their rules |
+| `T_ATELIER` | the compiled package, served as bytes | — |
+
+Two of these need an input the system cannot invent. `B4` requires `--one-pager`, and the run refuses
+rather than generating a stand-in: a baseline authored by the thing being measured is not a baseline.
+`B2` costs one extra call to write the guide, counted in the estimate before anything is spent.
+
+These arms have never been run against a real expert. That run is the next thing that would move any
+claim here, and the arithmetic for sizing it is in
+[M2_PRICING_STUDY_CLOSE.md](studies/M2_PRICING_STUDY_CLOSE.md) §4: 17 contexts resolved Δ ≥ 0.24
+while the effects worth finding were 0.13–0.24, so the next design needs roughly 36 to 62.
+
 **Ratification demonstrably changes what a model does.** Twelve identical statements compiled twice,
 once as unratified observations and once as ratified requirements, served to the same model on 30
 unseen topics: the required structure appeared 11 of 30 times against 29 of 30. Everything but one
@@ -673,7 +292,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-61 files and 923 tests. It exercises the governance spine, the compiler, the renderer, delivery
+61 files and 930 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -831,65 +450,3 @@ so.
 └── sessions/<project>-<hash>.json    one run in flight per project
 ```
 
-## Architecture
-
-A requirement is five separate questions, and keeping them separate is most of the design. Each
-column arrived from something that went wrong rather than from a diagram drawn in advance.
-
-```text
-                            REQUIREMENT
-   ┌────────────┬─────────────┬───────────────┬────────────┬──────────────┐
-   ▼            ▼             ▼               ▼            ▼
-authority   appliesWhen   prerequisites    carrier     observation
-who says    when it       what must        how the     how anyone
-it binds    applies       exist first      behaviour   would know it
-                                           is caused   happened
-```
-
-Collapse any two and you get a familiar failure. Fold observation into carrier and a schema starts
-claiming a citation is true. Fold prerequisites into judgment and a model invents the evidence a rule
-demanded. Fold authority into recurrence and a habit becomes law.
-
-The core is provider and host neutral, and a boundary test keeps it that way.
-
-```text
-core/discovery/       evidence-backed candidate decisions, across framings
-core/coverage/        weak support, blind spots, unresolved boundaries
-core/ratification/    append-only human authority: what you saw, and what you did
-core/architecture/    requirement → minimum carrier, and decisions apart from their realizations
-core/delivery/        what each execution surface actually delivers, per carrier
-core/state/           the six objects, prerequisites, and the request binding
-core/runtime/         provider, model and configuration binding
-core/inference/       the one seam a model reaches through, and the budget that bounds it
-renderers/            SkillPackage generation
-adapters/             host installation
-providers/            inference backends
-```
-
-Four identities, and every one of them exists because assuming it was the same as another cost
-something.
-
-```text
-StandardVersion     what good means             human-owned, immutable, content-addressed
-SkillVersion        how one model produces it   machine-owned, replaceable
-RuntimeBinding      what actually served it     observed, never inherited across a change
-InvocationRequest   what was actually asked     bound, and proven equal to what was served
-```
-
-### Contributing, and what the checks are for
-
-```bash
-npm ci
-npm run typecheck     # strict, plus four flags beyond it
-npm run lint          # type-aware; every disabled rule states its reason
-npm test              # the suite
-npm run build         # what a user installs
-```
-
-CI runs exactly those four and then runs the built binary. The tests worth reading first are
-witnesses rather than units. `tests/atelier-carrier-delivery.test.ts` proves a compiled contract
-reaches the provider. `tests/atelier-reachability.test.ts` walks the import graph and refuses to let
-a module go dark without someone writing down why. `tests/atelier-documented-claims.test.ts` holds
-this file to what the code actually does, which is why the commands above are the commands that exist.
-
-MIT.

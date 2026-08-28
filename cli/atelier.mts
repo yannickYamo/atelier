@@ -12,7 +12,7 @@
  * This file is dispatch and nothing else. Each command lives in `commands/`, and what they share
  * lives in `runtime.ts`.
  */
-import { cmd, argv, die, loadSession, saveSession } from './runtime.js';
+import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir } from './runtime.js';
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands/ratify.js';
@@ -96,6 +96,16 @@ const main = async (): Promise<void> => {
       const s = loadSession();
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  studies [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
+      console.log(`project ${projectDir()}`);
+      // Runs are keyed by the project PATH, so a moved or renamed directory shows an empty run here
+      // while the old one still exists under its old name. Naming the others is the difference
+      // between a recoverable situation and a baffling one.
+      const others = listSessions().filter((x) => !x.here);
+      if (others.length) {
+        console.log(`\n${others.length} other run(s) in flight under this store:`);
+        for (const o of others) console.log(`  ${o.projectDir ?? '(project not recorded)'}`);
+        console.log('  Working in one of those? cd there, or set ATELIER_PROJECT_DIR to it.');
+      }
       return;
     }
     case 'abort': {

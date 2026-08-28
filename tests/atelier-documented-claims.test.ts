@@ -16,7 +16,11 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const read = (f: string): string => readFileSync(f, 'utf8');
-const DOCS = ['README.md', 'CONTRIBUTING.md', 'ACCEPTANCE.md'] as const;
+// The README was split into a front door plus six design documents under docs/. Every one of them
+// is shipped in the package and linked from the README, so a command or a number stated in any of
+// them is stated to a user. Reading only the README would let a claim escape review by moving.
+const DOCS: readonly string[] = ['README.md', 'CONTRIBUTING.md', 'ACCEPTANCE.md', 'MEASUREMENTS.md',
+  ...readdirSync('docs').filter((f) => f.endsWith('.md')).map((f) => join('docs', f))];
 const allDocs = DOCS.map(read).join('\n');
 
 const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true })
@@ -76,6 +80,15 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
   // MAT and FORM are ratification vocabulary and moved with the ratification commands when
   // discover.ts was split. The variable was already named `ratify`, which is how the seam showed.
   const ratify = read('cli/commands/ratify.ts');
+
+  /**
+   * README PLUS docs/, because the property is that a reader can FIND the vocabulary, not that it
+   * sits in one file. The README was split at 895 lines into a front door and six design documents;
+   * asserting against the README alone would have forced the vocabulary to stay in the front door
+   * purely to keep a test green, which is the test dictating the documentation's shape.
+   */
+  const prose = (): string => ['README.md', ...readdirSync('docs').filter((f) => f.endsWith('.md'))
+    .map((f) => join('docs', f))].map(read).join('\n');
   const listFrom = (src: string, decl: string): string[] => {
     const m = new RegExp(`const ${decl} = \\[([^\\]]+)\\]`).exec(src);
     return m ? [...m[1].matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]) : [];
@@ -84,13 +97,13 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
   it('materiality', () => {
     const code = listFrom(ratify, 'MAT');
     expect(code.length, 'MAT no longer parses out of the source').toBe(5);
-    for (const v of code) expect(read('README.md'), `${v} is accepted and undocumented`).toContain(v);
+    for (const v of code) expect(prose(), `${v} is accepted and undocumented`).toContain(v);
   });
 
   it('realization tolerance', () => {
     const code = listFrom(ratify, 'FORM');
     expect(code.length).toBe(3);
-    for (const v of code) expect(read('README.md')).toContain(v);
+    for (const v of code) expect(prose()).toContain(v);
   });
 
   it('carriers, and all five are named where a reader chooses between them', () => {
@@ -102,7 +115,7 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
     expect(decl, 'the Carrier union no longer parses out of its owner').not.toBeNull();
     const carriers = [...(decl?.[1] ?? '').matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]);
     expect(carriers.sort()).toEqual(['EXAMPLE', 'NONE', 'OUTPUT_CONTRACT', 'PROSE', 'SELF_CHECK']);
-    for (const c of carriers) expect(read('README.md'), `carrier ${c} is undocumented`).toContain(c);
+    for (const c of carriers) expect(prose(), `carrier ${c} is undocumented`).toContain(c);
   });
 
   it('nothing declares a second Carrier union to drift from the first', () => {
@@ -115,10 +128,27 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
       .toEqual(['core/architecture/compile.ts']);
   });
 
+  it('every arm the reference run can generate is named in the prose', () => {
+    // Three arms were declared in code, compared by nothing, and mentioned in no document, so the
+    // omission was invisible from either side. Naming them is what lets a reader notice the set
+    // changed. The union is read from its owner rather than restated here.
+    const armsSrc = read('core/reference/arms.ts')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const decl = /export type ArmId =([\s\S]*?);/.exec(armsSrc);
+    expect(decl, 'the ArmId union no longer parses out of its owner').not.toBeNull();
+    const arms = [...(decl?.[1] ?? '').matchAll(/'([A-Z0-9_]+)'/g)].map((x) => x[1]);
+    expect(arms.length, 'no arms parsed — the assertion below would be vacuous').toBeGreaterThanOrEqual(6);
+
+    const text = prose();
+    const undocumented = arms.filter((a) => !text.includes(a));
+    expect(undocumented, `arms a run can generate that no document names:\n${undocumented.join('\n')}`)
+      .toEqual([]);
+  });
+
   it('the decision verbs a reader is offered are the ones ratify accepts', () => {
     const accepted = /\[('APPROVE', 'REWRITE', 'CONTEXTUAL')\]\.includes\(dec\)/.exec(ratify);
     expect(accepted, 'the accepted-decision list has moved; re-point this test').not.toBeNull();
-    for (const v of ['APPROVE', 'REWRITE', 'CONTEXTUAL', 'REJECT']) expect(read('README.md')).toContain(v);
+    for (const v of ['APPROVE', 'REWRITE', 'CONTEXTUAL', 'REJECT']) expect(prose()).toContain(v);
   });
 });
 
