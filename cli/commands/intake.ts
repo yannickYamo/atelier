@@ -188,7 +188,32 @@ export function intake(path: string, workType: string): void {
     .map((r) => ({ id: r.file, path: join(base, r.file), kind: kindOf.get(r.file) }));
   const items = usableRead.map((r) => ({ id: r.file, contentHash: sha(r.text), tokens: Math.ceil(r.text.length / 4) }));
   const corpusHash = sha(items.map((i) => i.contentHash).join('|'));
-  const ev: ExpertEvidence = { evidenceId: sha(`ev|${corpusHash}`), workType, items, corpusHash, sealedAt: new Date().toISOString(), aiAssisted: null, published: null };
+  // ── THE ONE FIELD DOCUMENTED AS CHANGING EVERY RESULT WAS NEVER ASKED FOR ────────────────────
+  //
+  // `aiAssisted` carries the comment "declared, never inferred — it changes what any result means",
+  // and this line hardcoded it to null for the life of the command. A corpus was sealed, a standard
+  // discovered from it, and the author only mentioned afterwards that roughly half the prose was
+  // AI-assisted — which is exactly the fact that decides whether "discovered from expert work" means
+  // what a reader takes it to mean.
+  //
+  // NULL REMAINS A VALID STATE and is not treated as false. "Nobody asked" and "the author says no"
+  // are different, and a run that quietly recorded the first as the second would let an undeclared
+  // corpus be reported as clean. So it is declared here or it stays unknown, loudly.
+  const aiAssisted = argv.includes('--ai-assisted') ? true
+    : argv.includes('--no-ai-assist') ? false
+      : null;
+  const ev: ExpertEvidence = { evidenceId: sha(`ev|${corpusHash}`), workType, items, corpusHash, sealedAt: new Date().toISOString(), aiAssisted, published: null };
+
+  if (aiAssisted === null) {
+    console.log('\n  provenance UNDECLARED. Nobody has said whether this work was AI-assisted, and it');
+    console.log('  changes what a discovered rule means: a pattern found in machine-assisted prose may');
+    console.log('  be the assistant\'s habit rather than yours. Ratification still makes the standard');
+    console.log('  yours — you approve each rule — but "discovered from your work" is a weaker claim.');
+    console.log('  Declare it:  --ai-assisted   or   --no-ai-assist\n');
+  } else if (aiAssisted) {
+    console.log('\n  provenance: AI-ASSISTED, declared. Recorded on the evidence, and it travels with');
+    console.log('  every result derived from this corpus.\n');
+  }
 
   // ── RESERVE BEFORE ANYTHING READS ────────────────────────────────────────────────────────
   //
