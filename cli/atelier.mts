@@ -31,6 +31,19 @@ import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 
+/**
+ * EVALUATION SURFACE, NOT PRODUCT SURFACE.
+ *
+ * `study` runs the measurement apparatus: sealing suites, scoring observers against a human key,
+ * auditing whether a standard permits a valid carrier test. Every one of those is something WE do
+ * to Atelier, never something a user does to their own work — being asked to hand-label thirty
+ * sentences out of context is a bad experience and it is not what anyone installed this for.
+ *
+ * It still dispatches, because the alternative is a second binary that drifts from this one and an
+ * apparatus measuring code the product does not run. It is simply not offered.
+ */
+const EVAL_ONLY: readonly string[] = ['study'];
+
 /** Every command the dispatcher answers. Exported so a test can pin it against the docs. */
 export const COMMANDS: readonly string[] = [
   'abort',
@@ -146,7 +159,7 @@ const main = async (): Promise<void> => {
       // The list is derived from the dispatch table rather than typed out beside it. The hand-written
       // version had drifted to omit nine registered commands, including `promote` and `confirm`,
       // which other commands tell the user to run.
-      const known = COMMANDS.join(' · ');
+      const known = COMMANDS.filter((c) => !EVAL_ONLY.includes(c)).join(' · ');
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}".\n  commands: ${known}`);
       }
