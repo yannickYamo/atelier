@@ -19,6 +19,40 @@ import type { InferenceClient, Budget, InferenceResult } from '../core/inference
 const budget = (): Budget => ({ spentUsd: 0, capUsd: 5, maxCalls: 200 });
 
 /** Returns a fixed json payload for every call, and counts how often it was asked. */
+/** Genuinely unrelated scenarios — no shared vocabulary above the ceiling. Written out rather than
+ *  templated because a template shares its own boilerplate and trips the gate it is meant to dodge. */
+const DISTINCT: readonly string[] = [
+  'configure a wireless router for a small dental practice',
+  'draft an apology email about a delayed furniture shipment',
+  'summarise quarterly revenue trends for the board',
+  'plan a three-day hiking route through volcanic terrain',
+  'write release notes for a photo editing application',
+  'explain compound interest to a teenager saving money',
+  'outline safety procedures for handling laboratory reagents',
+  'compose a product description for handmade ceramic bowls',
+  'review a rental agreement clause about pet ownership',
+  'design an onboarding checklist for warehouse staff',
+  'troubleshoot why a sourdough starter stopped rising',
+  'prepare talking points about municipal parking reform',
+];
+
+/** Distinct tasks per call. The diversity gate is live, so a stub repeating one task is refused —
+ *  correct behaviour, and tested separately below rather than incidentally everywhere. */
+const varyingStub = (): InferenceClient & { calls: number } => {
+  const c = {
+    calls: 0,
+    complete: (): Promise<InferenceResult> => {
+      c.calls++;
+      return Promise.resolve({
+        json: { task: DISTINCT[(c.calls - 1) % DISTINCT.length] },
+        modelId: 'stub', inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0,
+        cost: { billingUsd: 0 }, costUsd: 0, logprobs: null, termination: { kind: 'COMPLETE' },
+      } as InferenceResult);
+    },
+  };
+  return c;
+};
+
 const stub = (json: unknown): InferenceClient & { calls: number } => {
   const c = {
     calls: 0,
@@ -164,12 +198,10 @@ describe('generation invents the situation and never the verdict', () => {
   it('copies the expectation from the obligation rather than taking one back', async () => {
     // The generator is shown the expectation so it can build the right situation. It has no channel
     // to send a different one back: the schema accepts one field, and only `task` is read.
-    const cases = await generateCases(
-      stub({ task: 'a realistic request', expectation: 'SOMETHING THE MODEL MADE UP' }),
-      budget(), obligations, 'writing');
+    const cases = await generateCases(varyingStub(), budget(), obligations, 'writing');
     expect(cases).not.toBeInstanceOf(GenerationRefused);
     if (cases instanceof GenerationRefused) return;
-    for (const [i, c] of cases.entries()) {
+    for (const [i, c] of cases.cases.entries()) {
       expect(c.expectation).toBe(obligations[i].expectation);
       expect(c.obligationId).toBe(obligations[i].obligationId);
       expect(c.observation).toBe(obligations[i].observation);
@@ -184,10 +216,30 @@ describe('generation invents the situation and never the verdict', () => {
   });
 
   it('a generated suite seals, because every case claims a real obligation', async () => {
-    const cases = await generateCases(stub({ task: 'a request' }), budget(), obligations, 'writing');
+    const cases = await generateCases(varyingStub(), budget(), obligations, 'writing');
     if (cases instanceof GenerationRefused) throw new Error('refused');
-    const s = sealSuite(v, cases);
+    const s = sealSuite(v, cases.cases);
     expect(s).not.toBeInstanceOf(SuiteRefused);
+  });
+
+  it('REFUSES a generator that keeps returning the same scenario, and says which it collided with', async () => {
+    // The failure this gate exists for: asked the same question with no memory, a generator
+    // converges. One frozen suite had 13 near-duplicate pairs, ALL of them in the arm that carried
+    // the finding, so eight "independent" contexts were about three scenarios.
+    const r = await generateCases(stub({ task: 'write a short tagline for cold brew coffee' }),
+      budget(), obligations, 'writing');
+    expect(r).toBeInstanceOf(GenerationRefused);
+    expect((r as GenerationRefused).message).toMatch(/too similar to/);
+    expect((r as GenerationRefused).message).toMatch(/Nothing was sealed/);
+  });
+
+  it('the ledger records what was refused, so the exclusions stay auditable', async () => {
+    const r = await generateCases(varyingStub(), budget(), obligations, 'writing',
+      { validate: (task) => Promise.resolve(task.includes('dental') ? 'mentions the rule' : null) });
+    if (r instanceof GenerationRefused) throw new Error('refused');
+    // Rejections are part of the artifact rather than a line on stderr.
+    expect(r.rejected.some((x) => x.why === 'mentions the rule')).toBe(true);
+    expect(r.diversity.length).toBeGreaterThanOrEqual(r.cases.length);
   });
 });
 
