@@ -68,7 +68,10 @@ const scriptedProvider = (opts: { failing: string; repaired?: boolean }): Infere
 
       let json: unknown;
       if (role === 'generate') {
-        json = { task: `a realistic request derived from: ${r.userMessage.slice(0, 40)}` };
+        // Unrelated scenarios, not a template: the diversity gate is live in generateCases, and a
+        // stub whose tasks share boilerplate is refused — which is the gate working, not a bug.
+        json = { task: GENERATED_TASKS[calls.filter((c) => c.role === 'generate').length - 1]
+          ?? `an unrelated request number ${calls.length}` };
       } else if (role === 'produce') {
         json = { output: r.stableBlock ? 'output produced under a compiled skill' : 'bare output' };
       } else {
@@ -94,6 +97,21 @@ const scriptedProvider = (opts: { failing: string; repaired?: boolean }): Infere
 };
 
 const budget = (): Budget => ({ spentUsd: 0, capUsd: 10, maxCalls: 500 });
+
+const GENERATED_TASKS: readonly string[] = [
+  'configure a wireless router for a small dental practice',
+  'draft an apology email about a delayed furniture shipment',
+  'summarise quarterly revenue trends for the board',
+  'plan a three-day hiking route through volcanic terrain',
+  'write release notes for a photo editing application',
+  'explain compound interest to a teenager saving money',
+  'outline safety procedures for handling laboratory reagents',
+  'compose a product description for handmade ceramic bowls',
+  'review a rental agreement clause about pet ownership',
+  'design an onboarding checklist for warehouse staff',
+  'troubleshoot why a sourdough starter stopped rising',
+  'prepare talking points about municipal parking reform',
+];
 
 const ctxFor = (task: string): ArmContext => ({
   task, maxTokens: 1200, toolName: 'emit_output',
@@ -131,10 +149,10 @@ describe('the whole loop, driven end to end', () => {
     const generated = await generateCases(client, b, obligations, STANDARD.workType);
     expect(generated).not.toBeInstanceOf(GenerationRefused);
     if (generated instanceof GenerationRefused) return;
-    expect(generated).toHaveLength(obligations.length);
+    expect(generated.cases).toHaveLength(obligations.length);
 
     // ── 3. sealed and split before anything runs ──────────────────────────────────────────────
-    const suite = sealSuite(STANDARD, generated);
+    const suite = sealSuite(STANDARD, generated.cases);
     expect(suite).not.toBeInstanceOf(SuiteRefused);
     if (suite instanceof SuiteRefused) return;
     expect(suite.searchCaseIds.length).toBeGreaterThan(0);
@@ -225,7 +243,7 @@ describe('the whole loop, driven end to end', () => {
     const obligations = obligationsForStandard(STANDARD);
     const generated = await generateCases(client, b, obligations, STANDARD.workType);
     if (generated instanceof GenerationRefused) throw new Error('refused');
-    const suite = sealSuite(STANDARD, generated);
+    const suite = sealSuite(STANDARD, generated.cases);
     if (suite instanceof SuiteRefused) throw new Error('refused');
 
     const arch = compileArchitecture(STANDARD);
