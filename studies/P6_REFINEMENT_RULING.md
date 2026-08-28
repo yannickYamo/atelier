@@ -71,3 +71,31 @@ sufficient context — and the refined wording frozen before any of it is genera
 2. **Observer qualification** — can any instrument recover those judgments? A property of the instrument.
 3. **Carrier effect** — only then, and only if 1 holds. If 2 fails but 1 holds, the study proceeds
    with blind expert scoring: a target only a person can see is still a target.
+
+---
+
+## Fresh validation — the refined wording's core claim holds
+
+18 fresh passages, full-paragraph context (median 54 words), none from the development set
+`08c71ed1c87adb4e`, admissibility checked by `atelier study validate`. **10 YES, 7 NO, 1 UNSURE.**
+
+**THE DECISIVE TEST WAS LENGTH.** The original wording said the move is short and aphoristic; the
+refined wording says length is irrelevant. On cases the author had never judged:
+
+| | YES rate |
+|---|---|
+| short sentences (≤16 words) | 3 of 7 — **43%** |
+| long sentences | 7 of 10 — **70%** |
+
+Length does not predict the judgment, and the trend runs **opposite** to the original rule. The
+refined discriminant survives its first contact with unseen cases.
+
+**Abstention fell from 17% to 6%.** One case in eighteen, against four in twenty-four. The question
+is now answerable from what is shown, which is what full-paragraph context and a restated question
+were for — and it is the cleanest evidence that the earlier 30% abstention was a property of the
+elicitation rather than of the rule.
+
+**This is not yet extension STABILITY.** That requires the author to reproduce the same boundary on
+the same cases at a later sitting, which has not been done. What is established is narrower and
+still worth having: the refined rule's central claim is not contradicted by fresh data, and the
+original rule's central claim would have been.
