@@ -111,7 +111,8 @@ const runArm = async (
     out.push(await runCase(client, b, c, async (task) => {
       const r = await client.complete(requestFor(bytes === null ? 'BARE' : 'INITIAL', bytes, ctxFor(task)));
       const o = (r.json as { output?: unknown }).output;
-      return typeof o === 'string' ? o : '';
+      const text = typeof o === 'string' ? o : '';
+      return { output: text, validity: text.trim() ? 'COMPLETE' as const : 'EMPTY' as const };
     }));
   }
   return out;

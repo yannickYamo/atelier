@@ -132,13 +132,17 @@ export async function contract(): Promise<void> {
         // provider may return anything. Coercing an object here would serve "[object Object]" to
         // the reader as though it were the skill's work.
         const out = (r.json as { output?: unknown }).output;
-        return typeof out === 'string' ? out : '';
+        const text = typeof out === 'string' ? out : '';
+        // Completeness is reported by whoever made the request, because only they can know it. A
+        // structured tool call that came back parseable is complete by construction; an empty one is
+        // not an answer.
+        return { output: text, validity: text.trim() ? 'COMPLETE' as const : 'EMPTY' as const };
       });
       outcomes.push(outcome);
       if (arm !== 'BARE') {
-        const mark = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
-          APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed' }[outcome.verdict];
-        console.log(`  ${c.caseId}  ${mark.padEnd(14)} ${c.obligationId}`);
+        const MARKS: Record<string, string> = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
+          APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed', EXECUTION_INVALID: 'NOT RUN' };
+        console.log(`  ${c.caseId}  ${(MARKS[outcome.verdict] ?? '?').padEnd(14)} ${c.obligationId}`);
       }
     }
     return outcomes;
