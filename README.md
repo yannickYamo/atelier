@@ -184,6 +184,34 @@ told to follow, a schema the runtime enforces, or **nothing at all** — and `pl
 which, per rule, with the reason. A requirement that reaches the model through nothing looks
 identical to every other one in your standard; here it says so.
 
+### Then check whether the implementation actually carries it
+
+```bash
+atelier contract --skill focus            # generate, seal, run the search half
+atelier contract --skill focus --holdout  # once, at the end
+```
+
+Your standard decides what must be tested, not a model. Each rule places **obligations** derived from
+its own typed fields: a positive rule owes a case where the behaviour must appear, a prohibition owes
+one where it must not, a conditional rule owes a case where its condition is **absent** — the test
+that catches a rule firing everywhere — and rules that both apply everywhere owe an interaction,
+which is where skills usually break. A model is then asked to invent a realistic *situation* for each
+obligation. It is never asked what passing means.
+
+Two kinds of looking are reported separately and never merged:
+
+```text
+decided: 2 passed, 0 failed          (a machine-checkable shape; a verdict)
+read by an unqualified reader: 5 appear to pass, 1 appears to fail
+                                      (guides diagnosis; certifies nothing)
+```
+
+**These are constructed challenges, not samples of real work.** They tell you whether the
+implementation carries the standard you authored. They do not estimate how often it will succeed in
+deployment, and no confidence interval over them would mean anything — which is why the result
+carries counts and no rate. Evidence about deployment comes from `atelier reference`, run against an
+expert's real held-out work.
+
 `--kind` is asked rather than defaulted, because there is no safe guess: a rule meaning *do this*
 recorded as a prohibition reaches the model as a rule against doing it, and nothing would tell you.
 
@@ -340,7 +368,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-64 files and 974 tests. It exercises the governance spine, the compiler, the renderer, delivery
+65 files and 988 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier

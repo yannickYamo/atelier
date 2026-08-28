@@ -167,9 +167,28 @@ export interface ContractResult {
   readonly suiteHash: string;
   readonly skillVersionHash: string;
   readonly role: SuiteRole;
+  /**
+   * Decided by a QUALIFIED observer — today, only a machine-checkable shape.
+   *
+   * These are the only outcomes that may be spoken of as passing or failing without hedging.
+   */
   readonly passed: readonly string[];
   readonly failed: readonly string[];
-  /** ran, but nothing qualified could say whether it passed */
+  /**
+   * An UNQUALIFIED reader looked and formed a view.
+   *
+   * Separate from `passed`/`failed` because the difference is the whole authority model, and one
+   * list holding both is how an unqualified reading gets quoted later as a result. This is real
+   * information: it is what a diagnosis works from, and what tells an optimizer which way to move.
+   * It certifies nothing, it cannot promote anything, and no count of it is a measurement.
+   *
+   * A previous version of this type had one `unobservable` bucket, which conflated "nothing could
+   * look at this" with "something looked and has no standing". Those are different states and only
+   * one of them is useful.
+   */
+  readonly apparentPass: readonly string[];
+  readonly apparentFail: readonly string[];
+  /** nothing looked at all — no shape to check and no reader run */
   readonly unobservable: readonly string[];
   readonly obligationsCovered: number;
   readonly obligationsTotal: number;
@@ -182,10 +201,16 @@ export interface ContractResult {
  * only wanted the numbers. It says "constructed" every time on purpose.
  */
 export function describeContractResult(r: ContractResult): string {
-  const ran = r.passed.length + r.failed.length + r.unobservable.length;
-  return `${r.passed.length} of ${ran} constructed case(s) passed on the ${r.role.toLowerCase()} half`
-    + `, ${r.unobservable.length} unobservable`
+  const ran = r.passed.length + r.failed.length
+    + r.apparentPass.length + r.apparentFail.length + r.unobservable.length;
+  const qualified = r.passed.length + r.failed.length;
+  return `${ran} constructed case(s) on the ${r.role.toLowerCase()} half`
     + `, covering ${r.obligationsCovered} of ${r.obligationsTotal} obligation(s).`
+    + `\n  decided: ${r.passed.length} passed, ${r.failed.length} failed  (of ${qualified} a qualified `
+    + 'observer could judge — today that means a machine-checkable shape)'
+    + `\n  read by an unqualified reader: ${r.apparentPass.length} appear to pass, `
+    + `${r.apparentFail.length} appear to fail  (guides diagnosis; certifies nothing)`
+    + `\n  nothing looked: ${r.unobservable.length}`
     + '\n  These are constructed challenges derived from the standard, not independent samples of real'
     + ' work. They say whether the implementation carries the standard. They do not estimate how often'
     + ' it will succeed in deployment, and no confidence interval over them would mean anything.';

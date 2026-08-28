@@ -16,6 +16,7 @@ import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir } fr
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
+import { contract } from './commands/contract.js';
 import { pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands/ratify.js';
 import { build, revert } from './commands/build.js';
 import { confirmBoundary } from './commands/confirm.js';
@@ -32,6 +33,7 @@ import { enrol, terminate, type Run } from '../core/state/run-state.js';
 export const COMMANDS: readonly string[] = [
   'abort',
   'plan',
+  'contract',
   'add',
   'amend',
   'answer',
@@ -94,6 +96,7 @@ const main = async (): Promise<void> => {
     case 'profiles': { profiles(); return; }
     case 'carriers': { carriers(); return; }
     case 'plan': { plan(); return; }
+    case 'contract': return contract();
     case 'reference': return reference();
     case 'status': {
       const s = loadSession();
