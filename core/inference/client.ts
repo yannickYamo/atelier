@@ -85,8 +85,81 @@ export const inferenceTimeoutMs = (maxTokens: number): number => Math.max(120_00
  */
 export const INFERENCE_MAX_RETRIES = 2;
 
+// ─── HOW A GENERATION ENDED, AS A VALUE, OWNED IN ONE PLACE ────────────────────────────────────
+//
+// This exists because a study reported behaviour that had never happened. 54 of 144 generations were
+// cut off at the token limit before an answer was written, the observer read the fragments as
+// choices, and a coverage effect was published from them and later retracted. The provider knew. It
+// said `stop_reason: "max_tokens"` on every one of those calls, and this interface threw the fact
+// away — it was read once, to interpolate into an error string.
+//
+// NEVER INFER TERMINATION FROM THE TEXT. Only the caller that made the request can know whether the
+// provider stopped it, and a runner that guesses from the output is guessing at exactly the thing
+// that must not be guessed. That is the invariant this type exists to make structural.
+//
+// PROVIDER-NEUTRAL BY CONSTRUCTION. `stop_reason` is Anthropic's vocabulary and `finish_reason` is
+// OpenAI's; they do not share values and neither belongs in core. Normalisation happens at the
+// adapter boundary and nothing upstream ever sees a vendor string except inside `OTHER`, which
+// carries it verbatim so an unmapped value can be diagnosed rather than silently flattened.
+export type InferenceTermination =
+  /** the model finished on its own terms. Behaviour may be read from this. */
+  | { readonly kind: 'COMPLETE' }
+  /** stopped at the token limit. Nothing about behaviour can be read from it. */
+  | { readonly kind: 'MAX_TOKENS' }
+  /** the provider suppressed the response */
+  | { readonly kind: 'CONTENT_FILTER' }
+  /** the model declined */
+  | { readonly kind: 'REFUSAL' }
+  /** a value this build does not know. Kept verbatim rather than guessed at. */
+  | { readonly kind: 'OTHER'; readonly providerValue: string };
+
+/**
+ * A FORCED TOOL CALL THAT ENDED IN A TOOL CALL IS `COMPLETE`, NOT ITS OWN KIND.
+ *
+ * Every request this system makes sets `tool_choice`, so `stop_reason: "tool_use"` is the SUCCESS
+ * path and not a distinct outcome. Giving it a separate kind would make every successful call
+ * non-COMPLETE, and any consumer written as `kind === 'COMPLETE'` would then reject all real work.
+ * The distinction a caller actually needs is whether an answer was FINISHED, and by that question
+ * `tool_use` and `end_turn` are the same event.
+ */
+export const isReadableTermination = (t: InferenceTermination): boolean => t.kind === 'COMPLETE';
+
+/**
+ * Raised when a generation did not finish, so no partial artifact can reach an observer.
+ *
+ * THIS THROWS RATHER THAN RETURNING, AND THAT IS DELIBERATE. `provider-conformance.ts` establishes
+ * failing closed as a property: a truncated structured output is not a partial answer, it is an
+ * unparseable one, and an adapter that returns something anyway hands a half-object to a discovery
+ * run that records it as evidence. Returning termination as an ordinary value everywhere would
+ * reopen precisely that hazard for the fifteen callers who cannot act on it.
+ *
+ * So the fact is carried BY THE ERROR. Callers who must merely not record a fragment keep failing
+ * closed for free; the one caller that must COUNT truncations — a behavioural study, which needs to
+ * report "n of these never ran" rather than crash — catches this and reads `termination`.
+ */
+export class GenerationIncomplete extends Error {
+  constructor(
+    readonly termination: InferenceTermination,
+    readonly detail: string,
+    /** what the call had produced when it stopped, for a budget probe to learn from */
+    readonly outputTokens: number | null = null,
+  ) {
+    super(detail);
+    this.name = 'GenerationIncomplete';
+  }
+}
+
+
 export interface InferenceResult {
   readonly json: unknown;
+  /**
+   * HOW THE PROVIDER SAYS THIS ENDED. Reported, never inferred.
+   *
+   * Present on every successful result so a consumer can assert on it rather than assume it. A
+   * generation that did not finish does not arrive here at all — it raises `GenerationIncomplete`,
+   * so a partial object cannot reach an observer by omission.
+   */
+  readonly termination: InferenceTermination;
   /**
    * The model the PROVIDER says answered, not the one we asked for. An alias resolves server-side,
    * and a binding that recorded the request would be recording our intent rather than what ran.

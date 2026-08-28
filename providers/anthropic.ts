@@ -8,11 +8,30 @@
 // the instructions are marked cache_control and the corpus is not.
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { InferenceClient, InferenceRequest, InferenceResult } from '../core/inference/client.js';
-import { budgetUsd, inferenceTimeoutMs, INFERENCE_MAX_RETRIES } from '../core/inference/client.js';
+import type { InferenceClient, InferenceRequest, InferenceResult, InferenceTermination } from '../core/inference/client.js';
+import { budgetUsd, inferenceTimeoutMs, INFERENCE_MAX_RETRIES, GenerationIncomplete } from '../core/inference/client.js';
 import { ANTHROPIC_PRICING, costOf, priceFor, type Pricing } from './pricing.js';
 
 export type { Pricing } from './pricing.js';
+
+/**
+ * Anthropic's `stop_reason` vocabulary, mapped to the one core understands.
+ *
+ * Exported because a mapping that can only be exercised through a paid API call is a mapping nobody
+ * checks. `null` happens on a streaming-shaped response and is not a completion.
+ *
+ * `tool_use` is COMPLETE: every request here forces a tool call, so ending in one is the success
+ * path. See `isReadableTermination`.
+ */
+export const anthropicTermination = (stopReason: string | null): InferenceTermination => {
+  switch (stopReason) {
+    case 'end_turn': case 'stop_sequence': case 'tool_use': return { kind: 'COMPLETE' };
+    case 'max_tokens': return { kind: 'MAX_TOKENS' };
+    case 'refusal': return { kind: 'REFUSAL' };
+    default: return { kind: 'OTHER', providerValue: stopReason ?? 'null' };
+  }
+};
+
 export class AnthropicInferenceClient implements InferenceClient {
   private readonly client: Anthropic;
   constructor(private readonly modelId: string, apiKey?: string, private readonly pricing: Pricing | null = priceFor(ANTHROPIC_PRICING, modelId)) {
@@ -60,10 +79,25 @@ export class AnthropicInferenceClient implements InferenceClient {
       timeout: inferenceTimeoutMs(req.maxTokens),
     });
 
+    const u = res.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+    const termination = anthropicTermination(res.stop_reason);
+
+    // TERMINATION IS CHECKED BEFORE THE PAYLOAD, and the order is the point. Asking "is there a
+    // tool_use block?" first turns a truncation into "the schema was not satisfied" — a content
+    // failure that reads as the model's fault, on a call the model was never allowed to finish.
+    // That misattribution is what a retracted coverage effect was built on.
+    if (termination.kind !== 'COMPLETE') {
+      throw new GenerationIncomplete(termination,
+        termination.kind === 'MAX_TOKENS'
+          ? `the model stopped at the ${req.maxTokens}-token limit before completing the object. `
+            + 'A truncated structured output is not a partial answer, it is an unparseable one. Nothing was recorded.'
+          : `the model stopped for "${termination.kind === 'OTHER' ? termination.providerValue : termination.kind}" before completing the object. Nothing was recorded.`,
+        u.output_tokens);
+    }
+
     const block = res.content.find((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use');
     if (!block) throw new Error(`inference returned no tool_use block (stop_reason: ${res.stop_reason}). The schema was not satisfied.`);
 
-    const u = res.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
     const usage = {
       inputTokens: u.input_tokens, cacheReadTokens: u.cache_read_input_tokens ?? 0,
       cacheWriteTokens: u.cache_creation_input_tokens ?? 0, outputTokens: u.output_tokens,
@@ -74,6 +108,6 @@ export class AnthropicInferenceClient implements InferenceClient {
     // NULL, AND IT IS A PROTOCOL FACT RATHER THAN AN OMISSION. The Messages API does not expose
     // per-token logprobs, so an instrument that reads a distribution cannot run on this adapter. It
     // must say which backend it needs instead of quietly producing a weaker reading here.
-    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null };
+    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination };
   }
 }

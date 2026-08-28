@@ -45,5 +45,8 @@ export const anInvocation = (o: Partial<InvocationRecord> & { invocationId: stri
 export const anInferenceResult = (o: Partial<InferenceResult> = {}): InferenceResult => ({
   json: null, modelId: 'test-model', inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1,
   cost: { basis: 'API_METERED', billingUsd: 0 }, costUsd: 0,
+  // A fixture models a provider that ANSWERED. A test needing a truncation must say so explicitly,
+  // because the whole point of the type is that completeness is never assumed.
+  termination: { kind: 'COMPLETE' },
   ...o,
 });

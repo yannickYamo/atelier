@@ -22,8 +22,8 @@
 // rather than by annotation: stable first, variable second, which is what a prefix cache rewards
 // anyway. Nothing in the contract had to change to say that.
 
-import type { InferenceClient, InferenceRequest, InferenceResult } from '../core/inference/client.js';
-import { budgetUsd, inferenceTimeoutMs } from '../core/inference/client.js';
+import type { InferenceClient, InferenceRequest, InferenceResult, InferenceTermination } from '../core/inference/client.js';
+import { budgetUsd, inferenceTimeoutMs, GenerationIncomplete } from '../core/inference/client.js';
 import { OPENAI_COMPATIBLE_PRICING, costOf, isLocalBackend, priceFor, type Pricing } from './pricing.js';
 
 /**
@@ -102,6 +102,21 @@ export const BACKEND_PRESETS: Readonly<Record<string, { baseUrl: string; tokenLi
 };
 
 /** Named so an error can say which capability was missing rather than "something went wrong". */
+
+/**
+ * OpenAI's `finish_reason` vocabulary, mapped to the one core understands. Exported so the mapping
+ * is checkable without a backend. `tool_calls` is COMPLETE for the same reason `tool_use` is on the
+ * Anthropic side: the request forced one, so ending in one is success.
+ */
+export const openAiTermination = (finishReason: string | null | undefined): InferenceTermination => {
+  switch (finishReason) {
+    case 'stop': case 'tool_calls': case 'function_call': return { kind: 'COMPLETE' };
+    case 'length': return { kind: 'MAX_TOKENS' };
+    case 'content_filter': return { kind: 'CONTENT_FILTER' };
+    default: return { kind: 'OTHER', providerValue: finishReason ?? 'null' };
+  }
+};
+
 export class CapabilityUnsupported extends Error {
   constructor(readonly capability: string, readonly backend: string, detail: string) {
     super(`${backend} does not support ${capability}. ${detail}\n`
@@ -199,15 +214,21 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
 
     // ── EVERY WAY THIS CAN FAIL, NAMED ─────────────────────────────────────────────────────────
     if (choice?.message?.refusal) {
-      throw new Error(`${this.backend} refused the request: ${choice.message.refusal}. No candidates were produced.`);
+      throw new GenerationIncomplete({ kind: 'REFUSAL' },
+        `${this.backend} refused the request: ${choice.message.refusal}. No candidates were produced.`);
     }
-    if (finish === 'length') {
-      throw new Error(
+    // TERMINATION BEFORE PAYLOAD. A call the backend never let finish must not be reported as a
+    // content failure, and the fact must travel as a typed value so a study can COUNT it.
+    const termination = openAiTermination(finish);
+    if (termination.kind === 'MAX_TOKENS') {
+      throw new GenerationIncomplete(termination,
         `${this.backend} stopped at the ${req.maxTokens}-token limit before completing the object.\n`
-        + `  A truncated structured output is not a partial answer, it is an unparseable one. Nothing was recorded.`);
+        + `  A truncated structured output is not a partial answer, it is an unparseable one. Nothing was recorded.`,
+        res.usage?.completion_tokens ?? null);
     }
-    if (finish === 'content_filter') {
-      throw new Error(`${this.backend} filtered the response (finish_reason: content_filter). Nothing was recorded.`);
+    if (termination.kind === 'CONTENT_FILTER') {
+      throw new GenerationIncomplete(termination,
+        `${this.backend} filtered the response (finish_reason: content_filter). Nothing was recorded.`);
     }
 
     const raw = this.mode === 'FORCED_TOOL_CALL'
@@ -249,7 +270,7 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
       ? lp.map((t) => ({ token: t.token, logprob: t.logprob,
           top: (t.top_logprobs ?? []).map((a) => ({ token: a.token, logprob: a.logprob })) }))
       : null;
-    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs };
+    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs, termination };
   }
 
   private async post(body: unknown, maxTokens: number): Promise<ChatResponse> {

@@ -22,8 +22,8 @@
 // the first is not, and because three model-based instruments in this programme produced zero
 // abstentions across 150 observations when asked the first kind of question.
 
-import type { InferenceClient, Budget } from '../inference/client.js';
-import { spend } from '../inference/client.js';
+import type { InferenceClient, Budget, InferenceTermination } from '../inference/client.js';
+import { spend, isReadableTermination, GenerationIncomplete } from '../inference/client.js';
 import type { ContractTestCase, ContractResult, ContractTestSuite, SuiteRole } from './suite.js';
 
 export const READER_SYSTEM = `You report what an output DOES. You do not decide whether it is good.
@@ -76,6 +76,8 @@ export interface CaseOutcome {
   readonly caseId: string;
   readonly output: string;
   readonly validity: GenerationValidity;
+  /** why the provider says it ended. Kept so a filtered call is never reported as an empty answer. */
+  readonly termination?: InferenceTermination;
   readonly verdict: 'PASS' | 'FAIL' | 'APPARENT_PASS' | 'APPARENT_FAIL' | 'UNOBSERVED' | 'EXECUTION_INVALID';
   /** the span an unqualified reader quoted, or the validation error from a shape check */
   readonly evidence: string | null;
@@ -90,6 +92,33 @@ export interface CaseOutcome {
  * guessing at exactly the thing that must not be guessed.
  */
 export type RunSkill = (task: string) => Promise<{ output: string; validity: GenerationValidity }>;
+
+/**
+ * THE ONE PLACE COMPLETENESS IS DECIDED, AND IT READS THE PROVIDER RATHER THAN THE TEXT.
+ *
+ * Every caller that used to write `text.trim() ? 'COMPLETE' : 'EMPTY'` was inferring termination
+ * from the artifact, which is the guess this whole type exists to forbid — a model that stops one
+ * token into a fluent sentence produces text that trims to something, and the guess says COMPLETE.
+ *
+ * `text` still matters, but only AFTER the provider has said the generation finished: a call that
+ * ended cleanly and returned nothing is a real empty answer rather than an interrupted one.
+ */
+export const validityFrom = (t: InferenceTermination, text: string): GenerationValidity => {
+  if (!isReadableTermination(t)) return t.kind === 'MAX_TOKENS' ? 'TRUNCATED' : 'EMPTY';
+  return text.trim() ? 'COMPLETE' : 'EMPTY';
+};
+
+/**
+ * Turns the adapter's fail-closed raise back into a countable outcome, for the ONE caller that must
+ * count rather than abort: a study reporting "n of these never ran".
+ *
+ * Anything that is not an incomplete generation rethrows. A runner that swallowed every error would
+ * turn a broken API key into a wall of EXECUTION_INVALID rows and call it data.
+ */
+export const validityFromError = (e: unknown): GenerationValidity => {
+  if (e instanceof GenerationIncomplete) return validityFrom(e.termination, '');
+  throw e;
+};
 
 /** Deterministic: does the output parse, and does it carry every declared key? */
 const checkShape = (output: string, expectation: string): { ok: boolean; why: string } => {

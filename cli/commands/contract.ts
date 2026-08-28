@@ -26,7 +26,10 @@ import { obligationsForStandard } from '../../core/contract/obligation.js';
 import { generateCases, GenerationRefused } from '../../core/contract/generate.js';
 import { sealSuite, searchCases, describeContractResult, SuiteRefused,
   type ContractTestSuite } from '../../core/contract/suite.js';
-import { runCase, foldOutcomes, type CaseOutcome } from '../../core/contract/run.js';
+import { runCase, foldOutcomes, validityFrom, validityFromError, type CaseOutcome } from '../../core/contract/run.js';
+import { budgetFromProbe, budgetFromOverride, describeBudget, CensoredProbe,
+  type BudgetProvenance, type ProbeObservation } from '../../core/contract/budget-probe.js';
+import { GenerationIncomplete } from '../../core/inference/client.js';
 import { requestFor, type ContractArm, type ArmContext, type ComparisonIdentity } from '../../core/contract/arm.js';
 import { bindingHash } from '../../core/runtime/binding.js';
 import { proposeRepair, assertSameTarget } from '../../core/contract/repair.js';
@@ -118,25 +121,78 @@ export async function contract(): Promise<void> {
 
   const { servedText } = resolveServedSkill(name);
 
+  // ── THE GENERATION BUDGET IS ESTABLISHED BEFORE ANYTHING IS SCORED ───────────────────────────
+  //
+  // A probe runs the first cases at a deliberately generous cap and asks one question: did anything
+  // get cut off? If yes the probe is CENSORED and cannot say how long the work is — every truncated
+  // observation is a lower bound, not a length — so the preflight is rerun and the study is not
+  // started. `--max-tokens` skips the probe and is recorded as supplied rather than measured, so no
+  // report can later call it a measurement.
+  const override = flag('--max-tokens') === undefined ? null : numericFlag('--max-tokens', 0);
+  const PROBE_CAP = numericFlag('--probe-cap', 16_000);
+  const PROBE_N = Math.min(3, toRun.length);
+
+  const probeOne = async (task: string): Promise<ProbeObservation> => {
+    try {
+      const r = await client.complete(requestFor('BARE', null, {
+        task, maxTokens: PROBE_CAP, toolName: 'emit_output',
+        toolDescription: 'Produce the requested work.', schema: OUTPUT_SCHEMA,
+      }));
+      return { outputTokens: r.outputTokens, censored: r.termination.kind === 'MAX_TOKENS' };
+    } catch (e) {
+      if (e instanceof GenerationIncomplete && e.termination.kind === 'MAX_TOKENS') {
+        return { outputTokens: e.outputTokens ?? PROBE_CAP, censored: true };
+      }
+      throw e;
+    }
+  };
+
+  let budgetProv: BudgetProvenance;
+  if (override !== null) {
+    budgetProv = budgetFromOverride(override);
+  } else {
+    const probe: ProbeObservation[] = [];
+    for (const c of toRun.slice(0, PROBE_N)) probe.push(await probeOne(c.task));
+    try {
+      budgetProv = budgetFromProbe(probe, PROBE_CAP, { suiteHash: suite.suiteHash });
+    } catch (e) {
+      if (e instanceof CensoredProbe) die(`budget preflight refused: ${e.message}`);
+      throw e;
+    }
+  }
+  const maxTokens = budgetProv.maxTokens;
+  console.log(`  budget: ${describeBudget(budgetProv)}\n`);
+
   /** Every arm runs through this, so the only thing that can differ between them is the bytes. */
   const runArm = async (arm: ContractArm, bytes: string | null): Promise<CaseOutcome[]> => {
     const outcomes: CaseOutcome[] = [];
     for (const c of toRun) {
       const outcome = await runCase(client, budget, c, async (task) => {
         const ctx: ArmContext = {
-          task, maxTokens: 1200, toolName: 'emit_output',
+          // NOT A CONSTANT. This was 1200 for the life of the command, against a measured 6606-token
+          // median for a bare answer on a multi-step task, and it truncated 54 of 144 generations in
+          // a study whose result had to be retracted. The budget is now supplied by a preflight that
+          // is forbidden from estimating it off a censored sample.
+          task, maxTokens, toolName: 'emit_output',
           toolDescription: 'Produce the requested work.', schema: OUTPUT_SCHEMA,
         };
-        const r = await client.complete(requestFor(arm, bytes, ctx));
-        // The schema declares `output` as a string, but a schema is what was ASKED for and a
-        // provider may return anything. Coercing an object here would serve "[object Object]" to
-        // the reader as though it were the skill's work.
-        const out = (r.json as { output?: unknown }).output;
-        const text = typeof out === 'string' ? out : '';
-        // Completeness is reported by whoever made the request, because only they can know it. A
-        // structured tool call that came back parseable is complete by construction; an empty one is
-        // not an answer.
-        return { output: text, validity: text.trim() ? 'COMPLETE' as const : 'EMPTY' as const };
+        try {
+          const r = await client.complete(requestFor(arm, bytes, ctx));
+          // The schema declares `output` as a string, but a schema is what was ASKED for and a
+          // provider may return anything. Coercing an object here would serve "[object Object]" to
+          // the reader as though it were the skill's work.
+          const out = (r.json as { output?: unknown }).output;
+          const text = typeof out === 'string' ? out : '';
+          // Completeness comes from the PROVIDER, never from whether the text looks finished. The
+          // old `text.trim() ? COMPLETE : EMPTY` could not represent a truncation at all, which is
+          // how fragments reached an observer and were scored as behaviour.
+          return { output: text, validity: validityFrom(r.termination, text) };
+        } catch (e) {
+          // An incomplete generation is a countable outcome here, not an abort: a study must report
+          // "n never ran". Anything else rethrows — swallowing errors would turn a bad API key into
+          // a wall of EXECUTION_INVALID rows and call it data.
+          return { output: '', validity: validityFromError(e) };
+        }
       });
       outcomes.push(outcome);
       if (arm !== 'BARE') {

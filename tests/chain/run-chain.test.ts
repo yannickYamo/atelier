@@ -25,7 +25,7 @@ function fakeClient(onPropose: unknown, onObserve: unknown): InferenceClient & {
         ? { matches: Array.from({ length: n }, (_, i) => ({ leftIndex: i, matchedRightIndex: i })) }
         : isPropose ? onPropose : onObserve;
       return { json, modelId: 'fake', inputTokens: 1,
-        cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0 };
+        cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0, termination: { kind: 'COMPLETE' as const } };
     },
   };
 }

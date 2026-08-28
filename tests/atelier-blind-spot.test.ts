@@ -159,7 +159,7 @@ describe('the abstraction check is semantic and advisory', () => {
   it('defaults to ABSTRACTED when the instrument gives nothing — it must not reject on silence', async () => {
     const { checkAbstraction } = await import('../core/coverage/abstraction-check.js');
     const client = { async complete() {
-      return { json: null, modelId: 'f', inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0 };
+      return { json: null, modelId: 'f', inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0, termination: { kind: 'COMPLETE' as const } };
     } };
     const v = await checkAbstraction(client, { spentUsd: 0, capUsd: 1 }, 'anything');
     expect(v.abstracted).toBe(true);
