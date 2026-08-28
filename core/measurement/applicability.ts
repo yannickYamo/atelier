@@ -51,8 +51,23 @@ export interface ApplicabilityDecision {
 
 const UNCONDITIONAL = /^\s*GENERAL\s*$/i;
 
-/** Is this requirement unconditional by its own frozen words? */
-export const isUnconditional = (r: Requirement): boolean => UNCONDITIONAL.test(r.appliesWhen ?? '');
+/**
+ * Can the FROZEN TEXT ALONE prove this requirement governs, with nothing else consulted?
+ *
+ * DELIBERATELY STRICTER THAN `isGeneralScope`, and the divergence is the design rather than a bug.
+ * That owner answers "does this rule apply everywhere", for planning and for what a reader is shown.
+ * This one answers "may a case be counted as CLEAN EVIDENCE about whether the rule was followed",
+ * and the two mistakes are not symmetric. Reading `GENERAL, except on migrations` as unconditional
+ * costs a slightly wrong display; counting it as clean evidence puts a marginal case into a
+ * measurement as though it were decisive, which is how forced verdicts on cases that barely arise
+ * end up looking like an instrument that cannot judge.
+ *
+ * So exact text only. Anything with more in it than the word GENERAL is refused and left to an
+ * instrument or a person. The cases where the two owners disagree are enumerated in
+ * `tests/atelier-general-scope.test.ts`.
+ */
+export const canProveApplicableFromText = (r: Requirement): boolean =>
+  UNCONDITIONAL.test(r.appliesWhen ?? '');
 
 /**
  * Decide what the frozen text alone can decide.
@@ -62,7 +77,7 @@ export const isUnconditional = (r: Requirement): boolean => UNCONDITIONAL.test(r
  * wearing a deterministic name, and its guesses would enter the denominator as if they were facts.
  */
 export function resolveFromFrozenText(r: Requirement, contextId: string): ApplicabilityDecision {
-  return isUnconditional(r)
+  return canProveApplicableFromText(r)
     ? { requirementId: r.requirementId, contextId, state: 'APPLIES', decidedBy: 'FROZEN_TEXT',
         why: 'the requirement states it applies generally' }
     : { requirementId: r.requirementId, contextId, state: 'UNRESOLVED', decidedBy: 'FROZEN_TEXT',
@@ -84,14 +99,19 @@ export interface ApplicabilityCensus {
   readonly total: number;
   readonly unconditional: number;
   readonly conditional: number;
-  /** the share the frozen text alone declares unconditional */
-  readonly generalShare: number;
+  /**
+   * The share the frozen text alone PROVES unconditional.
+   *
+   * Not applicability density. `a_j = Pr_x[alpha_j(x)]` is a probability over deployment contexts;
+   * this is a count of declarations, computed by the stricter of the two owners. Nothing routes on it.
+   */
+  readonly provenGeneralShare: number;
 }
 
 /** What the standard says about its own conditionality — the number A2 is trying to move. */
 export function census(requirements: readonly Requirement[]): ApplicabilityCensus {
   const total = requirements.length;
-  const unconditional = requirements.filter(isUnconditional).length;
+  const unconditional = requirements.filter(canProveApplicableFromText).length;
   return { total, unconditional, conditional: total - unconditional,
-    generalShare: total ? unconditional / total : 0 };
+    provenGeneralShare: total ? unconditional / total : 0 };
 }

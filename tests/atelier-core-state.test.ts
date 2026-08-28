@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { newRun, transition, enrol, terminate, isEnrolled, type Run } from '../core/state/run-state.js';
-import { assertSourceIsNotAuthority, assertFeedbackDidNotMutate, assertSupersessionRecorded, unconfirmedRate, discoveryRecall, unconditionalRate, type StandardVersion, type Requirement } from '../core/state/canonical-state.js';
+import { assertSourceIsNotAuthority, assertFeedbackDidNotMutate, assertSupersessionRecorded, unconfirmedRate, discoveryRecall, declaredGeneralShare, type StandardVersion, type Requirement } from '../core/state/canonical-state.js';
 
 const at = (r: Run, s: Run['state']): Run => ({ ...r, state: s });
 const req = (o: Partial<Requirement> & { requirementId: string }): Requirement => ({
@@ -96,6 +96,6 @@ describe('GATE 3 — the materialization is never the authority', () => {
 
   it('reports the GENERAL rate without enforcing it', () => {
     const v = std({ requirements: [req({ requirementId: 'a' }), req({ requirementId: 'b', appliesWhen: 'when writing about herself' })] });
-    expect(unconditionalRate(v)).toBe(0.5);
+    expect(declaredGeneralShare(v)).toBe(0.5);
   });
 });

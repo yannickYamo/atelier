@@ -532,13 +532,25 @@ export const discoveryRecall = (v: StandardVersion): number =>
  *
  * Blank counts as GENERAL. A rule that names no condition applies always; that is the only reading
  * under which the two former behaviours agree, and it is the sensible one. Blankness is still a
- * smell, which is what `unconditionalRate` is for.
+ * smell, which is what `declaredGeneralShare` is for.
  */
 export const isGeneralScope = (appliesWhen: string): boolean => {
   const v = appliesWhen.trim();
   return v === '' || /^GENERAL\b/i.test(v);
 };
 
-/** Reported, not enforced: the share of rules that declined to name a condition. */
-export const unconditionalRate = (v: StandardVersion): number =>
+/**
+ * The share of rules whose text declined to name a condition.
+ *
+ * NOT APPLICABILITY DENSITY, and the distinction is load-bearing. The paper's `a_j = Pr_x[alpha_j(x)]`
+ * is a per-requirement probability over DEPLOYMENT CONTEXTS: how often a rule's condition actually
+ * holds in use. This is a per-standard count of DECLARATIONS: how many rules said GENERAL. Ten
+ * perfectly authored conditional rules score zero here while being perfectly articulable, so a low
+ * number says nothing about whether their author could state them.
+ *
+ * It is also not a substitute waiting for the real thing. `a_j` ranges over contexts that do not
+ * exist when a standard is written, so no applicability density is available at authoring time at
+ * all. Nothing may route on this.
+ */
+export const declaredGeneralShare = (v: StandardVersion): number =>
   v.requirements.length === 0 ? 0 : v.requirements.filter((r) => isGeneralScope(r.appliesWhen)).length / v.requirements.length;
