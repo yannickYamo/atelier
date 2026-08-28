@@ -18,6 +18,7 @@
 import * as store from '../../core/state/store.js';
 import { DATA, die, flag } from '../runtime.js';
 import { applicabilityModeOf, sourceModeOf, type Requirement } from '../../core/state/canonical-state.js';
+import { obligationsForStandard, coverageOf } from '../../core/contract/obligation.js';
 
 /** One row of `assurance/manifest.json`, as the renderer writes it. */
 interface ManifestFile {
@@ -91,6 +92,30 @@ export function plan(): void {
   if (unserved.length) {
     console.log(`\n${unserved.length} requirement(s) reach the model through nothing:`);
     for (const r of unserved) console.log(`  ${r.requirementId}  ${rows.get(r.requirementId)?.why ?? 'no manifest row'}`);
+  }
+
+  // ── WHAT THE STANDARD OBLIGES ANY IMPLEMENTATION TO DO ────────────────────────────────────────
+  //
+  // Derived from the standard with no model consulted, so this is available offline and says
+  // something the carrier table cannot: how much of what you wrote can be checked automatically.
+  // Usually the answer is "very little", and that is the honest starting point rather than a
+  // disappointment — a rule with no machine-checkable shape has no qualified observer, and saying so
+  // is what stops a semantic guess later being mistaken for a measurement.
+  const obligations = obligationsForStandard(v);
+  const cov = coverageOf(v);
+  const automatic = obligations.filter((o) => o.observation === 'DETERMINISTIC').length;
+  console.log(`\nobligations: ${obligations.length} across ${v.requirements.length} requirement(s)`
+    + `  ·  ${automatic} checkable without judgment  ·  ${obligations.length - automatic} need a person or an unqualified reader`);
+  for (const c of cov) {
+    if (c.obligationCount === 0) {
+      console.log(`  ${c.requirementId}  none — nothing is served for it, so there is nothing to require`);
+    } else {
+      console.log(`  ${c.requirementId}  ${c.obligationCount} obligation(s), ${c.automaticallyObservable} automatic`);
+    }
+  }
+  const interactions = obligations.filter((o) => o.kind === 'INTERACTION');
+  if (interactions.length) {
+    console.log(`  ${interactions.length} interaction(s) where two rules meet — the place skills usually fail`);
   }
 
   const withPrereqs = v.requirements.filter((r) => (r.prerequisites?.length ?? 0) > 0);

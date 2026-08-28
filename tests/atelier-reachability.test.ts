@@ -155,6 +155,14 @@ const PARKED: Readonly<Record<string, string>> = {
   'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
+  'core/contract/suite.ts':
+    'THE SEALING DISCIPLINE, PARKED AHEAD OF THE THING IT CONSTRAINS, AND DELIBERATELY SO. Obligations '
+    + 'are derived deterministically and are already live in `atelier plan`. Sealing a suite needs '
+    + 'generated CASES, and generating a task that puts a model in an obligation\'s situation needs a '
+    + 'model, which arrives with the escalation loop. What is built here is the constraint on that '
+    + 'loop rather than a feature waiting for a caller: the search/holdout split is fixed before an '
+    + 'optimizer exists, because a holdout chosen once failures are known is not a holdout. Building '
+    + 'the guard after the thing it guards is how it ends up shaped to permit what was already done.',
   'core/state/policy.ts':
     'Protocol policy resolution, forty-one lines, reachable only from the conformance test. Whether a '
     + 'protocol policy is a real axis or a generalisation nobody needed is still open.',
