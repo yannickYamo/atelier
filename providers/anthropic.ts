@@ -35,8 +35,19 @@ export class AnthropicInferenceClient implements InferenceClient {
       model: this.modelId,
       max_tokens: req.maxTokens,
       // STABLE first and cached; VARIABLE second and not. Reversing these still works and costs ~9x.
+      //
+      // AN EMPTY STABLE BLOCK IS OMITTED, NOT SENT EMPTY. The API rejects `cache_control` on an empty
+      // text block outright — "cache_control cannot be set for empty text blocks" — so a request with
+      // nothing to cache fails before it is answered.
+      //
+      // That is not a hypothetical shape. It is exactly what a BARE control arm sends: the condition
+      // with no Atelier-derived carrier at all. The whole arm was unrunnable against a real provider
+      // and no test saw it, because every test that exercises this path replaces the provider. The
+      // first live run found it on its first attempt.
       system: [
-        { type: 'text', text: req.stableBlock, cache_control: { type: 'ephemeral' } },
+        ...(req.stableBlock
+          ? [{ type: 'text' as const, text: req.stableBlock, cache_control: { type: 'ephemeral' as const } }]
+          : []),
         ...(req.variableBlock ? [{ type: 'text' as const, text: req.variableBlock }] : []),
       ],
       messages: [{ role: 'user', content: req.userMessage }],
