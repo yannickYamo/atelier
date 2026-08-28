@@ -51,7 +51,7 @@ else in these records has been altered, and no result depends on the identities.
 | | |
 |---|---|
 | [CONTRACT_LIFT_PREREGISTRATION.md](CONTRACT_LIFT_PREREGISTRATION.md) | Sealed before any context was generated. 24 contexts x 3 generations x 2 arms, endpoints and stopping rules fixed in advance, one amendment recorded before the freeze. |
-| [CONTRACT_LIFT_CLOSE.md](CONTRACT_LIFT_CLOSE.md) | **The M2 result reproduced on a different standard, task family and model.** Primary null (Δ = −0.021), and its components oppose: coverage +0.167, restraint −0.208. The bare model was perfect on restraint and the compiled skill broke it. More regressions than recoveries. The model reader abstains 29% of the time and is systematically permissive — 17 false passes, zero false fails — which is why it certifies nothing. |
+| [CONTRACT_LIFT_CLOSE.md](CONTRACT_LIFT_CLOSE.md) | **Coverage figures WITHDRAWN — see the negative-branch close.** **The M2 result reproduced on a different standard, task family and model.** Primary null (Δ = −0.021), and its components oppose: coverage +0.167, restraint −0.208. The bare model was perfect on restraint and the compiled skill broke it. More regressions than recoveries. The model reader abstains 29% of the time and is systematically permissive — 17 false passes, zero false fails — which is why it certifies nothing. |
 | [CONTRACT_LIFT_SUITE.json](CONTRACT_LIFT_SUITE.json) · [RESULTS](CONTRACT_LIFT_RESULTS.json) | The frozen contexts and the per-generation structural labels. Reproducible from these. |
 
 ### Can static prose carry a conditional rule?
@@ -59,6 +59,7 @@ else in these records has been altered, and no result depends on the identities.
 | | |
 |---|---|
 | [NEGATIVE_BRANCH_PREREGISTRATION.md](NEGATIVE_BRANCH_PREREGISTRATION.md) | Sealed before any context existed. The contract-lift study compiled a conditional rule that said when to apply and never what to do otherwise, so it tested a one-sided rendering rather than static prose as such. Three arms — BARE, STATIC, EXPLICIT — on 16 fresh contexts, with the success condition and the failure shape to watch for both stated in advance. |
+| [NEGATIVE_BRANCH_CLOSE.md](NEGATIVE_BRANCH_CLOSE.md) | **The primary passed: stating the otherwise-branch fully restored restraint** (0.708 → 1.000, Δ +0.292, CI [+0.083, +0.500], three recoveries and no regressions), for a one-sentence renderer change and no applicability engine. It also found the defect that **withdraws every coverage figure in both studies**: generations truncated by the thinking budget before an answer was written. Restraint outputs were never truncated, so those findings stand. |
 
 ### Why the obvious repair was not built
 
