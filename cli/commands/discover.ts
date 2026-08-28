@@ -215,13 +215,29 @@ export async function discover(): Promise<void> {
   // put a guess and a quotation under the same yes.
   const methodDocs = new Map(files.filter((f) => f.kind === 'METHODOLOGY').map((f) => [f.id, textOf(f.path)]));
   const pkgPath = join(DATA, 'skill-package.json');
+
+  // ── THE TASTE RUN IS PERSISTED BEFORE ANYTHING OPTIONAL RUNS ─────────────────────────────────
+  //
+  // It was saved AFTER the methodology block, which meant any failure below discarded a result the
+  // user had already paid for. The catch below states the rule in its own words — "a failed
+  // methodology check must not cost the taste run that already succeeded and was paid for" — and
+  // the read that threw sat one line ABOVE the try, so the single failure it was written to prevent
+  // was the one that happened: a stale `skill-package.json` left in the GLOBAL store by an
+  // unrelated project killed a fresh run after 39 held-out checks and lost all 13 proposals.
+  //
+  // Ordering is the fix, not a bigger try. Once inference has been spent, its result is written
+  // before any step that may fail, so no later refusal can reach back and delete it.
+  saveSession({ ...s, run: (t as { run: Run }).run, proposals });
+
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
-    const sp = readJson<{ absRoot: string; readable: string[] }>(pkgPath, { what: 'a source package', requireKeys: ['absRoot'] });
-    // checked against the WHOLE readable package, not just the SKILL.md — an obligation carried in a
-    // template is carried, and reporting it missing because we only looked at one file is a defect
-    // in the instrument reported as a defect in the skill.
-    const skillText = sp.readable.map((rel) => { const r = extract(join(sp.absRoot, rel)); return r.ok ? r.text : ''; }).join('\n\n');
     try {
+      // INSIDE the try. A malformed package is a reason to skip the methodology check, never a
+      // reason to end the command — and it is emphatically not a defect in the user's corpus.
+      const sp = readJson<{ absRoot: string; readable: string[] }>(pkgPath, { what: 'a source package', requireKeys: ['absRoot'] });
+      // checked against the WHOLE readable package, not just the SKILL.md — an obligation carried in a
+      // template is carried, and reporting it missing because we only looked at one file is a defect
+      // in the instrument reported as a defect in the skill.
+      const skillText = sp.readable.map((rel) => { const r = extract(join(sp.absRoot, rel)); return r.ok ? r.text : ''; }).join('\n\n');
       const mrun = await runMethodExtraction(client, budget, methodDocs, skillText, { standardDimensions: [ev.workType] });
       console.log(`\n${describeMethodRun(mrun)}  ($${mrun.costUsd.toFixed(3)})`);
       writeAtomic(join(DATA, 'method-findings.json'), JSON.stringify(mrun, null, 1));
@@ -232,7 +248,6 @@ export async function discover(): Promise<void> {
     }
   }
 
-  saveSession({ ...s, run: (t as { run: Run }).run, proposals });
   const b = proposals.filter((p) => p.kind === 'BOUNDARY').length;
   console.log(`\n${proposals.length} rule(s)${b ? `, ${b} of them boundaries` : ''}.  ($${budget.spentUsd.toFixed(3)})`);
   for (const p of proposals) {
