@@ -38,6 +38,17 @@ export interface Transition { readonly from: RunState; readonly to: RunState; re
 /** The legal graph as data — inspectable before it runs, unlike control flow. */
 export const TRANSITIONS: readonly Transition[] = [
   { from: 'EMPTY', to: 'CORPUS_SEALED' },
+  // DIRECT AUTHORING: a person went from nothing to a standard by writing it.
+  //
+  // The rest of this graph assumes a corpus is sealed before anything can be ratified, which is
+  // right when the standard is being RECOVERED — sealing is what binds the run to the work it was
+  // read from. There is nothing to bind when the author simply states their rules, and requiring a
+  // seal there meant `add` could record requirements that no later step would ever compile.
+  //
+  // This edge cannot be reached by accident on the discovered path: that run leaves EMPTY the moment
+  // its corpus is sealed, so this transition is no longer available to it. And it cannot produce an
+  // empty standard, because the close refuses when nothing was decided.
+  { from: 'EMPTY', to: 'RATIFIED' },
   { from: 'CORPUS_SEALED', to: 'LIST_SEALED', requiresStudy: 'DISCOVERY_STUDY' },
   { from: 'CORPUS_SEALED', to: 'PROPOSED' },          // product path: straight through
   { from: 'LIST_SEALED', to: 'PROPOSED' },

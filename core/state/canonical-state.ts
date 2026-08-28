@@ -242,7 +242,29 @@ export type AuthorityState = 'DRAFT' | 'RATIFIED';
 
 export interface StandardVersion {
   readonly standardVersionHash: string;
-  readonly evidenceId: string;
+  /**
+   * The sealed corpus this standard was recovered from, when there was one.
+   *
+   * NULL FOR A STANDARD ITS AUTHOR WROTE DIRECTLY, and that is a fact worth carrying rather than a
+   * hole to fill. A person stating "always lead with the next action" is exercising authority, not
+   * supplying evidence about themselves, and there is no corpus behind it to name. This was
+   * mandatory once, which made the whole direct-authoring path unreachable: rules could be added and
+   * never compiled, because the close demanded an evidence id that a directly authored standard
+   * cannot honestly produce.
+   *
+   * `discoveryRecall` reports 0% for such a standard, which is the truth and not a failure — the
+   * machine found none of it because a person wrote all of it.
+   */
+  readonly evidenceId: string | null;
+  /**
+   * WHAT KIND OF WORK THIS GOVERNS. Required on every path, including the direct one.
+   *
+   * It survives the evidence id becoming optional because it is not a fact about the corpus. It is
+   * what `defaultDescription` turns into the skill's description, which is the first thing a host
+   * reads when deciding whether to load the skill at all. Weakening it to follow the evidence id
+   * would quietly degrade skill-level triggering, which is a different problem from anything the
+   * corpus answers.
+   */
   readonly workType: string;
   readonly requirements: readonly Requirement[];
   /** DRAFT while any requirement is still DERIVED_UNRATIFIED. Derived, never asserted by a caller. */
@@ -552,5 +574,34 @@ export const isGeneralScope = (appliesWhen: string): boolean => {
  * exist when a standard is written, so no applicability density is available at authoring time at
  * all. Nothing may route on this.
  */
+/**
+ * WHERE THE CONTENT OF THIS STANDARD CAME FROM.
+ *
+ * DERIVED, never stored. Every requirement already carries its own `provenance`, so a second field
+ * at version level would be a second place the same fact could be settled, and the two would
+ * eventually disagree. `authorityStateOf` is the precedent: it reads authorities rather than being
+ * asserted alongside them.
+ *
+ * The distinction matters at the close, where a reader is told how much of what they are about to
+ * compile the machine proposed and how much they wrote themselves.
+ */
+export type SourceMode =
+  /** every requirement was written by its author. No corpus was read. */
+  | 'DIRECT'
+  /** every requirement came from reading work */
+  | 'DISCOVERED'
+  /** both, which is the ordinary case once a person starts adding to what was found */
+  | 'HYBRID'
+  /** nothing to characterise */
+  | 'EMPTY';
+
+const AUTHORED: ReadonlySet<Provenance> = new Set(['EXPERT_ADDED']);
+
+export const sourceModeOf = (v: StandardVersion): SourceMode => {
+  if (!v.requirements.length) return 'EMPTY';
+  const authored = v.requirements.filter((r) => AUTHORED.has(r.provenance)).length;
+  return authored === v.requirements.length ? 'DIRECT' : authored === 0 ? 'DISCOVERED' : 'HYBRID';
+};
+
 export const declaredGeneralShare = (v: StandardVersion): number =>
   v.requirements.length === 0 ? 0 : v.requirements.filter((r) => isGeneralScope(r.appliesWhen)).length / v.requirements.length;
