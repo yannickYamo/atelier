@@ -18,7 +18,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { isGeneralScope } from '../core/state/canonical-state.js';
+import { isGeneralScope, type Requirement } from '../core/state/canonical-state.js';
+import { canProveApplicableFromText } from '../core/measurement/applicability.js';
 
 describe('the values that used to be read two different ways', () => {
   it('the canonical spelling is general scope', () => {
@@ -88,6 +89,75 @@ describe('nothing re-implements the question', () => {
     const offenders = shipped()
       .filter((f) => /appliesWhen\s*[!=]==\s*'GENERAL'/.test(codeOf(f)));
     expect(offenders, `exact equality misses 'general' and ' GENERAL ':\n${offenders.join('\n')}`)
+      .toEqual([]);
+  });
+});
+
+describe('two owners, one question each, and the divergence is deliberate', () => {
+  // `isGeneralScope` asks "does this rule apply everywhere" — planning and display.
+  // `canProveApplicableFromText` asks "may a case count as CLEAN EVIDENCE about this rule" — and is
+  // stricter on purpose, because the two mistakes are not symmetric. A slightly wrong display costs
+  // little; a marginal case entering a measurement as decisive is how forced verdicts on cases that
+  // barely arise end up looking like an instrument that cannot judge.
+  //
+  // They were silently different before this was written down. Enumerating the disagreements is what
+  // turns a divergence into a decision.
+  const req = (appliesWhen: string): Requirement =>
+    ({ requirementId: 'r', statement: 's', appliesWhen } as Requirement);
+
+  it('agree wherever the text is plainly one thing or the other', () => {
+    for (const [text, expected] of [['GENERAL', true], ['general', true], ['  GENERAL  ', true],
+      ['when pricing enterprise deals', false]] as const) {
+      expect(isGeneralScope(text), text).toBe(expected);
+      expect(canProveApplicableFromText(req(text)), text).toBe(expected);
+    }
+  });
+
+  it('disagree on exactly these, and each disagreement is the stricter one refusing', () => {
+    const DIVERGENT = ['GENERAL, all contexts', 'GENERAL except in summaries', ''];
+    for (const text of DIVERGENT) {
+      expect(isGeneralScope(text), `${text}: planning should read this as general`).toBe(true);
+      expect(canProveApplicableFromText(req(text)), `${text}: evidence should refuse this`).toBe(false);
+    }
+  });
+
+  it('the strict owner never admits something the loose one refuses', () => {
+    // The asymmetry only runs one way. If it ever inverted, the conservative reading would be
+    // admitting evidence the display layer does not even consider in scope.
+    for (const text of ['GENERAL', 'general', '  GENERAL  ', 'GENERAL, all contexts', '',
+      'when pricing', 'generalise the claim']) {
+      if (canProveApplicableFromText(req(text))) {
+        expect(isGeneralScope(text), `${text}: strict admitted what loose refused`).toBe(true);
+      }
+    }
+  });
+});
+
+describe('nothing routes on a count of declarations', () => {
+  // `declaredGeneralShare` and `census().provenGeneralShare` count how many rules SAID general.
+  // The paper's a_j = Pr_x[alpha_j(x)] is a probability over deployment contexts. Ten perfectly
+  // authored conditional rules score zero on the first while being perfectly articulable, and the
+  // second is not measurable at authoring time at all, because the contexts do not exist yet.
+  // Reporting either is fine. Deciding anything on one is not.
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((e) => {
+    const p = join(dir, e);
+    if (statSync(p).isDirectory()) return e === 'node_modules' ? [] : walk(p);
+    return /\.m?ts$/.test(p) ? [p] : [];
+  });
+
+  const PLANNING = ['core/architecture', 'core/compiler', 'core/convergence', 'core/diagnosis'];
+
+  it('the scan can see the planning modules it is policing', () => {
+    expect(PLANNING.flatMap(walk).length).toBeGreaterThan(8);
+  });
+
+  it('no planning or compilation module reads a declared-general count', () => {
+    const offenders = PLANNING.flatMap(walk).filter((f) => {
+      const code = readFileSync(f, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      return /declaredGeneralShare|provenGeneralShare/.test(code);
+    });
+    expect(offenders, `a declaration count is not applicability density; do not decide on it:\n${offenders.join('\n')}`)
       .toEqual([]);
   });
 });

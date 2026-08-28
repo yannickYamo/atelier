@@ -6,7 +6,7 @@
  * marginal cases look exactly like an instrument that cannot judge.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveFromFrozenText, admitsEvidence, isUnconditional, census } from '../core/measurement/applicability.js';
+import { resolveFromFrozenText, admitsEvidence, canProveApplicableFromText, census } from '../core/measurement/applicability.js';
 import type { Requirement } from '../core/state/canonical-state.js';
 
 const req = (id: string, appliesWhen: string): Requirement => ({ requirementId: id,
@@ -53,13 +53,13 @@ describe('applicability gates evidence', () => {
 
   it('census reports the share A2 is trying to move', () => {
     const c = census([req('a', 'GENERAL'), req('b', 'GENERAL'), req('c', 'At conclusions')]);
-    expect(c.generalShare).toBeCloseTo(2 / 3);
+    expect(c.provenGeneralShare).toBeCloseTo(2 / 3);
     expect(c.conditional).toBe(1);
   });
 
-  it('isUnconditional is exact, not a prefix match', () => {
-    expect(isUnconditional(req('a', 'GENERAL'))).toBe(true);
-    expect(isUnconditional(req('a', ' general '))).toBe(true);
-    expect(isUnconditional(req('a', 'GENERAL except in summaries'))).toBe(false);
+  it('canProveApplicableFromText is exact, not a prefix match', () => {
+    expect(canProveApplicableFromText(req('a', 'GENERAL'))).toBe(true);
+    expect(canProveApplicableFromText(req('a', ' general '))).toBe(true);
+    expect(canProveApplicableFromText(req('a', 'GENERAL except in summaries'))).toBe(false);
   });
 });

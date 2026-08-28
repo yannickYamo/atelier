@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
-import { discoveryRecall, unconditionalRate, unconfirmedRate, authorityStateOf, isGeneralScope } from '../../core/state/canonical-state.js';
+import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, DATA, die, argv, flag, loadSession, saveSession, step, type Session } from '../runtime.js';
 import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationDecision as LedgerDecision } from '../../core/ratification/decision-record.js';
@@ -362,7 +362,7 @@ export function ratifyClose(): void {
   writeAtomic(join(DATA, 'pending-standard.json'), JSON.stringify(v, null, 1));
   if (stamped) writeAtomic(join(DATA, 'ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   console.log(`StandardVersion ${v.standardVersionHash} [${v.authorityState}]: ${kept.length} requirements.`);
-  console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  unconditional ${(unconditionalRate(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
+  console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  unconditional ${(declaredGeneralShare(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
   if (stamped?.records.length) {
     const su = survival(stamped);
     // RECORDED, as opposed to inferred from id gaps after the fact. The distinction is the point of
