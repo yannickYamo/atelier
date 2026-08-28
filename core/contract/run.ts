@@ -47,18 +47,49 @@ export const READER_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
+/**
+ * COMPLETENESS GATES BEHAVIOUR. A CUT-OFF ANSWER IS NOT AN ANSWER.
+ *
+ * A behavioural checker cannot tell "the model chose not to do X" from "the model was stopped before
+ * it could". Reading a truncated output returns a confident, well-formed, meaningless label, and it
+ * looks exactly like a real observation.
+ *
+ * This is not hypothetical. Two studies in this repository scored a coverage endpoint on generations
+ * that had been cut off at the token limit — 27 of 48 in one, 54 of 72 in the other — and both
+ * figures are withdrawn. The instrument failures this programme had catalogued until then were about
+ * JUDGMENT: an unqualified observer, a word list standing in for a grammatical property. This one is
+ * about EXECUTION COMPLETENESS, and it sits upstream of every semantic instrument, so no amount of
+ * care in the observer would have caught it.
+ *
+ * So an incomplete generation is its own verdict and never a behavioural one.
+ */
+export type GenerationValidity =
+  /** the model finished. Behaviour may be read from this. */
+  | 'COMPLETE'
+  /** stopped at the token limit. Nothing about behaviour can be read from it. */
+  | 'TRUNCATED'
+  /** no answer text at all */
+  | 'EMPTY';
+
 /** What running one case produced, before anything is aggregated. */
 export interface CaseOutcome {
   readonly caseId: string;
   readonly output: string;
-  readonly verdict: 'PASS' | 'FAIL' | 'APPARENT_PASS' | 'APPARENT_FAIL' | 'UNOBSERVED';
+  readonly validity: GenerationValidity;
+  readonly verdict: 'PASS' | 'FAIL' | 'APPARENT_PASS' | 'APPARENT_FAIL' | 'UNOBSERVED' | 'EXECUTION_INVALID';
   /** the span an unqualified reader quoted, or the validation error from a shape check */
   readonly evidence: string | null;
   readonly why: string;
 }
 
-/** Produces the output under test. Injected so a run can be driven without a provider. */
-export type RunSkill = (task: string) => Promise<string>;
+/**
+ * Produces the output under test. Injected so a run can be driven without a provider.
+ *
+ * Returns the completeness alongside the text, because only the caller that made the request knows
+ * whether the provider stopped it. A runner that inferred completeness from the text would be
+ * guessing at exactly the thing that must not be guessed.
+ */
+export type RunSkill = (task: string) => Promise<{ output: string; validity: GenerationValidity }>;
 
 /** Deterministic: does the output parse, and does it carry every declared key? */
 const checkShape = (output: string, expectation: string): { ok: boolean; why: string } => {
@@ -113,7 +144,14 @@ async function readUnqualified(
 export async function runCase(
   client: InferenceClient, budget: Budget, c: ContractTestCase, run: RunSkill,
 ): Promise<CaseOutcome> {
-  const output = await run(c.task);
+  const { output, validity } = await run(c.task);
+  if (validity !== 'COMPLETE') {
+    return { caseId: c.caseId, output, validity, verdict: 'EXECUTION_INVALID', evidence: null,
+      why: validity === 'TRUNCATED'
+        ? 'the generation was stopped at the token limit, so what the model would have done is '
+          + 'unknown. Scoring it would record the limit rather than the behaviour.'
+        : 'the generation produced no answer text.' };
+  }
   // FROM THE TYPED KIND, never from the prose. Reading "must not" out of the expectation made the
   // polarity depend on which casing an obligation happened to use, and would invert silently the
   // first time somebody reworded a sentence.
@@ -121,22 +159,22 @@ export async function runCase(
 
   if (c.observation === 'DETERMINISTIC') {
     const { ok, why } = checkShape(output, c.expectation);
-    return { caseId: c.caseId, output, verdict: ok ? 'PASS' : 'FAIL', evidence: null, why };
+    return { caseId: c.caseId, output, validity, verdict: ok ? 'PASS' : 'FAIL', evidence: null, why };
   }
 
   if (c.observation === 'HUMAN') {
-    return { caseId: c.caseId, output, verdict: 'UNOBSERVED', evidence: null,
+    return { caseId: c.caseId, output, validity, verdict: 'UNOBSERVED', evidence: null,
       why: 'this requirement is marked as needing a person, and no person has looked' };
   }
 
   const { holds, evidence } = await readUnqualified(client, budget, c, output);
   if (holds === 'UNCLEAR') {
-    return { caseId: c.caseId, output, verdict: 'UNOBSERVED', evidence,
+    return { caseId: c.caseId, output, validity, verdict: 'UNOBSERVED', evidence,
       why: 'an unqualified reader could not tell, which is a real answer and not a failure' };
   }
   const satisfied = negative ? holds === 'NO' : holds === 'YES';
   return {
-    caseId: c.caseId, output,
+    caseId: c.caseId, output, validity,
     verdict: satisfied ? 'APPARENT_PASS' : 'APPARENT_FAIL',
     evidence,
     why: `an unqualified reader answered ${holds} to a ${negative ? 'prohibition' : 'requirement'}. `

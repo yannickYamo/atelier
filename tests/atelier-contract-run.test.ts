@@ -56,7 +56,7 @@ const aCase = (over: Partial<ContractTestCase> = {}): ContractTestCase => ({
 describe('an unqualified reading never becomes a verdict', () => {
   it('a positive rule the reader says YES to is APPARENT_PASS, not PASS', async () => {
     const o = await runCase(stub({ holds: 'YES', evidence: 'the first line' }), budget(),
-      aCase(), () => Promise.resolve('some output'));
+      aCase(), () => Promise.resolve({ output: 'some output', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('APPARENT_PASS');
     expect(o.why).toMatch(/certifies nothing/);
   });
@@ -67,7 +67,7 @@ describe('an unqualified reading never becomes a verdict', () => {
     const o = await runCase(stub({ holds: 'YES', evidence: 'Let me know if...' }), budget(),
       aCase({ obligationKind: 'SHOULD_NOT_FIRE',
         expectation: 'the output must NOT do this: end with a generic offer' }),
-      () => Promise.resolve('...Let me know if you need anything else.'));
+      () => Promise.resolve({ output: '...Let me know if you need anything else.', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('APPARENT_FAIL');
   });
 
@@ -75,13 +75,13 @@ describe('an unqualified reading never becomes a verdict', () => {
     const o = await runCase(stub({ holds: 'NO', evidence: 'ends on the recommendation' }), budget(),
       aCase({ obligationKind: 'SHOULD_NOT_FIRE',
         expectation: 'the output must NOT do this: end with a generic offer' }),
-      () => Promise.resolve('...so ship it.'));
+      () => Promise.resolve({ output: '...so ship it.', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('APPARENT_PASS');
   });
 
   it('UNCLEAR is recorded as unobserved, not folded into a failure', async () => {
     const o = await runCase(stub({ holds: 'UNCLEAR', evidence: null }), budget(),
-      aCase(), () => Promise.resolve('x'));
+      aCase(), () => Promise.resolve({ output: 'x', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('UNOBSERVED');
     expect(o.why).toMatch(/real answer and not a failure/);
   });
@@ -90,14 +90,14 @@ describe('an unqualified reading never becomes a verdict', () => {
     // Three model-based instruments in this programme produced zero abstentions across 150
     // observations. A confident answer with no span behind it is the shape that produces.
     const o = await runCase(stub({ holds: 'YES', evidence: null }), budget(),
-      aCase(), () => Promise.resolve('x'));
+      aCase(), () => Promise.resolve({ output: 'x', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('UNOBSERVED');
   });
 
   it('a requirement needing a person is never read by a model at all', async () => {
     const client = stub({ holds: 'YES', evidence: 'anything' });
     const o = await runCase(client, budget(), aCase({ observation: 'HUMAN' }),
-      () => Promise.resolve('x'));
+      () => Promise.resolve({ output: 'x', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('UNOBSERVED');
     expect(client.calls, 'a model was asked about a requirement marked as needing a person').toBe(0);
   });
@@ -112,19 +112,19 @@ describe('a machine-checkable shape is decided without a model', () => {
   it('passes when every declared field is present, with no model consulted', async () => {
     const client = stub({});
     const o = await runCase(client, budget(), shapeCase,
-      () => Promise.resolve('{"verdict":"ship"}'));
+      () => Promise.resolve({ output: '{"verdict":"ship"}', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('PASS');
     expect(client.calls, 'a shape check consulted a model').toBe(0);
   });
 
   it('fails a missing declared field and says which', async () => {
-    const o = await runCase(stub({}), budget(), shapeCase, () => Promise.resolve('{"other":1}'));
+    const o = await runCase(stub({}), budget(), shapeCase, () => Promise.resolve({ output: '{"other":1}', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('FAIL');
     expect(o.why).toMatch(/missing declared field\(s\): verdict/);
   });
 
   it('fails output that is not JSON at all, rather than guessing', async () => {
-    const o = await runCase(stub({}), budget(), shapeCase, () => Promise.resolve('ship it'));
+    const o = await runCase(stub({}), budget(), shapeCase, () => Promise.resolve({ output: 'ship it', validity: 'COMPLETE' as const }));
     expect(o.verdict).toBe('FAIL');
     expect(o.why).toMatch(/not JSON/);
   });
@@ -137,7 +137,7 @@ describe('folding keeps the buckets separate', () => {
   const sealed = sealSuite(v, cases) as ContractTestSuite;
 
   const outcome = (caseId: string, verdict: CaseOutcome['verdict']): CaseOutcome =>
-    ({ caseId, output: 'o', verdict, evidence: null, why: 'w' });
+    ({ caseId, output: 'o', validity: 'COMPLETE', verdict, evidence: null, why: 'w' });
 
   it('apparent readings do not land in passed or failed', () => {
     const r = foldOutcomes(sealed, 'sv', 'SEARCH', [
@@ -188,5 +188,35 @@ describe('generation invents the situation and never the verdict', () => {
     if (cases instanceof GenerationRefused) throw new Error('refused');
     const s = sealSuite(v, cases);
     expect(s).not.toBeInstanceOf(SuiteRefused);
+  });
+});
+
+describe('a generation that did not finish is never scored as behaviour', () => {
+  // Two studies scored a coverage endpoint on generations cut off at the token limit, and both
+  // figures are withdrawn. A checker cannot tell "chose not to" from "was stopped before it could",
+  // and the label it returns looks exactly like a real observation.
+  it('a truncated generation is EXECUTION_INVALID, whatever the reader would have said', async () => {
+    const client = stub({ holds: 'YES', evidence: 'a span' });
+    const o = await runCase(client, budget(), aCase(),
+      () => Promise.resolve({ output: '# Setting Up Your New Router\n\n**1', validity: 'TRUNCATED' as const }));
+    expect(o.verdict).toBe('EXECUTION_INVALID');
+    expect(o.why).toMatch(/stopped at the token limit/);
+    expect(client.calls, 'a reader was asked about an answer that was never finished').toBe(0);
+  });
+
+  it('an empty generation is EXECUTION_INVALID', async () => {
+    const o = await runCase(stub({}), budget(), aCase(),
+      () => Promise.resolve({ output: '', validity: 'EMPTY' as const }));
+    expect(o.verdict).toBe('EXECUTION_INVALID');
+  });
+
+  it('completeness gates a shape check too, which needs no model at all', async () => {
+    const o = await runCase(stub({}), budget(),
+      aCase({ obligationKind: 'OUTPUT_SHAPE', observation: 'DETERMINISTIC',
+        expectation: 'the output must validate against the declared shape: {"v":{"type":"string"}}' }),
+      () => Promise.resolve({ output: '{"v":"x"', validity: 'TRUNCATED' as const }));
+    // Without the gate this reads as invalid JSON and scores FAIL — a real-looking verdict about a
+    // model that was cut off mid-object.
+    expect(o.verdict).toBe('EXECUTION_INVALID');
   });
 });
