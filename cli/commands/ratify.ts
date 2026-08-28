@@ -11,6 +11,7 @@
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
 import { join } from 'node:path';
+import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
@@ -164,8 +165,36 @@ export interface RatificationDecision {
 
 export function ratifyBatch(): void {
   const s = loadSession();
+
+  // ── A PAGE, WHEN THERE IS TOO MUCH TO HOLD IN A SCROLLBACK ───────────────────────────────────
+  //
+  // Ratification is the one step a machine may not do, and it was the worst served: twenty
+  // proposals scrolling past, each needing a five-way judgment, with the evidence for each one
+  // somewhere further up the buffer. `--page` writes the same decisions as a document where the
+  // proposal and the quotation it came from sit together, and hands back exactly the JSON
+  // `--decisions` accepts. Nothing is sent anywhere.
+  const pageOut = flag('--page');
+  if (pageOut !== undefined) {
+    const decidedSoFar = new Set(s.decided.map((d) => d.requirementId));
+    const pending = s.proposals.filter((p) => !decidedSoFar.has(p.requirementId));
+    if (!pending.length) return void die('nothing is awaiting a ruling.');
+    writeAtomic(pageOut, renderRatifyPage(pending, {
+      corpusHash: s.evidence?.corpusHash ?? 'unknown',
+      workType: s.evidence?.workType ?? 'work',
+      itemCount: s.evidence?.items?.length ?? 0,
+      // Said on the page rather than assumed: a run that fell back to a single pass has checked
+      // nothing against unread work, and the reader is entitled to know that while reading.
+      heldOutChecked: (s.run as { heldOutChecked?: boolean } | undefined)?.heldOutChecked !== false,
+    }));
+    console.log(`${pending.length} proposal(s) written to ${pageOut}`);
+    console.log('Open it, rule on each one, then press Copy rulings and pass them back:');
+    console.log("  atelier ratify --decisions '<paste>'");
+    return;
+  }
+
   const raw = flag('--decisions') ?? die('--decisions <json> required — array of '
-    + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?}');
+    + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?}'
+    + '\n  Or write a page you can read and mark up:  atelier ratify --page rulings.html');
   let list: RatificationDecision[];
   try { list = JSON.parse(raw) as RatificationDecision[]; } catch { return void die('--decisions is not valid JSON.'); }
 

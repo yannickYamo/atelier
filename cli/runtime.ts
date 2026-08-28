@@ -48,7 +48,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'labels', 'max-calls', 'model', 'name', 'note',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
-  'observation', 'out', 'probe-cap', 'prose', 'standard', 'target',
+  'observation', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'seed', 'suite',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'skill', 'source-author', 'statement', 'strict-schema',
