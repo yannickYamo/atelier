@@ -46,6 +46,14 @@ else in these records has been altered, and no result depends on the identities.
 | [ARM_E_PREREGISTRATION.md](ARM_E_PREREGISTRATION.md) · [RESULT](ARM_E_RESULT.md) | The expert-selected-examples arm. |
 | [CONTEXTUAL_GENERALIZATION_PREREGISTRATION.md](CONTEXTUAL_GENERALIZATION_PREREGISTRATION.md) | Generalization to unseen contexts. |
 
+### Does a compiled skill beat the bare model?
+
+| | |
+|---|---|
+| [CONTRACT_LIFT_PREREGISTRATION.md](CONTRACT_LIFT_PREREGISTRATION.md) | Sealed before any context was generated. 24 contexts x 3 generations x 2 arms, endpoints and stopping rules fixed in advance, one amendment recorded before the freeze. |
+| [CONTRACT_LIFT_CLOSE.md](CONTRACT_LIFT_CLOSE.md) | **The M2 result reproduced on a different standard, task family and model.** Primary null (Δ = −0.021), and its components oppose: coverage +0.167, restraint −0.208. The bare model was perfect on restraint and the compiled skill broke it. More regressions than recoveries. The model reader abstains 29% of the time and is systematically permissive — 17 false passes, zero false fails — which is why it certifies nothing. |
+| [CONTRACT_LIFT_SUITE.json](CONTRACT_LIFT_SUITE.json) · [RESULTS](CONTRACT_LIFT_RESULTS.json) | The frozen contexts and the per-generation structural labels. Reproducible from these. |
+
 ### Why the obvious repair was not built
 
 | | |

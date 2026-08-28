@@ -1,0 +1,173 @@
+{
+ "frozenAt": "2026-08-28T04:36:02.296Z",
+ "model": "claude-opus-5",
+ "rules": {
+  "x1": "Lead with the next action the reader must take, before any explanation.",
+  "x2": "Number multi-step work so the reader can stop and resume.",
+  "x3": "Never close with an offer of further help."
+ },
+ "contexts": [
+  {
+   "contextId": "ctx01",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "Our new hires keep messing up expense reimbursements. Write something for the onboarding packet that gets them from a paper receipt in hand to a submitted claim in Concur, including the manager approval part and what to do when a receipt is lost. Keep it short enough to read in five minutes."
+  },
+  {
+   "contextId": "ctx02",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I run a small pottery studio and members keep firing pieces wrong. Write a wall card that takes someone from a finished greenware mug to a glazed piece out of the second firing — drying time, bisque loading, glaze dipping, wax on the foot, kiln shelf placement. Assume they've never touched our kiln."
+  },
+  {
+   "contextId": "ctx03",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I volunteer at a community garden and people keep killing the drip irrigation. Write something I can laminate and hang in the shed so a newcomer can go from a dry system in spring to water running through all four beds — flushing the lines, hooking up the timer, checking pressure, spotting clogged emitters. They've never used it before."
+  },
+  {
+   "contextId": "ctx04",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I manage a community radio station and our volunteer hosts keep botching the handover between shows. Write something to tape inside the booth so someone arriving for their slot can get from walking in to being live on air — mic levels, logging in to the playout software, taking over from the previous host without dead air, and starting the legal ID. Assume it's their first solo shift."
+  },
+  {
+   "contextId": "ctx05",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I run a mobile dog grooming van and my new groomer keeps rushing intake. Write a card for the van wall covering everything from the client opening their door to the dog being safely on the table: leash handoff, coat and skin check, matting assessment, confirming the cut with the owner, and securing the dog in the harness. She's never worked mobile before."
+  },
+  {
+   "contextId": "ctx06",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I teach beginner darkroom classes and students keep ruining their first roll. Write a handout that takes someone from an exposed 35mm roll to negatives hanging up to dry — loading the reel in the changing bag, mixing developer to temperature, agitation timing, stop and fix, washing. They've never developed film before."
+  },
+  {
+   "contextId": "ctx07",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I run a small brewery taproom and my weekend staff keep botching closing. Write something to pin by the taps that gets a new server from last call to locking up: cleaning the draft lines and drip trays, counting the till and dropping the deposit, shutting down the POS, glycol and cooler checks, alarm and keys. Assume it's their first close alone."
+  },
+  {
+   "contextId": "ctx08",
+   "kind": "SHOULD_FIRE",
+   "rule": "x2",
+   "task": "I run a small sailing club and new crew keep fumbling the boat launch. Write something for the clubhouse noticeboard that gets a member from arriving at the dinghy park to sailing off the slipway: rigging the mast and sails, checking the bung and buoyancy, hooking up the trolley, launching solo in an onshore wind. Assume they've only sailed as a passenger."
+  },
+  {
+   "contextId": "ctx09",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "Our neighbor watered our plants and took in the mail for three weeks while we were away, and refused any payment. Write a short thank-you note we can leave with a bottle of wine on her porch — warm, a little funny, not gushy. Her name is Marguerite."
+  },
+  {
+   "contextId": "ctx10",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I run a small bike repair shop and I'm adding a line to the top of our new business cards. Write one short tagline that gets across we fix anything on two wheels, we're fast, and we don't talk down to beginners. Shop name is Cogwheel."
+  },
+  {
+   "contextId": "ctx11",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I'm self-publishing a mystery novel set in a Norwegian fishing village where a lighthouse keeper vanishes mid-winter. Write the back-cover blurb — about a paragraph, moody, hooks the reader without giving away that the sister did it. Title is The Long Dark Water."
+  },
+  {
+   "contextId": "ctx12",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I'm a ceramicist selling at a craft fair next month. Write one paragraph for the little card I'll set beside my stoneware mugs — explains they're wood-fired, each glaze comes out different, and they're meant for daily use, not display. Warm but not precious."
+  },
+  {
+   "contextId": "ctx13",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I'm a veterinary anesthesiologist leaving my clinic of nine years for a research post. Write one short paragraph I can post in our staff break room — sincere, a bit self-deprecating, thanking the techs especially, and making clear I'm not disappearing entirely. Sign-off from Dr. Okonjo."
+  },
+  {
+   "contextId": "ctx14",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "Our brewery is releasing a smoked porter aged in old rye barrels. Write the paragraph for the can's back label — describes how it tastes, mentions the barrels came from a distillery two towns over, and sounds like a person talking, not a wine critic. Beer's called Ashfall."
+  },
+  {
+   "contextId": "ctx15",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I'm a wedding cellist and my website has no \"about\" text yet. Write one paragraph for that page — I've played 300+ ceremonies, I'll learn any song a couple asks for, and I stay calm when the timing falls apart. Warm, professional, no schmaltz. My name is Dev Raghunathan."
+  },
+  {
+   "contextId": "ctx16",
+   "kind": "SHOULD_NOT_APPLY",
+   "rule": "x2",
+   "task": "I restore vintage neon signs and a magazine is running a one-paragraph profile of my workshop. Write that paragraph: I bend the glass myself, most pieces come from shuttered motels and diners, and I hate when people hang them as irony. Voice should be plainspoken, a little stubborn. I'm Roz Petrakis."
+  },
+  {
+   "contextId": "ctx17",
+   "kind": "BOUNDARY",
+   "rule": "x2",
+   "task": "Our office coffee machine keeps getting clogged. Write a short note I can tape to the wall above it so anyone can descale it themselves with the vinegar solution we keep under the sink, and know when it's safe to brew again."
+  },
+  {
+   "contextId": "ctx18",
+   "kind": "BOUNDARY",
+   "rule": "x2",
+   "task": "Our community garden has a rain barrel that freezes and cracks every winter. Write something I can email to our twenty plot holders so whoever gets there first in November can drain and stow it properly, and knows how to reconnect it in spring without wrecking the downspout fitting."
+  },
+  {
+   "contextId": "ctx19",
+   "kind": "BOUNDARY",
+   "rule": "x2",
+   "task": "I run a small letterpress studio and rent time to members. Write a card I can leave by the press so a new member can ink up, pull a proof, check registration, and clean the rollers with the citrus wash before they leave. Keep it friendly but firm about the solvent."
+  },
+  {
+   "contextId": "ctx20",
+   "kind": "BOUNDARY",
+   "rule": "x2",
+   "task": "I keep bees and I'm away for two weeks in July. Write something I can hand my neighbour so she can check the hive once, spot if they've swarmed or the super is full, and add the spare box from my shed without getting stung or crushing the queen. She's never opened a hive before."
+  },
+  {
+   "contextId": "ctx21",
+   "kind": "INTERACTION",
+   "rule": "x1+x3",
+   "task": "Write a short email to my landlord telling him the bathroom ceiling is leaking again and I need someone out this week. He's been ignoring my texts, so I want it firm but not hostile. My name's Dana, unit 4B."
+  },
+  {
+   "contextId": "ctx22",
+   "kind": "INTERACTION",
+   "rule": "x1+x3",
+   "task": "Draft a message to the parents in my daughter's soccer club: our Saturday tournament got moved to a field 40 minutes away and carpool sign-ups close Wednesday. Half of them never read past the first line, so make it land fast. I'm Marcus, team manager for the U11 Hawks."
+  },
+  {
+   "contextId": "ctx23",
+   "kind": "INTERACTION",
+   "rule": "x1+x3",
+   "task": "Write a note to the twelve volunteers at our food pantry: the walk-in freezer died, so Thursday's frozen delivery has to be sorted and boxed at the church hall instead, starting an hour earlier at 7am. They need to know where to show up and when. I'm Rosa, volunteer coordinator."
+  },
+  {
+   "contextId": "ctx24",
+   "kind": "INTERACTION",
+   "rule": "x1+x3",
+   "task": "Write a message to the six musicians in my wedding band: our bass player broke his wrist, so Saturday's reception set has to drop the three songs that lean on him and we're rehearsing the replacements Thursday 7pm at my garage instead of the studio. They need the new setlist locked in their heads. I'm Priya, bandleader."
+  }
+ ],
+ "counts": [
+  {
+   "kind": "SHOULD_FIRE",
+   "n": 8
+  },
+  {
+   "kind": "SHOULD_NOT_APPLY",
+   "n": 8
+  },
+  {
+   "kind": "BOUNDARY",
+   "n": 4
+  },
+  {
+   "kind": "INTERACTION",
+   "n": 4
+  }
+ ]
+}
