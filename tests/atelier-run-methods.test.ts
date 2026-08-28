@@ -24,7 +24,7 @@ function stub(methods: unknown): InferenceClient {
   return {
     async complete(): Promise<InferenceResult> {
       return { json: { methods }, modelId: 'stub', inputTokens: 0, cacheReadTokens: 0,
-        cacheWriteTokens: 0, outputTokens: 0, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0 };
+        cacheWriteTokens: 0, outputTokens: 0, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0, termination: { kind: 'COMPLETE' as const } };
     },
   };
 }

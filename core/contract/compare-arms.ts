@@ -24,6 +24,7 @@
 // could hold a rate.
 
 import type { ContractArm } from './arm.js';
+import { headroomOf, unmeasurableReason, type EndpointHeadroom } from './headroom.js';
 import type { ContractResult } from './suite.js';
 
 /** One arm's standing, per channel. No total, and adding these is the mistake. */
@@ -58,6 +59,17 @@ export interface ChannelDelta {
   readonly decided: number | null;
   readonly apparent: number | null;
 }
+
+/**
+ * Could this arm's decided channel have shown a rise at all?
+ *
+ * BARE is the control, and a control that passed every decided case leaves nothing above it. A study
+ * reported exactly that as its co-primary being MET — coverage 1.000 in all three arms, interval
+ * [+0.000, +0.000] — because the success condition was "did not go down" and a constant cannot.
+ */
+export const armHeadroom = (t: ArmTally): EndpointHeadroom =>
+  headroomOf(t.decidedPass + t.decidedFail === 0 ? 0 : t.decidedPass / (t.decidedPass + t.decidedFail),
+    t.decidedPass + t.decidedFail);
 
 export const deltaBetween = (from: ArmTally, to: ArmTally): ChannelDelta => ({
   decided: (from.decidedPass + from.decidedFail) === 0 && (to.decidedPass + to.decidedFail) === 0
@@ -97,7 +109,18 @@ export function describeArmComparison(tallies: readonly ArmTally[]): string {
     `  ${label}: decided ${d.decided === null ? 'n/a' : signed(d.decided)}`
     + `, unqualified read ${d.apparent === null ? 'n/a' : signed(d.apparent)}`;
 
-  if (bare && initial) lines.push('', say('what the standard added (initial - bare)', deltaBetween(bare, initial)));
+  if (bare && initial) {
+    lines.push('', say('what the standard added (initial - bare)', deltaBetween(bare, initial)));
+    // THE DELTA IS PRINTED, AND THEN QUALIFIED. A control that passed every decided case leaves
+    // nothing above it, so a non-negative delta there is arithmetic rather than evidence — the
+    // shape that let a coverage co-primary be reported as MET when 0 of 70 generations could move.
+    const why = unmeasurableReason(armHeadroom(bare), 'LIFT');
+    if (why) {
+      lines.push(`  ${why}`,
+        '  Harm remains measurable here: the control can still fall, which is how a restraint',
+        '  regression was caught. Only the upward claim is unavailable.');
+    }
+  }
   if (initial && candidate) lines.push(say('what optimization added (candidate - initial)', deltaBetween(initial, candidate)));
 
   lines.push('',

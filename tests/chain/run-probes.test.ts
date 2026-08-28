@@ -11,7 +11,7 @@ const client: InferenceClient = {
   async complete(req) {
     // echo the instruction so a test can tell the three doses apart
     return { json: { piece: `PIECE[${req.variableBlock.includes('LESS') ? 'less' : req.variableBlock.includes('MORE') ? 'more' : 'measure'}]` },
-      modelId: 'fake', inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0 };
+      modelId: 'fake', inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0, termination: { kind: 'COMPLETE' as const } };
   },
 };
 

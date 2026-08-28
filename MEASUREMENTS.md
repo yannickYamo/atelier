@@ -20,7 +20,7 @@ unless the row says so, and none of it should be read as a validation of this sy
 | Where | The claim | What it rests on |
 |---|---|---|
 | `core/fidelity/veto-contract.ts:15`, `core/fidelity/veto-sensor.ts:21` | two observer versions produced zero abstentions across 126 observations (v1 0/33, v2 0/33 on the same set, v2 0/60 on a fresh universe) | one internal run per version; verdict counts recorded by the harness, not adjudicated by a person |
-| `core/fidelity/graded-readout.ts:4`, `core/inference/client.ts:107`, `core/distinctiveness/floor.ts:25` | three instruments produced zero abstentions across 150 observations | the 126 above plus a third instrument on 24 more; same caveat |
+| `core/fidelity/graded-readout.ts:4`, `core/inference/client.ts:180`, `core/distinctiveness/floor.ts:25` | three instruments produced zero abstentions across 150 observations | the 126 above plus a third instrument on 24 more; same caveat |
 | `core/fidelity/judgement.ts:21`, `core/fidelity/graded-readout.ts:31` | a semantic validator carried 100% sensitivity and 7% specificity, firing on 28 of 30 expert-perfect cells | one run on one 30-cell set that a person had already marked perfect; the denominator is small and the set is not public |
 | `core/fidelity/conditional-fidelity.ts:7` | 3 violations across 138 scored outputs | one study; the endpoint measured whether an output avoided situations where it could be penalised, which is the reason the file exists |
 | `core/distinctiveness/floor.ts:17` | ~0.4% false-alarm evidence | measured on a different estimand and a different baseline from the one the floor governs, which is why the comment says so and why the number does not transfer |
