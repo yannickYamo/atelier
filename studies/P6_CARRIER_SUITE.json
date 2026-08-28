@@ -1,0 +1,232 @@
+{
+ "suiteHash": "eb52d496b4df5fb5",
+ "frozenAt": "2026-08-28T12:00:00.000Z",
+ "contexts": [
+  {
+   "contextId": "t01",
+   "kind": "SHOULD_FIRE",
+   "task": "Our regional grocery chain is deciding whether to keep running our own delivery fleet or hand it over to Instacart and DoorDash — can you work through whether owning last-mile actually protects anything for a company our size, or if we're just paying for the illusion of control?"
+  },
+  {
+   "contextId": "t02",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a mid-sized orchestra and our board keeps pushing to expand the summer pops season because it sells out, while our classical subscription base shrinks every year. Can you think through whether leaning harder into pops actually builds anything durable for us or just subsidizes a decline we're not addressing?"
+  },
+  {
+   "contextId": "t03",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a dental practice with four locations and a private equity group has offered to buy us out with the usual promise that I stay on as clinical lead for five years. Can you reason through whether selling to a DSO rollup actually leaves a practice like mine better off, or whether the earnout structure just transfers my remaining good years to someone else's balance sheet?"
+  },
+  {
+   "contextId": "t04",
+   "kind": "SHOULD_FIRE",
+   "task": "I'm a commercial real estate developer sitting on two half-empty 1980s office towers downtown, and everyone keeps telling me to convert them to apartments. Can you work through whether office-to-residential conversion is genuinely viable economics for buildings like these, or whether it's mostly a story people tell themselves to avoid writing down the asset?"
+  },
+  {
+   "contextId": "t05",
+   "kind": "SHOULD_FIRE",
+   "task": "I own a craft brewery that's been around twelve years, and our taproom now makes more money than our wholesale distribution business even though distribution is most of the volume and headcount. Can you think through whether we should be shrinking distribution deliberately and building around the taproom, or whether giving up shelf space is a door that doesn't reopen?"
+  },
+  {
+   "contextId": "t06",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 60-bed nursing home in a rural county and we've been offered a contract to become a preferred post-acute partner for the regional hospital system, which would fill beds but means taking sicker short-stay rehab patients instead of our long-term residents. Can you reason through whether becoming a rehab feeder actually stabilizes a facility like ours or just makes us dependent on a partner who can drop us in a year?"
+  },
+  {
+   "contextId": "t07",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 40-boat commercial fishing operation and a seafood buyer is pushing us to sign an exclusive multi-year supply agreement at a guaranteed floor price, which would end our ability to sell into the spot market when prices spike. Can you work through whether locking in a single buyer actually gives a fleet like ours stability, or whether we're just handing away the only upside we have left?"
+  },
+  {
+   "contextId": "t08",
+   "kind": "SHOULD_FIRE",
+   "task": "I publish a monthly trade magazine for the HVAC industry, and our ad revenue is flat while a newsletter guy with 12,000 subscribers is taking the sponsors we used to count on. Can you work through whether we should be spending our remaining cash building a paid subscription product, or whether the real asset we have left is the events business we've been treating as a side line?"
+  },
+  {
+   "contextId": "t09",
+   "kind": "SHOULD_FIRE",
+   "task": "I own a 200-acre almond orchard in the Central Valley and our water district just moved to a pumping allocation that will cut what we can draw by about a third within four years. I'm weighing whether to pull the oldest 60 acres and lease that ground for a solar array versus replanting on more efficient rootstock — can you think through whether taking land out of production permanently actually makes a farm like ours more resilient, or if I'm just liquidating the thing that makes us a farm?"
+  },
+  {
+   "contextId": "t10",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 90-year-old family funeral home and cremation now accounts for about 70% of our calls, which has cut our average revenue per service roughly in half. My son wants to build out an event space and grief-counseling side of the business; can you reason through whether that actually replaces what we're losing, or whether we should just accept being a smaller, cheaper operation and cut our building costs to match?"
+  },
+  {
+   "contextId": "t11",
+   "kind": "SHOULD_FIRE",
+   "task": "I own a 14-screen independent cinema in a college town, and the studios' shrinking release slate means we have dead weeknights we're filling with retro screenings and private rentals that barely cover staffing. Can you think through whether pivoting toward being a general-purpose venue actually gives a theater like mine a future, or whether it just erodes the one thing that still brings people in on a Friday?"
+  },
+  {
+   "contextId": "t12",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 30-person architecture firm that does mostly public schools and municipal buildings, and two of our competitors have started offering to carry projects into construction management for a bigger fee. Can you reason through whether adding CM services genuinely strengthens a firm our size, or whether it just puts us on the hook for risk we're not built to price?"
+  },
+  {
+   "contextId": "t13",
+   "kind": "SHOULD_FIRE",
+   "task": "I own a 3rd-generation ski area in Vermont with about 900 vertical feet, and our last four winters have had unreliable natural snow. The board wants to borrow $6M to expand snowmaking coverage from 60% to 90% of terrain, but I keep wondering if we should put that money into summer operations — mountain biking, weddings, a lift-served hiking product — instead. Can you work through whether doubling down on winter reliability actually secures a hill our size, or whether we're financing a season that's leaving us regardless?"
+  },
+  {
+   "contextId": "t14",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 12-person textile mill in North Carolina that weaves specialty fabric for uniform makers, and our two biggest customers have started asking us to hold six months of finished inventory for them instead of ordering monthly. Can you work through whether becoming their de facto warehouse actually locks in a supplier like us, or whether we're just financing their working capital with money we don't have?"
+  },
+  {
+   "contextId": "t15",
+   "kind": "SHOULD_FIRE",
+   "task": "I own a 120-room independent hotel on a highway exit outside a mid-size city, and a Marriott franchise rep is pitching us on flagging under one of their select-service brands — the fees and PIP renovation would run us close to $3M. Can you work through whether joining a big flag actually protects an independent property like ours, or whether we'd just be renting demand we could build ourselves?"
+  },
+  {
+   "contextId": "t16",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 250-truck regional trucking company and our largest 3PL customer wants us to move from spot freight onto a dedicated contract lane network with fixed rates and committed capacity. Can you work through whether going dedicated actually gives a carrier our size a stable base, or whether we're just becoming a cost center someone else can re-bid every year?"
+  },
+  {
+   "contextId": "t17",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 22-person veterinary specialty referral hospital and the general practices that send us cases are being bought up fast by corporate groups that have their own referral centers. Can you work through whether we should start opening our own primary care clinics to secure a case pipeline, or whether owning the front end just turns us into a competitor to the vets we depend on?"
+  },
+  {
+   "contextId": "t18",
+   "kind": "SHOULD_FIRE",
+   "task": "I own a small ceramics supply company that sells clay, glazes and kilns to studios and schools, and a national art-supply distributor just offered to carry our house-blend clay bodies nationwide under their catalog. Can you think through whether wholesaling our recipes through them actually grows a company like ours, or whether we'd be handing over the only thing our customers can't get anywhere else?"
+  },
+  {
+   "contextId": "t19",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 15-person immigration law firm and about 60% of our revenue comes from employment-based visa filings for three staffing companies that keep pushing our fees down. We could take on more individual family-based clients, which pay better per case but come one at a time — can you think through whether diversifying into that work actually makes a firm like ours less fragile, or whether we'd just be trading a stable pipeline for a treadmill of intake?"
+  },
+  {
+   "contextId": "t20",
+   "kind": "SHOULD_FIRE",
+   "task": "I run a 40-year-old independent bookstore that's become known for its author events, and a nearby university has offered to move us into a subsidized storefront on their campus edge in exchange for running their course-book sales. Can you work through whether tying ourselves to a university actually secures a shop like ours, or whether we'd be trading a customer base we built for a landlord who can change the arrangement whenever their budget shifts?"
+  }
+ ],
+ "diversity": {
+  "threshold": 0.35,
+  "decisions": [
+   {
+    "candidate": "Our regional grocery chain is deciding whether to keep running our own delivery fleet or hand it over to Instacart and DoorDash — can you work through whether owning last-mile actually protects anything for a company our size, or if we're just paying for the illusion of control?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0
+   },
+   {
+    "candidate": "I run a mid-sized orchestra and our board keeps pushing to expand the summer pops season because it sells out, while our classical subscription base shrinks every year. Can you think through whether leaning harder into pops actually builds anything durable for us or just subsidizes a decline we're not addressing?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.09259259259259259
+   },
+   {
+    "candidate": "I run a dental practice with four locations and a private equity group has offered to buy us out with the usual promise that I stay on as clinical lead for five years. Can you reason through whether selling to a DSO rollup actually leaves a practice like mine better off, or whether the earnout structure just transfers my remaining good years to someone else's balance sheet?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.06666666666666667
+   },
+   {
+    "candidate": "I'm a commercial real estate developer sitting on two half-empty 1980s office towers downtown, and everyone keeps telling me to convert them to apartments. Can you work through whether office-to-residential conversion is genuinely viable economics for buildings like these, or whether it's mostly a story people tell themselves to avoid writing down the asset?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.05
+   },
+   {
+    "candidate": "I own a craft brewery that's been around twelve years, and our taproom now makes more money than our wholesale distribution business even though distribution is most of the volume and headcount. Can you think through whether we should be shrinking distribution deliberately and building around the taproom, or whether giving up shelf space is a door that doesn't reopen?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.06060606060606061
+   },
+   {
+    "candidate": "I run a 60-bed nursing home in a rural county and we've been offered a contract to become a preferred post-acute partner for the regional hospital system, which would fill beds but means taking sicker short-stay rehab patients instead of our long-term residents. Can you reason through whether becoming a rehab feeder actually stabilizes a facility like ours or just makes us dependent on a partner who can drop us in a year?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.10810810810810811
+   },
+   {
+    "candidate": "I run a 40-boat commercial fishing operation and a seafood buyer is pushing us to sign an exclusive multi-year supply agreement at a guaranteed floor price, which would end our ability to sell into the spot market when prices spike. Can you work through whether locking in a single buyer actually gives a fleet like ours stability, or whether we're just handing away the only upside we have left?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.1125
+   },
+   {
+    "candidate": "I publish a monthly trade magazine for the HVAC industry, and our ad revenue is flat while a newsletter guy with 12,000 subscribers is taking the sponsors we used to count on. Can you work through whether we should be spending our remaining cash building a paid subscription product, or whether the real asset we have left is the events business we've been treating as a side line?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.09375
+   },
+   {
+    "candidate": "I own a 200-acre almond orchard in the Central Valley and our water district just moved to a pumping allocation that will cut what we can draw by about a third within four years. I'm weighing whether to pull the oldest 60 acres and lease that ground for a solar array versus replanting on more efficient rootstock — can you think through whether taking land out of production permanently actually makes a farm like ours more resilient, or if I'm just liquidating the thing that makes us a farm?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.1038961038961039
+   },
+   {
+    "candidate": "I run a 90-year-old family funeral home and cremation now accounts for about 70% of our calls, which has cut our average revenue per service roughly in half. My son wants to build out an event space and grief-counseling side of the business; can you reason through whether that actually replaces what we're losing, or whether we should just accept being a smaller, cheaper operation and cut our building costs to match?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.10606060606060606
+   },
+   {
+    "candidate": "I own a 14-screen independent cinema in a college town, and the studios' shrinking release slate means we have dead weeknights we're filling with retro screenings and private rentals that barely cover staffing. Can you think through whether pivoting toward being a general-purpose venue actually gives a theater like mine a future, or whether it just erodes the one thing that still brings people in on a Friday?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.1232876712328767
+   },
+   {
+    "candidate": "I run a 30-person architecture firm that does mostly public schools and municipal buildings, and two of our competitors have started offering to carry projects into construction management for a bigger fee. Can you reason through whether adding CM services genuinely strengthens a firm our size, or whether it just puts us on the hook for risk we're not built to price?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.08333333333333333
+   },
+   {
+    "candidate": "I own a 3rd-generation ski area in Vermont with about 900 vertical feet, and our last four winters have had unreliable natural snow. The board wants to borrow $6M to expand snowmaking coverage from 60% to 90% of terrain, but I keep wondering if we should put that money into summer operations — mountain biking, weddings, a lift-served hiking product — instead. Can you work through whether doubling down on winter reliability actually secures a hill our size, or whether we're financing a season that's leaving us regardless?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.1038961038961039
+   },
+   {
+    "candidate": "I run a 12-person textile mill in North Carolina that weaves specialty fabric for uniform makers, and our two biggest customers have started asking us to hold six months of finished inventory for them instead of ordering monthly. Can you work through whether becoming their de facto warehouse actually locks in a supplier like us, or whether we're just financing their working capital with money we don't have?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.11904761904761904
+   },
+   {
+    "candidate": "I own a 120-room independent hotel on a highway exit outside a mid-size city, and a Marriott franchise rep is pitching us on flagging under one of their select-service brands — the fees and PIP renovation would run us close to $3M. Can you work through whether joining a big flag actually protects an independent property like ours, or whether we'd just be renting demand we could build ourselves?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.12280701754385964
+   },
+   {
+    "candidate": "I run a 250-truck regional trucking company and our largest 3PL customer wants us to move from spot freight onto a dedicated contract lane network with fixed rates and committed capacity. Can you work through whether going dedicated actually gives a carrier our size a stable base, or whether we're just becoming a cost center someone else can re-bid every year?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.13793103448275862
+   },
+   {
+    "candidate": "I run a 22-person veterinary specialty referral hospital and the general practices that send us cases are being bought up fast by corporate groups that have their own referral centers. Can you work through whether we should start opening our own primary care clinics to secure a case pipeline, or whether owning the front end just turns us into a competitor to the vets we depend on?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.12857142857142856
+   },
+   {
+    "candidate": "I own a small ceramics supply company that sells clay, glazes and kilns to studios and schools, and a national art-supply distributor just offered to carry our house-blend clay bodies nationwide under their catalog. Can you think through whether wholesaling our recipes through them actually grows a company like ours, or whether we'd be handing over the only thing our customers can't get anywhere else?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.125
+   },
+   {
+    "candidate": "I run a 15-person immigration law firm and about 60% of our revenue comes from employment-based visa filings for three staffing companies that keep pushing our fees down. We could take on more individual family-based clients, which pay better per case but come one at a time — can you think through whether diversifying into that work actually makes a firm like ours less fragile, or whether we'd just be trading a stable pipeline for a treadmill of intake?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.12941176470588237
+   },
+   {
+    "candidate": "I run a 40-year-old independent bookstore that's become known for its author events, and a nearby university has offered to move us into a subsidized storefront on their campus edge in exchange for running their course-book sales. Can you work through whether tying ourselves to a university actually secures a shop like ours, or whether we'd be trading a customer base we built for a landlord who can change the arrangement whenever their budget shifts?",
+    "accepted": true,
+    "collidedWith": null,
+    "overlap": 0.1267605633802817
+   }
+  ]
+ },
+ "worstPairOverlap": 0.13793103448275862
+}
