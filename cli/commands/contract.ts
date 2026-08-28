@@ -27,7 +27,7 @@ import { generateCases, GenerationRefused } from '../../core/contract/generate.j
 import { sealSuite, searchCases, describeContractResult, SuiteRefused,
   type ContractTestSuite } from '../../core/contract/suite.js';
 import { runCase, foldOutcomes, type CaseOutcome } from '../../core/contract/run.js';
-import { requestFor, type ContractArm, type ArmContext } from '../../core/contract/arm.js';
+import { requestFor, type ContractArm, type ArmContext, type ComparisonIdentity } from '../../core/contract/arm.js';
 import { bindingHash } from '../../core/runtime/binding.js';
 import { proposeRepair, assertSameTarget } from '../../core/contract/repair.js';
 import { applyEscalation } from '../../core/architecture/escalate.js';
@@ -44,6 +44,17 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
 const suitePath = (name: string, standardVersionHash: string): string =>
   join(DATA, 'skills', name, 'contract', `${standardVersionHash}.json`);
 
+/**
+ * Where the identities of a three-arm comparison are recorded.
+ *
+ * Written when a candidate is materialized, read when the holdout is spent. It exists so the final
+ * read can load the artifacts that were ACTUALLY tested rather than rebuild them: a rebuild produces
+ * whatever today's compiler emits, which is a different artifact from the one the search half
+ * measured, and the comparison would silently be between the wrong two things.
+ */
+const comparisonPath = (name: string, standardVersionHash: string): string =>
+  join(DATA, 'skills', name, 'contract', `${standardVersionHash}.comparison.json`);
+
 export async function contract(): Promise<void> {
   const name = flag('--skill') ?? die('--skill <name> required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
@@ -55,6 +66,15 @@ export async function contract(): Promise<void> {
   if (!obligations.length) {
     die(`"${name}" places no obligations: every requirement is INCIDENTAL, so the standard asks for `
       + 'no behaviour and there is nothing to test.');
+  }
+
+  // BEFORE A PROVIDER IS RESOLVED. A refusal that is free and deterministic must not sit behind a
+  // missing API key: the person is then told about the key, fixes it, and only then learns the two
+  // flags contradict each other.
+  if (argv.includes('--holdout') && argv.includes('--repair')) {
+    die('--repair cannot run on the holdout. It is read once, at the end, against artifacts that '
+      + 'already exist; changing the implementation during that read spends the holdout on a version '
+      + 'that did not exist when it was sealed. Repair on the search half first.');
   }
 
   const path = suitePath(name, v.standardVersionHash);
@@ -125,7 +145,54 @@ export async function contract(): Promise<void> {
   };
 
   const role = onHoldout ? 'HOLDOUT' as const : 'SEARCH' as const;
-  console.log(`\nRunning ${toRun.length} case(s) on the ${onHoldout ? 'HOLDOUT' : 'search'} half.\n`);
+
+  // ── THE HOLDOUT IS ONE COORDINATED READ OF THREE FROZEN ARTIFACTS ────────────────────────────
+  //
+  // Every arm runs on the same sealed cases, in one event, against artifacts loaded from the store
+  // rather than rebuilt. Rebuilding would produce whatever today's compiler emits, and the
+  // comparison would quietly be between two things nobody measured.
+  //
+  // It also refuses to repair. A holdout read that could change the implementation it is reading has
+  // spent the holdout on a version that did not exist when it was sealed.
+  if (onHoldout) {
+    const cPath = comparisonPath(name, v.standardVersionHash);
+    const identity = existsSync(cPath)
+      ? readJson<ComparisonIdentity>(cPath, { what: 'the recorded comparison', requireKeys: ['initialSkillVersionHash'] })
+      : null;
+
+    const initialSv = store.getSkillVersion(L, identity?.initialSkillVersionHash ?? active)
+      ?? die('the initial SkillVersion this comparison was recorded against is missing from the store.');
+    const initialPkg = store.getPackage(L, initialSv.materializedHash)
+      ?? die(`the package ${initialSv.materializedHash} that was actually tested is missing from the store.`);
+
+    const arms: { arm: ContractArm; bytes: string | null }[] = [
+      { arm: 'BARE', bytes: null },
+      { arm: 'INITIAL', bytes: initialPkg.files['SKILL.md'] ?? die('the stored initial package carries no SKILL.md.') },
+    ];
+    if (identity?.candidateSkillVersionHash) {
+      const candSv = store.getSkillVersion(L, identity.candidateSkillVersionHash)
+        ?? die('the candidate SkillVersion is recorded but missing from the store.');
+      const candPkg = store.getPackage(L, candSv.materializedHash)
+        ?? die('the candidate package is recorded but missing from the store.');
+      arms.push({ arm: 'CANDIDATE', bytes: candPkg.files['SKILL.md'] ?? die('the candidate package carries no SKILL.md.') });
+    }
+
+    console.log(`\nSpending the holdout: ${toRun.length} sealed case(s) x ${arms.length} arm(s), one read.\n`);
+    const holdoutTallies: ArmTally[] = [];
+    for (const { arm, bytes } of arms) {
+      const os = await runArm(arm, bytes);
+      holdoutTallies.push(tallyOf(arm, foldOutcomes(suite, arm, 'HOLDOUT', os)));
+    }
+    console.log(`\n${describeArmComparison(holdoutTallies)}`);
+    console.log(`\n  suite ${suite.suiteHash} · standard ${v.standardVersionHash}`
+      + `\n  binding ${bindingHash(binding)}`
+      + `\n  initial ${initialSv.skillVersionHash}`
+      + `\n  candidate ${identity?.candidateSkillVersionHash ?? '(none — no repair was attempted)'}`);
+    console.log(`\nspent $${budget.spentUsd.toFixed(4)} of $${cap.toFixed(2)}.`);
+    return;
+  }
+
+  console.log(`\nRunning ${toRun.length} case(s) on the search half.\n`);
   const outcomes = await runArm('INITIAL', servedText);
   const result = foldOutcomes(suite, active, role, outcomes);
   console.log(`\n${describeContractResult(result)}`);
@@ -196,6 +263,25 @@ export async function contract(): Promise<void> {
       // The optimizer changed an arrangement. It may not have changed the target, and saying so is
       // cheap next to discovering later that it did.
       assertSameTarget(v, v);
+
+      // MATERIALIZED AND STORED, NOT PROMOTED. `setActive` is deliberately not called: the candidate
+      // becomes an artifact that can be read back byte for byte, and nothing about serving changes.
+      const candidateSkill = {
+        skillVersionHash: sha(`${candidateArch.architectureHash}|${candidatePkg.packageHash}`),
+        skillName: name, standardVersionHash: v.standardVersionHash,
+        architectureHash: candidateArch.architectureHash,
+        materializedHash: candidatePkg.packageHash,
+        builtAt: new Date().toISOString(), description: sv.description,
+      };
+      store.putArchitecture(L, candidateArch);
+      store.putPackage(L, candidatePkg);
+      store.putSkillVersion(L, candidateSkill);
+      const identity: ComparisonIdentity = {
+        suiteHash: suite.suiteHash, standardVersionHash: v.standardVersionHash,
+        bindingHash: bindingHash(binding), initialSkillVersionHash: active,
+        candidateSkillVersionHash: candidateSkill.skillVersionHash,
+      };
+      writeAtomic(comparisonPath(name, v.standardVersionHash), JSON.stringify(identity, null, 1));
 
       console.log(`\ncandidate architecture ${candidateArch.architectureHash} `
         + `(incumbent ${arch.architectureHash}). Re-running the search half.\n`);
