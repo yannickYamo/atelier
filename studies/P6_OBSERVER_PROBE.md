@@ -69,7 +69,13 @@ compressed slogan; the author says no. It calls *"You just need the language to 
 restatement; the author says no. On one case the author says YES where both the judge and a second
 careful reader said NO.
 
-**Two competent readers and the author do not agree on which cases the rule covers.**
+**The wording's implied boundary did not match 12 of the author's 20 case-level judgments.**
+
+Said precisely, because the loose version misleads. p6 was never a classifier — it is a
+natural-language hypothesis about a behaviour. The 24-card exercise operationalised ONE reading of
+it and found that reading did not match the author's extension. "Ratification was 50% accurate" is
+not what happened and would be a damaging thing for the paper to imply: what was measured is that an
+approved *description* underdetermines its own *cases*.
 
 p6's statement is a machine's paraphrase of a pattern. The author ratified it because it read
 truly — and **ratifying a STATEMENT is not the same as agreeing on its EXTENSION.** An author can
