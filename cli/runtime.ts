@@ -44,14 +44,14 @@ export const VALUED_OPTIONS: readonly string[] = [
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'host', 'id', 'invocation', 'kind',
+  'exclude', 'from', 'host', 'id', 'invocation', 'kind',
   'labels', 'max-calls', 'model', 'name', 'note',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
-  'task', 'temperature', 'to', 'token-limit-param', 'verdict',
+  'task', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
   'why', 'work-type',
 ];
 

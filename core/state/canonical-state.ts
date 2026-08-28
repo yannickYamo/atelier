@@ -69,7 +69,25 @@ export type Provenance =
    * reader planning a public-corpus study would conclude adoption was impossible and either abandon
    * it or reach for EXPERT_RATIFIED, which is the inversion the ceiling exists to stop.
    */
-  | 'PUBLIC_BEHAVIOUR_INFERRED';
+  | 'PUBLIC_BEHAVIOUR_INFERRED'
+  /**
+   * THE PERSON SAID IT; A MACHINE ONLY BROKE IT INTO SEPARATE RULES.
+   *
+   * Distinct from both neighbours, and the distinction changes what a number means. EXPERT_ADDED is
+   * a rule its author typed as a rule. MACHINE_DISCOVERED is a rule read out of their work, which
+   * they may never have been able to state. This is the middle case a prompt produces: someone says
+   * "lead with the action, no preamble, never end with an offer of help" and a model separates that
+   * into three requirements without inventing any of them.
+   *
+   * Filing those as MACHINE_DISCOVERED would report `discovered 100%` on a standard its author
+   * dictated, which is false in the direction that flatters the machine. Filing them as EXPERT_ADDED
+   * would hide that a model chose the wording, and wording is where a faithful decomposition and an
+   * invented rule become indistinguishable.
+   *
+   * A rule the model adds that the person did NOT say is not this. It is MACHINE_DISCOVERED, and it
+   * carries the ordinary ceiling until someone ratifies it.
+   */
+  | 'EXPERT_STATED';
 export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
 
 /** 1. What the expert supplied. Frozen at seal time; its hash is the run's identity. */
@@ -534,7 +552,13 @@ export const authorityStateOf = (rs: readonly Requirement[]): AuthorityState =>
 export const unconfirmedRate = (v: StandardVersion): number =>
   v.requirements.length === 0 ? 0 : v.requirements.filter((r) => r.authority === 'DERIVED_UNRATIFIED').length / v.requirements.length;
 
-/** Discovery credit counts only what the machine found. Human completion is product, not recall. */
+/**
+ * Discovery credit counts only what the machine FOUND. Human completion is product, not recall.
+ *
+ * `EXPERT_STATED` is excluded deliberately: a model that separated a sentence into three rules
+ * discovered nothing, and counting it here would report `discovered 100%` on a standard its author
+ * dictated.
+ */
 export const discoveryRecall = (v: StandardVersion): number =>
   v.requirements.length === 0 ? 0 : v.requirements.filter((r) => r.provenance === 'MACHINE_DISCOVERED').length / v.requirements.length;
 
@@ -620,7 +644,8 @@ export type SourceMode =
   /** nothing to characterise */
   | 'EMPTY';
 
-const AUTHORED: ReadonlySet<Provenance> = new Set(['EXPERT_ADDED']);
+// A rule the person stated is theirs, however it was transcribed. A rule a machine found is not.
+const AUTHORED: ReadonlySet<Provenance> = new Set(['EXPERT_ADDED', 'EXPERT_STATED']);
 
 export const sourceModeOf = (v: StandardVersion): SourceMode => {
   if (!v.requirements.length) return 'EMPTY';

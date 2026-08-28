@@ -94,6 +94,7 @@ export function provenanceLabel(p: Provenance): string {
     case 'MACHINE_DISCOVERED': return 'discovered';
     case 'SUBSTANTIVELY_REWRITTEN': return 'rewritten by you';
     case 'EXPERT_ADDED': return 'added by you';
+    case 'EXPERT_STATED': return 'stated by you';
     case 'PUBLIC_BEHAVIOUR_INFERRED': return 'inferred from public work; adopted for this skill';
     default: { const _exhaustive: never = p; return _exhaustive; }
   }
@@ -245,10 +246,33 @@ export function renderAgentSkill(
   // It may never buy less.
   const preFinalize = serves.filter((x) => x.role === 'ENFORCE' && x.carrier === 'SELF_CHECK').map((x) => x.r);
 
+  // ── A CONDITION IS RENDERED WITH BOTH BRANCHES ────────────────────────────────────────────────
+  //
+  // "Applies when: X" as a trailing annotation says when the rule applies and never says what to do
+  // otherwise. A rule sitting under "What to do" with a note attached reads as an instruction with a
+  // hint, and a measured study found exactly the failure that predicts: the conditional rule's
+  // activation rose and its RESTRAINT fell, so the model applied it where the condition did not hold.
+  //
+  // This is not carrying the requirement harder — that repair is refused elsewhere and the same
+  // study is why. It is stating the half that was never stated. The requirement, its authority and
+  // its condition are untouched; only the sentence that carries them changes, which is a carrier
+  // decision the compiler owns.
+  const conditionalLine = (statement: string, appliesWhen: string): string => {
+    // The author's condition, verbatim, with a leading "when" only if they did not write one.
+    const w = appliesWhen.trim().replace(/[.\s]+$/, '');
+    const clause = /^when\b/i.test(w) ? w : `when ${w}`;
+    const body = statement.trim().replace(/[.\s]+$/, '');
+    const lead = body.charAt(0).toLowerCase() + body.slice(1);
+    return `${clause.charAt(0).toUpperCase() + clause.slice(1)}, ${lead}. `
+      + 'When that does not hold, do not.';
+  };
+
   const line = (r: typeof v.requirements[number], i: number): string => {
-    const cond = isGeneralScope(r.appliesWhen) ? '' : `\n   Applies when: ${r.appliesWhen}`;
     const prov = provenanceLabel(r.provenance);
-    return `${i + 1}. ${r.statement}${cond}\n   <!-- ${r.requirementId} · ${prov} -->`;
+    const text = isGeneralScope(r.appliesWhen)
+      ? r.statement
+      : conditionalLine(r.statement, r.appliesWhen);
+    return `${i + 1}. ${text}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 
   const avoidSection = bound.length
