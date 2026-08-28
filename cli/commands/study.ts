@@ -19,7 +19,11 @@ import {
 import { decompose, describeEstimate, pairedBootstrap } from '../../core/contract/analysis.js';
 import { headroomOf, unmeasurableReason, screenCandidate } from '../../core/contract/headroom.js';
 import { worstPair } from '../../core/contract/diversity.js';
-import { profileAll, detectAll, type HumanLabel } from '../../core/contract/observers/aphorism.js';
+import { profileAll, detectAll, profileJudge, judgePrompt,
+  APHORISM_JUDGE_SYSTEM, APHORISM_JUDGE_SCHEMA, type HumanLabel } from '../../core/contract/observers/aphorism.js';
+import { proposeRefinement, CalibrationRefused, type CalibrationCase }
+  from '../../core/discovery/extension-calibration.js';
+import { clientAndBinding } from '../runtime.js';
 import { checkMechanismExposure, describeExposure, type ExposureFacts } from '../../core/contract/mechanism-exposure.js';
 import { ablateCarrier, assertSemanticClosure, describeAblation, AblationRefused } from '../../core/contract/carrier-ablation.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
@@ -169,6 +173,12 @@ function eligibility(): void {
     // Proven from an invocation record, never assumed. Absent evidence is absent delivery.
     deliveredAtRuntime: argv.includes('--delivery-proven'),
     normativeSetsMatch: true,
+    // Both null until measured. Absent evidence is absent, never assumed adequate — the gate says
+    // "never measured" rather than passing quietly.
+    expertSelfConsistency: flag('--expert-consistency') === undefined
+      ? null : numericFlag('--expert-consistency', 0),
+    observerKappa: flag('--observer-kappa') === undefined ? null : numericFlag('--observer-kappa', 0),
+    scoring: argv.includes('--blind-expert') ? 'BLIND_EXPERT' : 'AUTOMATIC',
   };
   console.log(`\n${describeExposure(checkMechanismExposure(facts))}`);
 }
@@ -221,13 +231,71 @@ function observe(): void {
   }
 }
 
+/**
+ * Score a MODEL judge against the expert's key, and propose a sharper wording from their rulings.
+ *
+ * Both live here rather than in the product surface because both are measurement: one asks whether
+ * an instrument recovers a boundary, the other asks what the boundary actually is. The refinement
+ * they produce is a PROPOSAL — it arrives DERIVED_UNRATIFIED and the expert rules on it, exactly as
+ * the original candidate did.
+ */
+async function calibrate(): Promise<void> {
+  const { cases } = readJson<{ cases: CalibrationCase[] }>(
+    flag('--cases') ?? die('--cases <file.json> required — the expert\'s rulings with their context'),
+    { what: 'the calibration cases', requireKeys: ['cases'] });
+  const statement = flag('--statement') ?? die('--statement <the ratified wording> required');
+  const { client } = clientAndBinding('discovery');
+  const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1) };
+
+  let proposal;
+  try {
+    proposal = await proposeRefinement(client, budget,
+      { statement } as Parameters<typeof proposeRefinement>[2], cases);
+  } catch (e) {
+    if (e instanceof CalibrationRefused) return void die(e.message);
+    throw e;
+  }
+
+  console.log(`coherent: ${proposal.coherent}\n`);
+  console.log(`WHAT THE WORDING GOT WRONG\n  ${proposal.diagnosis}\n`);
+  console.log(`PROPOSED\n  ${proposal.refined}\n`);
+  if (proposal.unexplained.length) {
+    console.log('STILL UNEXPLAINED BY THE PROPOSAL');
+    for (const u of proposal.unexplained) console.log(`  - ${u}`);
+  }
+  console.log(`\nauthority ${proposal.authority} — a rule rewritten to fit an expert's labels is`);
+  console.log('still a guess about what those labels meant. It binds nothing until they say so.');
+}
+
+/** Score a frozen model judge against the expert's key. Reports kappa, not agreement alone. */
+function judge(): void {
+  const { results } = readJson<{ results: { id: string; expert: HumanLabel; judge: HumanLabel }[] }>(
+    flag('--results') ?? die('--results <judged.json> required'),
+    { what: 'the judged cases', requireKeys: ['results'] });
+  const p = profileJudge(results.map((r) => ({ id: r.id, expert: r.expert, judge: r.judge })));
+  const n = p.decidedByBoth;
+  const ey = results.filter((r) => r.expert === 'YES' && r.judge !== 'UNSURE').length;
+  const jy = results.filter((r) => r.judge === 'YES' && r.expert !== 'UNSURE').length;
+  const pe = n ? (ey / n) * (jy / n) + ((n - ey) / n) * ((n - jy) / n) : 0;
+  const kappa = pe < 1 ? (p.agreement - pe) / (1 - pe) : 0;
+  console.log(`both ruled ${n}  agreement ${p.agreement.toFixed(2)}  kappa ${kappa.toFixed(3)}`);
+  console.log(`  false pass ${p.falsePass}  false fail ${p.falseFail}`);
+  console.log(`  judge abstained ${p.judgeAbstained}, expert abstained ${p.expertAbstained}`);
+  console.log(`\nAGREEMENT ALONE IS NOT THE NUMBER. On a skewed key a constant answer scores well;`);
+  console.log('kappa corrects for that, and the false-pass/false-fail split says which way it errs.');
+  console.log(`judge prompt is frozen: ${APHORISM_JUDGE_SYSTEM.length} chars, `
+    + `${Object.keys(APHORISM_JUDGE_SCHEMA).length} schema keys, sample: ${judgePrompt('...', '...').length} chars`);
+}
+
 export function study(): void {
   switch (argv[1]) {
+    case 'calibrate': return void calibrate();
+    case 'judge': return judge();
     case 'observe': return observe();
     case 'eligibility': return eligibility();
     case 'seal': return seal();
     case 'analyse': case 'analyze': return analyse();
     case 'screen': return screen();
-    default: die('usage: atelier study <eligibility|observe|seal|analyse|screen> [options]');
+    default: die('usage: atelier study <eligibility|observe|judge|calibrate|seal|analyse|screen> [options]');
   }
 }

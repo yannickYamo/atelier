@@ -1,0 +1,10 @@
+{
+ "coherent": true,
+ "refined": "After I've argued a point, I write one more sentence that says the same thing again in my own voice — as a judgment, a stance, or a general claim about how things work. It isn't a summary of what just happened or a next step; it's the underlying principle stated flat, so the reader carries away my position rather than the example. It doesn't have to be short or quotable; what makes it mine is that it asserts something evaluative or law-like beyond the evidence just given.",
+ "diagnosis": "The original names two frequent realizations as the invariant: compression/aphorism and section boundaries. The rulings ignore brevity — several very short punchy lines (the CTA-ish \"One month, one feature, real traction,\" \"Don't give it away in your entry tier,\" \"This playbook distills what works,\" \"You just need the language to see them\") are NO, while longer, unpunchy sentences are YES. What actually separates YES from NO is whether the sentence restates the claim as the author's own general judgment versus doing other work: reporting a result or fact (\"grew Tinder from 5k to 15k,\" \"Scrap rates above 5%\"), issuing an instruction or promise to the reader, or continuing the narration. The UNSURE cases sit on the boundary precisely because they mix a metric or an imperative with a hint of principle.",
+ "unexplained": [
+  "Why an instruction ('Don't give it away in your entry tier') is NO while another instruction-flavored line ('I would actually advise you as a PM to focus most of your time in the problem space') is YES — possibly first-person stance vs. bare imperative.",
+  "Whether a restatement placed mid-paragraph rather than at a section end still counts; the rulings don't clearly test position.",
+  "The Tinder/Pinterest pair: both report growth numbers, yet one is NO and one UNSURE, suggesting the trailing interpretive clause ('building a devoted core...') pulls it toward the pattern."
+ ]
+}

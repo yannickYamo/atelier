@@ -51,6 +51,29 @@ export type ExposureConditionId =
    */
   | 'CARRIER_DELIVERED'
   /**
+   * THE EXPERT'S OWN BOUNDARY IS STABLE when they are shown concrete cases.
+   *
+   * A property of the TARGET, and it is the expert's alone. An earlier draft of this gate asked
+   * whether the expert AGREED WITH ANOTHER READER, which quietly hands outsiders authority over
+   * someone else's standard — a reader disagreeing with an author is a fact about the reader.
+   *
+   * The measurement that forced this apart: an author ratified a rule's wording and then, shown
+   * concrete sentences, judged cases the wording did not predict. That is not incoherent taste. It
+   * is a lossy paraphrase, and the repair is to sharpen the description rather than to overrule the
+   * author or to discard the rule.
+   */
+  | 'EXPERT_EXTENSION_STABLE'
+  /**
+   * SOME OBSERVER CAN RECOVER THAT BOUNDARY well enough for the use it is put to.
+   *
+   * A property of the INSTRUMENT, and completely separate from the one above. The two come apart in
+   * both directions, and conflating them loses a real standard or blesses a fake one:
+   *
+   *   stable extension + bad observer  -> a valid target that needs a human to score. Not ineligible.
+   *   unstable extension + good agreement -> the observer has learned the noise, not the rule.
+   */
+  | 'OBSERVER_QUALIFIED'
+  /**
    * Target and ablation encode the SAME normative target.
    *
    * Otherwise the contrast is more-standard against less-standard rather than one realisation
@@ -61,8 +84,14 @@ export type ExposureConditionId =
 export const EXPOSURE_CONDITIONS: readonly ExposureConditionId[] = [
   'NAMED_MECHANISM_PRESENT', 'TARGET_AUTHORITATIVE', 'CONTEXTS_EXERCISE_TARGET',
   'APPLICABILITY_INDEPENDENT', 'OUTCOME_OBSERVABLE', 'CONTROL_LACKS_CARRIER',
-  'CARRIER_DELIVERED', 'SEMANTIC_CLOSURE',
+  'CARRIER_DELIVERED', 'SEMANTIC_CLOSURE', 'EXPERT_EXTENSION_STABLE', 'OBSERVER_QUALIFIED',
 ];
+
+/**
+ * How an outcome gets scored. Separated because a failing observer does NOT make a target
+ * ineligible — it makes the study more expensive, and the expert scores it blind instead.
+ */
+export type ScoringMode = 'AUTOMATIC' | 'BLIND_EXPERT' | 'NONE';
 
 /** What a caller must establish. Every field is a fact about the run, never a hope about it. */
 export interface ExposureFacts {
@@ -81,7 +110,20 @@ export interface ExposureFacts {
   readonly deliveredAtRuntime: boolean;
   /** target and ablation carry the same requirement ids with the same statements */
   readonly normativeSetsMatch: boolean;
+  /**
+   * The expert's own agreement with themselves on held-out cases, or null when never measured.
+   * Never another reader's agreement with the expert — that is the line below.
+   */
+  readonly expertSelfConsistency: number | null;
+  /** an observer's agreement with the expert, as Cohen's kappa. null when no observer was tested. */
+  readonly observerKappa: number | null;
+  readonly scoring: ScoringMode;
 }
+
+/** Chance-corrected agreement below this is not an instrument. */
+export const MIN_OBSERVER_KAPPA = 0.6;
+/** How consistently the expert must reproduce their own boundary for it to be a target at all. */
+export const MIN_EXPERT_CONSISTENCY = 0.8;
 
 export interface ExposureCheck {
   readonly id: ExposureConditionId;
@@ -119,6 +161,23 @@ export function checkMechanismExposure(f: ExposureFacts): ExposureVerdict {
       detail: f.deliveredAtRuntime
         ? 'the target artifact is in the served bytes'
         : 'NOT in the served bytes — materialised is not delivered, and a null here would be unreadable' },
+    { id: 'EXPERT_EXTENSION_STABLE',
+      pass: f.expertSelfConsistency !== null && f.expertSelfConsistency >= MIN_EXPERT_CONSISTENCY,
+      detail: f.expertSelfConsistency === null
+        ? 'never measured — the expert has not been shown held-out cases, so nothing is known about '
+          + 'whether the ratified wording picks out a boundary they reproduce'
+        : `expert reproduces their own boundary at ${f.expertSelfConsistency.toFixed(2)} `
+          + `(needs ${MIN_EXPERT_CONSISTENCY})` },
+    { id: 'OBSERVER_QUALIFIED',
+      // BLIND_EXPERT scoring passes this WITHOUT an observer: a target whose boundary only a person
+      // can see is still a target. It costs the expert's time, not the study's validity.
+      pass: f.scoring === 'BLIND_EXPERT'
+        || (f.observerKappa !== null && f.observerKappa >= MIN_OBSERVER_KAPPA),
+      detail: f.scoring === 'BLIND_EXPERT'
+        ? 'scored blind by the expert — no automatic observer is claimed'
+        : f.observerKappa === null
+          ? 'no observer has been tested against the expert'
+          : `observer kappa ${f.observerKappa.toFixed(2)} (needs ${MIN_OBSERVER_KAPPA})` },
     { id: 'SEMANTIC_CLOSURE', pass: f.normativeSetsMatch,
       detail: f.normativeSetsMatch
         ? 'both arms carry the same requirement set'
