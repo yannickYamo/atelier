@@ -129,7 +129,14 @@ Do not judge whether the writing is good. Only whether this specific rule was op
 
 export const OBSERVER_SCHEMA: Record<string, unknown> = {
   type: 'object',
-  properties: { applicable: { type: 'boolean' }, present: { type: 'boolean' }, why: { type: 'string' } },
+  properties: {
+    applicable: { type: 'boolean' },
+    present: { type: 'boolean' },
+    // BOUNDED AT THE SCHEMA, not by hoping the model is brief. `why` is the only unbounded field in
+    // this object, so it is the only thing that can push the response past the token limit — and a
+    // response that does not finish is not a partial observation, it is no observation.
+    why: { type: 'string', maxLength: 400 },
+  },
   required: ['applicable', 'present', 'why'], additionalProperties: false,
 };
 
@@ -222,13 +229,30 @@ export async function runDiscoveryChain(
         stableBlock: req.contextPrompt, variableBlock: req.systemPrompt,
         userMessage: 'Answer both questions now.', toolName: 'emit_observation',
         toolDescription: 'Is this rule applicable here, and was it followed?',
-        schema: OBSERVER_SCHEMA, maxTokens: 500,
+        // 500 truncated in practice on a long `why`, and the read below turned every truncation into
+        // "the rule does not apply and was not followed" — a silent FALSE NEGATIVE in the direction
+        // that under-reports the expert's own rules. `why` is now capped at 400 characters, so this
+        // is roughly six times what the object can need.
+        schema: OBSERVER_SCHEMA, maxTokens: 1500,
       });
       return { value: x, cost: x.cost };
     });
     const j = r.json as { applicable?: boolean; present?: boolean } | null;
+    // ── AN ABSENT ANSWER IS NOT A NEGATIVE ANSWER ──────────────────────────────────────────────
+    //
+    // This read was `j?.applicable === true`, which is indistinguishable from a confident NO when
+    // the object never arrived. `GoldenObservation` carries two booleans and has no way to say
+    // "not observed", so a missing field HAD to become "the rule does not apply here" — and that
+    // biases held-out confirmation downward, silently, in the direction that under-reports the
+    // expert's own standard. Refusing is the only honest option the type allows.
+    if (typeof j?.applicable !== 'boolean' || typeof j.present !== 'boolean') {
+      throw new Error(
+        `the observer returned no usable answer for ${req.proposedId} on ${req.contextId}. `
+        + 'Recording it as "not applicable" would turn a missing observation into evidence against '
+        + 'a rule the expert may well hold.');
+    }
     observations.push({ proposedId: req.proposedId, observation: {
-      contextId: req.contextId, applicable: j?.applicable === true, present: j?.applicable === true && j?.present === true } });
+      contextId: req.contextId, applicable: j.applicable, present: j.applicable && j.present } });
   }
 
   // PROSPECTIVE, because these calls just happened. `assertProspective` exists so a cached result
