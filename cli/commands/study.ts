@@ -23,6 +23,9 @@ import { profileAll, detectAll, profileJudge, judgePrompt,
   APHORISM_JUDGE_SYSTEM, APHORISM_JUDGE_SCHEMA, type HumanLabel } from '../../core/contract/observers/aphorism.js';
 import { proposeRefinement, CalibrationRefused, type CalibrationCase }
   from '../../core/discovery/extension-calibration.js';
+import { sealCalibrationSet, assertNoReuse, assertValidationUsable,
+  DevelopmentCasesReused, ValidationSetTooThin, type SealedCalibrationSet }
+  from '../../core/discovery/calibration-provenance.js';
 import { clientAndBinding } from '../runtime.js';
 import { checkMechanismExposure, describeExposure, type ExposureFacts } from '../../core/contract/mechanism-exposure.js';
 import { ablateCarrier, assertSemanticClosure, describeAblation, AblationRefused } from '../../core/contract/carrier-ablation.js';
@@ -287,8 +290,49 @@ function judge(): void {
     + `${Object.keys(APHORISM_JUDGE_SCHEMA).length} schema keys, sample: ${judgePrompt('...', '...').length} chars`);
 }
 
+/**
+ * Score a refined wording against FRESH cases, refusing anything that shaped it.
+ *
+ * The refusal is the point. The reserve machinery already refuses reused corpus evidence; nothing
+ * refused reused calibration cases, which are the same hazard one layer up.
+ */
+function validate(): void {
+  const dev = readJson<SealedCalibrationSet>(
+    flag('--development') ?? die('--development <sealed.json> required — the cases that SHAPED the rule'),
+    { what: 'the development set', requireKeys: ['caseIds', 'refinedStatement'] });
+  const { labels } = readJson<{ labels: { id: string; label: string }[] }>(
+    flag('--key') ?? die('--key <labels.json> required'),
+    { what: 'the validation labels', requireKeys: ['labels'] });
+  try {
+    assertNoReuse(dev, labels.map((l) => l.id));
+    assertValidationUsable(labels);
+  } catch (e) {
+    if (e instanceof DevelopmentCasesReused || e instanceof ValidationSetTooThin) return void die(e.message);
+    throw e;
+  }
+  const decided = labels.filter((l) => l.label !== 'UNSURE');
+  const yes = decided.filter((l) => l.label === 'YES').length;
+  console.log(`validation set clean: ${labels.length} cases, ${decided.length} decided `
+    + `(${yes} yes / ${decided.length - yes} no), none from the development set ${dev.setHash}.`);
+  console.log('\nThis says the set is ADMISSIBLE. It says nothing yet about the rule.');
+}
+
+/** Seal the cases that produced a refinement, so a later run can be refused for reusing them. */
+function sealDev(): void {
+  const { labels } = readJson<{ labels: { id: string }[] }>(
+    flag('--key') ?? die('--key <labels.json> required'), { what: 'the labels', requireKeys: ['labels'] });
+  const statement = flag('--statement') ?? die('--statement <the wording these produced> required');
+  const sealed = sealCalibrationSet(statement, 'DEVELOPMENT', labels.map((l) => l.id),
+    flag('--sealed-at') ?? new Date().toISOString());
+  writeAtomic(flag('--out') ?? die('--out <sealed.json> required'), JSON.stringify(sealed, null, 1));
+  console.log(`sealed ${sealed.caseIds.length} DEVELOPMENT cases as ${sealed.setHash}`);
+  console.log('These are spent. A validation run naming any of them is refused.');
+}
+
 export function study(): void {
   switch (argv[1]) {
+    case 'seal-development': return sealDev();
+    case 'validate': return validate();
     case 'calibrate': return void calibrate();
     case 'judge': return judge();
     case 'observe': return observe();
@@ -296,6 +340,6 @@ export function study(): void {
     case 'seal': return seal();
     case 'analyse': case 'analyze': return analyse();
     case 'screen': return screen();
-    default: die('usage: atelier study <eligibility|observe|judge|calibrate|seal|analyse|screen> [options]');
+    default: die('usage: atelier study <eligibility|observe|judge|calibrate|seal-development|validate|seal|analyse|screen> [options]');
   }
 }
