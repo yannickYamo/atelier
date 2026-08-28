@@ -19,6 +19,7 @@ import {
 import { decompose, describeEstimate, pairedBootstrap } from '../../core/contract/analysis.js';
 import { headroomOf, unmeasurableReason, screenCandidate } from '../../core/contract/headroom.js';
 import { worstPair } from '../../core/contract/diversity.js';
+import { profileAll, detectAll, type HumanLabel } from '../../core/contract/observers/aphorism.js';
 import { checkMechanismExposure, describeExposure, type ExposureFacts } from '../../core/contract/mechanism-exposure.js';
 import { ablateCarrier, assertSemanticClosure, describeAblation, AblationRefused } from '../../core/contract/carrier-ablation.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
@@ -172,12 +173,60 @@ function eligibility(): void {
   console.log(`\n${describeExposure(checkMechanismExposure(facts))}`);
 }
 
+/**
+ * Score candidate observers against a HUMAN-SEALED key.
+ *
+ * The direction matters and is the whole reason this runs before a suite is built. An endpoint that
+ * no instrument can observe is a study blocked on instrument design, and learning that costs a
+ * labelling session rather than a sealed suite and several hundred generations.
+ *
+ * The key is the expert's. No model votes here: a model-labelled key would make this a measurement
+ * of agreement between two model judgments, which is not what an accuracy number is read as.
+ */
+function observe(): void {
+  const passages = readJson<{ id: string; text: string }[]>(
+    flag('--candidates') ?? die('--candidates <passages.json> required'), { what: 'the passages' });
+  const labels = readJson<{ id: string; label: HumanLabel }[]>(
+    flag('--key') ?? die('--key <labels.json> required — the expert\'s labels, not a model\'s'),
+    { what: 'the human key' });
+
+  const byId = new Map(passages.map((p) => [p.id, p.text]));
+  const cases = labels
+    .filter((l) => byId.has(l.id))
+    .map((l) => ({ passage: byId.get(l.id)!, label: l.label }));
+  const unsure = cases.filter((c) => c.label === 'UNSURE').length;
+
+  console.log(`${cases.length} labelled passage(s); ${cases.length - unsure} decided, ${unsure} unsure.`);
+  console.log('UNSURE is excluded from accuracy rather than counted as NO — folding abstention into');
+  console.log('the negative class converts "could not tell" into "did not happen".\n');
+  console.log('  detector       agree   recall   prec.   false-pass   false-fail');
+  for (const p of profileAll(cases)) {
+    console.log(`  ${p.detector.padEnd(14)} ${p.agreement.toFixed(2).padStart(5)}   `
+      + `${p.recall.toFixed(2).padStart(5)}   ${p.precision.toFixed(2).padStart(5)}   `
+      + `${String(p.falsePass).padStart(10)}   ${String(p.falseFail).padStart(10)}`);
+  }
+  console.log('\nA detector with high agreement and many FALSE PASSES is permissive: it under-reports');
+  console.log('exactly the failures a study exists to find. Read the two columns, never the agreement alone.');
+
+  if (argv.includes('--per-passage')) {
+    console.log('\nper passage:');
+    for (const l of labels) {
+      const t = byId.get(l.id);
+      if (!t) continue;
+      const d = detectAll(t);
+      console.log(`  ${l.id}  expert=${l.label.padEnd(6)} ` +
+        Object.entries(d).map(([k, v]) => `${k}=${v ? 'Y' : 'n'}`).join(' ') + `  ${t.slice(0, 60)}`);
+    }
+  }
+}
+
 export function study(): void {
   switch (argv[1]) {
+    case 'observe': return observe();
     case 'eligibility': return eligibility();
     case 'seal': return seal();
     case 'analyse': case 'analyze': return analyse();
     case 'screen': return screen();
-    default: die('usage: atelier study <eligibility|seal|analyse|screen> [options]');
+    default: die('usage: atelier study <eligibility|observe|seal|analyse|screen> [options]');
   }
 }
