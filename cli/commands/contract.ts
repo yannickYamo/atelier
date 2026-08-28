@@ -241,7 +241,11 @@ export async function contract(): Promise<void> {
         continue;
       }
       const component = arch.components.find((x) => x.carries.includes(c.requirementIds[0]));
-      const r = proposeRepair('IMPLEMENTATION_MISS',
+      // The obligation decides whether escalation is even the right direction. A rule that fired
+      // where it should not have is not fixed by carrying it harder.
+      const obligation = suite.obligations.find((o) => o.obligationId === c.obligationId);
+      if (!obligation) { console.log(`\n  ${id}: no obligation on record; nothing to repair.`); continue; }
+      const r = proposeRepair('IMPLEMENTATION_MISS', obligation.kind,
         { requirementId: c.requirementIds[0], carrierAtServe: component?.carrier ?? 'PROSE',
           invocationId: `contract:${suite.suiteHash}:${id}` } as never, arch);
       if ('refused' in r) { console.log(`\n  ${id}: ${r.reason}`); continue; }

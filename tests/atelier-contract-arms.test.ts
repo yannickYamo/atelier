@@ -118,7 +118,7 @@ describe('only an implementation miss may change an implementation', () => {
   it('checks the route before it looks at the architecture', () => {
     // Asking "can this be escalated" first would produce a well-formed operation for a diagnosis
     // with no standing, and a well-formed operation is the kind of thing a caller applies.
-    const r = proposeRepair('STANDARD_GAP',
+    const r = proposeRepair('STANDARD_GAP', 'SHOULD_FIRE',
       { requirementId: 'x1', carrierAtServe: 'PROSE', invocationId: 'i1' } as never,
       { architectureHash: 'a', standardVersionHash: 'sv1', components: [] });
     expect('refused' in r && r.refused).toBe(true);

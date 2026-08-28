@@ -114,7 +114,10 @@ export async function runCase(
   client: InferenceClient, budget: Budget, c: ContractTestCase, run: RunSkill,
 ): Promise<CaseOutcome> {
   const output = await run(c.task);
-  const negative = c.expectation.includes('must NOT') || c.expectation.includes('must not');
+  // FROM THE TYPED KIND, never from the prose. Reading "must not" out of the expectation made the
+  // polarity depend on which casing an obligation happened to use, and would invert silently the
+  // first time somebody reworded a sentence.
+  const negative = c.obligationKind === 'SHOULD_NOT_FIRE' || c.obligationKind === 'SHOULD_NOT_APPLY';
 
   if (c.observation === 'DETERMINISTIC') {
     const { ok, why } = checkShape(output, c.expectation);

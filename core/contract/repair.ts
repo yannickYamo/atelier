@@ -34,11 +34,38 @@ import { createHash } from 'node:crypto';
 import type { StandardVersion } from '../state/canonical-state.js';
 import type { SkillArchitecture } from '../architecture/compile.js';
 import type { DiagnosisRoute } from '../diagnosis/diagnose.js';
+import type { ObligationKind } from './obligation.js';
 import { proposeEscalation, type ServedMissEvidence, type EscalateCarrier, type EscalationRefusal }
   from '../architecture/escalate.js';
 
 /** Routes that may cause an implementation to change. Exactly one. */
 export const REPAIRABLE_ROUTES: readonly DiagnosisRoute[] = ['IMPLEMENTATION_MISS'];
+
+/**
+ * FAILURES ESCALATION CAN ACTUALLY FIX, AND THE ONES IT WOULD MAKE WORSE.
+ *
+ * The only repair this system knows is to carry a requirement HARDER — prose to self-check, and so
+ * on up the ladder. That helps two kinds of failure: a behaviour that was supposed to appear and did
+ * not, and a prohibition that was violated, where a check against the finished draft is exactly what
+ * catches it.
+ *
+ * It is the wrong direction for over-application. A SHOULD_NOT_APPLY case fails when a conditional
+ * rule was invoked where its condition did not hold, and escalating a rule that is already
+ * over-applying makes it more prominent and more likely to fire again. This is not a
+ * speculative worry: the pricing study measured compilation preserving WHAT to say and losing WHEN
+ * NOT to say it, and the dilution study measured added rule load degrading a model's ability to tell
+ * applicable from inapplicable. Escalating here would be spending both findings in the wrong
+ * direction while reporting a repair.
+ *
+ * A BOUNDARY case has no correct answer by construction, so nothing about it can be a miss. An
+ * INTERACTION names two requirements and cannot attribute the failure to either.
+ *
+ * Those failures are real and worth reporting. They are an APPLICABILITY problem, and this system
+ * has no repair for one — which is a gap to state rather than a gap to paper over with the repair it
+ * happens to own.
+ */
+export const ESCALATION_FIXES: readonly ObligationKind[] =
+  ['SHOULD_FIRE', 'SHOULD_NOT_FIRE', 'OUTPUT_SHAPE'];
 
 export interface RepairRefused { readonly refused: true; readonly reason: string }
 
@@ -111,11 +138,27 @@ export interface RepairProposal {
  */
 export function proposeRepair(
   route: DiagnosisRoute,
+  obligation: ObligationKind,
   evidence: ServedMissEvidence,
   arch: SkillArchitecture,
 ): RepairProposal | RepairRefused {
   const admitted = admitsRepair(route);
   if (admitted.refused) return admitted;
+
+  if (!ESCALATION_FIXES.includes(obligation)) {
+    const why: Partial<Record<ObligationKind, string>> = {
+      SHOULD_NOT_APPLY: 'a conditional rule was applied where its condition did not hold. The only '
+        + 'repair here is to carry it HARDER, which makes an over-applying rule more prominent and '
+        + 'more likely to fire again. This is an applicability problem and this system has no repair '
+        + 'for one; reporting that is more useful than spending the repair it happens to own.',
+      BOUNDARY: 'a boundary case has no correct answer by construction, so nothing about it is a miss '
+        + 'and there is nothing to repair. What it records is which way the implementation went.',
+      INTERACTION: 'the case names two requirements and cannot attribute the failure to either. '
+        + 'Escalating one of them would spend a change on a guess.',
+    };
+    return { refused: true, reason: why[obligation]
+      ?? `a ${obligation} failure is not the kind escalation fixes.` };
+  }
 
   const op: EscalateCarrier | EscalationRefusal = proposeEscalation(evidence, arch);
   if ('refused' in op) return { refused: true, reason: op.reason };
