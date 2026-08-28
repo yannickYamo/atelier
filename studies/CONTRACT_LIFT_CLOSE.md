@@ -1,14 +1,20 @@
 # Contract lift, BARE vs INITIAL — CLOSE
 
 > **WITHDRAWN IN PART, 2026-08-28.** Every COVERAGE figure below is withdrawn: the generations
-> behind it were truncated by the model's thinking budget before an answer was written, so what was
+> behind it were cut off at the token limit before an answer was written, so what was
 > scored was truncation and not behaviour. 27 of 48 `SHOULD_FIRE` generations ran short; **0 of 48**
 > `SHOULD_NOT_APPLY` generations did. **The restraint findings stand and are unaffected.** The
 > "components oppose each other" framing is not supported, because one component was never measured.
 > See [NEGATIVE_BRANCH_CLOSE.md](NEGATIVE_BRANCH_CLOSE.md) §2, which also reports the fix for the
 > restraint failure this study found.
+>
+> **REFUTED, not merely withdrawn, 2026-08-28.** A remeasurement at an adequate generation budget
+> found coverage at **1.000 in all three arms** — bare, one-sided and two-sided alike. The `+0.167`
+> reported here was an artifact of truncation end to end, and the bare `0.083` was not a low baseline
+> but a censored one. See NEGATIVE_BRANCH_CLOSE.md §R2.
 
-**Status: CLOSED. The primary is a NULL, and its two components oppose each other.** Per the
+**Status: CLOSED. The primary is a NULL. The "two components oppose each other" reading is
+RETRACTED** — one component was never validly measured, and remeasurement later found it at ceiling. Per the
 preregistration nothing was rerun, n was not increased, and the suite was not touched after outputs
 existed.
 
