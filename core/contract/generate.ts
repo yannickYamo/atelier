@@ -22,6 +22,7 @@ import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { Obligation } from './obligation.js';
 import type { ContractTestCase } from './suite.js';
+import { judgeCandidate, MAX_OVERLAP, type DiversityDecision } from './diversity.js';
 
 export const GENERATOR_SYSTEM = `You write ONE test task.
 
@@ -50,8 +51,12 @@ export const GENERATOR_SCHEMA: Record<string, unknown> = {
 
 export class GenerationRefused extends Error {}
 
-const promptFor = (o: Obligation, workType: string): string =>
-  `WORK TYPE: ${workType}\n`
+const promptFor = (o: Obligation, workType: string, taken: readonly string[] = []): string =>
+  (taken.length
+    ? 'ALREADY USED — write about a COMPLETELY different domain, industry and situation:\n'
+      + taken.map((t, n) => `${n + 1}. ${t}`).join('\n') + '\n\n'
+    : '')
+  + `WORK TYPE: ${workType}\n`
   + `OBLIGATION KIND: ${o.kind}\n`
   + `SITUATION TO CONSTRUCT: ${o.situation}\n`
   + `WHAT THE STANDARD REQUIRES THERE: ${o.expectation}\n\n`
@@ -67,20 +72,49 @@ const promptFor = (o: Obligation, workType: string): string =>
  * generate are exactly the ones nothing will test, and a suite quietly missing its negative cases
  * looks like a suite that passed them.
  */
+/**
+ * Refuse a candidate for a reason the caller can act on. Injected, because WHAT MAKES A CASE VALID
+ * is a property of the obligation and not of this loop — a step-count check belongs to a rule about
+ * steps. Returning a string rejects and retries; `null` accepts.
+ */
+export type CaseValidator = (task: string, o: Obligation) => Promise<string | null>;
+
+export interface GeneratedSuite {
+  readonly cases: readonly ContractTestCase[];
+  /** every candidate the diversity gate saw and what it decided. Sealed with the suite. */
+  readonly diversity: readonly DiversityDecision[];
+  /** every validator rejection, so a suite can show what it refused rather than only what it kept */
+  readonly rejected: readonly { readonly obligationId: string; readonly task: string; readonly why: string }[];
+}
+
+/** Attempts per obligation before the run is refused. */
+export const MAX_ATTEMPTS = 8;
+
 export async function generateCases(
   client: InferenceClient,
   budget: Budget,
   obligations: readonly Obligation[],
   workType: string,
-): Promise<readonly ContractTestCase[] | GenerationRefused> {
+  opts: { readonly validate?: CaseValidator; readonly maxOverlap?: number } = {},
+): Promise<GeneratedSuite | GenerationRefused> {
   const cases: ContractTestCase[] = [];
+  const diversity: DiversityDecision[] = [];
+  const rejected: { obligationId: string; task: string; why: string }[] = [];
+  const threshold = opts.maxOverlap ?? MAX_OVERLAP;
+
   for (const [i, o] of obligations.entries()) {
+   let accepted: string | null = null;
+   let lastWhy = 'no attempt produced a task';
+   for (let attempt = 1; attempt <= MAX_ATTEMPTS && accepted === null; attempt++) {
     let json: unknown;
     try {
       const r = await spend(budget, 0.01, async () => {
         const x = await client.complete({
           stableBlock: GENERATOR_SYSTEM, variableBlock: '',
-          userMessage: promptFor(o, workType),
+          // WHAT IS ALREADY TAKEN IS SHOWN. Asked the same question with no memory, a generator
+          // converges: one frozen suite had 13 near-duplicate pairs, ALL in the arm that carried the
+          // finding. The diversity gate below is the refusal; this is what stops it firing constantly.
+          userMessage: promptFor(o, workType, cases.map((c) => c.task)),
           toolName: 'emit_task',
           toolDescription: 'Emit one realistic task for the situation described.',
           schema: GENERATOR_SCHEMA, maxTokens: 600,
@@ -99,6 +133,27 @@ export async function generateCases(
     if (typeof task !== 'string' || !task.trim()) {
       return new GenerationRefused(`the generator returned no task for ${o.obligationId}.`);
     }
+    const candidate = task.trim();
+
+    // ── THE GATE, AND IT RUNS BEFORE THE FREEZE RATHER THAN AS A REPORT AFTER IT ──────────────
+    const decision = judgeCandidate(candidate, cases.map((c) => ({ id: c.caseId, task: c.task })), threshold);
+    diversity.push(decision);
+    if (!decision.accepted) {
+      lastWhy = `too similar to ${decision.collidedWith} at ${decision.overlap.toFixed(2)}`;
+      continue;
+    }
+
+    // The validator sees the obligation, so "does this case correspond to what it claims to test"
+    // is answered against the obligation rather than against this loop's idea of a good task.
+    if (opts.validate) {
+      const why = await opts.validate(candidate, o);
+      if (why !== null) {
+        rejected.push({ obligationId: o.obligationId, task: candidate, why });
+        lastWhy = why;
+        continue;
+      }
+    }
+    accepted = candidate;
 
     cases.push({
       caseId: `c${String(i + 1).padStart(3, '0')}`,
@@ -107,11 +162,20 @@ export async function generateCases(
       obligationId: o.obligationId,
       obligationKind: o.kind,
       requirementIds: o.requirementIds,
-      task: task.trim(),
+      task: candidate,
       expectation: o.expectation,
       observation: o.observation,
       provenance: 'MODEL_GENERATED',
     });
+   }
+   if (accepted === null) {
+     // A PARTIAL SUITE IS WORSE THAN NONE. The obligations that failed to generate are exactly the
+     // ones nothing will test, and a suite quietly missing its negative cases looks like a suite
+     // that passed them.
+     return new GenerationRefused(
+       `no admissible case for ${o.obligationId} after ${MAX_ATTEMPTS} attempts; last refusal: ${lastWhy}. `
+       + `${cases.length} of ${obligations.length} obligations had been filled. Nothing was sealed.`);
+   }
   }
-  return cases;
+  return { cases, diversity, rejected };
 }

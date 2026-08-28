@@ -99,8 +99,15 @@ export async function contract(): Promise<void> {
     console.log(`${obligations.length} obligation(s) derived from StandardVersion ${v.standardVersionHash}.`);
     console.log(`Generating one case each with ${describeBinding(binding)}. Cap $${cap.toFixed(2)}.\n`);
     const generated = await generateCases(client, budget, obligations, v.workType);
-    const cases = generated instanceof GenerationRefused ? die(generated.message) : generated;
-    const sealed = sealSuite(v, cases);
+    const gen = generated instanceof GenerationRefused ? die(generated.message) : generated;
+    const sealed = sealSuite(v, gen.cases);
+    // WHAT THE GATE EXCLUDED, said out loud. A filter whose decisions are unrecorded is a claim
+    // about the suite rather than a property of it.
+    const dropped = gen.diversity.filter((d) => !d.accepted).length;
+    if (dropped || gen.rejected.length) {
+      console.log(`  refused ${dropped} near-duplicate candidate(s) and ${gen.rejected.length} that `
+        + 'did not correspond to their obligation, before sealing.');
+    }
     suite = sealed instanceof SuiteRefused ? die(sealed.message) : sealed;
     writeAtomic(path, JSON.stringify(suite, null, 1));
     console.log(`sealed suite ${suite.suiteHash}: ${suite.searchCaseIds.length} search, `
