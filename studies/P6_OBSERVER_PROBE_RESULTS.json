@@ -1,0 +1,146 @@
+[
+ {
+  "id": "m01",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "It restates the prior claim that the problem space is where the value lies, as advice, adding no new information—just re-landing the point more directly."
+ },
+ {
+  "id": "m02",
+  "expert": "YES",
+  "judge": "NO",
+  "why": "It restates the prioritization point but adds new content — the basis for the call (fleet telemetry and sim metrics vs. engineering preference) and a personal stake/aspiration, moving the piece forward rather than merely re-landing."
+ },
+ {
+  "id": "m03",
+  "expert": "YES",
+  "judge": "NO",
+  "why": "The prior text argues that shaping cost preferences changes perceived behavior; the final sentence introduces a new causal claim about trust compounding from the rider's unconscious mental model and fleet coherence — new conceptual ground rather than a compressed restatement."
+ },
+ {
+  "id": "m04",
+  "expert": "NO",
+  "judge": "YES",
+  "why": "It restates the preceding claim—that manual work is now a choice rather than a burden—as a compact rhetorical contrast, adding no new information or evidence; delete it and only the punch is lost."
+ },
+ {
+  "id": "m05",
+  "expert": "UNSURE",
+  "judge": "NO",
+  "why": "The final sentence supplies a concrete illustrative example of the abstract principle just stated, adding specificity rather than merely restating the point in compressed form."
+ },
+ {
+  "id": "m06",
+  "expert": "NO",
+  "judge": "NO",
+  "why": "It supplies new evidence (growth figures, outcome of the tour) and extends the point about atomic networks rather than restating the prior claim in compressed form."
+ },
+ {
+  "id": "m07",
+  "expert": "NO",
+  "judge": "YES",
+  "why": "It restates the prior claim (\"you already have the answers\") in a punchier closing line, adding no new information or argumentative move."
+ },
+ {
+  "id": "m08",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "It restates the \"consistent, recognizable personality\" point in a punchier, concrete formulation without adding new information or advancing the argument."
+ },
+ {
+  "id": "m09",
+  "expert": "NO",
+  "judge": "NO",
+  "why": "Rather than compressing, it elaborates the prior claim by listing additional specific capabilities (timeline estimation, failure-mode anticipation, durable value) not previously stated; it extends rather than re-lands in fewer words."
+ },
+ {
+  "id": "m10",
+  "expert": "UNSURE",
+  "judge": "NO",
+  "why": "It adds new figures (10k users, 40-50% monthly growth) and extends the point to consequences, rather than merely restating the prior sentence more punchily."
+ },
+ {
+  "id": "m11",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "The prior sentences already describe decisive, unhurried, safe driving; the final line just restates that in compressed, punchy form (\"less dithering\") without adding new information."
+ },
+ {
+  "id": "m12",
+  "expert": "NO",
+  "judge": "YES",
+  "why": "It restates the preceding plan-pitch as a compressed slogan, adding no new information — pure punch line."
+ },
+ {
+  "id": "m13",
+  "expert": "NO",
+  "judge": "NO",
+  "why": "The final sentence supplies new factual context (scrap rates, cost, buyer budget) rather than restating the prior point about packaging an ML model; it advances the argument."
+ },
+ {
+  "id": "m14",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "It restates the prior diagnosis (no outcome identified, missed opportunity, poor results) in a punchier \"feature, not a solution\" formula without adding new information."
+ },
+ {
+  "id": "m15",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "It restates the prior claim that systems/architectural thinking is the differentiator, naming the same skills in condensed form; no new evidence or argumentative move."
+ },
+ {
+  "id": "m16",
+  "expert": "YES",
+  "judge": "NO",
+  "why": "Rather than compressing into a punchy restatement, it steps back to characterize Graham's essay and its target (Silicon Valley scalability obsession), adding framing/content and moving the argument on rather than merely re-landing it in fewer words."
+ },
+ {
+  "id": "m17",
+  "expert": "NO",
+  "judge": "NO",
+  "why": "The prior sentence states an observation about value distribution; the final sentence issues a prescriptive recommendation (pricing/packaging advice) not already stated, advancing the argument rather than restating it."
+ },
+ {
+  "id": "m18",
+  "expert": "UNSURE",
+  "judge": "NO",
+  "why": "The preceding sentence defines a value cascade; the final sentence issues a new prescriptive recommendation (instrument once, reuse across pricing/renewals/upsell) rather than restating that cascade in compressed form. It advances to application."
+ },
+ {
+  "id": "m19",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "It restates the prior claim—PMs rush to build instead of doing problem/solution discovery—as a compact aphorism, adding no new information; deleting it loses only the punch."
+ },
+ {
+  "id": "m20",
+  "expert": "UNSURE",
+  "judge": "YES",
+  "why": "The prior sentence already asserts the archetype governs urgency, proof, and tone; the closer just restates the stakes of getting it wrong in punchier form, adding no new information or step."
+ },
+ {
+  "id": "m21",
+  "expert": "YES",
+  "judge": "YES",
+  "why": "It restates the consequence already implied by giving away the most valuable capabilities in entry-level tiers, landing the point in fewer words without adding new evidence or moving to a new claim."
+ },
+ {
+  "id": "m22",
+  "expert": "NO",
+  "judge": "NO",
+  "why": "Rather than restating the prior claim in compressed form, it introduces/frames a new object — the playbook — and moves the piece forward into what follows."
+ },
+ {
+  "id": "m23",
+  "expert": "YES",
+  "judge": "NO",
+  "why": "The sentence extends the list of benefits (segment fit, prioritization) rather than restating the prior point more compactly; it adds a new consequence of identifying the archetype."
+ },
+ {
+  "id": "m24",
+  "expert": "YES",
+  "judge": "UNSURE",
+  "why": "Only one prior sentence, a vague teaser (\"the silence tells you everything\"), is given. The final sentence supplies the content of that delusion rather than clearly restating an argument already made, but with so little preceding text I can't tell whether it compresses or advances."
+ }
+]
