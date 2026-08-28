@@ -170,7 +170,8 @@ describe('the suite is sealed before anything optimizes against it', () => {
 describe('a contract run cannot claim deployment reliability', () => {
   const result: ContractResult = {
     suiteHash: 'h', skillVersionHash: 'sv', role: 'HOLDOUT',
-    passed: ['a', 'b', 'c'], failed: ['d'], unobservable: ['e'],
+    passed: ['a', 'b', 'c'], failed: ['d'],
+    apparentPass: ['f', 'g'], apparentFail: ['h'], unobservable: ['e'],
     obligationsCovered: 4, obligationsTotal: 6,
   };
 
@@ -187,7 +188,11 @@ describe('a contract run cannot claim deployment reliability', () => {
     expect(s).toContain('constructed');
     expect(s).toMatch(/not independent samples/i);
     expect(s).toMatch(/do not estimate/i);
-    expect(s).toContain('3 of 5');
+    expect(s).toContain('8 constructed case(s)');
+    // The two readings are reported separately, or the weaker one gets quoted as the stronger.
+    expect(s).toMatch(/decided: 3 passed, 1 failed/);
+    expect(s).toMatch(/unqualified reader: 2 appear to pass, 1 appear to fail/);
+    expect(s).toMatch(/certifies nothing/);
   });
 
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((e) => {
