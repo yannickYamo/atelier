@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderRatifyPage } from '../renderers/ratify-page/render.js';
 import { aRequirement } from './fixtures.js';
+import { readFileSync } from 'node:fs';
 
 const meta = { corpusHash: 'c0ffee', workType: 'writing', itemCount: 7, heldOutChecked: true };
 
@@ -103,5 +104,26 @@ describe('the page holds in both themes and stores nothing off-device', () => {
   });
   it('says plainly that nothing leaves the browser', () => {
     expect(html).toContain('Nothing is sent anywhere');
+  });
+});
+
+describe('the evaluation apparatus is not offered to users', () => {
+  const src = readFileSync(new URL('../cli/atelier.mts', import.meta.url), 'utf8');
+
+  it('study is dispatchable but absent from what a user is told about', () => {
+    // Being asked to hand-label thirty sentences out of context is a bad experience, and it is not
+    // what anyone installed this for. Sealing suites, scoring observers and auditing carrier
+    // eligibility are things WE do to Atelier.
+    expect(src).toMatch(/const EVAL_ONLY: readonly string\[\] = \['study'\]/);
+    expect(src).toMatch(/COMMANDS\.filter\(\(c\) => !EVAL_ONLY\.includes\(c\)\)/);
+    // Still reachable: a second binary would drift, and the apparatus would measure code the
+    // product does not run.
+    expect(src).toMatch(/case 'study':/);
+  });
+
+  it('but ratify --page IS a user surface, because that step is theirs', () => {
+    const ratify = readFileSync(new URL('../cli/commands/ratify.ts', import.meta.url), 'utf8');
+    expect(ratify).toMatch(/--page/);
+    expect(ratify).toContain('atelier ratify --page');
   });
 });

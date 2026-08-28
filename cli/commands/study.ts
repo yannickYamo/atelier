@@ -184,11 +184,12 @@ function eligibility(): void {
  * of agreement between two model judgments, which is not what an accuracy number is read as.
  */
 function observe(): void {
-  const passages = readJson<{ id: string; text: string }[]>(
-    flag('--candidates') ?? die('--candidates <passages.json> required'), { what: 'the passages' });
-  const labels = readJson<{ id: string; label: HumanLabel }[]>(
+  const { passages } = readJson<{ passages: { id: string; text: string }[] }>(
+    flag('--candidates') ?? die('--candidates <passages.json> required'),
+    { what: 'the passages', requireKeys: ['passages'] });
+  const { labels } = readJson<{ labels: { id: string; label: HumanLabel }[] }>(
     flag('--key') ?? die('--key <labels.json> required — the expert\'s labels, not a model\'s'),
-    { what: 'the human key' });
+    { what: 'the human key', requireKeys: ['labels'] });
 
   const byId = new Map(passages.map((p) => [p.id, p.text]));
   const cases = labels
