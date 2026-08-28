@@ -8,7 +8,8 @@
 // and decides nothing itself. Sealing and analysis are here because they need no provider, which
 // means they can be exercised — and audited — without spending anything.
 
-import { argv, flag, die, numericFlag } from '../runtime.js';
+import { argv, flag, die, numericFlag, DATA } from '../runtime.js';
+import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import {
@@ -18,6 +19,11 @@ import {
 import { decompose, describeEstimate, pairedBootstrap } from '../../core/contract/analysis.js';
 import { headroomOf, unmeasurableReason, screenCandidate } from '../../core/contract/headroom.js';
 import { worstPair } from '../../core/contract/diversity.js';
+import { checkMechanismExposure, describeExposure, type ExposureFacts } from '../../core/contract/mechanism-exposure.js';
+import { ablateCarrier, assertSemanticClosure, describeAblation, AblationRefused } from '../../core/contract/carrier-ablation.js';
+import { compileArchitecture } from '../../core/architecture/compile.js';
+import * as store from '../../core/state/store.js';
+import type { StandardVersion } from '../../core/state/canonical-state.js';
 
 function seal(): void {
   const src = flag('--contexts') ?? die('usage: atelier study seal --contexts <file.json> --out <file.json>');
@@ -113,11 +119,65 @@ function screen(): void {
   console.log('confirmatory comparison, and its contexts are burned rather than reused.');
 }
 
+/**
+ * May a study on this standard claim to test a carrier at all?
+ *
+ * Static: no inference, no spend. Compiles the standard, reports every requirement's carrier, and
+ * runs the eight exposure conditions against the named target. A FAIL is a finding, not an obstacle
+ * — the reportable sentence is that the available standards do not permit a valid test.
+ */
+function eligibility(): void {
+  const name = flag('--skill') ?? die('usage: atelier study eligibility --skill <name> --target <requirementId>');
+  const target = flag('--target') ?? die('--target <requirementId> required — a study must NAME the mechanism it tests');
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  // Resolved through the ACTIVE SkillVersion rather than guessed: the standard a study must audit is
+  // the one the skill actually serves, not the newest one on disk.
+  const active = store.getActive(L) ?? die(`${name} has no active SkillVersion — build it first.`);
+  const svHash = flag('--standard')
+    ?? store.getSkillVersion(L, active)?.standardVersionHash
+    ?? die(`the active SkillVersion ${active} names no standard.`);
+  const v: StandardVersion = store.getStandard(L, svHash) ?? die(`standard ${svHash} is missing.`);
+
+  const full = compileArchitecture(v);
+  console.log(`standard ${v.standardVersionHash} — ${full.components.length} components\n`);
+  for (const c of full.components) {
+    console.log(`  ${c.carries.join('+').padEnd(18)} ${c.carrier.padEnd(16)} ${c.gateRole}`);
+  }
+
+  let ablated;
+  try {
+    ablated = ablateCarrier(v, target, 'PROSE');
+    assertSemanticClosure(full, ablated);
+  } catch (e) {
+    if (e instanceof AblationRefused) die(`\nablation refused: ${e.message}`);
+    throw e;
+  }
+  console.log(`\n${describeAblation(ablated)}`);
+
+  const r = v.requirements.find((x) => x.requirementId === target);
+  const facts: ExposureFacts = {
+    targetRequirementId: target,
+    targetCarrier: ablated.originalCarrier,
+    targetAuthority: r?.authority ?? 'UNKNOWN',
+    // GENERAL scope needs no instrument to decide applicability, which is why it is preferred.
+    applicabilityBasis: r && isGeneralScope(r.appliesWhen) ? 'GENERAL' : 'MODEL_JUDGED',
+    // Supplied by the caller until a sealed suite exists to count against; a study reads it from there.
+    contextsExercisingTarget: numericFlag('--contexts-exercising', 0),
+    observationMode: flag('--observation') ?? 'STRUCTURAL',
+    controlCarrier: ablated.ablatedCarrier,
+    // Proven from an invocation record, never assumed. Absent evidence is absent delivery.
+    deliveredAtRuntime: argv.includes('--delivery-proven'),
+    normativeSetsMatch: true,
+  };
+  console.log(`\n${describeExposure(checkMechanismExposure(facts))}`);
+}
+
 export function study(): void {
   switch (argv[1]) {
+    case 'eligibility': return eligibility();
     case 'seal': return seal();
     case 'analyse': case 'analyze': return analyse();
     case 'screen': return screen();
-    default: die('usage: atelier study <seal|analyse|screen> [options]');
+    default: die('usage: atelier study <eligibility|seal|analyse|screen> [options]');
   }
 }
