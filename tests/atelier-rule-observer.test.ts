@@ -20,7 +20,7 @@ function stub(picks: readonly string[]): InferenceClient {
     async complete(): Promise<InferenceResult> {
       const pick = picks[Math.min(i++, picks.length - 1)];
       return { json: { pick, why: 'because' }, modelId: 'stub', inputTokens: 0,
-        cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0 };
+        cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0, termination: { kind: 'COMPLETE' as const } };
     },
   };
 }
@@ -32,7 +32,7 @@ function longestWins(): InferenceClient {
       const a = req.stableBlock.split('## A\n\n')[1]?.split('\n\n## B')[0] ?? '';
       const b = req.stableBlock.split('## B\n\n')[1]?.split('\n\nAnswer with')[0] ?? '';
       return { json: { pick: a.length >= b.length ? 'A' : 'B', why: 'longer' }, modelId: 'stub',
-        inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0 };
+        inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, cost: { basis: 'API_METERED' as const, billingUsd: 0 }, costUsd: 0, termination: { kind: 'COMPLETE' as const } };
     },
   };
 }

@@ -47,6 +47,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'exclude', 'from', 'host', 'id', 'invocation', 'kind',
   'labels', 'max-calls', 'model', 'name', 'note',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
+  'max-tokens', 'probe-cap',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
