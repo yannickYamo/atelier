@@ -27,7 +27,19 @@ import { generateCases, GenerationRefused } from '../../core/contract/generate.j
 import { sealSuite, searchCases, describeContractResult, SuiteRefused,
   type ContractTestSuite } from '../../core/contract/suite.js';
 import { runCase, foldOutcomes, type CaseOutcome } from '../../core/contract/run.js';
+import { requestFor, type ContractArm, type ArmContext } from '../../core/contract/arm.js';
+import { bindingHash } from '../../core/runtime/binding.js';
+import { proposeRepair, assertSameTarget } from '../../core/contract/repair.js';
+import { applyEscalation } from '../../core/architecture/escalate.js';
+import { renderAgentSkill } from '../../renderers/agent-skill/render.js';
+import { sha } from '../runtime.js';
+import { tallyOf, describeArmComparison, type ArmTally } from '../../core/contract/compare-arms.js';
 import { resolveServedSkill } from './invoke.js';
+
+const OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: 'object', properties: { output: { type: 'string' } },
+  required: ['output'], additionalProperties: false,
+};
 
 const suitePath = (name: string, standardVersionHash: string): string =>
   join(DATA, 'skills', name, 'contract', `${standardVersionHash}.json`);
@@ -85,31 +97,119 @@ export async function contract(): Promise<void> {
     : searchCases(suite);
 
   const { servedText } = resolveServedSkill(name);
-  const outcomes: CaseOutcome[] = [];
-  console.log(`\nRunning ${toRun.length} case(s) on the ${onHoldout ? 'HOLDOUT' : 'search'} half.\n`);
-  for (const c of toRun) {
-    const outcome = await runCase(client, budget, c, async (task) => {
-      const r = await client.complete({
-        stableBlock: servedText, variableBlock: '', userMessage: task,
-        toolName: 'emit_output', toolDescription: 'Produce the requested work.',
-        schema: { type: 'object', properties: { output: { type: 'string' } },
-          required: ['output'], additionalProperties: false },
-        maxTokens: 1200,
+
+  /** Every arm runs through this, so the only thing that can differ between them is the bytes. */
+  const runArm = async (arm: ContractArm, bytes: string | null): Promise<CaseOutcome[]> => {
+    const outcomes: CaseOutcome[] = [];
+    for (const c of toRun) {
+      const outcome = await runCase(client, budget, c, async (task) => {
+        const ctx: ArmContext = {
+          task, maxTokens: 1200, toolName: 'emit_output',
+          toolDescription: 'Produce the requested work.', schema: OUTPUT_SCHEMA,
+        };
+        const r = await client.complete(requestFor(arm, bytes, ctx));
+        // The schema declares `output` as a string, but a schema is what was ASKED for and a
+        // provider may return anything. Coercing an object here would serve "[object Object]" to
+        // the reader as though it were the skill's work.
+        const out = (r.json as { output?: unknown }).output;
+        return typeof out === 'string' ? out : '';
       });
-      // The schema declares `output` as a string, but a schema is what was ASKED for and a provider
-      // may return anything. Coercing an object here would serve "[object Object]" to the reader as
-      // though it were the skill's work.
-      const out = (r.json as { output?: unknown }).output;
-      return typeof out === 'string' ? out : '';
-    });
-    outcomes.push(outcome);
-    const mark = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
-      APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed' }[outcome.verdict];
-    console.log(`  ${c.caseId}  ${mark.padEnd(14)} ${c.obligationId}`);
+      outcomes.push(outcome);
+      if (arm !== 'BARE') {
+        const mark = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
+          APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed' }[outcome.verdict];
+        console.log(`  ${c.caseId}  ${mark.padEnd(14)} ${c.obligationId}`);
+      }
+    }
+    return outcomes;
+  };
+
+  const role = onHoldout ? 'HOLDOUT' as const : 'SEARCH' as const;
+  console.log(`\nRunning ${toRun.length} case(s) on the ${onHoldout ? 'HOLDOUT' : 'search'} half.\n`);
+  const outcomes = await runArm('INITIAL', servedText);
+  const result = foldOutcomes(suite, active, role, outcomes);
+  console.log(`\n${describeContractResult(result)}`);
+
+  // ── THE CONTROL ARM ──────────────────────────────────────────────────────────────────────────
+  //
+  // Reporting only. It answers "did this skill change the model at all", which nothing else here can
+  // answer and which a person is entitled to. It never reaches the diagnosis: what to repair is a
+  // function of the standard and of what the implementation did, and a rule the runtime already
+  // satisfies is still a rule the implementation owes, because the next binding may not satisfy it.
+  const tallies: ArmTally[] = [];
+  if (argv.includes('--bare')) {
+    console.log('\nRunning the same cases with no Atelier-derived carrier at all.');
+    const bareOutcomes = await runArm('BARE', null);
+    tallies.push(tallyOf('BARE', foldOutcomes(suite, 'none', role, bareOutcomes)));
+    tallies.push(tallyOf('INITIAL', result));
+    console.log(`\n${describeArmComparison(tallies)}`);
+    console.log(`\n  suite ${suite.suiteHash} · standard ${v.standardVersionHash} · skill ${active}`
+      + `\n  binding ${bindingHash(binding)}`);
   }
 
-  const result = foldOutcomes(suite, active, onHoldout ? 'HOLDOUT' : 'SEARCH', outcomes);
-  console.log(`\n${describeContractResult(result)}`);
+  // ── THE REPAIR ATTEMPT ───────────────────────────────────────────────────────────────────────
+  //
+  // NO MODEL IS ASKED WHAT WENT WRONG. `diagnose.ts` exists to map a free-text complaint onto a
+  // requirement; a contract case already knows which requirement it came from, so a call to
+  // re-derive that would invent nothing and could only introduce error.
+  //
+  // The route is IMPLEMENTATION_MISS by construction for a single-requirement obligation: the
+  // standard contains the rule, because the obligation was derived from it, and the implementation
+  // did not carry it. An INTERACTION case names two requirements and cannot attribute the miss to
+  // either, which is UNCERTAIN and authorises nothing — the same rule `routeFrom` applies when a
+  // mapping names more than one.
+  //
+  // An APPARENT_FAIL may propose a repair. That is guiding a diagnosis, which an unqualified reader
+  // is allowed to do. What it may not do is certify or promote, and nothing below promotes.
+  if (argv.includes('--repair') && !onHoldout) {
+    const failing = [...result.failed, ...result.apparentFail];
+    const arch = store.getArchitecture(L, v.standardVersionHash) ?? die('the architecture for this skill is missing.');
+    const proposals = [];
+    for (const id of failing) {
+      const c = toRun.find((x) => x.caseId === id);
+      if (!c) continue;
+      if (c.requirementIds.length !== 1) {
+        console.log(`\n  ${id}: names ${c.requirementIds.length} requirements, so the miss cannot be `
+          + 'attributed to either. UNCERTAIN authorises no change.');
+        continue;
+      }
+      const component = arch.components.find((x) => x.carries.includes(c.requirementIds[0]));
+      const r = proposeRepair('IMPLEMENTATION_MISS',
+        { requirementId: c.requirementIds[0], carrierAtServe: component?.carrier ?? 'PROSE',
+          invocationId: `contract:${suite.suiteHash}:${id}` } as never, arch);
+      if ('refused' in r) { console.log(`\n  ${id}: ${r.reason}`); continue; }
+      proposals.push(r);
+    }
+
+    if (!proposals.length) {
+      console.log('\nNo repair was proposed. That is a closed loop with nothing to change, not a failure.');
+    } else {
+      console.log(`\n${proposals.length} repair(s) proposed:`);
+      for (const p of proposals) console.log(`  ${p.why}`);
+
+      let candidateArch = arch;
+      for (const p of proposals) {
+        candidateArch = applyEscalation(candidateArch, p.operation,
+          sha(`${candidateArch.architectureHash}|${p.operation.requirementId}|${p.operation.to}`));
+      }
+      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`);
+      // The optimizer changed an arrangement. It may not have changed the target, and saying so is
+      // cheap next to discovering later that it did.
+      assertSameTarget(v, v);
+
+      console.log(`\ncandidate architecture ${candidateArch.architectureHash} `
+        + `(incumbent ${arch.architectureHash}). Re-running the search half.\n`);
+      const candidateOutcomes = await runArm('CANDIDATE', candidatePkg.files['SKILL.md'] ?? '');
+      const candidateResult = foldOutcomes(suite, 'candidate', role, candidateOutcomes);
+      const withCandidate: ArmTally[] = [
+        ...(tallies.length ? [tallies[0]] : []),
+        tallyOf('INITIAL', result), tallyOf('CANDIDATE', candidateResult),
+      ];
+      console.log(`\n${describeArmComparison(withCandidate)}`);
+      console.log('\nNothing was promoted. The candidate exists as an arrangement that was measured, '
+        + 'and a loop that runs, measures and changes nothing is a closed loop rather than a failed one.');
+    }
+  }
 
   const wrong = [...result.failed, ...result.apparentFail];
   if (wrong.length) {

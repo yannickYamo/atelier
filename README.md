@@ -212,6 +212,40 @@ deployment, and no confidence interval over them would mean anything — which i
 carries counts and no rate. Evidence about deployment comes from `atelier reference`, run against an
 expert's real held-out work.
 
+### Did the skill change anything, and did repairing it help?
+
+```bash
+atelier contract --skill focus --bare --repair
+```
+
+```text
+                                  BARE      INITIAL   CANDIDATE
+------------------------------------------------------------
+decided — passed                  0         0         0
+decided — failed                  0         0         0
+unqualified read — appears ok     2         5         6
+unqualified read — appears wrong  4         1         0
+nothing looked                    3         3         3
+
+  what the standard added (initial - bare): decided n/a, unqualified read +3
+  what optimization added (candidate - initial): decided n/a, unqualified read +1
+```
+
+`BARE` is the same task, tools, schema and token budget with **no Atelier-derived carrier at all** —
+so the two columns differ in exactly one thing, and a test enforces that as Atelier grows more
+carriers. It is instrumentation, not a participant: it never reaches the diagnosis, because what to
+repair is a function of your standard and what the implementation did. A rule the runtime already
+satisfies is still a rule the implementation owes, since the next model may not satisfy it.
+
+If `BARE` matches or beats the compiled skill, Atelier says so, and suggests you may not need a skill
+here. That answer is worth more than an artifact nobody required.
+
+`--repair` escalates a rule's carrier when a case shows the implementation missed it, rebuilds, and
+re-runs. **Only an implementation miss may repair an implementation** — a gap in the standard is a
+proposal for its owner, not a change to make, and a case naming two rules cannot attribute the miss
+to either. Nothing is promoted. A loop that runs, measures, and changes nothing is a closed loop
+rather than a failed one.
+
 `--kind` is asked rather than defaulted, because there is no safe guess: a rule meaning *do this*
 recorded as a prohibition reaches the model as a rule against doing it, and nothing would tell you.
 
@@ -368,7 +402,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-65 files and 988 tests. It exercises the governance spine, the compiler, the renderer, delivery
+66 files and 1011 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
