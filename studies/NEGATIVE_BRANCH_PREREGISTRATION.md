@@ -105,3 +105,50 @@ what justifies taking it.
 - No failure rerun until it passes. The suite is not edited after outputs exist.
 - If the result is noisy, the reported conclusion is that it is noisy.
 - The previous study's contexts are not reused, and its numbers are not pooled with these.
+
+---
+
+# Amendment 2 — coverage remeasurement, sealed before any new generation
+
+The coverage endpoint above was never validly observed: 54 of 72 `SHOULD_FIRE` generations were
+stopped at the token limit before an answer was written. This is not a rerun of a disliked result.
+The dependent variable was not produced, and the recorded statistic was an execution failure.
+
+**What changes. Only the generation budget, and only because it has been measured.**
+
+`max_tokens` 1200 → **8000**. Measured requirement on this arm: worst observed complete answer is
+**4376** output tokens, giving 1.8× headroom. Restraint contexts average 769.
+
+**Validity, declared before any call.**
+
+    VALID  :=  stop_reason != 'max_tokens'  AND  answer text is non-empty
+
+An invalid generation is `EXECUTION_INVALID`. It is never scored as behaviour, and it is **not
+rerun** — either the declared budget was adequate or this remeasurement failed its own
+instrumentation gate, and that is the reportable outcome.
+
+**The observer is corrected, and the correction is stated now.** The original regex required a digit
+at line start and could not see `**1.` bold-numbered lists. It matches an optional emphasis marker.
+On the previous outputs this changed 4 of 144 labels and moved no conclusion; it is fixed here so the
+remeasurement is not run on a known-blind instrument.
+
+**Restraint is re-run, which the earlier plan said not to do.** A pre-flight check found the previous
+EXPLICIT package differed from STATIC in more than the conditional: it had been rendered from a
+hand-built fixture and carried `standardVersion: sv` and a different `mintedAt` in its trailing
+comment. Both arms are now rendered from the same stored standard `27f643df08f5b11e`, and the diff
+between them is exactly three lines — two replaced by one, the conditional sentence.
+
+The metadata sat in an HTML comment and very likely changed nothing. "Very likely" is not the standard
+for a controlled comparison, so the restraint figure is measured again on clean arms. The original
+stands as recorded and is superseded only if this disagrees with it.
+
+**Frozen and unchanged:** the 16 contexts and their wording, the standard, the three arms, 3
+generations per context per arm, the scoring rule, the analysis, the context as the unit of analysis.
+
+**Cost.** Measured, not estimated: 144 generations, ~$8.76 expected, hard cap **$12.00**. The earlier
+$2 figure was wrong because the runs it was based on were cheap precisely *because* they were
+truncated.
+
+**Stopping rules unchanged.** n fixed. Run once. No selective reruns. No merging with the truncated
+generations, which remain in the record as evidence of an instrumentation failure. If the result is
+noisy, the reported conclusion is that it is noisy.
