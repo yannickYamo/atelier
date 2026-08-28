@@ -31,8 +31,23 @@ import { applicabilityModeOf } from '../state/canonical-state.js';
 export type ObligationKind =
   /** the behaviour MUST appear when the rule's condition holds */
   | 'SHOULD_FIRE'
-  /** the behaviour must NOT appear — either a prohibition, or a rule whose condition is absent */
+  /**
+   * A PROHIBITION was violated: the forbidden behaviour appeared.
+   *
+   * Distinct from SHOULD_NOT_APPLY, and the distinction decides whether a repair is even pointed the
+   * right way. Both once carried this name, which made "the output did the thing it must not" and
+   * "a conditional rule fired where its condition was absent" indistinguishable to anything
+   * downstream — and the only repair this system owns helps the first and worsens the second.
+   */
   | 'SHOULD_NOT_FIRE'
+  /**
+   * A CONDITIONAL rule was invoked where its condition does not hold.
+   *
+   * An over-application. Carrying the rule harder makes it more prominent and more likely to fire
+   * again, so escalation is the wrong direction here. This is the failure the pricing study measured
+   * as compilation keeping WHAT to say and losing WHEN NOT to say it.
+   */
+  | 'SHOULD_NOT_APPLY'
   /** the edge of the condition, where a reasonable reader could argue either way */
   | 'BOUNDARY'
   /** two requirements meeting in one task, where satisfying one could break the other */
@@ -116,7 +131,7 @@ export function obligationsFor(r: Requirement): readonly Obligation[] {
   // compilation preserved what to say and lost when not to say it.
   if (mode === 'CONDITION_PRESENT') {
     out.push({
-      obligationId: idFor('SHOULD_NOT_FIRE', ids), requirementIds: ids, kind: 'SHOULD_NOT_FIRE',
+      obligationId: idFor('SHOULD_NOT_APPLY', ids), requirementIds: ids, kind: 'SHOULD_NOT_APPLY',
       situation: `a task of this work type where this does NOT hold: ${r.appliesWhen}`,
       expectation: `the output must not invoke this rule at all: ${r.statement}`,
       observation: observationFor(r),

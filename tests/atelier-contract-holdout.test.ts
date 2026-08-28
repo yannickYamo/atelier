@@ -35,7 +35,8 @@ const standard = (rs: Requirement[]): StandardVersion => ({
 const sealedFor = (rs: Requirement[]): ContractTestSuite => {
   const v = standard(rs);
   const cases: ContractTestCase[] = obligationsForStandard(v).map((o, i) => ({
-    caseId: `c${i}`, obligationId: o.obligationId, requirementIds: o.requirementIds,
+    caseId: `c${i}`, obligationId: o.obligationId, obligationKind: o.kind,
+    requirementIds: o.requirementIds,
     task: `task ${i}`, expectation: o.expectation, observation: o.observation,
     provenance: 'MODEL_GENERATED',
   }));

@@ -105,6 +105,7 @@ export async function generateCases(
       // COPIED, never taken from the model. The generator was shown the expectation so it could build
       // the right situation; it has no way to send a different one back.
       obligationId: o.obligationId,
+      obligationKind: o.kind,
       requirementIds: o.requirementIds,
       task: task.trim(),
       expectation: o.expectation,

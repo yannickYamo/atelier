@@ -35,7 +35,7 @@ const standard = (requirements: Requirement[]): StandardVersion => ({
 });
 
 const caseFor = (id: string, obligationId: string, over: Partial<ContractTestCase> = {}): ContractTestCase => ({
-  caseId: id, obligationId, requirementIds: ['x1'], task: `task ${id}`,
+  caseId: id, obligationId, obligationKind: 'SHOULD_FIRE', requirementIds: ['x1'], task: `task ${id}`,
   expectation: 'the expectation, carried from the obligation', observation: 'UNQUALIFIED',
   provenance: 'MODEL_GENERATED', ...over,
 });
@@ -55,7 +55,11 @@ describe('the standard decides what must be tested', () => {
     const kinds = obligationsFor(req('x1', { appliesWhen: 'the answer has more than one step' }))
       .map((o) => o.kind);
     expect(kinds).toContain('SHOULD_FIRE');
-    expect(kinds).toContain('SHOULD_NOT_FIRE');
+    // SHOULD_NOT_APPLY, not SHOULD_NOT_FIRE. A conditional rule invoked where its condition is
+    // absent is an OVER-APPLICATION; a prohibition that was violated is a different failure with the
+    // opposite repair, and giving them one name made them indistinguishable downstream.
+    expect(kinds).toContain('SHOULD_NOT_APPLY');
+    expect(kinds).not.toContain('SHOULD_NOT_FIRE');
     expect(kinds).toContain('BOUNDARY');
   });
 

@@ -33,7 +33,8 @@
 
 import { createHash } from 'node:crypto';
 import type { StandardVersion } from '../state/canonical-state.js';
-import { type Obligation, type ObservationMode, obligationsForStandard } from './obligation.js';
+import { type Obligation, type ObligationKind, type ObservationMode, obligationsForStandard }
+  from './obligation.js';
 
 /** Who invented the task text. The obligation is never invented; only the situation is. */
 export type GenerationProvenance =
@@ -47,6 +48,16 @@ export type GenerationProvenance =
 export interface ContractTestCase {
   readonly caseId: string;
   readonly obligationId: string;
+  /**
+   * The obligation's kind, carried so nothing downstream has to re-derive it.
+   *
+   * A runner needs to know whether the expectation is a presence or an absence, and the first
+   * version read that off the expectation TEXT by searching for "must not". That is a word list
+   * standing in for a typed property: it depended on the exact casing two different obligations
+   * happened to use, and would silently invert on any rewording of the prose. The kind is the
+   * property; the sentence is a rendering of it.
+   */
+  readonly obligationKind: ObligationKind;
   readonly requirementIds: readonly string[];
   /** the task a model is actually given */
   readonly task: string;

@@ -48,7 +48,7 @@ const standard = (rs: Requirement[]): StandardVersion => ({
 });
 
 const aCase = (over: Partial<ContractTestCase> = {}): ContractTestCase => ({
-  caseId: 'c1', obligationId: 'should_fire:x1', requirementIds: ['x1'],
+  caseId: 'c1', obligationId: 'should_fire:x1', obligationKind: 'SHOULD_FIRE', requirementIds: ['x1'],
   task: 'write something', expectation: 'the output must do this: lead with the action',
   observation: 'UNQUALIFIED', provenance: 'MODEL_GENERATED', ...over,
 });
@@ -65,14 +65,16 @@ describe('an unqualified reading never becomes a verdict', () => {
     // Carried from the expectation rather than re-derived from the statement. Re-deriving it is the
     // inversion that already happened once in this codebase.
     const o = await runCase(stub({ holds: 'YES', evidence: 'Let me know if...' }), budget(),
-      aCase({ expectation: 'the output must NOT do this: end with a generic offer' }),
+      aCase({ obligationKind: 'SHOULD_NOT_FIRE',
+        expectation: 'the output must NOT do this: end with a generic offer' }),
       () => Promise.resolve('...Let me know if you need anything else.'));
     expect(o.verdict).toBe('APPARENT_FAIL');
   });
 
   it('a prohibition the reader says NO to is APPARENT_PASS', async () => {
     const o = await runCase(stub({ holds: 'NO', evidence: 'ends on the recommendation' }), budget(),
-      aCase({ expectation: 'the output must NOT do this: end with a generic offer' }),
+      aCase({ obligationKind: 'SHOULD_NOT_FIRE',
+        expectation: 'the output must NOT do this: end with a generic offer' }),
       () => Promise.resolve('...so ship it.'));
     expect(o.verdict).toBe('APPARENT_PASS');
   });
@@ -103,7 +105,7 @@ describe('an unqualified reading never becomes a verdict', () => {
 
 describe('a machine-checkable shape is decided without a model', () => {
   const shapeCase = aCase({
-    observation: 'DETERMINISTIC',
+    obligationKind: 'OUTPUT_SHAPE', observation: 'DETERMINISTIC',
     expectation: 'the output must validate against the declared shape: {"verdict":{"type":"string"}}',
   });
 
