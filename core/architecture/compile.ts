@@ -95,7 +95,11 @@ export interface SkillArchitecture {
 }
 
 /** Confirmed by a person, in either direction. Discovery alone never produces one of these. */
-const isConfirmed = (r: Requirement): boolean =>
+/**
+ * Exported because the RENDERER needs the same answer, and a second definition of "did the author
+ * stand behind this" would drift from this one — which is the seam the authority model rests on.
+ */
+export const isConfirmed = (r: Requirement): boolean =>
   r.authority === 'EXPERT_RATIFIED' || r.authority === 'EXPERT_AUTHORED'
   // A user who adopted a behaviour for their own skill HAS decided. What they did not decide is
   // whose standard it is, and that distinction lives in `provenance`, which adoption never touches.
