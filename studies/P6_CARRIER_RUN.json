@@ -1,0 +1,681 @@
+{
+ "identity": {
+  "suiteHash": "eb52d496b4df5fb5",
+  "arms": [
+   {
+    "arm": "FULL",
+    "servedHash": "c17ab484fbb77a2f",
+    "servedBytes": 5207
+   },
+   {
+    "arm": "ABLATION",
+    "servedHash": "311523f906e0bb36",
+    "servedBytes": 5138
+   }
+  ],
+  "request": {
+   "modelId": "claude-opus-5",
+   "maxTokens": 7652,
+   "toolName": "none",
+   "schemaHash": "44136fa355b3678a"
+  },
+  "reportedModelIds": [
+   "claude-opus-5"
+  ],
+  "runHash": "a7b43182e723bcec"
+ },
+ "budget": {
+  "maxTokens": 7652,
+  "basis": "UNCENSORED_PROBE",
+  "probeSuiteHash": "eb52d496b4df5fb5",
+  "probeTerminationCounts": {
+   "COMPLETE": 3,
+   "MAX_TOKENS": 0
+  },
+  "observedMaxOutputTokens": 3826,
+  "headroom": 2
+ },
+ "suiteHash": "eb52d496b4df5fb5",
+ "generations": [
+  {
+   "contextId": "t01",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 858,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t02",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1150,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t02",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2211,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t02",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 798,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t01",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 2761,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t01",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2944,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t03",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1703,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t03",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2461,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t03",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3484,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t04",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1173,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t01",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 6489,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t04",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1946,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t02",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "max_tokens",
+   "outputTokens": 7652,
+   "validity": "TRUNCATED"
+  },
+  {
+   "contextId": "t04",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1962,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t05",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1959,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t05",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2511,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t05",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1069,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t06",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1137,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t05",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1525,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t03",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "max_tokens",
+   "outputTokens": 7652,
+   "validity": "TRUNCATED"
+  },
+  {
+   "contextId": "t07",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1709,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t06",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2690,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t06",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 3586,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t06",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3993,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t04",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "max_tokens",
+   "outputTokens": 7652,
+   "validity": "TRUNCATED"
+  },
+  {
+   "contextId": "t07",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1897,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t07",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 3482,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t07",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2436,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t08",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1413,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t08",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1734,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t08",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1749,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t09",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1324,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t09",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1647,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t09",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1326,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t08",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3638,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t10",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1251,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t10",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1346,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t09",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1774,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t10",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1872,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t11",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1179,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t10",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2029,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t11",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3051,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t11",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 2621,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t12",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2076,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t12",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1106,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t12",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3202,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t11",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 4484,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t13",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1525,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t13",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3378,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t14",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1372,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t13",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2443,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t14",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 3316,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t14",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1625,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t15",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1091,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t14",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 2391,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t15",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1267,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t12",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "max_tokens",
+   "outputTokens": 7652,
+   "validity": "TRUNCATED"
+  },
+  {
+   "contextId": "t15",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2037,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t15",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2065,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t16",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1035,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t13",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 7223,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t16",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 2893,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t17",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1276,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t17",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1137,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t16",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2110,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t17",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1547,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t18",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1487,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t18",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 2475,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t16",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 4431,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t18",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2610,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t19",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1773,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t19",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1718,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t19",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 2770,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t20",
+   "arm": "FULL",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1009,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t19",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 3120,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t20",
+   "arm": "FULL",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 2429,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t20",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "end_turn",
+   "outputTokens": 1996,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t20",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "end_turn",
+   "outputTokens": 1882,
+   "validity": "COMPLETE"
+  },
+  {
+   "contextId": "t17",
+   "arm": "ABLATION",
+   "rep": 2,
+   "stop": "max_tokens",
+   "outputTokens": 7652,
+   "validity": "TRUNCATED"
+  },
+  {
+   "contextId": "t18",
+   "arm": "ABLATION",
+   "rep": 1,
+   "stop": "max_tokens",
+   "outputTokens": 7652,
+   "validity": "TRUNCATED"
+  }
+ ]
+}
