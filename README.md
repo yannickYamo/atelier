@@ -147,6 +147,37 @@ of the way of a reader who just wants to run it.
 
 ## Quickstart
 
+There are two ways in, and they end at the same compiler. Which one you want depends on a single
+question: **can you already say what good means here?**
+
+### If you can state your rules
+
+No corpus, no API key, no discovery. You are exercising authority, not supplying evidence about
+yourself, so Atelier records the rules as yours and compiles them.
+
+```bash
+atelier add --statement "Lead with the next action, before any explanation." \
+            --kind GENERATIVE --applies-when GENERAL
+atelier add --statement "Number multi-step work so the reader can stop and resume." \
+            --kind GENERATIVE --applies-when "the answer has more than one step"
+atelier add --statement "Never open with a preamble that restates the question." \
+            --kind BOUNDARY --applies-when GENERAL
+
+atelier ratify-close --work-type writing
+atelier build --name focus
+```
+
+`--kind` is asked rather than defaulted, because there is no safe guess: a rule meaning *do this*
+recorded as a prohibition reaches the model as a rule against doing it, and nothing would tell you.
+
+The close reports `discovered 0%`. That is accurate rather than a shortfall — the machine found none
+of it because you wrote all of it — and it is printed so a standard nobody observed can never later
+be mistaken for one that was.
+
+### If you can only recognise good work when you see it
+
+This is the harder case and the one the research is about. Point Atelier at the work.
+
 ```bash
 git clone https://github.com/yannickYamo/atelier
 cd atelier && npm install && npm run build
@@ -292,7 +323,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-61 files and 935 tests. It exercises the governance spine, the compiler, the renderer, delivery
+62 files and 947 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier

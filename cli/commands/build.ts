@@ -61,7 +61,11 @@ export function build(nameArg?: string): void {
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
   const L: store.StoreLayout = { root: DATA, skillName: name };
-  store.initStore(L); store.putEvidence(L, s.evidence ?? die('nothing sealed.')); store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
+  store.initStore(L);
+  // Only when there IS a corpus. A directly authored standard has no evidence record, and writing an
+  // empty one to satisfy a call would fabricate a file that later reads as a sealed corpus.
+  if (s.evidence) store.putEvidence(L, s.evidence);
+  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
 
   // ── THE RECORD OF WHAT THIS BUILD DECIDED ──────────────────────────────────────────────────
   //

@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
-import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope } from '../../core/state/canonical-state.js';
+import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, DATA, die, argv, flag, loadSession, saveSession, step, type Session } from '../runtime.js';
 import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationDecision as LedgerDecision } from '../../core/ratification/decision-record.js';
@@ -327,8 +327,23 @@ export function ratifyOne(): void {
 export function addOne(): void {
   const s = loadSession();
   const statement = flag('--statement') ?? die('--statement required');
+  // ASKED, NOT DEFAULTED — and the reason is two fields below, where materiality and tolerance are
+  // left null because "a default here would silently answer a question the author was never asked".
+  // `kind` cannot be null, so the question is asked instead.
+  //
+  // It defaulted to BOUNDARY once, which was the worst available guess. A positive instruction
+  // recorded as a prohibition renders under "What not to do", so a rule saying LEAD WITH THE ACTION
+  // reached the model as a rule against doing it. The failure is silent, inverts the author's
+  // meaning, and is invisible until someone reads the compiled package.
+  const KINDS: readonly Requirement['kind'][] = ['GENERATIVE', 'BOUNDARY'];
+  const asked = flag('--kind')?.toUpperCase();
+  const kind = KINDS.find((k) => k === asked)
+    ?? die('--kind GENERATIVE|BOUNDARY required.\n'
+      + '  GENERATIVE  something to DO      ("lead with the next action")\n'
+      + '  BOUNDARY    something NOT to do  ("never open with a preamble")\n'
+      + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
   const req: Requirement = { requirementId: `x${s.decided.length + 1}`, statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
-    kind: (flag('--kind') ?? 'BOUNDARY') as Requirement['kind'], authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
+    kind, authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
   saveSession({ ...s, decided: [...s.decided, req] });
   console.log(`added ${req.requirementId} (${req.kind}) — recorded as EXPERT_ADDED, not as something discovered.`);
@@ -336,7 +351,17 @@ export function addOne(): void {
 
 export function ratifyClose(): void {
   let s = loadSession();
-  if (!s.evidence) die('no sealed evidence.');
+  // NO EVIDENCE IS A LEGITIMATE STATE, NOT A MISSING PRECONDITION.
+  //
+  // This refused outright once, which made the whole direct-authoring path unreachable: `add`
+  // recorded rules and nothing downstream would compile them. A person writing their own standard
+  // has no corpus to seal and owes none — they are exercising authority, not offering evidence about
+  // themselves. What they do owe is the work type, because the skill's description is built from it
+  // and it cannot be inferred from a corpus that does not exist.
+  const workType = s.evidence?.workType ?? flag('--work-type')
+    ?? die('--work-type <kind> is required for a standard you wrote yourself, because there is no '
+      + "corpus to infer it from. It becomes the skill's description, which is how a host decides "
+      + 'whether to load the skill at all.  For example:  --work-type writing');
   // EVERY proposal reaches the standard, carrying its own authority. Dropping the unconfirmed ones
   // is what forced a person through a form before they could have anything; what is unconfirmed is
   // now DISCLOSED and, if it is a prohibition, compiled as OBSERVE so it cannot shape output.
@@ -348,8 +373,7 @@ export function ratifyClose(): void {
   for (const d of s.decided) byId.set(d.requirementId, d);
   const kept = [...byId.values()].filter((d) => d.authority !== 'EXPERT_REJECTED');
   if (!kept.length) die('nothing to compile. A standard with no requirement is not a standard.');
-  const evc = s.evidence ?? die('nothing sealed.');
-  const body = { evidenceId: evc.evidenceId, workType: evc.workType, requirements: kept };
+  const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept };
   const v: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body, authorityState: authorityStateOf(kept), mintedAt: new Date().toISOString(),
     supersedes: flag('--supersedes') ?? null, reason: flag('--reason') ?? null };
   s = step(s, 'RATIFIED', { standardVersionHash: v.standardVersionHash });
@@ -362,7 +386,18 @@ export function ratifyClose(): void {
   writeAtomic(join(DATA, 'pending-standard.json'), JSON.stringify(v, null, 1));
   if (stamped) writeAtomic(join(DATA, 'ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   console.log(`StandardVersion ${v.standardVersionHash} [${v.authorityState}]: ${kept.length} requirements.`);
-  console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  unconditional ${(declaredGeneralShare(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
+  console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  declared-general ${(declaredGeneralShare(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
+  // A 0% discovery rate on a directly authored standard is the truth, not a warning, and saying so
+  // is what stops the number reading as a shortfall. It also stops the reverse: a standard nobody
+  // observed must never be mistaken later for one that was.
+  const mode = sourceModeOf(v);
+  if (mode === 'DIRECT') {
+    console.log('  every requirement was AUTHORED by you, not observed in work. No corpus was read, '
+      + 'so 0% discovered is accurate rather than a shortfall.');
+  } else if (mode === 'HYBRID') {
+    const authored = v.requirements.filter((r) => r.provenance === 'EXPERT_ADDED').length;
+    console.log(`  ${authored} of ${v.requirements.length} requirement(s) you authored; the rest came from the work.`);
+  }
   if (stamped?.records.length) {
     const su = survival(stamped);
     // RECORDED, as opposed to inferred from id gaps after the fact. The distinction is the point of
