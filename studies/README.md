@@ -54,6 +54,12 @@ else in these records has been altered, and no result depends on the identities.
 | [CONTRACT_LIFT_CLOSE.md](CONTRACT_LIFT_CLOSE.md) | **The M2 result reproduced on a different standard, task family and model.** Primary null (Δ = −0.021), and its components oppose: coverage +0.167, restraint −0.208. The bare model was perfect on restraint and the compiled skill broke it. More regressions than recoveries. The model reader abstains 29% of the time and is systematically permissive — 17 false passes, zero false fails — which is why it certifies nothing. |
 | [CONTRACT_LIFT_SUITE.json](CONTRACT_LIFT_SUITE.json) · [RESULTS](CONTRACT_LIFT_RESULTS.json) | The frozen contexts and the per-generation structural labels. Reproducible from these. |
 
+### Can static prose carry a conditional rule?
+
+| | |
+|---|---|
+| [NEGATIVE_BRANCH_PREREGISTRATION.md](NEGATIVE_BRANCH_PREREGISTRATION.md) | Sealed before any context existed. The contract-lift study compiled a conditional rule that said when to apply and never what to do otherwise, so it tested a one-sided rendering rather than static prose as such. Three arms — BARE, STATIC, EXPLICIT — on 16 fresh contexts, with the success condition and the failure shape to watch for both stated in advance. |
+
 ### Why the obvious repair was not built
 
 | | |

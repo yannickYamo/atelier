@@ -147,8 +147,42 @@ of the way of a reader who just wants to run it.
 
 ## Quickstart
 
-There are two ways in, and they end at the same compiler. Which one you want depends on a single
-question: **can you already say what good means here?**
+One command. What you have decides the rest.
+
+```bash
+# You can say what you want
+atelier skill "answers should lead with the action, number the steps when there
+                are steps, and never end with an offer of more help"
+
+# You have work that shows it, but can't state the rules
+atelier skill --from ./my-best-work
+
+# Both
+atelier skill "make it sound like me" --from ./my-best-work
+```
+
+Atelier separates what you said into rules, shows you them, and **compiles nothing until you say
+yes**. Rules you actually said are yours. Anything the model supplies as a reading of what you said
+is marked, and reaches the model as an example rather than an instruction until you decide otherwise:
+
+```text
+3 rule(s) from what you said, for writing:
+
+  1. [do  ] Lead with the action.
+  2. [do  ] Number the steps.
+      applies when: the answer has more than one step
+  3. [don't] Never end with an offer of more help.
+
+3 of these are yours.
+```
+
+Nothing routes on how *hard* your request looks. A rule you can state perfectly can still be hard to
+execute — [a measured study here](studies/CONTRACT_LIFT_CLOSE.md) found exactly that — so the route
+reads what you supplied and nothing about what it means.
+
+---
+
+The two paths in detail, and the commands underneath them:
 
 ### If you can state your rules
 
@@ -402,7 +436,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-69 files and 1027 tests. It exercises the governance spine, the compiler, the renderer, delivery
+70 files and 1038 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier

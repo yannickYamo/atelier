@@ -34,6 +34,7 @@ interface ManifestFile {
 
 const SOURCE: Readonly<Record<Requirement['provenance'], string>> = {
   EXPERT_ADDED: 'you wrote it',
+  EXPERT_STATED: 'you said it',
   MACHINE_DISCOVERED: 'found in the work',
   SUBSTANTIVELY_REWRITTEN: 'found, then reworded',
   PUBLIC_BEHAVIOUR_INFERRED: 'inferred from public work',

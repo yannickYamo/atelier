@@ -16,6 +16,7 @@ import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir } fr
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
+import { skill } from './commands/skill.js';
 import { contract } from './commands/contract.js';
 import { pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands/ratify.js';
 import { build, revert } from './commands/build.js';
@@ -32,6 +33,7 @@ import { enrol, terminate, type Run } from '../core/state/run-state.js';
 /** Every command the dispatcher answers. Exported so a test can pin it against the docs. */
 export const COMMANDS: readonly string[] = [
   'abort',
+  'skill',
   'plan',
   'contract',
   'add',
@@ -95,6 +97,7 @@ const main = async (): Promise<void> => {
     case 'check': return check();
     case 'profiles': { profiles(); return; }
     case 'carriers': { carriers(); return; }
+    case 'skill': return skill();
     case 'plan': { plan(); return; }
     case 'contract': return contract();
     case 'reference': return reference();
