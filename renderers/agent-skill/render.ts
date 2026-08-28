@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { assertArchitectureServesStandard, type SkillArchitecture, type Carrier, type GateRole } from '../../core/architecture/compile.js';
+import { isConfirmed } from '../../core/architecture/compile.js';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
@@ -292,8 +293,26 @@ export function renderAgentSkill(
   // OBSERVE lands AFTER the draft exists, in its own pass, and says so. A prohibition nobody has
   // confirmed must not quietly shape the writing — if it is wrong it would suppress something and
   // leave no trace that it did.
+  // ── THE PREAMBLE IS DERIVED FROM WHAT IS IN THE SECTION, NEVER ASSERTED OVER IT ──────────────
+  //
+  // This said "patterns inferred from the author's work that NO ONE HAS CONFIRMED yet. Do not let
+  // them shape what you write" about EVERYTHING here — but the section is defined by ROLE, not by
+  // confirmation status, and the two are not the same set. A requirement the author wrote in their
+  // own words, marked PREFERRED, can land here and be told to the model as an unconfirmed guess it
+  // must not act on. That is not a hedge, it is a false statement about the author's own rule, and
+  // it actively suppresses a behaviour they asked for.
+  //
+  // Found while diffing two study arms that were supposed to differ only in carrier: the prose arm
+  // told the model p6 was unconfirmed and to ignore it, while the example arm said "reach for this
+  // when it fits". Same requirement, opposite instruction.
+  const anyConfirmed = observed.some((r) => isConfirmed(r));
+  const observePreamble = observed.every((r) => isConfirmed(r))
+    ? 'These are things the author does that are NOT obligations. Reach for one where it fits and do\nnot force it. When the draft is finished, read it back and note briefly which of them it did.'
+    : anyConfirmed
+      ? 'Some of these the author confirmed and some are inferred from their work and CONFIRMED BY NOBODY.\nNeither is an obligation. Do not let the unconfirmed ones shape what you write. When the draft is\nfinished, read it back and note briefly whether any of them apply.'
+      : "These are patterns inferred from the author's work that NO ONE HAS CONFIRMED yet. Do not let them\nshape what you write. Once the draft is finished, read it back and note briefly whether any of them\napply. Report what you find and leave the draft as it is.";
   const observeSection = observed.length
-    ? `\n## After you have written it, check yourself\n\nThese are patterns inferred from the author's work that NO ONE HAS CONFIRMED yet. Do not let them\nshape what you write. Once the draft is finished, read it back and note briefly whether any of them\napply. Report what you find and leave the draft as it is.\n\n${observed.map(line).join('\n\n')}\n`
+    ? `\n## After you have written it, check yourself\n\n${observePreamble}\n\n${observed.map(line).join('\n\n')}\n`
     : '';
 
   // ── REFERENCE MATERIAL, NAMED FROM SKILL.md ────────────────────────────────────────────────

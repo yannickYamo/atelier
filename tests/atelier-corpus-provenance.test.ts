@@ -37,3 +37,37 @@ describe('corpus provenance is declared, never assumed', () => {
     expect(runtime).toMatch(/'no-ai-assist'/);
   });
 });
+
+describe('the observe section describes what is actually in it', () => {
+  const render = readFileSync(new URL('../renderers/agent-skill/render.ts', import.meta.url), 'utf8');
+
+  it('does not assert "nobody confirmed" over a section defined by ROLE', () => {
+    // A requirement the author wrote in their own words, marked PREFERRED, can land here. Telling
+    // the model it is an unconfirmed guess it must not act on is a false statement about the
+    // author's own rule, and it suppresses a behaviour they asked for.
+    expect(render).toMatch(/const observePreamble = observed\.every\(\(r\) => isConfirmed\(r\)\)/);
+    expect(render).toMatch(/anyConfirmed/);
+  });
+
+  it('keeps the suppressing wording ONLY for the all-unconfirmed case', () => {
+    // That wording is right when everything in the section really is a guess; it is the blanket
+    // application that was wrong.
+    // Assert on STRUCTURE, not on string positions: the comment above the code quotes the old
+    // wording, so an indexOf would find the explanation rather than the branch.
+    const preamble = render.slice(render.indexOf('const observePreamble'),
+      render.indexOf('const observeSection'));
+    expect(preamble).toMatch(/NOT obligations/);          // all-confirmed branch
+    expect(preamble).toMatch(/CONFIRMED BY NOBODY/);      // mixed branch
+    expect(preamble).toMatch(/NO ONE HAS CONFIRMED/);     // all-unconfirmed fallback, kept
+    // and the suppressing sentence survives ONLY alongside that last one
+    expect(preamble.slice(preamble.indexOf('NO ONE HAS CONFIRMED'))).toMatch(/Do not let them/);
+  });
+
+  it('one definition of confirmed, shared with the compiler', () => {
+    // Two answers to "did the author stand behind this" would drift, and it is the seam the whole
+    // authority model rests on.
+    expect(render).toMatch(/import \{ isConfirmed \} from '\.\.\/\.\.\/core\/architecture\/compile\.js'/);
+    const compile = readFileSync(new URL('../core/architecture/compile.ts', import.meta.url), 'utf8');
+    expect(compile).toMatch(/export const isConfirmed/);
+  });
+});
