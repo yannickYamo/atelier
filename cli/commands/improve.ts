@@ -7,14 +7,14 @@
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import { spend } from '../../core/inference/client.js';
-import { observeRuntime, type RuntimeBinding } from '../../core/runtime/binding.js';
+import { observeRuntime, bindingHash, type RuntimeBinding } from '../../core/runtime/binding.js';
+import { persistInvocation } from '../../core/runtime/record.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { proposeEscalation, applyEscalation, type ServedMissEvidence } from '../../core/architecture/escalate.js';
 import { foldRepairs, foldProhibitions, mayPropose, describeHistory, WEAKEST_EVALUATION,
   type EvidenceBasis } from '../../core/architecture/repair-memory.js';
 import { runSpine, explainSpine } from '../../core/convergence/controller.js';
 import { proposeFloor } from '../../core/distinctiveness/contract.js';
-import { resolveFromFrozenText, admitsEvidence } from '../../core/measurement/applicability.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
@@ -25,7 +25,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, MODEL, clientFor , numericFlag, assertReachable} from '../runtime.js';
+import { sha, DATA, die, argv, flag, MODEL, clientFor, numericFlag, assertReachable, skillArg } from '../runtime.js';
 import type { InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -39,7 +39,7 @@ import { asText } from '../../core/discovery/text.js';
  * rollback remains possible because nothing was overwritten.
  */
 export async function improve(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
   const sv = store.getSkillVersion(L, activeHash)!;
@@ -107,7 +107,6 @@ export async function improve(): Promise<void> {
   const inv = store.getInvocation(L, invId) ?? die(`no invocation ${invId} for ${name}.`);
   const complaint = flag('--complaint') ?? die('--complaint "<what was wrong with that output>" — the repair is driven by what YOU say went wrong, not by a score.');
   const fb = { feedbackId: `f${sha(`${invId}|${complaint}`).slice(0, 10)}`, invocationId: invId, complaint, at: new Date().toISOString() };
-  store.putFeedback(L, fb);
 
   // The standard THAT RAN, not the current one. A complaint is about the version that produced it.
   const ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
@@ -117,6 +116,10 @@ export async function improve(): Promise<void> {
 
   console.log(`\ndiagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
   console.log(`  ${d.reason}`);
+  // ONE write, after diagnosis, carrying the attributed rule when there is one — two writes under
+  // one content-derived id is a store refusal, and evidence should name its rule anyway.
+  try { store.putFeedback(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb); }
+  catch { /* identical record already recorded */ }
 
   if (d.route === 'DELIVERY_FAILURE') {
     console.log(`\nThis is a SERVING problem, not a taste problem. Your standard is not involved and nothing about`);
@@ -161,14 +164,17 @@ export async function improve(): Promise<void> {
   // than something reconstructed later. Independent misses are counted over DISTINCT tasks: the same
   // complaint about the same input twice is one observation said twice.
   const missesForRule = store.listFeedback(L)
+    .filter((f) => f.requirementId === d.requirementId)   // complaints about OTHER rules are not evidence about this one
     .map((f) => store.getInvocation(L, f.invocationId))
     .filter((r): r is NonNullable<typeof r> => r !== null);
   const evidence: EvidenceBasis = {
     missContexts: new Set([inv.inputHash, ...missesForRule.map((r) => r.inputHash)]).size,
     invocationIds: [...new Set([inv.invocationId, ...missesForRule.map((r) => r.invocationId)])] };
 
+  const scope = { standardVersionHash: inv.standardVersionHash,
+    providerAdapter: inv.runtimeBinding.providerAdapter, requestedModel: inv.runtimeBinding.requestedModel };
   const may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to,
-    { evidence, evaluation: WEAKEST_EVALUATION });
+    { evidence, evaluation: WEAKEST_EVALUATION }, scope);
   if (!may.allowed) {
     console.log(`\nNo repair proposed — ${may.reason}`);
     console.log(`\n${describeHistory(repairs, prohibitions, op.requirementId)}`);
@@ -188,6 +194,7 @@ export async function improve(): Promise<void> {
   store.putArchitecture(L, nextArch); store.putPackage(L, pkg); store.putSkillVersion(L, candidate);
   store.appendEvent(L, { kind: 'REPAIR_PROPOSED', repairId: sha(`${op.requirementId}|${op.from}|${op.to}|${candidate.skillVersionHash}`),
     skillName: name, requirementId: op.requirementId, from: op.from, to: op.to,
+    ...scope, bindingHash: bindingHash(inv.runtimeBinding),
     sourceSkillVersionHash: inv.skillVersionHash, candidateSkillVersionHash: candidate.skillVersionHash,
     evidenceBasis: evidence, at: candidate.builtAt });
 
@@ -312,48 +319,18 @@ export async function runOnce(
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output };
   assertRequestBound(rec.request, task);
-  store.putInvocation(L, rec);
-  // FIRST RUN ESTABLISHES THE BINDING. Every later run of this SkillVersion is compared against it,
-  // which is what stops evidence earned on one runtime from being read as evidence about another.
-  store.recordBinding(L, sv.skillVersionHash, binding);
-
-  // ── EVERY REAL INVOCATION FEEDS THE EVIDENCE STATE ─────────────────────────────────────────
-  //
-  // Not a research command: the ordinary path. What is recorded here is DETERMINISTIC — whether the
-  // package that produced this output is the one that was compiled — and it is recorded per
-  // requirement because that is the grain everything downstream reasons at.
-  //
-  // Deliberately NOT a semantic verdict. No instrument in this system has earned the right to say
-  // whether a requirement was met, so an invocation contributes the fact it can establish without
-  // one, and the absence of a fidelity verdict is visible rather than papered over.
-  {
-    const std = store.getStandard(L, sv.standardVersionHash);
-    const at = rec.at;
-    for (const r of std?.requirements ?? []) {
-      // APPLICABILITY GATES EVIDENCE. Before this, every requirement entered every context — which
-      // is how the v3 campaign judged 33 of 33 as applicable and then produced verdicts on cases
-      // where the rule barely arises. An UNRESOLVED pair is recorded as such and contributes
-      // nothing, because a case nobody established as applicable cannot say whether the rule held.
-      const app = resolveFromFrozenText(r, rec.inputHash);
-      if (!admitsEvidence(app)) {
-        store.appendEvent(L, { kind: 'APPLICABILITY_UNRESOLVED', requirementId: r.requirementId,
-          contextId: rec.inputHash, invocationId: rec.invocationId, why: app.why, at });
-        continue;
-      }
-      store.putObservation(L, {
-        requirementId: r.requirementId, domain: 'DELIVERY', contextId: rec.inputHash, invocationId: rec.invocationId,
-        generationIndex: store.listInvocations(L).filter((x) => x.inputHash === rec.inputHash).length - 1,
-        verdict: delivery.matched ? 'DELIVERED' : 'NOT_DELIVERED',
-        producer: 'delivery-check', producerVersion: '1', authority: 'DETERMINISTIC',
-        evidence: { expected: delivery.expectedPackageHash, served: delivery.servedPackageHash }, at });
-    }
-  }
+  // Persisted through the ONE shared function — the host surface records through the same one, so
+  // evidence cannot differ in shape by which surface witnessed it.
+  persistInvocation(L, rec, binding, store.getStandard(L, sv.standardVersionHash));
   return rec;
 }
 
 export async function create(path: string): Promise<void> {
   // BEFORE INTAKE, WHICH SEALS. A missing key discovered after the seal leaves the user with a run
   // they did not know they had and a refusal on the retry.
+  // The staged commands print next-step hints for a person running them by hand; under create the
+  // next step runs itself, and a hint that is already stale when it prints teaches distrust.
+  process.env.ATELIER_ORCHESTRATED = '1';
   assertReachable('discovery');
   intake(path, flag('--work-type') ?? 'writing');
   if (argv.includes('--dry-run')) return;   // intake already returned without sealing

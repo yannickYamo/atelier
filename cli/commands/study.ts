@@ -8,7 +8,7 @@
 // and decides nothing itself. Sealing and analysis are here because they need no provider, which
 // means they can be exercised — and audited — without spending anything.
 
-import { argv, flag, die, numericFlag, DATA } from '../runtime.js';
+import { argv, flag, die, numericFlag, DATA, skillArg } from '../runtime.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
@@ -135,7 +135,7 @@ function screen(): void {
  * — the reportable sentence is that the available standards do not permit a valid test.
  */
 function eligibility(): void {
-  const name = flag('--skill') ?? die('usage: atelier study eligibility --skill <name> --target <requirementId>');
+  const name = skillArg('usage: atelier study eligibility --skill <name> --target <requirementId>');
   const target = flag('--target') ?? die('--target <requirementId> required — a study must NAME the mechanism it tests');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   // Resolved through the ACTIVE SkillVersion rather than guessed: the standard a study must audit is

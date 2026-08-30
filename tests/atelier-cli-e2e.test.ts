@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { renderAgentSkill } from '../renderers/agent-skill/render.js';
@@ -143,6 +143,26 @@ describe('E2E: promote demands a reason and records it', () => {
     // no comparison was run on this pair, so the ledger must say so rather than imply agreement
     expect(out).toContain('you ruled alone     1');
     expect(out).not.toMatch(/\d+% agreement/);
+  });
+
+  it('promotion INSTALLS the promoted package — the host serves what the store claims', () => {
+    const { dataRoot, projectDir, L, cand } = seed();
+    run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'better');
+    expect(store.getActive(L)).toBe('k-cand');
+    for (const [rel, content] of Object.entries(cand.pkg.files)) {
+      expect(readFileSync(join(projectDir, '.claude', 'skills', cand.pkg.skillId, rel), 'utf8')).toBe(content);
+    }
+  });
+
+  it('if the install fails, the pointer does NOT move — the store never claims what the host does not serve', () => {
+    const { dataRoot, projectDir, L } = seed();
+    // A regular file where the skills DIRECTORY must go makes every install fail.
+    mkdirSync(join(projectDir, '.claude'), { recursive: true });
+    writeFileSync(join(projectDir, '.claude', 'skills'), 'not a directory');
+    const out = run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'better');
+    expect(out).toContain('EXIT:1');
+    expect(out).toContain('install failed');
+    expect(store.getActive(L), 'a failed install must not move the active pointer').toBe('k-champ');
   });
 
   it('a promotion with no rule named files no rule, and says why', () => {

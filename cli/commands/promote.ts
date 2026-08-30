@@ -12,7 +12,7 @@ import * as store from '../../core/state/store.js';
 import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
 import { foldJudgements, rationalesFor, agreement, describeAgreement, describeJudgements } from '../../core/fidelity/judgement.js';
 
-import { DATA, die, argv, flag, MODEL, clientFor , numericFlag} from '../runtime.js';
+import { DATA, die, argv, flag, MODEL, clientFor, numericFlag, skillArg, pickHost, projectDir } from '../runtime.js';
 
 // ── promote ─────────────────────────────────────────────────────────────────────────────────
 /**
@@ -24,7 +24,7 @@ import { DATA, die, argv, flag, MODEL, clientFor , numericFlag} from '../runtime
  * something a transcript records.
  */
 export function reject(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const rec = foldRepairs(store.readEvents(L)).find((r) => r.candidateSkillVersionHash === cand)
@@ -61,7 +61,8 @@ export function reject(): void {
   if (argv.includes('--never-this-transition')) {
     const why = note ?? die('--never-this-transition needs --why: a permanent architectural rule should say why.');
     store.appendEvent(L, { kind: 'TRANSITION_FORBIDDEN', requirementId: rec.requirementId,
-      from: rec.from, to: rec.to, by: 'expert', reason: why, at });
+      from: rec.from, to: rec.to, by: 'expert', reason: why, at,
+      standardVersionHash: store.getSkillVersion(L, rec.sourceSkillVersionHash)?.standardVersionHash });
     console.log(`\nAND you ruled the move out entirely: ${rec.requirementId} will never move ${rec.from} -> ${rec.to}.`);
     console.log(`That is a decision about your architecture rather than about this candidate, so no amount of`);
     console.log(`evidence reopens it. It is yours to withdraw.`);
@@ -82,7 +83,7 @@ export function reject(): void {
  * that it is a STABLE opinion rather than a reading of which text came first.
  */
 export async function compare(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
   const rule = flag('--rule') ?? die('--rule <requirementId> required — a comparison is ON something, and "which is better overall" is the question that rewards fluency.');
@@ -152,7 +153,7 @@ export async function compare(): Promise<void> {
  * on the strength of a diff they were shown in a terminal is not the same claim.
  */
 export function promote(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
   // ── A PROMOTION WITHOUT A REASON IS A LABEL WITH NO LEARNING SIGNAL ──────────────────────────
   //
@@ -212,6 +213,17 @@ export function promote(): void {
     : compared.length ? compared
       : promotedRepair ? [promotedRepair.requirementId] : [];
 
+  // ── INSTALL FIRST, POINTER SECOND ────────────────────────────────────────────────────────────
+  //
+  // Promotion used to move the pointer and stop, so the store said v2 was active while the host kept
+  // serving v1's bytes — the exact divergence `inspect` exists to catch, created by the command that
+  // is supposed to end the loop. The order matters the same way it does in `build`: if the install
+  // fails, nothing has claimed the candidate is active, and the person is told instead of shown.
+  const pkg = store.getPackage(L, sv.materializedHash)
+    ?? die(`package ${sv.materializedHash} is not in the store, so ${cand} cannot be installed as evaluated.`);
+  const host = pickHost();
+  const inst = host.install(pkg, projectDir());
+  if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was promoted — the active version is unchanged.`);
   store.setActive(L, cand);
   const at = new Date().toISOString();
   if (promotedRepair) {
@@ -232,6 +244,7 @@ export function promote(): void {
   console.log(`  promoted       package ${sv.materializedHash}  — the same one, which is the point`);
   console.log(`  StandardVersion ${sv.standardVersionHash}  — unchanged`);
   console.log(`  previous       ${prevActive ?? '(none)'} remains in history:  atelier rollback --to ${prevActive ?? ''}`);
+  console.log(`  installed      ${inst.installedAt} — ${host.invocationHint(name).trim()} now serves this version`);
   if (rules.length) {
     console.log(`\n  Your reason is on file against ${rules.join(', ')}. You will see it the next time you compare on`);
     console.log(`  ${rules.length > 1 ? 'those rules' : 'that rule'}, and it is now one row in:  atelier judgements --skill ${name}`);
@@ -256,7 +269,7 @@ export function promote(): void {
  * beside it, is the only artefact that says what the instrument is actually measuring.
  */
 export function judgements(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const records = foldJudgements(store.readEvents(L));
   const rule = flag('--rule');

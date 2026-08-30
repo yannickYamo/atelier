@@ -155,9 +155,6 @@ const PARKED: Readonly<Record<string, string>> = {
   'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
-  'core/state/policy.ts':
-    'Protocol policy resolution, forty-one lines, reachable only from the conformance test. Whether a '
-    + 'protocol policy is a real axis or a generalisation nobody needed is still open.',
 };
 
 describe('the census: nothing is dark by accident', () => {

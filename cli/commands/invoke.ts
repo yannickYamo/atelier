@@ -13,8 +13,9 @@ import { checkSatisfiable, describeSatisfiability } from '../../core/state/prere
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
 import { runOnce } from './improve.js';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
-import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding , numericFlag, positional, boundResources} from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, assertSkillName, runFile } from '../runtime.js';
 
 // ── invoke ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -118,7 +119,7 @@ export function resolveServedSkill(name: string): ServedSkill {
 }
 
 export async function invoke(): Promise<void> {
-  const name = flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"');
+  const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const task = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
@@ -188,5 +189,6 @@ export async function invoke(): Promise<void> {
     console.log(`output contract ${c.artifact} — ${c.enforced ? 'constrained this generation' : 'DID NOT REACH THE PROVIDER'}`);
   }
   console.log(`invocation ${rec.invocationId}  ·  SkillVersion ${sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${budget.spentUsd.toFixed(4)}`);
-  console.log(`If that was not right:  atelier improve --skill ${name} --invocation ${rec.invocationId}`);
+  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: name, input: task, at: rec.at }, null, 1));
+  console.log(`If that was not right:  atelier fix "<what was wrong>"`);
 }

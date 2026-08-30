@@ -12,7 +12,7 @@
  * This file is dispatch and nothing else. Each command lives in `commands/`, and what they share
  * lives in `runtime.ts`.
  */
-import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir } from './runtime.js';
+import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir, archiveSession, sessionPath } from './runtime.js';
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
@@ -29,7 +29,11 @@ import { amend, sharpen, answerProbe } from './commands/amend.js';
 import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
+import { record } from './commands/record.js';
+import { fix } from './commands/fix.js';
+import { existsSync } from 'node:fs';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
+import { policyFor } from '../core/state/policy.js';
 
 /**
  * EVALUATION SURFACE, NOT PRODUCT SURFACE.
@@ -63,6 +67,7 @@ export const COMMANDS: readonly string[] = [
   'discover',
   'enrol',
   'feedback',
+  'fix',
   'history',
   'improve',
   'inspect',
@@ -75,6 +80,7 @@ export const COMMANDS: readonly string[] = [
   'ratify',
   'ratify-close',
   'ratify-one',
+  'record',
   'reference',
   'reject',
   'revert',
@@ -116,12 +122,18 @@ const main = async (): Promise<void> => {
     case 'skill': return skill();
     case 'plan': { plan(); return; }
     case 'contract': return contract();
+    case 'record': return record();
+    case 'fix': return fix();
     case 'reference': return reference();
     case 'status': {
       const s = loadSession();
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  studies [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
       console.log(`project ${projectDir()}`);
+      // Read off core/state/policy.ts — the one owner of "what is permitted now" — rather than
+      // restated here where it would drift.
+      const pol = policyFor(s.run);
+      if (pol.reasonIfBlocked) console.log(`blocked: ${pol.reasonIfBlocked}`);
       // Runs are keyed by the project PATH, so a moved or renamed directory shows an empty run here
       // while the old one still exists under its old name. Naming the others is the difference
       // between a recoverable situation and a baffling one.
@@ -134,15 +146,22 @@ const main = async (): Promise<void> => {
       return;
     }
     case 'abort': {
+      // Marked terminal AND moved aside. Terminal alone left the file in the way of every later
+      // command, with advice to run the command that had just been run.
+      if (!existsSync(sessionPath())) { console.log('nothing in flight here.'); return; }
       const s = loadSession();
       const t = terminate(s.run, 'USER_ABORTED');
       if (t.ok) saveSession({ ...s, run: (t as { run: Run }).run });
-      console.log('run aborted.');
+      const archived = archiveSession();
+      if (!archived) { console.log('nothing in flight here.'); return; }
+      console.log(`run aborted. What was decided is kept at ${archived}; the next command starts a new run.`);
       return;
     }
     case 'enrol': {
       const s = loadSession();
-      const kind = (process.argv.includes('--kind') ? process.argv[process.argv.indexOf('--kind') + 1] : '') as 'DISCOVERY_STUDY' | 'BEHAVIOUR_STUDY';
+      const KINDS = ['DISCOVERY_STUDY', 'BEHAVIOUR_STUDY'] as const;
+      const asked = process.argv.includes('--kind') ? process.argv[process.argv.indexOf('--kind') + 1] : undefined;
+      const kind = KINDS.find((k) => k === asked) ?? die(`--kind ${KINDS.join('|')} required.`);
       const e = enrol(s.run, kind, new Date().toISOString());
       if (!e.ok) die(`${e.refusal} — ${e.detail}`);
       saveSession({ ...s, run: (e as { run: Run }).run });

@@ -53,6 +53,10 @@ export const TRANSITIONS: readonly Transition[] = [
   { from: 'CORPUS_SEALED', to: 'PROPOSED' },          // product path: straight through
   { from: 'LIST_SEALED', to: 'PROPOSED' },
   { from: 'PROPOSED', to: 'RATIFIED' },
+  // A RATIFIED STANDARD MAY BE SUPERSEDED BEFORE IT IS BUILT. `add` after `ratify-close` is the
+  // ordinary case of remembering one more rule. The close then mints a new version that RECORDS
+  // what it supersedes, and the hash guard below admits exactly that and nothing else.
+  { from: 'RATIFIED', to: 'RATIFIED' },
   { from: 'RATIFIED', to: 'BUILT' },
   // A PREVIEW MAY BE RATIFIED AFTERWARDS.
   //
@@ -88,7 +92,7 @@ export type Refusal =
 
 export type TransitionResult = { readonly ok: true; readonly run: Run } | { readonly ok: false; readonly refusal: Refusal; readonly detail: string };
 
-export function transition(run: Run, to: RunState, ctx: { corpusHash?: string; standardVersionHash?: string } = {}): TransitionResult {
+export function transition(run: Run, to: RunState, ctx: { corpusHash?: string; standardVersionHash?: string; supersedes?: string | null } = {}): TransitionResult {
   if (run.terminal) return { ok: false, refusal: 'RUN_ALREADY_TERMINAL', detail: `run ${run.runId} ended as ${run.terminal}; a terminal run is superseded by a new run, never resumed.` };
 
   const legal = TRANSITIONS.find((t) => t.from === run.state && t.to === to);
@@ -106,7 +110,11 @@ export function transition(run: Run, to: RunState, ctx: { corpusHash?: string; s
   if (ctx.corpusHash && run.corpusHash && ctx.corpusHash !== run.corpusHash) {
     return { ok: false, refusal: 'CORPUS_MUTATED', detail: `corpus changed since sealing (${run.corpusHash} -> ${ctx.corpusHash}). Start a new run; this one's identity is bound to the sealed corpus.` };
   }
-  if (ctx.standardVersionHash && run.standardVersionHash && ctx.standardVersionHash !== run.standardVersionHash) {
+  // A changed hash is a MUTATION unless the new version says which one it supersedes. That is the
+  // difference between editing a ratified standard in place and minting the next one — and the
+  // second is the ordinary way a standard grows after it has been built.
+  if (ctx.standardVersionHash && run.standardVersionHash && ctx.standardVersionHash !== run.standardVersionHash
+    && ctx.supersedes !== run.standardVersionHash) {
     return { ok: false, refusal: 'STANDARD_MUTATED', detail: `StandardVersion changed after ratification (${run.standardVersionHash} -> ${ctx.standardVersionHash}). Editing a ratified standard mints a NEW version; it does not amend this one.` };
   }
   if (to === 'REVEALED' && run.preference === null) {

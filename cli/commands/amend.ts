@@ -16,7 +16,9 @@ import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor , numericFlag} from '../runtime.js';
+import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor, numericFlag, skillArg } from '../runtime.js';
+import { decide } from '../../core/ratification/authority.js';
+import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
 // ── amend ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -35,7 +37,7 @@ import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor , nu
  * claiming the machine discovered them.
  */
 export function amend(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const ruleId = flag('--rule') ?? die('--rule required');
   const statement = flag('--statement') ?? die('--statement "<the rule in your words>" required');
   const appliesWhen = flag('--applies-when');
@@ -46,10 +48,10 @@ export function amend(): void {
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
   const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in ${prev.standardVersionHash}.`);
 
-  const requirements = prev.requirements.map((r) => r.requirementId === ruleId
-    ? { ...r, statement, appliesWhen: appliesWhen ?? r.appliesWhen,
-        authority: 'EXPERT_AUTHORED' as const, provenance: 'SUBSTANTIVELY_REWRITTEN' as const }
-    : r);
+  let amended;
+  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen }); }
+  catch (e) { return void die((e as Error).message); }
+  const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
   const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
@@ -83,6 +85,12 @@ export function amend(): void {
   const inst = pickHost().install(pkg, projectDir());
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
+  // The act is a ratification decision like any other, and until now it left no ledger record —
+  // docs/AUTHORITY.md promised one for "every one of these decisions" and only the session flow kept it.
+  const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },
+    target, amended.ledgerDecision, { humanRevision: amended.requirement, note: reason, decidedAt: next.mintedAt }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
+
   console.log(`\nAmended ${ruleId}.`);
   console.log(`  was: ${target.statement}`);
   console.log(`  now: ${statement}`);
@@ -109,7 +117,7 @@ export function amend(): void {
  * side — and anyone running this already has an editor open next to it.
  */
 export async function sharpen(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const k = numericFlag('--questions', 2);
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
@@ -155,7 +163,7 @@ export async function sharpen(): Promise<void> {
  * probe did not ask about.
  */
 export function answerProbe(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const ruleId = flag('--rule') ?? die('--rule required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const keyPath = join(DATA, 'skills', name, 'probes', `${ruleId}.key.json`);

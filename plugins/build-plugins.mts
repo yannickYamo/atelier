@@ -45,8 +45,26 @@ const MANIFEST = (_h: HostSpec): string => JSON.stringify({
 const HOOKS = (h: HostSpec): string => JSON.stringify({
   hooks: {
     SessionStart: [{ hooks: [{ type: 'command', command: `"\${CLAUDE_PLUGIN_ROOT}"/scripts/capability-check.sh` }] }],
+    // Claude Code only: its documented hook payloads are what `atelier record` parses. Codex gets
+    // these when its own events are confirmed — abstracting three hosts before one works is how
+    // none of them does.
+    ...(h.id === 'claude-code' ? {
+      UserPromptSubmit: [{ hooks: [{ type: 'command', command: `"\${CLAUDE_PLUGIN_ROOT}"/scripts/record-hook.sh prompt` }] }],
+      Stop: [{ hooks: [{ type: 'command', command: `"\${CLAUDE_PLUGIN_ROOT}"/scripts/record-hook.sh stop` }] }],
+    } : {}),
   },
-}, null, 2).replace('${CLAUDE_PLUGIN_ROOT}', h.id === 'codex' ? '${CODEX_PLUGIN_ROOT}' : '${CLAUDE_PLUGIN_ROOT}');
+}, null, 2).replaceAll('${CLAUDE_PLUGIN_ROOT}', h.id === 'codex' ? '${CODEX_PLUGIN_ROOT}' : '${CLAUDE_PLUGIN_ROOT}');
+
+const RECORD_HOOK = [
+  '#!/usr/bin/env bash',
+  '# INVISIBLE EVIDENCE CAPTURE. A skill used through the host produces the same canonical',
+  '# InvocationRecord as `atelier invoke` -- that is what makes /atelier:fix possible without anyone',
+  '# copying an id. Absent binary = silent no-op: recording is a convenience, never a gate.',
+  'set -euo pipefail',
+  'command -v atelier >/dev/null 2>&1 || exit 0',
+  'exec atelier record --from-hook "${1:-}"',
+  '',
+].join('\n');
 
 const CAPABILITY_CHECK = `#!/usr/bin/env bash
 # FAIL CLOSED if the host cannot support the protocol.
@@ -59,7 +77,7 @@ set -euo pipefail
 if ! command -v atelier >/dev/null 2>&1; then
   echo "Atelier: 'atelier' is not on PATH. The protocol guarantees (ratification-before-build," >&2
   echo "corpus-freeze, reveal-after-preference) are enforced by that binary, not by instructions." >&2
-  echo "Install it first:  npm install -g @yannickyamo/atelier" >&2
+  echo "Install it first:  git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link" >&2
   exit 2
 fi
 exit 0
@@ -74,6 +92,7 @@ for (const h of HOSTS) {
   writeFileSync(join(root, h.manifestDir, 'plugin.json'), `${MANIFEST(h)}\n`);
   writeFileSync(join(root, 'hooks', 'hooks.json'), `${HOOKS(h)}\n`);
   writeFileSync(join(root, 'scripts', 'capability-check.sh'), CAPABILITY_CHECK, { mode: 0o755 });
+  if (h.id === 'claude-code') writeFileSync(join(root, 'scripts', 'record-hook.sh'), RECORD_HOOK, { mode: 0o755 });
 
   for (const skill of readdirSync(SRC)) {
     const dst = join(root, 'skills', skill);

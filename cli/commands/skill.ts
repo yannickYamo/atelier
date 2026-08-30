@@ -32,7 +32,10 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { die, flag, argv, positional, clientFor, PROPOSER, loadSession, saveSession } from '../runtime.js';
+import { sha, die, flag, argv, positional, clientFor, PROPOSER, loadSession, saveSession, authoredIdAllocator, type ProposalSet, type ProposedRule } from '../runtime.js';
+import { groundedInUserText } from '../../core/ratification/grounding.js';
+import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
+import { decide } from '../../core/ratification/authority.js';
 import { spend, type Budget } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { create } from './improve.js';
@@ -86,6 +89,8 @@ For each rule report:
 - appliesWhen: the condition under which it holds, or exactly "GENERAL" if it always holds.
 - faithful: true if the person actually said this. false if you are supplying an operational reading
   they did not state.
+- sourceSpan: the EXACT words from what they said that this rule restates, copied verbatim. For a
+  rule they did not state, copy the closest phrase that prompted your reading.
 
 Also report workType: two or three words for the kind of work this governs, as a person would say
 it — "writing", "code review", "customer email". This is DESCRIPTIVE, not part of the standard: it
@@ -111,8 +116,9 @@ const PROPOSER_SCHEMA: Record<string, unknown> = {
           kind: { type: 'string', enum: ['GENERATIVE', 'BOUNDARY'] },
           appliesWhen: { type: 'string' },
           faithful: { type: 'boolean' },
+          sourceSpan: { type: 'string' },
         },
-        required: ['statement', 'kind', 'appliesWhen', 'faithful'],
+        required: ['statement', 'kind', 'appliesWhen', 'faithful', 'sourceSpan'],
         additionalProperties: false,
       },
     },
@@ -122,7 +128,7 @@ const PROPOSER_SCHEMA: Record<string, unknown> = {
 };
 
 interface Proposed {
-  statement: string; kind: 'GENERATIVE' | 'BOUNDARY'; appliesWhen: string; faithful: boolean;
+  statement: string; kind: 'GENERATIVE' | 'BOUNDARY'; appliesWhen: string; faithful: boolean; sourceSpan?: string;
 }
 
 export async function skill(): Promise<void> {
@@ -145,66 +151,100 @@ export async function skill(): Promise<void> {
 
   // ── DIRECT and HYBRID both start from what the person said ───────────────────────────────────
   console.log(`${decision.why}\n`);
-  const client = clientFor(PROPOSER);
-  const budget: Budget = { spentUsd: 0, capUsd: 0.5, maxCalls: 2 };
-  const r = await spend(budget, 0.02, async () => {
-    const x = await client.complete({
-      stableBlock: PROPOSER_SYSTEM, variableBlock: '',
-      userMessage: `WHAT THEY SAID:\n${prompt ?? ''}\n\nSeparate it.`,
-      toolName: 'emit_rules', toolDescription: 'Separate what was said into individual rules.',
-      schema: PROPOSER_SCHEMA, maxTokens: 2000,
+
+  // ── PROPOSED ONCE, PERSISTED, AND THE PERSON APPROVES THOSE BYTES ──────────────────────────
+  //
+  // The preview and the acceptance used to be two independent model calls: `--yes` re-rolled the
+  // proposer and compiled whatever came back the second time. The set is now written to the session
+  // BEFORE it is shown, a later run with the same prompt reuses it with no call at all, and a
+  // different prompt invalidates it — you can only ever accept what you saw.
+  const promptHash = sha(prompt ?? '');
+  let s = loadSession();
+  let pset: ProposalSet | null = s.proposalSet?.promptHash === promptHash ? (s.proposalSet ?? null) : null;
+
+  if (!pset) {
+    const client = clientFor(PROPOSER);
+    const budget: Budget = { spentUsd: 0, capUsd: 0.5, maxCalls: 2 };
+    const r = await spend(budget, 0.02, async () => {
+      const x = await client.complete({
+        stableBlock: PROPOSER_SYSTEM, variableBlock: '',
+        userMessage: `WHAT THEY SAID:\n${prompt ?? ''}\n\nSeparate it.`,
+        toolName: 'emit_rules', toolDescription: 'Separate what was said into individual rules.',
+        schema: PROPOSER_SCHEMA, maxTokens: 2000,
+      });
+      return { value: x, cost: x.cost };
     });
-    return { value: x, cost: x.cost };
-  });
 
-  const payload = r.json as { rules?: Proposed[]; workType?: string };
-  // An EMPTY string must fall through, not be accepted, which is why this is a chain of explicit
-  // checks rather than `??` — a work type of "" would become a skill description of "" and the host
-  // reads that when deciding whether to load the skill at all.
-  const firstNonEmpty = (...xs: (string | undefined)[]): string =>
-    xs.map((x) => (x ?? '').trim()).find((x) => x.length > 0) ?? 'writing';
-  const workType = firstNonEmpty(payload.workType, flag('--work-type'));
-  const proposed = (payload.rules ?? []).filter((p) => p.statement?.trim());
-  if (!proposed.length) die('nothing separable was found in that. Try saying what a good answer does.');
+    const payload = r.json as { rules?: Proposed[]; workType?: string };
+    // An EMPTY string must fall through, not be accepted — a work type of "" would become a skill
+    // description of "". The person's flag beats the model's guess: the flag is a decision, the
+    // guess is a reading, and the old order let the reading win.
+    const firstNonEmpty = (...xs: (string | undefined)[]): string =>
+      xs.map((x) => (x ?? '').trim()).find((x) => x.length > 0) ?? 'writing';
+    const workType = firstNonEmpty(flag('--work-type'), payload.workType);
+    const proposed = (payload.rules ?? []).filter((p) => p.statement?.trim());
+    if (!proposed.length) die('nothing separable was found in that. Try saying what a good answer does.');
 
-  console.log(`${proposed.length} rule(s) from what you said, for ${workType}:\n`);
-  proposed.forEach((p, i) => {
+    // ── GROUNDED HERE, DETERMINISTICALLY — the model's `faithful` is evidence, never authority ──
+    const rules: ProposedRule[] = proposed.map((p) => {
+      const g = groundedInUserText({ statement: p.statement.trim(),
+        appliesWhen: p.appliesWhen.trim() || 'GENERAL', sourceSpan: p.sourceSpan ?? '' }, prompt ?? '');
+      return { statement: p.statement.trim(), kind: p.kind, appliesWhen: p.appliesWhen.trim() || 'GENERAL',
+        sourceSpan: p.sourceSpan ?? '', faithful: p.faithful, grounded: g.grounded, groundingWhy: g.why };
+    });
+    pset = { proposalSetHash: sha(JSON.stringify(rules)), promptHash, workType, rules };
+    s = { ...s, proposalSet: pset };
+    saveSession(s);
+  } else {
+    console.log('(using the proposal you were already shown — nothing was re-asked)\n');
+  }
+
+  const workType = pset.workType;
+  console.log(`${pset.rules.length} rule(s) from what you said, for ${workType}:\n`);
+  pset.rules.forEach((p, i) => {
     const cond = p.appliesWhen.trim().toUpperCase() === 'GENERAL' ? '' : `\n      applies when: ${p.appliesWhen}`;
     console.log(`  ${i + 1}. [${p.kind === 'BOUNDARY' ? "don't" : 'do  '}] ${p.statement}${cond}`);
-    if (!p.faithful) console.log('      ^ YOU DID NOT SAY THIS. It is a reading of what you said, and it needs your decision.');
+    if (!p.grounded) console.log('      ^ MY READING — these words are not in what you said. It needs your decision.');
   });
 
-  const invented = proposed.filter((p) => !p.faithful);
-  const mine = proposed.length - invented.length;
-  console.log(`\n${mine} of these ${mine === 1 ? 'is' : 'are'} yours.`
+  const invented = pset.rules.filter((p) => !p.grounded);
+  const mine = pset.rules.length - invented.length;
+  console.log(`\n${mine} of these ${mine === 1 ? 'is' : 'are'} yours, in your own words.`
     + (invented.length
-      ? ` ${invented.length} ${invented.length === 1 ? 'is the machine\'s reading' : "are the machine's reading"} `
-        + 'and will be shown to the model as an example rather than instructing it, until you say otherwise.'
+      ? ` ${invented.length} ${invented.length === 1 ? 'is my reading' : 'are my readings'}: accepted, `
+        + 'they are SHOWN to the model without instructing it, until you declare them required.'
       : ''));
 
   if (!argv.includes('--yes')) {
-    console.log('\nNothing has been compiled. To accept these as written:\n'
+    console.log('\nNothing has been compiled. To accept exactly these:\n'
       + `\n  atelier skill ${JSON.stringify(prompt ?? '')} --yes --name <name>\n`
       + '\nTo change one first, accept then use `atelier amend`, or state it differently and run again.');
     return;
   }
 
-  // ── ACCEPTED ────────────────────────────────────────────────────────────────────────────────
+  // ── ACCEPTED: THE PERSISTED SET, NOT A RE-ROLL ─────────────────────────────────────────────
   //
-  // A faithful separation is the person's own rule, transcribed. Anything the model supplied is a
-  // machine proposal and carries the ordinary ceiling — `componentFor` serves an unratified rule as
-  // an EXAMPLE under OBSERVE, so it is shown to the model and never instructs it.
-  const s = loadSession();
-  const decided: Requirement[] = proposed.map((p, i) => ({
-    requirementId: `x${i + 1}`, statement: p.statement.trim(),
-    appliesWhen: p.appliesWhen.trim() || 'GENERAL',
+  // A grounded rule is the person's own sentence, mechanically verified — EXPERT_AUTHORED through
+  // `decide`. An ungrounded one is the machine's reading the person just approved — ratified, and
+  // under the source-aware default it is shown, not instructed, until they declare it. Every ruling
+  // lands in the ledger, one record per rule.
+  const nextId = authoredIdAllocator(s);
+  const bases: Requirement[] = pset.rules.map((p) => ({
+    requirementId: nextId(), statement: p.statement,
+    appliesWhen: p.appliesWhen,
     kind: p.kind,
-    authority: p.faithful ? 'EXPERT_AUTHORED' : 'DERIVED_UNRATIFIED',
-    provenance: p.faithful ? 'EXPERT_STATED' : 'MACHINE_DISCOVERED',
-    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
+    authority: 'DERIVED_UNRATIFIED',
+    provenance: 'MACHINE_DISCOVERED',
+    evidence: p.sourceSpan || null, evidenceItemId: null, wouldBeAbsentIf: null,
     materiality: null, realizationTolerance: null, outputShape: null,
   }));
-  saveSession({ ...s, decided: [...s.decided, ...decided] });
+  let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
+  const decidedNow: Requirement[] = bases.map((base, i) => {
+    const outcome = decide(base, { verb: pset.rules[i].grounded ? 'STATED' : 'APPROVE' });
+    ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
+    return outcome.requirement;
+  });
+  saveSession({ ...s, decided: [...s.decided, ...decidedNow], ledger, proposalSet: null });
 
   if (decision.route === 'HYBRID') {
     console.log('\nNow reading the work for what you did not say.\n');
@@ -214,6 +254,7 @@ export async function skill(): Promise<void> {
 
   // The work type reaches `ratify-close` the way a flag would. It is a description of what the skill
   // governs, not a claim about the standard, and the person has just seen it in the proposal.
+  process.env.ATELIER_ORCHESTRATED = '1';
   if (!argv.includes('--work-type')) { argv.push('--work-type', workType); }
   ratifyClose();
   build(flag('--name') ?? basename(process.cwd()));

@@ -14,7 +14,7 @@ import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../.
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
 
-import { sha, DATA, die, argv, flag, loadSession, saveSession, step } from '../runtime.js';
+import { sha, die, argv, flag, loadSession, saveSession, step, runFile } from '../runtime.js';
 
 // ── intake ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -275,8 +275,8 @@ export function intake(path: string, workType: string): void {
   }
   s = step(s, 'CORPUS_SEALED', { corpusHash });
   saveSession({ ...s, evidence: ev, reservation });
-  writeAtomic(join(DATA, 'corpus-paths.json'), JSON.stringify(files, null, 1));
-  writeAtomic(join(DATA, 'import-plan.json'), JSON.stringify(plan, null, 1));
+  writeAtomic(runFile('corpus-paths.json'), JSON.stringify(files, null, 1));
+  writeAtomic(runFile('import-plan.json'), JSON.stringify(plan, null, 1));
 
   // THE SKILL IS BOUND TO THE RUN TOO. An IMPROVE run is a claim about a specific skill, and if that
   // skill changes underneath us the claim silently becomes a claim about something else — the same
@@ -284,7 +284,7 @@ export function intake(path: string, workType: string): void {
   // standard; it is the thing being measured against it.
   if (pkg) {
     const pkgText = pkgFiles.map((r) => `${relToPkg(r.file)}\n${r.text}`).join('\n\u0000\n');
-    writeAtomic(join(DATA, 'skill-package.json'), JSON.stringify({
+    writeAtomic(runFile('skill-package.json'), JSON.stringify({
       ...pkg, root: pkgRoot === '' ? '.' : pkgRoot, absRoot: join(base, pkgRoot ?? ""), packageHash: sha(pkgText),
       readable: pkgFiles.map((r) => relToPkg(r.file)) }, null, 1));
   }
