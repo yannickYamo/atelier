@@ -2,6 +2,20 @@
 
 The implementation can change. The standard cannot change itself.
 
+**The shipped correction loop is one command.** `atelier fix "<what was wrong>"` resolves your
+latest recorded use, diagnoses, and on an implementation miss builds ONE lateral candidate — a
+*different mechanism*, chosen from the carriers the rule's own typed properties make legal under a
+fixed, recorded ordering (`core/architecture/replace-carrier.ts`) — re-runs the same task, and puts
+a blinded A/B in front of you. Your pick installs the winner and is recorded as a judgement and a
+BEHAVIOR observation; the StandardVersion hash is asserted unchanged, not merely logged. Rejection
+memory is scoped to (StandardVersion, model): a move that lost under one model is not thereby ruled
+out under another, and a superseding standard inherits no verdicts. There is deliberately **no
+strength ordering over carriers** — the carrier study falsified that assumption.
+
+The commands below are the staged spelling of the same loop, for when you want to drive each step
+yourself. `improve`'s escalation (PROSE → SELF_CHECK) predates lateral replacement and remains for
+that path.
+
 ```bash
 atelier invoke --skill my-skill "..."        # produces an invocation id
 

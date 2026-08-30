@@ -8,6 +8,8 @@ a run in progress may not be.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-30
+
 ### Added
 
 - **`atelier fix` — one correction path.** A complaint goes in; Atelier resolves the latest

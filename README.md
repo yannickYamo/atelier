@@ -347,13 +347,17 @@ atelier ratify --decisions '[
   {"id":"p3","decision":"APPROVE","materiality":"REQUIRED",
    "shape":{"verdict":{"type":"string"},"confidence":{"type":"number"}}}
 ]'
-atelier ratify-close
+# `create` already minted a DRAFT preview, so this close SUPERSEDES it — the reason is recorded:
+atelier ratify-close --reason "ruled on every proposal"
 
 # 4. Compile it.
 atelier build --name my-skill
 
-# 5. Use it.
+# 5. Use it — in your host as /my-skill, or:
 atelier invoke --skill my-skill "Write the recommendation."
+
+# 6. When something is wrong, say so. No ids, no hashes:
+atelier fix "the answer buried the recommendation"
 ```
 
 A small corpus is enough to draft a provisional standard. It is not evidence that the standard is
@@ -374,7 +378,7 @@ codex` to see it.
 
 ## What to expect
 
-Atelier is an open research and product preview. The full pipeline runs end to end today, and one honest caveat on that sentence: the automated suite covers the governance spine and the CLI surface, while the path from a folder of work to a served generation is exercised by hand rather than by a test that calls a model.
+Atelier is an open research and product preview. The full pipeline runs end to end today. The automated suite drives the shipped binary through creation, serving, host-recorded use and the whole correction loop against a scripted backend — including the blinded A/B and both authority paths — while the live discovery chain over a real corpus (a real model reading real work) is still exercised by hand rather than by a test that pays for inference.
 
 ```text
 corpus

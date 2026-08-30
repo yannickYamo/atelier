@@ -40,7 +40,7 @@ export class AnthropicInferenceClient implements InferenceClient {
       throw new Error(
         'ANTHROPIC_API_KEY is not set.\n'
         + '  export ANTHROPIC_API_KEY=sk-...\n'
-        + 'Atelier needs an inference provider for the discovery step. Your corpus, standard and outputs '
+        + 'Atelier needs an inference provider for this step. Your corpus, standard and outputs '
         + 'stay on this machine; nothing is sent anywhere except that one call.',
       );
     }
