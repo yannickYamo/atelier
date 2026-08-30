@@ -22,9 +22,13 @@ const dispatched = new Set(
 );
 const flags = new Set([...VALUED_OPTIONS, ...BOOLEAN_OPTIONS]);
 
-/** Every `atelier <cmd> [--flag …]` a file puts in front of a person. */
-const hintsIn = (src: string): { cmd: string; flags: string[]; raw: string }[] =>
-  [...src.matchAll(/\batelier ([a-z][a-z-]*)((?:\s+--[a-z-]+(?:[= ][^\s`'"\\]+)?)*)/g)]
+/** Every `atelier <cmd> [--flag …]` a file puts in front of a person. Comments are prose about the
+ *  system, not hints to a person — the census's very first run flagged a comment RECOUNTING an old
+ *  typo defect, which is history, not advice. Stripped, same expression as the other censuses. */
+const stripComments = (src: string): string =>
+  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const hintsIn = (src: string, isTs: boolean): { cmd: string; flags: string[]; raw: string }[] =>
+  [...(isTs ? stripComments(src) : src).matchAll(/\batelier ([a-z][a-z-]*)((?:\s+--[a-z-]+(?:[= ][^\s`'"\\]+)?)*)/g)]
     .map((m) => ({ cmd: m[1], raw: m[0], flags: [...m[2].matchAll(/--([a-z-]+)/g)].map((f) => f[1]) }));
 
 describe('every atelier invocation printed by the CLI or the plugin skills', () => {
@@ -36,7 +40,7 @@ describe('every atelier invocation printed by the CLI or the plugin skills', () 
   it('names a command the dispatcher answers', () => {
     const offenders: string[] = [];
     for (const f of files) {
-      for (const h of hintsIn(readFileSync(f, 'utf8'))) {
+      for (const h of hintsIn(readFileSync(f, 'utf8'), f.endsWith('ts'))) {
         if (!dispatched.has(h.cmd)) offenders.push(`${f}: "${h.raw}"`);
       }
     }
@@ -46,7 +50,7 @@ describe('every atelier invocation printed by the CLI or the plugin skills', () 
   it('names only flags the command grammar declares', () => {
     const offenders: string[] = [];
     for (const f of files) {
-      for (const h of hintsIn(readFileSync(f, 'utf8'))) {
+      for (const h of hintsIn(readFileSync(f, 'utf8'), f.endsWith('ts'))) {
         for (const fl of h.flags) {
           if (!flags.has(fl)) offenders.push(`${f}: "${h.raw}" (--${fl})`);
         }
@@ -56,7 +60,7 @@ describe('every atelier invocation printed by the CLI or the plugin skills', () 
   });
 
   it('the census sees enough hints to be policing anything', () => {
-    const total = files.reduce((n, f) => n + hintsIn(readFileSync(f, 'utf8')).length, 0);
+    const total = files.reduce((n, f) => n + hintsIn(readFileSync(f, 'utf8'), f.endsWith('ts')).length, 0);
     expect(total).toBeGreaterThan(40);
   });
 });
