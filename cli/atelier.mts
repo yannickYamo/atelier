@@ -12,7 +12,7 @@
  * This file is dispatch and nothing else. Each command lives in `commands/`, and what they share
  * lives in `runtime.ts`.
  */
-import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir } from './runtime.js';
+import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir, archiveSession, sessionPath } from './runtime.js';
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
@@ -29,6 +29,7 @@ import { amend, sharpen, answerProbe } from './commands/amend.js';
 import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
+import { existsSync } from 'node:fs';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 
 /**
@@ -134,15 +135,22 @@ const main = async (): Promise<void> => {
       return;
     }
     case 'abort': {
+      // Marked terminal AND moved aside. Terminal alone left the file in the way of every later
+      // command, with advice to run the command that had just been run.
+      if (!existsSync(sessionPath())) { console.log('nothing in flight here.'); return; }
       const s = loadSession();
       const t = terminate(s.run, 'USER_ABORTED');
       if (t.ok) saveSession({ ...s, run: (t as { run: Run }).run });
-      console.log('run aborted.');
+      const archived = archiveSession();
+      if (!archived) { console.log('nothing in flight here.'); return; }
+      console.log(`run aborted. What was decided is kept at ${archived}; the next command starts a new run.`);
       return;
     }
     case 'enrol': {
       const s = loadSession();
-      const kind = (process.argv.includes('--kind') ? process.argv[process.argv.indexOf('--kind') + 1] : '') as 'DISCOVERY_STUDY' | 'BEHAVIOUR_STUDY';
+      const KINDS = ['DISCOVERY_STUDY', 'BEHAVIOUR_STUDY'] as const;
+      const asked = process.argv.includes('--kind') ? process.argv[process.argv.indexOf('--kind') + 1] : undefined;
+      const kind = KINDS.find((k) => k === asked) ?? die(`--kind ${KINDS.join('|')} required.`);
       const e = enrol(s.run, kind, new Date().toISOString());
       if (!e.ok) die(`${e.refusal} — ${e.detail}`);
       saveSession({ ...s, run: (e as { run: Run }).run });

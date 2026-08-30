@@ -16,7 +16,7 @@
 // not a holdout.
 
 import * as store from '../../core/state/store.js';
-import { DATA, die, flag, argv, numericFlag, clientAndBinding, describeBinding } from '../runtime.js';
+import { DATA, die, flag, argv, numericFlag, clientAndBinding, describeBinding, skillArg } from '../runtime.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import { join } from 'node:path';
@@ -59,7 +59,7 @@ const comparisonPath = (name: string, standardVersionHash: string): string =>
   join(DATA, 'skills', name, 'contract', `${standardVersionHash}.comparison.json`);
 
 export async function contract(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill <name> required');
+  const name = skillArg('--skill <name> required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
   const sv = store.getSkillVersion(L, active) ?? die(`skill version ${active} is missing.`);

@@ -10,6 +10,33 @@ a run in progress may not be.
 
 ### Fixed
 
+- **A build could compile a standard the user never ratified.** The run in flight was per-project;
+  the files it produced were not. `pending-standard.json` and nine other working files sat at the
+  store root, so two projects sharing one store overwrote each other's pending standard and `build`
+  in one project installed — and stamped as ratified — the standard the other had just closed.
+  Working files now live under `runs/<project>/`, keyed exactly as the session is, and `build`
+  refuses a pending standard whose hash is not the one this run ratified. Files left at the root by
+  an older version are adopted only when the store holds a single run, which is the one case where
+  their owner is unambiguous.
+- **`--skill ../../elsewhere` read from, and wrote to, a directory outside the store.** `build`
+  normalised names; the read-side commands (`inspect`, `history`, `rollback`, `feedback`, and
+  eleven others) joined `--skill` onto `skills/` as given. Every `--skill` is now validated against
+  the same rule `build --name` applies, refused rather than normalised, and the store layout itself
+  rejects a name that would leave `skills/`.
+- **A rule the person typed was silently dropped.** `add` numbered rules from the length of
+  `decided`; a batch `ADD` numbered from a counter that restarted at 1 on every call; the front door
+  numbered from the model's list position. All three minted `x1`, and `ratify-close` keys the
+  standard by id, so the later rule replaced the earlier one while the CLI reported "2 kept". One
+  allocator now hands out the successor of the highest `x<n>` anywhere in the run.
+- **After its first build, a project was a dead end; `abort` made it permanent.** Adding a rule after
+  `build` and closing again was refused as STANDARD_MUTATED with the advice to `abort`; `abort`
+  marked the run terminal and left it in place, and nothing ever started a new run. Closing again
+  now mints a version that records what it supersedes (and requires `--reason`, as every
+  supersession does), `RATIFIED -> RATIFIED` is a legal transition for that purpose, and `abort`
+  archives the session under `sessions/aborted/` so the next command starts clean. `build` also
+  advances the run before it writes anything: a refused build used to install the skill and move the
+  active pointer, then exit 1.
+
 - **The skill emitted its own internals into the user's deliverable.** Example bodies were rendered
   with markdown headings (`# p6`, `## How the author did it`) and served under another heading.
   Served to a model as context, a heading is not a label — it is a document structure, and the model

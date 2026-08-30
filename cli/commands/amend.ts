@@ -16,7 +16,7 @@ import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor , numericFlag} from '../runtime.js';
+import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor, numericFlag, skillArg } from '../runtime.js';
 
 // ── amend ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -35,7 +35,7 @@ import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor , nu
  * claiming the machine discovered them.
  */
 export function amend(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const ruleId = flag('--rule') ?? die('--rule required');
   const statement = flag('--statement') ?? die('--statement "<the rule in your words>" required');
   const appliesWhen = flag('--applies-when');
@@ -109,7 +109,7 @@ export function amend(): void {
  * side — and anyone running this already has an editor open next to it.
  */
 export async function sharpen(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const k = numericFlag('--questions', 2);
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
@@ -155,7 +155,7 @@ export async function sharpen(): Promise<void> {
  * probe did not ask about.
  */
 export function answerProbe(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const ruleId = flag('--rule') ?? die('--rule required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const keyPath = join(DATA, 'skills', name, 'probes', `${ruleId}.key.json`);
