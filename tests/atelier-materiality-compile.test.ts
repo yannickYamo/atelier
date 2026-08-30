@@ -80,9 +80,17 @@ describe('realization tolerance decides whether the FORM is pinned', () => {
 });
 
 describe('an unanswered axis is ABSENT, never defaulted', () => {
-  it('null materiality falls through to the pre-existing kind-based arrangement', () => {
-    // a standard ratified before the axes existed must compile exactly as it did.
+  it('null materiality on a discovered-then-ratified rule is SHOWN, not instructed', () => {
+    // The old fallthrough compiled ratified+undeclared to ENFORCE while the CLI printed "they will
+    // be SHOWN, not instructed" — the strongest thing a skill does, decided by a question nobody
+    // was asked. Undeclared now instructs only when the person WROTE the rule; a discovered rule
+    // they approved observes until they declare how much it matters.
     const c = componentFor(req({ materiality: null }));
+    expect(c.gateRole).toBe('OBSERVE');
+  });
+
+  it('null materiality on a rule the person AUTHORED instructs — their sentence is the declaration', () => {
+    const c = componentFor(req({ materiality: null, authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED' }));
     expect(c.id).toMatch(/^do:/);
     expect(c.gateRole).toBe('ENFORCE');
     expect(c.carrier).toBe('PROSE');

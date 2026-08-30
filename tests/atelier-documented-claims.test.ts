@@ -77,9 +77,10 @@ const walkTs = (dir: string): string[] => readdirSync(dir).flatMap((e) => {
 });
 
 describe('the vocabulary the docs teach is the vocabulary the compiler accepts', () => {
-  // MAT and FORM are ratification vocabulary and moved with the ratification commands when
-  // discover.ts was split. The variable was already named `ratify`, which is how the seam showed.
-  const ratify = read('cli/commands/ratify.ts');
+  // MAT and FORM are ratification vocabulary. They moved twice: with the ratification commands when
+  // discover.ts was split, and then into the one canonical authority function when the five decision
+  // surfaces were collapsed onto it — the validation now lives where the authority is assigned.
+  const ratify = read('core/ratification/authority.ts');
 
   /**
    * README PLUS docs/, because the property is that a reader can FIND the vocabulary, not that it
@@ -145,10 +146,14 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
       .toEqual([]);
   });
 
-  it('the decision verbs a reader is offered are the ones ratify accepts', () => {
-    const accepted = /\[('APPROVE', 'REWRITE', 'CONTEXTUAL')\]\.includes\(dec\)/.exec(ratify);
-    expect(accepted, 'the accepted-decision list has moved; re-point this test').not.toBeNull();
-    for (const v of ['APPROVE', 'REWRITE', 'CONTEXTUAL', 'REJECT']) expect(prose()).toContain(v);
+  it('the decision verbs a reader is offered are the ones the authority function accepts', () => {
+    // The accepted verbs are the DecisionVerb union now — one owner for every surface.
+    const union = /export type DecisionVerb =([\s\S]*?);/.exec(ratify);
+    expect(union, 'the DecisionVerb union has moved; re-point this test').not.toBeNull();
+    for (const v of ['APPROVE', 'REWRITE', 'CONTEXTUAL', 'REJECT']) {
+      expect(union![1], `${v} is offered to readers and missing from the union`).toContain(`'${v}'`);
+      expect(prose()).toContain(v);
+    }
   });
 });
 
