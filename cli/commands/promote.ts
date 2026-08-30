@@ -12,7 +12,7 @@ import * as store from '../../core/state/store.js';
 import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
 import { foldJudgements, rationalesFor, agreement, describeAgreement, describeJudgements } from '../../core/fidelity/judgement.js';
 
-import { DATA, die, argv, flag, MODEL, clientFor , numericFlag} from '../runtime.js';
+import { DATA, die, argv, flag, MODEL, clientFor, numericFlag, skillArg } from '../runtime.js';
 
 // ── promote ─────────────────────────────────────────────────────────────────────────────────
 /**
@@ -24,7 +24,7 @@ import { DATA, die, argv, flag, MODEL, clientFor , numericFlag} from '../runtime
  * something a transcript records.
  */
 export function reject(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const rec = foldRepairs(store.readEvents(L)).find((r) => r.candidateSkillVersionHash === cand)
@@ -82,7 +82,7 @@ export function reject(): void {
  * that it is a STABLE opinion rather than a reading of which text came first.
  */
 export async function compare(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
   const rule = flag('--rule') ?? die('--rule <requirementId> required — a comparison is ON something, and "which is better overall" is the question that rewards fluency.');
@@ -152,7 +152,7 @@ export async function compare(): Promise<void> {
  * on the strength of a diff they were shown in a terminal is not the same claim.
  */
 export function promote(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const cand = flag('--candidate') ?? die('--candidate <skillVersionHash> required');
   // ── A PROMOTION WITHOUT A REASON IS A LABEL WITH NO LEARNING SIGNAL ──────────────────────────
   //
@@ -256,7 +256,7 @@ export function promote(): void {
  * beside it, is the only artefact that says what the instrument is actually measuring.
  */
 export function judgements(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const records = foldJudgements(store.readEvents(L));
   const rule = flag('--rule');

@@ -16,7 +16,7 @@
 // from what the installed skill actually is.
 
 import * as store from '../../core/state/store.js';
-import { DATA, die, flag } from '../runtime.js';
+import { DATA, die, flag, skillArg } from '../runtime.js';
 import { applicabilityModeOf, sourceModeOf, type Requirement } from '../../core/state/canonical-state.js';
 import { obligationsForStandard, coverageOf } from '../../core/contract/obligation.js';
 
@@ -47,7 +47,7 @@ const APPLICABILITY: Readonly<Record<string, string>> = {
 };
 
 export function plan(): void {
-  const name = flag('--skill') ?? die('--skill <name> required');
+  const name = skillArg('--skill <name> required');
   const L: store.StoreLayout = { root: DATA, skillName: name };
 
   const active = store.getActive(L) ?? die(`no built skill called "${name}". Run \`atelier build --name ${name}\` first.`);

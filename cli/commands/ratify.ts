@@ -10,14 +10,13 @@
 // reconstructed from anything else in the store. Keeping the two jobs in one file made it easy to
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
-import { join } from 'node:path';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
 import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { sha, DATA, die, argv, flag, loadSession, saveSession, step, type Session } from '../runtime.js';
+import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
 import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationDecision as LedgerDecision } from '../../core/ratification/decision-record.js';
 
 /**
@@ -210,11 +209,13 @@ export function ratifyBatch(): void {
   const decided = [...s.decided];
   let ledger = ledgerFor(s);
   const decidedAt = new Date().toISOString();
+  const nextId = authoredIdAllocator(s);
   let added = 0;
   for (const d of list) {
     const dec = (d.decision ?? '').toUpperCase();
     if (dec === 'ADD') {
-      decided.push({ requirementId: `x${++added}`, statement: d.statement ?? die('ADD needs --statement'), appliesWhen: d.appliesWhen ?? 'GENERAL',
+      added++;
+      decided.push({ requirementId: nextId(), statement: d.statement ?? die('ADD needs --statement'), appliesWhen: d.appliesWhen ?? 'GENERAL',
         kind: (d.kind ?? 'BOUNDARY') as Requirement['kind'], authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
         wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null });   // a person stating their own rule owes no counterfactual to a machine
       continue;
@@ -371,11 +372,15 @@ export function addOne(): void {
       + '  GENERATIVE  something to DO      ("lead with the next action")\n'
       + '  BOUNDARY    something NOT to do  ("never open with a preamble")\n'
       + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
-  const req: Requirement = { requirementId: `x${s.decided.length + 1}`, statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
+  const req: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
     kind, authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
   saveSession({ ...s, decided: [...s.decided, req] });
   console.log(`added ${req.requirementId} (${req.kind}) — recorded as EXPERT_ADDED, not as something discovered.`);
+  if (s.run.standardVersionHash) {
+    console.log(`This run already ratified ${s.run.standardVersionHash}. Closing again mints a version that supersedes it:`
+      + '\n  atelier ratify-close --reason "<why the standard changed>"');
+  }
 }
 
 export function ratifyClose(): void {
@@ -403,17 +408,36 @@ export function ratifyClose(): void {
   const kept = [...byId.values()].filter((d) => d.authority !== 'EXPERT_REJECTED');
   if (!kept.length) die('nothing to compile. A standard with no requirement is not a standard.');
   const body = { evidenceId: s.evidence?.evidenceId ?? null, workType, requirements: kept };
-  const v: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body, authorityState: authorityStateOf(kept), mintedAt: new Date().toISOString(),
-    supersedes: flag('--supersedes') ?? null, reason: flag('--reason') ?? null };
-  s = step(s, 'RATIFIED', { standardVersionHash: v.standardVersionHash });
+  const hash = sha(JSON.stringify(body));
+  // ── CLOSING AGAIN IS A SUPERSESSION, NOT A MUTATION ──────────────────────────────────────
+  //
+  // A run that has already ratified (or built) a standard and closes again with different content
+  // is minting the next version. That was refused as STANDARD_MUTATED, and the refusal's advice was
+  // `abort` — which threw the run away. Adding one more rule after a build is the ordinary way a
+  // standard grows; it is recorded as such, with the reason every supersession owes.
+  const prior = s.run.standardVersionHash;
+  if (prior && prior === hash) {
+    die(`nothing changed: these decisions are exactly StandardVersion ${prior}, which this run already closed.`
+      + '\n  Add a rule (atelier add) or change one before closing again; to build it, atelier build --name <name>.');
+  }
+  const supersedes = flag('--supersedes') ?? (prior && prior !== hash ? prior : null);
+  const reason = flag('--reason') ?? null;
+  if (supersedes && !reason) {
+    die(`this closes a standard that supersedes ${supersedes}. A supersession needs its reason recorded:`
+      + '\n  atelier ratify-close --reason "<why the standard changed>"'
+      + '\nA version history without reasons can be counted, not audited.');
+  }
+  const v: StandardVersion = { standardVersionHash: hash, ...body, authorityState: authorityStateOf(kept), mintedAt: new Date().toISOString(),
+    supersedes, reason };
+  s = step(s, 'RATIFIED', { standardVersionHash: v.standardVersionHash, supersedes });
   // The decisions are stamped with the version they produced, and the ledger is written beside the
   // standard rather than inside it. A standard says what is; the ledger says who decided it and what
   // they were looking at, and the second one cannot be reconstructed later.
   const stamped = s.ledger ? stampVersion(s.ledger, v.standardVersionHash) : null;
   s = { ...s, ledger: stamped };
   saveSession(s);
-  writeAtomic(join(DATA, 'pending-standard.json'), JSON.stringify(v, null, 1));
-  if (stamped) writeAtomic(join(DATA, 'ratification-ledger.json'), JSON.stringify(stamped, null, 1));
+  writeAtomic(runFile('pending-standard.json'), JSON.stringify(v, null, 1));
+  if (stamped) writeAtomic(runFile('ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   console.log(`StandardVersion ${v.standardVersionHash} [${v.authorityState}]: ${kept.length} requirements.`);
   console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  declared-general ${(declaredGeneralShare(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
   // A 0% discovery rate on a directly authored standard is the truth, not a warning, and saying so
@@ -433,7 +457,7 @@ export function ratifyClose(): void {
     // keeping the ledger at all, so the line says which one this is.
     console.log(`  ratification [${su.provenance}]: ${su.shown} shown · ${su.approved} approved · ${su.edited} edited · `
       + `${su.rejected} rejected · ${su.decidedNotRequirement} kept as non-obligation · ${su.deferred} open`);
-    console.log(`  survival ${(su.survivalRate * 100).toFixed(0)}%  ·  decided ${(su.decidedRate * 100).toFixed(0)}%  ·  ${join(DATA, 'ratification-ledger.json')}`);
+    console.log(`  survival ${(su.survivalRate * 100).toFixed(0)}%  ·  decided ${(su.decidedRate * 100).toFixed(0)}%  ·  ${runFile('ratification-ledger.json')}`);
   }
   console.log('Run `atelier build --name <name>`.');
 }

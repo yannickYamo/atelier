@@ -10,7 +10,7 @@ import { compileArchitecture, observedBoundaries } from '../../core/architecture
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, projectDir, pickHost } from '../runtime.js';
+import { sha, DATA, die, argv, flag, projectDir, pickHost, skillArg } from '../runtime.js';
 
 // ── confirm ─────────────────────────────────────────────────────────────────────────────────
 /**
@@ -24,7 +24,7 @@ import { sha, DATA, die, argv, flag, projectDir, pickHost } from '../runtime.js'
  * will take later, exercised here by a person.
  */
 export function confirmBoundary(): void {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const ruleId = flag('--rule') ?? die('--rule required — confirm one at a time; a bulk yes is not a judgement.');
   const drop = argv.includes('--drop');
   const L: store.StoreLayout = { root: DATA, skillName: name };
