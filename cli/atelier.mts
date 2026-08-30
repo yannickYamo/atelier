@@ -30,6 +30,7 @@ import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
 import { record } from './commands/record.js';
+import { fix } from './commands/fix.js';
 import { existsSync } from 'node:fs';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 
@@ -65,6 +66,7 @@ export const COMMANDS: readonly string[] = [
   'discover',
   'enrol',
   'feedback',
+  'fix',
   'history',
   'improve',
   'inspect',
@@ -120,6 +122,7 @@ const main = async (): Promise<void> => {
     case 'plan': { plan(); return; }
     case 'contract': return contract();
     case 'record': return record();
+    case 'fix': return fix();
     case 'reference': return reference();
     case 'status': {
       const s = loadSession();

@@ -81,6 +81,23 @@ const INSTRUMENT_STRENGTH: Record<EvaluationBasis['instrument'], number> = {
   HUMAN_EYE: 0, UNQUALIFIED_COMPARATOR: 0, QUALIFIED_OBSERVER: 1,
 };
 
+/**
+ * WHERE A REJECTION APPLIES — Amendment A2 of the closure slice.
+ *
+ * A carrier move that lost under one model on one StandardVersion is implementation evidence about
+ * THAT pairing, not universal compiler knowledge: EXAMPLE→PROSE losing under one model says nothing
+ * about another model, and a superseding standard inherits no verdicts (its labels do not carry
+ * over — the same rule `amend` already states). Model-level on purpose: parameter tweaks must not
+ * fragment memory, so the key is providerAdapter+requestedModel, with the full bindingHash kept as
+ * evidence. Records from before these fields existed fold as scope-unknown and suppress
+ * conservatively wherever they match by transition alone.
+ */
+export interface RepairScope {
+  readonly standardVersionHash: string;
+  readonly providerAdapter: string;
+  readonly requestedModel: string;
+}
+
 export interface RepairProposedEvent {
   readonly kind: 'REPAIR_PROPOSED';
   readonly repairId: string;
@@ -88,6 +105,11 @@ export interface RepairProposedEvent {
   readonly requirementId: string;
   readonly from: Carrier;
   readonly to: Carrier;
+  /** A2 scope. Optional because the log predates it; absent folds as scope-unknown. */
+  readonly standardVersionHash?: string;
+  readonly providerAdapter?: string;
+  readonly requestedModel?: string;
+  readonly bindingHash?: string;
   readonly sourceSkillVersionHash: string;
   readonly candidateSkillVersionHash: string;
   readonly evidenceBasis: EvidenceBasis;
@@ -114,6 +136,8 @@ export interface TransitionForbiddenEvent {
   readonly requirementId: string;
   readonly from: Carrier;
   readonly to: Carrier;
+  /** a human architectural ruling holds for THIS standard, across runtimes; a new version inherits nothing */
+  readonly standardVersionHash?: string;
   readonly by: string;
   readonly reason: string;
   readonly at: string;
@@ -126,6 +150,11 @@ export interface RepairRecord {
   readonly requirementId: string;
   readonly from: Carrier;
   readonly to: Carrier;
+  /** A2 scope, when the proposing event recorded it. Absent folds as scope-unknown. */
+  readonly standardVersionHash?: string;
+  readonly providerAdapter?: string;
+  readonly requestedModel?: string;
+  readonly bindingHash?: string;
   readonly sourceSkillVersionHash: string;
   readonly candidateSkillVersionHash: string;
   readonly evidenceBasis: EvidenceBasis;
@@ -182,10 +211,20 @@ export function mayPropose(
   prohibitions: readonly Prohibition[],
   requirementId: string, from: Carrier, to: Carrier,
   proposed: { evidence: EvidenceBasis; evaluation: EvaluationBasis },
+  scope?: RepairScope,
 ): RepairJudgement {
   const key = repairKey(requirementId, from, to);
+  // A record without scope fields predates A2 and matches conservatively; with them, it binds only
+  // its own (standard, model) pairing. Prohibitions are human rulings: standard-scoped, runtime-wide.
+  const inScope = (r: { standardVersionHash?: string; providerAdapter?: string; requestedModel?: string }): boolean =>
+    !scope
+    || ((r.standardVersionHash ?? scope.standardVersionHash) === scope.standardVersionHash
+      && (r.providerAdapter ?? scope.providerAdapter) === scope.providerAdapter
+      && (r.requestedModel ?? scope.requestedModel) === scope.requestedModel);
+  const prohibitionInScope = (p: { standardVersionHash?: string }): boolean =>
+    !scope || (p.standardVersionHash ?? scope.standardVersionHash) === scope.standardVersionHash;
 
-  const banned = prohibitions.find((p) => repairKey(p.requirementId, p.from, p.to) === key);
+  const banned = prohibitions.find((p) => repairKey(p.requirementId, p.from, p.to) === key && prohibitionInScope(p));
   if (banned) {
     return { allowed: false, reason:
       `you ruled that ${requirementId} must not move ${from} -> ${to}: "${banned.reason}". `
@@ -193,7 +232,7 @@ export function mayPropose(
       + `it is yours to withdraw.` };
   }
 
-  const prior = history.filter((r) => repairKey(r.requirementId, r.from, r.to) === key);
+  const prior = history.filter((r) => repairKey(r.requirementId, r.from, r.to) === key && inScope(r));
 
   const pending = prior.find((r) => r.outcome === 'PENDING');
   if (pending) {

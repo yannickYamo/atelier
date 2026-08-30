@@ -14,6 +14,10 @@
 import { createServer } from 'node:http';
 
 let payload = { rules: [], workType: 'writing' };
+// Per-tool payloads, for commands that make more than one KIND of call (fix: a diagnosis, then a
+// generation). /__set with { byTool: { emit_coverage: {...}, emit_piece: {...} } } routes on the
+// forced tool name in the request; a flat body keeps the single-payload behaviour.
+let byTool = null;
 let count = 0;
 
 const server = createServer((req, res) => {
@@ -21,11 +25,20 @@ const server = createServer((req, res) => {
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
     res.setHeader('content-type', 'application/json');
-    if (req.url === '/__set') { payload = JSON.parse(body); res.end('{"ok":true}'); return; }
+    if (req.url === '/__set') {
+      const parsed = JSON.parse(body);
+      if (parsed.byTool) { byTool = parsed.byTool; } else { payload = parsed; byTool = null; }
+      res.end('{"ok":true}'); return;
+    }
     if (req.url === '/__count') { res.end(JSON.stringify({ count })); return; }
     count += 1;
+    let answer = payload;
+    if (byTool) {
+      const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name;
+      if (tool && byTool[tool] !== undefined) answer = byTool[tool];
+    }
     res.end(JSON.stringify({
-      choices: [{ finish_reason: 'stop', message: { tool_calls: [{ function: { arguments: JSON.stringify(payload) } }] } }],
+      choices: [{ finish_reason: 'stop', message: { tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
       usage: { prompt_tokens: 10, completion_tokens: 10 },
     }));
   });

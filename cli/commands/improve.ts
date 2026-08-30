@@ -7,7 +7,7 @@
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import { spend } from '../../core/inference/client.js';
-import { observeRuntime, type RuntimeBinding } from '../../core/runtime/binding.js';
+import { observeRuntime, bindingHash, type RuntimeBinding } from '../../core/runtime/binding.js';
 import { persistInvocation } from '../../core/runtime/record.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { proposeEscalation, applyEscalation, type ServedMissEvidence } from '../../core/architecture/escalate.js';
@@ -107,7 +107,6 @@ export async function improve(): Promise<void> {
   const inv = store.getInvocation(L, invId) ?? die(`no invocation ${invId} for ${name}.`);
   const complaint = flag('--complaint') ?? die('--complaint "<what was wrong with that output>" — the repair is driven by what YOU say went wrong, not by a score.');
   const fb = { feedbackId: `f${sha(`${invId}|${complaint}`).slice(0, 10)}`, invocationId: invId, complaint, at: new Date().toISOString() };
-  store.putFeedback(L, fb);
 
   // The standard THAT RAN, not the current one. A complaint is about the version that produced it.
   const ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
@@ -117,6 +116,10 @@ export async function improve(): Promise<void> {
 
   console.log(`\ndiagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
   console.log(`  ${d.reason}`);
+  // ONE write, after diagnosis, carrying the attributed rule when there is one — two writes under
+  // one content-derived id is a store refusal, and evidence should name its rule anyway.
+  try { store.putFeedback(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb); }
+  catch { /* identical record already recorded */ }
 
   if (d.route === 'DELIVERY_FAILURE') {
     console.log(`\nThis is a SERVING problem, not a taste problem. Your standard is not involved and nothing about`);
@@ -161,14 +164,17 @@ export async function improve(): Promise<void> {
   // than something reconstructed later. Independent misses are counted over DISTINCT tasks: the same
   // complaint about the same input twice is one observation said twice.
   const missesForRule = store.listFeedback(L)
+    .filter((f) => f.requirementId === d.requirementId)   // complaints about OTHER rules are not evidence about this one
     .map((f) => store.getInvocation(L, f.invocationId))
     .filter((r): r is NonNullable<typeof r> => r !== null);
   const evidence: EvidenceBasis = {
     missContexts: new Set([inv.inputHash, ...missesForRule.map((r) => r.inputHash)]).size,
     invocationIds: [...new Set([inv.invocationId, ...missesForRule.map((r) => r.invocationId)])] };
 
+  const scope = { standardVersionHash: inv.standardVersionHash,
+    providerAdapter: inv.runtimeBinding.providerAdapter, requestedModel: inv.runtimeBinding.requestedModel };
   const may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to,
-    { evidence, evaluation: WEAKEST_EVALUATION });
+    { evidence, evaluation: WEAKEST_EVALUATION }, scope);
   if (!may.allowed) {
     console.log(`\nNo repair proposed — ${may.reason}`);
     console.log(`\n${describeHistory(repairs, prohibitions, op.requirementId)}`);
@@ -188,6 +194,7 @@ export async function improve(): Promise<void> {
   store.putArchitecture(L, nextArch); store.putPackage(L, pkg); store.putSkillVersion(L, candidate);
   store.appendEvent(L, { kind: 'REPAIR_PROPOSED', repairId: sha(`${op.requirementId}|${op.from}|${op.to}|${candidate.skillVersionHash}`),
     skillName: name, requirementId: op.requirementId, from: op.from, to: op.to,
+    ...scope, bindingHash: bindingHash(inv.runtimeBinding),
     sourceSkillVersionHash: inv.skillVersionHash, candidateSkillVersionHash: candidate.skillVersionHash,
     evidenceBasis: evidence, at: candidate.builtAt });
 

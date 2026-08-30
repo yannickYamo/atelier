@@ -61,7 +61,8 @@ export function reject(): void {
   if (argv.includes('--never-this-transition')) {
     const why = note ?? die('--never-this-transition needs --why: a permanent architectural rule should say why.');
     store.appendEvent(L, { kind: 'TRANSITION_FORBIDDEN', requirementId: rec.requirementId,
-      from: rec.from, to: rec.to, by: 'expert', reason: why, at });
+      from: rec.from, to: rec.to, by: 'expert', reason: why, at,
+      standardVersionHash: store.getSkillVersion(L, rec.sourceSkillVersionHash)?.standardVersionHash });
     console.log(`\nAND you ruled the move out entirely: ${rec.requirementId} will never move ${rec.from} -> ${rec.to}.`);
     console.log(`That is a decision about your architecture rather than about this candidate, so no amount of`);
     console.log(`evidence reopens it. It is yours to withdraw.`);

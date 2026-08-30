@@ -7,7 +7,9 @@
 import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 
-import { DATA, die, flag, projectDir, pickHost, skillArg } from '../runtime.js';
+import { DATA, die, flag, projectDir, pickHost, skillArg, runFile } from '../runtime.js';
+import { existsSync } from 'node:fs';
+import { readJson } from '../../core/state/read-json.js';
 
 // ── inspect / history / rollback / feedback ──────────────────────────────────────────────────
 export function inspect(): void {
@@ -71,7 +73,15 @@ export function feedback(): void {
   const L: store.StoreLayout = { root: DATA, skillName: skillArg() };
   const verdict = (flag('--verdict') ?? '').toUpperCase();
   if (!['GOOD', 'CLOSE', 'BAD'].includes(verdict)) die('--verdict GOOD|CLOSE|BAD');
-  store.appendEvent(L, { kind: 'FEEDBACK', at: new Date().toISOString(), skillVersionHash: store.getActive(L) ?? 'none', verdict, note: flag('--note') ?? null });
+  // Attached to the run it is ABOUT when one is on record — a verdict floating free of any output
+  // was the old shape, and nothing could ever read it back against anything.
+  let invocationId: string | null = null;
+  const last = runFile('last-invocation.json');
+  if (existsSync(last)) {
+    try { invocationId = readJson<{ invocationId?: string }>(last, { what: 'the last invocation' }).invocationId ?? null; }
+    catch { invocationId = null; }
+  }
+  store.appendEvent(L, { kind: 'FEEDBACK', at: new Date().toISOString(), skillVersionHash: store.getActive(L) ?? 'none', verdict, note: flag('--note') ?? null, invocationId });
   console.log('recorded. Feedback is evidence — it can propose a change to your standard, never apply one.');
 }
 

@@ -46,7 +46,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'from', 'from-hook', 'host', 'id', 'invocation', 'kind',
-  'labels', 'materiality', 'form', 'max-calls', 'model', 'name', 'note',
+  'add', 'labels', 'materiality', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
@@ -64,7 +64,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'bare', 'holdout', 'json', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
-  'review', 'score', 'skip-methods', 'yes',
+  'review', 'score', 'skip', 'skip-methods', 'yes',
 ];
 
 export const argv = process.argv.slice(2);
