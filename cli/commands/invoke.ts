@@ -5,6 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { Budget } from '../../core/inference/client.js';
+import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
@@ -81,8 +82,24 @@ export function resolveServedSkill(name: string): ServedSkill {
     if (ctxFlag && cond.toLowerCase().includes(ctxFlag)) return true;
     withheld.push(f); return false;
   });
+  // ── A BOUNDARY, BECAUSE THE OLD FRAMING ANSWERED THE WRONG QUESTION ──────────────────────────
+  //
+  // This block opened with `# How the author works — examples` and said "these are instances, not
+  // instructions". That is a statement about AUTHORITY — whether the model must comply. It says
+  // nothing about OUTPUT OWNERSHIP, which is what was actually going wrong: the model treated the
+  // section as part of the document it was writing and continued it, appending the skill's own
+  // requirement text to the user's deliverable in roughly half of generations.
+  //
+  // So the block is fenced rather than headed, and says what it is FOR rather than only what it is
+  // NOT. No heading to continue, and an explicit statement that the deliverable starts after it.
   const exampleBlock = servedExamples.length
-    ? `\n\n---\n\n# How the author works — examples\n\nThese are instances, not instructions. Where one is marked NOT required, an output that does\notherwise is not wrong.\n\n${servedExamples.map((f) => pkg.files[f]).join('\n\n---\n\n')}`
+    ? `\n\n=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===\n\n`
+      + `Everything up to the end marker shows how the author works. It is context for you, never\n`
+      + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
+      + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
+      + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
+      + `wrong.\n\n${servedExamples.map((f) => pkg.files[f]).join('\n\n- - -\n\n')}`
+      + `\n\n=== END REFERENCE MATERIAL — the work you produce begins fresh from here ===`
     : '';
   const contractFile = pkg.files['contracts/output.schema.json'] ?? null;
   const servedText = `${skillMd}${exampleBlock}`;
@@ -161,6 +178,10 @@ export async function invoke(): Promise<void> {
   }
 
   console.log(`\n${rec.output}\n`);
+  // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
+  // passing them in would report a breach on every invocation.
+  const breaches = findOwnershipBreaches(rec.output);
+  if (breaches.length) console.log(describeBreaches(breaches));
   console.log(`─────────────────────────────────────────────────────────────`);
   if (rec.delivery.outputContract) {
     const c = rec.delivery.outputContract;
