@@ -415,8 +415,20 @@ mintedAt:        ${v.mintedAt}
       : r.realizes
         ? `${r.statement}\n\n*(No verbatim span was anchored for this one, so what follows describes the form\nrather than showing it.)*\n\n`
         : `${r.statement}\n\n`;
+    // ── NO MARKDOWN HEADINGS IN REFERENCE MATERIAL ────────────────────────────────────────────
+    //
+    // These bodies used to open with `# p6` and carry a `## How the author did it`. Served to a
+    // model as context, a heading is not a label — it is a document structure, and the model
+    // CONTINUED it. Measured on 74 generations of a blind study: 31 outputs emitted a literal
+    // `# pN` line and 10 reproduced a served instance verbatim, so a user's deliverable ended with
+    // the skill's own guts appended to it. The arm carrying one extra example did it 59% of the
+    // time against the other arm's 29%.
+    //
+    // "These are instances, not instructions" addressed AUTHORITY. It said nothing about OUTPUT
+    // OWNERSHIP, which is the thing that was actually being got wrong. Labels are now bracketed
+    // rather than headed, so there is no structure to continue.
     exampleFiles[`examples/${r.requirementId}.md`] =
-      `# ${r.requirementId}${r.realizes ? ` — how ${r.realizes} lands` : ''}\n\n${shown}`
+      `[${r.requirementId}]${r.realizes ? ` — how ${r.realizes} lands` : ''}\n\n${shown}`
       + (isGeneralScope(r.appliesWhen) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
       + `${binding}\n\n`
       // THE COUNTERFACTUAL IS NOT SERVED, AND THIS IS THE PLACE IT NEARLY WAS.
@@ -425,7 +437,8 @@ mintedAt:        ${v.mintedAt}
       // AUTHOR something to disagree with at ratification. It is not a second ratified requirement.
       // Rendering it here reads as "avoid X" and would hand an unratified sentence the same carrier
       // as a ratified one — the precise escalation the authority seam exists to refuse.
-      + (r.evidence && !r.realizes ? `## How the author did it\n\n> ${r.evidence.replace(/\n/g, '\n> ')}\n` : '');
+      + (r.evidence && !r.realizes
+        ? `observed in the author's work:\n> ${r.evidence.replace(/\n/g, '\n> ')}\n` : '');
   }
 
   // ── OUTPUT CONTRACTS ────────────────────────────────────────────────────────────────────────

@@ -81,8 +81,13 @@ Stratified by contamination, because the leak plainly influences a preference ju
 **Where exactly one side leaked, the author preferred the clean one 6 times out of 6.**
 
 No stratum reaches significance on its own; each is n≤6, and this is not a test the study was
-powered for. But the direction is the same in all three, and the overall result is not explained by
-leakage alone — **on the six pairs where neither output leaked, the ablation is still ahead 4 to 2.**
+powered for. The direction is the same in all three, which is worth noting and is not evidence.
+
+**An earlier draft of this close said the result "is not explained by leakage alone" because the
+clean stratum is 4–2. That overstated it.** At n=6, 4–2 has p = 0.688 — a fair coin produces that
+split or worse about seven times in ten. It is consistent with the overall finding and it supports
+nothing on its own. The honest statement is that **the clean-pair evidence is uninformative**, and
+whether the carrier would still lose without the leak is unmeasured.
 
 **What this licenses:** on this standard, this requirement and these contexts, the EXAMPLE carrier as
 implemented produced work the author preferred less than an otherwise identical prose realization.
