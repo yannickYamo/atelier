@@ -21,8 +21,19 @@ import type { SkillArchitecture } from '../architecture/compile.js';
 
 export interface StoreLayout { readonly root: string; readonly skillName: string }
 
+/**
+ * A skill name is a single directory entry under `skills/`, and the layout refuses anything else.
+ * The CLI validates names before they get here; this is the guard that holds when a caller does not.
+ */
+const safeName = (name: string): string => {
+  if (!name || name === '.' || name === '..' || /[\\/\0]/.test(name)) {
+    throw new Error(`STORE: "${name}" is not a skill name; it would resolve outside skills/.`);
+  }
+  return name;
+};
+
 const dirs = (l: StoreLayout) => ({
-  base: join(l.root, 'skills', l.skillName),
+  base: join(l.root, 'skills', safeName(l.skillName)),
   standards: join(l.root, 'skills', l.skillName, 'standards'),
   versions: join(l.root, 'skills', l.skillName, 'versions'),
   architectures: join(l.root, 'skills', l.skillName, 'architectures'),

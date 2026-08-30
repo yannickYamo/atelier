@@ -7,13 +7,15 @@
 import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 
-import { DATA, die, flag, projectDir, pickHost } from '../runtime.js';
+import { DATA, die, flag, projectDir, pickHost, skillArg, runFile } from '../runtime.js';
+import { existsSync } from 'node:fs';
+import { readJson } from '../../core/state/read-json.js';
 
 // ── inspect / history / rollback / feedback ──────────────────────────────────────────────────
 export function inspect(): void {
-  const L: store.StoreLayout = { root: DATA, skillName: flag('--skill') ?? die('--skill required') };
+  const L: store.StoreLayout = { root: DATA, skillName: skillArg() };
   const active = store.getActive(L) ?? die('no active version.');
-  const sv = store.getSkillVersion(L, active)!;
+  const sv = store.getSkillVersion(L, active) ?? die(`active version ${active} is missing from the store for ${L.skillName}.`);
   const v = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing');
   assertSourceIsNotAuthority('STANDARD_VERSION', true);
     console.log(`skill ${L.skillName}\nactive SkillVersion ${sv.skillVersionHash}\nowned by StandardVersion ${v.standardVersionHash} [${v.authorityState}] (${v.requirements.length} requirements, minted ${v.mintedAt})`);
@@ -41,12 +43,12 @@ export function inspect(): void {
 }
 
 export function historyCmd(): void {
-  const L: store.StoreLayout = { root: DATA, skillName: flag('--skill') ?? die('--skill required') };
+  const L: store.StoreLayout = { root: DATA, skillName: skillArg() };
   for (const h of store.history(L)) console.log(`${h.active ? '*' : ' '} ${h.skillVersion.skillVersionHash}  ${h.skillVersion.builtAt}  standard ${h.skillVersion.standardVersionHash}${h.standard?.reason ? `  — ${h.standard.reason}` : ''}`);
 }
 
 export function rollback(): void {
-  const L: store.StoreLayout = { root: DATA, skillName: flag('--skill') ?? die('--skill required') };
+  const L: store.StoreLayout = { root: DATA, skillName: skillArg() };
   const to = flag('--to') ?? die('--to <skillVersionHash> required');
   const sv = store.getSkillVersion(L, to) ?? die(`no SkillVersion ${to} for ${L.skillName}.`);
   // ── REINSTALL THE BYTES THAT VERSION BUILT ──────────────────────────────────────────────────
@@ -68,10 +70,18 @@ export function rollback(): void {
 }
 
 export function feedback(): void {
-  const L: store.StoreLayout = { root: DATA, skillName: flag('--skill') ?? die('--skill required') };
+  const L: store.StoreLayout = { root: DATA, skillName: skillArg() };
   const verdict = (flag('--verdict') ?? '').toUpperCase();
   if (!['GOOD', 'CLOSE', 'BAD'].includes(verdict)) die('--verdict GOOD|CLOSE|BAD');
-  store.appendEvent(L, { kind: 'FEEDBACK', at: new Date().toISOString(), skillVersionHash: store.getActive(L) ?? 'none', verdict, note: flag('--note') ?? null });
+  // Attached to the run it is ABOUT when one is on record — a verdict floating free of any output
+  // was the old shape, and nothing could ever read it back against anything.
+  let invocationId: string | null = null;
+  const last = runFile('last-invocation.json');
+  if (existsSync(last)) {
+    try { invocationId = readJson<{ invocationId?: string }>(last, { what: 'the last invocation' }).invocationId ?? null; }
+    catch { invocationId = null; }
+  }
+  store.appendEvent(L, { kind: 'FEEDBACK', at: new Date().toISOString(), skillVersionHash: store.getActive(L) ?? 'none', verdict, note: flag('--note') ?? null, invocationId });
   console.log('recorded. Feedback is evidence — it can propose a change to your standard, never apply one.');
 }
 

@@ -21,7 +21,11 @@ my-skill/
 └── context-map.json
 ```
 
-The compiler chooses the minimum implementation each ratified requirement needs.
+The compiler chooses a deterministic initial implementation for each ratified requirement — a
+policy, not a proof. Semantic weight does not determine mechanism (the carrier study watched
+EXAMPLE lose to plain prose on a PREFERRED rule), so the arrangement is a first guess made
+auditable per rule, and the correction loop may replace a carrier laterally under the same
+StandardVersion when evidence says so.
 
 | carrier | used when |
 |---|---|

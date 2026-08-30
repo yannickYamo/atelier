@@ -164,9 +164,19 @@ export const roleFor = (r: Requirement): GateRole => {
     // Declared not to be taste — it reaches nothing, and `componentFor` gives it no runtime carrier.
     case 'INCIDENTAL':
       return 'OBSERVE';
-    // REQUIRED, or a standard ratified before materiality existed: unchanged behaviour.
+    // ── UNDECLARED IS SOURCE-AWARE, BECAUSE THE TWO SILENCES MEAN DIFFERENT THINGS ──────────
+    //
+    // REQUIRED binds, whoever said it. For a rule with NO declared materiality, who wrote it is the
+    // whole question. "Never end with an offer of help", typed by the person, is enough authority to
+    // instruct — asking "does breaking this make the work worse?" about their own sentence would be
+    // a questionnaire about what they just said. The same silence on a DISCOVERED rule the person
+    // merely approved is a question nobody answered, and the old default answered it at maximum
+    // strength: ratified + undeclared compiled to ENFORCE while the CLI printed "they will be SHOWN,
+    // not instructed" — the message and the compiler disagreeing about the strongest thing a skill
+    // does. Undeclared-discovered now observes until its owner says it matters; materiality remains
+    // semantic metadata either way, and never picks the carrier.
     default:
-      return 'ENFORCE';
+      return r.materiality === 'REQUIRED' || r.authority === 'EXPERT_AUTHORED' ? 'ENFORCE' : 'OBSERVE';
   }
 };
 

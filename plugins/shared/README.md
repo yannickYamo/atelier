@@ -30,5 +30,5 @@ required to use the tool.
 
 The standard is an **authority record**. The tool may change *how* it is implemented; it may never
 change *what you approved*. Editing the generated `SKILL.md` by hand changes what is served without
-changing what you ratified — Atelier detects that and tells you. Use `/atelier:improve` instead, which
-mints a new version with a reason and keeps the old one.
+changing what you ratified — Atelier detects that and tells you. Say what was wrong with `/atelier:fix` instead —
+it repairs the implementation, or mints a new standard version with your reason and keeps the old one.
