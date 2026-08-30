@@ -33,6 +33,7 @@ import { record } from './commands/record.js';
 import { fix } from './commands/fix.js';
 import { existsSync } from 'node:fs';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
+import { policyFor } from '../core/state/policy.js';
 
 /**
  * EVALUATION SURFACE, NOT PRODUCT SURFACE.
@@ -129,6 +130,10 @@ const main = async (): Promise<void> => {
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  studies [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
       console.log(`project ${projectDir()}`);
+      // Read off core/state/policy.ts — the one owner of "what is permitted now" — rather than
+      // restated here where it would drift.
+      const pol = policyFor(s.run);
+      if (pol.reasonIfBlocked) console.log(`blocked: ${pol.reasonIfBlocked}`);
       // Runs are keyed by the project PATH, so a moved or renamed directory shows an empty run here
       // while the old one still exists under its old name. Naming the others is the difference
       // between a recoverable situation and a baffling one.
@@ -166,7 +171,7 @@ const main = async (): Promise<void> => {
     default: {
       // A MISTYPED COMMAND IS AN ERROR, AND THIS USED TO EXIT 0.
       //
-      // `atelier discovr` printed help and reported success, so a script could run a typo in a loop
+      // `atelier discover` printed help and reported success, so a script could run a typo in a loop
       // and never learn the work had not happened. Help on no argument is a courtesy; help on a wrong
       // argument is a failure, and the exit code has to say which.
       //

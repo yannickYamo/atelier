@@ -254,6 +254,7 @@ export async function skill(): Promise<void> {
 
   // The work type reaches `ratify-close` the way a flag would. It is a description of what the skill
   // governs, not a claim about the standard, and the person has just seen it in the proposal.
+  process.env.ATELIER_ORCHESTRATED = '1';
   if (!argv.includes('--work-type')) { argv.push('--work-type', workType); }
   ratifyClose();
   build(flag('--name') ?? basename(process.cwd()));
