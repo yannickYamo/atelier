@@ -17,6 +17,8 @@ import { renderAgentSkill, assertPortable, defaultDescription } from '../../rend
 import * as store from '../../core/state/store.js';
 
 import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor, numericFlag, skillArg } from '../runtime.js';
+import { decide } from '../../core/ratification/authority.js';
+import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
 // ── amend ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -46,10 +48,10 @@ export function amend(): void {
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
   const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in ${prev.standardVersionHash}.`);
 
-  const requirements = prev.requirements.map((r) => r.requirementId === ruleId
-    ? { ...r, statement, appliesWhen: appliesWhen ?? r.appliesWhen,
-        authority: 'EXPERT_AUTHORED' as const, provenance: 'SUBSTANTIVELY_REWRITTEN' as const }
-    : r);
+  let amended;
+  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen }); }
+  catch (e) { return void die((e as Error).message); }
+  const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
   const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
@@ -82,6 +84,12 @@ export function amend(): void {
   store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
   const inst = pickHost().install(pkg, projectDir());
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
+
+  // The act is a ratification decision like any other, and until now it left no ledger record —
+  // docs/AUTHORITY.md promised one for "every one of these decisions" and only the session flow kept it.
+  const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },
+    target, amended.ledgerDecision, { humanRevision: amended.requirement, note: reason, decidedAt: next.mintedAt }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
 
   console.log(`\nAmended ${ruleId}.`);
   console.log(`  was: ${target.statement}`);

@@ -60,9 +60,14 @@ describe('saying something is not ratifying it', () => {
   const code = readFileSync('cli/commands/skill.ts', 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-  it('a faithful separation is the person\'s own rule', () => {
-    expect(code).toMatch(/p\.faithful \? 'EXPERT_AUTHORED' : 'DERIVED_UNRATIFIED'/);
-    expect(code).toMatch(/p\.faithful \? 'EXPERT_STATED' : 'MACHINE_DISCOVERED'/);
+  it('a faithful separation is the person\'s own rule — assigned by the one authority function, not here', () => {
+    // The front door used to grant EXPERT_AUTHORED off the model's own `faithful` boolean — the
+    // laundering path in person. Authority is now assigned only by `decide()`: the flag may route
+    // WHICH question is asked, never answer it, and this file must not name the granted authority
+    // at all.
+    expect(code, 'the front door granted authority itself').not.toContain("'EXPERT_AUTHORED'");
+    expect(code, 'the faithful flag no longer routes through decide()').toMatch(/p\.faithful \? decide\(/);
+    expect(code).toMatch(/verb: 'STATED'/);
   });
 
   it('anything the model supplied cannot instruct until someone says so', () => {
