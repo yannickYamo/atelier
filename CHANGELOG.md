@@ -8,6 +8,46 @@ a run in progress may not be.
 
 ## [Unreleased]
 
+### Added
+
+- **`atelier fix` — one correction path.** A complaint goes in; Atelier resolves the latest
+  recorded use (and says which), diagnoses, and either repairs the implementation — one lateral
+  carrier candidate, the same task re-run, a blinded A/B, one keystroke, the winner active AND
+  installed with the StandardVersion hash asserted immovable — or, on a standard gap, asks the one
+  authority question (add as required / preferred / don't) and an approval mints, compiles and
+  installs the superseding StandardVersion in the same motion. The pick lands in the judgement
+  ledger and as the first BEHAVIOR-domain observation; a refusal is remembered and not re-asked.
+- **A `/skill` use in Claude Code becomes a canonical invocation record.** The plugin's prompt/stop
+  hooks pipe the host's own payloads into a hidden `atelier record`; delivery is checked against the
+  store at the moment of use, the model is read from the transcript or recorded UNREPORTED, and
+  `last-invocation.json` is what lets `fix` need no id from anyone. Core stays host-agnostic: the
+  surface value is HOST_PLUGIN, and which host lives in the runtime binding.
+- **Grounded direct authority.** The front door persists exactly the proposal it showed; `--yes`
+  ratifies those bytes with zero further model calls. A rule becomes EXPERT_AUTHORED only when its
+  normative content is mechanically grounded in the person's own text (verbatim span, content words,
+  numbers) — the model's `faithful` flag is display evidence, never an authority input.
+- **One canonical authority function.** Every surface — batch ratify, ratify-one, add, the front
+  door, amend, confirm, fix — assigns authority through `decide()`, which validates obligations and
+  enforces the public-source ceiling on every path; amend and confirm now leave ledger records.
+  Writing its ceiling test caught the first draft laundering provenance through AMEND.
+- **A hint census.** Every `atelier …` line the CLI or plugin skills print must name a dispatched
+  command and declared flags. Its first run caught a live typo in the dispatcher's own help.
+
+### Changed
+
+- **Undeclared materiality is source-aware.** A rule the person WROTE instructs with no
+  questionnaire; a discovered rule they merely approved is SHOWN until they declare how much it
+  matters. The close prints instructs/shown per rule by calling the compiler, so the text cannot
+  disagree with the build again. Materiality remains semantic metadata and never selects a carrier.
+- **Repair memory is (standard, model)-scoped.** A carrier move rejected under one model never
+  suppresses the same move under another; a superseding StandardVersion inherits no verdicts; a
+  human TRANSITION_FORBIDDEN holds across runtimes but not across standard versions. The repair
+  primitive is lateral replacement under a fixed, recorded ordering — carriers are mechanisms, not
+  strengths, which the carrier study demonstrated.
+- **`promote` installs.** Adopting a candidate leaves the store, the pointer and the host's bytes
+  agreeing, or refuses without moving anything. "Your skill is ready." prints only over a package
+  that instructs something; a DRAFT preview says so and names the next step.
+
 ### Fixed
 
 - **A build could compile a standard the user never ratified.** The run in flight was per-project;
