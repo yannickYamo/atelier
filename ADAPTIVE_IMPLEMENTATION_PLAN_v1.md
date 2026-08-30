@@ -1,195 +1,184 @@
-# Changing the implementation without changing the target — plan v1
+# Change the implementation, never the target — plan v2
 
-The moat claim this plan is built to test:
+**Supersedes v1.** v1 proposed generalising the carrier ladder into a bidirectional relation. That
+was wrong and the correction is recorded below, because it matters more than the plan.
 
-> Given a fixed human-owned `StandardVersion`, Atelier can use behavioural evidence to identify a bad
-> implementation, change **only** the `SkillVersion`, and produce a better reproduction of the
-> expert's taste on unseen tasks **without redefining what good means**.
+The one claim this exists to falsify:
 
-Everything below exists to make that claim falsifiable. The optimizer may change `π`. It may never
-silently change `S`.
-
----
-
-## 0. THE BLOCKING FINDING: Atelier cannot currently make this proposal
-
-Not "does it badly" — **structurally cannot**, in three verified places. If we hand-edit
-`p6: EXAMPLE → PROSE` and call it adaptive compilation, we prove that a person can read a negative
-study and patch a skill. That is not the claim.
-
-| # | gap | evidence |
-|---|---|---|
-| 1 | **The only trigger is a MISS.** `ServedMissEvidence` requires "the author confirmed the output missed this requirement". The carrier study found the opposite: p6 fired MORE in the ablation (0.92 vs 0.57) and the FULL arm was preferred LESS. There is no evidence type for *the rule was realized and the work was still worse*. | `core/architecture/escalate.ts:35` |
-| 2 | **EXAMPLE is not on the ladder.** `LADDER = ['PROSE','SELF_CHECK']`, so `nextLevel('EXAMPLE')` returns `null` and the loop refuses with *"already at the strongest carrier this renderer implements"* — which is a **wrong message**: EXAMPLE is not strongest, it is absent. | verified: `nextLevel('EXAMPLE') → null` |
-| 3 | **The ladder only ascends.** A carrier change that WEAKENS cannot be expressed at all. | `nextLevel` returns `LADDER[i+1]` only |
-
-A fourth, smaller: the ladder's own comment says EXAMPLE and OUTPUT_CONTRACT are excluded because
-"the renderer cannot honour them yet". **That is stale** — the renderer emits `examples/p6.md`, the
-runtime serves it, and we measured it leaking. A comment justifying an exclusion on grounds that
-have since become false is how a deliberate decision turns into an accident.
-
-**Phase 0 builds the capability. No study fires until Atelier proposes the change itself.**
+> Atelier can use qualified comparative behavioural evidence to replace a bad `SkillVersion`
+> implementation while leaving the human-owned `StandardVersion` unchanged, and the adapted
+> `SkillVersion` performs better on fresh blind tasks.
 
 ---
 
-## Phase 0 — make the loop able to be wrong in this direction
+## THE CORRECTION v1 GOT WRONG
 
-### 0.1 A second evidence type: realized-but-worse
+v1 said: *a miss may only escalate; underperformance may only de-escalate.* That assumes carriers
+are **ordered by strength**. They are not. PROSE, SELF_CHECK, EXAMPLE and OUTPUT_CONTRACT are
+**heterogeneous mechanisms** — telling, checking, showing, enforcing. "EXAMPLE → PROSE" is not a
+step down a ladder; it is a **replacement of one mechanism by another**.
 
-`ServedMissEvidence` says *the behaviour did not happen*. We need *the behaviour happened and the
-work was worse*, carrying the comparison it came from:
+Building a bidirectional ladder would have encoded a false ordering into the compiler permanently,
+to serve one experiment. The existing MISS ladder stays untouched.
 
-```
-CarrierUnderperformEvidence
-  requirementId, carrierAtServe
-  comparison: { against: Carrier, contexts: n, preferenceDelta, interval }
-  instrument: BLIND_EXPERT | ...
-  expertConfirmed: true
-```
+**What is verified and makes the narrow version cheap:**
 
-**It must be refused when the comparison is not decisive**, so a nominal majority cannot license a
-carrier change. The threshold is preregistered here: a context-level interval excluding zero.
-
-### 0.2 The ladder becomes a graph, and moves both ways
-
-`nextLevel` is one-directional and cannot express a weakening. Replace with an explicit relation
-that admits EXAMPLE and OUTPUT_CONTRACT, and permits a **downward** move only when carrying
-underperform evidence — never on a miss.
-
-**The asymmetry is the safety property.** A miss may only escalate; underperformance may only
-de-escalate. Nothing lets one kind of evidence move a carrier in the direction the other kind
-argues for.
-
-### 0.3 The diagnosis must say STANDARD unchanged, out loud
-
-The proposal has to state, in the artifact:
-
-> p6 remains PREFERRED. **No StandardVersion change proposed.** Evidence indicates the EXAMPLE
-> realization underperformed a prose realization. Proposed implementation change: EXAMPLE → PROSE.
-
-`assertArchitectureServesStandard` already refuses an architecture that stops serving the standard,
-and `applyEscalation` copies `gateRole` and `carries` untouched. Extend both to cover the new
-operation, and add a test that a de-escalation which alters any requirement's text, materiality or
-gate role is **refused** rather than warned about.
-
-### 0.4 Reuse, do not rebuild
-
-`repair-memory.ts` already refuses laundering, permits reconsideration on stronger evidence, keeps
-`TRANSITION_FORBIDDEN` human-authored, and bounds what a proposer sees. The new operation goes
-through `mayPropose` unchanged. **Adding a second path around it would be the bug.**
-
-**Phase 0 exit:** on the closed study's evidence, `atelier improve` proposes EXAMPLE → PROSE for p6,
-names the evidence, and states no standard change — with the standard hash identical before and
-after. Verified on the built binary.
-
----
-
-## Phase 1 — qualify the leak repair, with no claim attached
-
-The repair is already shipped (labels bracketed, block fenced, ownership stated, detector wired).
-Before any arm is built on it, qualify it on real provider calls:
-
-| gate | requirement |
+| fact | consequence |
 |---|---|
-| skill-internal headings in output | **0** |
-| verbatim served-example reproduction | **0** |
-| termination valid | all COMPLETE |
-| delivery witnessed | `servedExamples` non-empty for a GENERAL example |
-
-Current evidence: 0 leaks in 8 live invocations. **Raise to ~20 before building arms.**
-
-**The repair is not moat evidence and is never reported as such. The closed 13–3 study stays
-negative forever.**
+| `mayPropose(history, prohibitions, requirementId, from, to, …)` is **carrier-agnostic** | a replacement routes through the existing authority path with **no second proposal authority** |
+| `diagnose` already returns `IMPLEMENTATION_MISS` and `STANDARD_GAP` as distinct routes | the distinction exists; what is missing is comparative evidence to reach it |
+| `applyEscalation` copies `gateRole` and `carries` untouched | the operation is already structurally unable to move authority |
 
 ---
 
-## Phase 2 — SEARCH: does the repair deserve promotion?
+## Phase 0 — one capability, narrowly scoped
 
-Both arms carry the leak fix. **We are not comparing repaired prose to a broken example.**
+### 0.1 `proposeCarrierReplacement(requirementId, from, to, comparativeEvidence)`
 
-| arm | p6 carrier | everything else |
+Proposable **only** when qualified comparative evidence directly compared the incumbent
+implementation against the proposed comparator. Not a ladder move. Not derivable from a miss.
+
+Routes through `mayPropose` unchanged — laundering refusal, reconsideration on stronger evidence and
+`TRANSITION_FORBIDDEN` all apply as they stand.
+
+### 0.2 The minimum evidence type
+
+`ComparativeImplementationEvidence` carries and nothing more:
+
+```
+standardVersionHash      the target, which must not move
+requirementId
+incumbentCarrier         comparatorCarrier
+armIdentities            served-byte hashes for both
+suiteHash                contexts the comparison ran on
+preference               decisive counts + the interval
+instrument               BLIND_EXPERT
+executionValidity        all COMPLETE, or it does not qualify
+```
+
+Enough to reach `IMPLEMENTATION_UNDERPERFORMANCE` **without implying `STANDARD_GAP`**. No new
+user-facing semantic question is added.
+
+### 0.3 The proposal states what did not change
+
+The artifact must say, and a test must assert, that `standardVersionHash` is **identical before and
+after**, and that materiality, statement and gate role are untouched.
+
+### 0.4 The closed study authorises a RETEST, not a promotion
+
+The 13–3 result established that the *current* EXAMPLE implementation underperformed **and** that it
+leaked skill internals at 59% against 29%. Because the treatment leaked, it cannot establish that
+clean PROSE is intrinsically better.
+
+Its machine-readable consequence is `CURRENT_IMPLEMENTATION_FAILED / RETEST_AFTER_IMPLEMENTATION_FIX`.
+**Never `PROMOTE_PROSE`.** The closed negative stands unchanged and is not reopened.
+
+**Phase 0 exit:** on the SEARCH evidence (not the closed study), `atelier improve` proposes
+EXAMPLE → PROSE for p6, names the evidence, states no standard change, and the standard hash is
+identical either side. Verified on the built binary.
+
+---
+
+## Phase 1 — qualify the leak repair. No claim attached.
+
+Already shipped: labels bracketed, block fenced, ownership stated, detector on the output. Qualify
+through the real provider path before any arm is built:
+
+| gate | requirement | status |
+|---|---|---|
+| skill-internal `# pN` headings in output | 0 | 0/8 so far |
+| verbatim served-example reproduction | 0 | 0/8 so far |
+| execution valid | all COMPLETE | — |
+| target EXAMPLE delivered | `servedExamples` non-empty | witnessed |
+
+Raise to **20 invocations** before proceeding. Then **freeze the repaired implementation** — it is
+never tuned against study outcomes. **This repair is product work and is not moat evidence.**
+
+---
+
+## Phase 2 — SEARCH. Development evidence, permanently burned.
+
+**8 fresh contexts**, one generation per arm, both carrying the leak fix.
+
+| arm | p6 | everything else |
 |---|---|---|
 | `REPAIRED_EXAMPLE` | EXAMPLE | identical |
-| `PROSE_CANDIDATE` | PROSE | identical |
+| `PROSE_COMPARATOR` | PROSE | identical |
 
-Same `StandardVersion 7be05d7f92222e15`, same other 18 requirements, same model, runtime, request
-shape, rendering, token budget, contexts. Enforced by `assertSemanticClosure` — exactly one
-component may differ.
+Same `StandardVersion 7be05d7f92222e15`, same other 18 requirements, model, runtime, request shape,
+rendering, budget. `assertSemanticClosure` enforces exactly one differing component.
 
-**12 fresh contexts**, sealed before generation, diversity-gated, drawn from a pool disjoint from
-Phase 3's.
+**Requested answer length is bounded and identical across contexts** — roughly 500–700 words. Long
+enough that an argument exists to land, short enough that reading stays bounded. Length is a
+property of the CONTEXT, identical in both arms, so it cannot favour either.
 
-**Atelier decides promotion from this, not a person's impression of it.** If `REPAIRED_EXAMPLE`
-wins, **do not promote PROSE** — that says the leak, not the carrier, caused the original loss,
-which is a real and publishable architecture result. Stop there.
+The expert sees randomised A/B and answers **one question**: *which is closer to how you would
+actually write this?* A / B / Equally me / Neither. **No p6 labelling. No re-ratification. No
+observer exercise.**
 
-## Phase 3 — HOLDOUT: the moat test
+### The promotion criterion, frozen now, and asymmetric on purpose
 
-Contexts never seen in Phase 2. Nothing changes after Phase 2 closes.
+**At n=8 a "PROSE wins 6 of 8" rule has p ≈ 0.29 under a fair coin.** A criterion shaped as a win
+would promote on noise, and HOLDOUT would then be testing a carrier chosen by chance.
 
-$$\text{ADAPTED} - \text{REPAIRED\_EXAMPLE}$$
+So SEARCH is a **screen against a clear loss**, which is what n=8 can support:
 
-**24 fresh contexts**, 2 generations each, 2 arms = 96 generations.
+- **REPAIRED_EXAMPLE wins ≥ 5 of 8 decisive** → **STOP.** The leak, not the carrier, caused the
+  original loss. Do not propose a replacement. Publishable architecture result.
+- **Otherwise** → PROSE is an eligible candidate and Phase 0's proposal path runs on this evidence.
 
-### Endpoints
-
-**Primary — blind expert taste.** *Which is closer to how you would actually write this?*
-A / B / Equally me / Neither, arm hidden. Scored `+1 / 0 / −1`, **aggregated within context first**,
-then a paired context bootstrap; the decisive-pair sign test is complementary, not primary.
-
-**A moat claim requires the 95% context-level interval above zero**, not a nominal majority.
-
-**Secondary — mechanism.** Did the ending re-land the argument's judgment, takeaway or implication?
-Arms still hidden. This explains *why* taste moved; it does not define taste.
-
-**Guardrails, four and no more:** skill-internal leakage, verbatim example copying, required-standard
-violation, obvious forced or caricatured style. No 19-requirement composite at the finish line.
+SEARCH contexts are development data, sealed as such, and the reuse guard refuses them in HOLDOUT.
 
 ---
 
-## The cost nobody has priced yet
+## Phase 3 — HOLDOUT. The moat test.
 
-**The expert is the only qualified instrument** — κ = 0.257 for the model judge. This design asks for
-two rounds of blind scoring.
+**16 fresh contexts**, unseen in SEARCH, same bounded length. Blind:
+
+$$\text{ADAPTED (Atelier-created)} \;-\; \text{REPAIRED\_EXAMPLE}$$
+
+**Primary and only endpoint:** *which is closer to how you would actually write this?*
+
+Context is the independent unit; replicates nested. Report the paired context-level interval **and**
+the exact decisive-pair result. Nothing changes after outputs exist — not n, not carrier, not
+standard, not prompts, not endpoints.
+
+---
+
+## Cost, now that length is bounded
 
 | phase | pairs | words | reading |
 |---|---|---|---|
-| Phase 2 SEARCH | 12 | ~29,000 | ~2 hours |
-| Phase 3 HOLDOUT | 24 | ~58,000 | ~4 hours |
-| | | | **~6 hours total** |
+| SEARCH | 8 | ~10,000 | ~40 min |
+| HOLDOUT | 16 | ~20,000 | ~80 min |
+| | | | **~2 hours** |
 
-Inference is the cheap half: roughly $4 for Phase 2 and $8 for Phase 3, budget from an uncensored
-probe before each. **The founder's reading time is the binding constraint on this entire programme**,
-and it should drive the sizing decision rather than be discovered halfway.
-
-If six hours is too much: run Phase 3 only, using the closed study to generate the hypothesis and
-accepting that the promotion decision was made by a person rather than by Atelier. That is a weaker
-claim and it should be said plainly rather than blurred.
+Bounding the answer length cut this from ~6 hours to ~2. Inference roughly **$6 total**, budget from
+an uncensored probe before each firing.
 
 ---
 
-## What each outcome closes
+## Stop conditions, and they are real
 
-| result | what it means | action |
-|---|---|---|
-| SEARCH: PROSE wins → HOLDOUT: ADAPTED wins, interval above zero, no guardrail regression | **The claim.** Atelier localized the failure to implementation, kept the target fixed, chose a different realization, and reproduced the expert's taste better on unseen tasks. | Close v1. Write the paper. |
-| SEARCH: REPAIRED_EXAMPLE wins | The carrier was fine; the runtime was broken. Failure localized to SkillVersion, not StandardVersion — an architecture result without an adaptive-carrier result. | Close. Do not promote PROSE. Do not fish. |
-| HOLDOUT ties | Adaptive carrier selection unproven. | Close honestly. |
-| HOLDOUT loses | The compiler learned the wrong lesson. This is what prospective validation is for. | Close. |
+| condition | action |
+|---|---|
+| repaired EXAMPLE wins or does not clearly lose in SEARCH | **Stop.** The prior failure was not evidence against the clean carrier. |
+| Atelier cannot produce the implementation-only proposal with the standard hash preserved | **Stop.** The adaptive-compiler moat is not mechanically demonstrated. That is the finding. |
+| HOLDOUT null or negative | **Stop.** Close honestly. |
 
-**No p7, p8, p9. No carrier fishing. No "one more tweak."** A null is closure.
+**No p7, p8, p9. No carrier fishing. No tuning the repair against outcomes.**
 
-## Optional, and not required to close v1
+## The claim if it succeeds — this wording and no wider
 
-`B4_EXPERT_ONE_PAGER` — already typed in `core/reference/arms.ts` as *"the commercial competitor,
-and the arm this system has the least right to assume it beats."* If `ADAPTED > B4` prospectively,
-the claim becomes commercial rather than architectural. **Do not make it necessary.**
+> Atelier reconstructed and human-ratified an expert standard, kept that `StandardVersion` fixed when
+> behavioural evidence showed a model-specific implementation was inferior, proposed and created a
+> replacement `SkillVersion` from qualified comparative evidence, and the adapted implementation was
+> preferred by the source expert on fresh blinded tasks.
 
-## What is deliberately not in this plan
+**Not** universal taste reproduction. **Not** optimal carrier selection. **Not** that PROSE beats
+EXAMPLE in general.
 
-- **No change to `PREFERRED → EXAMPLE`.** One falsification on one requirement with a since-fixed
-  confound is not grounds to rewrite a policy. The long-term target is
-  `P(carrier | materiality, requirement type, model, runtime, evidence)`; this study produces the
-  second data point toward it, not the rewrite.
-- **No modification to p6 or the other 18 requirements.** The target is frozen. That is the thesis.
-- **No re-run of the closed study.** It generated the hypothesis. It cannot also certify it.
+## Not in this slice
+
+No new user workflow. No user-facing feature surface. No change to `PREFERRED → EXAMPLE`. No
+modification to p6 or the other 18 requirements. The closed study is not re-run and not reopened.
