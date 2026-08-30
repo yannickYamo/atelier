@@ -436,7 +436,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-86 files and 1235 tests. It exercises the governance spine, the compiler, the renderer, delivery
+87 files and 1247 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -541,7 +541,8 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 | `invoke --skill <name> "<task>"` | run the compiled skill |
 | `inspect --skill <name>` | what is in the standard, and what the package actually serves |
 | `history` / `rollback --to <v>` | every version, and how to go back |
-| `improve --skill <name> --invocation <id> --complaint "<text>"` | propose a repair from a real output |
+| `fix "<what was wrong>"` | the one correction path. Resolves your latest recorded use, diagnoses, and either repairs the implementation (blinded A/B, winner installed, standard hash unchanged) or asks the one authority question a standard gap deserves |
+| `improve --skill <name> --invocation <id> --complaint "<text>"` | advanced spelling of the repair half of `fix` |
 | `compare --skill <name>` | put the candidate and the current version side by side |
 | `promote` / `reject --skill <name>` | adopt the candidate, or refuse it and record why |
 | `revert` | undo the last build's file writes, leaving the standard untouched |

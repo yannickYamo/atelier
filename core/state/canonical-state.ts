@@ -492,6 +492,10 @@ export interface FeedbackRecord {
   readonly feedbackId: string;
   readonly invocationId: string;
   readonly complaint: string;
+  /** which rule the diagnosis attributed the miss to. Absent while undiagnosed, or for older records.
+   *  Evidence strength for a rule counts only records that NAME it — complaints about other rules
+   *  used to inflate the dominance check the repair memory exists to enforce. */
+  readonly requirementId?: string;
   readonly at: string;
 }
 
