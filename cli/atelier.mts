@@ -171,7 +171,7 @@ const main = async (): Promise<void> => {
     default: {
       // A MISTYPED COMMAND IS AN ERROR, AND THIS USED TO EXIT 0.
       //
-      // `atelier discover` printed help and reported success, so a script could run a typo in a loop
+      // `atelier discovr` printed help and reported success, so a script could run a typo in a loop
       // and never learn the work had not happened. Help on no argument is a courtesy; help on a wrong
       // argument is a failure, and the exit code has to say which.
       //
