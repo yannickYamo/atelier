@@ -164,7 +164,7 @@ describe('a realization is SHOWN when a span was anchored', () => {
       materiality: 'PREFERRED', appliesWhen: 'GENERAL', statement: 'A plain preference.',
       evidence: 'the observed line', evidenceItemId: 'p1.md' });
     const md = render([DECISION, plain]);
-    expect(md).toMatch(/## How the author did it/);
+    expect(md).toMatch(/observed in the author's work:/);
     expect(md.indexOf('A plain preference.')).toBeLessThan(md.indexOf('the observed line'));
   });
 });
