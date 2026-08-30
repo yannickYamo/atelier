@@ -10,6 +10,58 @@ a run in progress may not be.
 
 ### Fixed
 
+- **The skill emitted its own internals into the user's deliverable.** Example bodies were rendered
+  with markdown headings (`# p6`, `## How the author did it`) and served under another heading.
+  Served to a model as context, a heading is not a label — it is a document structure, and the model
+  continued it: the answer finished and the skill's requirement text was appended underneath. Measured
+  on 74 generations of a blind study, 31 outputs carried a literal `# pN` line and 10 reproduced a
+  served example verbatim; the arm carrying one extra example did it 59% of the time against 29%.
+  The framing sentence said "these are instances, not instructions", which settles AUTHORITY and says
+  nothing about OUTPUT OWNERSHIP. Labels are now bracketed, the block is fenced with explicit start
+  and end markers, and it states that the deliverable begins after it. Zero leaks in 8 live
+  invocations afterwards.
+- **A truncated generation was reported as the model's failure.** The Anthropic adapter read
+  `stop_reason` only to interpolate into an error string, so a call the model was never allowed to
+  finish surfaced as "the schema was not satisfied". Termination is now a provider-neutral value
+  normalised at the adapter boundary, and an incomplete generation raises a typed error carrying it.
+  A study built on this misattribution had to withdraw a published figure.
+- **The contract runner was provisioned at a fifth of what the work needs.** `maxTokens` was
+  hardcoded to 1200 against a measured 6606-token median for a bare answer, and completeness was
+  inferred from the text — which cannot distinguish "the model chose not to" from "the model was cut
+  off". The budget now comes from a probe that is REFUSED if anything in it was itself truncated: an
+  estimate drawn from a censored sample is not a measurement.
+- **Discovery discarded a completed run.** Proposals were saved AFTER an optional methodology check
+  whose own comment says a failure there "must not cost the taste run that already succeeded and was
+  paid for" — and the read that threw sat one line above that try. A stale file left in the global
+  store by an unrelated project killed a fresh run after 39 held-out checks and lost all 13
+  proposals. What is paid for is now written before anything optional runs.
+- **A missing observation became evidence against a rule.** The discovery observer read
+  `j?.applicable === true`, which is indistinguishable from a confident NO when the object never
+  arrived, and its 500-token budget truncated in practice. Silent false negatives, in the direction
+  that under-reports the author's own patterns. The free-text field is bounded at the schema, the
+  budget has real headroom, and an unusable answer now refuses.
+- **A rule the author wrote was described to the model as one nobody had confirmed.** The
+  self-check section asserted "NO ONE HAS CONFIRMED yet" over everything in it, but the section is
+  defined by ROLE and confirmation is a different property — so a confirmed PREFERRED requirement
+  could be introduced as an unconfirmed guess the model must not act on. The preamble is now derived
+  from what is actually in the section.
+- **`build` with no standard printed a raw ENOENT and an absolute store path.** It now names both
+  routes to a standard, which is what someone who has simply not minted one yet needs.
+
+### Added
+
+- **Corpus provenance is declared or loudly unknown.** `aiAssisted` carries the comment "declared,
+  never inferred — it changes what any result means" and was hardcoded to `null`, so the one field
+  documented as changing every downstream result was never asked for. Intake now takes
+  `--ai-assisted` / `--no-ai-assist` and, absent either, says at seal time what is weaker about an
+  undeclared corpus. `null` is kept as a state and never collapsed into `false`.
+- **Repair memory is bounded and kept off the executor.** History informs proposals; what was tried
+  on the way to a skill is not part of the skill. Under a budget, PROMOTIONS are dropped before
+  rejections — a promotion is already encoded in the artifact, a rejection exists nowhere else — and
+  nothing is truncated silently.
+
+### Fixed (earlier)
+
 - **The clustered confidence interval was 26% too narrow at n=3**, the smallest sample it admits and
   the most common one. A second t-table keyed from df=3 fell back to t(3)=3.182 where t(2)=4.303 is
   correct, so an interval that honestly crosses zero was reported as a decided direction — and that
