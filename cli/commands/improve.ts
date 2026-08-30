@@ -328,6 +328,9 @@ export async function runOnce(
 export async function create(path: string): Promise<void> {
   // BEFORE INTAKE, WHICH SEALS. A missing key discovered after the seal leaves the user with a run
   // they did not know they had and a refusal on the retry.
+  // The staged commands print next-step hints for a person running them by hand; under create the
+  // next step runs itself, and a hint that is already stale when it prints teaches distrust.
+  process.env.ATELIER_ORCHESTRATED = '1';
   assertReachable('discovery');
   intake(path, flag('--work-type') ?? 'writing');
   if (argv.includes('--dry-run')) return;   // intake already returned without sealing

@@ -189,7 +189,21 @@ export function build(nameArg?: string): void {
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
   saveSession({ ...s, skillName: name });
-  console.log(`\nYour skill is ready.\n`);
+  // ── "READY" IS EARNED, NOT ANNOUNCED ─────────────────────────────────────────────────────
+  //
+  // `create` used to end with this banner over a package whose "What to do" was `_(none)_` — every
+  // rule unratified, nothing instructing, and the one pointer forward buried above the celebration.
+  // The banner now means what it says: at least one rule reaches the model as an instruction.
+  const instructs = arch.components.some((c) => c.gateRole === 'ENFORCE');
+  if (instructs) {
+    console.log(`\nYour skill is ready.\n`);
+  } else {
+    console.log(`\nPreview installed — it INSTRUCTS NOTHING until you rule.\n`);
+    console.log(v.authorityState === 'DRAFT'
+      ? `  Every rule is still a proposal. Rule on them:  atelier ratify --page rulings.html   (or atelier pending)`
+      : `  Every kept rule is shown, not instructed. Declare what binds:  "materiality":"REQUIRED" on a ratify decision`);
+    console.log('');
+  }
   console.log(`  ${host.invocationHint(name)}\n`);
   console.log(`Installed for ${host.detect().hostId} at ${inst.installedAt}`);
   console.log(`StandardVersion ${v.standardVersionHash} · architecture ${arch.architectureHash} · package ${pkg.packageHash}`);
