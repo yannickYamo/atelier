@@ -49,8 +49,8 @@ describe('sealing is product-owned, deterministic, and refuses a suite it cannot
       [{ id: 'ctx02', task: b.task }])];
     const sealed = sealStudySuite([a, b], decisions, FROZEN);
     expect(sealed.diversity.threshold).toBe(MAX_OVERLAP);
-    expect(sealed.diversity.decisions[0]!.accepted).toBe(false);
-    expect(sealed.diversity.decisions[0]!.collidedWith).toBe('ctx02');
+    expect(sealed.diversity.decisions[0].accepted).toBe(false);
+    expect(sealed.diversity.decisions[0].collidedWith).toBe('ctx02');
     expect(sealed.worstPairOverlap).toBeLessThan(MAX_OVERLAP);
   });
 
@@ -97,8 +97,8 @@ describe('the context is the unit, and generations are nested inside it', () => 
       { structural: 'CORRECT' }, { structural: 'WRONG' },
       { validity: 'TRUNCATED', structural: 'EXECUTION_INVALID' },
     ]));
-    expect(rows[0]!.validByArm.BARE).toBe(2);
-    expect(rows[0]!.byArm.BARE).toBe(0.5);
+    expect(rows[0].validByArm.BARE).toBe(2);
+    expect(rows[0].byArm.BARE).toBe(0.5);
   });
 
   it('resampling is over CONTEXTS: repeating generations must not shrink the interval', () => {

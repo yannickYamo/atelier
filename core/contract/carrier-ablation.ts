@@ -104,13 +104,13 @@ export function assertSemanticClosure(full: SkillArchitecture, ablated: Ablation
       'the arms do not carry the same requirements under the same gate roles, so this compares '
       + 'more-standard against less-standard rather than one realisation against another.');
   }
-  const differing = full.components.filter((c, i) => c.carrier !== ablated.architecture.components[i]!.carrier);
+  const differing = full.components.filter((c, i) => c.carrier !== ablated.architecture.components[i].carrier);
   if (differing.length !== 1) {
     throw new AblationRefused(
       `${differing.length} components differ in carrier; a targeted ablation must differ in exactly one. `
       + `Differing: ${differing.map((c) => c.id).join(', ')}`);
   }
-  if (!differing[0]!.carries.includes(ablated.targetRequirementId)) {
+  if (!differing[0].carries.includes(ablated.targetRequirementId)) {
     throw new AblationRefused('the differing component is not the named target.');
   }
 }

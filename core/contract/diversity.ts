@@ -76,8 +76,8 @@ export function worstPair(
   let worst: { a: string; b: string; overlap: number } | null = null;
   for (let i = 0; i < cases.length; i++) {
     for (let j = i + 1; j < cases.length; j++) {
-      const o = tokenOverlap(cases[i]!.task, cases[j]!.task);
-      if (worst === null || o > worst.overlap) worst = { a: cases[i]!.id, b: cases[j]!.id, overlap: o };
+      const o = tokenOverlap(cases[i].task, cases[j].task);
+      if (worst === null || o > worst.overlap) worst = { a: cases[i].id, b: cases[j].id, overlap: o };
     }
   }
   return worst;

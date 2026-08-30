@@ -17,7 +17,12 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['dist/**', 'node_modules/**', 'plugins/dist/**'] },
+  // `studies/harness/**` is plain JS that chooses PARAMETERS and decides nothing: every semantic and
+  // statistical rule it uses is imported from the built product, and
+  // `tests/atelier-study-semantics-census.test.ts` fails if one reappears there. Type-aware linting
+  // of untyped JS reading JSON produces `any` noise rather than findings, and the typed code it
+  // calls is fully linted. This is an exclusion with a reason, not a rule nobody understood.
+  { ignores: ['dist/**', 'node_modules/**', 'plugins/dist/**', 'studies/harness/**'] },
 
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

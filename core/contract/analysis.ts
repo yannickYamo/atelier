@@ -79,12 +79,15 @@ export function pairedBootstrap(
   const means: number[] = [];
   for (let i = 0; i < n; i++) {
     let sum = 0;
-    for (let k = 0; k < deltas.length; k++) sum += deltas[Math.floor(rnd() * deltas.length)]!;
+    // AS MANY DRAWS AS THERE ARE CONTEXTS, each drawn at random WITH REPLACEMENT. The element is
+    // deliberately unused: this is not an iteration over deltas, it is n independent draws from
+    // them, and writing it as an index loop made it read like the former.
+    for (const _unused of deltas) sum += deltas[Math.floor(rnd() * deltas.length)];
     means.push(sum / deltas.length);
   }
   means.sort((a, b) => a - b);
-  const lo = means[Math.floor(n * 0.025)]!;
-  const hi = means[Math.floor(n * 0.975)]!;
+  const lo = means[Math.floor(n * 0.025)];
+  const hi = means[Math.floor(n * 0.975)];
   return { treatment, control, contexts: deltas.length, meanDelta: mean(deltas), lo95: lo, hi95: hi,
     degenerate: lo === hi };
 }

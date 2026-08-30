@@ -36,7 +36,7 @@ describe('a bound that drops what is recoverable elsewhere first', () => {
       rec({ repairId: 'weak', evidenceBasis: { missContexts: 1, invocationIds: [] } }),
       rec({ repairId: 'strong', evidenceBasis: { missContexts: 9, invocationIds: [] } }),
     ];
-    expect(historyForProposer(h, 'g9', 1).kept[0]!.evidenceBasis.missContexts).toBe(9);
+    expect(historyForProposer(h, 'g9', 1).kept[0].evidenceBasis.missContexts).toBe(9);
   });
 
   it('never truncates silently — the caller is handed what it did not show', () => {
@@ -66,15 +66,15 @@ describe('history reaches the proposer and never the executor', () => {
 
   it('REFUSES served bytes carrying a candidate hash from history', () => {
     const served = '# skill\n\nLead with the action.\n<!-- built from deadbeefaaaaaaaa -->';
-    expect(() => assertHistoryNotServed(served, h)).toThrow(HistoryLeakedToExecutor);
-    expect(() => assertHistoryNotServed(served, h)).toThrow(/nobody ratified it/);
+    expect(() => { assertHistoryNotServed(served, h); }).toThrow(HistoryLeakedToExecutor);
+    expect(() => { assertHistoryNotServed(served, h); }).toThrow(/nobody ratified it/);
   });
 
   it('POLARITY: clean served bytes pass', () => {
-    expect(() => assertHistoryNotServed('# skill\n\nLead with the action.', h)).not.toThrow();
+    expect(() => { assertHistoryNotServed('# skill\n\nLead with the action.', h); }).not.toThrow();
   });
 
   it('and an empty history cannot leak', () => {
-    expect(() => assertHistoryNotServed('anything at all', [])).not.toThrow();
+    expect(() => { assertHistoryNotServed('anything at all', []); }).not.toThrow();
   });
 });

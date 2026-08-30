@@ -55,7 +55,7 @@ describe('a targeted ablation changes one carrier and nothing else', () => {
 
   it('semantic closure passes when only the mechanism differs', () => {
     const v = standard();
-    expect(() => assertSemanticClosure(compileArchitecture(v), ablateCarrier(v, 'r2'))).not.toThrow();
+    expect(() => { assertSemanticClosure(compileArchitecture(v), ablateCarrier(v, 'r2')); }).not.toThrow();
   });
 
   it('and REFUSES when the arms would oblige different things', () => {
@@ -64,7 +64,7 @@ describe('a targeted ablation changes one carrier and nothing else', () => {
     const ab = ablateCarrier(v, 'r2');
     const thinner = { ...ab, architecture: { ...ab.architecture,
       components: ab.architecture.components.slice(0, 2) } };
-    expect(() => assertSemanticClosure(compileArchitecture(v), thinner)).toThrow(/same requirements/);
+    expect(() => { assertSemanticClosure(compileArchitecture(v), thinner); }).toThrow(/same requirements/);
   });
 
   it('and REFUSES when a second carrier moved — that is a second treatment', () => {
@@ -73,7 +73,7 @@ describe('a targeted ablation changes one carrier and nothing else', () => {
     const twoChanged = { ...ab, architecture: { ...ab.architecture,
       components: ab.architecture.components.map((c) =>
         c.carries.includes('r3') ? { ...c, carrier: 'PROSE' as const } : c) } };
-    expect(() => assertSemanticClosure(compileArchitecture(v), twoChanged)).toThrow(/exactly one/);
+    expect(() => { assertSemanticClosure(compileArchitecture(v), twoChanged); }).toThrow(/exactly one/);
   });
 
   it('describes what it isolated, in the words a pre-registration needs', () => {
