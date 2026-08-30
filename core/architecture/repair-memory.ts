@@ -294,3 +294,102 @@ export function describeHistory(
   if (rest.length) out += `${rest.map(line).join('\n')}\n`;
   return out;
 }
+
+// ─── WHAT A PROPOSER MAY BE SHOWN, AND WHY IT IS BOUNDED ───────────────────────────────────────
+//
+// Independent work on skill evolution (WikiSkill, Google Research, arXiv 2608.27454) measured two
+// things this file should act on. Showing an accumulated knowledge layer to the component that
+// PROPOSES skill changes raised final quality from 48.7% to 63.7%. Showing the same layer to the
+// component that EXECUTES the task during training LOWERED it, 63.7% to 60.9%.
+//
+// Same knowledge, opposite sign, decided entirely by which component sees it. Atelier already
+// separates those roles for a different reason — authority — and this is independent evidence that
+// the separation also pays in quality. So history informs proposals and is structurally kept out of
+// what the model writing the user's work is shown. `assertHistoryNotServed` is that structure.
+//
+// ─── AND IT IS BOUNDED, WHICH THEY LIST AS FUTURE WORK ─────────────────────────────────────────
+//
+// That paper states plainly: "WikiSkill currently lacks an automated mechanism to prune the wiki."
+// We have the measurement they do not. `studies/M3A_DILUTION_RESULTS.md`: adding 23 irrelevant
+// provisions cost 0.103 of restraint, paired exact McNemar p = 0.0043, CI [+0.039, +0.171].
+//
+// STATED HONESTLY: that was measured on rules served to an EXECUTOR, not on history shown to a
+// PROPOSER. The mechanism — irrelevant material degrades adherence to relevant material — is
+// plausibly general, and it is not the same setting. The bound is here because unbounded growth is
+// a hazard we have measured NEARBY, not one we have measured HERE.
+//
+// ─── WHAT GETS DROPPED FIRST, AND WHY IT IS THE OPPOSITE OF KEEPING EVERYTHING ─────────────────
+//
+// A PROMOTION is already encoded in the artifact: the carrier changed, the pointer moved, the
+// package on disk says so. Re-stating it in history is the only redundant thing here.
+//
+// A REJECTION exists NOWHERE ELSE. Nothing in the tree records that a transition was tried and
+// found wanting; that is the whole reason this file exists. So under a budget, promotions are
+// dropped before rejections — which inverts "accumulate everything", and follows from the same
+// argument that made the asymmetry worth having.
+
+/** How many attempts a proposer may be shown for one requirement. */
+export const PROPOSER_HISTORY_BUDGET = 8;
+
+export interface BoundedHistory {
+  readonly kept: readonly RepairRecord[];
+  /** never silently truncated: a caller that shows this must say what it did not show */
+  readonly droppedCount: number;
+  readonly droppedOutcomes: Readonly<Record<string, number>>;
+}
+
+/**
+ * The subset of a requirement's history a proposer may see, ordered by what it cannot learn
+ * elsewhere. Prohibitions are NOT bounded here — they are human-authored, few, and absolute.
+ */
+export function historyForProposer(
+  history: readonly RepairRecord[], requirementId: string,
+  budget: number = PROPOSER_HISTORY_BUDGET,
+): BoundedHistory {
+  const mine = history.filter((r) => r.requirementId === requirementId);
+  const rank = (r: RepairRecord): number =>
+    r.outcome === 'REJECTED' ? 0 : r.outcome === 'PENDING' ? 1 : 2;
+  const ordered = [...mine].sort((a, b) =>
+    rank(a) - rank(b)
+    // within a class, stronger evidence first: a rejection on six misses says more than one on one.
+    || b.evidenceBasis.missContexts - a.evidenceBasis.missContexts
+    || (b.evaluationBasis?.generations ?? 1) - (a.evaluationBasis?.generations ?? 1));
+  const kept = ordered.slice(0, budget);
+  const dropped = ordered.slice(budget);
+  const droppedOutcomes: Record<string, number> = {};
+  for (const d of dropped) droppedOutcomes[d.outcome] = (droppedOutcomes[d.outcome] ?? 0) + 1;
+  return { kept, droppedCount: dropped.length, droppedOutcomes };
+}
+
+export class HistoryLeakedToExecutor extends Error {}
+
+/**
+ * Refuse served bytes that carry repair history.
+ *
+ * The executor is shown the skill. It is not shown what was tried on the way to it — partly because
+ * that is a claim nobody ratified, and partly because the measurement above says it makes the work
+ * worse. Structural rather than conventional: a rule that lives only in a comment is one refactor
+ * from being untrue.
+ */
+export function assertHistoryNotServed(
+  servedText: string, history: readonly RepairRecord[],
+): void {
+  const leaked = history
+    .map((r) => r.candidateSkillVersionHash)
+    .filter((h) => h.length >= 8 && servedText.includes(h.slice(0, 8)));
+  if (leaked.length) {
+    throw new HistoryLeakedToExecutor(
+      `served bytes contain ${leaked.length} candidate hash(es) from repair history: `
+      + `${leaked.map((h) => h.slice(0, 8)).join(', ')}. What was tried on the way to a skill is not `
+      + 'part of the skill — nobody ratified it, and showing it to the executor measurably degrades '
+      + 'the work.');
+  }
+}
+
+/** The line a caller prints so a bound is never silent. */
+export const describeBound = (b: BoundedHistory): string =>
+  b.droppedCount === 0
+    ? `${b.kept.length} attempt(s), all shown`
+    : `${b.kept.length} of ${b.kept.length + b.droppedCount} attempt(s) shown; `
+      + `${Object.entries(b.droppedOutcomes).map(([o, n]) => `${n} ${o.toLowerCase()}`).join(', ')} not shown `
+      + '(promotions are dropped first — they are already in the artifact)';
