@@ -11,8 +11,8 @@ const dev = sealCalibrationSet('the refined wording', 'DEVELOPMENT',
 describe('cases that shaped a rule cannot also test it', () => {
   it('REFUSES on a single shared case, not on a ratio', () => {
     // A threshold would invite arguing about how much contamination is tolerable. It is none.
-    expect(() => assertNoReuse(dev, ['m99', 'm04'])).toThrow(DevelopmentCasesReused);
-    expect(() => assertNoReuse(dev, ['m04'])).toThrow(/shaped the rule being validated/);
+    expect(() => { assertNoReuse(dev, ['m99', 'm04']); }).toThrow(DevelopmentCasesReused);
+    expect(() => { assertNoReuse(dev, ['m04']); }).toThrow(/shaped the rule being validated/);
   });
 
   it('names which cases are contaminated, so it can be acted on', () => {
@@ -21,7 +21,7 @@ describe('cases that shaped a rule cannot also test it', () => {
   });
 
   it('POLARITY: a genuinely fresh set passes', () => {
-    expect(() => assertNoReuse(dev, ['m90', 'm91', 'm92'])).not.toThrow();
+    expect(() => { assertNoReuse(dev, ['m90', 'm91', 'm92']); }).not.toThrow();
   });
 
   it('seals deterministically, so the set can be cited later', () => {
@@ -44,14 +44,14 @@ describe('a validation set must be able to say something', () => {
 
   it('refuses a set too thin to score, counting DECIDED cases only', () => {
     // Abstention is a real answer and is excluded, so a set can be large and still too thin.
-    expect(() => assertValidationUsable([...lab(6, 'YES'), ...lab(6, 'NO'), ...lab(20, 'UNSURE')]))
+    expect(() => { assertValidationUsable([...lab(6, 'YES'), ...lab(6, 'NO'), ...lab(20, 'UNSURE')]); })
       .not.toThrow();
-    expect(() => assertValidationUsable([...lab(4, 'YES'), ...lab(4, 'NO'), ...lab(30, 'UNSURE')]))
+    expect(() => { assertValidationUsable([...lab(4, 'YES'), ...lab(4, 'NO'), ...lab(30, 'UNSURE')]); })
       .toThrow(ValidationSetTooThin);
   });
 
   it('refuses a single-class set, where agreement cannot beat a constant', () => {
-    expect(() => assertValidationUsable(lab(MIN_VALIDATION_CASES + 4, 'YES'))).toThrow(/same class/);
-    expect(() => assertValidationUsable(lab(MIN_VALIDATION_CASES + 4, 'NO'))).toThrow(/same class/);
+    expect(() => { assertValidationUsable(lab(MIN_VALIDATION_CASES + 4, 'YES')); }).toThrow(/same class/);
+    expect(() => { assertValidationUsable(lab(MIN_VALIDATION_CASES + 4, 'NO')); }).toThrow(/same class/);
   });
 });

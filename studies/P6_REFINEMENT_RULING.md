@@ -1,5 +1,20 @@
 # p6, refined and ratified — the ruling and what it still does not explain
 
+
+> **Two disclosures, because a reader would otherwise assume otherwise.**
+>
+> **The expert is this tool's author.** This is a self-study: the person whose standard was
+> discovered, who ratified it, who labelled the cases and who scores the outputs is the same person
+> who built Atelier. That is a legitimate case study and it is not an independent evaluation. Every
+> result here should be weighted as first-party.
+>
+> **The corpus is AI-assisted.** The seven essays were published by the author under his own name;
+> he has since declared that roughly half the prose was written with AI assistance, and the evidence
+> record carries `aiAssisted: true`. So "a pattern discovered from expert work" is a weaker claim
+> than it sounds: some candidates may be an assistant's habits rather than the author's. What this
+> does **not** weaken is the case-level judgment — the boundary the author drew is his, whatever
+> wrote the sentences — nor the standard's authority, since he approved each rule.
+
 **Ruled EDIT by the author, 2026-08-28.** The machine's proposal was rejected as an overcorrection
 and replaced with the author's own wording.
 

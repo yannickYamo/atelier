@@ -331,15 +331,15 @@ function sealDev(): void {
 
 export function study(): void {
   switch (argv[1]) {
-    case 'seal-development': return sealDev();
-    case 'validate': return validate();
+    case 'seal-development': { sealDev(); return; }
+    case 'validate': { validate(); return; }
     case 'calibrate': return void calibrate();
-    case 'judge': return judge();
-    case 'observe': return observe();
-    case 'eligibility': return eligibility();
-    case 'seal': return seal();
-    case 'analyse': case 'analyze': return analyse();
-    case 'screen': return screen();
+    case 'judge': { judge(); return; }
+    case 'observe': { observe(); return; }
+    case 'eligibility': { eligibility(); return; }
+    case 'seal': { seal(); return; }
+    case 'analyse': case 'analyze': { analyse(); return; }
+    case 'screen': { screen(); return; }
     default: die('usage: atelier study <eligibility|observe|judge|calibrate|seal-development|validate|seal|analyse|screen> [options]');
   }
 }
