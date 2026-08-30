@@ -436,7 +436,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-85 files and 1220 tests. It exercises the governance spine, the compiler, the renderer, delivery
+86 files and 1235 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -555,6 +555,7 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 | `reference --skill <name>` | generate against held-out work and seal the blinding |
 | `reference --score --labels <json>` | unblind and score the held-out test |
 | `check [--role discovery\|target]` | verify a backend actually works, and record what was proven |
+| `record` | internal: written by the Claude Code plugin's hooks so a `/skill` use becomes the same invocation record `invoke` writes. Never typed by a person |
 | `profiles` | which backends have been verified, and to what stage |
 | `carriers --skill <name> [--host codex]` | what each execution surface really delivers |
 | `status` / `abort` | where the current run is, and how to abandon it |
@@ -578,7 +579,9 @@ Flags worth knowing.
 ## Your data
 
 Local by default. No Atelier telemetry and no account. Standards, evidence and generated artifacts stay
-on your machine. Data leaves it only when sent to the inference providers you explicitly configure for
+on your machine. When the Claude Code plugin is installed, a `/skill` use of an Atelier skill is
+recorded locally too — the prompt and the reply, under the same roof as every other invocation —
+because that record is what lets a later correction know what it is correcting. Data leaves it only when sent to the inference providers you explicitly configure for
 discovery or execution.
 
 Everything lives under `~/.atelier`, or wherever `ATELIER_DATA` points. Compiled skills sit in

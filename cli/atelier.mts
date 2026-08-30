@@ -29,6 +29,7 @@ import { amend, sharpen, answerProbe } from './commands/amend.js';
 import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
+import { record } from './commands/record.js';
 import { existsSync } from 'node:fs';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 
@@ -76,6 +77,7 @@ export const COMMANDS: readonly string[] = [
   'ratify',
   'ratify-close',
   'ratify-one',
+  'record',
   'reference',
   'reject',
   'revert',
@@ -117,6 +119,7 @@ const main = async (): Promise<void> => {
     case 'skill': return skill();
     case 'plan': { plan(); return; }
     case 'contract': return contract();
+    case 'record': return record();
     case 'reference': return reference();
     case 'status': {
       const s = loadSession();
