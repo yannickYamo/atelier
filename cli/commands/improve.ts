@@ -8,13 +8,13 @@ import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import { spend } from '../../core/inference/client.js';
 import { observeRuntime, type RuntimeBinding } from '../../core/runtime/binding.js';
+import { persistInvocation } from '../../core/runtime/record.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { proposeEscalation, applyEscalation, type ServedMissEvidence } from '../../core/architecture/escalate.js';
 import { foldRepairs, foldProhibitions, mayPropose, describeHistory, WEAKEST_EVALUATION,
   type EvidenceBasis } from '../../core/architecture/repair-memory.js';
 import { runSpine, explainSpine } from '../../core/convergence/controller.js';
 import { proposeFloor } from '../../core/distinctiveness/contract.js';
-import { resolveFromFrozenText, admitsEvidence } from '../../core/measurement/applicability.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
@@ -312,42 +312,9 @@ export async function runOnce(
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output };
   assertRequestBound(rec.request, task);
-  store.putInvocation(L, rec);
-  // FIRST RUN ESTABLISHES THE BINDING. Every later run of this SkillVersion is compared against it,
-  // which is what stops evidence earned on one runtime from being read as evidence about another.
-  store.recordBinding(L, sv.skillVersionHash, binding);
-
-  // ── EVERY REAL INVOCATION FEEDS THE EVIDENCE STATE ─────────────────────────────────────────
-  //
-  // Not a research command: the ordinary path. What is recorded here is DETERMINISTIC — whether the
-  // package that produced this output is the one that was compiled — and it is recorded per
-  // requirement because that is the grain everything downstream reasons at.
-  //
-  // Deliberately NOT a semantic verdict. No instrument in this system has earned the right to say
-  // whether a requirement was met, so an invocation contributes the fact it can establish without
-  // one, and the absence of a fidelity verdict is visible rather than papered over.
-  {
-    const std = store.getStandard(L, sv.standardVersionHash);
-    const at = rec.at;
-    for (const r of std?.requirements ?? []) {
-      // APPLICABILITY GATES EVIDENCE. Before this, every requirement entered every context — which
-      // is how the v3 campaign judged 33 of 33 as applicable and then produced verdicts on cases
-      // where the rule barely arises. An UNRESOLVED pair is recorded as such and contributes
-      // nothing, because a case nobody established as applicable cannot say whether the rule held.
-      const app = resolveFromFrozenText(r, rec.inputHash);
-      if (!admitsEvidence(app)) {
-        store.appendEvent(L, { kind: 'APPLICABILITY_UNRESOLVED', requirementId: r.requirementId,
-          contextId: rec.inputHash, invocationId: rec.invocationId, why: app.why, at });
-        continue;
-      }
-      store.putObservation(L, {
-        requirementId: r.requirementId, domain: 'DELIVERY', contextId: rec.inputHash, invocationId: rec.invocationId,
-        generationIndex: store.listInvocations(L).filter((x) => x.inputHash === rec.inputHash).length - 1,
-        verdict: delivery.matched ? 'DELIVERED' : 'NOT_DELIVERED',
-        producer: 'delivery-check', producerVersion: '1', authority: 'DETERMINISTIC',
-        evidence: { expected: delivery.expectedPackageHash, served: delivery.servedPackageHash }, at });
-    }
-  }
+  // Persisted through the ONE shared function — the host surface records through the same one, so
+  // evidence cannot differ in shape by which surface witnessed it.
+  persistInvocation(L, rec, binding, store.getStandard(L, sv.standardVersionHash));
   return rec;
 }
 
