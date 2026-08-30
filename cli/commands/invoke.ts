@@ -5,6 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { Budget } from '../../core/inference/client.js';
+import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { checkSatisfiable, describeSatisfiability } from '../../core/state/prerequisite.js';
@@ -85,6 +86,12 @@ export function resolveServedSkill(name: string): ServedSkill {
     : '';
   const contractFile = pkg.files['contracts/output.schema.json'] ?? null;
   const servedText = `${skillMd}${exampleBlock}`;
+  // WHAT WAS TRIED ON THE WAY TO A SKILL IS NOT PART OF THE SKILL. Nobody ratified it, and
+  // independent measurement says showing an accumulated knowledge layer to the component doing the
+  // work makes the work worse (63.7% -> 60.9%, arXiv 2608.27454) while showing it to the component
+  // proposing changes makes it better. Checked here rather than trusted, because the two live in
+  // the same store and one careless template is all it would take.
+  assertHistoryNotServed(servedText, foldRepairs(store.readEvents(L)));
   const servedHash = sha(JSON.stringify(pkg.files));
   const delivery = deliveryOf(sv.materializedHash, servedHash, Object.keys(pkg.files), servedExamples, withheld);
   if (!delivery.matched) {
