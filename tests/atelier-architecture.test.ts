@@ -17,10 +17,11 @@ import { renderAgentSkill } from '../renderers/agent-skill/render.js';
 import { authorityStateOf } from '../core/state/canonical-state.js';
 import type { Requirement, StandardVersion, Authority, RuleKind } from '../core/state/canonical-state.js';
 
-const req = (id: string, kind: RuleKind, authority: Authority, statement = `rule ${id}`): Requirement => ({
+const req = (id: string, kind: RuleKind, authority: Authority, statement = `rule ${id}`,
+  materiality: Requirement['materiality'] = null): Requirement => ({
   requirementId: id, statement, appliesWhen: 'GENERAL', kind, authority,
   provenance: 'MACHINE_DISCOVERED',
-  wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, evidence: 'span', evidenceItemId: 'w1',
+  wouldBeAbsentIf: null, materiality, realizationTolerance: null, outputShape: null, evidence: 'span', evidenceItemId: 'w1',
 });
 
 const std = (requirements: Requirement[]): StandardVersion => ({
@@ -59,7 +60,7 @@ describe('the implementation can move while the standard stands still', () => {
 
 describe('an inferred prohibition does not shape output until someone confirms it', () => {
   const unconfirmed = req('b1', 'BOUNDARY', 'DERIVED_UNRATIFIED', 'never polish out informal punctuation');
-  const confirmed = req('b2', 'BOUNDARY', 'EXPERT_RATIFIED', 'never open with a rhetorical question');
+  const confirmed = req('b2', 'BOUNDARY', 'EXPERT_RATIFIED', 'never open with a rhetorical question', 'REQUIRED');
   const positive = req('g1', 'GENERATIVE', 'DERIVED_UNRATIFIED', 'lead with the decision');
 
   it('unconfirmed BOUNDARY compiles to OBSERVE; confirmed BOUNDARY enforces', () => {
@@ -175,13 +176,17 @@ describe('THE AUTHORITY SEAM — what an optimizer may not do', () => {
     expect(() => { assertArchitectureServesStandard(rearranged, v); }).not.toThrow();
   });
 
-  it('the role is DERIVED from authority, so there is one owner of the decision', () => {
+  it('the role is DERIVED from authority and declared weight, so there is one owner of the decision', () => {
     expect(roleFor(unconfirmed)).toBe('OBSERVE');
-    expect(roleFor(req('b2', 'BOUNDARY', 'EXPERT_RATIFIED'))).toBe('ENFORCE');
-    expect(roleFor(req('b3', 'BOUNDARY', 'EXPERT_AUTHORED'))).toBe('ENFORCE');
+    expect(roleFor(req('b2', 'BOUNDARY', 'EXPERT_RATIFIED', 'rule b2', 'REQUIRED'))).toBe('ENFORCE');
+    expect(roleFor(req('b3', 'BOUNDARY', 'EXPERT_AUTHORED'))).toBe('ENFORCE');   // their own sentence suffices
     // unconfirmed, in EITHER direction, never instructs — see the corrected asymmetry above
     expect(roleFor(req('g1', 'GENERATIVE', 'DERIVED_UNRATIFIED'))).toBe('OBSERVE');
-    expect(roleFor(req('g2', 'GENERATIVE', 'EXPERT_RATIFIED'))).toBe('ENFORCE');
+    expect(roleFor(req('g2', 'GENERATIVE', 'EXPERT_RATIFIED', 'rule g2', 'REQUIRED'))).toBe('ENFORCE');
+    // THE TWO SILENCES DIFFER: a discovered rule the person approved without saying how much it
+    // matters is SHOWN until they do; the same silence on a rule they wrote themselves instructs.
+    expect(roleFor(req('g3', 'GENERATIVE', 'EXPERT_RATIFIED'))).toBe('OBSERVE');
+    expect(roleFor(req('g4', 'GENERATIVE', 'EXPERT_AUTHORED'))).toBe('ENFORCE');
   });
 
   it('a REJECTED rule can never be compiled, let alone served', () => {
@@ -217,7 +222,7 @@ describe('THE AUTHORITY SEAM — what an optimizer may not do', () => {
 //   PROSE       generation prose
 //   SELF_CHECK  generation prose  +  an enforceable pre-finalize check
 describe('escalating a carrier changes what the model is actually served', () => {
-  const v = std([req('g1', 'GENERATIVE', 'EXPERT_RATIFIED', 'Open on the concrete moment, never on the reflection it produced.')]);
+  const v = std([req('g1', 'GENERATIVE', 'EXPERT_RATIFIED', 'Open on the concrete moment, never on the reflection it produced.', 'REQUIRED')]);
   const atProse = compileArchitecture(v);
   const escalated = {
     ...atProse,

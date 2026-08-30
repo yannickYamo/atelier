@@ -24,13 +24,18 @@ Gather every answer, then submit once:
 
 ```bash
 atelier ratify --decisions '[
-  {"id":"p1","decision":"APPROVE"},
-  {"id":"p2","decision":"REWRITE","statement":"<their exact words>"},
-  {"id":"p3","decision":"CONTEXTUAL","appliesWhen":"<their exact words>"},
+  {"id":"p1","decision":"APPROVE","materiality":"REQUIRED"},
+  {"id":"p2","decision":"REWRITE","statement":"<their exact words>","materiality":"PREFERRED"},
+  {"id":"p3","decision":"CONTEXTUAL","appliesWhen":"<their exact words>","materiality":"REQUIRED"},
   {"id":"p4","decision":"REJECT"},
   {"id":"new","decision":"ADD","statement":"<a boundary they named>","kind":"BOUNDARY"}
 ]'
 ```
+
+**Ask how much each kept rule matters, in their words, and record it as `materiality`.** A discovered
+rule approved WITHOUT one is kept but only SHOWN to the model — it does not instruct until its owner
+says it matters (`REQUIRED` binds; `PREFERRED` is wanted but other valid realizations are fine). The
+close prints `instructs`/`shown` per rule, computed by the compiler; relay it.
 
 **The batch is refused unless every outstanding proposal has its own answer.** Gaps would let the
 unanswered rules through on the strength of the answered ones.

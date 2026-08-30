@@ -34,7 +34,9 @@ describe('the authority guard was FIXED, not weakened', () => {
       expect(componentFor(req('g1', m)).gateRole).toBe('OBSERVE');
     }
     expect(roleFor(req('g1', 'REQUIRED'))).toBe('ENFORCE');
-    expect(roleFor(req('g1', null))).toBe('ENFORCE');            // pre-materiality standards unchanged
+    // undeclared-discovered observes until its owner declares it; undeclared-AUTHORED still instructs
+    expect(roleFor(req('g1', null))).toBe('OBSERVE');
+    expect(roleFor(req('g1', null, null, { authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED' }))).toBe('ENFORCE');
   });
 
   it('an INFERRED prohibition is still OBSERVE whatever its materiality — the guard is intact', () => {
