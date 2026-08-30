@@ -17,7 +17,7 @@ import { supportStage, describeProfile, UNMEASURED, type ModelCapabilityProfile 
 import { bindingHash } from '../../core/runtime/binding.js';
 import { ATELIER_CLI_DELIVERY, describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import * as store from '../../core/state/store.js';
-import { DATA, die, flag, argv, clientAndBinding, describeBinding, pickHost, type Role } from '../runtime.js';
+import { DATA, die, flag, argv, clientAndBinding, describeBinding, pickHost, assertSkillName, type Role } from '../runtime.js';
 
 const PROFILES = (): string => join(DATA, 'profiles');
 
@@ -105,7 +105,8 @@ export function profiles(): void {
  */
 export function carriers(): void {
   const host = pickHost();
-  const name = flag('--skill') ?? (argv[1]?.startsWith('--') ? undefined : argv[1]);
+  const rawName = flag('--skill') ?? (argv[1]?.startsWith('--') ? undefined : argv[1]);
+  const name = rawName === undefined ? undefined : assertSkillName(rawName);
   const L = name ? { root: DATA, skillName: name } : null;
 
   let present: Carrier[] | undefined;

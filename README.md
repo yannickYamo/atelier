@@ -7,7 +7,8 @@
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
 Atelier learns the decisions behind an expert's work, writes them down as an explicit, versioned
-standard, and compiles that standard into the smallest skill a model needs to reproduce it on new work.
+standard, and compiles it into a skill through a deterministic, auditable first arrangement — one the
+correction loop can then improve for your runtime without the standard moving.
 
 The point is to treat a standard the way you already treat a schema or a test: versioned, owned by a
 named person, compiled for whatever runtime is current, and changed only through an explicit act. Your
@@ -114,9 +115,11 @@ judgment, taste, and the boundaries around them.
 
 The system may discover candidates. It cannot make them authoritative on its own.
 
-**The SkillVersion** is the model-specific implementation of that standard. Atelier selects the
-smallest set of instructions, examples, contracts, checks and routing needed to carry the standard into
-a particular runtime.
+**The SkillVersion** is the model-specific implementation of that standard: instructions, examples,
+contracts, checks and routing chosen by a deterministic initial policy from each rule's typed fields.
+That policy is a starting point, not a claim of optimality — the carrier study measured a "richer"
+carrier losing to plain prose, which is exactly why `fix` can replace a rule's carrier laterally,
+on evidence, while the StandardVersion stands still.
 
 A stronger model may need less scaffolding. A smaller model may need more. A new runtime may support a
 better carrier altogether. The StandardVersion stays where it is unless a person moves it.
@@ -145,25 +148,39 @@ of the way of a reader who just wants to run it.
 
 ---
 
-## Quickstart
-
-One command. What you have decides the rest.
+## Install
 
 ```bash
-# You can say what you want
+git clone https://github.com/yannickYamo/atelier
+cd atelier && npm install && npm run build
+npm link                    # puts `atelier` on your PATH
+```
+
+Node 22+. No account, no telemetry. An `ANTHROPIC_API_KEY` (or any OpenAI-compatible backend via
+`--provider openai-compatible --base-url …`) is needed only for the steps that call a model —
+stating your own rules with `add` and compiling them costs nothing.
+
+## Quickstart — Create · Use · Correct
+
+Three verbs. Everything else is machinery you can inspect and never have to operate.
+
+**Create.** There are two ways in, and they are one system:
+
+```bash
+# "I know what I want" — state it
 atelier skill "answers should lead with the action, number the steps when there
                 are steps, and never end with an offer of more help"
 
-# You have work that shows it, but can't state the rules
-atelier skill --from ./my-best-work
-
-# Both
-atelier skill "make it sound like me" --from ./my-best-work
+# "I know good when I see it" — show it your best work
+atelier skill --from ./my-best-work --reserve held-out.md
 ```
 
-Atelier separates what you said into rules, shows you them, and **compiles nothing until you say
-yes**. Rules you actually said are yours. Anything the model supplies as a reading of what you said
-is marked, and reaches the model as an example rather than an instruction until you decide otherwise:
+Atelier separates what you supplied into rules and **compiles nothing until you say yes**. What you
+are shown is persisted, byte for byte — a later `--yes` accepts exactly that, with no second model
+call. Rules mechanically grounded in your own words are yours and instruct; anything that is the
+machine's reading says so, and is shown to the model without instructing it until you declare it.
+On the taste path you rule on every proposal — mine / not mine / in my words / only when — plus the
+one question that decides what binds: how much does it matter?
 
 ```text
 3 rule(s) from what you said, for writing:
@@ -173,12 +190,39 @@ is marked, and reaches the model as an example rather than an instruction until 
       applies when: the answer has more than one step
   3. [don't] Never end with an offer of more help.
 
-3 of these are yours.
+3 of these are yours, in your own words.
 ```
+
+**Use.** Invoke it like any skill, wherever you work:
+
+```bash
+/my-skill write the launch post        # Claude Code — recorded invisibly by the plugin's hooks
+atelier invoke --skill my-skill "…"    # or the CLI; same record either way
+```
+
+**Correct.** When something is wrong, say so — no ids, no hashes:
+
+```bash
+atelier fix "the answer buried the recommendation"
+```
+
+Atelier resolves your latest run (and says which), then routes the complaint itself. If your
+standard already covers it, that is an implementation problem: one alternative implementation,
+the same task re-run, a blinded A/B, one keystroke — and the winner is installed while your
+StandardVersion hash does not move. If your standard does not cover it, Atelier proposes the
+missing rule and asks the one question that is yours alone — add as required, as preferred, or
+not at all — and an approval mints, compiles and installs the new StandardVersion in the same
+motion. That single approval is the moat, not friction: a machine may propose; only you decide
+what good means.
 
 Nothing routes on how *hard* your request looks. A rule you can state perfectly can still be hard to
 execute — [a measured study here](studies/CONTRACT_LIFT_CLOSE.md) found exactly that — so the route
 reads what you supplied and nothing about what it means.
+
+**Advanced validation** — for when you want proof rather than a feeling: `atelier contract` builds
+constructed challenges from your standard's own typed obligations (bare vs compiled, counts not
+rates), `atelier reference` runs the blinded held-out test against work you reserved at intake, and
+`atelier plan` shows per rule how the compiler carried it. They are instruments, not stages.
 
 ---
 
@@ -186,8 +230,22 @@ The two paths in detail, and the commands underneath them:
 
 ### If you can state your rules
 
-No corpus, no API key, no discovery. You are exercising authority, not supplying evidence about
-yourself, so Atelier records the rules as yours and compiles them.
+The front door takes the sentence whole:
+
+```bash
+atelier skill "lead with the action, number the steps when there are steps"
+atelier skill "…same sentence…" --yes --name focus     # accepts EXACTLY what you were shown
+```
+
+One model call separates it into rules; the proposal is **persisted before it is shown**, and
+`--yes` ratifies those bytes with no second call. A rule becomes *yours* — `EXPERT_AUTHORED`, and it
+instructs — only when its content is mechanically grounded in the words you typed; anything that is
+the machine's reading is labelled `MY READING`, accepted as ratified-but-shown, and instructs
+nothing until you declare it required. The model's own opinion of its faithfulness is never an
+authority input.
+
+The staged spelling needs no key at all — you are exercising authority, not supplying evidence
+about yourself:
 
 ```bash
 atelier add --statement "Lead with the next action, before any explanation." \
@@ -287,15 +345,31 @@ The close reports `discovered 0%`. That is accurate rather than a shortfall — 
 of it because you wrote all of it — and it is printed so a standard nobody observed can never later
 be mistaken for one that was.
 
+### When something is wrong: one command
+
+```bash
+atelier fix "the answer buried the recommendation"
+```
+
+`fix` resolves your latest recorded use — host or CLI — and its first line says which, so a
+misbinding is visible before anything is diagnosed against it. Then it routes the complaint itself:
+
+- **The standard covers it** → an implementation problem. One alternative implementation is built
+  (a *different mechanism* for that rule, chosen from what its typed fields make legal — never a
+  "stronger" rung on a ladder), your task re-runs on it, and you get a blinded A/B. One keystroke
+  (`--pick a|b|same` when scripted) and the winner is active **and installed**, while the
+  StandardVersion hash is asserted — not merely logged — unchanged. Your pick lands in the
+  judgement ledger; a rejected mechanism is not re-proposed for that rule on that model.
+- **The standard does not cover it** → the one question that is yours alone: the proposed rule,
+  `--add required` / `--add preferred` / `--skip`. An approval mints the superseding
+  StandardVersion with your complaint as its recorded reason, compiles, and installs — no command
+  choreography. A refusal is remembered and not re-asked.
+
 ### If you can only recognise good work when you see it
 
 This is the harder case and the one the research is about. Point Atelier at the work.
 
 ```bash
-git clone https://github.com/yannickYamo/atelier
-cd atelier && npm install && npm run build
-npm link                       # puts `atelier` on your PATH
-
 export ANTHROPIC_API_KEY=sk-...
 
 # 1. Read expert work, and reserve evidence before discovery sees it.
@@ -318,13 +392,17 @@ atelier ratify --decisions '[
   {"id":"p3","decision":"APPROVE","materiality":"REQUIRED",
    "shape":{"verdict":{"type":"string"},"confidence":{"type":"number"}}}
 ]'
-atelier ratify-close
+# `create` already minted a DRAFT preview, so this close SUPERSEDES it — the reason is recorded:
+atelier ratify-close --reason "ruled on every proposal"
 
 # 4. Compile it.
 atelier build --name my-skill
 
-# 5. Use it.
+# 5. Use it — in your host as /my-skill, or:
 atelier invoke --skill my-skill "Write the recommendation."
+
+# 6. When something is wrong, say so. No ids, no hashes:
+atelier fix "the answer buried the recommendation"
 ```
 
 A small corpus is enough to draft a provisional standard. It is not evidence that the standard is
@@ -345,7 +423,7 @@ codex` to see it.
 
 ## What to expect
 
-Atelier is an open research and product preview. The full pipeline runs end to end today, and one honest caveat on that sentence: the automated suite covers the governance spine and the CLI surface, while the path from a folder of work to a served generation is exercised by hand rather than by a test that calls a model.
+Atelier is an open research and product preview. The full pipeline runs end to end today. The automated suite drives the shipped binary through creation, serving, host-recorded use and the whole correction loop against a scripted backend — including the blinded A/B and both authority paths — while the live discovery chain over a real corpus (a real model reading real work) is still exercised by hand rather than by a test that pays for inference.
 
 ```text
 corpus
@@ -436,7 +514,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-82 files and 1173 tests. It exercises the governance spine, the compiler, the renderer, delivery
+88 files and 1254 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -535,26 +613,28 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 | `pending` | show the candidates, with evidence and counterfactuals, before you rule |
 | `ratify --decisions <json>` | rule on every candidate in one batch. Nothing partial |
 | `ratify-one --id <id>` | rule on a single candidate |
-| `add --statement <text>` | add a rule of your own that discovery never proposed |
-| `ratify-close` | mint the StandardVersion from what you kept |
+| `add --statement <text> --kind GENERATIVE\|BOUNDARY [--applies-when <cond>]` | add a rule of your own that discovery never proposed. `--kind` is asked, never defaulted |
+| `ratify-close [--work-type <kind>] [--reason <why>]` | mint the StandardVersion from what you kept. Closing again after a build supersedes, and a supersession requires its `--reason` |
 | `build --name <name>` | compile the standard into a skill and install it |
-| `invoke --skill <name> "<task>"` | run the compiled skill |
+| `invoke --skill <name> "<task>" [--candidate <hash>]` | run the compiled skill — or run a proposed candidate without adopting it |
 | `inspect --skill <name>` | what is in the standard, and what the package actually serves |
-| `history` / `rollback --to <v>` | every version, and how to go back |
-| `improve --skill <name> --invocation <id> --complaint "<text>"` | propose a repair from a real output |
-| `compare --skill <name>` | put the candidate and the current version side by side |
-| `promote` / `reject --skill <name>` | adopt the candidate, or refuse it and record why |
+| `history --skill <name>` / `rollback --skill <name> --to <hash>` | every version, and how to go back |
+| `fix "<what was wrong>"` | the one correction path. Resolves your latest recorded use, diagnoses, and either repairs the implementation (blinded A/B, winner installed, standard hash unchanged) or asks the one authority question a standard gap deserves |
+| `improve --skill <name> --invocation <id> --complaint "<text>"` | advanced spelling of the repair half of `fix` |
+| `compare --skill <name> --candidate <hash> --rule <id>` | a blind instrument reading of champion vs candidate on one rule. Decides nothing |
+| `promote` / `reject --skill <name> --candidate <hash> --why "<reason>"` | adopt the candidate (installs it) or refuse it; your reason is the ledger row |
 | `revert` | undo the last build's file writes, leaving the standard untouched |
-| `confirm --rule <id>` | rule on one inferred behaviour after the skill already works |
+| `confirm --skill <name> --rule <id> [--drop]` | rule on one inferred behaviour after the skill already works |
 | `reference --declare-viewed <ids>` | record that you have read a held-out unit. It is refused from then on, and there is no undo |
-| `sharpen` | for a rule claiming to hold everywhere, write the same passage three ways, too little / about right / overdone, blinded |
-| `answer --pick <n>` / `--none` / `--indifferent` | fold your choice into a typed consequence. A probe answer is evidence, never authority: it routes you to `confirm` or `amend` and never edits the rule |
-| `amend --rule <id>` | change what a rule means. Mints a new StandardVersion with a required reason |
+| `sharpen --skill <name> --rule <id>` | for a rule claiming to hold everywhere, write the same passage three ways, too little / about right / overdone, blinded |
+| `answer --skill <name> --pick <n>` / `--none` / `--indifferent` | fold your probe choice into a typed consequence. Evidence, never authority: it routes you to `confirm` or `amend` and never edits the rule |
+| `amend --skill <name> --rule <id> --statement "<text>" --reason "<why>"` | change what a rule means. Mints a superseding StandardVersion, rebuilds and installs |
 | `judgements --skill <name> [--rule <id>]` | what you said when you promoted, and how often the instrument agreed |
-| `feedback --invocation <id>` | record a complaint against a real output |
+| `feedback --skill <name> --verdict GOOD\|CLOSE\|BAD [--note "<words>"]` | a one-word verdict, attached to your latest recorded use |
 | `reference --skill <name>` | generate against held-out work and seal the blinding |
 | `reference --score --labels <json>` | unblind and score the held-out test |
 | `check [--role discovery\|target]` | verify a backend actually works, and record what was proven |
+| `record` | internal: written by the Claude Code plugin's hooks so a `/skill` use becomes the same invocation record `invoke` writes. Never typed by a person |
 | `profiles` | which backends have been verified, and to what stage |
 | `carriers --skill <name> [--host codex]` | what each execution surface really delivers |
 | `status` / `abort` | where the current run is, and how to abandon it |
@@ -563,6 +643,10 @@ Flags worth knowing.
 
 | flag | when |
 |---|---|
+| `--yes --name <name>` | on `skill`: accept exactly the persisted proposal and build |
+| `--pick a\|b\|same` | on `fix`: settle the blinded comparison without a prompt |
+| `--add required\|preferred` / `--skip` | on `fix`: rule on a proposed standard addition |
+| `--materiality <level>` / `--form <tolerance>` | on `ratify-one`/`add`: declare what a kept rule obliges |
 | `--reserve <file>` | hold work back before discovery reads it. Only reachable at intake |
 | `--one-pager <file>` | the expert's own one-page attempt at their rules, for the baseline arm that competes with the product. There is no substitute and no default |
 | `--arm-set <hash>` | at `--score`, refuses labels collected on a different arm set |
@@ -578,7 +662,9 @@ Flags worth knowing.
 ## Your data
 
 Local by default. No Atelier telemetry and no account. Standards, evidence and generated artifacts stay
-on your machine. Data leaves it only when sent to the inference providers you explicitly configure for
+on your machine. When the Claude Code plugin is installed, a `/skill` use of an Atelier skill is
+recorded locally too — the prompt and the reply, under the same roof as every other invocation —
+because that record is what lets a later correction know what it is correcting. Data leaves it only when sent to the inference providers you explicitly configure for
 discovery or execution.
 
 Everything lives under `~/.atelier`, or wherever `ATELIER_DATA` points. Compiled skills sit in
@@ -590,7 +676,9 @@ so.
 
 ```text
 ~/.atelier
-├── skills/<name>/        compiled skills, shared across projects
-└── sessions/<project>-<hash>.json    one run in flight per project
+├── skills/<name>/                    compiled skills, shared across projects
+├── sessions/<project>-<hash>.json    one run in flight per project
+└── runs/<project>-<hash>/            that run's working files: the sealed corpus list,
+                                      the pending standard, the ledger, the build proposal
 ```
 

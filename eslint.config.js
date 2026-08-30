@@ -22,7 +22,7 @@ export default defineConfig(
   // `tests/atelier-study-semantics-census.test.ts` fails if one reappears there. Type-aware linting
   // of untyped JS reading JSON produces `any` noise rather than findings, and the typed code it
   // calls is fully linted. This is an exclusion with a reason, not a rule nobody understood.
-  { ignores: ['dist/**', 'node_modules/**', 'plugins/dist/**', 'studies/harness/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'plugins/dist/**', 'studies/harness/**', 'tests/fixtures/**/*.mjs'] },
 
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

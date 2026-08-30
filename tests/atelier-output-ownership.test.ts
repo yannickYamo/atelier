@@ -11,7 +11,7 @@ describe('the skill\'s internals are not part of the user\'s work', () => {
       + 'I attribute human emotional and cognitive states to systems, algorithms, and machines.';
     const b = findOwnershipBreaches(real);
     expect(b.length).toBeGreaterThan(0);
-    expect(b[0]!.marker).toBe('# p18');
+    expect(b[0].marker).toBe('# p18');
     expect(describeBreaches(b)).toMatch(/is a defect in how the skill was served/);
   });
 

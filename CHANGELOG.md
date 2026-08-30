@@ -8,7 +8,76 @@ a run in progress may not be.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-30
+
+### Added
+
+- **`atelier fix` — one correction path.** A complaint goes in; Atelier resolves the latest
+  recorded use (and says which), diagnoses, and either repairs the implementation — one lateral
+  carrier candidate, the same task re-run, a blinded A/B, one keystroke, the winner active AND
+  installed with the StandardVersion hash asserted immovable — or, on a standard gap, asks the one
+  authority question (add as required / preferred / don't) and an approval mints, compiles and
+  installs the superseding StandardVersion in the same motion. The pick lands in the judgement
+  ledger and as the first BEHAVIOR-domain observation; a refusal is remembered and not re-asked.
+- **A `/skill` use in Claude Code becomes a canonical invocation record.** The plugin's prompt/stop
+  hooks pipe the host's own payloads into a hidden `atelier record`; delivery is checked against the
+  store at the moment of use, the model is read from the transcript or recorded UNREPORTED, and
+  `last-invocation.json` is what lets `fix` need no id from anyone. Core stays host-agnostic: the
+  surface value is HOST_PLUGIN, and which host lives in the runtime binding.
+- **Grounded direct authority.** The front door persists exactly the proposal it showed; `--yes`
+  ratifies those bytes with zero further model calls. A rule becomes EXPERT_AUTHORED only when its
+  normative content is mechanically grounded in the person's own text (verbatim span, content words,
+  numbers) — the model's `faithful` flag is display evidence, never an authority input.
+- **One canonical authority function.** Every surface — batch ratify, ratify-one, add, the front
+  door, amend, confirm, fix — assigns authority through `decide()`, which validates obligations and
+  enforces the public-source ceiling on every path; amend and confirm now leave ledger records.
+  Writing its ceiling test caught the first draft laundering provenance through AMEND.
+- **A hint census.** Every `atelier …` line the CLI or plugin skills print must name a dispatched
+  command and declared flags. Its first run caught a live typo in the dispatcher's own help.
+
+### Changed
+
+- **Undeclared materiality is source-aware.** A rule the person WROTE instructs with no
+  questionnaire; a discovered rule they merely approved is SHOWN until they declare how much it
+  matters. The close prints instructs/shown per rule by calling the compiler, so the text cannot
+  disagree with the build again. Materiality remains semantic metadata and never selects a carrier.
+- **Repair memory is (standard, model)-scoped.** A carrier move rejected under one model never
+  suppresses the same move under another; a superseding StandardVersion inherits no verdicts; a
+  human TRANSITION_FORBIDDEN holds across runtimes but not across standard versions. The repair
+  primitive is lateral replacement under a fixed, recorded ordering — carriers are mechanisms, not
+  strengths, which the carrier study demonstrated.
+- **`promote` installs.** Adopting a candidate leaves the store, the pointer and the host's bytes
+  agreeing, or refuses without moving anything. "Your skill is ready." prints only over a package
+  that instructs something; a DRAFT preview says so and names the next step.
+
 ### Fixed
+
+- **A build could compile a standard the user never ratified.** The run in flight was per-project;
+  the files it produced were not. `pending-standard.json` and nine other working files sat at the
+  store root, so two projects sharing one store overwrote each other's pending standard and `build`
+  in one project installed — and stamped as ratified — the standard the other had just closed.
+  Working files now live under `runs/<project>/`, keyed exactly as the session is, and `build`
+  refuses a pending standard whose hash is not the one this run ratified. Files left at the root by
+  an older version are adopted only when the store holds a single run, which is the one case where
+  their owner is unambiguous.
+- **`--skill ../../elsewhere` read from, and wrote to, a directory outside the store.** `build`
+  normalised names; the read-side commands (`inspect`, `history`, `rollback`, `feedback`, and
+  eleven others) joined `--skill` onto `skills/` as given. Every `--skill` is now validated against
+  the same rule `build --name` applies, refused rather than normalised, and the store layout itself
+  rejects a name that would leave `skills/`.
+- **A rule the person typed was silently dropped.** `add` numbered rules from the length of
+  `decided`; a batch `ADD` numbered from a counter that restarted at 1 on every call; the front door
+  numbered from the model's list position. All three minted `x1`, and `ratify-close` keys the
+  standard by id, so the later rule replaced the earlier one while the CLI reported "2 kept". One
+  allocator now hands out the successor of the highest `x<n>` anywhere in the run.
+- **After its first build, a project was a dead end; `abort` made it permanent.** Adding a rule after
+  `build` and closing again was refused as STANDARD_MUTATED with the advice to `abort`; `abort`
+  marked the run terminal and left it in place, and nothing ever started a new run. Closing again
+  now mints a version that records what it supersedes (and requires `--reason`, as every
+  supersession does), `RATIFIED -> RATIFIED` is a legal transition for that purpose, and `abort`
+  archives the session under `sessions/aborted/` so the next command starts clean. `build` also
+  advances the run before it writes anything: a refused build used to install the skill and move the
+  active pointer, then exit 1.
 
 - **The skill emitted its own internals into the user's deliverable.** Example bodies were rendered
   with markdown headings (`# p6`, `## How the author did it`) and served under another heading.

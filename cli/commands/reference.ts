@@ -17,7 +17,6 @@ import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { scoreReference, LABELLING_INSTRUCTIONS, UNCERTAIN_HANDLING, scorePairedArms,
@@ -31,9 +30,9 @@ import type { GoldenUnit } from '../../core/golden/golden-unit.js';
 import { runOnce, spendOneWithResult } from './improve.js';
 import { resolveServedSkill } from './invoke.js';
 import type { Provenance } from '../../core/fidelity/provenance.js';
-import { DATA, die, flag, argv, clientAndBinding, describeBinding, loadSession, saveSession, numericFlag } from '../runtime.js';
+import { die, flag, argv, clientAndBinding, describeBinding, loadSession, saveSession, numericFlag, runFile, skillArg } from '../runtime.js';
 
-const PAIRS = (): string => join(DATA, 'reference-pairs.json');
+const PAIRS = (): string => runFile('reference-pairs.json');
 
 /**
  * Which side carries the expert's work.
@@ -57,7 +56,7 @@ const sideFor = (pairKind: string, unitId: string, salt: string): 'A' | 'B' =>
  * things at once.
  */
 function corpusTextForBaseline(): string {
-  const manifest = join(DATA, 'corpus-paths.json');
+  const manifest = runFile('corpus-paths.json');
   if (!existsSync(manifest)) {
     die('no corpus manifest — this run has no record of which files discovery read, so the '
       + 'paste-the-work baseline cannot be built from the same material.');
@@ -114,7 +113,7 @@ function declareViewed(): void {
 }
 
 async function preparePhase(): Promise<void> {
-  const name = flag('--skill') ?? die('usage: atelier reference --skill <name>   (then: --score --labels <json>)');
+  const name = skillArg('usage: atelier reference --skill <name>   (then: --score --labels <json>)');
   const s = loadSession();
   const reserved: readonly GoldenUnit[] = s.reservation?.reserved ?? [];
   if (!reserved.length) {
