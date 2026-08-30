@@ -1,0 +1,10 @@
+{"judgments":[
+{"id":"c1","pref":"B","p6A":"NO","p6B":"YES"},{"id":"c10","pref":"B","p6A":"YES","p6B":"YES"},
+{"id":"c12","pref":"A","p6A":"YES","p6B":"YES"},{"id":"c14","pref":"A","p6A":"UNSURE","p6B":"YES"},
+{"id":"c16","pref":"A","p6A":"YES","p6B":"NO"},{"id":"c18","pref":"B","p6A":"NO","p6B":"YES"},
+{"id":"c20","pref":"B","p6A":"UNSURE","p6B":"UNSURE"},{"id":"c21","pref":"A","p6A":"YES","p6B":"NO"},
+{"id":"c23","pref":"TIE"},{"id":"c25","pref":"B","p6A":"YES","p6B":"YES"},
+{"id":"c27","pref":"A","p6A":"NO","p6B":"YES"},{"id":"c3","pref":"B","p6A":"NO","p6B":"YES"},
+{"id":"c33","pref":"A","p6A":"YES","p6B":"YES"},{"id":"c4","pref":"A","p6A":"YES","p6B":"YES"},
+{"id":"c5","pref":"B","p6A":"NO","p6B":"YES"},{"id":"c6","pref":"A","p6A":"UNSURE","p6B":"UNSURE"},
+{"id":"c8","pref":"A","p6A":"YES","p6B":"YES"}]}
