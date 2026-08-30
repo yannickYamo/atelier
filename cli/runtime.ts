@@ -405,6 +405,31 @@ export function pickHost(): HostAdapter {
   return die(`unknown host "${want}". Available: claude-code, codex.`);
 }
 
+// ── the front door's persisted proposal ───────────────────────────────────────────────────────
+//
+// What the person is shown is what a later `--yes` ratifies — BYTE FOR BYTE. Before this existed the
+// preview and the acceptance were two independent model calls, and the person approved a roll they
+// had seen while the system compiled a roll they had not.
+export interface ProposedRule {
+  readonly statement: string;
+  readonly kind: 'GENERATIVE' | 'BOUNDARY';
+  readonly appliesWhen: string;
+  /** the stretch of the person's own sentence this rule claims to restate */
+  readonly sourceSpan: string;
+  /** the model's self-report. Evidence for display; NEVER an authority input. */
+  readonly faithful: boolean;
+  /** the deterministic verdict of core/ratification/grounding.ts — the authority input */
+  readonly grounded: boolean;
+  readonly groundingWhy: string;
+}
+export interface ProposalSet {
+  readonly proposalSetHash: string;
+  /** hash of the exact prompt these rules were proposed from; a different prompt invalidates the set */
+  readonly promptHash: string;
+  readonly workType: string;
+  readonly rules: readonly ProposedRule[];
+}
+
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
 export interface Session {
   run: Run; skillName: string | null; evidence: ExpertEvidence | null;
@@ -418,6 +443,8 @@ export interface Session {
    */
   projectDir?: string;
   proposals: Requirement[]; decided: Requirement[];
+  /** the front door's pending proposal, awaiting the person's yes. Cleared on acceptance. */
+  proposalSet?: ProposalSet | null;
   /** frozen at intake. Discovery must never read these; `reservedIds` is what the filter consults. */
   reservation?: Reservation | null;
   /**
