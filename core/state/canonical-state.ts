@@ -352,7 +352,7 @@ export interface EvidenceHistory { readonly skillName: string; readonly events: 
  * NO record. That is a real gap, and a typed surface means closing it later ADDS a value rather
  * than silently reusing this one — nobody can mistake a CLI-proven loop for a host-proven one.
  */
-export type InvocationSurface = 'ATELIER_CLI';
+export type InvocationSurface = 'ATELIER_CLI' | 'HOST_PLUGIN';
 
 /**
  * WHY THIS INPUT EXISTS. Declared at the call, never inferred afterwards.
@@ -409,7 +409,7 @@ export interface DeliveryEvidence {
 }
 
 /** Where a task came from, so a wrong task can be traced to the surface that produced it. */
-export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS';
+export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS' | 'HOST_PROMPT';
 
 export interface RequestBinding {
   /** what the command resolved the user's request to be */
