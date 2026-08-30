@@ -21,6 +21,7 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { spend } from '../../core/inference/client.js';
 import type { Budget } from '../../core/inference/client.js';
 import { obligationsForStandard } from '../../core/contract/obligation.js';
 import { generateCases, GenerationRefused } from '../../core/contract/generate.js';
@@ -86,7 +87,8 @@ export async function contract(): Promise<void> {
   const { client, binding } = clientAndBinding('target');
   const cap = numericFlag('--cap', 2.0);
   // One call per obligation to generate, then at most one reader call per case that is run.
-  const budget: Budget = { spentUsd: 0, capUsd: cap, maxCalls: obligations.length * 3 + 4 };
+  // Calls: up to three arms of generations over the run set, the probe, and one reader per case.
+  const budget: Budget = { spentUsd: 0, capUsd: cap, maxCalls: obligations.length * 8 + 8 };
 
   let suite: ContractTestSuite;
   if (reuse) {
@@ -141,10 +143,17 @@ export async function contract(): Promise<void> {
 
   const probeOne = async (task: string): Promise<ProbeObservation> => {
     try {
-      const r = await client.complete(requestFor('BARE', null, {
-        task, maxTokens: PROBE_CAP, toolName: 'emit_output',
-        toolDescription: 'Produce the requested work.', schema: OUTPUT_SCHEMA,
-      }));
+      // METERED. The probe and the arm generations were the two calls in this command that bypassed
+      // `spend` entirely, so `--cap` bounded only the $0.01 readers while the 16k-token generations
+      // ran free — the exact inversion of what a cap is for. A truncated probe still costs its call;
+      // the pre-check is what refuses before the money, and the summary line now tells the truth.
+      const r = await spend(budget, 0.2, async () => {
+        const x = await client.complete(requestFor('BARE', null, {
+          task, maxTokens: PROBE_CAP, toolName: 'emit_output',
+          toolDescription: 'Produce the requested work.', schema: OUTPUT_SCHEMA,
+        }));
+        return { value: x, cost: x.cost };
+      });
       return { outputTokens: r.outputTokens, censored: r.termination.kind === 'MAX_TOKENS' };
     } catch (e) {
       if (e instanceof GenerationIncomplete && e.termination.kind === 'MAX_TOKENS') {
@@ -184,7 +193,11 @@ export async function contract(): Promise<void> {
           toolDescription: 'Produce the requested work.', schema: OUTPUT_SCHEMA,
         };
         try {
-          const r = await client.complete(requestFor(arm, bytes, ctx));
+          // Metered like the probe above — every generation an arm makes counts against --cap.
+          const r = await spend(budget, 0.2, async () => {
+            const x = await client.complete(requestFor(arm, bytes, ctx));
+            return { value: x, cost: x.cost };
+          });
           // The schema declares `output` as a string, but a schema is what was ASKED for and a
           // provider may return anything. Coercing an object here would serve "[object Object]" to
           // the reader as though it were the skill's work.
