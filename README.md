@@ -145,6 +145,18 @@ of the way of a reader who just wants to run it.
 
 ---
 
+## Install
+
+```bash
+git clone https://github.com/yannickYamo/atelier
+cd atelier && npm install && npm run build
+npm link                    # puts `atelier` on your PATH
+```
+
+Node 22+. No account, no telemetry. An `ANTHROPIC_API_KEY` (or any OpenAI-compatible backend via
+`--provider openai-compatible --base-url …`) is needed only for the steps that call a model —
+stating your own rules with `add` and compiling them costs nothing.
+
 ## Quickstart — Create · Use · Correct
 
 Three verbs. Everything else is machinery you can inspect and never have to operate.
@@ -215,8 +227,22 @@ The two paths in detail, and the commands underneath them:
 
 ### If you can state your rules
 
-No corpus, no API key, no discovery. You are exercising authority, not supplying evidence about
-yourself, so Atelier records the rules as yours and compiles them.
+The front door takes the sentence whole:
+
+```bash
+atelier skill "lead with the action, number the steps when there are steps"
+atelier skill "…same sentence…" --yes --name focus     # accepts EXACTLY what you were shown
+```
+
+One model call separates it into rules; the proposal is **persisted before it is shown**, and
+`--yes` ratifies those bytes with no second call. A rule becomes *yours* — `EXPERT_AUTHORED`, and it
+instructs — only when its content is mechanically grounded in the words you typed; anything that is
+the machine's reading is labelled `MY READING`, accepted as ratified-but-shown, and instructs
+nothing until you declare it required. The model's own opinion of its faithfulness is never an
+authority input.
+
+The staged spelling needs no key at all — you are exercising authority, not supplying evidence
+about yourself:
 
 ```bash
 atelier add --statement "Lead with the next action, before any explanation." \
@@ -316,15 +342,31 @@ The close reports `discovered 0%`. That is accurate rather than a shortfall — 
 of it because you wrote all of it — and it is printed so a standard nobody observed can never later
 be mistaken for one that was.
 
+### When something is wrong: one command
+
+```bash
+atelier fix "the answer buried the recommendation"
+```
+
+`fix` resolves your latest recorded use — host or CLI — and its first line says which, so a
+misbinding is visible before anything is diagnosed against it. Then it routes the complaint itself:
+
+- **The standard covers it** → an implementation problem. One alternative implementation is built
+  (a *different mechanism* for that rule, chosen from what its typed fields make legal — never a
+  "stronger" rung on a ladder), your task re-runs on it, and you get a blinded A/B. One keystroke
+  (`--pick a|b|same` when scripted) and the winner is active **and installed**, while the
+  StandardVersion hash is asserted — not merely logged — unchanged. Your pick lands in the
+  judgement ledger; a rejected mechanism is not re-proposed for that rule on that model.
+- **The standard does not cover it** → the one question that is yours alone: the proposed rule,
+  `--add required` / `--add preferred` / `--skip`. An approval mints the superseding
+  StandardVersion with your complaint as its recorded reason, compiles, and installs — no command
+  choreography. A refusal is remembered and not re-asked.
+
 ### If you can only recognise good work when you see it
 
 This is the harder case and the one the research is about. Point Atelier at the work.
 
 ```bash
-git clone https://github.com/yannickYamo/atelier
-cd atelier && npm install && npm run build
-npm link                       # puts `atelier` on your PATH
-
 export ANTHROPIC_API_KEY=sk-...
 
 # 1. Read expert work, and reserve evidence before discovery sees it.
@@ -568,24 +610,24 @@ That is the research program. See [CONTRIBUTING.md](CONTRIBUTING.md).
 | `pending` | show the candidates, with evidence and counterfactuals, before you rule |
 | `ratify --decisions <json>` | rule on every candidate in one batch. Nothing partial |
 | `ratify-one --id <id>` | rule on a single candidate |
-| `add --statement <text>` | add a rule of your own that discovery never proposed |
-| `ratify-close` | mint the StandardVersion from what you kept |
+| `add --statement <text> --kind GENERATIVE\|BOUNDARY [--applies-when <cond>]` | add a rule of your own that discovery never proposed. `--kind` is asked, never defaulted |
+| `ratify-close [--work-type <kind>] [--reason <why>]` | mint the StandardVersion from what you kept. Closing again after a build supersedes, and a supersession requires its `--reason` |
 | `build --name <name>` | compile the standard into a skill and install it |
-| `invoke --skill <name> "<task>"` | run the compiled skill |
+| `invoke --skill <name> "<task>" [--candidate <hash>]` | run the compiled skill — or run a proposed candidate without adopting it |
 | `inspect --skill <name>` | what is in the standard, and what the package actually serves |
-| `history` / `rollback --to <v>` | every version, and how to go back |
+| `history --skill <name>` / `rollback --skill <name> --to <hash>` | every version, and how to go back |
 | `fix "<what was wrong>"` | the one correction path. Resolves your latest recorded use, diagnoses, and either repairs the implementation (blinded A/B, winner installed, standard hash unchanged) or asks the one authority question a standard gap deserves |
 | `improve --skill <name> --invocation <id> --complaint "<text>"` | advanced spelling of the repair half of `fix` |
-| `compare --skill <name>` | put the candidate and the current version side by side |
-| `promote` / `reject --skill <name>` | adopt the candidate, or refuse it and record why |
+| `compare --skill <name> --candidate <hash> --rule <id>` | a blind instrument reading of champion vs candidate on one rule. Decides nothing |
+| `promote` / `reject --skill <name> --candidate <hash> --why "<reason>"` | adopt the candidate (installs it) or refuse it; your reason is the ledger row |
 | `revert` | undo the last build's file writes, leaving the standard untouched |
-| `confirm --rule <id>` | rule on one inferred behaviour after the skill already works |
+| `confirm --skill <name> --rule <id> [--drop]` | rule on one inferred behaviour after the skill already works |
 | `reference --declare-viewed <ids>` | record that you have read a held-out unit. It is refused from then on, and there is no undo |
-| `sharpen` | for a rule claiming to hold everywhere, write the same passage three ways, too little / about right / overdone, blinded |
-| `answer --pick <n>` / `--none` / `--indifferent` | fold your choice into a typed consequence. A probe answer is evidence, never authority: it routes you to `confirm` or `amend` and never edits the rule |
-| `amend --rule <id>` | change what a rule means. Mints a new StandardVersion with a required reason |
+| `sharpen --skill <name> --rule <id>` | for a rule claiming to hold everywhere, write the same passage three ways, too little / about right / overdone, blinded |
+| `answer --skill <name> --pick <n>` / `--none` / `--indifferent` | fold your probe choice into a typed consequence. Evidence, never authority: it routes you to `confirm` or `amend` and never edits the rule |
+| `amend --skill <name> --rule <id> --statement "<text>" --reason "<why>"` | change what a rule means. Mints a superseding StandardVersion, rebuilds and installs |
 | `judgements --skill <name> [--rule <id>]` | what you said when you promoted, and how often the instrument agreed |
-| `feedback --invocation <id>` | record a complaint against a real output |
+| `feedback --skill <name> --verdict GOOD\|CLOSE\|BAD [--note "<words>"]` | a one-word verdict, attached to your latest recorded use |
 | `reference --skill <name>` | generate against held-out work and seal the blinding |
 | `reference --score --labels <json>` | unblind and score the held-out test |
 | `check [--role discovery\|target]` | verify a backend actually works, and record what was proven |
@@ -598,6 +640,10 @@ Flags worth knowing.
 
 | flag | when |
 |---|---|
+| `--yes --name <name>` | on `skill`: accept exactly the persisted proposal and build |
+| `--pick a\|b\|same` | on `fix`: settle the blinded comparison without a prompt |
+| `--add required\|preferred` / `--skip` | on `fix`: rule on a proposed standard addition |
+| `--materiality <level>` / `--form <tolerance>` | on `ratify-one`/`add`: declare what a kept rule obliges |
 | `--reserve <file>` | hold work back before discovery reads it. Only reachable at intake |
 | `--one-pager <file>` | the expert's own one-page attempt at their rules, for the baseline arm that competes with the product. There is no substitute and no default |
 | `--arm-set <hash>` | at `--score`, refuses labels collected on a different arm set |
