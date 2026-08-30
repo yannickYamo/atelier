@@ -142,6 +142,9 @@ export async function discover(): Promise<void> {
       : openItems.filter((i) => !skillIds.has(i.id));
 
     console.log(`\nNot enough to validate against: ${chain.detail}`);
+    // The page's "not checked against unseen work" caveat reads this flag, and nothing ever wrote
+    // it — the one warning built for exactly this downgrade could never render.
+    (s as { run: { heldOutChecked?: boolean } }).run.heldOutChecked = false;
     console.log(`Falling back to a single pass over ${forProposal.length} piece(s). Every rule below is a`);
     console.log(`PROPOSAL nothing has checked — no rule was tested against work the proposer had not read.`);
     if (skillIds.size) console.log(`Your existing skill is NOT among them — a standard read off the skill we are improving would only restate it.`);
@@ -254,5 +257,5 @@ export async function discover(): Promise<void> {
     const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    applies when: ${p.appliesWhen}`;
     console.log(`  [${p.requirementId}] ${p.statement}${cond}`);
   }
-  console.log(`\nRun \`atelier ratify-close\` to mint the standard, or \`atelier build --name <name>\` if create is doing it for you.`);
+  if (!process.env.ATELIER_ORCHESTRATED) console.log(`\nRun \`atelier ratify-close\` to mint the standard.`);
 }

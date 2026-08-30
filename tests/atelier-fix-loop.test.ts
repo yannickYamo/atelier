@@ -190,7 +190,7 @@ describe('Amendment A2: rejection memory is (standard, model)-scoped (unit)', ()
     repairId: 'r1', skillName: 's', requirementId: 'x1', from: 'PROSE', to: 'SELF_CHECK',
     sourceSkillVersionHash: 'k1', candidateSkillVersionHash: 'k2',
     evidenceBasis: WEAKEST_EVIDENCE, evaluationBasis: WEAKEST_EVALUATION,
-    outcome: 'REJECTED', outcomeAt: 't', note: null, at: 't', ...o } as RepairRecord);
+    outcome: 'REJECTED', outcomeAt: 't', note: null, at: 't', ...o });
   const proposal = { evidence: WEAKEST_EVIDENCE, evaluation: WEAKEST_EVALUATION };
   const scopeA = { standardVersionHash: 'S1', providerAdapter: 'anthropic', requestedModel: 'claude-opus-5' };
 

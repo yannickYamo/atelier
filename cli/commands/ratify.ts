@@ -397,6 +397,6 @@ export function ratifyClose(): void {
       + `${su.rejected} rejected · ${su.decidedNotRequirement} kept as non-obligation · ${su.deferred} open`);
     console.log(`  survival ${(su.survivalRate * 100).toFixed(0)}%  ·  decided ${(su.decidedRate * 100).toFixed(0)}%  ·  ${runFile('ratification-ledger.json')}`);
   }
-  console.log('Run `atelier build --name <name>`.');
+  if (!process.env.ATELIER_ORCHESTRATED) console.log('Run `atelier build --name <name>`.');
 }
 

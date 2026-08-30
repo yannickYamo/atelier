@@ -145,25 +145,27 @@ of the way of a reader who just wants to run it.
 
 ---
 
-## Quickstart
+## Quickstart — Create · Use · Correct
 
-One command. What you have decides the rest.
+Three verbs. Everything else is machinery you can inspect and never have to operate.
+
+**Create.** There are two ways in, and they are one system:
 
 ```bash
-# You can say what you want
+# "I know what I want" — state it
 atelier skill "answers should lead with the action, number the steps when there
                 are steps, and never end with an offer of more help"
 
-# You have work that shows it, but can't state the rules
-atelier skill --from ./my-best-work
-
-# Both
-atelier skill "make it sound like me" --from ./my-best-work
+# "I know good when I see it" — show it your best work
+atelier skill --from ./my-best-work --reserve held-out.md
 ```
 
-Atelier separates what you said into rules, shows you them, and **compiles nothing until you say
-yes**. Rules you actually said are yours. Anything the model supplies as a reading of what you said
-is marked, and reaches the model as an example rather than an instruction until you decide otherwise:
+Atelier separates what you supplied into rules and **compiles nothing until you say yes**. What you
+are shown is persisted, byte for byte — a later `--yes` accepts exactly that, with no second model
+call. Rules mechanically grounded in your own words are yours and instruct; anything that is the
+machine's reading says so, and is shown to the model without instructing it until you declare it.
+On the taste path you rule on every proposal — mine / not mine / in my words / only when — plus the
+one question that decides what binds: how much does it matter?
 
 ```text
 3 rule(s) from what you said, for writing:
@@ -173,12 +175,39 @@ is marked, and reaches the model as an example rather than an instruction until 
       applies when: the answer has more than one step
   3. [don't] Never end with an offer of more help.
 
-3 of these are yours.
+3 of these are yours, in your own words.
 ```
+
+**Use.** Invoke it like any skill, wherever you work:
+
+```bash
+/my-skill write the launch post        # Claude Code — recorded invisibly by the plugin's hooks
+atelier invoke --skill my-skill "…"    # or the CLI; same record either way
+```
+
+**Correct.** When something is wrong, say so — no ids, no hashes:
+
+```bash
+atelier fix "the answer buried the recommendation"
+```
+
+Atelier resolves your latest run (and says which), then routes the complaint itself. If your
+standard already covers it, that is an implementation problem: one alternative implementation,
+the same task re-run, a blinded A/B, one keystroke — and the winner is installed while your
+StandardVersion hash does not move. If your standard does not cover it, Atelier proposes the
+missing rule and asks the one question that is yours alone — add as required, as preferred, or
+not at all — and an approval mints, compiles and installs the new StandardVersion in the same
+motion. That single approval is the moat, not friction: a machine may propose; only you decide
+what good means.
 
 Nothing routes on how *hard* your request looks. A rule you can state perfectly can still be hard to
 execute — [a measured study here](studies/CONTRACT_LIFT_CLOSE.md) found exactly that — so the route
 reads what you supplied and nothing about what it means.
+
+**Advanced validation** — for when you want proof rather than a feeling: `atelier contract` builds
+constructed challenges from your standard's own typed obligations (bare vs compiled, counts not
+rates), `atelier reference` runs the blinded held-out test against work you reserved at intake, and
+`atelier plan` shows per rule how the compiler carried it. They are instruments, not stages.
 
 ---
 
@@ -436,7 +465,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-87 files and 1247 tests. It exercises the governance spine, the compiler, the renderer, delivery
+88 files and 1254 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
