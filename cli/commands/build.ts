@@ -102,12 +102,8 @@ export function build(nameArg?: string): void {
   // rule is a change, and saying so is accurate rather than inflated. On IMPROVE the caller must have
   // decided which rules the existing package already carries; `alreadyHandled` has no default
   // precisely so that decision cannot be made silently here.
-  const alreadyHandled = new Set<string>(
-    existsSync(runFile('already-handled.json'))
-      ? readJson<string[]>(runFile('already-handled.json'), { kind: 'array', what: 'the already-handled list' })
-      : []);
   const review = argv.includes('--review');
-  const proposal = buildProposal(name, v.standardVersionHash, v.requirements, arch, alreadyHandled);
+  const proposal = buildProposal(name, v.standardVersionHash, v.requirements, arch, new Set<string>());
   const proposalText = renderProposal(proposal, { gated: review });
   console.log(`\n${proposalText}`);
   const guessed = unconfirmedIn(proposal);
@@ -145,7 +141,16 @@ export function build(nameArg?: string): void {
       if (existsSync(abs)) { const r = extract(abs); if (r.ok) contents.set(c.path, r.text); }
     }
 
-    const plan = planImprovement(sp.skillId, sp.absRoot, proposal.changes, sp.components, contents);
+    // ── ONLY WHAT MAY BIND IS WRITTEN, AND ONLY WHAT IS MISSING ────────────────────────────────
+    //
+    // Every proposal change used to be appended as a plain instruction heading — including rules the
+    // compiler had routed to OBSERVE precisely because nobody ratified them. And the `already-handled`
+    // list this filter leaned on was read from a file nothing ever wrote, so it was always empty.
+    // "Already handled" is now read off the package itself: a rule whose words are in the files needs
+    // no second copy.
+    const installedText = [...contents.values()].join('\n');
+    const writable = proposal.changes.filter((c) => c.gateRole === 'ENFORCE' && !installedText.includes(c.text));
+    const plan = planImprovement(sp.skillId, sp.absRoot, writable, sp.components, contents);
     console.log(`\n${describeImprovement(plan, sp.skillId)}`);
 
     if (plan.edits.length) {

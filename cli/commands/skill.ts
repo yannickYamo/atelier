@@ -33,6 +33,7 @@
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { die, flag, argv, positional, clientFor, PROPOSER, loadSession, saveSession, authoredIdAllocator } from '../runtime.js';
+import { decide } from '../../core/ratification/authority.js';
 import { spend, type Budget } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { create } from './improve.js';
@@ -196,15 +197,21 @@ export async function skill(): Promise<void> {
   // an EXAMPLE under OBSERVE, so it is shown to the model and never instructs it.
   const s = loadSession();
   const nextId = authoredIdAllocator(s);
-  const decided: Requirement[] = proposed.map((p) => ({
-    requirementId: nextId(), statement: p.statement.trim(),
-    appliesWhen: p.appliesWhen.trim() || 'GENERAL',
-    kind: p.kind,
-    authority: p.faithful ? 'EXPERT_AUTHORED' : 'DERIVED_UNRATIFIED',
-    provenance: p.faithful ? 'EXPERT_STATED' : 'MACHINE_DISCOVERED',
-    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
-    materiality: null, realizationTolerance: null, outputShape: null,
-  }));
+  const decided: Requirement[] = proposed.map((p) => {
+    const base: Requirement = {
+      requirementId: nextId(), statement: p.statement.trim(),
+      appliesWhen: p.appliesWhen.trim() || 'GENERAL',
+      kind: p.kind,
+      authority: 'DERIVED_UNRATIFIED',
+      provenance: 'MACHINE_DISCOVERED',
+      evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
+      materiality: null, realizationTolerance: null, outputShape: null,
+    };
+    // The model's own `faithful` flag routes which QUESTION is asked, never the answer: authority is
+    // assigned by `decide`, and item 4 of the closure slice replaces this flag with deterministic
+    // grounding in the user's text. Until then the flag still gates STATED, but through the one door.
+    return p.faithful ? decide(base, { verb: 'STATED' }).requirement : base;
+  });
   saveSession({ ...s, decided: [...s.decided, ...decided] });
 
   if (decision.route === 'HYBRID') {

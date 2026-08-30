@@ -46,7 +46,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'from', 'host', 'id', 'invocation', 'kind',
-  'labels', 'max-calls', 'model', 'name', 'note',
+  'labels', 'materiality', 'form', 'max-calls', 'model', 'name', 'note',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',

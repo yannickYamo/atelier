@@ -17,7 +17,8 @@ import type { StandardVersion, Requirement } from '../../core/state/canonical-st
 import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
-import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationDecision as LedgerDecision } from '../../core/ratification/decision-record.js';
+import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
+import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger } from '../../core/ratification/decision-record.js';
 
 /**
  * Batch SUBMISSION, never batch approval.
@@ -118,12 +119,6 @@ const ledgerFor = (s: Session): RatificationLedger => {
  * it is not an obligation". That is precisely `DECIDED_NOT_A_REQUIREMENT`, which exists because
  * mapping every non-requirement onto DEFER once reported a finished pass as 45% done.
  */
-const asLedgerDecision = (dec: string, materiality: string | null, rewritten: boolean): LedgerDecision => {
-  if (dec === 'REJECT') return 'REJECT';
-  if (rewritten) return 'EDIT';
-  return materiality && ['EXEMPLAR_ONLY', 'TOLERATED', 'INCIDENTAL'].includes(materiality)
-    ? 'DECIDED_NOT_A_REQUIREMENT' : 'APPROVE';
-};
 
 /**
  * One author's answer about one proposed rule.
@@ -215,9 +210,11 @@ export function ratifyBatch(): void {
     const dec = (d.decision ?? '').toUpperCase();
     if (dec === 'ADD') {
       added++;
-      decided.push({ requirementId: nextId(), statement: d.statement ?? die('ADD needs --statement'), appliesWhen: d.appliesWhen ?? 'GENERAL',
-        kind: (d.kind ?? 'BOUNDARY') as Requirement['kind'], authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
-        wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null });   // a person stating their own rule owes no counterfactual to a machine
+      const base: Requirement = { requirementId: nextId(), statement: d.statement ?? die('ADD needs --statement'), appliesWhen: d.appliesWhen ?? 'GENERAL',
+        kind: (d.kind ?? 'BOUNDARY') as Requirement['kind'], authority: 'DERIVED_UNRATIFIED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
+        wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };   // a person stating their own rule owes no counterfactual to a machine
+      try { decided.push(decide(base, { verb: 'ADD', materiality: d.materiality, form: d.form }).requirement); }
+      catch (e) { return void die((e as Error).message); }
       continue;
     }
     const p = s.proposals.find((x) => x.requirementId === d.id);
@@ -227,92 +224,24 @@ export function ratifyBatch(): void {
       ledger = appendDecision(ledger, p!, 'REJECT', { note: d.statement, decidedAt });
       continue;
     }
-    if (dec === 'REWRITE' && !d.statement) die(`${d.id}: REWRITE needs the user's own wording. The standard records what they said, not a tidied version.`);
-    if (dec === 'CONTEXTUAL' && !d.appliesWhen) die(`${d.id}: CONTEXTUAL needs the condition, in their words.`);
     if (!['APPROVE', 'REWRITE', 'CONTEXTUAL'].includes(dec)) die(`${d.id}: unknown decision "${dec}"`);
 
-    // ── MATERIALITY AND FORM ARE PART OF THE DECISION ────────────────────────────────────────
+    // ── ONE FUNCTION RULES, EVERYWHERE ───────────────────────────────────────────────────────
     //
-    // Approving a rule and declaring what it obliges are two answers, and the compiler needs both.
-    // Without them every kept rule arrived undeclared and compiled as an instruction, which is how a
-    // behaviour the author merely prefers became law.
-    const MAT = ['REQUIRED', 'PREFERRED', 'EXEMPLAR_ONLY', 'TOLERATED', 'INCIDENTAL'];
-    const FORM = ['STRICT', 'FUNCTIONALLY_EQUIVALENT', 'FLEXIBLE'];
-    const mat = (d.materiality ?? '').toUpperCase() || null;
-    const form = (d.form ?? '').toUpperCase() || null;
-    if (mat && !MAT.includes(mat)) die(`${d.id}: materiality must be one of ${MAT.join(' / ')}`);
-    if (form && !FORM.includes(form)) die(`${d.id}: form must be one of ${FORM.join(' / ')}`);
-
-    // ── A REALIZATION IS ASKED A DIFFERENT QUESTION ─────────────────────────────────────────
-    //
-    // Flat, an expressive rule reads as a fussy habit and gets rejected; linked, it is how the
-    // decision above it lands. The link changes what the author is being asked. Materiality belongs
-    // to the parent — accepting one here would put a second obligation on a single choice — and what
-    // is genuinely open is whether the exact form matters, which is `form`.
-    const realizes = typeof d.realizes === 'string' && d.realizes.trim() ? d.realizes.trim() : null;
-    if (realizes) {
-      if (realizes === d.id) die(`${d.id}: a rule cannot realize itself.`);
-      const parent = s.proposals.find((x) => x.requirementId === realizes)
-        ?? decided.find((x) => x.requirementId === realizes);
-      if (!parent) die(`${d.id}: realizes "${realizes}", which is not a rule in this draft.`);
-      if (mat) {
-        die(`${d.id}: a realization does not take a materiality — ${realizes} carries the obligation, and a `
-          + `second one here would issue two commands for one choice.\n`
-          + `  What is open is how tightly the FORM binds:  "form":"STRICT" | "FUNCTIONALLY_EQUIVALENT" | "FLEXIBLE"`);
-      }
-    }
-
-    // ── AND THE SHAPE, WHERE THE RULE IS ABOUT ONE ──────────────────────────────────────────
-    //
-    // THE CARRIER THAT COULD NOT BE ASKED FOR. `outputShape` is what turns a required rule into an
-    // OUTPUT_CONTRACT, which is the only carrier the runtime can guarantee rather than request. It was
-    // read by the compiler, rendered by the renderer, delivered to the provider and proven by a hash
-    // comparison, and no command anywhere set it. The whole carrier was reachable from a test fixture
-    // and from nowhere a person could stand.
-    //
-    // It rides on the ratification decision because that is where the author is already saying what a
-    // rule obliges. A shape is the strongest thing they can say, so it belongs in the same breath as
-    // the materiality that licenses it.
-    let shape: Record<string, unknown> | null = null;
-    if (d.shape !== undefined && d.shape !== null && d.shape !== '') {
-      try {
-        shape = typeof d.shape === 'string' ? JSON.parse(d.shape) as Record<string, unknown> : d.shape;
-      } catch { return void die(`${d.id}: shape is not valid JSON.`); }
-      if (typeof shape !== 'object' || Array.isArray(shape) || !Object.keys(shape).length) {
-        die(`${d.id}: shape must be an object of field name to JSON Schema fragment, `
-          + `for example {"verdict":{"type":"string"},"confidence":{"type":"number"}}.`);
-      }
-      // A shape only reaches a contract through REQUIRED. Accepting one under a weaker materiality
-      // would record an obligation the author did not make and then quietly fail to enforce it.
-      if (mat !== 'REQUIRED') {
-        die(`${d.id}: a shape is only enforceable on a REQUIRED rule; this one is `
-          + `${mat ?? 'undeclared'}. A shape the runtime will not hold is a request, and the rule already `
-          + `says it in words.`);
-      }
-    }
-
-    // ── WHO STANDS BEHIND IT DEPENDS ON WHOSE WORK IT CAME FROM ──────────────────────────────
-    //
-    // A rule read off someone else's public work does not become that person's ratified standard
-    // because a third party approved it. They decided to USE it, which is theirs to decide, and the
-    // source provenance is untouched by that decision.
-    const fromPublic = p!.provenance === 'PUBLIC_BEHAVIOUR_INFERRED';
-    const kept: Requirement = { ...p!,
-      authority: fromPublic ? 'USER_ADOPTED' : 'EXPERT_RATIFIED',
-      provenance: fromPublic ? 'PUBLIC_BEHAVIOUR_INFERRED'
-        : (dec === 'REWRITE' || dec === 'CONTEXTUAL') ? 'SUBSTANTIVELY_REWRITTEN' : 'MACHINE_DISCOVERED',
-      materiality: mat as Requirement['materiality'],
-      realizationTolerance: form as Requirement['realizationTolerance'],
-      outputShape: shape,
-      realizes,
-      ...(d.statement ? { statement: d.statement } : {}), ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}) };
-    decided.push(kept);
-
+    // Materiality/form/shape/realizes validation, the public-source ceiling, and the ledger verb all
+    // live in `decide` now — the batch used to be the only route that validated, which is exactly
+    // how `ratify-one` drifted into accepting anything and skipping the ceiling.
+    let outcome;
+    try {
+      outcome = decide(p!, { verb: dec as DecisionVerb, statement: d.statement, appliesWhen: d.appliesWhen,
+        materiality: d.materiality, form: d.form, shape: d.shape, realizes: typeof d.realizes === 'string' ? d.realizes : null,
+        findRule: (rid) => s.proposals.find((x) => x.requirementId === rid) ?? decided.find((x) => x.requirementId === rid) });
+    } catch (e) { return void die((e as Error).message); }
+    decided.push(outcome.requirement);
     // The record stores what was SHOWN and, on an edit, what replaced it. Storing only the survivor
     // would answer a question the standard already answers.
-    const rewritten = dec === 'REWRITE' || dec === 'CONTEXTUAL';
-    ledger = appendDecision(ledger, p!, asLedgerDecision(dec, mat, rewritten),
-      { ...(rewritten ? { humanRevision: kept } : {}), decidedAt });
+    ledger = appendDecision(ledger, p!, outcome.ledgerDecision,
+      { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt });
   }
   saveSession({ ...s, decided, ledger });
   const kept = decided.filter((d) => d.authority !== 'EXPERT_REJECTED');
@@ -339,18 +268,18 @@ export function ratifyOne(): void {
     console.log(`${id} rejected.`); return;
   }
 
-  const statement = flag('--statement');
-  const appliesWhen = flag('--applies-when');
-  const rewritten = d === 'REWRITE' || (d === 'CONTEXTUAL' && !!appliesWhen);
-  if (d === 'REWRITE' && !statement) die('--statement required for REWRITE: the standard records the user\'s words, not a tidied version of them.');
-  if (d === 'CONTEXTUAL' && !appliesWhen) die('--applies-when required for CONTEXTUAL.');
   if (!['APPROVE', 'REWRITE', 'CONTEXTUAL'].includes(d)) die(`unknown decision "${d}" (APPROVE|REWRITE|CONTEXTUAL|REJECT)`);
-
-  const req: Requirement = { ...p, authority: 'EXPERT_RATIFIED', provenance: rewritten ? 'SUBSTANTIVELY_REWRITTEN' : 'MACHINE_DISCOVERED',
-    ...(statement ? { statement } : {}), ...(appliesWhen ? { appliesWhen } : {}) };
-  saveSession({ ...s, decided: [...s.decided, req],
-    ledger: appendDecision(ledgerFor(s), p, rewritten ? 'EDIT' : 'APPROVE',
-      { ...(rewritten ? { humanRevision: req } : {}), decidedAt: new Date().toISOString() }) });
+  // Same function as the batch — `ratify-one` used to skip every validation the batch performed and
+  // the public-source branch with it, which is how a single-rule ruling could launder provenance.
+  let outcome;
+  try {
+    outcome = decide(p, { verb: d as DecisionVerb, statement: flag('--statement'), appliesWhen: flag('--applies-when'),
+      materiality: flag('--materiality'), form: flag('--form'),
+      findRule: (rid) => s.proposals.find((x) => x.requirementId === rid) });
+  } catch (e) { return void die((e as Error).message); }
+  saveSession({ ...s, decided: [...s.decided, outcome.requirement],
+    ledger: appendDecision(ledgerFor(s), p, outcome.ledgerDecision,
+      { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt: new Date().toISOString() }) });
   console.log(`${id} ${d.toLowerCase()}.`);
 }
 
@@ -372,9 +301,12 @@ export function addOne(): void {
       + '  GENERATIVE  something to DO      ("lead with the next action")\n'
       + '  BOUNDARY    something NOT to do  ("never open with a preamble")\n'
       + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
-  const req: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
-    kind, authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
+  const base: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
+    kind, authority: 'DERIVED_UNRATIFIED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
+  let req: Requirement;
+  try { req = decide(base, { verb: 'ADD', materiality: flag('--materiality') }).requirement; }
+  catch (e) { return void die((e as Error).message); }
   saveSession({ ...s, decided: [...s.decided, req] });
   console.log(`added ${req.requirementId} (${req.kind}) — recorded as EXPERT_ADDED, not as something discovered.`);
   if (s.run.standardVersionHash) {

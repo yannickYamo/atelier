@@ -11,6 +11,8 @@ import { renderAgentSkill, assertPortable, defaultDescription } from '../../rend
 import * as store from '../../core/state/store.js';
 
 import { sha, DATA, die, argv, flag, projectDir, pickHost, skillArg } from '../runtime.js';
+import { decide } from '../../core/ratification/authority.js';
+import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
 // ── confirm ─────────────────────────────────────────────────────────────────────────────────
 /**
@@ -36,9 +38,18 @@ export function confirmBoundary(): void {
     ?? die(`${ruleId} is not in standard ${prev.standardVersionHash}.`);
   if (target.authority !== 'DERIVED_UNRATIFIED') die(`${ruleId} is already ${target.authority} — nothing to confirm.`);
 
+  let confirmedReq = target;
+  let confirmedLedger: 'APPROVE' | 'REJECT' = 'REJECT';
+  if (!drop) {
+    try {
+      const outcome = decide(target, { verb: 'CONFIRM' });
+      confirmedReq = outcome.requirement;
+      confirmedLedger = 'APPROVE';
+    } catch (e) { return void die((e as Error).message); }
+  }
   const requirements = drop
     ? prev.requirements.filter((r) => r.requirementId !== ruleId)
-    : prev.requirements.map((r) => r.requirementId === ruleId ? { ...r, authority: 'EXPERT_RATIFIED' as const } : r);
+    : prev.requirements.map((r) => r.requirementId === ruleId ? confirmedReq : r);
 
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
   const next: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
@@ -58,6 +69,11 @@ export function confirmBoundary(): void {
   const host = pickHost();
   const inst = host.install(pkg, projectDir());
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
+
+  // Ledgered like every other ruling. A drop is a REJECT of the inferred rule; a confirm is its APPROVE.
+  const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },
+    target, confirmedLedger, { ...(next.reason ? { note: next.reason } : {}), decidedAt: next.mintedAt }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
 
   console.log(drop
     ? `Dropped. "${target.statement}" is no longer part of your standard.`
