@@ -36,7 +36,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build:plugins": "tsx plugins/build-plugins.mts",
-    "pretest": "npm run build:plugins",
+    "pretest": "npm run build:plugins && npm run build",
     "acceptance:carriers": "tsx scripts/carrier-acceptance.mts",
     "ablation:carrier": "tsx scripts/ablation-carrier.mts",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test"

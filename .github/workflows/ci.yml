@@ -40,13 +40,15 @@ jobs:
       # wrong behaviour at runtime rather than as a red test.
       - run: npm run lint
 
+      # BUILT BEFORE TESTED, deliberately. The e2e files drive dist/cli/atelier.mjs and each built
+      # it on demand when missing — so on a fresh runner several vitest workers raced each other's
+      # `rm -rf dist`, and a sibling read a half-written module mid-import. One flaky SyntaxError
+      # in CI was the whole diagnosis. `pretest` builds too, so a fresh clone's bare `npm test`
+      # cannot race either; this step also still catches an import that resolves only in-tree.
+      - run: npm run build
       - run: npm test
 
       # A known-vulnerable transitive dependency is a defect the suite cannot see.
       - run: npm audit --audit-level=high
-
-      # The package a user installs is `dist/`, not the source tree. Building it in CI is
-      # what catches an import that resolves under the checkout and nowhere else.
-      - run: npm run build
       - name: the built CLI runs
         run: node dist/cli/atelier.mjs 2>&1 | head -1

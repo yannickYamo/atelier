@@ -7,7 +7,8 @@
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
 Atelier learns the decisions behind an expert's work, writes them down as an explicit, versioned
-standard, and compiles that standard into the smallest skill a model needs to reproduce it on new work.
+standard, and compiles it into a skill through a deterministic, auditable first arrangement — one the
+correction loop can then improve for your runtime without the standard moving.
 
 The point is to treat a standard the way you already treat a schema or a test: versioned, owned by a
 named person, compiled for whatever runtime is current, and changed only through an explicit act. Your
@@ -114,9 +115,11 @@ judgment, taste, and the boundaries around them.
 
 The system may discover candidates. It cannot make them authoritative on its own.
 
-**The SkillVersion** is the model-specific implementation of that standard. Atelier selects the
-smallest set of instructions, examples, contracts, checks and routing needed to carry the standard into
-a particular runtime.
+**The SkillVersion** is the model-specific implementation of that standard: instructions, examples,
+contracts, checks and routing chosen by a deterministic initial policy from each rule's typed fields.
+That policy is a starting point, not a claim of optimality — the carrier study measured a "richer"
+carrier losing to plain prose, which is exactly why `fix` can replace a rule's carrier laterally,
+on evidence, while the StandardVersion stands still.
 
 A stronger model may need less scaffolding. A smaller model may need more. A new runtime may support a
 better carrier altogether. The StandardVersion stays where it is unless a person moves it.
