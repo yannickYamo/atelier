@@ -80,3 +80,22 @@ describe('the anonymisation holds', () => {
     expect(index()).toMatch(/Maintainer B/);
   });
 });
+
+describe('a first-party study says so', () => {
+  it('every P6 study discloses the self-study and the AI-assisted corpus', () => {
+    // A reader seeing "the author" assumes an independent expert. Here the person whose standard
+    // was discovered, who ratified it, who labelled the cases and who scores the outputs is the
+    // person who built the tool. And roughly half the corpus prose was AI-assisted, which makes
+    // "discovered from expert work" weaker than it sounds. Both were true in the commit log and in
+    // the evidence record, and absent from the documents anyone would actually read.
+    const dir = new URL('../studies/', import.meta.url).pathname;
+    const p6 = readdirSync(dir).filter((f) => f.startsWith('P6_') && f.endsWith('.md'));
+    expect(p6.length).toBeGreaterThan(0);
+    for (const f of p6) {
+      const src = readFileSync(join(dir, f), 'utf8');
+      expect(src, `${f} does not disclose the self-study`).toMatch(/self-study/i);
+      expect(src, `${f} does not disclose the corpus provenance`).toMatch(/AI-assisted/i);
+      expect(src, `${f} does not say it is first-party`).toMatch(/first-party/i);
+    }
+  });
+});

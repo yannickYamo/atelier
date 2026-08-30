@@ -51,7 +51,17 @@ export function revert(): void {
 export function build(nameArg?: string): void {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
-  const v = readJson<StandardVersion>(join(DATA, 'pending-standard.json'), { what: 'the pending standard' });
+  // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
+  // what failed. It used to surface a raw ENOENT with an absolute store path — technically accurate,
+  // and useless to someone who has simply not minted a standard yet.
+  const pendingPath = join(DATA, 'pending-standard.json');
+  if (!existsSync(pendingPath)) {
+    die('there is no standard to build from yet.\n'
+      + '  A skill is compiled from a ratified StandardVersion, and none has been minted here.\n'
+      + '  From your own work:   atelier create <path-to-your-work>   then ratify, then ratify-close\n'
+      + '  From what you can state:  atelier skill "<the rules, in your words>"');
+  }
+  const v = readJson<StandardVersion>(pendingPath, { what: 'the pending standard' });
   // The arrangement is COMPILED, not derived from the requirement list. That is what lets a skill
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
