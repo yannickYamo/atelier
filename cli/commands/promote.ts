@@ -12,7 +12,7 @@ import * as store from '../../core/state/store.js';
 import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
 import { foldJudgements, rationalesFor, agreement, describeAgreement, describeJudgements } from '../../core/fidelity/judgement.js';
 
-import { DATA, die, argv, flag, MODEL, clientFor, numericFlag, skillArg } from '../runtime.js';
+import { DATA, die, argv, flag, MODEL, clientFor, numericFlag, skillArg, pickHost, projectDir } from '../runtime.js';
 
 // ── promote ─────────────────────────────────────────────────────────────────────────────────
 /**
@@ -212,6 +212,17 @@ export function promote(): void {
     : compared.length ? compared
       : promotedRepair ? [promotedRepair.requirementId] : [];
 
+  // ── INSTALL FIRST, POINTER SECOND ────────────────────────────────────────────────────────────
+  //
+  // Promotion used to move the pointer and stop, so the store said v2 was active while the host kept
+  // serving v1's bytes — the exact divergence `inspect` exists to catch, created by the command that
+  // is supposed to end the loop. The order matters the same way it does in `build`: if the install
+  // fails, nothing has claimed the candidate is active, and the person is told instead of shown.
+  const pkg = store.getPackage(L, sv.materializedHash)
+    ?? die(`package ${sv.materializedHash} is not in the store, so ${cand} cannot be installed as evaluated.`);
+  const host = pickHost();
+  const inst = host.install(pkg, projectDir());
+  if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was promoted — the active version is unchanged.`);
   store.setActive(L, cand);
   const at = new Date().toISOString();
   if (promotedRepair) {
@@ -232,6 +243,7 @@ export function promote(): void {
   console.log(`  promoted       package ${sv.materializedHash}  — the same one, which is the point`);
   console.log(`  StandardVersion ${sv.standardVersionHash}  — unchanged`);
   console.log(`  previous       ${prevActive ?? '(none)'} remains in history:  atelier rollback --to ${prevActive ?? ''}`);
+  console.log(`  installed      ${inst.installedAt} — ${host.invocationHint(name).trim()} now serves this version`);
   if (rules.length) {
     console.log(`\n  Your reason is on file against ${rules.join(', ')}. You will see it the next time you compare on`);
     console.log(`  ${rules.length > 1 ? 'those rules' : 'that rule'}, and it is now one row in:  atelier judgements --skill ${name}`);
