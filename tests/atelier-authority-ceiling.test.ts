@@ -23,9 +23,13 @@ describe('nothing unconfirmed shapes output', () => {
     expect(roleFor(req({ kind: 'BOUNDARY' }))).toBe('OBSERVE');
   });
 
-  it('confirmation is what unlocks instruction, in any of its forms', () => {
-    for (const a of ['EXPERT_RATIFIED', 'EXPERT_AUTHORED', 'USER_ADOPTED'] as Authority[]) {
-      expect(roleFor(req({ authority: a }))).toBe('ENFORCE');
+  it('what unlocks instruction is the person\'s own words, or a confirmed rule its owner declared REQUIRED', () => {
+    // Undeclared materiality is source-aware: the person's own sentence is enough authority to
+    // instruct; a discovered rule they merely approved stays SHOWN until they say it matters.
+    expect(roleFor(req({ authority: 'EXPERT_AUTHORED' }))).toBe('ENFORCE');
+    for (const a of ['EXPERT_RATIFIED', 'USER_ADOPTED'] as Authority[]) {
+      expect(roleFor(req({ authority: a })), `${a} + undeclared must be shown, not instructed`).toBe('OBSERVE');
+      expect(roleFor(req({ authority: a, materiality: 'REQUIRED' }))).toBe('ENFORCE');
     }
   });
 
