@@ -18,6 +18,7 @@ import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateO
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
+import { roleFor } from '../../core/architecture/compile.js';
 import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger } from '../../core/ratification/decision-record.js';
 
 /**
@@ -245,12 +246,15 @@ export function ratifyBatch(): void {
   }
   saveSession({ ...s, decided, ledger });
   const kept = decided.filter((d) => d.authority !== 'EXPERT_REJECTED');
-  const undeclared = kept.filter((d) => d.materiality === null).length;
   console.log(`${kept.length} rule(s) kept, ${decided.length - kept.length} rejected${added ? `, ${added} added by you` : ''}.`);
   const byMat = kept.reduce<Record<string, number>>((a, d) => ({ ...a, [d.materiality ?? 'undeclared']: (a[d.materiality ?? 'undeclared'] ?? 0) + 1 }), {});
   console.log(`  ${Object.entries(byMat).map(([k, n]) => `${n} ${k}`).join(' · ')}`);
-  if (undeclared) {
-    console.log(`  ${undeclared} kept without a materiality — they will be SHOWN, not instructed.`);
+  // COMPUTED BY THE COMPILER, NOT RESTATED BY THE CLI. This line once said undeclared rules "will be
+  // SHOWN, not instructed" while `roleFor` compiled exactly those rules to ENFORCE. Whatever this
+  // prints now is read off the same function the build will call, so the two cannot disagree again.
+  console.log(`  ${kept.map((d) => `${d.requirementId} ${roleFor(d) === 'ENFORCE' ? 'instructs' : 'shown'}`).join(' · ')}`);
+  if (kept.some((d) => roleFor(d) !== 'ENFORCE' && d.materiality === null)) {
+    console.log('  A shown rule starts instructing when you declare it:  "materiality":"REQUIRED"');
   }
   if (kept.some((d) => d.authority === 'USER_ADOPTED')) {
     console.log(`  Recorded as ADOPTED BY YOU from work you did not write. The source stays attributed to it.`);
@@ -371,6 +375,8 @@ export function ratifyClose(): void {
   writeAtomic(runFile('pending-standard.json'), JSON.stringify(v, null, 1));
   if (stamped) writeAtomic(runFile('ratification-ledger.json'), JSON.stringify(stamped, null, 1));
   console.log(`StandardVersion ${v.standardVersionHash} [${v.authorityState}]: ${kept.length} requirements.`);
+  // Read off the compiler, so this line and the build cannot disagree about what binds.
+  console.log(`  ${kept.map((r) => `${r.requirementId} ${roleFor(r) === 'ENFORCE' ? 'instructs' : 'shown'}`).join(' · ')}`);
   console.log(`  discovered ${(discoveryRecall(v) * 100).toFixed(0)}%  ·  declared-general ${(declaredGeneralShare(v) * 100).toFixed(0)}%  ·  unconfirmed ${(unconfirmedRate(v) * 100).toFixed(0)}%`);
   // A 0% discovery rate on a directly authored standard is the truth, not a warning, and saying so
   // is what stops the number reading as a shortfall. It also stops the reverse: a standard nobody
