@@ -25,7 +25,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, MODEL, clientFor , numericFlag, assertReachable} from '../runtime.js';
+import { sha, DATA, die, argv, flag, MODEL, clientFor, numericFlag, assertReachable, skillArg } from '../runtime.js';
 import type { InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -39,7 +39,7 @@ import { asText } from '../../core/discovery/text.js';
  * rollback remains possible because nothing was overwritten.
  */
 export async function improve(): Promise<void> {
-  const name = flag('--skill') ?? die('--skill required');
+  const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
   const sv = store.getSkillVersion(L, activeHash)!;

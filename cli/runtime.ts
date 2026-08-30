@@ -19,6 +19,7 @@ import { AnthropicInferenceClient } from '../providers/anthropic.js';
 import { ClaudeCodeAdapter } from '../adapters/claude-code/adapter.js';
 import { CodexAdapter } from '../adapters/codex/adapter.js';
 import type { HostAdapter } from '../adapters/host-adapter.js';
+import { skillNameFrom } from '../renderers/agent-skill/render.js';
 
 export const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 export const DATA = process.env.ATELIER_DATA ?? join(process.env.HOME ?? '.', '.atelier');
@@ -444,10 +445,68 @@ export interface Session {
  * to. The directory PATH is hashed rather than used as a name so a session cannot be addressed by
  * guessing, and the readable basename is kept alongside it so `ls sessions/` is legible to a person.
  */
-export const sessionPath = (): string => {
+const projectKey = (): string => {
   const dir = projectDir();
   const leaf = (dir.split('/').filter(Boolean).pop() ?? 'root').replace(/[^A-Za-z0-9._-]/g, '-');
-  return join(DATA, 'sessions', `${leaf}-${sha(dir)}.json`);
+  return `${leaf}-${sha(dir)}`;
+};
+
+export const sessionPath = (): string => join(DATA, 'sessions', `${projectKey()}.json`);
+
+// ── THE RUN'S WORKING FILES, KEYED LIKE THE SESSION ──────────────────────────────────────────
+//
+// Everything a run produces BEFORE it lands under `skills/<name>/` — the sealed corpus path list,
+// the import plan, the pending StandardVersion, the ratification ledger, the build proposal, the
+// undo record, the held-out pairs — used to sit at the root of the data directory. The session was
+// made per-project and these were not, so two projects sharing one store overwrote each other's
+// pending standard, and `build` in one project compiled the standard the OTHER project had just
+// ratified. Nothing refused, because the file was exactly where `build` expected it.
+//
+// Keyed by the same project hash as the session, so a run and its working files live and die
+// together. `profiles/` stays global on purpose: a verified backend is a fact about the machine.
+export const runDir = (): string => join(DATA, 'runs', projectKey());
+export const runFile = (name: string): string => join(runDir(), name);
+
+/** The files that lived at the store root before working files were per-project. */
+const LEGACY_RUN_FILES: readonly string[] = [
+  'corpus-paths.json', 'import-plan.json', 'skill-package.json', 'pending-standard.json',
+  'ratification-ledger.json', 'proposal.md', 'already-handled.json', 'undo.json',
+  'reference-pairs.json', 'method-findings.json',
+];
+
+/**
+ * Adopt root-level working files into this project's run — ONLY when this is the sole run under the
+ * store. A root file then has exactly one possible owner. With two runs in flight it could belong to
+ * either, and guessing would re-create the collision this layout exists to end; the files stay
+ * where they are and the project that owns them can re-close its standard.
+ */
+const adoptLegacyRunFiles = (): void => {
+  if (listSessions().some((x) => !x.here)) return;
+  for (const f of LEGACY_RUN_FILES) {
+    const from = join(DATA, f), to = runFile(f);
+    if (!existsSync(from) || existsSync(to)) continue;
+    mkdirSync(runDir(), { recursive: true });
+    renameSync(from, to);
+  }
+};
+
+/**
+ * Put the current run out of the way, so the next command starts clean.
+ *
+ * `abort` used to mark the run terminal and leave the file in place. Every later transition then
+ * refused with "a terminal run is superseded by a new run, never resumed" — and nothing ever
+ * started the new run, so the project was stuck until someone deleted a file no document named.
+ * The run is archived rather than deleted: what was decided is still readable, it just no longer
+ * stands in the way.
+ */
+export const archiveSession = (): string | null => {
+  const p = sessionPath();
+  if (!existsSync(p)) return null;
+  const dir = join(DATA, 'sessions', 'aborted');
+  mkdirSync(dir, { recursive: true });
+  const to = join(dir, `${projectKey()}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+  renameSync(p, to);
+  return to;
 };
 
 /** Where the single global session lived before runs were per-project. */
@@ -458,7 +517,10 @@ const blankSession = (): Session =>
 
 export const loadSession = (): Session => {
   const p = sessionPath();
-  if (existsSync(p)) return readJson<Session>(p, { what: "this project's session", requireKeys: ['run'] });
+  if (existsSync(p)) {
+    adoptLegacyRunFiles();
+    return readJson<Session>(p, { what: "this project's session", requireKeys: ['run'] });
+  }
   // One-time adoption of a pre-existing global run, so an upgrade does not strand work in flight.
   // It is MOVED, not copied: leaving it readable would let every other project adopt it too, which
   // is the exact collision this change exists to end.
@@ -468,6 +530,7 @@ export const loadSession = (): Session => {
     writeAtomic(p, JSON.stringify(legacy, null, 1));
     renameSync(LEGACY_SESSION, `${LEGACY_SESSION}.migrated`);
     console.error(`atelier: adopted the previous global run into this project (${p}).`);
+    adoptLegacyRunFiles();
     return legacy;
   }
   return blankSession();
@@ -522,4 +585,46 @@ export const step = (s: Session, to: Run['state'], ctx: Parameters<typeof transi
       + `\n  See where it is: atelier status`);
   }
   return { ...s, run: (t as { run: Run }).run };
+};
+
+// ── A SKILL NAME FROM THE COMMAND LINE ───────────────────────────────────────────────────────
+//
+// `build` normalises `--name` through `skillNameFrom`, so every skill in the store has a name that
+// is safe to join onto a path. The read-side commands took `--skill` raw, and the store joined it
+// under `skills/` as given — so `--skill ../../elsewhere` read from, and wrote to, a directory that
+// was never part of the store. The sanitiser existed; these commands just did not call it.
+//
+// REFUSED rather than normalised. Normalising `../../x` to `x` on a lookup would silently answer a
+// question about a different skill than the one named.
+export const assertSkillName = (raw: string): string => {
+  let normal: string;
+  try { normal = skillNameFrom(raw); } catch { normal = ''; }
+  if (normal !== raw) {
+    die(`"${raw}" is not a skill name. Names are lower-case letters, digits and hyphens, as \`build --name\` makes them`
+      + (normal ? ` — did you mean "${normal}"?` : '.'));
+  }
+  return raw;
+};
+
+/** `--skill <name>`, validated. `usage` is what to say when it is missing. */
+export const skillArg = (usage = '--skill required'): string => assertSkillName(flag('--skill') ?? die(usage));
+
+// ── ONE ALLOCATOR FOR THE IDS A PERSON MINTS ─────────────────────────────────────────────────
+//
+// `add` numbered its rules from the length of `decided`; a batch `ADD` numbered from a counter that
+// started at 1 on every call; the front door numbered from the position in the model's list. All
+// three said `x1` for the first rule, and `ratify-close` keys the standard by id — so the later `x1`
+// silently replaced the earlier one. The CLI printed "2 kept"; the standard held one. A rule the
+// person typed vanished with no message, in a product whose one promise is that a decision is never
+// lost.
+//
+// The next id is the successor of the highest `x<n>` anywhere in the run — proposals or decisions —
+// so it cannot collide with anything already recorded, whichever path recorded it.
+export const authoredIdAllocator = (s: Session): (() => string) => {
+  let n = 0;
+  for (const r of [...s.proposals, ...s.decided]) {
+    const m = /^x(\d+)$/.exec(r.requirementId);
+    if (m) n = Math.max(n, Number(m[1]));
+  }
+  return () => `x${++n}`;
 };

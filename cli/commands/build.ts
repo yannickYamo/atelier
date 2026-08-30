@@ -20,7 +20,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step } from '../runtime.js';
+  loadSession, saveSession, step, runFile } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -35,7 +35,7 @@ import { sha, DATA, die, argv, flag, projectDir, pickHost,
  * wrote yourself" in another.
  */
 export function revert(): void {
-  const f = join(DATA, 'undo.json');
+  const f = runFile('undo.json');
   if (!existsSync(f)) die('nothing to revert — no build has written into a skill of yours.');
   const undo = readJson<UndoRecord>(f, { what: 'an undo record' });
   const paths = Object.keys(undo.before);
@@ -54,14 +54,36 @@ export function build(nameArg?: string): void {
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
   // what failed. It used to surface a raw ENOENT with an absolute store path — technically accurate,
   // and useless to someone who has simply not minted a standard yet.
-  const pendingPath = join(DATA, 'pending-standard.json');
+  const pendingPath = runFile('pending-standard.json');
   if (!existsSync(pendingPath)) {
     die('there is no standard to build from yet.\n'
       + '  A skill is compiled from a ratified StandardVersion, and none has been minted here.\n'
       + '  From your own work:   atelier create <path-to-your-work>   then ratify, then ratify-close\n'
       + '  From what you can state:  atelier skill "<the rules, in your words>"');
   }
-  const v = readJson<StandardVersion>(pendingPath, { what: 'the pending standard' });
+  const pending = readJson<StandardVersion>(pendingPath, { what: 'the pending standard' });
+  // ── THE STANDARD MUST BE THIS RUN'S ──────────────────────────────────────────────────────────
+  //
+  // The run records the hash it ratified; the file on disk is what will be compiled. Before this
+  // check they were assumed to agree, and when two projects shared a store they did not: a build in
+  // one project compiled — and stamped as ratified — the standard the other had just closed. The
+  // working files are per-project now, and this is the check that makes any future drift refuse.
+  if (s.run.standardVersionHash !== pending.standardVersionHash) {
+    die(`the pending standard here is ${pending.standardVersionHash}, but this project's run `
+      + (s.run.standardVersionHash ? `ratified ${s.run.standardVersionHash}.` : 'has ratified nothing.')
+      + '\n  A skill is compiled only from the standard this run closed. Close it again: atelier ratify-close');
+  }
+  // ── ADVANCE BEFORE WRITING ───────────────────────────────────────────────────────────────────
+  //
+  // This transition used to be checked LAST: the store was written, the active pointer moved and
+  // the skill installed, and then the run refused to advance — so a refused build looked exactly
+  // like a successful one on disk and reported failure on the terminal.
+  s = step(s, 'BUILT');
+  // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS. `mintedAt` sits outside the hash; re-closing
+  // identical content in another project would otherwise make the store refuse a body that differs
+  // only by timestamp. Same rule as `amend`.
+  const L: store.StoreLayout = { root: DATA, skillName: name };
+  const v = store.getStandard(L, pending.standardVersionHash) ?? pending;
   // The arrangement is COMPILED, not derived from the requirement list. That is what lets a skill
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
@@ -69,13 +91,6 @@ export function build(nameArg?: string): void {
   const pkg0 = renderAgentSkill(v, arch, name, desc);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
-
-  const L: store.StoreLayout = { root: DATA, skillName: name };
-  store.initStore(L);
-  // Only when there IS a corpus. A directly authored standard has no evidence record, and writing an
-  // empty one to satisfy a call would fabricate a file that later reads as a sealed corpus.
-  if (s.evidence) store.putEvidence(L, s.evidence);
-  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
 
   // ── THE RECORD OF WHAT THIS BUILD DECIDED ──────────────────────────────────────────────────
   //
@@ -88,13 +103,12 @@ export function build(nameArg?: string): void {
   // decided which rules the existing package already carries; `alreadyHandled` has no default
   // precisely so that decision cannot be made silently here.
   const alreadyHandled = new Set<string>(
-    existsSync(join(DATA, 'already-handled.json'))
-      ? readJson<string[]>(join(DATA, 'already-handled.json'), { kind: 'array', what: 'the already-handled list' })
+    existsSync(runFile('already-handled.json'))
+      ? readJson<string[]>(runFile('already-handled.json'), { kind: 'array', what: 'the already-handled list' })
       : []);
   const review = argv.includes('--review');
   const proposal = buildProposal(name, v.standardVersionHash, v.requirements, arch, alreadyHandled);
   const proposalText = renderProposal(proposal, { gated: review });
-  writeAtomic(join(DATA, 'proposal.md'), proposalText);
   console.log(`\n${proposalText}`);
   const guessed = unconfirmedIn(proposal);
   if (guessed.length) {
@@ -104,6 +118,12 @@ export function build(nameArg?: string): void {
     console.log(`--review: stopping before anything is written. Re-run \`atelier build --name ${name}\` to install.`);
     return;
   }
+  writeAtomic(runFile('proposal.md'), proposalText);
+  store.initStore(L);
+  // Only when there IS a corpus. A directly authored standard has no evidence record, and writing an
+  // empty one to satisfy a call would fabricate a file that later reads as a sealed corpus.
+  if (s.evidence) store.putEvidence(L, s.evidence);
+  store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //
@@ -115,7 +135,7 @@ export function build(nameArg?: string): void {
   // than written. And the bytes are backed up first, by the same pass that changes them: `rollback`
   // moves a pointer between versions Atelier built and has no authority over a package it did not
   // create.
-  const pkgFile = join(DATA, 'skill-package.json');
+  const pkgFile = runFile('skill-package.json');
   if (existsSync(pkgFile)) {
     const sp = readJson<{ absRoot: string; components: AdaptedComponent[]; skillId: string }>(
       pkgFile, { what: 'the skill package', requireKeys: ['absRoot', 'components'] });
@@ -130,13 +150,12 @@ export function build(nameArg?: string): void {
 
     if (plan.edits.length) {
       const undo: UndoRecord = plan.undo;
-      writeAtomic(join(DATA, 'undo.json'), JSON.stringify(undo, null, 1));
+      writeAtomic(runFile('undo.json'), JSON.stringify(undo, null, 1));
       for (const [rel, text] of Object.entries(plan.resulting)) writeAtomic(join(sp.absRoot, rel), text);
       console.log(`Written into ${sp.absRoot}.`);
       console.log(`  atelier revert    puts every one of those files back exactly as it was\n`);
     }
 
-    s = step(s, 'BUILT');
     saveSession({ ...s, skillName: name });
     console.log(`StandardVersion ${v.standardVersionHash} · architecture ${arch.architectureHash}`);
 
@@ -164,7 +183,6 @@ export function build(nameArg?: string): void {
   const inst = host.install(pkg, projectDir());
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
-  s = step(s, 'BUILT');
   saveSession({ ...s, skillName: name });
   console.log(`\nYour skill is ready.\n`);
   console.log(`  ${host.invocationHint(name)}\n`);

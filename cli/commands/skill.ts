@@ -32,7 +32,7 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { die, flag, argv, positional, clientFor, PROPOSER, loadSession, saveSession } from '../runtime.js';
+import { die, flag, argv, positional, clientFor, PROPOSER, loadSession, saveSession, authoredIdAllocator } from '../runtime.js';
 import { spend, type Budget } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { create } from './improve.js';
@@ -195,8 +195,9 @@ export async function skill(): Promise<void> {
   // machine proposal and carries the ordinary ceiling — `componentFor` serves an unratified rule as
   // an EXAMPLE under OBSERVE, so it is shown to the model and never instructs it.
   const s = loadSession();
-  const decided: Requirement[] = proposed.map((p, i) => ({
-    requirementId: `x${i + 1}`, statement: p.statement.trim(),
+  const nextId = authoredIdAllocator(s);
+  const decided: Requirement[] = proposed.map((p) => ({
+    requirementId: nextId(), statement: p.statement.trim(),
     appliesWhen: p.appliesWhen.trim() || 'GENERAL',
     kind: p.kind,
     authority: p.faithful ? 'EXPERT_AUTHORED' : 'DERIVED_UNRATIFIED',

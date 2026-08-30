@@ -14,7 +14,7 @@ import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
 import { runOnce } from './improve.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
-import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding , numericFlag, positional, boundResources} from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, assertSkillName } from '../runtime.js';
 
 // ── invoke ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -118,7 +118,7 @@ export function resolveServedSkill(name: string): ServedSkill {
 }
 
 export async function invoke(): Promise<void> {
-  const name = flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"');
+  const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const task = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);

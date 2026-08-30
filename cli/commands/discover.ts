@@ -21,7 +21,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
-import { sha, DATA, die, argv, flag, PROPOSER, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor } from '../runtime.js';
+import { sha, die, argv, flag, PROPOSER, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/
 export async function discover(): Promise<void> {
   const s = loadSession();
   if (!s.evidence) die('nothing sealed. Run `atelier intake <path>` first.');
-  const files = readJson<{ id: string; path: string; kind?: string }[]>(join(DATA, 'corpus-paths.json'), { kind: 'array', what: 'the sealed corpus path list' });
+  const files = readJson<{ id: string; path: string; kind?: string }[]>(runFile('corpus-paths.json'), { kind: 'array', what: 'the sealed corpus path list' });
   const textOf = (f: string): string => { const r = extract(f); if (!r.ok) die(r.reason); return (r as { text: string }).text; };
   const ev = s.evidence ?? die('nothing sealed.');
   const items = files.map((f) => ({ id: f.id, text: textOf(f.path) }));
@@ -58,7 +58,7 @@ export async function discover(): Promise<void> {
   // told apart from a description of one example, so the chain refuses rather than producing a
   // weaker version of itself — and we fall back to the single call, saying so plainly. A user with
   // three pieces should know their standard rests on unvalidated proposals.
-  const importPlan = readJson<ImportPlan>(join(DATA, 'import-plan.json'), { what: 'the import plan' });
+  const importPlan = readJson<ImportPlan>(runFile('import-plan.json'), { what: 'the import plan' });
 
   // ── THE RESERVE IS ENFORCED HERE, ON THE ONLY PATH THAT READS ────────────────────────────
   //
@@ -214,7 +214,7 @@ export async function discover(): Promise<void> {
   // arrives DERIVED_UNRATIFIED because we guessed it. Pooling them into one list of "rules" would
   // put a guess and a quotation under the same yes.
   const methodDocs = new Map(files.filter((f) => f.kind === 'METHODOLOGY').map((f) => [f.id, textOf(f.path)]));
-  const pkgPath = join(DATA, 'skill-package.json');
+  const pkgPath = runFile('skill-package.json');
 
   // ── THE TASTE RUN IS PERSISTED BEFORE ANYTHING OPTIONAL RUNS ─────────────────────────────────
   //
@@ -240,7 +240,7 @@ export async function discover(): Promise<void> {
       const skillText = sp.readable.map((rel) => { const r = extract(join(sp.absRoot, rel)); return r.ok ? r.text : ''; }).join('\n\n');
       const mrun = await runMethodExtraction(client, budget, methodDocs, skillText, { standardDimensions: [ev.workType] });
       console.log(`\n${describeMethodRun(mrun)}  ($${mrun.costUsd.toFixed(3)})`);
-      writeAtomic(join(DATA, 'method-findings.json'), JSON.stringify(mrun, null, 1));
+      writeAtomic(runFile('method-findings.json'), JSON.stringify(mrun, null, 1));
     } catch (e) {
       // A failed methodology check must not cost the taste run that already succeeded and was paid for.
       if (e instanceof BudgetExceeded) console.log(`\nSkipped the methodology check — it would exceed the cap. Raise --cap or pass --skip-methods.`);

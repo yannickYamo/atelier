@@ -436,7 +436,7 @@ says, this has no advantage to claim yet, and the honest reason is in the null a
 ## What you can reproduce here, and what you cannot
 
 **Reproducible from this repository, no API key, offline:** the full test suite, `npm test`,
-82 files and 1173 tests. It exercises the governance spine, the compiler, the renderer, delivery
+83 files and 1193 tests. It exercises the governance spine, the compiler, the renderer, delivery
 claims, and the promote/reject/inspect/rollback surface against the shipped binary.
 
 **Reproducible from this repository with a key:** `npm run ablation:carrier`, a judge-free carrier
@@ -590,7 +590,9 @@ so.
 
 ```text
 ~/.atelier
-├── skills/<name>/        compiled skills, shared across projects
-└── sessions/<project>-<hash>.json    one run in flight per project
+├── skills/<name>/                    compiled skills, shared across projects
+├── sessions/<project>-<hash>.json    one run in flight per project
+└── runs/<project>-<hash>/            that run's working files: the sealed corpus list,
+                                      the pending standard, the ledger, the build proposal
 ```
 
