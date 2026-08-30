@@ -1,0 +1,242 @@
+{
+ "pairs": [
+  {
+   "id": "c1",
+   "ctx": "t01",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c2",
+   "ctx": "t01",
+   "rep": "2",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c3",
+   "ctx": "t02",
+   "rep": "2",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c4",
+   "ctx": "t03",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c5",
+   "ctx": "t04",
+   "rep": "2",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c6",
+   "ctx": "t05",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c7",
+   "ctx": "t05",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c8",
+   "ctx": "t06",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c9",
+   "ctx": "t06",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c10",
+   "ctx": "t07",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c11",
+   "ctx": "t07",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c12",
+   "ctx": "t08",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c13",
+   "ctx": "t08",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c14",
+   "ctx": "t09",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c15",
+   "ctx": "t09",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c16",
+   "ctx": "t10",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c17",
+   "ctx": "t10",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c18",
+   "ctx": "t11",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c19",
+   "ctx": "t11",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c20",
+   "ctx": "t12",
+   "rep": "2",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c21",
+   "ctx": "t13",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c22",
+   "ctx": "t13",
+   "rep": "2",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c23",
+   "ctx": "t14",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c24",
+   "ctx": "t14",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c25",
+   "ctx": "t15",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c26",
+   "ctx": "t15",
+   "rep": "2",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c27",
+   "ctx": "t16",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c28",
+   "ctx": "t16",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c29",
+   "ctx": "t17",
+   "rep": "1",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c30",
+   "ctx": "t18",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c31",
+   "ctx": "t19",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c32",
+   "ctx": "t19",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  },
+  {
+   "id": "c33",
+   "ctx": "t20",
+   "rep": "1",
+   "A": "FULL",
+   "B": "ABLATION"
+  },
+  {
+   "id": "c34",
+   "ctx": "t20",
+   "rep": "2",
+   "A": "ABLATION",
+   "B": "FULL"
+  }
+ ]
+}
