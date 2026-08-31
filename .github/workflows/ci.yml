@@ -52,3 +52,12 @@ jobs:
       - run: npm audit --audit-level=high
       - name: the built CLI runs
         run: node dist/cli/atelier.mjs 2>&1 | head -1
+
+      # Reviewer finding F5: "the tarball installs and runs" was a claim in a commit message —
+      # the exact shape of claim this repository refuses everywhere else. Now CI is the witness.
+      - name: the package a user installs actually runs
+        run: |
+          npm pack
+          mkdir -p /tmp/pack-smoke && cd /tmp/pack-smoke && npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/yannickyamo-atelier-*.tgz > /dev/null
+          ./node_modules/.bin/atelier | head -1

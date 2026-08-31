@@ -97,3 +97,17 @@ describe('the specific lines the audit caught, pinned', () => {
     }
   });
 });
+
+describe('generation budgets are not literals below the measured median (reviewer F1)', () => {
+  it('runOnce carries no hardcoded maxTokens — the basis is a flag with a measured default', () => {
+    const src = readFileSync('cli/commands/improve.ts', 'utf8');
+    expect(src).not.toMatch(/maxTokens: [0-9]/);
+    expect(src).toContain("numericFlag('--max-tokens'");
+  });
+
+  it("the help's first line teaches the documented front door, not the staged spelling", () => {
+    const src = readFileSync('cli/atelier.mts', 'utf8');
+    const firstHelp = /console\.log\('atelier ([a-z-]+)/.exec(src);
+    expect(firstHelp?.[1], 'bare `atelier` must lead with the README front door').toBe('skill');
+  });
+});
