@@ -253,7 +253,12 @@ export async function spendOneWithResult(
       userMessage: contract ? 'Produce it now, in the required shape.' : 'Write it now. Output only the piece itself.',
       toolName: contract ? 'emit_output' : 'emit_piece',
       toolDescription: contract ? 'Emit the output in the shape the standard requires.' : 'Emit the finished piece.',
-      schema, maxTokens: 4000 };
+      // NOT A CONSTANT — reviewer finding F1, the instrument's own lesson applied to the product.
+      // The contract runner shipped at 1200 against a measured 6606-token median and had to retract
+      // a study over the truncation tail; this path carried 4000, ~60% of that median, serving
+      // invoke, every reference arm, and fix's rerun. Default is ~1.8x the measured median;
+      // --max-tokens overrides, and a cut-off still surfaces as GenerationIncomplete, never as data.
+      schema, maxTokens: numericFlag('--max-tokens', 12_000) };
     servedTask = req.variableBlock;
     const res = await client.complete(req);
     return { value: res, cost: res.cost };

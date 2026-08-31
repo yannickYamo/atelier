@@ -6,9 +6,7 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
-## [Unreleased]
-
-## [0.2.0] — 2026-08-30
+## [Unreleased] — targeting 0.2.0
 
 ### Added
 

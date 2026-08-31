@@ -39,6 +39,7 @@
     "pretest": "npm run build:plugins && npm run build",
     "acceptance:carriers": "tsx scripts/carrier-acceptance.mts",
     "ablation:carrier": "tsx scripts/ablation-carrier.mts",
+    "preflight": "npm run typecheck && npm run lint && npm test && npm run build",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test"
   },
   "repository": {
