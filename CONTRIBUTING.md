@@ -9,6 +9,20 @@ npm ci
 npm run typecheck     # tsc, strict plus four flags beyond it
 npm run lint          # type-aware eslint; `npm run lint:fix` for the mechanical half
 npm test              # 1254 tests, ~5s
+
+Before citing any gate in a commit message, run `npm run preflight` — typecheck, lint, test and
+build in one command, no pipes, non-zero on any failure. Three ad-hoc shell checks lied in one
+session; the script is the mechanism that replaced the habit. (It aggregates the CI steps above; it
+is a local convenience, not an extra check.)
+
+## Releasing (maintainer)
+
+A dated CHANGELOG section means shipped, so the section is dated by the release, not before it.
+1. `npm run preflight` — green or stop.
+2. Move Unreleased to `## [x.y.z] — <date>`; bump `package.json` to match.
+3. `git tag vx.y.z && git push --tags` — release.yml publishes with provenance (needs the
+   `NPM_TOKEN` repository secret), or `npm login && npm publish` locally.
+4. Add the npm install line to README **after** `npm view @yannickyamo/atelier` returns a version.
 npm run build         # what a user installs
 ```
 

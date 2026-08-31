@@ -182,7 +182,10 @@ const main = async (): Promise<void> => {
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}".\n  commands: ${known}`);
       }
-      console.log('atelier create <path>   then: pending · ratify --decisions <json> · ratify-close · build --name <name>');
+      console.log('atelier skill "<your rules>"  ·  atelier skill --from <path-to-your-work>     create');
+      console.log('  /<name> or atelier invoke --skill <name> "<task>"                            use');
+      console.log('  atelier fix "<what was wrong>"                                               correct');
+      console.log('  staged spelling: create <path> · pending · ratify --decisions <json> · ratify-close · build --name <name>');
       console.log(`  every command: ${known}`);
       console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
       console.log('   held-out: reference --skill <name>   then: reference --score --labels <json>');
