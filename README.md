@@ -156,6 +156,12 @@ cd atelier && npm install && npm run build
 npm link                    # puts `atelier` on your PATH
 ```
 
+CI installs the packed tarball into a clean project and runs it on every push, so the path above is
+tested, not promised. The package name `@yannickyamo/atelier` is reserved for the npm release;
+**it is not published yet** — until it is, the source install above is the only real one, and this
+README will say so the day that changes.
+
+
 Node 22+. No account, no telemetry. An `ANTHROPIC_API_KEY` (or any OpenAI-compatible backend via
 `--provider openai-compatible --base-url …`) is needed only for the steps that call a model —
 stating your own rules with `add` and compiling them costs nothing.
