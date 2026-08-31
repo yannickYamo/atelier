@@ -34,11 +34,14 @@ describe('the arm set is fixed, not chosen', () => {
     expect(ALL_ARMS).toContain(TREATMENT);
   });
 
-  it('the primary comparison is the treatment against pasting the work into the prompt', () => {
+  it('the primary comparison is the ratified standard against the model\'s own guide — preregistered', () => {
+    // Flipped from T_vs_B1 by studies/EXTERNAL_EXPERT_B2_PREREGISTRATION.md, sealed before any
+    // corpus was read: T beating pasted examples while losing to a capable model's own guide would
+    // mean the product is "a model read your work". Which comparison decides the product is a
+    // preregistered choice — this test enforces that the choice only moves with a seal.
     const primary = PAIR_KINDS.filter((k) => k.primary);
     expect(primary).toHaveLength(1);
-    expect(primary[0].left).toBe('T_ATELIER');
-    expect(primary[0].right).toBe('B1_CORPUS_IN_PROMPT');
+    expect(primary[0].id).toBe('T_vs_B2');
   });
 
   it('every arm a pair kind names is an arm the set can generate', () => {
