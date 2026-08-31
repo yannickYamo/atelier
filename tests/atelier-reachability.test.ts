@@ -119,6 +119,11 @@ describe('a decision that is not an approval is still a decision', () => {
 // deliberate state — but "is anything dark that nobody decided to park". A module may leave the
 // codebase or leave this list; it may not leave silently.
 const PARKED: Readonly<Record<string, string>> = {
+  'core/stats/sign-test.ts':
+    'The external-expert study\'s analysis instrument (exact sign test, Clopper-Pearson, the '
+    + 'discordant floor), named by a sealed preregistration and pinned by its own tests. Consumed '
+    + 'by the studies/harness runner, deliberately reachable from no CLI verb: a user command that '
+    + 'computes study p-values is an invitation to peeking.',
   'core/fidelity/conditional-fidelity.ts':
     'MEASUREMENT INFRASTRUCTURE, PARKED ON PURPOSE UNTIL A STUDY USES IT. It replaces the adherence '
     + 'endpoint that failed three times: COMPLETE defined as absence of violations, over conditional '

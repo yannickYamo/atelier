@@ -137,8 +137,16 @@ export interface PairKind {
  * The primary is deliberately unchanged. Which comparison decides the product is a preregistered
  * choice and not something to revise while fixing a wiring defect.
  */
+// ─── THE PRIMARY MOVED, DELIBERATELY, BY PREREGISTRATION ──────────────────────────────────────
+//
+// T_vs_B1 asks whether the pipeline beats pasting the corpus in. T_vs_B2 asks whether a RATIFIED,
+// COMPILED standard beats a capable model's own guide to the same corpus — and only that comparison
+// tests the moat: if T beats B1 but loses to B2, the product is "a model read your work", which
+// anyone reproduces in one prompt. Changed by the external-expert preregistration
+// (studies/EXTERNAL_EXPERT_B2_PREREGISTRATION.md), before any corpus was read, as the comment below
+// always demanded: which comparison decides the product is a preregistered choice.
 export const PAIR_KINDS: readonly PairKind[] = [
-  { id: 'T_vs_B1', left: 'T_ATELIER', right: 'B1_CORPUS_IN_PROMPT', primary: true,
+  { id: 'T_vs_B1', left: 'T_ATELIER', right: 'B1_CORPUS_IN_PROMPT', primary: false,
     answers: 'does the pipeline beat pasting the work into the prompt' },
   { id: 'T_vs_GOLDEN', left: 'T_ATELIER', right: 'GOLDEN', primary: false,
     answers: 'non-inferiority against the expert\'s own held-out work' },
@@ -146,7 +154,7 @@ export const PAIR_KINDS: readonly PairKind[] = [
     answers: 'does it beat the expert\'s own half hour' },
   { id: 'B1_vs_GOLDEN', left: 'B1_CORPUS_IN_PROMPT', right: 'GOLDEN', primary: false,
     answers: 'how good the cheap thing is on its own' },
-  { id: 'T_vs_B2', left: 'T_ATELIER', right: 'B2_MODEL_STYLE_GUIDE', primary: false,
+  { id: 'T_vs_B2', left: 'T_ATELIER', right: 'B2_MODEL_STYLE_GUIDE', primary: true,
     answers: 'does a ratified standard beat a capable model\'s own guide to the same corpus' },
   { id: 'T_vs_B3', left: 'T_ATELIER', right: 'B3_STANDARD_AS_PROSE', primary: false,
     answers: 'does compiling add anything over serving the same standard as flat prose' },

@@ -8,7 +8,7 @@ Thanks for looking. A few things that will make a change easy to accept.
 npm ci
 npm run typecheck     # tsc, strict plus four flags beyond it
 npm run lint          # type-aware eslint; `npm run lint:fix` for the mechanical half
-npm test              # 1254 tests, ~5s
+npm test              # 1264 tests, ~5s
 
 Before citing any gate in a commit message, run `npm run preflight` — typecheck, lint, test and
 build in one command, no pipes, non-zero on any failure. Three ad-hoc shell checks lied in one
