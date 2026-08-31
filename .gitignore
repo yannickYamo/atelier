@@ -14,3 +14,5 @@ plugins/dist/
 # open-source tree, which ships code and the tests that hold it up.
 /ROADMAP.md
 /PAPER_HANDOFF.md
+/ADAPTIVE_IMPLEMENTATION_PLAN_v1.md
+/STUDY_INFRASTRUCTURE_AUDIT_*.md
