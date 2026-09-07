@@ -99,6 +99,22 @@ first label, key published with the result; no generation text enters the orches
 (BUILDER_VIEWED ledger); all 51 labels before any analysis; recognition declaration after; spend
 cap $15; guide and T token counts recorded.
 
+## 4a. Amendment, recorded 2026-09-06 — before any label reached the builder
+
+The repository's study-semantics census caught the generation runner deciding for itself what counted
+as a finished generation, a rule `core/inference` owns. The runner is fixed (every generation now goes
+through the shipped client, which normalizes termination and raises `GenerationIncomplete`). The
+disclosure that matters for reading this study: the 97 generations on disk were produced by the
+pre-fix path, a plain text completion, while the product's own serving function wraps generation in a
+forced tool call with a `{piece}` schema.
+
+**Internal validity is unaffected** — both arms went through one identical path and differed only in
+served bytes, exactly as sealed in §3. **External validity is narrowed**: these outputs are not
+byte-for-byte what `atelier invoke` produces for a user, so a result here speaks to the served-bytes
+comparison and not to the shipped invocation path. Regeneration was not performed: labelling may
+already be under way, and re-rolling generations mid-labelling is the builder's decision. Recorded
+here rather than discovered later.
+
 ## 5. What any outcome licenses — the ceiling, sealed
 
 - **T wins:** *exploratory* evidence that a compiled, obligation-bearing form of this reviewer's
