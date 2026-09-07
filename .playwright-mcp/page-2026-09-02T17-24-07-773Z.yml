@@ -1,0 +1,409 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - paragraph [ref=e3]: Ratification · 18 proposals · corpus 8d015a819194c7ba
+    - heading "Your standard, unratified" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Atelier read 4 pieces of your personal reflective writing and proposes these 18 rules as things you do. None of them binds anything until you say so.
+  - generic [ref=e7]:
+    - generic [ref=e8]: 0 of 18 ruled
+    - button "Copy 0 so far" [disabled] [ref=e10]
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - heading "What each ruling does" [level=2] [ref=e13]
+      - generic [ref=e14]:
+        - term [ref=e15]: Required
+        - definition [ref=e16]: An obligation. The skill must do this.
+        - term [ref=e17]: Preferred
+        - definition [ref=e18]: Characteristic of you but not obligatory — compiled as something shown rather than commanded.
+        - term [ref=e19]: Exemplar only
+        - definition [ref=e20]: Worth showing as an instance of how you work; never issued as an instruction.
+        - term [ref=e21]: Tolerated
+        - definition [ref=e22]: Appears in your work and must not be manufactured. An obligation pointing the other way.
+        - term [ref=e23]: Incidental
+        - definition [ref=e24]: Real, but it should not reach the model at all.
+        - term [ref=e25]: Not mine
+        - definition [ref=e26]: The machine guessed wrong. It is dropped, not softened.
+    - article [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]: p1
+        - generic [ref=e30]: GENERATIVE
+      - paragraph [ref=e31]: I close each paragraph with a verdict sentence that states the leadership payoff, usually stacking abstract nouns like trust, morale, resilience, and accountability.
+      - paragraph [ref=e32]: applies when a paragraph of scene description is finishing
+      - blockquote [ref=e33]:
+        - text: The morale, resilience, and motivation for this group were elite
+        - generic [ref=e34]: piece-01.md
+      - paragraph [ref=e35]: would be absent if Paragraphs would end on the last narrative beat and leave the reader to draw the lesson.
+      - group "Materiality for p1" [ref=e36]:
+        - button "Required" [ref=e37] [cursor=pointer]
+        - button "Preferred" [ref=e38] [cursor=pointer]
+        - button "Exemplar only" [ref=e39] [cursor=pointer]
+        - button "Tolerated" [ref=e40] [cursor=pointer]
+        - button "Incidental" [ref=e41] [cursor=pointer]
+        - button "Not mine" [ref=e42] [cursor=pointer]
+      - generic [ref=e43]:
+        - generic [ref=e44]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e45]:
+          - /placeholder: e.g. never when …
+    - article [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]: p2
+        - generic [ref=e49]: GENERATIVE
+      - paragraph [ref=e50]: I drop coursework vocabulary — role conflict, culture shaping mechanisms, transformative leadership — onto the scene as a label rather than defining or interrogating the concept.
+      - paragraph [ref=e51]: applies when connecting a retold moment to course material
+      - blockquote [ref=e52]:
+        - text: illustrates an example of role conflict
+        - generic [ref=e53]: piece-02.md
+      - paragraph [ref=e54]: would be absent if The analysis would stay in plain description, or it would stop to explain what the term means and test whether the scene really fits it.
+      - group "Materiality for p2" [ref=e55]:
+        - button "Required" [ref=e56] [cursor=pointer]
+        - button "Preferred" [ref=e57] [cursor=pointer]
+        - button "Exemplar only" [ref=e58] [cursor=pointer]
+        - button "Tolerated" [ref=e59] [cursor=pointer]
+        - button "Incidental" [ref=e60] [cursor=pointer]
+        - button "Not mine" [ref=e61] [cursor=pointer]
+      - generic [ref=e62]:
+        - generic [ref=e63]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e64]:
+          - /placeholder: e.g. never when …
+    - article [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]: p3
+        - generic [ref=e68]: GENERATIVE
+      - paragraph [ref=e69]: I quote dialogue only in short fragments dropped inside my own sentence, never as a set-off line, and I use them as proof of a character's stance rather than analyzing the wording.
+      - paragraph [ref=e70]: applies when a character's line is being cited
+      - blockquote [ref=e71]:
+        - text: Yoast tells his assistant coach that he should “do what you have to do”
+        - generic [ref=e72]: piece-02.md
+      - paragraph [ref=e73]: would be absent if Speeches would be block-quoted at length or paraphrased entirely away, and the diction itself would be discussed.
+      - group "Materiality for p3" [ref=e74]:
+        - button "Required" [ref=e75] [cursor=pointer]
+        - button "Preferred" [ref=e76] [cursor=pointer]
+        - button "Exemplar only" [ref=e77] [cursor=pointer]
+        - button "Tolerated" [ref=e78] [cursor=pointer]
+        - button "Incidental" [ref=e79] [cursor=pointer]
+        - button "Not mine" [ref=e80] [cursor=pointer]
+      - generic [ref=e81]:
+        - generic [ref=e82]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e83]:
+          - /placeholder: e.g. never when …
+    - article [ref=e84]:
+      - generic [ref=e85]:
+        - generic [ref=e86]: p4
+        - generic [ref=e87]: GENERATIVE
+      - paragraph [ref=e88]: "I resolve every conflict in favor of the leadership lesson: friction between styles or people is reframed as a net benefit to the organization rather than left as unresolved cost."
+      - paragraph [ref=e89]: applies when two approaches or people are in genuine conflict
+      - blockquote [ref=e90]:
+        - text: having variances in leadership can actually be a great thing for an organization
+        - generic [ref=e91]: piece-01.md
+      - paragraph [ref=e92]: would be absent if The piece would sit with the damage — Boone's humiliation of a player, Yoast's sabotage — as a real debit rather than a step toward growth.
+      - group "Materiality for p4" [ref=e93]:
+        - button "Required" [ref=e94] [cursor=pointer]
+        - button "Preferred" [ref=e95] [cursor=pointer]
+        - button "Exemplar only" [ref=e96] [cursor=pointer]
+        - button "Tolerated" [ref=e97] [cursor=pointer]
+        - button "Incidental" [ref=e98] [cursor=pointer]
+        - button "Not mine" [ref=e99] [cursor=pointer]
+      - generic [ref=e100]:
+        - generic [ref=e101]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e102]:
+          - /placeholder: e.g. never when …
+    - article [ref=e103]:
+      - generic [ref=e104]:
+        - generic [ref=e105]: p5
+        - generic [ref=e106]: GENERATIVE
+      - paragraph [ref=e107]: I build every paragraph around a specific named scene from the film rather than arguing from the film in general, and I signal the move with 'One example' or 'For instance' before naming the moment.
+      - paragraph [ref=e108]: applies when writing analytical prose about a narrative source; a general claim about leadership or resilience has just been asserted
+      - blockquote [ref=e109]:
+        - text: One example, which was the ultimate test of overcoming adversity, was how the team responded to Gerry Bertier’s car accident.
+        - generic [ref=e110]: piece-02.md
+      - paragraph [ref=e111]: would be absent if The paragraphs would state abstract claims about coaching styles and culture with no named characters or retold scenes attached.
+      - group "Materiality for p5" [ref=e112]:
+        - button "Required" [ref=e113] [cursor=pointer]
+        - button "Preferred" [ref=e114] [cursor=pointer]
+        - button "Exemplar only" [ref=e115] [cursor=pointer]
+        - button "Tolerated" [ref=e116] [cursor=pointer]
+        - button "Incidental" [ref=e117] [cursor=pointer]
+        - button "Not mine" [ref=e118] [cursor=pointer]
+      - generic [ref=e119]:
+        - generic [ref=e120]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e121]:
+          - /placeholder: e.g. never when …
+    - article [ref=e122]:
+      - generic [ref=e123]:
+        - generic [ref=e124]: p6
+        - generic [ref=e125]: GENERATIVE
+      - paragraph [ref=e126]: I identify minor characters by name and role in parentheses or apposition, assuming the reader needs the roster but not a plot summary.
+      - paragraph [ref=e127]: applies when a secondary figure enters the piece for the first time
+      - blockquote [ref=e128]:
+        - text: Coach Yoast (assistant head coach) who is also fiercely competitive
+        - generic [ref=e129]: piece-01.md
+      - paragraph [ref=e130]: would be absent if Characters would appear as 'a player' or 'one of the coaches', or the film's plot would be summarized up front instead.
+      - group "Materiality for p6" [ref=e131]:
+        - button "Required" [ref=e132] [cursor=pointer]
+        - button "Preferred" [ref=e133] [cursor=pointer]
+        - button "Exemplar only" [ref=e134] [cursor=pointer]
+        - button "Tolerated" [ref=e135] [cursor=pointer]
+        - button "Incidental" [ref=e136] [cursor=pointer]
+        - button "Not mine" [ref=e137] [cursor=pointer]
+      - generic [ref=e138]:
+        - generic [ref=e139]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e140]:
+          - /placeholder: e.g. never when …
+    - article [ref=e141]:
+      - generic [ref=e142]:
+        - generic [ref=e143]: p7
+        - generic [ref=e144]: GENERATIVE
+      - paragraph [ref=e145]: When I compare two people I use the future-tense-of-habit construction ('is going to lead in a different manner') to state a character's standing disposition instead of describing a single instance.
+      - paragraph [ref=e146]: applies when setting one figure's style against another's
+      - blockquote [ref=e147]:
+        - text: Coach Yoast is going to lead in a different manner and pick a player up when Coach Boone knocks him down.
+        - generic [ref=e148]: piece-01.md
+      - paragraph [ref=e149]: would be absent if Contrasts would be made in past tense scene-by-scene, or with simple present ('Yoast leads differently').
+      - group "Materiality for p7" [ref=e150]:
+        - button "Required" [ref=e151] [cursor=pointer]
+        - button "Preferred" [ref=e152] [cursor=pointer]
+        - button "Exemplar only" [ref=e153] [cursor=pointer]
+        - button "Tolerated" [ref=e154] [cursor=pointer]
+        - button "Incidental" [ref=e155] [cursor=pointer]
+        - button "Not mine" [ref=e156] [cursor=pointer]
+      - generic [ref=e157]:
+        - generic [ref=e158]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e159]:
+          - /placeholder: e.g. never when …
+    - article [ref=e160]:
+      - generic [ref=e161]:
+        - generic [ref=e162]: p8
+        - generic [ref=e163]: GENERATIVE
+      - paragraph [ref=e164]: I reach for a military or absolutist metaphor to characterize authority, then immediately cash it out with the scene that earns it.
+      - paragraph [ref=e165]: applies when describing a commanding or dominant leader
+      - blockquote [ref=e166]:
+        - text: runs his team like a military general would guide a team as they prepare for a battle
+        - generic [ref=e167]: piece-01.md
+      - paragraph [ref=e168]: would be absent if The leader would be described in neutral managerial terms — 'demanding', 'results-oriented' — with no figurative framing.
+      - group "Materiality for p8" [ref=e169]:
+        - button "Required" [ref=e170] [cursor=pointer]
+        - button "Preferred" [ref=e171] [cursor=pointer]
+        - button "Exemplar only" [ref=e172] [cursor=pointer]
+        - button "Tolerated" [ref=e173] [cursor=pointer]
+        - button "Incidental" [ref=e174] [cursor=pointer]
+        - button "Not mine" [ref=e175] [cursor=pointer]
+      - generic [ref=e176]:
+        - generic [ref=e177]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e178]:
+          - /placeholder: e.g. never when …
+    - article [ref=e179]:
+      - generic [ref=e180]:
+        - generic [ref=e181]: p9
+        - generic [ref=e182]: GENERATIVE
+      - paragraph [ref=e183]: I open a piece by stating the external pressure on the group in the first two sentences, so the whole essay reads as a response to that pressure.
+      - paragraph [ref=e184]: applies when writing the first paragraph; the subject is a team or organization under strain
+      - blockquote [ref=e185]:
+        - text: The Titans football team immediately encountered moments of stress and emotional turmoil due to the mandatory school integration.
+        - generic [ref=e186]: piece-02.md
+      - paragraph [ref=e187]: would be absent if The piece would open on a character, a scene, or a thesis about leadership with the social context filled in later or not at all.
+      - group "Materiality for p9" [ref=e188]:
+        - button "Required" [ref=e189] [cursor=pointer]
+        - button "Preferred" [ref=e190] [cursor=pointer]
+        - button "Exemplar only" [ref=e191] [cursor=pointer]
+        - button "Tolerated" [ref=e192] [cursor=pointer]
+        - button "Incidental" [ref=e193] [cursor=pointer]
+        - button "Not mine" [ref=e194] [cursor=pointer]
+      - generic [ref=e195]:
+        - generic [ref=e196]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e197]:
+          - /placeholder: e.g. never when …
+    - article [ref=e198]:
+      - generic [ref=e199]:
+        - generic [ref=e200]: p10
+        - generic [ref=e201]: GENERATIVE
+      - paragraph [ref=e202]: I attribute causes to intangible group properties — shared culture, genuine affection, shared identity — rather than to individual talent or luck when explaining why a group held together.
+      - paragraph [ref=e203]: applies when accounting for why the group withstood a crisis
+      - blockquote [ref=e204]:
+        - text: resilience was no longer dependent on Boone and Yoast’s coaching commands but rather came from the genuine affection and shared identity
+        - generic [ref=e205]: piece-02.md
+      - paragraph [ref=e206]: would be absent if Outcomes would be credited to a coach's decisions, skill, or chance, with the collective treated as an effect rather than a cause.
+      - group "Materiality for p10" [ref=e207]:
+        - button "Required" [ref=e208] [cursor=pointer]
+        - button "Preferred" [ref=e209] [cursor=pointer]
+        - button "Exemplar only" [ref=e210] [cursor=pointer]
+        - button "Tolerated" [ref=e211] [cursor=pointer]
+        - button "Incidental" [ref=e212] [cursor=pointer]
+        - button "Not mine" [ref=e213] [cursor=pointer]
+      - generic [ref=e214]:
+        - generic [ref=e215]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e216]:
+          - /placeholder: e.g. never when …
+    - article [ref=e217]:
+      - generic [ref=e218]:
+        - generic [ref=e219]: p11
+        - generic [ref=e220]: GENERATIVE
+      - paragraph [ref=e221]: I use parentheses to smuggle in the concrete stakes of a scene rather than giving them their own clause.
+      - paragraph [ref=e222]: applies when a factual detail supports but does not carry the point
+      - blockquote [ref=e223]:
+        - text: playing defense (and shutting down the other team's best player)
+        - generic [ref=e224]: piece-01.md
+      - paragraph [ref=e225]: would be absent if The detail would be promoted to its own sentence or cut entirely.
+      - group "Materiality for p11" [ref=e226]:
+        - button "Required" [ref=e227] [cursor=pointer]
+        - button "Preferred" [ref=e228] [cursor=pointer]
+        - button "Exemplar only" [ref=e229] [cursor=pointer]
+        - button "Tolerated" [ref=e230] [cursor=pointer]
+        - button "Incidental" [ref=e231] [cursor=pointer]
+        - button "Not mine" [ref=e232] [cursor=pointer]
+      - generic [ref=e233]:
+        - generic [ref=e234]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e235]:
+          - /placeholder: e.g. never when …
+    - article [ref=e236]:
+      - generic [ref=e237]:
+        - generic [ref=e238]: p12
+        - generic [ref=e239]: GENERATIVE
+      - paragraph [ref=e240]: I lead each section with an abstract claim about a leadership concept, then immediately hand the reader a named scene from the film as proof, rather than letting the scene arrive first and draw its own conclusion.
+      - paragraph [ref=e241]: applies when writing a body paragraph of a leadership analysis; the evidence base is a single narrative film
+      - blockquote [ref=e242]:
+        - text: One example specifically is when Coach Yoast experiences significant emotional strain at the beginning of the football season.
+        - generic [ref=e243]: piece-02.md
+      - paragraph [ref=e244]: would be absent if Paragraphs would open with the scene retold in narrative order and end with the generalisation, or would stay entirely at the level of concept with no scene attached.
+      - group "Materiality for p12" [ref=e245]:
+        - button "Required" [ref=e246] [cursor=pointer]
+        - button "Preferred" [ref=e247] [cursor=pointer]
+        - button "Exemplar only" [ref=e248] [cursor=pointer]
+        - button "Tolerated" [ref=e249] [cursor=pointer]
+        - button "Incidental" [ref=e250] [cursor=pointer]
+        - button "Not mine" [ref=e251] [cursor=pointer]
+      - generic [ref=e252]:
+        - generic [ref=e253]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e254]:
+          - /placeholder: e.g. never when …
+    - article [ref=e255]:
+      - generic [ref=e256]:
+        - generic [ref=e257]: p13
+        - generic [ref=e258]: GENERATIVE
+      - paragraph [ref=e259]: I build my argument by contrast pairs — two coaches, two styles, knock down versus pick up — and keep the pair running as the organising spine of the piece rather than treating each figure separately.
+      - paragraph [ref=e260]: applies when more than one leader or approach is in play; structuring a full short essay
+      - blockquote [ref=e261]:
+        - text: Coach Yoast is going to lead in a different manner and pick a player up when Coach Boone knocks him down.
+        - generic [ref=e262]: piece-01.md
+      - paragraph [ref=e263]: would be absent if Each coach would get his own self-contained profile, or one would be analysed and the other mentioned only in passing.
+      - group "Materiality for p13" [ref=e264]:
+        - button "Required" [ref=e265] [cursor=pointer]
+        - button "Preferred" [ref=e266] [cursor=pointer]
+        - button "Exemplar only" [ref=e267] [cursor=pointer]
+        - button "Tolerated" [ref=e268] [cursor=pointer]
+        - button "Incidental" [ref=e269] [cursor=pointer]
+        - button "Not mine" [ref=e270] [cursor=pointer]
+      - generic [ref=e271]:
+        - generic [ref=e272]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e273]:
+          - /placeholder: e.g. never when …
+    - article [ref=e274]:
+      - generic [ref=e275]:
+        - generic [ref=e276]: p14
+        - generic [ref=e277]: GENERATIVE
+      - paragraph [ref=e278]: When I reach for an image it is a single military or fire metaphor dropped in one clause and then abandoned; I never extend it across the paragraph.
+      - paragraph [ref=e279]: applies when characterising a leader's manner or a turning point; the abstract label alone feels thin
+      - blockquote [ref=e280]:
+        - text: he ignites a fire in his team with his speech
+        - generic [ref=e281]: piece-01.md
+      - paragraph [ref=e282]: would be absent if The metaphor would be sustained and developed — the battle figure carried through the whole essay — or there would be no figurative language at all.
+      - group "Materiality for p14" [ref=e283]:
+        - button "Required" [ref=e284] [cursor=pointer]
+        - button "Preferred" [ref=e285] [cursor=pointer]
+        - button "Exemplar only" [ref=e286] [cursor=pointer]
+        - button "Tolerated" [ref=e287] [cursor=pointer]
+        - button "Incidental" [ref=e288] [cursor=pointer]
+        - button "Not mine" [ref=e289] [cursor=pointer]
+      - generic [ref=e290]:
+        - generic [ref=e291]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e292]:
+          - /placeholder: e.g. never when …
+    - article [ref=e293]:
+      - generic [ref=e294]:
+        - generic [ref=e295]: p15
+        - generic [ref=e296]: GENERATIVE
+      - paragraph [ref=e297]: I stack outcomes in three-item lists of abstract nouns or adjectives when I want the payoff to feel total.
+      - paragraph [ref=e298]: applies when asserting the cumulative effect of leadership; the sentence is meant to land
+      - blockquote [ref=e299]:
+        - text: The morale, resilience, and motivation for this group were elite
+        - generic [ref=e300]: piece-01.md
+      - paragraph [ref=e301]: would be absent if A single named outcome would be argued through, with the mechanism spelled out instead of the list.
+      - group "Materiality for p15" [ref=e302]:
+        - button "Required" [ref=e303] [cursor=pointer]
+        - button "Preferred" [ref=e304] [cursor=pointer]
+        - button "Exemplar only" [ref=e305] [cursor=pointer]
+        - button "Tolerated" [ref=e306] [cursor=pointer]
+        - button "Incidental" [ref=e307] [cursor=pointer]
+        - button "Not mine" [ref=e308] [cursor=pointer]
+      - generic [ref=e309]:
+        - generic [ref=e310]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e311]:
+          - /placeholder: e.g. never when …
+    - article [ref=e312]:
+      - generic [ref=e313]:
+        - generic [ref=e314]: p16
+        - generic [ref=e315]: GENERATIVE
+      - paragraph [ref=e316]: I treat the film's events as real organisational data and write about the characters as employees and leaders, never as authorial constructions or as a movie being watched.
+      - paragraph [ref=e317]: applies when the film is being used as a case study
+      - blockquote [ref=e318]:
+        - text: This proves the success of Boone’s cultural transformation, which was originally met with resistance.
+        - generic [ref=e319]: piece-02.md
+      - paragraph [ref=e320]: would be absent if There would be talk of the director's choices, of what the film wants the viewer to feel, or of whether the story is a reliable model of real workplaces.
+      - group "Materiality for p16" [ref=e321]:
+        - button "Required" [ref=e322] [cursor=pointer]
+        - button "Preferred" [ref=e323] [cursor=pointer]
+        - button "Exemplar only" [ref=e324] [cursor=pointer]
+        - button "Tolerated" [ref=e325] [cursor=pointer]
+        - button "Incidental" [ref=e326] [cursor=pointer]
+        - button "Not mine" [ref=e327] [cursor=pointer]
+      - generic [ref=e328]:
+        - generic [ref=e329]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e330]:
+          - /placeholder: e.g. never when …
+    - article [ref=e331]:
+      - generic [ref=e332]:
+        - generic [ref=e333]: p17
+        - generic [ref=e334]: GENERATIVE
+      - paragraph [ref=e335]: I use the present tense for what happens on screen and slide into past tense for the team's development, without regularising the two.
+      - paragraph [ref=e336]: applies when moving between scene description and summary of arc
+      - blockquote [ref=e337]:
+        - text: Coach Yoast goes over and speaks to Petey to engage him in the game once again
+        - generic [ref=e338]: piece-01.md
+      - paragraph [ref=e339]: would be absent if Tense would be held consistent throughout, either all cinematic present or all narrative past.
+      - group "Materiality for p17" [ref=e340]:
+        - button "Required" [ref=e341] [cursor=pointer]
+        - button "Preferred" [ref=e342] [cursor=pointer]
+        - button "Exemplar only" [ref=e343] [cursor=pointer]
+        - button "Tolerated" [ref=e344] [cursor=pointer]
+        - button "Incidental" [ref=e345] [cursor=pointer]
+        - button "Not mine" [ref=e346] [cursor=pointer]
+      - generic [ref=e347]:
+        - generic [ref=e348]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e349]:
+          - /placeholder: e.g. never when …
+    - article [ref=e350]:
+      - generic [ref=e351]:
+        - generic [ref=e352]: p18
+        - generic [ref=e353]: GENERATIVE
+      - paragraph [ref=e354]: I generalise from the single team to organisations at large in one short sentence, using 'an organization' as the widened frame, and then drop straight back to the film.
+      - paragraph [ref=e355]: applies when drawing the transferable lesson; placed inside a paragraph, not in a conclusion
+      - blockquote [ref=e356]:
+        - text: having variances in leadership can actually be a great thing for an organization
+        - generic [ref=e357]: piece-01.md
+      - paragraph [ref=e358]: would be absent if The essay would stay strictly inside the film's world, or the generalisation would be developed with outside examples.
+      - group "Materiality for p18" [ref=e359]:
+        - button "Required" [ref=e360] [cursor=pointer]
+        - button "Preferred" [ref=e361] [cursor=pointer]
+        - button "Exemplar only" [ref=e362] [cursor=pointer]
+        - button "Tolerated" [ref=e363] [cursor=pointer]
+        - button "Incidental" [ref=e364] [cursor=pointer]
+        - button "Not mine" [ref=e365] [cursor=pointer]
+      - generic [ref=e366]:
+        - generic [ref=e367]: When would you deliberately NOT do this? (optional)
+        - textbox "When would you deliberately NOT do this? (optional)" [ref=e368]:
+          - /placeholder: e.g. never when …
+    - generic [ref=e369]:
+      - heading "Last question — answer only after all 18 are ruled" [level=2] [ref=e370]
+      - paragraph [ref=e371]: Does this set substantially capture how you write, across both kinds of pieces you gave us — yes or no?
+      - generic [ref=e372]:
+        - button "Yes" [disabled] [ref=e373]
+        - button "No" [disabled] [ref=e374]
+  - contentinfo [ref=e375]: 4 item(s), work type "personal reflective writing", corpus 8d015a819194c7ba Marks are saved in this browser only. Nothing is sent anywhere — press Copy rulings and send the copied block back to the study coordinator.
