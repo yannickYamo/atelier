@@ -1,6 +1,6 @@
 # Atelier
 
-**Turn expert taste and judgment into an executable AI skill.**
+**You own what good means. The model is the part you can replace.**
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -26,9 +26,9 @@ expert work
     ↓ discover contextual decisions
 candidate standard
     ↓ human authority
-StandardVersion        what good means
+StandardVersion        what good means          ← yours
     ↓ compile
-SkillVersion           how one model implements it
+SkillVersion           how one model implements it   ← disposable
     ↓ use + evidence
 SkillVersion v2        same standard, better implementation
 ```
@@ -37,6 +37,56 @@ SkillVersion v2        same standard, better implementation
 
 A model can propose what it sees. Only a person can decide what belongs in the standard. Once a
 standard is frozen, Atelier can improve the implementation without quietly moving the target.
+
+---
+
+## Owning the weights is not owning the target
+
+The industry has decided that personal AI matters. The strongest version of that argument is now
+funded at serious scale — River AI raised $1.1B on the premise that
+*"Today's stack was designed for a world where a few companies own the intelligence and rent it out
+by the token… Personal AI does not fit that shape. It is yours, not rented, and you have real control
+over it."* ([their words](https://river.ai/introducing-river-ai).) That premise is right, and Atelier
+shares it. What follows is a distinction, not a disagreement.
+
+But "own your AI" hides an ambiguity, and everything depends on which noun it attaches to.
+
+| | what you own | where your judgment lives | can you read it? |
+|---|---|---|---|
+| **Fine-tuning / RL on open weights** | the weights | in the parameters | no |
+| **Prompting a frontier model** | nothing | in a string you rewrite by hand | yes, until it drifts |
+| **Memory / preference accumulation** | a growing pile | in whatever got logged | not as a definition |
+| **Atelier** | **the standard** | in ratified, versioned sentences | **yes, and you can diff it** |
+
+Owning a model's weights is a real and valuable thing. It is not the same as owning the definition of
+good those weights were moved toward. If a fine-tune's picture of you drifts, there is no artifact to
+inspect — you cannot diff weights against your intent. You can diff a StandardVersion, and Atelier's
+repair loop asserts the hash is unchanged rather than logging that it hoped so.
+
+There is a second gap, and it is visible in the tooling itself. Reinforcement learning needs a
+grader. For verifiable work a grader is easy to write — `1.0 if the answer matches`. **For taste
+there is no such function.** Nobody can write `reward(essay) → 0.0 | 1.0` for *sounds like me*, which
+is exactly why the hard part of personalization is not the optimizer. It is getting tacit human
+judgment into an explicit target in the first place, and keeping the optimizer from editing it.
+
+That is the part Atelier builds:
+
+- **Acquisition.** Turning work into candidate decisions, with the condition and the boundary
+  attached, not just the behaviour.
+- **Authority.** A human ruling on every candidate — mine, not mine, in my words, only when — with a
+  ceiling that a machine cannot climb.
+- **Governance.** An optimizer that may change the implementation and may never change the target.
+
+None of that competes with better models or cheaper training. It is the layer underneath them, and it
+gets more useful as they get better: **an optimizer needs an objective, and somebody has to own it.**
+
+Two practical consequences worth stating plainly:
+
+- **Atelier runs on models you don't own.** A standard carries no model identity, so it compiles onto
+  a frontier API today and a local open model tomorrow with no migration and no retraining. You are
+  not required to move your stack to keep your standard.
+- **If machines can do the work, this is what is left for people:** deciding what good means, in
+  writing, in words a machine may execute and may not rewrite.
 
 ---
 
@@ -458,8 +508,10 @@ The broader product thesis is still being tested, deliberately.
 
 ## What has been tested, including what failed
 
-Three behavioural studies, reported in full because the shape of the result tells you where this helps
-and where it does not.
+Every behavioural study is reported in full, because the shape of a result tells you where this helps
+and where it does not — and because a repository that only published its wins would be asking you to
+trust exactly the thing it claims to make inspectable. Two of the results below are nulls, one is a
+negative, one figure was withdrawn after publication, and one study stopped itself at its own gate.
 
 **Where most rules apply most of the time, a compiled standard beat raw examples.** A standard
 recovered from one maintainer's public review comments, adopted by a language model standing in for
@@ -490,10 +542,28 @@ Two of these need an input the system cannot invent. `B4` requires `--one-pager`
 rather than generating a stand-in: a baseline authored by the thing being measured is not a baseline.
 `B2` costs one extra call to write the guide, counted in the estimate before anything is spent.
 
-These arms have never been run against a real expert. That run is the next thing that would move any
-claim here, and the arithmetic for sizing it is in
+**The first external expert has now ratified a standard, and the endpoint still has not produced a
+number.** An outside writer — the first non-builder in this repository's history to hold authority
+over a standard — supplied a corpus, ruled on all 18 discovered rules, and kept every one of them.
+They also marked **none of them required**, so the compiled standard showed everything and instructed
+nothing, the known-bad validity trials could not be constructed from it, and the
+[preregistered gate stopped the study before the endpoint ran](studies/EXTERNAL_EXPERT_PILOT_CLOSE.md).
+It closed ACQUISITION-ONLY for $0.52, and the reviewer's 59 planned trials were never spent. That is
+the gate working, and it is also a finding worth sitting with: the first outside expert to use the
+materiality vocabulary treated their entire voice as preference rather than obligation.
+
+The full six-arm comparison against a real expert remains the next thing that would move any claim
+here. The arithmetic for sizing it is in
 [M2_PRICING_STUDY_CLOSE.md](studies/M2_PRICING_STUDY_CLOSE.md) §4: 17 contexts resolved Δ ≥ 0.24
 while the effects worth finding were 0.13–0.24, so the next design needs roughly 36 to 62.
+
+**The end-to-end repair chain was tested on its own terms, and it lost.** The
+[moat experiment](studies/MOAT_RESULT.md) ran the whole loop — fixed standard, failing
+implementation, qualified complaint, an Atelier-built alternative — and asked whether the standard's
+owner would blindly prefer the alternative on fresh work. They preferred it 9 times out of 16 against
+a preregistered bar of 12 (p = 0.40). It closed NEGATIVE and was not repaired. The governance half
+held throughout: the standard's hash never moved across five diagnostic rounds, a mint, a rerun and a
+settlement.
 
 **Ratification demonstrably changes what a model does.** Twelve identical statements compiled twice,
 once as unratified observations and once as ratified requirements, served to the same model on 30
@@ -533,7 +603,7 @@ test asserts any of those numbers and no behaviour depends on one, which
 `tests/atelier-measurements-disclosure.test.ts` keeps honest in both directions. Terms and symbols
 the comments use without spelling out are in [docs/GLOSSARY.md](docs/GLOSSARY.md).
 
-**The preregistrations and study records are in [studies/](studies/README.md).** Eighteen documents,
+**The preregistrations and study records are in [studies/](studies/README.md).** Thirty-six documents,
 sealed before generation and published as sealed: the null, the positive result, the gate that failed
 and was not excepted, and the effect that was real and still did not license the fix it suggested.
 Read them for what they refuse as much as for what they show. One published figure was wrong and is
