@@ -1,0 +1,414 @@
+{
+ "standard": "f8a183c087e91e6c",
+ "rule": "side A holds T iff first hex of sha256(\"<taskId>|override|<standard>\") is 0-7",
+ "trials": [
+  {
+   "taskId": "E01",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "35d5de29e5f7b07bd55c37d68ac4c3aa8b5f930488f9edc9341d2a4d25a8cb8b",
+   "shaB": "a8d2a522028cb1208328097f92088be4a162d905923bbd1f394baf9f63817095"
+  },
+  {
+   "taskId": "E02",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "9e354fdf30ee8f1f245042ce04f766557ff0f80497ac20f11ae1ed0b44e85dcb",
+   "shaB": "5b88380b2a48012dd96c19b2d06c90e1d4a0e46d9281c9b6c6d0d8a7b5a8c69f"
+  },
+  {
+   "taskId": "E03",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "3f47e68b1f23a85e36ac60f46dc32c6af4d863ddf8d612f7bbe8372536a924cc",
+   "shaB": "b33acdf8b0ce131e6cae147e6625eb5f2d4f76c0d423b96e391574d021de61f2"
+  },
+  {
+   "taskId": "E04",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "89ccc64b4268a426500a3d5edfac5461269106cdb39359ad14332501649c7c6e",
+   "shaB": "a19e421a21b7edca96a7b93b32de7ab43a62448fea2b2298fd8b7c92b254d345"
+  },
+  {
+   "taskId": "E05",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "dc287f6473ff687f45bcf946cc4a9092ee37f4292aa9d5a2f7da4b443eba4a1c",
+   "shaB": "de6004b9029f8112f0c726e113b10bb94d748d43f578aa456bbf865b775878af"
+  },
+  {
+   "taskId": "E06",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "a07995195bba0bc9d195cfbd5c638cf2b2c15edf180e65f5ab0bb4162f836a19",
+   "shaB": "7b471bd1cf1b10a5bbf6fb5741c7e817b9bf27e251747858220583cfca3e46fd"
+  },
+  {
+   "taskId": "E07",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "792bb2b3062b71276ccf3ca72ed87d144e99686641ab06d773590c76013d1e96",
+   "shaB": "d00050333854e1b108367ea8f5ea5d6655257243ed197a7e16e742a5214d01c6"
+  },
+  {
+   "taskId": "E08",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "db9343a9d602d27da9dfd77081b5c49bb4c64b08376c65d9316e15bb4c5e6d25",
+   "shaB": "c288e2e6849e890a15e262f3c6c320896569ae4f00b7fdaff2906d64dd89a34d"
+  },
+  {
+   "taskId": "E09",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "68a1e7406540f8aab3a1d7b8c3b25e74f2738a0e63342e11a20461f2f96ff7f6",
+   "shaB": "bcb7a225c96ae506b4e10e11457cbbbfb8fcb2affda2789b2c4371dd0ef6ac85"
+  },
+  {
+   "taskId": "E10",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "bdaf4fc493d1fd3f0406521f02bbf118ea25750c3947cf7fff5bd04856a31578",
+   "shaB": "3bc65097545ccce79e3f8e0e050287aa854057424d6a784b3ff9d8a5e84ba030"
+  },
+  {
+   "taskId": "E11",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "9f67e4b6561544f0c53b39e4245855b3c0edfe16a5654df363c39d2c0e357e2d",
+   "shaB": "7e232672b68cb3aab33c48c202fe0a5c147a7410143d224bc5d7155436b9b2af"
+  },
+  {
+   "taskId": "E12",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "0ed99c2dcabe9bccab9b42bd833df787c6f0dbe537cab544336d6837526cba19",
+   "shaB": "3a7d708be3241be272a5aa350293447d8decd763616e71b097c24a89ca6ffaa6"
+  },
+  {
+   "taskId": "E13",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "7f70f48ea2046cbd0d50783b9b56acbe3ac379a4e2fb16efe3c611de67b3297c",
+   "shaB": "49f912966f7586ef9e03d88c936eaca81e801a3af58619c7f195a7179c9e062d"
+  },
+  {
+   "taskId": "E14",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "801e650f3ce742f0d6f9c0f85e1faa646fe7a90dca4b5d9fdc7157bd81a6e5b4",
+   "shaB": "c8133d3c17818ef42230481f10d691a062de445b064009f167772cf11ac0fb4e"
+  },
+  {
+   "taskId": "E15",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "a44e941d8aa97078e70f75ebd3d05fa8e748b89b0bb9eeb6fd9f977cc50f6a03",
+   "shaB": "1633d205e82ab4eda04371c8009393ae016b43608bdfce2cf932d51743b8b73a"
+  },
+  {
+   "taskId": "E16",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "3a479061c0b0a882b95993005fbc13433264241b25d9e3777d7269821a02f032",
+   "shaB": "e08eace58e7a6812c2ae7d29d0d1cffc9512649b8737d299d11a190950d73d05"
+  },
+  {
+   "taskId": "E17",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "170ba5cd1d99d11642164e8b973545fe18f2a30637f561d744ae2822e29fa748",
+   "shaB": "5d933a405a1bc8985adce6ec589a13c973bb54a616867035302615d24c6810d7"
+  },
+  {
+   "taskId": "E18",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "9d8bac40c7dd64575df81a19bf48f489321c52c17985196569dd63ad72024c16",
+   "shaB": "e6bb2a60c270e578fe2b12f76ee7efe74a5516d583f8a7e16a0f1d9a511d1010"
+  },
+  {
+   "taskId": "E19",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "00a63be0d5ee536bda6e468140cd94cb54261648b91c59ff0d9693c19e465558",
+   "shaB": "5b8f57cc0b3b53aedbc8f0c2bfc45dd9ca8fd2060ada2bc81bbfd82ba57d67f6"
+  },
+  {
+   "taskId": "E20",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "974bda9973f858a4ac9b615507ad834e14abc1101ebdade29280cc6c3c7e7872",
+   "shaB": "1b92235d6ffc10b01ed02f42211a94c3b31612b40d426c51548dbfa0d38c158a"
+  },
+  {
+   "taskId": "J01",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "cba2b4833d72e03d777df392ab7b1a03438758da1cb3ef45f05067d0ab412135",
+   "shaB": "362dd1394d6eb99511c206432ba2404a926c07ae5808123fc0c4a61b4e94bb36"
+  },
+  {
+   "taskId": "J02",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "617f245d391212cf3e45527013f14dc3836ae8bb13cab18dd80530c3d7470329",
+   "shaB": "21b290f93474160d48805d28284db14ecd116221e97218e4733c7c30dcba6f48"
+  },
+  {
+   "taskId": "J03",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "f592dfa396c0222286aa143f1b522deae97827f31275bdef0156994e9d733845",
+   "shaB": "f6f37d6ddda43e4dbaf550edfe5259e780f90514f442970765722ba11c347d15"
+  },
+  {
+   "taskId": "J04",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "ec542a2d563ea51fbf237171dddcb39673148684a64780df72d252c86dd38a67",
+   "shaB": "71474014e862189a27a4d77bc7bcb7570b0d47f15dd60d2f457bae8b8c486bfe"
+  },
+  {
+   "taskId": "J05",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "49fb6f07387854c64de72c1f6f692457c90650394750056554a11fb35cf70a51",
+   "shaB": "8bded86399582a8c4b35c4b677b825ad083b1aa94aa966e41e931ea34405de30"
+  },
+  {
+   "taskId": "J06",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "d65179473a99a0c351df0bcd66b283b59edd9e5c0c1495a75b2b36abeaf5ab0b",
+   "shaB": "07022c7ca01558f1b707bc28f30a904d2073fd00f6a3bd6f0101050e9421e073"
+  },
+  {
+   "taskId": "J07",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "0c89301dffb9bc9f8114f4a4796d2653b4ce5196f94e1b268e07cc94f3538fc4",
+   "shaB": "3d2f1ea5de89e162319b397c6ea030fb8ef190419312123c4d997d57c1f9c1b5"
+  },
+  {
+   "taskId": "J08",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "e71848033917df6515989381348ef77a5f3b1962b7aff4172ccdfe181b6f658c",
+   "shaB": "c1f896bc44766c391827ad7a6a05fbdb6258b5f4c07d650c68715a215c2c5989"
+  },
+  {
+   "taskId": "J09",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "cbf680efd58d59944ae38e72acdd76d53e8d159c5869a09499b493885341d044",
+   "shaB": "662d4693bc2e2bec9e941b08929393103dbc5e57656c213e2cdee16d06ba0f04"
+  },
+  {
+   "taskId": "J10",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "89f5eb94d112e510d8115afd450438517a16ecab81f535dbafce26cc9556dfee",
+   "shaB": "0cc08fe71ad1c1bbd98f31956242f2699179b4dcadfe2ecdecf65ec275b803af"
+  },
+  {
+   "taskId": "J11",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "4e520ac9eb808ba2f5db0213962b9fe0b5f3b5633123dcb91111ee888448adad",
+   "shaB": "94df71eea2ff7fb1c6eca064cf9ef94c6c4bfe7de209de4df69a9b97748d3fad"
+  },
+  {
+   "taskId": "J12",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "546122c5f36c233ec79f379135ad5c289db20063bb2e992c6bc04a2e40f4d67b",
+   "shaB": "9deaa389c0c81455d604d9344952999966ad91bb4e383a49026c451a2429cc4b"
+  },
+  {
+   "taskId": "J13",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "5ab9ce2d76f19058d181c70fa8d0a5345f35ffc13f163fd4f54c3940ee599b6d",
+   "shaB": "5f6b4ce27f1dd9253e71eb0e9edcac9cf28c8641be1d219a2e5522ce5ac2c483"
+  },
+  {
+   "taskId": "J14",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "ca751491bf42f8b7042c6f47796e7110919d52f5082b7405067f1be7ad6ab52c",
+   "shaB": "ac70baadabfccfd9cf84186f67253fd747d3a48e83640c39413cfb678ba9f0af"
+  },
+  {
+   "taskId": "J15",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "6f5419278cfab6a9ead0145f90c91af52f10da4b3dac553d7a7ff83626e1ce55",
+   "shaB": "8ea8e9627b1bc7b56cd0c64eb74e24756d373ee0f5f1c6a7b7955c93c30fb5da"
+  },
+  {
+   "taskId": "J16",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "598747408a05d307e1bc80d6649eaf321ab3702215dd60d7b8a8ed2b5d7d5764",
+   "shaB": "e299a133aca4ee63be00fecf44e6d7e9ce8705a6d9d557455432b12c89f11ecd"
+  },
+  {
+   "taskId": "J17",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "ea41239aca03d3d2ca6a34a77d1e4aac72e2f13acd3c194402b17ba61ff87fd2",
+   "shaB": "c2f4617e0b8d4cf950512eb247ff9fd7f2d48f92ec53d290194434b5b97ae0b4"
+  },
+  {
+   "taskId": "J18",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "5cced4241b77933c300b4ec0aab64a697cef5dcc324d5c863331b3ebcf046dcf",
+   "shaB": "5597c73f1bbc4662f85709b3d87831c9233da4c1d86671114bc1809a0f4c5148"
+  },
+  {
+   "taskId": "J19",
+   "kind": "primary",
+   "sideA": "B2",
+   "sideB": "T",
+   "shaA": "858b36272a8e96a27543645ba9d3f046ff9b659b0d8242396f424cc4f7890638",
+   "shaB": "ff583445b3ff475859be06cb25d8c36104fde0d9ec87306976a39791397b6072"
+  },
+  {
+   "taskId": "J20",
+   "kind": "primary",
+   "sideA": "T",
+   "sideB": "B2",
+   "shaA": "42172814be7a7b7fb99d779ecfd963bf0cd2cc1adc098686b823fc837ac912bc",
+   "shaB": "424a5df7c592590f5d2e97406699952aa517514880e26942246c3685e85f06c7"
+  },
+  {
+   "taskId": "K01",
+   "kind": "known-bad",
+   "sideA": "T",
+   "sideB": "B0",
+   "shaA": "8887bfb468e55dee9a9a685a7dc49195d34886858ebb398dbf92e948b2c27ab3",
+   "shaB": "b74186a6c4949c4c1495e5d9c05b6b94060cb5f5022edb7a79671086ad4476ac"
+  },
+  {
+   "taskId": "K02",
+   "kind": "known-bad",
+   "sideA": "B0",
+   "sideB": "T",
+   "shaA": "848c6f52adaeb1a9a13e260947f5a865842d539b41552df33fe6f4eab417f5c4",
+   "shaB": "d7c40056838476ffb913d26a29ff210e4477b4d80204f059d4414827c1443336"
+  },
+  {
+   "taskId": "K03",
+   "kind": "known-bad",
+   "sideA": "T",
+   "sideB": "B0",
+   "shaA": "eab12abe5f61870ca3647f9e3c0a7aa1aab7574754399557af23289c68cd3991",
+   "shaB": "c42bbd93c2f4c76a74905c5c26bc75796b0a4272a26ccd949b4419a0e5caaa8b"
+  },
+  {
+   "taskId": "K04",
+   "kind": "known-bad",
+   "sideA": "T",
+   "sideB": "B0",
+   "shaA": "dd8fa8d810cc325980f2f60fbc05f6a3d8fd7aadf408dac491632999a926bcee",
+   "shaB": "f6e1c528980effeece456c3609258c86fb30cc8ed412e6f1b58e42c330a9258d"
+  },
+  {
+   "taskId": "K05",
+   "kind": "known-bad",
+   "sideA": "B0",
+   "sideB": "T",
+   "shaA": "a5dd09196a006501e5a4d4326da00471f08c69b4a678d378af52fd8054a30d48",
+   "shaB": "540d81c3b6ae842987788159e16f2ceedc628036201c5a341598c7de56067495"
+  },
+  {
+   "taskId": "K06",
+   "kind": "known-bad",
+   "sideA": "B0",
+   "sideB": "T",
+   "shaA": "fbaea270ddc0c0ccad0398d96a638af89b3cf6d063b3d1b69348848d13d79851",
+   "shaB": "beb76a4ead04023ff261b625ea39720549c8445ab958d7d80a7a8127fe89ff1a"
+  },
+  {
+   "taskId": "X01",
+   "kind": "identical",
+   "sideA": "T",
+   "sideB": "T",
+   "shaA": "f3437a8c2966657f4f35addf5b0f8925d3dd2904e541b3b425930f9c153ea4bc",
+   "shaB": "f3437a8c2966657f4f35addf5b0f8925d3dd2904e541b3b425930f9c153ea4bc"
+  },
+  {
+   "taskId": "X02",
+   "kind": "identical",
+   "sideA": "T",
+   "sideB": "T",
+   "shaA": "b8ec54372b0ce77aa1c8689684a4a34838eaabfeefaae1982504d1af9974291c",
+   "shaB": "b8ec54372b0ce77aa1c8689684a4a34838eaabfeefaae1982504d1af9974291c"
+  },
+  {
+   "taskId": "X03",
+   "kind": "identical",
+   "sideA": "T",
+   "sideB": "T",
+   "shaA": "768ce0f48b429fc9f7c1bc9e0d9dbd276be140ee3542ee49151793d3c9444648",
+   "shaB": "768ce0f48b429fc9f7c1bc9e0d9dbd276be140ee3542ee49151793d3c9444648"
+  },
+  {
+   "taskId": "X04",
+   "kind": "identical",
+   "sideA": "T",
+   "sideB": "T",
+   "shaA": "6576b3e00a43ad70393cd22a8986cec0a8f7b3289574f1507777989079709708",
+   "shaB": "6576b3e00a43ad70393cd22a8986cec0a8f7b3289574f1507777989079709708"
+  },
+  {
+   "taskId": "X05",
+   "kind": "identical",
+   "sideA": "T",
+   "sideB": "T",
+   "shaA": "bc7ab55e1e882519f7cf9a9af23faa79f16beb301942ea8b665ed8b9d7ac6e5c",
+   "shaB": "bc7ab55e1e882519f7cf9a9af23faa79f16beb301942ea8b665ed8b9d7ac6e5c"
+  }
+ ]
+}
