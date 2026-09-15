@@ -192,6 +192,49 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
   }, 120_000);
 });
 
+describe('a repair follows a moved standard instead of dying on it', () => {
+  it('after an addition, a miss against the old run re-runs on the current standard and repairs that', async () => {
+    // Found live: two `fix --add` calls moved the standard to S2; a third complaint about the same
+    // (S1) run took the repair route, built a candidate on S1, and was correctly refused at promotion
+    // ("active is bound to S2, candidate to S1"). The invariant held and the user was stuck.
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+
+    await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
+    expect(run(data, proj, 'fix', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+    expect(s2).not.toBe(s1);
+
+    // the last recorded invocation is still the S1 run; complain about x1, which S2 also carries
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'a fresh answer on the current standard' } });
+    const out = run(data, proj, 'fix', 'the answer buried the recommendation');
+    expect(out).toContain('has moved since that run');
+    expect(out).toContain('IMPLEMENTATION_MISS');
+    expect(out).not.toContain('REPAIR INVARIANT');
+    expect(out).toContain('--pick a|b|same');
+
+    // the candidate it minted is bound to the CURRENT standard, so promotion is possible
+    const pending = store.readEvents(L).filter((e) => e.kind === 'REPAIR_PROPOSED');
+    const last = pending[pending.length - 1] as { standardVersionHash?: string; candidateSkillVersionHash: string };
+    expect(last.standardVersionHash).toBe(s2);
+    expect(store.getSkillVersion(L, last.candidateSkillVersionHash)!.standardVersionHash).toBe(s2);
+  }, 180_000);
+
+  it('the "rule no longer carried" guard is unreachable today, and this pins WHY', () => {
+    // The moved-standard branch dies if the current standard lacks the rule the diagnosis named.
+    // Reaching that state needs a verb that REMOVES an authored rule from a standard, and the
+    // product has none: `confirm --drop` only rules on DERIVED_UNRATIFIED proposals, `amend` keeps
+    // ids, and additions only grow the set. Until a removal verb exists, the guard is defensive
+    // code for an impossible state. This test exists so that adding such a verb also adds the
+    // scenario test the guard deserves, rather than leaving it to be discovered live.
+    const src = readFileSync(resolve('cli/commands/confirm.ts'), 'utf8');
+    expect(src).toContain("if (target.authority !== 'DERIVED_UNRATIFIED') die(");
+    const fixSrc = readFileSync(resolve('cli/commands/fix.ts'), 'utf8');
+    expect(fixSrc).toContain('no longer carries ${d.requirementId}');
+  });
+});
+
 describe('the lateral policy (unit)', () => {
   const arch = (carrier: 'PROSE' | 'SELF_CHECK'): SkillArchitecture => ({
     architectureHash: 'a1', standardVersionHash: 'sv1',

@@ -6,6 +6,7 @@
 
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
+import type { Requirement } from '../../core/state/canonical-state.js';
 import { spend } from '../../core/inference/client.js';
 import { observeRuntime, bindingHash, type RuntimeBinding } from '../../core/runtime/binding.js';
 import { persistInvocation } from '../../core/runtime/record.js';
@@ -17,6 +18,8 @@ import { runSpine, explainSpine } from '../../core/convergence/controller.js';
 import { proposeFloor } from '../../core/distinctiveness/contract.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
+import { decide } from '../../core/ratification/authority.js';
+import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 import { type Provenance } from '../../core/fidelity/provenance.js';
@@ -25,7 +28,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, MODEL, clientFor, numericFlag, assertReachable, skillArg } from '../runtime.js';
+import { sha, DATA, die, argv, flag, MODEL, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession } from '../runtime.js';
 import type { InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -341,7 +344,40 @@ export async function create(path: string): Promise<void> {
   if (argv.includes('--dry-run')) return;   // intake already returned without sealing
   console.log('\nReading your work…');
   await discover();
+  if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') adoptAllFromPublicSource();
   ratifyClose();
   // Default the name from the folder, so the minimum a person types is a path.
   build(flag('--name') ?? basename(resolve(path)));
+}
+
+/**
+ * SOMEONE ELSE'S PUBLIC WORK HAS NO EXPERT TO ASK, SO THE QUESTIONNAIRE IS SKIPPED, NOT DEFERRED.
+ *
+ * The ratification page asks "is this yours, and how much does it matter?" That question has an
+ * owner when the corpus is the user's own work. When the corpus is a third party's public writing
+ * nobody in the room can answer it: the user cannot ratify a stranger's voice, and the machine may
+ * not. A user who ran `create --public-source` and was then handed a form full of abstractions
+ * asked, reasonably, why the test was not "build it and let me judge the output". It is.
+ *
+ * Every proposal is adopted through `decide`, which caps it at USER_ADOPTED / PREFERRED: the compiler
+ * SHOWS these to the model and enforces none of them, which is the ceiling the source can carry (a
+ * recurrence in a stranger's work is not a rule they hold; see `roleFor`). Judgement moves to where
+ * it belongs, on generated output, through `fix`. A user who wants one of these to bind says so
+ * there, and `fix --add required` is the recorded act that makes it so.
+ */
+export function adoptAllFromPublicSource(): void {
+  const s = loadSession();
+  if (!s.proposals.length || s.decided.length) return;
+  const decidedAt = new Date().toISOString();
+  let ledger: RatificationLedger = { standardDraftHash: draftHash(s.proposals), records: [] };
+  const decided: Requirement[] = [];
+  for (const p of s.proposals) {
+    const outcome = decide(p, { verb: 'APPROVE', materiality: 'PREFERRED' });
+    decided.push(outcome.requirement);
+    ledger = appendDecision(ledger, p, outcome.ledgerDecision, { decidedAt });
+  }
+  saveSession({ ...s, decided, ledger });
+  console.log(`\nAdopted all ${decided.length} as observed technique from ${flag('--source-author') ?? 'a public source'}: `
+    + 'shown to the model, enforced by none of them. That is the ceiling a stranger\'s work can carry.'
+    + '\nJudge the output, then say what is wrong:  atelier fix "<what was wrong>"');
 }
