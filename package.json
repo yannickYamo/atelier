@@ -21,7 +21,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.70.0"
+    "@anthropic-ai/sdk": "^0.125.0"
   },
   "license": "MIT",
   "publishConfig": {
