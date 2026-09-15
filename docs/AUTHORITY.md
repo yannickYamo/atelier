@@ -69,6 +69,22 @@ they did about it, and that is not reconstructable afterwards.
 
 ---
 
+## The staged commands
+
+`atelier skill` runs these for you. They exist on their own for the case where you want to look
+before you rule, which is most cases once the corpus is real.
+
+```bash
+atelier pending                      # every candidate, with its evidence and counterfactual
+atelier ratify --decisions '<json>'  # rule on all of them in one batch; nothing partial
+atelier ratify-close --reason "..."  # mint the StandardVersion from what you kept
+```
+
+`ratify-close` after a build supersedes the previous version, and a supersession requires its
+reason. A version history without reasons can be counted but not audited.
+
+---
+
 ---
 
 [← back to the README](../README.md)

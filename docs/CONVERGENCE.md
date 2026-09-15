@@ -93,4 +93,26 @@ The ledger fills from ordinary use. There is nothing to set up and no labelling 
 
 ---
 
+
+## The arms a comparison must include
+
+`atelier reference` fixes its arm set in code rather than taking it as a flag. An omitted arm
+leaves no trace in a result, and the arm most likely to be dropped is the one most likely to win.
+
+| arm | what it is | what beating it answers |
+|---|---|---|
+| `B0_BARE` | the task alone | does any of this beat asking with no standard |
+| `B1_CORPUS_IN_PROMPT` | the same corpus, pasted in | does the pipeline beat the cheapest thing a competent person would try |
+| `B2_MODEL_STYLE_GUIDE` | a model reads the corpus and writes its own guide | is a ratified standard working, or any competent summary |
+| `B3_STANDARD_AS_PROSE` | the ratified rules as flat text, no carriers | does compiling add anything over the standard itself |
+| `B4_EXPERT_ONE_PAGER` | what the expert writes in half an hour | does it beat the person's own attempt at their rules |
+| `T_ATELIER` | the compiled package, served as bytes | |
+
+`B4` requires `--one-pager` and the run refuses to invent a stand-in: a baseline authored by the
+thing being measured is not a baseline. `B2` is the primary comparison, because if a compiled
+standard cannot beat a model's own summary of the same corpus, the product is "a model read your
+work", which anyone reproduces in one prompt.
+
+---
+
 [← back to the README](../README.md)
