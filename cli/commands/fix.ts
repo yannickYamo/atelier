@@ -79,13 +79,13 @@ export async function fix(): Promise<void> {
   }
   const complaint = flag('--complaint') ?? positional([]) ?? die('say what was wrong:  atelier fix "<what was wrong>"');
   const L: store.StoreLayout = { root: DATA, skillName: name };
-  const inv = store.getInvocation(L, invId) ?? die(`no invocation ${invId} for ${name}.`);
+  let inv = store.getInvocation(L, invId) ?? die(`no invocation ${invId} for ${name}.`);
   console.log(`About your last run of /${name}: "${inv.input.slice(0, 70)}${inv.input.length > 70 ? '…' : ''}"`);
   console.log(`You said: "${complaint}"\n`);
 
   const fb = { feedbackId: `f${sha(`${invId}|${complaint}`).slice(0, 10)}`, invocationId: invId, complaint, at: new Date().toISOString() };
 
-  const ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
+  let ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
   const d = await diagnose(clientFor(flag('--model') ?? MODEL), budget, ranStandard, inv, fb);
   console.log(`diagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
@@ -194,6 +194,34 @@ export async function fix(): Promise<void> {
   }
 
   // ── IMPLEMENTATION MISS: one lateral candidate, the same task re-run, one keystroke ─────────
+  //
+  // ── A REPAIR FOLLOWS A MOVED STANDARD; IT DOES NOT DIE ON IT ────────────────────────────────
+  //
+  // The complaint is about a run on standard S1. If the owner has since added rules (S2 is active),
+  // a candidate built on S1 is correctly refused at promotion: installing it would drop S2's rules.
+  // That refusal used to be the end of the road, and the only recovery was an invoke by hand. Found
+  // live: two additions, then a repair, then "REPAIR INVARIANT ... Nothing was promoted." Now the
+  // same task is re-run on the ACTIVE version first, and the repair is made against that run. The
+  // invariant is untouched; the dead end is gone. If S2 no longer carries the rule the diagnosis
+  // named, there is nothing to repair and it says so.
+  {
+    const activeHash = store.getActive(L);
+    const activeSv = activeHash ? store.getSkillVersion(L, activeHash) : null;
+    if (activeSv && activeSv.standardVersionHash !== inv.standardVersionHash) {
+      const current = store.getStandard(L, activeSv.standardVersionHash) ?? die(`standard ${activeSv.standardVersionHash} missing.`);
+      if (!current.requirements.some((r) => r.requirementId === d.requirementId)) {
+        die(`Your standard has moved since that run (${inv.standardVersionHash} -> ${current.standardVersionHash}) and no longer carries ${d.requirementId}, the rule this complaint was attributed to. Nothing to repair.`);
+      }
+      console.log(`Your standard has moved since that run (${inv.standardVersionHash} -> ${current.standardVersionHash}). Re-running the same task on the current version first, so the repair is about what you actually have.\n`);
+      const curPkg = store.getPackage(L, activeSv.materializedHash) ?? die(`package ${activeSv.materializedHash} missing.`);
+      const { client: c0, binding: b0 } = clientAndBinding('target');
+      const budget0: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
+      inv = await runOnce(L, activeSv, curPkg.files['SKILL.md'] ?? '', curPkg.packageHash,
+        { expectedPackageHash: curPkg.packageHash, servedPackageHash: curPkg.packageHash, matched: true, servedFiles: Object.keys(curPkg.files) },
+        inv.input, c0, budget0, b0, 'ORGANIC_USE', curPkg.files['contracts/output.schema.json'] ?? null, 'HOST_PROMPT');
+      ranStandard = current;
+    }
+  }
   const ranArch = store.getArchitecture(L, inv.architectureHash, inv.standardVersionHash)
     ?? die(`architecture ${inv.architectureHash} missing — this SkillVersion predates architecture persistence.`);
   const requirement = ranStandard.requirements.find((r) => r.requirementId === d.requirementId)
