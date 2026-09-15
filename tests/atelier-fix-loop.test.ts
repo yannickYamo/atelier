@@ -21,8 +21,12 @@ import { aRequirement } from './fixtures.js';
 const CLI = resolve('dist/cli/atelier.mjs');
 
 beforeAll(() => {
-  if (!existsSync(CLI)) execFileSync('npm', ['run', 'build'], { stdio: 'ignore' });
-}, 120_000);
+  // NEVER REBUILD FROM INSIDE A TEST FILE. `npm test` builds once, before any worker starts, via
+  // `pretest`. The build script begins with `rm -rf dist`, so a rebuild triggered by one worker
+  // deletes the binary out from under every other worker mid-run, and the failure surfaces as an
+  // unrelated assertion in whichever file happened to be spawning the CLI at that instant.
+  if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` (or \`npm test\`, which builds first) before running this file alone.`);
+});
 
 // ── scripted backend, out of process (see scripted-backend.mjs for why) ───────────────────────
 let backend: ChildProcess; let port = 0;

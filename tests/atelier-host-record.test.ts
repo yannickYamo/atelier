@@ -15,8 +15,12 @@ import * as store from '../core/state/store.js';
 const CLI = resolve('dist/cli/atelier.mjs');
 
 beforeAll(() => {
-  if (!existsSync(CLI)) execFileSync('npm', ['run', 'build'], { stdio: 'ignore' });
-}, 120_000);
+  // NEVER REBUILD FROM INSIDE A TEST FILE. `npm test` builds once, before any worker starts, via
+  // `pretest`. The build script begins with `rm -rf dist`, so a rebuild triggered by one worker
+  // deletes the binary out from under every other worker mid-run, and the failure surfaces as an
+  // unrelated assertion in whichever file happened to be spawning the CLI at that instant.
+  if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` (or \`npm test\`, which builds first) before running this file alone.`);
+});
 
 const run = (dataRoot: string, projectDir: string, args: string[], stdin?: string): string => {
   try {
@@ -34,9 +38,18 @@ const run = (dataRoot: string, projectDir: string, args: string[], stdin?: strin
 const seeded = () => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-host-data-'));
   const proj = mkdtempSync(join(tmpdir(), 'atelier-host-proj-'));
-  run(data, proj, ['add', '--statement', 'Lead with the action.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL']);
-  run(data, proj, ['ratify-close', '--work-type', 'writing']);
-  run(data, proj, ['build', '--name', 'focus']);
+  // A SETUP FAILURE MUST NOT LOOK LIKE A PRODUCT FAILURE. `run` folds a failing child into its
+  // output string so the assertions below can inspect refusals; the seeding steps are not
+  // refusals, and one that fails silently left the suite asserting "expected 1 record, got 0"
+  // once under full-suite load, when the true cause was a step that never ran.
+  for (const args of [
+    ['add', '--statement', 'Lead with the action.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL'],
+    ['ratify-close', '--work-type', 'writing'],
+    ['build', '--name', 'focus'],
+  ]) {
+    const out = run(data, proj, args);
+    if (out.startsWith('EXIT:')) throw new Error(`seeding step failed: atelier ${args.join(' ')}\n${out}`);
+  }
   return { data, proj };
 };
 

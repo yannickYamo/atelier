@@ -44,7 +44,17 @@ export function inspect(): void {
 
 export function historyCmd(): void {
   const L: store.StoreLayout = { root: DATA, skillName: skillArg() };
-  for (const h of store.history(L)) console.log(`${h.active ? '*' : ' '} ${h.skillVersion.skillVersionHash}  ${h.skillVersion.builtAt}  standard ${h.skillVersion.standardVersionHash}${h.standard?.reason ? `  — ${h.standard.reason}` : ''}`);
+  // A standard's reason is printed once, on the first version built on it. Every later version on
+  // the same standard is an implementation change that by design did NOT move the standard, and
+  // repeating the reason on those lines read as if the repair had been caused by it.
+  const rows = store.history(L);                       // newest first
+  const firstOn = new Map<string, string>();           // standard -> oldest skillVersion built on it
+  for (const h of [...rows].reverse()) if (!firstOn.has(h.skillVersion.standardVersionHash)) firstOn.set(h.skillVersion.standardVersionHash, h.skillVersion.skillVersionHash);
+  for (const h of rows) {
+    const std = h.skillVersion.standardVersionHash;
+    const reason = h.standard?.reason && firstOn.get(std) === h.skillVersion.skillVersionHash ? `  — ${h.standard.reason}` : '';
+    console.log(`${h.active ? '*' : ' '} ${h.skillVersion.skillVersionHash}  ${h.skillVersion.builtAt}  standard ${std}${reason}`);
+  }
 }
 
 export function rollback(): void {
