@@ -2,10 +2,10 @@
 // One serving function; arms differ only in served bytes. Resumable: existing trial files are
 // kept, so a crash re-run finishes the set without regenerating anything.
 // PRINTS NO GENERATION TEXT — builder blinding is operational, not promised.
-import { AnthropicInferenceClient } from '/home/yamo/atelier/dist/providers/anthropic.js';
-import { GenerationIncomplete } from '/home/yamo/atelier/dist/core/inference/client.js';
-import Anthropic from '/home/yamo/atelier/node_modules/@anthropic-ai/sdk/index.mjs';
-import { TASKS } from '/home/yamo/atelier/studies/harness/override-tasks.mjs';
+import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
+import { GenerationIncomplete } from '../../dist/core/inference/client.js';
+import Anthropic from '@anthropic-ai/sdk';
+import { TASKS } from './override-tasks.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
