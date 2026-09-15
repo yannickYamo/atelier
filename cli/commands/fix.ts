@@ -144,19 +144,32 @@ export async function fix(): Promise<void> {
     }
     if (answer !== 'required' && answer !== 'preferred') die(`--add takes required|preferred; got "${answer}".`);
 
+    // AN ADDITION LANDS ON THE ACTIVE STANDARD, NOT ON THE ONE THE COMPLAINT RAN AGAINST.
+    //
+    // A repair must be about the version that actually ran, so that branch is bound to
+    // `ranStandard` and dies if the active pointer has moved. An addition is the opposite case: two
+    // complaints about the same run are two rules, and minting each from the run's standard meant the
+    // second one silently dropped the first — a user added "never use em dashes", then added a grammar
+    // rule from the same invocation, and the installed skill no longer mentioned em dashes. The
+    // complaint's provenance is preserved in `reason`; the base is whatever the owner holds now.
+    const activeNow = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
+    const baseStandard = (activeNow && store.getStandard(L, activeNow.standardVersionHash)) ?? ranStandard;
+    if (baseStandard.standardVersionHash !== ranStandard.standardVersionHash) {
+      console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${baseStandard.standardVersionHash}); the addition goes on the current one.`);
+    }
     // The machine proposed the words; the person just made them binding — that is ratification of a
     // discovered rule, never authorship, and `decide` records it exactly that way.
-    let n = 0; for (const r of ranStandard.requirements) { const m = /^x(\d+)$/.exec(r.requirementId); if (m) n = Math.max(n, Number(m[1])); }
+    let n = 0; for (const r of baseStandard.requirements) { const m = /^x(\d+)$/.exec(r.requirementId); if (m) n = Math.max(n, Number(m[1])); }
     const base: Requirement = { requirementId: `x${n + 1}`, statement: proposal, appliesWhen: 'GENERAL',
       kind: /\bnever\b|\bnot\b|\bavoid\b/i.test(proposal) ? 'BOUNDARY' : 'GENERATIVE',
       authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED', evidence: null, evidenceItemId: null,
       wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
     const outcome = decide(base, { verb: 'APPROVE', materiality: answer.toUpperCase() });
-    const requirements = [...ranStandard.requirements, outcome.requirement];
-    const body = { evidenceId: ranStandard.evidenceId, workType: ranStandard.workType, requirements };
+    const requirements = [...baseStandard.requirements, outcome.requirement];
+    const body = { evidenceId: baseStandard.evidenceId, workType: baseStandard.workType, requirements };
     const next: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
       authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
-      supersedes: ranStandard.standardVersionHash, reason: complaint };
+      supersedes: baseStandard.standardVersionHash, reason: complaint };
     assertSupersessionRecorded(next);
     const arch = compileArchitecture(next);
     const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
@@ -175,7 +188,7 @@ export async function fix(): Promise<void> {
     store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
     store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: next.mintedAt, skillVersionHash: skill.skillVersionHash, proposal, accepted: true });
     console.log(`Added as ${answer.toUpperCase()} — ${outcome.requirement.requirementId} ${answer === 'required' ? 'instructs' : 'is shown'}.`);
-    console.log(`StandardVersion ${next.standardVersionHash} supersedes ${ranStandard.standardVersionHash}  (reason: your complaint, on file)`);
+    console.log(`StandardVersion ${next.standardVersionHash} supersedes ${baseStandard.standardVersionHash}  (reason: your complaint, on file)`);
     console.log(`Rebuilt and installed: ${pickHost().invocationHint(name).trim()} now serves it.`);
     return;
   }
