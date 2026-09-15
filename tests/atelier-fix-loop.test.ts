@@ -151,6 +151,36 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     expect(store.readEvents(L).some((e) => e.kind === 'LEDGER_DECISION')).toBe(true);
   }, 120_000);
 
+  it('two additions against the SAME run accumulate: the second lands on the first, not beside it', async () => {
+    // Found live: a user added "never use em dashes", then, from the same invocation, added a grammar
+    // rule. Both were minted from the standard the run used, so the second silently dropped the first
+    // and the installed skill no longer mentioned em dashes. An addition must base on the ACTIVE
+    // standard; the complaint's provenance survives in `reason`.
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+
+    await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
+    expect(run(data, proj, 'fix', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
+    expect(s2).not.toBe(s1);
+
+    // no new invocation in between: the second complaint is about the same run as the first
+    await setByTool({ emit_coverage: ABSENT('Every sentence must parse as correct English.') });
+    const out = run(data, proj, 'fix', 'it has ungrammatical sentences', '--add', 'required');
+    expect(out).toContain('Added as REQUIRED');
+    expect(out).toContain('has moved since that run');
+
+    const s3 = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
+    expect(s3.supersedes, 'the second addition must supersede the FIRST addition, not the original').toBe(s2);
+    const statements = s3.requirements.map((r) => r.statement);
+    expect(statements).toContain('Never use an em dash.');
+    expect(statements).toContain('Every sentence must parse as correct English.');
+    const md = readFileSync(join(proj, '.claude', 'skills', 'focus', 'SKILL.md'), 'utf8');
+    expect(md).toContain('em dash');
+    expect(md).toContain('correct English');
+  }, 180_000);
+
   it('--skip records the refusal, mints nothing, and is not re-asked on the same proposal', async () => {
     const { data, proj } = await seeded();
     await setByTool({ emit_coverage: ABSENT('Always name the deadline.') });
