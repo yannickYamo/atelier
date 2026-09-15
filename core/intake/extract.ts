@@ -30,7 +30,21 @@ export type Extraction =
   | { readonly ok: true; readonly text: string; readonly via: string }
   | { readonly ok: false; readonly reason: string; readonly remedy: string | null };
 
-export const READABLE = ['.md', '.markdown', '.txt', '.docx', '.rtf', '.pdf'] as const;
+/**
+ * SOURCE CODE IS FINISHED WORK, AND IT WAS REFUSED AT THE DOOR.
+ *
+ * The README points `create` at a repository and names code review as the domain where the
+ * positive result lives, and intake refused every `.ts` in it: "not a format Atelier reads". The
+ * code-review study had read review COMMENTS, which are prose, so nothing had ever exercised the
+ * one route a code reader would try first. Plain-text source is the trivial case (it reads exactly
+ * as `.txt` does), so the only thing this list decides is which extensions count as work rather
+ * than as build output. Lockfiles, minified bundles and generated artifacts are still the user's
+ * job to exclude, and the printed file list is where they see what is about to be read.
+ */
+export const SOURCE = ['.ts', '.tsx', '.mts', '.js', '.mjs', '.jsx', '.py', '.go', '.rs', '.java', '.kt',
+  '.rb', '.php', '.swift', '.c', '.h', '.cc', '.cpp', '.hpp', '.cs', '.scala', '.sh', '.sql'] as const;
+
+export const READABLE = ['.md', '.markdown', '.txt', '.docx', '.rtf', '.pdf', ...SOURCE] as const;
 
 /** Files that are ABOUT the work rather than the work. Reading a README yields rules about READMEs. */
 /**
@@ -55,6 +69,7 @@ export function extract(path: string): Extraction {
     case '.rtf': return { ok: true, text: stripRtf(readFileSync(path, 'utf8')), via: 'rtf (control-word strip — formatting is discarded, and so is anything encoded as a field)' };
     case '.pdf': return extractPdf(path);
     default:
+      if ((SOURCE as readonly string[]).includes(ext)) return { ok: true, text: readFileSync(path, 'utf8'), via: 'utf8 (source)' };
       return { ok: false, reason: `${basename(path)}: ${ext || 'no extension'} is not a format Atelier reads.`,
         remedy: `Convert it to .md or .txt, or use one of ${READABLE.join(' ')}.` };
   }

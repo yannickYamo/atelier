@@ -95,6 +95,20 @@ describe('extract — what is readable, and what is refused with a remedy', () =
     if (!r.ok) expect(r.remedy).toBeTruthy();
   });
 
+  it('source code reads as finished work, not as an unreadable format', () => {
+    // The README points `create` at a repository; intake refused every .ts in one. Found live.
+    const d = mkdtempSync(join(tmpdir(), 'atelier-src-'));
+    const f = join(d, 'thing.ts');
+    writeFileSync(f, '// header comment\nexport const x = 1;\n');
+    const r = extract(f);
+    expect(r.ok).toBe(true);
+    if (r.ok) { expect(r.text).toContain('export const x'); expect(r.via).toContain('source'); }
+    expect(READABLE).toContain('.ts');
+    expect(READABLE).toContain('.py');
+    // and build output is still refused: the list is about work, not about text
+    expect(extract(join(d, 'bundle.min.map')).ok).toBe(false);
+  });
+
   it('READABLE and the refusal message agree — a list that drifts misroutes the user', () => {
     const r = extract(write('a.xyz', 'x'));
     if (!r.ok) for (const ext of READABLE) expect(r.remedy).toContain(ext);
