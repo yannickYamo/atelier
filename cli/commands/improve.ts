@@ -121,8 +121,8 @@ export async function improve(): Promise<void> {
   console.log(`  ${d.reason}`);
   // ONE write, after diagnosis, carrying the attributed rule when there is one — two writes under
   // one content-derived id is a store refusal, and evidence should name its rule anyway.
-  try { store.putFeedback(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb); }
-  catch { /* identical record already recorded */ }
+  const kept = store.putFeedbackOnce(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb);
+  if (!kept.written) console.log(`  (this complaint about this output was already recorded at ${kept.record.at}; that record stands and is not counted twice)`);
 
   if (d.route === 'DELIVERY_FAILURE') {
     console.log(`\nThis is a SERVING problem, not a taste problem. Your standard is not involved and nothing about`);

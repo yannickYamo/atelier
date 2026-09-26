@@ -85,8 +85,35 @@ const parsed = ((): Parsed => {
   }
 })();
 export const cmd = argv[0] ?? '';
+
+/** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude'];
+
+const occurrences = (name: string): string[] => {
+  const out: string[] = [];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === `--${name}` && argv[i + 1] !== undefined) out.push(argv[i + 1]);
+    else if (a.startsWith(`--${name}=`)) out.push(a.slice(name.length + 3));
+  }
+  return out;
+};
+
+/**
+ * EVERY value of a repeatable option. `--reserve a --reserve b` used to keep only `b` — the parser's
+ * last-wins — while the CLI's own hint told people to repeat the flag, so `a` went to discovery with
+ * no warning and a reserve cannot be repaired after the corpus is sealed.
+ */
+export const flagAll = (f: string): string[] =>
+  occurrences(f.replace(/^--/, '')).flatMap((v) => v.split(',')).map((x) => x.trim()).filter(Boolean);
+
 export const flag = (f: string): string | undefined => {
   const name = f.replace(/^--/, '');
+  // A single-valued option given twice is refused, not resolved: last-wins is a silent choice
+  // between two things the person typed.
+  if (VALUED_OPTIONS.includes(name) && !REPEATABLE_OPTIONS.includes(name) && occurrences(name).length > 1) {
+    die(`--${name} was given more than once. Give it once.`);
+  }
   const v = parsed.values[name];
   if (typeof v === 'string') return v;
   if (v === true) return undefined;                      // declared boolean, asked for as a value
@@ -222,6 +249,14 @@ export const modelFor = (role: Role, fallback = MODEL): string => {
 };
 
 /**
+ * The model that READS THE CORPUS. Discovery proposes with PROPOSER, not MODEL, and `check` used to
+ * verify MODEL under the heading "the discovery runtime": a green check on one model, then a 400 from
+ * the other one the moment discovery ran. Every discovery-side proposer call and the check that stands
+ * behind it resolve through here, so what was verified is what runs.
+ */
+export const proposerModel = (): string => modelFor('discovery', PROPOSER);
+
+/**
  * Schema enforcement is part of the RUNTIME IDENTITY, not a formatting preference.
  *
  * The same model asked to satisfy a schema and asked to be VALIDATED against one is not reliably the
@@ -341,9 +376,9 @@ export const describeBinding = (b: RuntimeBinding): string =>
 export const assertReachable = (role: Role): void => {
   const provider = providerFor(role);
   if (provider === 'anthropic') {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      die('ANTHROPIC_API_KEY is not set.\n'
-        + '  export ANTHROPIC_API_KEY=sk-...\n'
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+      die('Neither ANTHROPIC_API_KEY nor ANTHROPIC_AUTH_TOKEN is set.\n'
+        + '  export ANTHROPIC_API_KEY=sk-...        (or ANTHROPIC_AUTH_TOKEN=... behind a gateway)\n'
         + `Atelier needs an inference provider for the ${role} step. Your corpus, standard and outputs stay\n`
         + 'on this machine; nothing is sent anywhere except that one call.\n'
         + '  Nothing has been read or sealed, so this command is safe to run again once the key is set.');

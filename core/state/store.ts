@@ -18,6 +18,7 @@ import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
 import { assertSupersessionRecorded } from './canonical-state.js';
 import type { SkillArchitecture } from '../architecture/compile.js';
+import type { RatificationLedger } from '../ratification/decision-record.js';
 
 export interface StoreLayout { readonly root: string; readonly skillName: string }
 
@@ -41,6 +42,7 @@ const dirs = (l: StoreLayout) => ({
   invocations: join(l.root, 'skills', l.skillName, 'invocations'),
   feedback: join(l.root, 'skills', l.skillName, 'feedback'),
   bindings: join(l.root, 'skills', l.skillName, 'bindings'),
+  ledgers: join(l.root, 'skills', l.skillName, 'ledgers'),
 });
 
 export function initStore(l: StoreLayout): void {
@@ -74,6 +76,21 @@ export function putStandard(l: StoreLayout, v: StandardVersion): void {
     return;
   }
   writeAtomic(p, JSON.stringify(v, null, 1));
+}
+
+/**
+ * THE RATIFICATION LEDGER, KEPT BESIDE THE STANDARD IT PRODUCED.
+ *
+ * AUTHORITY.md promised this and it was not so: the ledger lived only in the per-project working
+ * folder, so the next close in the same project overwrote the record of who decided the previous
+ * standard and what they were shown. Keyed by the standard's hash, written once, never replaced.
+ */
+export function putLedger(l: StoreLayout, standardVersionHash: string, ledger: RatificationLedger): void {
+  putByHash(join(dirs(l).ledgers, `${standardVersionHash}.json`), standardVersionHash, ledger, 'ratification ledger');
+}
+export function getLedger(l: StoreLayout, standardVersionHash: string): RatificationLedger | null {
+  const p = join(dirs(l).ledgers, `${standardVersionHash}.json`);
+  return existsSync(p) ? readJson<RatificationLedger>(p, { what: 'a ratification ledger' }) : null;
 }
 
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
@@ -232,6 +249,20 @@ export function listObservations(l: StoreLayout): readonly Observation[] {
 
 export function putFeedback(l: StoreLayout, f: FeedbackRecord): void {
   putByHash(join(dirs(l).feedback, `${f.feedbackId}.json`), f.feedbackId, f, 'feedback');
+}
+/**
+ * A complaint is identified by (invocation, words), not by when it was typed. Re-entering the same
+ * complaint keeps the FIRST record — its time and the rule its diagnosis named — and says so.
+ *
+ * The callers used to `putFeedback` a record carrying a fresh timestamp and swallow the store's
+ * refusal in a bare catch, on the stated belief that a re-entry "writes the same bytes". It did not,
+ * and the same catch hid any real I/O failure, so evidence could be lost without a word.
+ */
+export function putFeedbackOnce(l: StoreLayout, f: FeedbackRecord): { readonly written: boolean; readonly record: FeedbackRecord } {
+  const path = join(dirs(l).feedback, `${f.feedbackId}.json`);
+  if (existsSync(path)) return { written: false, record: readJson<FeedbackRecord>(path, { what: 'a feedback record' }) };
+  putFeedback(l, f);
+  return { written: true, record: f };
 }
 export function listFeedback(l: StoreLayout): readonly FeedbackRecord[] {
   const d = dirs(l).feedback;

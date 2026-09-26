@@ -5,6 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
+import { survival } from '../../core/ratification/decision-record.js';
 import * as store from '../../core/state/store.js';
 
 import { DATA, die, flag, projectDir, pickHost, skillArg, runFile } from '../runtime.js';
@@ -54,6 +55,12 @@ export function historyCmd(): void {
     const std = h.skillVersion.standardVersionHash;
     const reason = h.standard?.reason && firstOn.get(std) === h.skillVersion.skillVersionHash ? `  — ${h.standard.reason}` : '';
     console.log(`${h.active ? '*' : ' '} ${h.skillVersion.skillVersionHash}  ${h.skillVersion.builtAt}  standard ${std}${reason}`);
+    // Who decided the standard, once, on the line that introduced it.
+    const ledger = firstOn.get(std) === h.skillVersion.skillVersionHash ? store.getLedger(L, std) : null;
+    if (ledger?.records.length) {
+      const su = survival(ledger);
+      console.log(`    ratified: ${su.shown} shown · ${su.approved} approved · ${su.edited} edited · ${su.rejected} rejected · ${su.deferred} open`);
+    }
   }
 }
 
