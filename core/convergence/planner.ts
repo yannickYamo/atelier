@@ -46,11 +46,10 @@ export type ActionKind =
 /**
  * What a probe would have to separate, and how its outcomes map back to the hypotheses.
  *
- * The design machinery for actually building one already exists and is recovered rather than
- * rebuilt: `discovery/chain/discrimination-probe.ts` supplies `designPair` (two outputs on the same
- * case differing only in the property), `planProbeSides`/`sideImbalance` (counterbalancing),
- * `blindPair`, and — the load-bearing one — `manipulationVerified`, which checks the two arms
- * ACTUALLY differ in the intended property. A probe whose arms do not differ discriminates nothing
+ * The design machinery that once built one (`discovery/chain/discrimination-probe.ts`) was deleted
+ * on 2026-09-26 with the taste ladder it served, so a planned experiment is a spec with no builder
+ * yet. What it must still guarantee when rebuilt: the two arms ACTUALLY differ in the intended
+ * property. A probe whose arms do not differ discriminates nothing
  * and would return a confident answer about the wrong thing.
  */
 export interface ExpectedDiscrimination {

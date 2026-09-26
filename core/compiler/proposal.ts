@@ -74,6 +74,8 @@ export interface ProposedRule {
   readonly authority: Authority;
   readonly carrier: Carrier;
   readonly sensor: Sensor;
+  /** carries a ratified measurement, so `atelier verify` checks it on any text */
+  readonly measured?: boolean;
   readonly gateRole: GateRole;
   readonly rationale: string;
   /** true when the skill being improved already carries this adequately */
@@ -141,7 +143,7 @@ export function buildProposal(
     rules.push({
       requirementId: r.requirementId, text: r.statement, authority: r.authority,
       carrier: c.carrier, sensor: c.sensor, gateRole: c.gateRole, rationale: c.rationale,
-      alreadyHandled: alreadyHandled.has(r.requirementId),
+      alreadyHandled: alreadyHandled.has(r.requirementId), measured: Boolean(r.measurement),
     });
   }
 
@@ -155,7 +157,8 @@ export function buildProposal(
 
 /** One line of plain-language justification for where a rule landed. */
 export function explainPlacement(r: ProposedRule): string {
-  return `${CARRIER_PHRASE[r.carrier]} — ${ROLE_PHRASE[r.gateRole]}; ${SENSOR_PHRASE[r.sensor]}`;
+  const sensor = r.measured ? 'counted on every output (atelier verify)' : SENSOR_PHRASE[r.sensor];
+  return `${CARRIER_PHRASE[r.carrier]} — ${ROLE_PHRASE[r.gateRole]}; ${sensor}`;
 }
 
 /**

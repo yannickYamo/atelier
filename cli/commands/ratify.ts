@@ -11,7 +11,7 @@
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
 import { suggest } from '../../core/ratification/suggest.js';
-import { validateMeasurement } from '../../core/observers/registry.js';
+import { validateMeasurement, observerFor } from '../../core/observers/registry.js';
 import type { Measurement, ObserverId } from '../../core/state/canonical-state.js';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
@@ -158,6 +158,8 @@ export interface RatificationDecision {
    * reading the skill is told to ask for it rather than invent it.
    */
   readonly needs?: string;
+  /** a measurement for this rule in `--measure` syntax, or "none" to drop the one it has */
+  readonly measure?: string;
   /** what the review screen suggested for this proposal, carried into the ledger beside the ruling */
   readonly suggested?: { readonly decision: string; readonly materiality: string | null; readonly why: string } | null;
 }
@@ -204,7 +206,8 @@ export function ratifyBatch(): void {
       // The same suggestions the terminal screen shows, pre-selected: one review, two surfaces.
       suggestions: Object.fromEntries(pending.map((p) => {
         const x = suggest(p, s.proposalMeta?.[p.requirementId], s.intent?.mode ?? 'GENERATE');
-        return [p.requirementId, { value: x.decision === 'REJECT' ? 'REJECT' : x.materiality ?? 'PREFERRED', why: x.why, needs: x.needs }];
+        return [p.requirementId, { value: x.decision === 'REJECT' ? 'REJECT' : x.materiality ?? 'PREFERRED', why: x.why, needs: x.needs,
+          measures: p.measurement ? observerFor(p.measurement.observer).describe(p.measurement.params) : null }];
       })),
     }));
     console.log(`${pending.length} proposal(s) written to ${pageOut}`);
@@ -279,6 +282,7 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     let outcome;
     try {
       outcome = decide(p!, { verb: dec as DecisionVerb, statement: d.statement, appliesWhen: d.appliesWhen,
+        ...(d.measure === undefined ? {} : { measurement: d.measure.trim().toLowerCase() === 'none' ? null : parseMeasure(d.measure) }),
         materiality: d.materiality, form: d.form, shape: d.shape, realizes: typeof d.realizes === 'string' ? d.realizes : null,
         findRule: (rid) => s.proposals.find((x) => x.requirementId === rid) ?? decided.find((x) => x.requirementId === rid) });
     } catch (e) { return void die((e as Error).message); }
@@ -354,13 +358,16 @@ export function parseMeasure(spec: string): Measurement {
   const i = spec.indexOf(':');
   const observer = (i === -1 ? spec : spec.slice(0, i)).trim().toUpperCase() as ObserverId;
   const rest = i === -1 ? '' : spec.slice(i + 1);
+  // STRICT. `medianMax=` read as 0, `0x10` as 16 and `15=20` as 15; a target a person did not mean
+  // is worse than a refusal, because it is enforced on every output from then on.
   const params: Record<string, number | string[]> = observer === 'LEXICON'
     ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
-    : Object.fromEntries(rest.split(',').filter(Boolean).map((kv) => {
-      const [k, v] = kv.split('=').map((x) => x.trim());
-      const n = Number(v);
-      if (!k || !Number.isFinite(n)) die(`--measure: "${kv}" is not name=number`);
-      return [k, n];
+    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv) => {
+      const parts = kv.split('=').map((x) => x.trim());
+      if (parts.length !== 2 || !parts[0] || !/^\d+(\.\d+)?$/.test(parts[1])) die(`--measure: "${kv}" is not name=number`);
+      const n = Number(parts[1]);
+      if (n <= 0) die(`--measure: ${parts[0]} must be greater than zero`);
+      return [parts[0], n];
     }));
   const m: Measurement = { observer, params };
   const problem = validateMeasurement(m);

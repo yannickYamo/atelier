@@ -30,16 +30,16 @@ export type SkillMode = 'GENERATE' | 'GUARD' | 'RESPOND';
 
 export function modeFromIntent(intent: string): { readonly mode: SkillMode; readonly why: string } {
   const t = ` ${intent.toLowerCase()} `;
-  // THE VERB FIRST. "always write in my voice" is generation with an adverb, and "write a post for all
-  // our customers" is generation with an audience; keyword-spotting read the first as guarding and
-  // the second as support. What the person asks the skill to DO decides; the rest only qualifies it.
-  const produces = /^\s*(please\s+)?(write|draft|compose|create|generate|produce|make)\b/.test(t)
+  // WHAT THE SKILL IS ASKED TO DO, THEN WHO IT IS FOR. "always write in my voice" is generation with an
+  // adverb, "write a support article" is generation about support, and "draft replies to customer
+  // emails" is answering people even though it starts with a writing verb. Replying is the act that
+  // makes a skill a policy for answers; checking is the act that makes it a gate.
+  const replying = /\b(repl(y|ies|ying)|respond(s|ing)?|responses?|answer(s|ing)?)\b/.test(t);
+  const people = /\b(customers?|clients?|users?|support|tickets?|help ?desk|inquir\w*|complaints?|emails?|messages?|dms?)\b/.test(t);
+  const checks = /\b(ensure|enforce|check(s|ing)?|audit|review(s|ing)?|comply|compliance|make sure|verify|lint|gate|follow(s)?)\b/.test(t);
+  const produces = /^\s*(please\s+)?(write|draft|compose|create|generate|produce)\b/.test(t)
     || /\b(write|draft|compose)\s+(me\s+)?(a|an|the|my|our)\b/.test(t);
-  const checks = /\b(ensure|enforce|check|audit|comply|compliance|make sure|verify|lint|gate|hold .* to)\b/.test(t)
-    || /\ball\s+(of\s+)?(our|my|the)?\s*(content|outputs?|copy|posts|docs|documents|pages|emails)\b/.test(t);
-  const answers = /\b(support|help ?desk|tickets?|inquir\w*|complaints?)\b/.test(t)
-    || (/\b(customers?|clients?|users?)\b/.test(t) && /\b(answer|answers|reply|replies|respond|responses?)\b/.test(t) && !produces);
-  if (answers && !checks) return { mode: 'RESPOND', why: 'you described answering people, so every rule you keep is a policy the answers must follow' };
+  if (replying && people) return { mode: 'RESPOND', why: 'you described answering people, so every rule you keep is a policy the answers must follow' };
   if (checks && !produces) return { mode: 'GUARD', why: 'you described holding outputs to the standard, so the rules you keep default to required' };
   return { mode: 'GENERATE', why: 'you described producing new work, so rules default to required only where the evidence is strong' };
 }
@@ -49,7 +49,7 @@ export interface ProposalEvidence {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** a measured rule's conformance on the pieces it was counted from */
-  readonly inSample?: { readonly applicable: number; readonly present: number } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean } | null;
 }
 
 export interface Suggestion {
@@ -65,16 +65,22 @@ export interface Suggestion {
 
 export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: SkillMode): Suggestion {
   const needs = e?.needs ?? null;
-  // A MEASURED rule is a count, and its evidence is how much of the author's own work meets it. When
-  // almost all of it does, the target describes them and is checkable on every output: required, in
-  // every mode. When much of it does not, the number describes an average nobody writes to.
+  // A MEASURED rule is a count, and its evidence is how the author's own UNSEEN work fares against it.
+  // Checked on held-out pieces and met by almost all of them, the target describes the author: it can
+  // instruct. Checked only on the pieces it was computed from, it passes by construction and is shown,
+  // not instructed, until the person says otherwise. A banned-phrase list is a negative from absence —
+  // weaker evidence than any count — so it is shown by default in every case.
   if (p.measurement && e?.inSample && e.inSample.applicable > 0) {
     const { applicable, present } = e.inSample;
+    const independent = e.inSample.independent === true;
     const r = present / applicable;
-    const seen = `${present} of ${applicable} of your pieces meet it; checked on every output`;
-    if (r >= 0.8) return { decision: 'APPROVE', materiality: 'REQUIRED', needs, strength: 3, why: seen };
-    if (r >= 0.5) return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: seen };
-    return { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} of your pieces meet it` };
+    const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
+    const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
+    if (r < 0.5) return { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` };
+    const lexicon = p.measurement.observer === 'LEXICON';
+    const strong = independent && r >= 0.8 && !lexicon;
+    return { decision: 'APPROVE', materiality: strong ? 'REQUIRED' : 'PREFERRED', needs, strength: strong ? 3 : 1,
+      why: lexicon ? `${seen}; absence is weak evidence, so it is shown until you make it required` : seen };
   }
   const agreed = (e?.framings.length ?? 0) > 1;
   const h = e?.heldOut ?? null;
