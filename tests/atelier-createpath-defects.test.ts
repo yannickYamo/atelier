@@ -95,8 +95,9 @@ describe('the credential check happens before anything is written down', () => {
   });
 
   it('and it refuses without spending or sealing, saying so', async () => {
-    const prior = { key: process.env.ANTHROPIC_API_KEY, argv: process.argv, exit: process.exit };
+    const prior = { key: process.env.ANTHROPIC_API_KEY, token: process.env.ANTHROPIC_AUTH_TOKEN, argv: process.argv, exit: process.exit };
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
     process.argv = ['node', 'atelier', 'create', '.'];
     const errs: string[] = [];
     const priorErr = console.error;
@@ -107,7 +108,8 @@ describe('the credential check happens before anything is written down', () => {
     expect(() => { assertReachable('discovery'); }).toThrow();
     console.error = priorErr; process.exit = prior.exit;
     process.env.ANTHROPIC_API_KEY = prior.key; process.argv = prior.argv;
-    expect(errs.join('\n')).toMatch(/ANTHROPIC_API_KEY is not set/);
+    if (prior.token !== undefined) process.env.ANTHROPIC_AUTH_TOKEN = prior.token;
+    expect(errs.join('\n')).toMatch(/Neither ANTHROPIC_API_KEY nor ANTHROPIC_AUTH_TOKEN is set/);
     expect(errs.join('\n')).toMatch(/Nothing has been read or sealed/);
   });
 

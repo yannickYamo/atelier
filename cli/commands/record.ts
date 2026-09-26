@@ -18,6 +18,7 @@
 // with no model line yields an UNREPORTED observation, never a guess.
 
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 
 import { writeAtomic } from '../../core/state/fs-atomic.js';
@@ -57,13 +58,29 @@ const modelFromTranscript = (path: string | undefined): string | null => {
   return null;
 };
 
+/**
+ * Claude Code names the project root for hook commands in CLAUDE_PROJECT_DIR. Where it does not, the
+ * nearest ancestor of the hook's cwd that holds an installed skills directory is the project.
+ */
+const hostProjectRoot = (cwd: string | undefined): string | undefined => {
+  if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
+  if (!cwd) return undefined;
+  for (let d = resolve(cwd); ; d = dirname(d)) {
+    if (existsSync(join(d, '.claude', 'skills'))) return d;
+    if (dirname(d) === d) return cwd;
+  }
+};
+
 export async function record(): Promise<void> {
   const mode = flag('--from-hook') ?? die('atelier record is written by the host hooks, not typed. (--from-hook prompt|stop)');
   let payload: PromptPayload & StopPayload;
   try { payload = JSON.parse(await readStdin()) as PromptPayload & StopPayload; }
   catch { return; }                                   // a malformed hook payload records nothing, loudly nowhere
-  // The hook fires in the project the person is working in; the run's files are keyed by it.
-  if (payload.cwd) process.env.ATELIER_PROJECT_DIR = payload.cwd;
+  // The hook fires in the project the person is working in; the run's files are keyed by it. That is
+  // the PROJECT ROOT, not the hook's cwd: Claude Code started in a subdirectory reported the
+  // subdirectory, the skill was not found there, and the use was dropped without a trace.
+  const root = hostProjectRoot(payload.cwd);
+  if (root) process.env.ATELIER_PROJECT_DIR = root;
   const pendingPath = runFile('pending-invocation.json');
 
   if (mode === 'prompt') {
@@ -78,7 +95,7 @@ export async function record(): Promise<void> {
     if (!sv || !pkg) return;
     // The delivery question is answered AT THE MOMENT OF USE: were the installed bytes the stored
     // package's? By stop-time the person may have rebuilt, and the answer would describe that.
-    const ver = pickHost().verifyInstallation(pkg, payload.cwd ?? process.cwd());
+    const ver = pickHost().verifyInstallation(pkg, root ?? process.cwd());
     if (!ver.present) return;                          // installed elsewhere; not this project's use
     const pending: PendingInvocation = {
       promptId: payload.prompt_id ?? '', skillName: name, input: (rest ?? '').trim(), at: new Date().toISOString(),

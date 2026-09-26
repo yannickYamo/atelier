@@ -32,6 +32,7 @@ import { reference } from './commands/reference.js';
 import { record } from './commands/record.js';
 import { fix } from './commands/fix.js';
 import { existsSync } from 'node:fs';
+import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 import { policyFor } from '../core/state/policy.js';
 
@@ -90,6 +91,12 @@ export const COMMANDS: readonly string[] = [
 ];
 
 const main = async (): Promise<void> => {
+  // Answered BEFORE dispatch, so no command can run when asked about. `abort --help` used to abort.
+  if (cmd === '--version' || cmd === '-v' || cmd === 'version') { console.log(version()); return; }
+  if (COMMANDS.includes(cmd) && wantsHelp(argv)) {
+    console.log(`usage: ${USAGE[cmd] ?? `atelier ${cmd}`}`);
+    return;
+  }
   switch (cmd) {
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
     case 'intake': { intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }

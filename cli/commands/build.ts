@@ -119,6 +119,11 @@ export function build(nameArg?: string): void {
   // Only when there IS a corpus. A directly authored standard has no evidence record, and writing an
   // empty one to satisfy a call would fabricate a file that later reads as a sealed corpus.
   if (s.evidence) store.putEvidence(L, s.evidence);
+  // The record of who decided this standard travels with it. Only the ledger stamped with THIS
+  // version: a directly authored rule set, or a rebuild of an older standard, has none to carry.
+  if (s.ledger?.records.some((r) => r.resultingStandardVersionHash === v.standardVersionHash)) {
+    store.putLedger(L, v.standardVersionHash, s.ledger);
+  }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────

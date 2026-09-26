@@ -14,7 +14,7 @@ import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../.
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
 
-import { sha, die, argv, flag, loadSession, saveSession, step, runFile } from '../runtime.js';
+import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile } from '../runtime.js';
 
 // ── intake ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -47,7 +47,7 @@ export function intake(path: string, workType: string): void {
   // if it were an example produces rules about README-writing, attributed to them. The skip list catches
   // the obvious cases; the printed file list catches everything else, because the only reliable filter
   // is a person looking at what is about to be read.
-  const excl = (flag('--exclude') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const excl = flagAll('--exclude');
   const isDir = statSync(dir).isDirectory();
   const base = isDir ? dir : dirname(dir);
   const all = isDir ? walk(dir) : [basename(dir)];
@@ -237,7 +237,7 @@ export function intake(path: string, workType: string): void {
   const clusterCount = new Set(goldenUnits.map((u) => u.provenance.clusterId)).size;
   console.log(`\n${goldenUnits.length} piece(s) in ${clusterCount} project cluster(s) [${clusters.basis}]`);
   console.log(`  ${clusters.why}`);
-  const reserveIds = (flag('--reserve') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const reserveIds = flagAll('--reserve');
   let reservation: Reservation | null = null;
   if (reserveIds.length) {
     const unknown = reserveIds.filter((id) => !goldenUnits.some((u) => u.unitId === id));

@@ -2,7 +2,6 @@ node_modules/
 dist/
 *.tgz
 .atelier/
-plugins/dist/
 
 # Running Atelier inside this repo installs a compiled skill here. That is correct behaviour and a
 # test artifact, never source. In YOUR project this directory is the installed skill and committing
