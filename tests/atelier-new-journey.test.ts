@@ -189,3 +189,17 @@ describe('the purpose is read from what the skill is asked to DO', () => {
     ['draft replies to customer emails', 'RESPOND'],
   ])('%s → %s', (intent, mode) => { expect(modeFromIntent(intent).mode).toBe(mode); });
 });
+
+describe('whose work it is is decided once, at intake, and kept', () => {
+  it('a continuation without --source-author still records the rules as someone else\'s public work, and review adopts them', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-pub-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-pub-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'intake', dir, '--source-author', 'A Public Writer');
+    const out = run(data, proj, 'new', dir, 'write like these', '--name', 'pub', '--accept');
+    expect(out).toMatch(/Accepting ADOPTS them for your skill/);
+    const std = JSON.parse(readFileSync(join(data, 'runs', readdirSync(join(data, 'runs'))[0], 'pending-standard.json'), 'utf8')) as { requirements: { provenance: string; authority: string }[] };
+    expect(std.requirements.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')).toBe(true);
+    expect(std.requirements.every((r) => r.authority === 'USER_ADOPTED')).toBe(true);
+  });
+});

@@ -322,7 +322,8 @@ export function intake(path: string, workType: string): void {
       + `\n  Abandon it:   atelier abort    then run this again`);
   }
   s = step(s, 'CORPUS_SEALED', { corpusHash });
-  saveSession({ ...s, evidence: ev, reservation });
+  const publicSource = flag('--source-author') ?? (argv.includes('--public-source') ? 'a public source' : null);
+  saveSession({ ...s, evidence: ev, reservation, ...(publicSource ? { publicSource } : {}) });
   writeAtomic(runFile('corpus-paths.json'), JSON.stringify(files, null, 1));
   writeAtomic(runFile('import-plan.json'), JSON.stringify(plan, null, 1));
 
