@@ -70,7 +70,9 @@ describe('THE POINT: the proposer never sees a held-out golden', () => {
 
   it('fires factors x held-out observations, document-major so the document caches', async () => {
     const c = fakeClient(factors(8), { applicable: true, present: true });
-    const r = await runDiscoveryChain(c, budget(), 's', corpus(4), roles(4), scope, 'm');
+    // Documents run side by side by default; at concurrency 1 the order is fully observable, and one
+    // document's calls must still be consecutive — that is what keeps its prefix cached.
+    const r = await runDiscoveryChain(c, budget(), 's', corpus(4), roles(4), scope, 'm', undefined, 1);
     // 8 factors x 2 held-out. TWO vantages run and both return the same 8 rules, so a working
     // matcher merges them and the observation cost is unchanged. If the matcher ever silently stops
     // merging, this doubles — which is the failure mode `suspectMatcherFailure` exists to announce.

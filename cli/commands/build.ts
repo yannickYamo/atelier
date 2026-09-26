@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
@@ -191,6 +192,7 @@ export function build(nameArg?: string): void {
   const pkg = pkg0;
   assertPortable(pkg);
   const inst = host.install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
   saveSession({ ...s, skillName: name });

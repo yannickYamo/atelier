@@ -16,7 +16,7 @@
 // from what the installed skill actually is.
 
 import * as store from '../../core/state/store.js';
-import { DATA, die, flag, skillArg } from '../runtime.js';
+import { DATA, die, skillArg, argv } from '../runtime.js';
 import { applicabilityModeOf, sourceModeOf, type Requirement } from '../../core/state/canonical-state.js';
 import { obligationsForStandard, coverageOf } from '../../core/contract/obligation.js';
 
@@ -127,11 +127,11 @@ export function plan(): void {
     }
   }
 
-  if (flag('--json')) {
+  if (argv.includes('--json')) {
     console.log(`\n${JSON.stringify({ skill: name, skillVersionHash: active,
       standardVersionHash: v.standardVersionHash, sourceMode: sourceModeOf(v),
       rows: v.requirements.map((r) => ({
-        requirementId: r.requirementId, provenance: r.provenance,
+        requirementId: r.requirementId, provenance: r.provenance, materiality: r.materiality,
         applicabilityMode: applicabilityModeOf(r.appliesWhen), appliesWhen: r.appliesWhen,
         carrier: rows.get(r.requirementId)?.carrier ?? null,
         gateRole: rows.get(r.requirementId)?.gateRole ?? null,

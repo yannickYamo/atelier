@@ -21,6 +21,7 @@
 // equals the hash after, asserted where the candidate is minted and again before promotion —
 // `assertStandardUnchanged` throws; it does not log.
 
+import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import * as store from '../../core/state/store.js';
@@ -40,8 +41,8 @@ import type { InstallablePackage } from '../../adapters/host-adapter.js';
 import { bindingHash } from '../../core/runtime/binding.js';
 import type { Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
-import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding, MODEL,
-  projectDir, pickHost, runFile, assertSkillName, loadSession } from '../runtime.js';
+import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
+  projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel } from '../runtime.js';
 
 const ask = async (question: string, allowed: readonly string[]): Promise<string | null> => {
   if (!process.stdin.isTTY) return null;
@@ -87,7 +88,7 @@ export async function fix(): Promise<void> {
 
   let ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
-  const d = await diagnose(clientFor(flag('--model') ?? MODEL), budget, ranStandard, inv, fb);
+  const d = await diagnose(clientFor(diagnoserModel()), budget, ranStandard, inv, fb);
   console.log(`diagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
   console.log(`  ${d.reason}\n`);
   // Written ONCE, after diagnosis, so the record can name the rule the miss was attributed to.
@@ -101,6 +102,7 @@ export async function fix(): Promise<void> {
     const sv = store.getSkillVersion(L, active) ?? die(`SkillVersion ${active} missing.`);
     const pkg = store.getPackage(L, sv.materializedHash) ?? die(`package ${sv.materializedHash} missing — rebuild: atelier build --name ${name}`);
     const inst = pickHost().install(pkg, projectDir());
+    { const moved = describeBackup(inst); if (moved) console.log(moved); }
     if (!inst.ok) return void die(`reinstall failed: ${inst.reason}`);
     console.log('This was a SERVING problem — the installed file was not what you approved. The approved');
     console.log(`bytes are back in place (${inst.installedAt}). Your standard was never involved.`);
@@ -182,6 +184,7 @@ export async function fix(): Promise<void> {
     store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch);
     store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
     const inst = pickHost().install(pkg, projectDir());
+    { const moved = describeBackup(inst); if (moved) console.log(moved); }
     if (!inst.ok) return void die(`install failed: ${inst.reason}`);
     const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([base]), records: [] },
       base, outcome.ledgerDecision, { note: complaint, decidedAt: next.mintedAt }), next.standardVersionHash);
@@ -369,6 +372,7 @@ async function settleBlindPick(
     die(`REPAIR INVARIANT: the active version is bound to ${activeSv.standardVersionHash}, the candidate to ${candidate.standardVersionHash}. Nothing was promoted.`);
   }
   const inst = pickHost().install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was promoted — the active version is unchanged.`);
   store.setActive(L, candidate.skillVersionHash);
   store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED',

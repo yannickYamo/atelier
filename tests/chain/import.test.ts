@@ -37,8 +37,36 @@ describe('import', () => {
     const a = planImport(four);
     const b = planImport(four.map(g => ({ ...g, text: `${g.text} totally different content ${g.id}` })));
     expect(a.goldens).toEqual(b.goldens);
-    // and it is the alphabetical prefix that proposes
-    expect(a.goldens.filter(g => g.role === 'PROPOSAL').map(g => g.contextId)).toEqual(['a_one', 'b_two']);
+    // held-out pieces sit at an even stride through the sorted ids, not at its tail
+    expect(a.goldens.filter(g => g.role === 'PROPOSAL').map(g => g.contextId)).toEqual(['a_one', 'c_three']);
+  });
+
+  it('SCALES with the corpus: forty pieces are all read or checked, not two', () => {
+    const forty = Array.from({ length: 40 }, (_, i) => golden(`post-${String(i).padStart(2, '0')}`));
+    const plan = planImport(forty);
+    const proposal = plan.goldens.filter(g => g.role === 'PROPOSAL');
+    const held = plan.goldens.filter(g => g.role === 'HELD_OUT');
+    expect(held).toHaveLength(8);                       // capped: every held-out piece is observed per rule
+    expect(proposal).toHaveLength(32);
+    expect(plan.unread ?? []).toEqual([]);
+  });
+
+  it('a piece past the proposer\'s one-pass read is NAMED as unread, never silently dropped', () => {
+    const big = (id: string): ImportedMaterial => ({ id, kind: 'GOLDEN', text: 'y'.repeat(40_000) });  // ~10k tokens
+    const plan = planImport(Array.from({ length: 20 }, (_, i) => big(`p${String(i).padStart(2, '0')}`)));
+    expect((plan.unread ?? []).length).toBeGreaterThan(0);
+    expect(plan.summary).toMatch(/not read/);
+  });
+
+  it('a declared held-out count wins, within the floors', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => golden(`g${i}`));
+    expect(planImport(ten, { heldOut: 5 }).goldens.filter(g => g.role === 'HELD_OUT')).toHaveLength(5);
+    expect(planImport(ten, { heldOut: 1 }).goldens.filter(g => g.role === 'HELD_OUT')).toHaveLength(2);
+  });
+
+  it('a reserved piece takes no role at all', () => {
+    const plan = planImport([...four, golden('e_five')], { reserved: ['a_one'] });
+    expect(plan.goldens.map(g => g.contextId)).not.toContain('a_one');
   });
 
   it('produces a split discovery ACCEPTS — the two floors agree', () => {

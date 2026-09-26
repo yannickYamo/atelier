@@ -15,7 +15,7 @@ import { resolveProvenance } from '../../core/fidelity/provenance.js';
 import { runOnce } from './improve.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
-import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, assertSkillName, runFile } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
 // ── invoke ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -120,8 +120,14 @@ export function resolveServedSkill(name: string): ServedSkill {
 
 export async function invoke(): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
-  const task = flag('--task') ?? positional([name])
+  const asked = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
+  // What `--with` binds travels WITH the task, so the model has the material the rule needs, and the
+  // record's input is what was actually served.
+  const material = boundMaterial();
+  const task = material.length
+    ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
+    : asked;
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
   // ── CAN THIS STANDARD BE EXECUTED TRUTHFULLY ON THIS INVOCATION ───────────────────────────
   //
