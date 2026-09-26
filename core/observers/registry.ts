@@ -119,13 +119,17 @@ function splitSentences(j: Joined): Sentence[] {
     const w = wordsOf(body).length;
     if (w) out.push({ start: j.at[begin + lead], end: j.at[begin + lead + body.length - 1] + 1, text: body, words: w });
   };
-  const re = /[.!?]+["'”’)\]]*(?=\s+["'“‘([]?[A-Z0-9]|\s*$)/g;
+  const re = /[.!?]+["'”’)\]*_]*(?=\s+(?:\*{1,2}|_{1,2})?["'“‘([]?[A-Z0-9]|\s*$)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(t)) !== null) {
     const end = m.index + m[0].length;
     if (m[0].startsWith('.') && m[0].length === 1) {
       const word = /([A-Za-z.]+)$/.exec(t.slice(begin, m.index))?.[1]?.toLowerCase() ?? '';
-      if (ABBREVIATIONS.has(word) || /^[a-z]$/i.test(word)) continue;     // "Dr.", "e.g.", an initial
+      // An initial is a capital letter after a capitalised word ("John F. Kennedy"); "plan B." ends one.
+      const prev = /([A-Za-z]+)\s+[A-Za-z]$/.exec(t.slice(begin, m.index))?.[1] ?? '';
+      const raw = /([A-Za-z])$/.exec(t.slice(begin, m.index))?.[1] ?? '';
+      const initial = word.length === 1 && /^[A-Z]$/.test(raw) && (/^[A-Z]/.test(prev) || begin === m.index - 1);
+      if (ABBREVIATIONS.has(word) || initial) continue;                    // "Dr.", "e.g.", an initial
     }
     emit(end);
     begin = end;
@@ -223,8 +227,11 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const lens = ss.map((s) => s.words);
       const med = quantile(lens, 0.5); const p90 = quantile(lens, 0.9);
       const medMax = num(p, 'medianMax') ?? Infinity; const p90Max = num(p, 'p90Max') ?? Infinity;
-      const long = ss.filter((s) => s.words > p90Max)
-        .map((s) => ({ start: s.start, end: s.end, text: s.text, why: `${s.words} words, over ${p90Max}` }));
+      // The sentences to shorten: over the 90th-percentile cap when that is what broke; when only the
+      // median is too high, the ones above the median target, so a repair always has somewhere to act.
+      const cut = p90 > p90Max ? p90Max : medMax;
+      const long = ss.filter((s) => s.words > cut)
+        .map((s) => ({ start: s.start, end: s.end, text: s.text, why: `${s.words} words, over ${cut}` }));
       const ok = med <= medMax && p90 <= p90Max;
       return { verdict: ok ? 'MET' : 'VIOLATED', spans: ok ? [] : long, value: med,
         detail: `median ${med}, 90th percentile ${p90} (targets ${medMax}, ${p90Max})` };

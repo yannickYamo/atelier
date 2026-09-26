@@ -89,8 +89,13 @@ export function repairPrompt(text: string, targets: readonly RepairTarget[]): st
 }
 
 /** Put the replacements back, from the end so offsets stay valid. A span with no replacement is kept. */
-export function applyRepair(text: string, targets: readonly RepairTarget[], replacements: readonly { readonly id: number; readonly text: string }[]): string {
-  const byId = new Map(replacements.filter((r) => typeof r.text === 'string' && r.text.trim()).map((r) => [r.id, r.text]));
+export function applyRepair(text: string, targets: readonly RepairTarget[], replacements: readonly { readonly id: number | string; readonly text: string }[]): string {
+  // First answer per id wins; an id given as "2" is the span numbered 2.
+  const byId = new Map<number, string>();
+  for (const r of replacements) {
+    const id = Number(r.id);   // a model may send "2"; the schema asks for a number
+    if (typeof r.text === 'string' && r.text.trim() && Number.isInteger(id) && !byId.has(id)) byId.set(id, r.text);
+  }
   let out = text;
   for (const t of [...targets].sort((a, b) => b.start - a.start)) {
     const rep = byId.get(t.id);
@@ -102,11 +107,25 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
 
 export interface RegressionVerdict { readonly ok: boolean; readonly why: string }
 
-/** Keep a repair only if it broke nothing that held, and fixed at least one REQUIRED rule. */
+/**
+ * What got worse between two reports: a rule that was not broken and now is (whatever it was before —
+ * MET, or not measurable because the text was too short), or a broken rule broken in more places.
+ * Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
+ */
+export function regressions(before: VerifyReport, after: VerifyReport): string[] {
+  const was = new Map(before.checked.map((c) => [c.requirementId, c.result]));
+  return after.checked.filter((c) => {
+    const b = was.get(c.requirementId);
+    if (c.result.verdict !== 'VIOLATED') return false;
+    if (b?.verdict !== 'VIOLATED') return true;
+    return c.result.spans.length > b.spans.length;
+  }).map((c) => c.requirementId);
+}
+
+/** Keep a repair only if nothing got worse, and at least one REQUIRED rule that was broken now holds. */
 export function acceptRepair(before: VerifyReport, after: VerifyReport): RegressionVerdict {
-  const was = new Map(before.checked.map((c) => [c.requirementId, c.result.verdict]));
-  const broke = after.checked.filter((c) => was.get(c.requirementId) === 'MET' && c.result.verdict === 'VIOLATED');
-  if (broke.length) return { ok: false, why: `the rewrite broke ${broke.map((c) => c.requirementId).join(', ')}, which held before` };
+  const worse = regressions(before, after);
+  if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
   const req = (r: VerifyReport): number => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
   if (req(after) >= req(before)) return { ok: false, why: 'the rewrite fixed no REQUIRED rule' };
   return { ok: true, why: `REQUIRED rules broken: ${req(before)} → ${req(after)}` };

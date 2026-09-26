@@ -25,14 +25,23 @@ export async function refineToStandard(
   while (report.failed && passes < maxPasses) {
     const targets = planRepair(text, report);
     if (!targets.length) { why = 'nothing the rules pointed at could be rewritten'; break; }
-    const res = await spend(budget, 0.05, async () => {
-      const x = await client.complete({
-        stableBlock: REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
-        toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.',
-        schema: REPAIR_SCHEMA, maxTokens: 4000,
+    // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for and already meets
+    // every rule the repair was not about; a failed call (a refusal, a 500, an exhausted budget)
+    // delivers it as it stands and says why, rather than ending the command with nothing.
+    let res: Awaited<ReturnType<InferenceClient['complete']>>;
+    try {
+      res = await spend(budget, 0.05, async () => {
+        const x = await client.complete({
+          stableBlock: REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
+          toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.',
+          schema: REPAIR_SCHEMA, maxTokens: 4000,
+        });
+        return { value: x, cost: x.cost };
       });
-      return { value: x, cost: x.cost };
-    });
+    } catch (e) {
+      why = `the rewrite could not run (${(e as Error).message.split('\n')[0]}); the draft is delivered as it stands`;
+      break;
+    }
     passes += 1;
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const next = applyRepair(text, targets, reps);
@@ -43,5 +52,5 @@ export async function refineToStandard(
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }
   return { output: text, report,
-    repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), why } };
+    repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft, why } };
 }

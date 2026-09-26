@@ -156,3 +156,83 @@ describe('the exemplar: one complete piece of the owner\'s, read first, carried 
     expect(existsSync(join(dir, 'examples', 'exemplar.md'))).toBe(true);
   });
 });
+
+// ── Found by the Phase 3 gap audit ─────────────────────────────────────────────────────────────
+import { sentencesOf as sents, measure as measureIt } from '../core/observers/registry.js';
+
+describe('a stale host repair never records an unrelated turn', () => {
+  it('a pending repair whose continuation never came is dropped by the next turn, not recorded as it', () => {
+    const { data, proj, env } = seedSkill();
+    const t = join(proj, 't.jsonl'); writeFileSync(t, '');
+    hook(env, proj, 'prompt', { cwd: proj, prompt_id: 'p1', transcript_path: t, prompt: '/nodrink say it' });
+    hook(env, proj, 'stop', { cwd: proj, prompt_id: 'p1', transcript_path: t, stop_hook_active: false, last_assistant_message: 'I drink tea.' });
+    hook(env, proj, 'stop', { cwd: proj, prompt_id: 'p999', transcript_path: t, stop_hook_active: false, last_assistant_message: 'Sunny in Paris.' });
+    expect(store.listInvocations({ root: data, skillName: 'nodrink' })).toHaveLength(0);
+  });
+  it('the continuation is recorded with the draft kept whole, and whether text outside the spans changed', () => {
+    const { data, proj, env } = seedSkill();
+    const t = join(proj, 't.jsonl'); writeFileSync(t, '');
+    hook(env, proj, 'prompt', { cwd: proj, prompt_id: 'p1', transcript_path: t, prompt: '/nodrink say it' });
+    hook(env, proj, 'stop', { cwd: proj, prompt_id: 'p1', transcript_path: t, stop_hook_active: false, last_assistant_message: 'Morning. I drink tea. Then work.' });
+    hook(env, proj, 'stop', { cwd: proj, prompt_id: 'p1', transcript_path: t, stop_hook_active: true, last_assistant_message: 'Evening. I drink the drink. Then sleep.' });
+    const [rec] = store.listInvocations({ root: data, skillName: 'nodrink' });
+    expect(rec.repair?.draft).toBe('Morning. I drink tea. Then work.');
+    expect(rec.repair?.outsideSpansChanged).toBe(true);
+    expect(rec.repair?.why).toMatch(/text outside the named spans changed/);
+  });
+});
+
+describe('the loop never makes anything worse, and always has somewhere to act', () => {
+  it('a rule that was not measurable and is now broken counts as worse', () => {
+    const std = { standardVersionHash: 's', requirements: [
+      { requirementId: 'len', statement: 's', appliesWhen: 'GENERAL', kind: 'GENERATIVE', materiality: 'REQUIRED', authority: 'EXPERT_AUTHORED',
+        measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 4, p90Max: 6 } } },
+      { requirementId: 'lex', statement: 's', appliesWhen: 'GENERAL', kind: 'BOUNDARY', materiality: 'REQUIRED', authority: 'EXPERT_AUTHORED',
+        measurement: { observer: 'LEXICON', params: { terms: ['tea'] } } },
+    ] } as unknown as StandardVersion;
+    const before = verifyText('d', std, 'Tea now.');
+    const after = verifyText('d', std, 'Coffee now, in the long and winding way of a morning. And another long sentence goes right here. And a third one that runs far too long.');
+    expect(acceptRepair(before, after).ok).toBe(false);
+  });
+  it('a median-only length violation still names sentences to shorten', () => {
+    const t = 'One two three four five six. Seven eight nine ten eleven twelve. Thirteen fourteen fifteen sixteen seventeen.';
+    const r = measureIt(t, { observer: 'SENTENCE_LENGTH', params: { medianMax: 3, p90Max: 20 } });
+    expect(r.verdict).toBe('VIOLATED');
+    expect(r.spans.length).toBeGreaterThan(0);
+  });
+  it('"plan B." ends a sentence; a bold sentence is its own sentence', () => {
+    expect(sents('Take plan B. We start now.').map((s) => s.text)).toEqual(['Take plan B.', 'We start now.']);
+    expect(sents('A confound. **That reading was wrong.** The cause was elsewhere.').length).toBe(3);
+    expect(sents('John F. Kennedy spoke.').length).toBe(1);
+  });
+});
+
+describe('a repair that cannot run delivers the draft', () => {
+  let backend: ChildProcess; let port = 0;
+  beforeAll(async () => {
+    backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+    port = await new Promise<number>((ok) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); }); });
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'I drink tea.' } } }) });
+  });
+  afterAll(() => { backend.kill(); });
+  it('with a one-call budget the draft is printed and recorded, and the record says why', () => {
+    const { data, proj, env } = seedSkill();
+    const out = execFileSync('node', [CLIP, 'invoke', '--skill', 'nodrink', 'say it', '--max-calls', '1',
+      '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'],
+    { encoding: 'utf8', cwd: proj, env: { ...env, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' } });
+    expect(out).toContain('I drink tea.');
+    const [rec] = store.listInvocations({ root: data, skillName: 'nodrink' });
+    expect(rec.repair?.why).toMatch(/could not run/);
+  });
+});
+
+describe('mcp answers a batch, and ignores responses', () => {
+  it('a batch array gets an array back; a response object gets nothing', () => {
+    const { env, proj } = seedSkill();
+    const input = [JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'ping' }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }]),
+      JSON.stringify({ jsonrpc: '2.0', id: 7, result: {} })].join('\n');
+    const lines = execFileSync('node', [CLIP, 'mcp'], { encoding: 'utf8', cwd: proj, env, input }).trim().split('\n');
+    expect(lines).toHaveLength(1);
+    expect((JSON.parse(lines[0]) as unknown[]).length).toBe(2);
+  });
+});

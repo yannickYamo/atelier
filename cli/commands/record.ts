@@ -18,7 +18,7 @@
 // with no model line yields an UNREPORTED observation, never a guess.
 
 import { verifyText } from '../../core/observers/verify.js';
-import { planRepair } from '../../core/loop/repair.js';
+import { planRepair, regressions } from '../../core/loop/repair.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
@@ -28,7 +28,7 @@ import * as store from '../../core/state/store.js';
 import { observeRuntime, type RuntimeBinding } from '../../core/runtime/binding.js';
 import { persistInvocation } from '../../core/runtime/record.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
-import type { InvocationRecord } from '../../core/state/canonical-state.js';
+import type { InvocationRecord, RepairRecord } from '../../core/state/canonical-state.js';
 import { sha, DATA, die, flag, runFile, pickHost, nearestProject, keyFor } from '../runtime.js';
 
 interface PromptPayload { prompt?: string; cwd?: string; prompt_id?: string; transcript_path?: string }
@@ -39,7 +39,7 @@ interface PendingInvocation {
   skillVersionHash: string; standardVersionHash: string; architectureHash: string;
   expectedPackageHash: string; servedPackageHash: string; matched: boolean; servedFiles: string[];
   /** set when the Stop hook sent the answer back once for its broken REQUIRED rules */
-  repairOf?: { outputHash: string; violated: string[] };
+  repairOf?: { outputHash: string; violated: string[]; draft: string; spans: { start: number; end: number }[] };
 }
 
 const readStdin = async (): Promise<string> => {
@@ -109,25 +109,37 @@ export async function record(): Promise<void> {
   process.env.ATELIER_PROJECT_DIR = root;
   const pendingPath = runFile('pending-invocation.json');
   const pending = readJson<PendingInvocation>(pendingPath, { what: 'the pending invocation', requireKeys: ['promptId', 'skillName'] });
-  // A different turn ended — unless this is the continuation the hook itself asked for.
-  if (!pending.promptId || (pending.promptId !== (payload.prompt_id ?? '') && !pending.repairOf)) return;
-  const output = payload.last_assistant_message ?? '';
+  // A different turn ended. The ONLY exception is the continuation this hook asked for, which Claude
+  // Code marks with stop_hook_active. A pending repair whose continuation never came (the person
+  // pressed Esc) is stale: the next unrelated turn must never be recorded as this skill's output.
+  const continuation = Boolean(pending.repairOf) && payload.stop_hook_active === true;
+  if (!pending.promptId || (pending.promptId !== (payload.prompt_id ?? '') && !continuation)) {
+    if (pending.repairOf) rmSync(pendingPath, { force: true });
+    return;
+  }
+  // The answer: what the host reports, and failing that the draft the repair was asked of — a
+  // continuation that came back empty still leaves a use to record.
+  // An empty string is no answer, so `||` is deliberate here, not `??`.
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+  const output = payload.last_assistant_message || (continuation ? pending.repairOf?.draft ?? '' : '');
   if (!output) { rmSync(pendingPath, { force: true }); return; }   // a turn with no assistant text witnessed nothing
 
   const L: store.StoreLayout = { root: DATA, skillName: pending.skillName };
 
   // ── THE SAME LOOP AS `invoke`, IN THE HOST ───────────────────────────────────────────────────
   //
-  // The answer is counted against every measured rule. When a REQUIRED one is broken, the turn is not
-  // allowed to end: the host is handed the spans that broke it and asked to rewrite only those, once.
-  // The continuation is recorded as the use, with what changed. Once only — `stop_hook_active` and
-  // `repairOf` both guard it — so a draft the model cannot fix is delivered as it is, and says so.
+  // The answer is counted against every measured rule. When a REQUIRED one is broken AND the rules
+  // point at spans to rewrite, the turn is not allowed to end: the host is handed those spans and asked
+  // to rewrite only them, once. `stop_hook_active` and `repairOf` both guard the once. Unlike the CLI,
+  // the host holds the pen for the whole answer, so "only these spans" is an instruction there, not a
+  // splice — and the record says whether anything outside them changed, and whether anything got worse.
   const std = store.getStandard(L, pending.standardVersionHash);
   const report = std ? verifyText(pending.skillName, std, output) : null;
   const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
-  if (report?.failed && !payload.stop_hook_active && !pending.repairOf) {
-    writeAtomic(pendingPath, JSON.stringify({ ...pending, repairOf: { outputHash: sha(output), violated: brokenNow.map((c) => c.requirementId) } }, null, 1));
-    const targets = planRepair(output, report);
+  const targets = report?.failed ? planRepair(output, report) : [];
+  if (report?.failed && targets.length && !payload.stop_hook_active && !pending.repairOf) {
+    writeAtomic(pendingPath, JSON.stringify({ ...pending, repairOf: { outputHash: sha(output), violated: brokenNow.map((c) => c.requirementId),
+      draft: output, spans: targets.map((t) => ({ start: t.start, end: t.end })) } }, null, 1));
     const reason = `Your answer breaks ${brokenNow.length} REQUIRED rule(s) of the /${pending.skillName} standard. `
       + 'Rewrite ONLY these spans, keep everything else exactly as it is, and give the full revised answer:\n\n'
       + targets.map((t) => `${t.id}. "${t.text}"\n   ${t.reasons.join('\n   ')}`).join('\n\n');
@@ -135,6 +147,26 @@ export async function record(): Promise<void> {
     return;
   }
   rmSync(pendingPath, { force: true });
+  let repair: RepairRecord | undefined;
+  if (continuation && pending.repairOf && std) {
+    const draft = pending.repairOf.draft;
+    const before = verifyText(pending.skillName, std, draft);
+    const worse = report ? regressions(before, report) : [];
+    // Outside the spans: the draft's text between and around them, compared with the answer's.
+    const keep = (t: string, spans: { start: number; end: number }[]): string[] => {
+      const out: string[] = []; let at = 0;
+      for (const sp of [...spans].sort((a, b) => a.start - b.start)) { out.push(t.slice(at, sp.start)); at = sp.end; }
+      out.push(t.slice(at));
+      return out.map((x) => x.trim()).filter(Boolean);
+    };
+    const outsideSpansChanged = !keep(draft, pending.repairOf.spans).every((piece) => output.includes(piece));
+    repair = { passes: 1, violatedBefore: pending.repairOf.violated, violatedAfter: brokenNow.map((c) => c.requirementId),
+      originalOutputHash: pending.repairOf.outputHash, draft, outsideSpansChanged,
+      why: [brokenNow.length ? 'the host rewrote once and a REQUIRED rule still does not hold' : 'every REQUIRED measured rule now holds',
+        worse.length ? `the rewrite made ${worse.join(', ')} worse` : '',
+        outsideSpansChanged ? 'text outside the named spans changed' : ''].filter(Boolean).join('; ') };
+  }
+
   const at = new Date().toISOString();
   const model = modelFromTranscript(payload.transcript_path);
   // The binding records what is KNOWN about this runtime: the host composed the request, and the
@@ -158,9 +190,7 @@ export async function record(): Promise<void> {
     delivery: { expectedPackageHash: pending.expectedPackageHash, servedPackageHash: pending.servedPackageHash,
       matched: pending.matched, servedFiles: pending.servedFiles, outputContract: null },
     input: pending.input, output,
-    ...(pending.repairOf ? { repair: { passes: 1, violatedBefore: pending.repairOf.violated,
-      violatedAfter: brokenNow.map((c) => c.requirementId), originalOutputHash: pending.repairOf.outputHash,
-      why: brokenNow.length ? 'the host rewrote once and a REQUIRED rule still does not hold' : 'every REQUIRED measured rule now holds' } } : {}),
+    ...(repair ? { repair } : {}),
   };
   assertRequestBound(rec.request, pending.input);
   persistInvocation(L, rec, binding, store.getStandard(L, pending.standardVersionHash));
