@@ -1,13 +1,10 @@
 // atelier/adapters/claude-code/adapter.ts — ADAPTER #1. Everything Claude-specific lives here.
-import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
-import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { join, dirname } from 'node:path';
-import { createHash } from 'node:crypto';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { installTree, verifyTree } from '../install-tree.js';
 import type { CarrierDeliveryMatrix } from '../../core/delivery/carrier-delivery.js';
 import type { HostAdapter, HostCapabilities, InstallResult, VerificationResult, ProtocolPolicy, GuardResult, InstallablePackage } from '../host-adapter.js';
 
-
-const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 export class ClaudeCodeAdapter implements HostAdapter {
   detect(): HostCapabilities {
@@ -42,21 +39,7 @@ export class ClaudeCodeAdapter implements HostAdapter {
     };
   }
 
-  install(pkg: InstallablePackage, projectDir: string): InstallResult {
-    try {
-      const d = this.dir(projectDir, pkg.skillId);
-      mkdirSync(d, { recursive: true });
-      // A package is a DIRECTORY TREE now, not one file. examples/ and contracts/ are nested, and a
-      // flat write silently loses them — the host would hold a skill missing exactly the components
-      // that carry PREFERRED and REQUIRED-STRICT behaviour.
-      for (const [rel, content] of Object.entries(pkg.files)) {
-        const target = join(d, rel);
-        mkdirSync(dirname(target), { recursive: true });
-        writeAtomic(target, content);
-      }
-      return { ok: true, installedAt: d };
-    } catch (e) { return { ok: false, reason: (e as Error).message }; }
-  }
+  install(pkg: InstallablePackage, projectDir: string): InstallResult { return installTree(this.dir(projectDir, pkg.skillId), pkg); }
   uninstall(skillId: string, projectDir: string): void { rmSync(this.dir(projectDir, skillId), { recursive: true, force: true }); }
 
   /** Claude invokes skills with a leading slash. Punctuation only — identity is skillId. */
@@ -83,21 +66,6 @@ export class ClaudeCodeAdapter implements HostAdapter {
         + (policy.reasonIfBlocked ? `Current policy would block: ${policy.reasonIfBlocked}.` : 'No active block.') };
   }
 
-  verifyInstallation(pkg: InstallablePackage, projectDir: string): VerificationResult {
-    const root = this.dir(projectDir, pkg.skillId);
-    const p = join(root, 'SKILL.md');
-    if (!existsSync(p)) return { present: false, matchesPackage: false, detail: `not installed at ${p}` };
-    // EVERY runtime file, not just SKILL.md. Hashing one file of a multi-file package would pass an
-    // installation whose examples or output contract had been edited — and those carry the
-    // PREFERRED and REQUIRED-STRICT behaviour, which is exactly what an editor would reach for.
-    const onDisk: Record<string, string> = {};
-    for (const rel of Object.keys(pkg.files)) {
-      const t = join(root, rel);
-      if (!existsSync(t)) return { present: true, matchesPackage: false, detail: `MISSING COMPONENT: ${rel} is in the compiled package and not on disk` };
-      onDisk[rel] = readFileSync(t, 'utf8');
-    }
-    const matches = sha(JSON.stringify(onDisk)) === pkg.packageHash;
-    return { present: true, matchesPackage: matches, detail: matches ? 'matches the compiled package' : 'INSTALLED FILES EDITED — they no longer match what was compiled from the standard' };
-  }
+  verifyInstallation(pkg: InstallablePackage, projectDir: string): VerificationResult { return verifyTree(this.dir(projectDir, pkg.skillId), pkg); }
   persistentStateLocation(): string { return process.env.CLAUDE_PLUGIN_DATA ?? join(process.env.HOME ?? '.', '.atelier'); }
 }

@@ -258,14 +258,20 @@ export function renderAgentSkill(
   // study is why. It is stating the half that was never stated. The requirement, its authority and
   // its condition are untouched; only the sentence that carries them changes, which is a carrier
   // decision the compiler owns.
+  //
+  // HOW IT READS. The first form was "When <condition>, <statement lowercased>. When that does not
+  // hold, do not." — which lowercased an author's "I" into "i", left the condition's internal
+  // semicolons as machine punctuation ("When final paragraph; the story invites…"), and read as
+  // generated text on the page an owner shows people. The condition now leads as a label, the
+  // statement keeps the author's own capitalisation, and both branches are still stated.
   const conditionalLine = (statement: string, appliesWhen: string): string => {
-    // The author's condition, verbatim, with a leading "when" only if they did not write one.
-    const w = appliesWhen.trim().replace(/[.\s]+$/, '');
-    const clause = /^when\b/i.test(w) ? w : `when ${w}`;
+    const cond = appliesWhen.trim().replace(/[.\s]+$/, '')
+      .replace(/^(only\s+)?when\s+/i, '')
+      .split(/\s*;\s*/).filter(Boolean).join(', and ')
+      // "At section transitions" follows "Only when" mid-sentence; "I", "API" and the like keep their case.
+      .replace(/^([A-Z])([a-z])/, (_m, a: string, b: string) => a.toLowerCase() + b);
     const body = statement.trim().replace(/[.\s]+$/, '');
-    const lead = body.charAt(0).toLowerCase() + body.slice(1);
-    return `${clause.charAt(0).toUpperCase() + clause.slice(1)}, ${lead}. `
-      + 'When that does not hold, do not.';
+    return `Only when ${cond}: ${body}. Otherwise, don't.`;
   };
 
   const line = (r: typeof v.requirements[number], i: number): string => {

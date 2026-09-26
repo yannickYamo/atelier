@@ -107,9 +107,30 @@ git clone https://github.com/yannickYamo/atelier
 cd atelier && npm install && npm run build && npm link
 ```
 
-Node 22 or later. No account, no telemetry. An `ANTHROPIC_API_KEY` (or any OpenAI-compatible
-backend via `--provider openai-compatible --base-url ...`) is needed only for steps that call a
-model. The npm package is not published yet; the source install is the real one.
+Then, in Claude Code, install the plugin. Its hooks are what record a `/my-skill` use so that
+`atelier fix` can find it:
+
+```text
+/plugin marketplace add yannickYamo/atelier
+/plugin install atelier@atelier
+```
+
+Node 22 or later. No account, no telemetry. An `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN` behind
+a gateway, or any OpenAI-compatible backend via `--provider openai-compatible --base-url ...`) is
+needed only for steps that call a model. The npm package is not published yet; the source install is
+the real one.
+
+| setting | what it does |
+|---|---|
+| `ATELIER_DATA` | where standards, skills and runs live (default `~/.atelier`) |
+| `ATELIER_MODEL` | the model for every role, unless a role names its own |
+| `ATELIER_PROPOSER_MODEL` | the model discovery proposes rules with |
+| `ATELIER_BACKEND`, `ATELIER_BASE_URL` | a named backend preset, and the endpoint for an OpenAI-compatible provider |
+| `ATELIER_PRICE_IN`, `ATELIER_PRICE_OUT` | your per-million-token rates, when the shipped table does not know the model |
+| `ATELIER_HOST` | `claude-code` (default) or `codex`: where a built skill is installed |
+| `ATELIER_PROJECT_DIR` | the project a run belongs to, when not the current directory |
+
+`atelier check` verifies the configured backend actually works before you spend on it.
 
 Three verbs. Everything else is machinery you can inspect and never have to operate.
 
@@ -149,8 +170,8 @@ preferred, or do not add. Approving mints, compiles and installs the new version
 command.
 
 To see what the compiler decided and why, `atelier plan --skill <name>` lists every rule with the
-mechanism carrying it. To check the skill against no skill at all, `atelier contract --bare`. To
-test it blind against work you reserved, `atelier reference`. The full command list is
+mechanism carrying it. To check the skill against no skill at all, `atelier contract --skill <name> --bare`.
+To test it blind against work you reserved, `atelier reference --skill <name>`. The full command list is
 `atelier --help`; the design is in [docs/](docs/ARCHITECTURE.md).
 
 ## Results so far
@@ -161,7 +182,10 @@ its wins.
 **Supported.** Ratification measurably changes what a model does: identical statements served as
 ratified requirements produced the required structure 29 times out of 30, against 11 out of 30 as
 unratified observations. On code review, a recovered standard beat raw examples on 15 of 17 held-out
-cases with a fraction of the context. The governance layer has held under every test, including one
+cases with a fraction of the context, with three limits the [study](studies/MAINTAINER_A_STUDY_CLOSE.md)
+attaches: the standard was adopted by a surrogate, not ratified by the author whose public work it
+came from; a model judged, against the standard the winning arm had been given; and the
+preregistered primary endpoint failed, so the result rests on a secondary one. The governance layer has held under every test, including one
 where its author overrode a preregistered stop and the override reproduced the gate's verdict at
 eight times the cost.
 
@@ -174,7 +198,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 90 files and 1271 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1283 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
