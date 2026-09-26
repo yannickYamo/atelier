@@ -45,7 +45,7 @@ export const USAGE: Readonly<Record<string, string>> = {
   carriers: 'atelier carriers [--skill <name>] [--host codex]\n  Which parts of a skill reach the model on each host.',
   plan: 'atelier plan --skill <name> [--json]\n  Every rule and the mechanism that carries it.',
   contract: 'atelier contract --skill <name> [--bare] [--cap <usd>]\n  Test the skill against no skill at all.',
-  reference: 'atelier reference --skill <name>   then: atelier reference --skill <name> --score --labels <json>\n  Test the skill blind against work you reserved.',
+  reference: 'atelier reference --skill <name> [--loop]   then: atelier reference --skill <name> --score --labels <json>\n  Test the skill blind against work you reserved.',
   record: 'atelier record --from-hook prompt|stop\n  Internal: called by the host plugin\'s hooks.',
   status: 'atelier status\n  Where the run in this project stands.',
   abort: 'atelier abort\n  Abandon the run in this project. What was decided is kept.',

@@ -63,7 +63,7 @@ export const VALUED_OPTIONS: readonly string[] = [
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept', 'accept-new-binding', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'bare', 'holdout', 'json', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'bare', 'holdout', 'json', 'loop', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes',

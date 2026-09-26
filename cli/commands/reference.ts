@@ -13,6 +13,7 @@
 // does not reveal; `score` unblinds. One command that did both would let the person scoring see which
 // side was theirs, and a result obtained that way is a different result.
 
+import { refineToStandard } from '../../core/loop/run-repair.js';
 import { BudgetExceeded, CallBudgetExceeded } from '../../core/inference/client.js';
 import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
 import { readFileSync, existsSync } from 'node:fs';
@@ -193,6 +194,9 @@ async function preparePhase(): Promise<void> {
   // every comparison that needs it is reported as NOT RUN, by name, on the pairs file and at scoring.
   // Nothing is silently dropped: a missing comparison is louder here than it was as a crash.
   const failedArms = new Map<ArmId, string>();
+  const loop = argv.includes('--loop');
+  const standard = store.getStandard(L, sv.standardVersionHash);
+  if (loop) console.log('  --loop: the skill\'s arm is checked and span-repaired, as invoke delivers it; baselines are not.');
   let modelStyleGuide: string | null = null;
   if (needsGuide) {
     try {
@@ -236,8 +240,13 @@ async function preparePhase(): Promise<void> {
   for (const a of arms) {
     if (failedArms.has(a)) continue;
     try {
+      // `--loop` serves the skill as it ships — checked and span-repaired — in the skill's own arm only.
+      // Every baseline stays what the model wrote. See studies/PROOF_STUDY_PREREGISTRATION.md §3.
+      const refine = a === 'T_ATELIER' && loop && standard
+        ? async (draft: string) => { const r = await refineToStandard(client, budget, L.skillName, standard, draft); return { output: r.output, repair: r.repair }; }
+        : null;
       const recs = await mapLimit(reserved, DEFAULT_CONCURRENCY, (u) => runOnce(L, sv, servedTextFor(a, inputs), servedHash, delivery,
-        u.task, client, budget, binding, provenance, a === 'T_ATELIER' ? contractFile : null));
+        u.task, client, budget, binding, provenance, a === 'T_ATELIER' ? contractFile : null, 'POSITIONAL', refine));
       outputs.set(a, new Map(reserved.map((u, i) => [u.unitId, recs[i].output])));
       console.log(`  ${a} ready across ${reserved.length} unit(s)`);
     } catch (e) {
@@ -271,7 +280,7 @@ async function preparePhase(): Promise<void> {
   }
 
   const setHash = armSetHash(arms, sv.skillVersionHash);
-  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, armSetHash: setHash, arms, pairs,
+  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, armSetHash: setHash, arms, pairs, loop,
     notRun, failedArms: Object.fromEntries(failedArms) }, null, 1));
   for (const n of notRun) {
     console.log(`\n${n.primary ? 'THE PRIMARY COMPARISON' : 'Comparison'} ${n.kind} DID NOT RUN — ${n.why}`);
