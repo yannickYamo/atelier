@@ -1,10 +1,9 @@
 // atelier/core/convergence/probe.ts — A DEV PROBE, AND THE PROVENANCE IT CAN NEVER SHED.
 //
 // The planner can decide a discriminating experiment is needed. This is what it emits: a SPEC, not a
-// fired probe. The machinery that builds one already exists and is not duplicated here —
-// `discovery/chain/discrimination-probe.ts` supplies `designPair` (two outputs on one case differing
-// only in the property), `planProbeSides`/`sideImbalance` (counterbalancing), `blindPair`, and
-// `manipulationVerified`, which checks the two arms ACTUALLY differ in the intended property. A probe
+// fired probe. The design machinery it once pointed at (`discovery/chain/discrimination-probe.ts`:
+// designPair, counterbalancing, blinding, manipulationVerified) was deleted on 2026-09-26 with the
+// taste ladder it served; a spec emitted here has no builder until one is written. A probe
 // whose arms do not differ discriminates nothing and returns a confident answer about the wrong thing.
 //
 // ─── THE SPLIT THIS FILE ENFORCES ──────────────────────────────────────────────────────────────

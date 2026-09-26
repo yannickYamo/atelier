@@ -20,6 +20,12 @@ else in these records has been altered, and no result depends on the identities.
 
 ## The studies
 
+### Drafted, not yet sealed
+
+| | |
+|---|---|
+| [PROOF_STUDY_PREREGISTRATION.md](PROOF_STUDY_PREREGISTRATION.md) | **DRAFT.** Recall of discovery against the owner's hand-built house standard (sealed answer key), and the shipped loop against a model's own guide to the same corpus, with a deterministic measured-rule table anyone can recompute (`scripts/measured-conformance.mts`, `scripts/recall-sheet.mts`). Sealed only by the owner's commit, before discovery reads the corpus. |
+
 ### The one reproducible study
 
 | | |

@@ -21,7 +21,9 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
-import { sha, die, argv, flag, PROPOSER, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
+import { deriveMeasuredRules } from '../../core/observers/derive.js';
+import { GenerationIncomplete } from '../../core/inference/client.js';
+import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -48,9 +50,9 @@ export async function discover(): Promise<void> {
       + `\n  See where it is: atelier status`);
   }
 
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', 60) };
-  const client = clientFor(flag('--model') ?? PROPOSER);
+  const client = clientFor(proposerModel());
   let proposals: Requirement[];
+  let proposalMeta: Record<string, ProposalMeta>;
 
   // ─── THE SPLIT IS USED WHENEVER THE CORPUS ALLOWS IT ────────────────────────────────────────
   //
@@ -83,8 +85,19 @@ export async function discover(): Promise<void> {
   const tokOf = (t: string): number => Math.ceil(t.length / 4);
   const proposalIds = new Set(openGoldens.filter((g) => g.role === 'PROPOSAL').map((g) => g.contextId));
   const poolTok = openItems.filter((i) => proposalIds.has(i.id)).reduce((n, i) => n + tokOf(i.text), 0);
-  const heldItems = openItems.filter((i) => !proposalIds.has(i.id));
+  // HELD-OUT ONLY. This counted every piece that was not a proposal, so pieces past the proposer's
+  // one-pass read were quoted as observation calls that never happen, and a 14-piece corpus was
+  // quoted at twice its cost and refused at the default cap.
+  const heldIds = new Set(openGoldens.filter((g) => g.role === 'HELD_OUT').map((g) => g.contextId));
+  const heldItems = openItems.filter((i) => heldIds.has(i.id));
   const heldCount = Math.max(1, heldItems.length);
+  // THE CALL BOUND FOLLOWS THE SPLIT. It was a flat 60, and the split now holds out up to eight
+  // pieces: eight pieces times twelve rules is 96 observation calls, so a larger corpus spent its
+  // budget and stopped at call 60 with nothing saved. The bound is the worst case this run can make —
+  // both vantages, the matcher, every rule the union can keep against every held-out piece — so it
+  // binds a runaway without binding the run it was sized for.
+  const worstCaseCalls = 2 /* vantages */ + 2 /* matcher */ + 24 * heldCount + 4;
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', worstCaseCalls) };
   const heldTok = heldItems.reduce((n, i) => n + tokOf(i.text), 0);
   // ── THE ESTIMATE USES THE RATE THAT WILL ACTUALLY BE CHARGED ──────────────────────────────
   //
@@ -100,7 +113,7 @@ export async function discover(): Promise<void> {
   const outTok = 4000 * VANTAGES + 300 * RULES * heldCount;
   // The override wins: a person who names their rate is the authority on it. The shipped table is a
   // dated seed for the case where nobody has.
-  const modelName = flag('--discovery-model') ?? flag('--model') ?? PROPOSER;
+  const modelName = proposerModel();
   const rate = priceOverrideFor('discovery') ?? priceFor(ANTHROPIC_PRICING, modelName);
   if (!rate) {
     console.log(`\nEstimated discovery size ~${Math.round(inTok).toLocaleString()} in / ~${outTok.toLocaleString()} out tokens `
@@ -124,8 +137,24 @@ export async function discover(): Promise<void> {
       + `\n  Or spend less:    point at fewer pieces, or shorter ones.`);
   }
 
-  const chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens,
-    { standardDimensions: [ev.workType] }, flag('--model') ?? PROPOSER);
+  // ── A REFUSAL FROM THE PROPOSER IS NOT THE END OF DISCOVERY ──────────────────────────────────
+  //
+  // On the first real run against an author's own posts, the default proposer stopped with
+  // stop_reason "refusal" on the rule-extraction call, twice, while the discovery-side model answered
+  // it cleanly. A classifier's false positive on "describe how this author writes" should cost one
+  // retry on the other configured model, said out loud — not the run.
+  const fallbackModel = diagnoserModel();
+  let usedModel = proposerModel();
+  let chain: Awaited<ReturnType<typeof runDiscoveryChain>>;
+  try {
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+  } catch (e) {
+    const refused = e instanceof GenerationIncomplete && e.termination.kind === 'REFUSAL';
+    if (!refused || fallbackModel === usedModel) throw e;
+    console.log(`\n${usedModel} declined the request (a refusal, not an error in your work). Retrying once with ${fallbackModel}.`);
+    usedModel = fallbackModel;
+    chain = await runDiscoveryChain(clientFor(fallbackModel), budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+  }
 
   if ('refused' in chain) {
     // GOLDENS ONLY, even here. The chain refuses on a thin corpus and this is the degraded path, but
@@ -170,6 +199,9 @@ export async function discover(): Promise<void> {
       }
       console.log(`\nThese are defects, not opinions. Candidates are still shown; you are deciding on them either way.`);
     }
+    proposalMeta = Object.fromEntries(union.members.map((m, i) => [`p${i + 1}`, {
+      framings: m.framings, alsoPhrasedAs: m.rules.slice(1).map((r) => r.rule.statement),
+      heldOut: null, needs: null } satisfies ProposalMeta]));
     proposals = union.members.map((m, i) => {
       const r = m.rules[0].rule;
       return {
@@ -181,6 +213,17 @@ export async function discover(): Promise<void> {
   } else {
     console.log(`\nProposed from ${chain.proposalIds.length} piece(s): ${chain.proposalIds.join(', ')}`);
     console.log(`Checked against ${chain.heldOutIds.length} the proposer never saw: ${chain.heldOutIds.join(', ')}  (${chain.observeCalls} checks)`);
+    proposalMeta = Object.fromEntries(chain.hypotheses.map((h, i) => {
+      const d = h.hypothesis.description;
+      const member = chain.framingUnion?.members.find((m) => m.rules.some((r) => r.rule.description === d));
+      const factor = chain.proposed.find((f) => f.description === d);
+      const applicable = h.golden.filter((g) => g.applicable).length;
+      return [`p${i + 1}`, {
+        framings: member?.framings ?? [],
+        alsoPhrasedAs: (member?.rules ?? []).map((r) => r.rule.description).filter((x) => x !== d),
+        heldOut: { applicable, present: h.golden.filter((g) => g.applicable && g.present).length },
+        needs: factor?.needs?.trim() ? factor.needs.trim() : null } satisfies ProposalMeta];
+    }));
     proposals = chain.hypotheses.map((h, i) => ({
       requirementId: `p${i + 1}`, statement: h.hypothesis.description,
       appliesWhen: h.hypothesis.appliesWhen.map((x) => x.describe).join('; ') || 'GENERAL',
@@ -230,7 +273,20 @@ export async function discover(): Promise<void> {
   //
   // Ordering is the fix, not a bigger try. Once inference has been spent, its result is written
   // before any step that may fail, so no later refusal can reach back and delete it.
-  saveSession({ ...s, run: (t as { run: Run }).run, proposals });
+  // ── THE MEASURABLE PART, COUNTED RATHER THAN READ ─────────────────────────────────────────────
+  //
+  // Sentence and paragraph length, hedging, and the stock phrases the author never uses — proposed
+  // with their measurement attached, over the pieces discovery was allowed to read (never the
+  // reserve). They go on the same screen and take the same ruling as everything else.
+  const readIds = new Set(openGoldens.filter((g) => g.role === 'PROPOSAL').map((g) => g.contextId));
+  const measured = deriveMeasuredRules(openItems.filter((i) => readIds.has(i.id)), openItems.filter((i) => heldIds.has(i.id)), sourceProvenance());
+  if (measured.length) {
+    console.log(`${measured.length} measurable rule(s) counted from the same pieces: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
+    proposals = [...proposals, ...measured.map((m) => m.requirement)];
+    proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance } satisfies ProposalMeta])) };
+  }
+  saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
     try {
@@ -253,9 +309,13 @@ export async function discover(): Promise<void> {
 
   const b = proposals.filter((p) => p.kind === 'BOUNDARY').length;
   console.log(`\n${proposals.length} rule(s)${b ? `, ${b} of them boundaries` : ''}.  ($${budget.spentUsd.toFixed(3)})`);
-  for (const p of proposals) {
-    const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    applies when: ${p.appliesWhen}`;
-    console.log(`  [${p.requirementId}] ${p.statement}${cond}`);
+  // Under `atelier new` the review screen shows every rule next; listing them here too printed the
+  // same twenty rules twice in a row.
+  if (!process.env.ATELIER_ORCHESTRATED) {
+    for (const p of proposals) {
+      const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    applies when: ${p.appliesWhen}`;
+      console.log(`  [${p.requirementId}] ${p.statement}${cond}`);
+    }
   }
   if (!process.env.ATELIER_ORCHESTRATED) console.log(`\nRun \`atelier ratify-close\` to mint the standard.`);
 }

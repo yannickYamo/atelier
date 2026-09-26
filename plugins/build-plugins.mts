@@ -16,24 +16,28 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, 'shared', 'skills');
-const OUT = join(HERE, 'dist');
+// COMMITTED, not gitignored. A marketplace install clones the repository and reads the plugin from a
+// path inside it; the tree used to be emitted into gitignored `plugins/dist`, so the one install route
+// a user has fetched a checkout with no plugin in it. CI rebuilds and fails on any diff.
+const OUT = join(HERE, 'hosts');
+const REPO = join(HERE, '..');
+// One version, the package's. The manifest was a hand-typed 0.1.0 against a 0.2.0 package.
+const VERSION = (JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')) as { version: string }).version;
 
 interface HostSpec {
   readonly id: string;
   readonly manifestDir: string;
   readonly prefix: string;          // how a user invokes a plugin skill here
-  readonly dataEnv: string;
 }
 
 const HOSTS: readonly HostSpec[] = [
-  { id: 'claude-code', manifestDir: '.claude-plugin', prefix: '/atelier:', dataEnv: 'CLAUDE_PLUGIN_DATA' },
-  { id: 'codex', manifestDir: '.codex-plugin', prefix: '$atelier:', dataEnv: 'CODEX_PLUGIN_DATA' },
+  { id: 'claude-code', manifestDir: '.claude-plugin', prefix: '/atelier:' },
+  { id: 'codex', manifestDir: '.codex-plugin', prefix: '$atelier:' },
 ];
 
 const MANIFEST = (_h: HostSpec): string => JSON.stringify({
   name: 'atelier',
-  displayName: 'Atelier Research Preview',
-  version: '0.1.0',
+  version: VERSION,
   description: 'Proposes what makes your work yours, you ratify it, and it builds a portable skill. Ships with an optional experiment.',
   author: { name: 'Atelier' },
   license: 'MIT',
@@ -74,8 +78,10 @@ const CAPABILITY_CHECK = `#!/usr/bin/env bash
 # of the invariants would hold. A silently unenforced protocol is worse than an absent one, because
 # its output is indistinguishable from a correct run.
 set -euo pipefail
-if ! command -v atelier >/dev/null 2>&1; then
-  echo "Atelier: 'atelier' is not on PATH. The protocol guarantees (ratification-before-build," >&2
+# RUN it, not just find it: a rebuild once left the linked binary without its executable bit, so
+# \`command -v\` succeeded and every hook failed.
+if ! atelier --version >/dev/null 2>&1; then
+  echo "Atelier: 'atelier' is not on PATH or will not run. The protocol guarantees (ratification-before-build," >&2
   echo "corpus-freeze, reveal-after-preference) are enforced by that binary, not by instructions." >&2
   echo "Install it first:  git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link" >&2
   exit 2
@@ -92,6 +98,11 @@ for (const h of HOSTS) {
   writeFileSync(join(root, h.manifestDir, 'plugin.json'), `${MANIFEST(h)}\n`);
   writeFileSync(join(root, 'hooks', 'hooks.json'), `${HOOKS(h)}\n`);
   writeFileSync(join(root, 'scripts', 'capability-check.sh'), CAPABILITY_CHECK, { mode: 0o755 });
+  // The checker as a tool any agent in the session can call: `atelier mcp` over stdio. Declared at
+  // the plugin root, where Claude Code reads a plugin's servers.
+  if (h.id === 'claude-code') {
+    writeFileSync(join(root, '.mcp.json'), `${JSON.stringify({ mcpServers: { atelier: { command: 'atelier', args: ['mcp'] } } }, null, 2)}\n`);
+  }
   if (h.id === 'claude-code') writeFileSync(join(root, 'scripts', 'record-hook.sh'), RECORD_HOOK, { mode: 0o755 });
 
   for (const skill of readdirSync(SRC)) {
@@ -105,10 +116,15 @@ for (const h of HOSTS) {
   console.log(`built ${h.id}: ${readdirSync(join(root, 'skills')).length} skills, manifest ${h.manifestDir}/plugin.json`);
 }
 
-// marketplace entry, one file, both hosts
-writeFileSync(join(OUT, 'marketplace.json'), `${JSON.stringify({
-  plugins: [{ name: 'atelier', displayName: 'Atelier Research Preview',
-    description: 'Turn your own work into a reusable skill you own. Portable across hosts.',
-    source: { type: 'github', owner: 'yannickYamo', repo: 'atelier' } }],
+// The marketplace Claude Code reads: `.claude-plugin/marketplace.json` at the repository root, naming
+// the committed plugin tree by relative path. `/plugin marketplace add yannickYamo/atelier` then
+// `/plugin install atelier@atelier` is the whole install.
+mkdirSync(join(REPO, '.claude-plugin'), { recursive: true });
+writeFileSync(join(REPO, '.claude-plugin', 'marketplace.json'), `${JSON.stringify({
+  name: 'atelier',
+  owner: { name: 'Yannick Maurice' },
+  description: 'Atelier: a standard you ratify, compiled into a skill any model can run.',
+  plugins: [{ name: 'atelier', source: './plugins/hosts/claude-code', version: VERSION,
+    description: 'Turn your own work into a reusable skill you own. Portable across hosts.' }],
 }, null, 2)}\n`);
-console.log(`built marketplace.json`);
+console.log(`built .claude-plugin/marketplace.json`);

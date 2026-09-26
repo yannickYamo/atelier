@@ -19,7 +19,7 @@
 // `assertAuthorityCeiling` runs on every outcome before it is returned, so a sixth surface added
 // later inherits the invariant by construction rather than by review.
 
-import type { Requirement } from '../state/canonical-state.js';
+import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { assertAuthorityCeiling } from '../state/canonical-state.js';
 import type { RatificationDecision as LedgerDecision } from './decision-record.js';
 
@@ -52,6 +52,11 @@ export interface DecisionInput {
   readonly form?: string | null;
   /** field-name → JSON-Schema fragment; only enforceable on REQUIRED */
   readonly shape?: unknown;
+  /**
+   * The rule's measurement. Undefined keeps the one it has — unless its words change, because a check
+   * written for the old wording no longer states what the new wording asks. Null drops it.
+   */
+  readonly measurement?: Measurement | null;
   /** the id of the decision this rule realizes; excludes a materiality of its own */
   readonly realizes?: string | null;
   /** resolver for `realizes` targets, over whatever draft the caller holds */
@@ -79,6 +84,19 @@ const ledgerVerbFor = (materiality: string | null, rewritten: boolean): LedgerDe
  * Validate what a decision declares the rule to OBLIGE. Identical rules on every surface — this is
  * the block that lived only in the batch path while `ratify-one` accepted anything.
  */
+
+/** What the rule's measurement is after this decision. See `DecisionInput.measurement`. */
+const measurementAfter = (shown: Requirement, d: DecisionInput): Measurement | undefined => {
+  if (d.measurement !== undefined) return d.measurement ?? undefined;
+  if (d.statement && d.statement !== shown.statement) return undefined;
+  return shown.measurement;
+};
+const withMeasurement = (r: Requirement, m: Measurement | undefined): Requirement => {
+  const { measurement: _dropped, ...rest } = r;
+  void _dropped;
+  return m ? { ...rest, measurement: m } : rest;
+};
+
 function validateObligation(id: string, d: DecisionInput): {
   materiality: Requirement['materiality']; form: Requirement['realizationTolerance'];
   shape: Record<string, unknown> | null; realizes: string | null;
@@ -161,13 +179,26 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
   }
 
   if (d.verb === 'AMEND') {
-    if (!d.statement) throw new Error(`${id}: AMEND records the owner's words; --statement is required.`);
-    const requirement: Requirement = { ...shown, statement: d.statement,
+    // The owner may reword a rule, reweigh it, or both. Reweighing alone was impossible: a rule closed
+    // as PREFERRED could never be made REQUIRED, because the one command that re-rules a closed standard
+    // insisted on new words, and the ledger is append-only everywhere else.
+    if (!d.statement && !d.materiality && d.measurement === undefined) {
+      throw new Error(`${id}: AMEND changes the rule's words (--statement), its weight (--materiality) or its check (--measure); give at least one.`);
+    }
+    const ob = d.materiality
+      ? validateObligation(id, { ...d, form: d.form ?? shown.realizationTolerance, shape: d.shape ?? shown.outputShape })
+      : null;
+    const requirement: Requirement = { ...shown,
+      ...(d.statement ? { statement: d.statement, authority: 'EXPERT_AUTHORED' as const,
+        provenance: fromPublicSource ? shown.provenance : 'SUBSTANTIVELY_REWRITTEN' as const } : {}),
+      // A weight declared by the owner is a ruling on the rule as it stands.
+      ...(!d.statement && shown.authority === 'DERIVED_UNRATIFIED' ? { authority: 'EXPERT_RATIFIED' as const } : {}),
       ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}),
-      authority: 'EXPERT_AUTHORED',
-      provenance: fromPublicSource ? shown.provenance : 'SUBSTANTIVELY_REWRITTEN' };
-    assertAuthorityCeiling(requirement);
-    return { requirement, ledgerDecision: 'EDIT', rewritten: true };
+      ...(ob ? { materiality: ob.materiality, realizationTolerance: ob.form, outputShape: ob.shape } : {}) };
+    const measured = withMeasurement(requirement, measurementAfter(shown, d));
+    assertAuthorityCeiling(measured);
+    // EDIT either way: the requirement changed, and the ledger keeps the before and the after.
+    return { requirement: measured, ledgerDecision: 'EDIT', rewritten: Boolean(d.statement) };
   }
 
   // APPROVE / REWRITE / CONTEXTUAL — a ruling on something proposed.
@@ -191,6 +222,7 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
     ...(ob.realizes !== null ? { realizes: ob.realizes } : {}),
     ...(d.statement ? { statement: d.statement } : {}),
     ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}) };
-  assertAuthorityCeiling(requirement);
-  return { requirement, ledgerDecision: ledgerVerbFor(ob.materiality, rewritten), rewritten };
+  const measured = withMeasurement(requirement, measurementAfter(shown, d));
+  assertAuthorityCeiling(measured);
+  return { requirement: measured, ledgerDecision: ledgerVerbFor(ob.materiality, rewritten), rewritten };
 }

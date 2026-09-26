@@ -35,18 +35,22 @@ export const anthropicTermination = (stopReason: string | null): InferenceTermin
 export class AnthropicInferenceClient implements InferenceClient {
   private readonly client: Anthropic;
   constructor(private readonly modelId: string, apiKey?: string, private readonly pricing: Pricing | null = priceFor(ANTHROPIC_PRICING, modelId)) {
+    // Two credential forms, both the SDK's own: an API key, or a bearer token (ANTHROPIC_AUTH_TOKEN),
+    // which is what a corporate gateway issues. Accepting only the first blocked anyone behind one
+    // before the SDK was ever reached. The SDK reads ANTHROPIC_BASE_URL itself.
     const key = apiKey ?? process.env.ANTHROPIC_API_KEY;
-    if (!key) {
+    const authToken = apiKey ? undefined : process.env.ANTHROPIC_AUTH_TOKEN;
+    if (!key && !authToken) {
       throw new Error(
-        'ANTHROPIC_API_KEY is not set.\n'
-        + '  export ANTHROPIC_API_KEY=sk-...\n'
+        'Neither ANTHROPIC_API_KEY nor ANTHROPIC_AUTH_TOKEN is set.\n'
+        + '  export ANTHROPIC_API_KEY=sk-...        (or ANTHROPIC_AUTH_TOKEN=... behind a gateway)\n'
         + 'Atelier needs an inference provider for this step. Your corpus, standard and outputs '
         + 'stay on this machine; nothing is sent anywhere except that one call.',
       );
     }
     // Retries stated rather than inherited. The SDK's own default is the same number; naming it
     // here is what lets a reader work out the worst case from this file instead of from the SDK's.
-    this.client = new Anthropic({ apiKey: key, maxRetries: INFERENCE_MAX_RETRIES });
+    this.client = new Anthropic({ apiKey: key ?? null, authToken: authToken ?? null, maxRetries: INFERENCE_MAX_RETRIES });
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
@@ -91,7 +95,7 @@ export class AnthropicInferenceClient implements InferenceClient {
         termination.kind === 'MAX_TOKENS'
           ? `the model stopped at the ${req.maxTokens}-token limit before completing the object. `
             + 'A truncated structured output is not a partial answer, it is an unparseable one. Nothing was recorded.'
-          : `the model stopped for "${termination.kind === 'OTHER' ? termination.providerValue : termination.kind}" before completing the object. Nothing was recorded.`,
+          : `${this.modelId} stopped for "${termination.kind === 'OTHER' ? termination.providerValue : termination.kind}" before completing the object (call: ${req.toolName}). Nothing was recorded.`,
         u.output_tokens);
     }
 

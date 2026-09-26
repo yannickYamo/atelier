@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { describeBackup } from '../../adapters/install-tree.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { authorityStateOf, assertSupersessionRecorded } from '../../core/state/canonical-state.js';
 import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
@@ -59,7 +60,7 @@ export function confirmBoundary(): void {
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
-  const pkg = renderAgentSkill(next, arch, name, desc);
+  const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L));
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
@@ -68,6 +69,7 @@ export function confirmBoundary(): void {
   store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
   const host = pickHost();
   const inst = host.install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
   // Ledgered like every other ruling. A drop is a REJECT of the inferred rule; a confirm is its APPROVE.

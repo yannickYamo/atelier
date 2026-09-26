@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { describeBackup } from '../../adapters/install-tree.js';
 import type { Budget } from '../../core/inference/client.js';
 import { foldRepairs } from '../../core/architecture/repair-memory.js';
 import { compareOnRule, describeObservedComparison } from '../../core/fidelity/run-observer.js';
@@ -12,7 +13,7 @@ import * as store from '../../core/state/store.js';
 import { selfEvaluatedOnly, rankForPromotion } from '../../core/fidelity/provenance.js';
 import { foldJudgements, rationalesFor, agreement, describeAgreement, describeJudgements } from '../../core/fidelity/judgement.js';
 
-import { DATA, die, argv, flag, MODEL, clientFor, numericFlag, skillArg, pickHost, projectDir } from '../runtime.js';
+import { DATA, die, argv, flag, clientFor, numericFlag, skillArg, pickHost, projectDir, diagnoserModel } from '../runtime.js';
 
 // ── promote ─────────────────────────────────────────────────────────────────────────────────
 /**
@@ -112,7 +113,7 @@ export async function compare(): Promise<void> {
   }
 
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.3), maxCalls: numericFlag('--max-calls', 8) };
-  const client = clientFor(flag('--model') ?? MODEL);
+  const client = clientFor(diagnoserModel());
   const c = await compareOnRule(client, budget, candRun.invocationId, candRun.input, req.statement,
     champRun.output, candRun.output);
 
@@ -223,6 +224,7 @@ export function promote(): void {
     ?? die(`package ${sv.materializedHash} is not in the store, so ${cand} cannot be installed as evaluated.`);
   const host = pickHost();
   const inst = host.install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was promoted — the active version is unchanged.`);
   store.setActive(L, cand);
   const at = new Date().toISOString();

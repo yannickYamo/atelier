@@ -11,6 +11,7 @@
 // meaning the same thing. So the renderer emits ONLY `name` and `description`, and anything
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
+import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
@@ -197,6 +198,13 @@ export function renderAgentSkill(
   arch: SkillArchitecture,
   skillId: string,
   description: string,
+  /**
+   * ONE COMPLETE PIECE BY THE AUTHOR, shipped with the skill and read before drafting. Per-rule
+   * fragments show a move; only a whole piece shows how the moves sit together over its length, which
+   * is where a voice drifts. It is an implementation carrier, chosen by the owner, never part of the
+   * standard — and it is labelled as something to take the voice from, never the content.
+   */
+  exemplar: { readonly text: string } | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
@@ -258,12 +266,19 @@ export function renderAgentSkill(
   // study is why. It is stating the half that was never stated. The requirement, its authority and
   // its condition are untouched; only the sentence that carries them changes, which is a carrier
   // decision the compiler owns.
+  //
+  // THE SENTENCE IS THE MEASURED ONE. "When <condition>, <statement>. When that does not hold, do not."
+  // is the form the negative-branch study measured (restraint +0.292), so it stays until a study says
+  // otherwise. Two defects in how it was FILLED are fixed without touching the frame: an author's "I"
+  // (or an acronym) is no longer lowercased into "i", and the "; " Atelier itself uses to join a
+  // condition's predicates reads as " and ".
   const conditionalLine = (statement: string, appliesWhen: string): string => {
     // The author's condition, verbatim, with a leading "when" only if they did not write one.
-    const w = appliesWhen.trim().replace(/[.\s]+$/, '');
+    const w = appliesWhen.trim().replace(/[.\s]+$/, '').split(/\s*;\s*/).filter(Boolean).join(' and ');
     const clause = /^when\b/i.test(w) ? w : `when ${w}`;
     const body = statement.trim().replace(/[.\s]+$/, '');
-    const lead = body.charAt(0).toLowerCase() + body.slice(1);
+    const keepCase = /^(I\b|I'|[A-Z]{2,})/.test(body);
+    const lead = keepCase ? body : body.charAt(0).toLowerCase() + body.slice(1);
     return `${clause.charAt(0).toUpperCase() + clause.slice(1)}, ${lead}. `
       + 'When that does not hold, do not.';
   };
@@ -273,7 +288,13 @@ export function renderAgentSkill(
     const text = isGeneralScope(r.appliesWhen)
       ? r.statement
       : conditionalLine(r.statement, r.appliesWhen);
-    return `${i + 1}. ${text}\n   <!-- ${r.requirementId} · ${prov} -->`;
+    // A rule that needs material the model does not have is where invention happens. `atelier invoke`
+    // refuses before the call; a host serving this file directly cannot be made to, so the file says it.
+    const needs = (r.prerequisites ?? []).map((p) =>
+      `\n   Needs: ${p.why.replace(/[.\s]+$/, '')}. If you were not given it, ask for it. Never invent it.`).join('');
+    // A measured rule states its number: the model is told the target it will be checked against.
+    const checked = r.measurement ? `\n   Checked: ${observerFor(r.measurement.observer).describe(r.measurement.params)}.` : '';
+    return `${i + 1}. ${text}${needs}${checked}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 
   const avoidSection = bound.length
@@ -350,7 +371,13 @@ description: ${description}
 
 Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
 apply.
+${exemplar ? `
+## Read first
 
+\`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
+voice, rhythm and structure from it: how it opens, how long its sentences and paragraphs run, how it
+moves from point to point. Never take its topic, facts, names, figures or sentences.
+` : ''}
 ## What to do
 
 ${gen.map(line).join('\n\n') || '_(none)_'}
@@ -472,7 +499,8 @@ mintedAt:        ${v.mintedAt}
       appliesWhen: x.r.appliesWhen })),
   }, null, 2)}\n` } : {};
 
-  const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap };
+  const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
+    ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
   const artifactFor = (c: Carrier, id: string): string | null =>

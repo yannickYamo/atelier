@@ -65,7 +65,7 @@ export const REPAIRABLE_ROUTES: readonly DiagnosisRoute[] = ['IMPLEMENTATION_MIS
  * happens to own.
  */
 export const ESCALATION_FIXES: readonly ObligationKind[] =
-  ['SHOULD_FIRE', 'SHOULD_NOT_FIRE', 'OUTPUT_SHAPE'];
+  ['SHOULD_FIRE', 'SHOULD_NOT_FIRE', 'OUTPUT_SHAPE', 'MEASURED'];
 
 export interface RepairRefused { readonly refused: true; readonly reason: string }
 

@@ -11,8 +11,8 @@
 // THE GOLDENS → EVIDENCE PLUMBING.
 //
 // The predecessor harness was a thin scratch shell: every rule already lives in production
-// (`discovery-contract.ts` owns the split, validation and folding; `taste-discovery.ts` owns
-// aggregation; `taste-factor-evidence.ts` owns priority). What the harness alone held was
+// (`discovery-contract.ts` owns the split, validation and folding; the aggregation and priority
+// ladder it once fed were deleted on 2026-09-26). What the harness alone held was
 // COORDINATION — enumeration, prompt construction, the two-call order, result collection — and it
 // held it in scratch, where the campaign would have been the first thing to execute it.
 //

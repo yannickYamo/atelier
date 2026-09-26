@@ -10,6 +10,9 @@
 // reconstructed from anything else in the store. Keeping the two jobs in one file made it easy to
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
+import { suggest } from '../../core/ratification/suggest.js';
+import { validateMeasurement, observerFor } from '../../core/observers/registry.js';
+import type { Measurement, ObserverId } from '../../core/state/canonical-state.js';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
@@ -17,9 +20,11 @@ import type { StandardVersion, Requirement } from '../../core/state/canonical-st
 import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
+import { existsSync } from 'node:fs';
+import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
-import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger } from '../../core/ratification/decision-record.js';
+import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationRecord } from '../../core/ratification/decision-record.js';
 
 /**
  * Batch SUBMISSION, never batch approval.
@@ -57,7 +62,10 @@ export function pending(): void {
     supportingUnitIds: r.evidenceItemId ? [r.evidenceItemId] : [],
     counterUnitIds: [], contextIds: r.evidenceItemId ? [r.evidenceItemId] : [],
     clusterIds: r.evidenceItemId ? [r.evidenceItemId] : [],
-    boundaryProbed: false, heldOutRecurrence: 0, framingsFound: [],
+    // From discovery's own record rather than hardcoded empty: the union's grouping and the held-out
+    // recurrence were computed, documented as what this view orders by, and dropped before it.
+    boundaryProbed: false, heldOutRecurrence: s.proposalMeta?.[r.requirementId]?.heldOut?.present ?? 0,
+    framingsFound: [...(s.proposalMeta?.[r.requirementId]?.framings ?? [])],
     hasCounterfactual: r.wouldBeAbsentIf !== null }));
   console.log(`\n${describeCoverage(cov)}`);
   // Clusters of observed-but-unexplained behaviour come from the discovery union, which this
@@ -146,7 +154,24 @@ export interface RatificationDecision {
   readonly statement?: string;
   readonly appliesWhen?: string;
   readonly kind?: string;
+  /**
+   * what following this rule truthfully needs from the person — "the real figures for the period".
+   * Becomes a prerequisite: invoke refuses a REQUIRED rule whose material is not bound, and a host
+   * reading the skill is told to ask for it rather than invent it.
+   */
+  readonly needs?: string;
+  /** a measurement for this rule in `--measure` syntax, or "none" to drop the one it has */
+  readonly measure?: string;
+  /** what the review screen suggested for this proposal, carried into the ledger beside the ruling */
+  readonly suggested?: { readonly decision: string; readonly materiality: string | null; readonly why: string } | null;
 }
+
+/** "The real figures for the quarter" → "real-figures-quarter": what `--with <name>=<file>` binds. */
+export const prerequisiteName = (why: string): string => {
+  const STOP = new Set(['the', 'a', 'an', 'of', 'for', 'to', 'and', 'or', 'in', 'on', 'with', 'from', 'my', 'our', 'your', 'their', 'any', 'some']);
+  const words = why.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w));
+  return words.slice(0, 4).join('-') || 'material';
+};
 
 
 /**
@@ -180,6 +205,12 @@ export function ratifyBatch(): void {
       // Said on the page rather than assumed: a run that fell back to a single pass has checked
       // nothing against unread work, and the reader is entitled to know that while reading.
       heldOutChecked: (s.run as { heldOutChecked?: boolean } | undefined)?.heldOutChecked !== false,
+      // The same suggestions the terminal screen shows, pre-selected: one review, two surfaces.
+      suggestions: Object.fromEntries(pending.map((p) => {
+        const x = suggest(p, s.proposalMeta?.[p.requirementId], s.intent?.mode ?? 'GENERATE');
+        return [p.requirementId, { value: x.decision === 'REJECT' ? 'REJECT' : x.materiality ?? 'PREFERRED', why: x.why, needs: x.needs,
+          measures: p.measurement ? observerFor(p.measurement.observer).describe(p.measurement.params) : null }];
+      })),
     }));
     console.log(`${pending.length} proposal(s) written to ${pageOut}`);
     console.log('Open it, rule on each one, then press Copy rulings and pass them back:');
@@ -188,11 +219,29 @@ export function ratifyBatch(): void {
   }
 
   const raw = flag('--decisions') ?? die('--decisions <json> required — array of '
-    + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?}'
+    + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?, needs?}'
     + '\n  Or write a page you can read and mark up:  atelier ratify --page rulings.html');
   let list: RatificationDecision[];
   try { list = JSON.parse(raw) as RatificationDecision[]; } catch { return void die('--decisions is not valid JSON.'); }
+  applyDecisions(list);
+}
 
+/**
+ * Every outstanding proposal, ruled on at once. The batch command, the review screen and the page all
+ * land here, so there is one place a decision becomes part of a standard.
+ */
+/** What the person decided, beside what they were offered, for the ledger. */
+const rulingOf = (d: RatificationDecision, materiality: string | null): NonNullable<RatificationRecord['ruling']> => {
+  const dec = (d.decision ?? '').toUpperCase();
+  const sug = d.suggested ?? null;
+  const took = !sug ? 'NO_SUGGESTION'
+    : (sug.decision === dec || (sug.decision === 'APPROVE' && dec !== 'REJECT')) && (dec === 'REJECT' || sug.materiality === materiality)
+      ? 'SUGGESTION' : 'OVERRIDE';
+  return { materiality, needs: d.needs?.trim() ? d.needs.trim() : null, suggested: sug, took };
+};
+
+export function applyDecisions(list: readonly RatificationDecision[]): void {
+  const s = loadSession();
   const decidedIds = new Set(s.decided.map((d) => d.requirementId));
   const outstanding = s.proposals.filter((p) => !decidedIds.has(p.requirementId)).map((p) => p.requirementId);
   const given = new Set(list.filter((d) => d.id !== 'new' && d.decision).map((d) => d.id!));
@@ -222,7 +271,7 @@ export function ratifyBatch(): void {
     if (!p) die(`no proposal ${d.id}`);
     if (dec === 'REJECT') {
       decided.push({ ...p!, authority: 'EXPERT_REJECTED' });
-      ledger = appendDecision(ledger, p!, 'REJECT', { note: d.statement, decidedAt });
+      ledger = appendDecision(ledger, p!, 'REJECT', { note: d.statement, decidedAt, ruling: rulingOf(d, null) });
       continue;
     }
     if (!['APPROVE', 'REWRITE', 'CONTEXTUAL'].includes(dec)) die(`${d.id}: unknown decision "${dec}"`);
@@ -235,14 +284,26 @@ export function ratifyBatch(): void {
     let outcome;
     try {
       outcome = decide(p!, { verb: dec as DecisionVerb, statement: d.statement, appliesWhen: d.appliesWhen,
+        ...(d.measure === undefined ? {} : { measurement: d.measure.trim().toLowerCase() === 'none' ? null : parseMeasure(d.measure) }),
         materiality: d.materiality, form: d.form, shape: d.shape, realizes: typeof d.realizes === 'string' ? d.realizes : null,
         findRule: (rid) => s.proposals.find((x) => x.requirementId === rid) ?? decided.find((x) => x.requirementId === rid) });
     } catch (e) { return void die((e as Error).message); }
+    // WHAT THIS RULE NEEDS FROM THE PERSON, DECLARED AT THE MOMENT THEY APPROVE IT. The anti-
+    // fabrication guard (`checkSatisfiable`) had a reader in invoke and a display in plan, and the only
+    // writer in the tree was a test fixture: a rule like "quantify with the awkward real figure" was
+    // approved, served, and satisfied with invented figures. The name is what `--with <name>=<file>`
+    // binds at invocation.
+    if (d.needs?.trim()) {
+      const why = d.needs.trim();
+      outcome = { ...outcome, requirement: { ...outcome.requirement,
+        prerequisites: [{ kind: 'CONTEXT' as const, name: prerequisiteName(why), why }] } };
+    }
     decided.push(outcome.requirement);
     // The record stores what was SHOWN and, on an edit, what replaced it. Storing only the survivor
     // would answer a question the standard already answers.
     ledger = appendDecision(ledger, p!, outcome.ledgerDecision,
-      { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt });
+      { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt,
+        ruling: rulingOf(d, outcome.requirement.materiality) });
   }
   saveSession({ ...s, decided, ledger });
   const kept = decided.filter((d) => d.authority !== 'EXPERT_REJECTED');
@@ -287,6 +348,38 @@ export function ratifyOne(): void {
   console.log(`${id} ${d.toLowerCase()}.`);
 }
 
+/**
+ * `--measure` in the author's own terms, for a rule they write themselves:
+ *   LEXICON:leverage|utilize|synergy
+ *   SENTENCE_LENGTH:medianMax=15,p90Max=28
+ *   PARAGRAPH_LENGTH:maxSentences=4
+ *   HEDGE_RATE:maxPer1000=3
+ * Declared, never inferred: the statement's words are not read to decide whether it is measurable.
+ */
+export function parseMeasure(spec: string): Measurement {
+  const i = spec.indexOf(':');
+  const observer = (i === -1 ? spec : spec.slice(0, i)).trim().toUpperCase() as ObserverId;
+  const rest = i === -1 ? '' : spec.slice(i + 1);
+  // STRICT. `medianMax=` read as 0, `0x10` as 16 and `15=20` as 15; a target a person did not mean
+  // is worse than a refusal, because it is enforced on every output from then on.
+  const params: Record<string, number | string[]> = observer === 'LEXICON'
+    ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
+    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv) => {
+      const parts = kv.split('=').map((x) => x.trim());
+      if (parts.length !== 2 || !parts[0] || !/^\d+(\.\d+)?$/.test(parts[1])) die(`--measure: "${kv}" is not name=number`);
+      const n = Number(parts[1]);
+      const KEYS: Readonly<Record<string, readonly string[]>> = {
+        SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'] };
+      if (KEYS[observer] && !KEYS[observer].includes(parts[0])) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${parts[0]}"`);
+      if (n <= 0 && !(observer === 'HEDGE_RATE' && n === 0)) die(`--measure: ${parts[0]} must be greater than zero`);
+      return [parts[0], n];
+    }));
+  const m: Measurement = { observer, params };
+  const problem = validateMeasurement(m);
+  if (problem) die(`--measure ${spec}: ${problem}`);
+  return m;
+}
+
 export function addOne(): void {
   const s = loadSession();
   const statement = flag('--statement') ?? die('--statement required');
@@ -305,9 +398,12 @@ export function addOne(): void {
       + '  GENERATIVE  something to DO      ("lead with the next action")\n'
       + '  BOUNDARY    something NOT to do  ("never open with a preamble")\n'
       + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
+  const measureSpec = flag('--measure');
+  const measurement = measureSpec === undefined ? undefined : parseMeasure(measureSpec);
   const base: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
     kind, authority: 'DERIVED_UNRATIFIED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
-    wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
+    wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null,
+    ...(measurement ? { measurement } : {}) };
   let req: Requirement;
   try { req = decide(base, { verb: 'ADD', materiality: flag('--materiality') }).requirement; }
   catch (e) { return void die((e as Error).message); }
@@ -328,7 +424,12 @@ export function ratifyClose(): void {
   // has no corpus to seal and owes none — they are exercising authority, not offering evidence about
   // themselves. What they do owe is the work type, because the skill's description is built from it
   // and it cannot be inferred from a corpus that does not exist.
-  const workType = s.evidence?.workType ?? flag('--work-type')
+  // A second close supersedes the first and inherits its work type; asking again for what the run
+  // already recorded is a question the person already answered.
+  const priorPath = runFile('pending-standard.json');
+  const priorWorkType = s.run.standardVersionHash && existsSync(priorPath)
+    ? readJson<{ workType?: string }>(priorPath, { what: 'the previous standard' }).workType : undefined;
+  const workType = s.evidence?.workType ?? flag('--work-type') ?? priorWorkType
     ?? die('--work-type <kind> is required for a standard you wrote yourself, because there is no '
       + "corpus to infer it from. It becomes the skill's description, which is how a host decides "
       + 'whether to load the skill at all.  For example:  --work-type writing');
@@ -397,6 +498,30 @@ export function ratifyClose(): void {
       + `${su.rejected} rejected · ${su.decidedNotRequirement} kept as non-obligation · ${su.deferred} open`);
     console.log(`  survival ${(su.survivalRate * 100).toFixed(0)}%  ·  decided ${(su.decidedRate * 100).toFixed(0)}%  ·  ${runFile('ratification-ledger.json')}`);
   }
-  if (!process.env.ATELIER_ORCHESTRATED) console.log('Run `atelier build --name <name>`.');
+  // A standard in which NOTHING instructs is legal — governance lets it be minted and built — but the
+  // printed next step used to walk a person straight into building a skill whose instruction section
+  // is empty. Say so, and point at the decision that would change it.
+  const instructing = kept.filter((r) => roleFor(r) === 'ENFORCE').length;
+  // PREFERRED compiles exactly as EXEMPLAR_ONLY — shown, never binding — which is the governance
+  // (the owner said breaking it is not thereby worse) but was never said. Say it where it is decided.
+  const preferredShown = kept.filter((r) => r.materiality === 'PREFERRED' && roleFor(r) !== 'ENFORCE');
+  if (preferredShown.length) {
+    console.log(`  ${preferredShown.map((r) => r.requirementId).join(', ')}: PREFERRED is shown to the model as an example, not instructed.`
+      + ' Mark a rule REQUIRED for it to instruct.');
+  }
+  if (!instructing) {
+    // Two different reasons, two different next steps: rules nobody has ruled on yet, and rules that
+    // were ruled on and deliberately not made obligatory.
+    const undecided = kept.filter((r) => r.materiality === null && r.authority === 'DERIVED_UNRATIFIED').length;
+    console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.');
+    if (kept.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')) {
+      console.log('  Read from someone else\'s public work, these are shown and never instructed — the ceiling that');
+      console.log('  source can carry. Judge the output, and make a rule bind in your own words:  atelier fix "<what was wrong>"');
+    } else if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
+    else console.log('  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:\n    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
+  }
+  if (!process.env.ATELIER_ORCHESTRATED) {
+    console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');
+  }
 }
 
