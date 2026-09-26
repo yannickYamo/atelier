@@ -56,9 +56,6 @@ export interface TasteFactor {
 export function canVeto(f: TasteFactor): boolean {
   return f.authority !== 'DERIVED_UNRATIFIED' && f.toleranceStatus === 'CALIBRATED';
 }
-export function canAuthorizeRepair(f: TasteFactor): boolean {
-  return f.authority !== 'DERIVED_UNRATIFIED';
-}
 
 // ── RepairOperatorSpec — STUB shape (no operator qualified at stage 0). ──
 export type RepairQualificationStatus = 'UNQUALIFIED' | 'CALIBRATING' | 'QUALIFIED';

@@ -11,6 +11,7 @@
 // meaning the same thing. So the renderer emits ONLY `name` and `description`, and anything
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
+import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
@@ -284,7 +285,9 @@ export function renderAgentSkill(
     // refuses before the call; a host serving this file directly cannot be made to, so the file says it.
     const needs = (r.prerequisites ?? []).map((p) =>
       `\n   Needs: ${p.why.replace(/[.\s]+$/, '')}. If you were not given it, ask for it. Never invent it.`).join('');
-    return `${i + 1}. ${text}${needs}\n   <!-- ${r.requirementId} · ${prov} -->`;
+    // A measured rule states its number: the model is told the target it will be checked against.
+    const checked = r.measurement ? `\n   Checked: ${observerFor(r.measurement.observer).describe(r.measurement.params)}.` : '';
+    return `${i + 1}. ${text}${needs}${checked}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 
   const avoidSection = bound.length

@@ -53,7 +53,9 @@ export type ObligationKind =
   /** two requirements meeting in one task, where satisfying one could break the other */
   | 'INTERACTION'
   /** the output must hold a machine-checkable shape */
-  | 'OUTPUT_SHAPE';
+  | 'OUTPUT_SHAPE'
+  /** the output must meet a declared deterministic measurement (see core/observers) */
+  | 'MEASURED';
 
 /**
  * HOW ANYONE WOULD KNOW whether this obligation was met.
@@ -145,6 +147,16 @@ export function obligationsFor(r: Requirement): readonly Obligation[] {
       observation: 'UNQUALIFIED',
       why: 'the edge of a condition is where an implementation reveals how it read the condition, and '
         + 'no automatic verdict is available there',
+    });
+  }
+
+  if (r.measurement) {
+    out.push({
+      obligationId: idFor('MEASURED', ids), requirementIds: ids, kind: 'MEASURED',
+      situation: 'any task where this requirement applies',
+      expectation: `measured: ${JSON.stringify(r.measurement)}`,
+      observation: 'DETERMINISTIC',
+      why: 'the owner ratified this rule with a measurement, so its verdict is a count, not a judgement',
     });
   }
 

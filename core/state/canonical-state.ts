@@ -90,6 +90,21 @@ export type Provenance =
   | 'EXPERT_STATED';
 export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
 
+/**
+ * HOW A RULE IS MEASURED, WHEN IT CAN BE — DECLARED, NEVER INFERRED FROM ITS WORDS.
+ *
+ * Deterministic observers whose verdict is a fact about the text rather than a judgement of it: a
+ * banned phrase is present or it is not; a median sentence length is a number. A rule carries one
+ * only when a person ratified a rule that was proposed WITH it (discovery measures the corpus and
+ * proposes the target) or declared it themselves. The obligation layer's refusal to read
+ * checkability off prose stands; this is the assertion path it always named and never had.
+ */
+export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE';
+export interface Measurement {
+  readonly observer: ObserverId;
+  readonly params: Readonly<Record<string, number | readonly string[]>>;
+}
+
 /** 1. What the expert supplied. Frozen at seal time; its hash is the run's identity. */
 export interface ExpertEvidence {
   readonly evidenceId: string;
@@ -193,6 +208,8 @@ export interface Requirement {
    * model to satisfy it anyway produced an invented statistic rather than a refusal.
    */
   readonly prerequisites?: readonly Prerequisite[];
+  /** a deterministic measurement of this rule, when it has one. See `Measurement`. */
+  readonly measurement?: Measurement;
 }
 
 /**
