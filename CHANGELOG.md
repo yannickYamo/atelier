@@ -53,6 +53,12 @@ a run in progress may not be.
 - **Exemplar carrier**: `build --exemplar <file>` ships one complete piece of the owner's, read first
   for voice and never for content; carried through every rebuild; a reserved piece is refused.
 
+- **The proof study, drafted** (`studies/PROOF_STUDY_PREREGISTRATION.md`, DRAFT until the owner seals
+  it): recall of discovery against the owner's hand-built house standard as a sealed answer key
+  (`scripts/recall-sheet.mts`, which refuses to open the key before discovery has finished), the
+  shipped loop against a model's own guide (`atelier reference --loop`), and a deterministic
+  measured-rule table per arm, whole piece and first vs last third (`scripts/measured-conformance.mts`).
+
 ### Changed (product phases, 2026-09-26)
 
 - **The discovery split scales with the corpus**: about a third held out (capped at 8), everything
