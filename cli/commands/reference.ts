@@ -13,6 +13,7 @@
 // does not reveal; `score` unblinds. One command that did both would let the person scoring see which
 // side was theirs, and a result obtained that way is a different result.
 
+import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
@@ -183,13 +184,27 @@ async function preparePhase(): Promise<void> {
   // built HERE rather than assigned into `inputs` afterwards: ArmInputs is readonly, and the previous
   // version cast that away to mutate it, which is the kind of edit that survives a type checker and
   // then surprises the next reader of the type.
-  const modelStyleGuide = needsGuide
-    ? (await spendOneWithResult(client, budget,
+  // ── ONE ARM FAILING DOES NOT DISCARD THE OTHERS ─────────────────────────────────────────────────
+  //
+  // On a small clean corpus the guide prompt came back `stop_reason: refusal` from one backend — the
+  // complete guide in the tool block, flagged anyway — and failing closed on it threw away all six arms,
+  // including the primary comparison's other side. A failed arm is now recorded with its reason and
+  // every comparison that needs it is reported as NOT RUN, by name, on the pairs file and at scoring.
+  // Nothing is silently dropped: a missing comparison is louder here than it was as a crash.
+  const failedArms = new Map<ArmId, string>();
+  let modelStyleGuide: string | null = null;
+  if (needsGuide) {
+    try {
+      modelStyleGuide = (await spendOneWithResult(client, budget,
         'Read the following body of work by one author and write a short guide a writer could follow to '
         + 'produce more work like it. Rules only, no preamble.',
-        corpusTextForBaseline(), null)).piece
-    : null;
-  if (needsGuide) console.log('  baseline guide written');
+        corpusTextForBaseline(), null)).piece;
+      console.log('  baseline guide written');
+    } catch (e) {
+      failedArms.set('B2_MODEL_STYLE_GUIDE', `the guide could not be written: ${(e as Error).message}`);
+      console.log(`  baseline guide FAILED — ${(e as Error).message}`);
+    }
+  }
 
   const inputs: ArmInputs = {
     compiledSkillText: servedText,
@@ -199,8 +214,10 @@ async function preparePhase(): Promise<void> {
     expertOnePager: onePagerPath ? readFileSync(onePagerPath, 'utf8') : null,
   };
 
-  // Refuse now, while nothing has been generated, if an arm cannot be served at all.
+  // Refuse now, while nothing has been generated, if an arm cannot be served at all — unless it is an
+  // arm that already failed above, which is recorded rather than fatal.
   for (const a of arms) {
+    if (failedArms.has(a)) continue;
     try { servedTextFor(a, inputs); } catch (e) {
       if (e instanceof MissingArmInput) die(`${a}: ${e.message}`);
       throw e;
@@ -213,24 +230,30 @@ async function preparePhase(): Promise<void> {
   const provenance: Provenance = 'ORGANIC_USE';
   const salt = sv.skillVersionHash;
 
-  // arm -> unitId -> output
+  // arm -> unitId -> output. Units run side by side within an arm; arms fail independently.
   const outputs = new Map<ArmId, Map<string, string>>();
   for (const a of arms) {
-    const byUnit = new Map<string, string>();
-    for (const u of reserved) {
-      const rec = await runOnce(L, sv, servedTextFor(a, inputs), servedHash, delivery, u.task, client,
-        budget, binding, provenance, a === 'T_ATELIER' ? contractFile : null);
-      byUnit.set(u.unitId, rec.output);
+    if (failedArms.has(a)) continue;
+    try {
+      const recs = await mapLimit(reserved, DEFAULT_CONCURRENCY, (u) => runOnce(L, sv, servedTextFor(a, inputs), servedHash, delivery,
+        u.task, client, budget, binding, provenance, a === 'T_ATELIER' ? contractFile : null));
+      outputs.set(a, new Map(reserved.map((u, i) => [u.unitId, recs[i].output])));
+      console.log(`  ${a} ready across ${reserved.length} unit(s)`);
+    } catch (e) {
+      failedArms.set(a, (e as Error).message);
+      console.log(`  ${a} FAILED — ${(e as Error).message}`);
     }
-    outputs.set(a, byUnit);
-    console.log(`  ${a} ready across ${reserved.length} unit(s)`);
   }
+  if (failedArms.has('T_ATELIER')) die(`the skill's own arm failed, so there is nothing to compare: ${failedArms.get('T_ATELIER')}`);
 
   const textFor = (side: ArmId | 'GOLDEN', u: GoldenUnit): string =>
     (side === 'GOLDEN' ? u.artifact : (outputs.get(side)?.get(u.unitId) ?? die(`no output for ${side}/${u.unitId}`)));
 
   const pairs: ReferencePair[] = [];
+  const notRun: { kind: string; primary: boolean; why: string }[] = [];
   for (const kind of PAIR_KINDS) {
+    const missing = [kind.left, kind.right].filter((side): side is ArmId => side !== 'GOLDEN').find((side) => failedArms.has(side));
+    if (missing) { notRun.push({ kind: kind.id, primary: kind.primary, why: `${missing}: ${failedArms.get(missing)}` }); continue; }
     for (const u of reserved) {
       const leftOnA = sideFor(kind.id, u.unitId, salt) === 'A';
       pairs.push({
@@ -244,7 +267,11 @@ async function preparePhase(): Promise<void> {
   }
 
   const setHash = armSetHash(arms, sv.skillVersionHash);
-  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, armSetHash: setHash, arms, pairs }, null, 1));
+  writeAtomic(PAIRS(), JSON.stringify({ skillVersionHash: sv.skillVersionHash, salt, armSetHash: setHash, arms, pairs,
+    notRun, failedArms: Object.fromEntries(failedArms) }, null, 1));
+  for (const n of notRun) {
+    console.log(`\n${n.primary ? 'THE PRIMARY COMPARISON' : 'Comparison'} ${n.kind} DID NOT RUN — ${n.why}`);
+  }
 
   console.log(`\n${'─'.repeat(78)}\n${LABELLING_INSTRUCTIONS}\n${'─'.repeat(78)}`);
   for (const p of pairs) {
@@ -260,7 +287,8 @@ async function preparePhase(): Promise<void> {
 function scorePhase(): void {
   if (!existsSync(PAIRS())) die(`no prepared pairs at ${PAIRS()}. Run \`atelier reference --skill <name>\` first.`);
   const stored = readJson<{
-    skillVersionHash: string; armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[] }>(
+    skillVersionHash: string; armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[];
+    notRun?: { kind: string; primary: boolean; why: string }[] }>(
     PAIRS(), { what: 'the prepared pairs', requireKeys: ['skillVersionHash', 'pairs'] });
 
   // ── LABELS BELONG TO THE ARM SET THEY WERE COLLECTED ON ────────────────────────────────────────
@@ -320,7 +348,7 @@ function scorePhase(): void {
  * the comparison most likely to be skipped is the one that decides the product.
  */
 function reportPairedArms(
-  stored: { armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[] },
+  stored: { armSetHash?: string; arms?: ArmId[]; pairs: ReferencePair[]; notRun?: { kind: string; primary: boolean; why: string }[] },
   labels: readonly ReferenceLabel[],
 ): void {
   if (!stored.armSetHash) return;   // a run prepared before arms existed
@@ -329,6 +357,11 @@ function reportPairedArms(
   console.log(`\n${'─'.repeat(78)}\n  ARM COMPARISONS   arm set ${stored.armSetHash}   (${(stored.arms ?? []).join(', ')})`);
   for (const kind of PAIR_KINDS) {
     const mine = stored.pairs.filter((p) => p.contextId.startsWith(`${kind.id}::`));
+    const skipped = stored.notRun?.find((n) => n.kind === kind.id);
+    if (skipped) {
+      console.log(`\n  ${kind.primary ? 'PRIMARY  ' : '         '}${kind.left} vs ${kind.right}   NOT RUN — ${skipped.why}`);
+      continue;
+    }
     if (!mine.length) continue;
     let leftWins = 0; let rightWins = 0; let concordant = 0;
     for (const p of mine) {

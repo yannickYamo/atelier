@@ -10,6 +10,50 @@ a run in progress may not be.
 
 ### Added
 
+- **`atelier new <folder> "<what it is for>"` — the whole journey in one command.** Reserves part of
+  the work before anything reads it, discovers, and puts every rule on ONE review screen, strongest
+  evidence first, each with a suggested ruling and the reason ("followed in 4 of 5 pieces it never
+  read"). Nothing compiles until the person accepts (Enter, or `p3=reject p5=preferred` on the same
+  line; `--accept` / `--set` for an assistant relaying the person's answer). Accepting mints, builds
+  and installs. Re-entrant: running it again continues from wherever the run stopped.
+- **Suggestions from evidence, never decisions** (`core/ratification/suggest.ts`): the purpose sentence
+  sets a mode (generate / guard / respond) that moves only the default weight; held-out recurrence and
+  cross-vantage agreement set the rest. A conditional rule for a support-style skill is suggested as
+  shown, not instructed, unless the evidence is strong — the measured restraint weak spot.
+- **Prerequisites have a writer.** Discovery asks what each rule needs from the person; ruling on it
+  declares a prerequisite; `invoke` refuses a REQUIRED rule without it, `--with name=file` now sends
+  the file's contents, and SKILL.md tells a host to ask rather than invent.
+- **`amend --materiality`**: a closed PREFERRED rule can be made REQUIRED (recorded supersession).
+- **`<command> --help`, `--version`**, answered before dispatch.
+- **The plugin installs**: `/plugin marketplace add yannickYamo/atelier`, `/plugin install atelier@atelier`.
+
+### Changed (product phases, 2026-09-26)
+
+- **The discovery split scales with the corpus**: about a third held out (capped at 8), everything
+  else read up to a one-pass token cap, overflow named. It was two pieces proposed, whatever the size.
+- **Discovery, `reference` and `contract` run calls concurrently**, with the budget reserving in-flight
+  estimates. `contract` prints each case as it lands and resumes from a progress file; `reference`
+  isolates a failed arm and reports every comparison that could not run instead of discarding all six.
+- **`check` verifies the models discovery actually runs**; every diagnosing command resolves its model
+  through one function.
+- The review, `pending` and coverage views read discovery's grouping and held-out recurrence, which
+  were computed and then dropped.
+
+### Fixed (product phases, 2026-09-26)
+
+- **Rejected rules shipped inside the installed skill.** Installs were additive; the directory is now
+  exactly the package, and `inspect` fails on any file the package does not name. Nothing Atelier did
+  not write is ever deleted: it is moved to `.atelier-backups/` and named.
+- `--reserve a --reserve b` kept only `b`; a single-valued option given twice is now refused.
+- `abort --help` aborted the run; `discover --help` spent budget.
+- A re-entered `fix`/`improve` complaint lost its record in a bare `catch`.
+- `npm run build` left the linked binary non-executable, silently breaking every hook.
+- A `/skill` use from a subdirectory was dropped; `fix` in a subdirectory found nothing.
+- The ratification ledger is kept beside the standard it produced and shown by `history`.
+- `ANTHROPIC_AUTH_TOKEN` is accepted.
+
+### Added (earlier in this release)
+
 - **`atelier fix` — one correction path.** A complaint goes in; Atelier resolves the latest
   recorded use (and says which), diagnoses, and either repairs the implementation — one lateral
   carrier candidate, the same task re-run, a blinded A/B, one keystroke, the winner active AND
