@@ -95,7 +95,7 @@ export class AnthropicInferenceClient implements InferenceClient {
         termination.kind === 'MAX_TOKENS'
           ? `the model stopped at the ${req.maxTokens}-token limit before completing the object. `
             + 'A truncated structured output is not a partial answer, it is an unparseable one. Nothing was recorded.'
-          : `the model stopped for "${termination.kind === 'OTHER' ? termination.providerValue : termination.kind}" before completing the object. Nothing was recorded.`,
+          : `${this.modelId} stopped for "${termination.kind === 'OTHER' ? termination.providerValue : termination.kind}" before completing the object (call: ${req.toolName}). Nothing was recorded.`,
         u.output_tokens);
     }
 

@@ -568,6 +568,8 @@ export interface Session {
   intent?: { readonly text: string; readonly mode: SkillMode } | null;
   /** the folder `atelier new` read the corpus from, so a later call can tell the same run from another */
   source?: string | null;
+  /** the spending cap the person gave `atelier new`, kept so continuing the run keeps their limit */
+  cap?: string | null;
 }
 
 export interface ProposalMeta {
