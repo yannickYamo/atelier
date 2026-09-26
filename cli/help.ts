@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 export const USAGE: Readonly<Record<string, string>> = {
-  new: 'atelier new <folder-of-your-best-work> "<what the skill is for>" [--name <name>] [--reserve <file>]...\n  Read your work, show the rules it found with a suggested ruling for each, and build the skill once you accept. Run it again to continue.',
+  new: 'atelier new <folder-of-your-best-work> "<what the skill is for>" [--name <name>] [--mode generate|guard|respond] [--reserve <file>]... [--held-out <n>] [--accept] [--set <id>=<choice>]...\n  Read your work, show the rules it found with a suggested ruling for each, and build the skill once you accept. Run it again to continue.',
   verify: 'atelier verify --skill <name> <file> [--json]   (or pipe the text in)\n  Check any text against every measured rule in the standard, with the exact spans that break one. Exits 1 when a REQUIRED rule is broken.',
   review: 'atelier review [--accept] [--set <id>=<choice>]...\n  The rules waiting for your ruling, with suggestions. --accept records them as shown; --set changes one (reject, approve, required, preferred, exemplar, tolerated, incidental).',
   skill: 'atelier skill "<your rules>" [--name <name>] [--yes]\n  atelier skill --from <path-to-your-work> [--reserve <file>]... [--name <name>]\n  Create a skill from rules you state, or from work you show.',

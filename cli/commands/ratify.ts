@@ -10,6 +10,7 @@
 // reconstructed from anything else in the store. Keeping the two jobs in one file made it easy to
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
+import { suggest } from '../../core/ratification/suggest.js';
 import { validateMeasurement } from '../../core/observers/registry.js';
 import type { Measurement, ObserverId } from '../../core/state/canonical-state.js';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
@@ -21,7 +22,7 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
-import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger } from '../../core/ratification/decision-record.js';
+import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationRecord } from '../../core/ratification/decision-record.js';
 
 /**
  * Batch SUBMISSION, never batch approval.
@@ -157,6 +158,8 @@ export interface RatificationDecision {
    * reading the skill is told to ask for it rather than invent it.
    */
   readonly needs?: string;
+  /** what the review screen suggested for this proposal, carried into the ledger beside the ruling */
+  readonly suggested?: { readonly decision: string; readonly materiality: string | null; readonly why: string } | null;
 }
 
 /** "The real figures for the quarter" → "real-figures-quarter": what `--with <name>=<file>` binds. */
@@ -198,6 +201,11 @@ export function ratifyBatch(): void {
       // Said on the page rather than assumed: a run that fell back to a single pass has checked
       // nothing against unread work, and the reader is entitled to know that while reading.
       heldOutChecked: (s.run as { heldOutChecked?: boolean } | undefined)?.heldOutChecked !== false,
+      // The same suggestions the terminal screen shows, pre-selected: one review, two surfaces.
+      suggestions: Object.fromEntries(pending.map((p) => {
+        const x = suggest(p, s.proposalMeta?.[p.requirementId], s.intent?.mode ?? 'GENERATE');
+        return [p.requirementId, { value: x.decision === 'REJECT' ? 'REJECT' : x.materiality ?? 'PREFERRED', why: x.why, needs: x.needs }];
+      })),
     }));
     console.log(`${pending.length} proposal(s) written to ${pageOut}`);
     console.log('Open it, rule on each one, then press Copy rulings and pass them back:');
@@ -217,6 +225,16 @@ export function ratifyBatch(): void {
  * Every outstanding proposal, ruled on at once. The batch command, the review screen and the page all
  * land here, so there is one place a decision becomes part of a standard.
  */
+/** What the person decided, beside what they were offered, for the ledger. */
+const rulingOf = (d: RatificationDecision, materiality: string | null): NonNullable<RatificationRecord['ruling']> => {
+  const dec = (d.decision ?? '').toUpperCase();
+  const sug = d.suggested ?? null;
+  const took = !sug ? 'NO_SUGGESTION'
+    : (sug.decision === dec || (sug.decision === 'APPROVE' && dec !== 'REJECT')) && (dec === 'REJECT' || sug.materiality === materiality)
+      ? 'SUGGESTION' : 'OVERRIDE';
+  return { materiality, needs: d.needs?.trim() ? d.needs.trim() : null, suggested: sug, took };
+};
+
 export function applyDecisions(list: readonly RatificationDecision[]): void {
   const s = loadSession();
   const decidedIds = new Set(s.decided.map((d) => d.requirementId));
@@ -248,7 +266,7 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     if (!p) die(`no proposal ${d.id}`);
     if (dec === 'REJECT') {
       decided.push({ ...p!, authority: 'EXPERT_REJECTED' });
-      ledger = appendDecision(ledger, p!, 'REJECT', { note: d.statement, decidedAt });
+      ledger = appendDecision(ledger, p!, 'REJECT', { note: d.statement, decidedAt, ruling: rulingOf(d, null) });
       continue;
     }
     if (!['APPROVE', 'REWRITE', 'CONTEXTUAL'].includes(dec)) die(`${d.id}: unknown decision "${dec}"`);
@@ -278,7 +296,8 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     // The record stores what was SHOWN and, on an edit, what replaced it. Storing only the survivor
     // would answer a question the standard already answers.
     ledger = appendDecision(ledger, p!, outcome.ledgerDecision,
-      { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt });
+      { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt,
+        ruling: rulingOf(d, outcome.requirement.materiality) });
   }
   saveSession({ ...s, decided, ledger });
   const kept = decided.filter((d) => d.authority !== 'EXPERT_REJECTED');
@@ -478,7 +497,10 @@ export function ratifyClose(): void {
     // were ruled on and deliberately not made obligatory.
     const undecided = kept.filter((r) => r.materiality === null && r.authority === 'DERIVED_UNRATIFIED').length;
     console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.');
-    if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
+    if (kept.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')) {
+      console.log('  Read from someone else\'s public work, these are shown and never instructed — the ceiling that');
+      console.log('  source can carry. Judge the output, and make a rule bind in your own words:  atelier fix "<what was wrong>"');
+    } else if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
     else console.log('  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:\n    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
   }
   if (!process.env.ATELIER_ORCHESTRATED) {

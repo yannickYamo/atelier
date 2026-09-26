@@ -47,7 +47,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind',
+  'exclude', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
   'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
@@ -433,8 +433,8 @@ export const numericFlag = (name: string, fallback: number): number => {
 export const boundResources = (): ReadonlySet<string> => {
   const names = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] !== '--with') continue;
-    const spec = argv[i + 1];
+    if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
+    const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : argv[i + 1];
     if (!spec) die('--with needs <name>=<path>, for example --with support-ticket-history=./tickets.csv');
     const name = spec.includes('=') ? spec.slice(0, spec.indexOf('=')) : spec;
     if (!name) die(`--with "${spec}" has no name before the "=".`);
@@ -454,8 +454,8 @@ export const boundResources = (): ReadonlySet<string> => {
 export const boundMaterial = (): { name: string; path: string; text: string }[] => {
   const out: { name: string; path: string; text: string }[] = [];
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] !== '--with') continue;
-    const spec = argv[i + 1] ?? '';
+    if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
+    const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : (argv[i + 1] ?? '');
     if (!spec.includes('=')) continue;                    // a bare name binds a resource the caller holds elsewhere
     const name = spec.slice(0, spec.indexOf('='));
     const path = spec.slice(spec.indexOf('=') + 1);
@@ -566,6 +566,8 @@ export interface Session {
   proposalMeta?: Readonly<Record<string, ProposalMeta>> | null;
   /** what the person said the skill is for, when they said it (`atelier new`), and the mode read off it */
   intent?: { readonly text: string; readonly mode: SkillMode } | null;
+  /** the folder `atelier new` read the corpus from, so a later call can tell the same run from another */
+  source?: string | null;
 }
 
 export interface ProposalMeta {

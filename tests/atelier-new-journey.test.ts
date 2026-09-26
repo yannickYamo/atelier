@@ -110,3 +110,74 @@ describe('the suggestion is computed from evidence, never decided', () => {
     expect(suggest(cond, { framings: ['A', 'B'], heldOut: { applicable: 2, present: 2 }, needs: null }, 'RESPOND').materiality).toBe('REQUIRED');
   });
 });
+
+// ── Found by the Phase 1 gap audit ─────────────────────────────────────────────────────────────
+import { readdirSync } from 'node:fs';
+
+describe('re-entry is the same run, or a refusal — never a silent switch', () => {
+  it('a second call naming a different folder is refused, and the built skill is untouched', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new2-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new2-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice', '--accept');
+    const other = join(proj, 'other'); mkdirSync(other);
+    for (let i = 0; i < 5; i++) writeFileSync(join(other, `o${i}.md`), `Other ${i}. ${'Something else entirely here. '.repeat(12)}`);
+    const out = run(data, proj, 'new', other, 'ensure all copy follows these', '--name', 'other');
+    expect(out).toMatch(/this project's run was made from .*posts, not .*other/);
+    expect(existsSync(join(proj, '.claude', 'skills', 'other'))).toBe(false);
+  });
+
+  it('the second call of the two-step flow keeps the purpose as the host-facing description', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new3-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new3-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice');
+    run(data, proj, 'new', dir, '--name', 'voice', '--accept');
+    expect(readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8')).toMatch(/Use when asked to: write me a blog post like these/);
+  });
+
+  it('the ledger records the weight chosen, the suggestion beside it, and whether it was taken', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new4-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new4-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice', '--accept', '--set', 'p1=preferred');
+    const runs = join(data, 'runs', readdirSync(join(data, 'runs'))[0]);
+    const ledger = JSON.parse(readFileSync(join(runs, 'ratification-ledger.json'), 'utf8')) as { records: { shown: { requirementId: string }; ruling?: { took: string; materiality: string } }[] };
+    const p1 = ledger.records.find((r) => r.shown.requirementId === 'p1');
+    expect(p1?.ruling?.took).toBe('OVERRIDE');
+    expect(p1?.ruling?.materiality).toBe('PREFERRED');
+    expect(ledger.records.find((r) => r.shown.requirementId === 'p2')?.ruling?.took).toBe('SUGGESTION');
+  });
+});
+
+describe('a larger corpus is not stopped by a call cap sized for a small one', () => {
+  it('thirty pieces: every held-out observation is made and the run reaches review', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new5-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new5-proj-'));
+    const dir = corpus(proj, 30);
+    const out = run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice');
+    expect(out).not.toMatch(/call budget exhausted/);
+    expect(out).toMatch(/Nothing was decided/);
+  });
+});
+
+describe('--held-out is a count, or a refusal', () => {
+  it('a non-number is refused before anything is sealed', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new6-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new6-proj-'));
+    const dir = corpus(proj, 8);
+    expect(run(data, proj, 'intake', dir, '--held-out', 'abc')).toMatch(/--held-out must be a whole number/);
+  });
+});
+
+describe('the purpose is read from what the skill is asked to DO', () => {
+  it.each([
+    ['always write in my voice', 'GENERATE'],
+    ['Write me a newsletter every week', 'GENERATE'],
+    ['write a blog post for all our customers', 'GENERATE'],
+    ['customer support needs to always answer this way', 'RESPOND'],
+    ['reply to support tickets like our best agent', 'RESPOND'],
+    ['ensure all content outputs follow the corpus', 'GUARD'],
+    ['check every draft against our house style', 'GUARD'],
+  ])('%s → %s', (intent, mode) => { expect(modeFromIntent(intent).mode).toBe(mode); });
+});

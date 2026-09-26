@@ -205,7 +205,8 @@ const main = async (): Promise<void> => {
       console.log('  staged spelling: create <path> · pending · ratify --decisions <json> · ratify-close · build --name <name>');
       console.log(`  every command: ${known}`);
       console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
-      console.log('   held-out: reference --skill <name>   then: reference --score --labels <json>');
+      console.log('   check any text: verify --skill <name> <file>');
+      console.log('        lab: reference --skill <name> (then --score --labels <json>) · contract --skill <name> [--bare] · study');
       return;
     }
   }

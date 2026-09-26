@@ -144,7 +144,8 @@ atelier new ./support-replies "customer support needs to always answer this way"
 atelier new ./approved-copy "ensure all content outputs follow these"
 ```
 
-Atelier holds some of the work back before anything reads it, reads the rest for the decisions
+Atelier holds some of the work back before anything reads it (when there are six or more pieces;
+name your own with `--reserve`), reads the rest for the decisions
 behind it, and shows you every rule it found on one screen, strongest evidence first, each with the
 ruling the evidence suggests and why ("followed in 4 of 5 pieces it never read"). **Nothing is
 compiled until you accept.** Press Enter to accept them as shown, or change any on the same line
@@ -209,7 +210,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 90 files and 1267 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 90 files and 1279 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

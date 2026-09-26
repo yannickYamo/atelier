@@ -20,7 +20,7 @@ import { DATA, die, flag, argv, numericFlag, clientAndBinding, describeBinding, 
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { spend } from '../../core/inference/client.js';
 import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
 import type { Budget } from '../../core/inference/client.js';
@@ -190,14 +190,18 @@ export async function contract(): Promise<void> {
    * the three starts clean.
    */
   const runArm = async (arm: ContractArm, bytes: string | null): Promise<CaseOutcome[]> => {
-    const progressPath = `${path}.progress-${arm}-${sha(`${bytes ?? ''}|${maxTokens}|${suite.suiteHash}`)}.json`;
+    // Keyed by everything that changes what a case measures: the suite, the arm's bytes, the token
+    // budget, the runtime binding (a different model is a different measurement), and the role.
+    const progressPath = `${path}.progress-${arm}-${sha(`${bytes ?? ''}|${maxTokens}|${suite.suiteHash}|${bindingHash(binding)}|${onHoldout ? 'H' : 'S'}`)}.json`;
+    // A case that never ran (a transient error, a truncation) is retried on resume, not replayed.
     const cached = new Map<string, CaseOutcome>(existsSync(progressPath)
-      ? readJson<CaseOutcome[]>(progressPath, { what: 'a contract run in progress' }).map((o) => [o.caseId, o]) : []);
+      ? readJson<CaseOutcome[]>(progressPath, { what: 'a contract run in progress' })
+        .filter((o) => o.verdict !== 'EXECUTION_INVALID').map((o) => [o.caseId, o]) : []);
     if (cached.size) console.log(`  ${arm}: resuming — ${cached.size} of ${toRun.length} case(s) already run`);
     const MARKS: Record<string, string> = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
       APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed', EXECUTION_INVALID: 'NOT RUN' };
     let done = cached.size;
-    return mapLimit(toRun, DEFAULT_CONCURRENCY, async (c) => {
+    const all = await mapLimit(toRun, DEFAULT_CONCURRENCY, async (c) => {
       const prior = cached.get(c.caseId);
       if (prior) return prior;
       const outcome = await runCase(client, budget, c, async (task) => {
@@ -237,6 +241,10 @@ export async function contract(): Promise<void> {
       console.log(`  ${arm.padEnd(9)} ${String(done).padStart(3)}/${toRun.length}  ${c.caseId}  ${(MARKS[outcome.verdict] ?? '?').padEnd(14)} ${c.obligationId}`);
       return outcome;
     });
+    // Finished: the progress file has done its job. Leaving it would make the next run replay this
+    // one instead of measuring again.
+    rmSync(progressPath, { force: true });
+    return all;
   };
 
   const role = onHoldout ? 'HOLDOUT' as const : 'SEARCH' as const;

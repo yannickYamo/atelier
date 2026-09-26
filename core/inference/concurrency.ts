@@ -25,7 +25,8 @@ export async function mapLimit<T, R>(
       try { out[i] = await fn(items[i], i); } catch (e) { failure ??= { error: e }; }
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  const width = Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : 1;
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, worker));
   if (failure !== null) throw (failure as { error: unknown }).error;
   return out;
 }
