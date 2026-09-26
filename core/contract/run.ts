@@ -189,7 +189,8 @@ export async function runCase(
   const negative = c.obligationKind === 'SHOULD_NOT_FIRE' || c.obligationKind === 'SHOULD_NOT_APPLY';
 
   if (c.obligationKind === 'MEASURED') {
-    const m = JSON.parse(c.expectation.replace(/^measured:\s*/, '')) as Measurement;
+    const m = JSON.parse(/\[measure (\{.*\})\]\s*$/.exec(c.expectation)?.[1] ?? 'null') as Measurement | null;
+    if (!m) return { caseId: c.caseId, output, validity, verdict: 'UNOBSERVED', evidence: null, why: 'the case carries no measurement to apply' };
     const r = measure(output, m);
     return { caseId: c.caseId, output, validity,
       verdict: r.verdict === 'NOT_APPLICABLE' ? 'UNOBSERVED' : r.verdict === 'MET' ? 'PASS' : 'FAIL',
