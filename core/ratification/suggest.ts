@@ -99,12 +99,16 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
       : 'never applied in the unread pieces, so they could not confirm it';
   const also = agreed ? '; two independent readings found it' : '';
 
-  const required = mode === 'GENERATE' ? held : (held || agreed);
+  // A rule that needs material only the person has would, as REQUIRED, refuse every task that does not
+  // bind it — for new writing that is most of them. So when producing new work it is suggested as
+  // shown and asks for the material in the host; when answering or guarding, the facts are the point.
+  const required = mode === 'GENERATE' ? held && !needs : (held || agreed);
   // RESPOND with a condition: the measured weak spot. A conditional rule served as an instruction was
   // applied where its condition did not hold. Suggested as required only on strong evidence, and said.
   const conditionalRespond = mode === 'RESPOND' && !isGeneralScope(p.appliesWhen);
   const materiality = conditionalRespond ? (held && agreed ? 'REQUIRED' : 'PREFERRED') : required ? 'REQUIRED' : 'PREFERRED';
   const caveat = conditionalRespond && materiality === 'PREFERRED'
-    ? '; conditional, so shown rather than instructed until the evidence is strong' : '';
+    ? '; conditional, so shown rather than instructed until the evidence is strong'
+    : mode === 'GENERATE' && needs && held ? '; needs your material, so shown until you make it required' : '';
   return { decision: 'APPROVE', materiality, needs, strength, why: `${seen}${also}${caveat}` };
 }

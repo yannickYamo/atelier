@@ -156,3 +156,19 @@ describe('a value is not an option', () => {
     expect(out).not.toMatch(/given more than once/);
   });
 });
+
+describe('a blog post is finished work, whatever its title says', () => {
+  it('"playbook", "framework" or "before" in a title does not move a post out of the corpus; a methodology/ folder does', () => {
+    const { data, proj } = fresh();
+    const dir = join(proj, 'posts');
+    execFileSync('mkdir', ['-p', join(dir, 'methodology')]);
+    const body = 'A real sentence of finished prose sits here. '.repeat(20);
+    for (const n of ['the-data-engineering-playbook-for-ai.md', 'the-compound-product-framework.md', 'what-i-knew-before-launch.md', 'plain-post.md'])
+      writeFileSync(join(dir, n), body);
+    writeFileSync(join(dir, 'methodology', 'how-we-review.md'), body);
+    const out = run(data, proj, 'intake', dir, '--dry-run');
+    expect(out).toMatch(/We will read \*\*2\*\* of your examples/);
+    expect(out).toMatch(/1 methodology document/);
+    expect(out).not.toMatch(/you rejected/);
+  });
+});
