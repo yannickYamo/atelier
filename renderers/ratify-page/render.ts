@@ -39,12 +39,20 @@ const CHOICES: readonly { readonly v: string; readonly label: string; readonly w
   { v: 'REJECT', label: 'Not mine', why: 'The machine guessed wrong. It is dropped, not softened.' },
 ];
 
+const LABEL_OF: Readonly<Record<string, string>> = Object.fromEntries(CHOICES.map((c) => [c.v, c.label]));
+
 export interface RatifyPageMeta {
   readonly corpusHash: string;
   readonly workType: string;
   readonly itemCount: number;
   /** stated on the page when discovery could not check its proposals against unread work */
   readonly heldOutChecked: boolean;
+  /**
+   * The review screen's suggestion per proposal: pre-selected on the page, with its reason and what
+   * the rule needs from the person. A pre-selection is still the person's to change, and nothing is
+   * submitted until they copy the rulings out.
+   */
+  readonly suggestions?: Readonly<Record<string, { readonly value: string; readonly why: string; readonly needs: string | null }>>;
 }
 
 export function renderRatifyPage(
@@ -53,6 +61,12 @@ export function renderRatifyPage(
   const n = proposals.length;
   const generalCount = proposals.filter((p) => isGeneralScope(p.appliesWhen)).length;
 
+  const sug = (id: string): string => {
+    const x = meta.suggestions?.[id];
+    if (!x) return '';
+    return `<p class="absent"><span class="lab">suggested</span> ${esc(LABEL_OF[x.value] ?? x.value)} — ${esc(x.why)}</p>`
+      + (x.needs ? `<p class="absent"><span class="lab">needs from you</span> ${esc(x.needs)} (the skill asks for it rather than inventing it)</p>` : '');
+  };
   const cards = proposals.map((p) => {
     const gen = isGeneralScope(p.appliesWhen);
     const when = gen ? '' : `<p class="when"><span class="lab">applies when</span> ${esc(p.appliesWhen)}</p>`;
@@ -67,7 +81,7 @@ export function renderRatifyPage(
     <span class="badge">${esc(p.kind)}</span>${gen ? '<span class="badge scope" title="Always applies — no condition has to be judged.">GENERAL SCOPE</span>' : ''}
     <span class="verdict" data-verdict-for="${esc(p.requirementId)}"></span></header>
   <p class="statement">${esc(p.statement)}</p>
-  ${when}${ev}${absent}
+  ${when}${ev}${absent}${sug(p.requirementId)}
   <div class="choices" role="group" aria-label="Materiality for ${esc(p.requirementId)}">${buttons}</div>
 </article>`;
   }).join('\n');
@@ -170,8 +184,11 @@ ${cards}
 var KEY='atelier-ratify-${esc(meta.corpusHash)}',TOTAL=${n};
 var COLOR={REQUIRED:'var(--required)',PREFERRED:'var(--preferred)',EXEMPLAR_ONLY:'var(--exemplar)',TOLERATED:'var(--tolerated)',INCIDENTAL:'var(--incidental)',REJECT:'var(--reject)'};
 var LABEL={REQUIRED:'Required',PREFERRED:'Preferred',EXEMPLAR_ONLY:'Exemplar only',TOLERATED:'Tolerated',INCIDENTAL:'Incidental',REJECT:'Not mine'};
+var SUGGESTED=${JSON.stringify(Object.fromEntries(Object.entries(meta.suggestions ?? {}).map(([k, v]) => [k, v.value]))).replace(/</g, '\\u003c')};
+var NEEDS=${JSON.stringify(Object.fromEntries(Object.entries(meta.suggestions ?? {}).filter(([, v]) => v.needs).map(([k, v]) => [k, v.needs]))).replace(/</g, '\\u003c')};
 var marks={};
-try{marks=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){marks={}}
+try{marks=JSON.parse(localStorage.getItem(KEY)||'null')||null}catch(e){marks=null}
+if(!marks){marks={};Object.keys(SUGGESTED).forEach(function(id){marks[id]=SUGGESTED[id]})}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(marks))}catch(e){}}
 function paint(id){var c=document.getElementById('card-'+id);if(!c)return;var v=marks[id];
  c.querySelectorAll('.choices button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.v===v))});
@@ -188,7 +205,7 @@ document.addEventListener('click',function(e){
  if(e.target.id==='copy'){
   var ids=Object.keys(marks).sort(function(a,c){return String(a).localeCompare(String(c),undefined,{numeric:true})});
   var text='['+String.fromCharCode(10)+ids.map(function(id){
-    return '  {"id":"'+id+'","decision":'+(marks[id]==='REJECT'?'"REJECT"':'"APPROVE","materiality":"'+marks[id]+'"')+'}'
+    return '  {"id":"'+id+'","decision":'+(marks[id]==='REJECT'?'"REJECT"':'"APPROVE","materiality":"'+marks[id]+'"'+(NEEDS[id]?',"needs":'+JSON.stringify(NEEDS[id]):''))+'}'
   }).join(','+String.fromCharCode(10))+String.fromCharCode(10)+']';
   var o=document.getElementById('out');o.style.display='block';o.value=text;o.select();
   if(navigator.clipboard){navigator.clipboard.writeText(text).then(function(){e.target.textContent='Copied';setTimeout(refresh,1400)},function(){})}}});
