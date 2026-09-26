@@ -20,6 +20,8 @@ import type { StandardVersion, Requirement } from '../../core/state/canonical-st
 import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
+import { existsSync } from 'node:fs';
+import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
 import { roleFor } from '../../core/architecture/compile.js';
 import { draftHash, appendDecision, stampVersion, survival, type RatificationLedger, type RatificationRecord } from '../../core/ratification/decision-record.js';
@@ -419,7 +421,12 @@ export function ratifyClose(): void {
   // has no corpus to seal and owes none — they are exercising authority, not offering evidence about
   // themselves. What they do owe is the work type, because the skill's description is built from it
   // and it cannot be inferred from a corpus that does not exist.
-  const workType = s.evidence?.workType ?? flag('--work-type')
+  // A second close supersedes the first and inherits its work type; asking again for what the run
+  // already recorded is a question the person already answered.
+  const priorPath = runFile('pending-standard.json');
+  const priorWorkType = s.run.standardVersionHash && existsSync(priorPath)
+    ? readJson<{ workType?: string }>(priorPath, { what: 'the previous standard' }).workType : undefined;
+  const workType = s.evidence?.workType ?? flag('--work-type') ?? priorWorkType
     ?? die('--work-type <kind> is required for a standard you wrote yourself, because there is no '
       + "corpus to infer it from. It becomes the skill's description, which is how a host decides "
       + 'whether to load the skill at all.  For example:  --work-type writing');
