@@ -19,17 +19,13 @@ export interface ProposedRule {
   readonly kind: 'GENERATIVE' | 'BOUNDARY';
   /** what you would see if this rule were NOT operating — the counterfactual a person can argue with */
   readonly wouldBeAbsentIf: string;
-  /** what a writer must be given to follow it truthfully; empty or absent when nothing */
-  readonly needsFromUser?: string;
 }
 
 /** The fields this path asks for. The chain path asks for richer ones; only the preamble is shared. */
 const PROPOSER_FIELDS = `For each rule give: STATEMENT (one sentence they could recognise as their own), APPLIES_WHEN (the
 condition; say GENERAL only if it truly holds throughout), EVIDENCE (a short verbatim quote), KIND
 (GENERATIVE or BOUNDARY), WOULD_BE_ABSENT_IF (what you would see in a piece if this rule were NOT
-operating — concrete enough that the author could check it and disagree), NEEDS_FROM_USER (what a
-writer must be GIVEN to follow it truthfully rather than invent it — real figures, the actual incident;
-empty when it needs nothing beyond the task, which is most rules).
+operating — concrete enough that the author could check it and disagree).
 
 - Up to 12 rules, and FEWER IS BETTER THAN PADDED. State a decision ONCE. If you find
   yourself writing two rules that a person would answer the same way, they are one rule and one of
@@ -67,9 +63,9 @@ export const PROPOSER_SCHEMA: Record<string, unknown> = {
           statement: { type: 'string' }, appliesWhen: { type: 'string' },
           evidence: { type: 'string' }, evidenceItemId: { type: 'string' },
           kind: { type: 'string', enum: ['GENERATIVE', 'BOUNDARY'] },
-          wouldBeAbsentIf: { type: 'string' }, needsFromUser: { type: 'string' },
+          wouldBeAbsentIf: { type: 'string' },
         },
-        required: ['statement', 'appliesWhen', 'evidence', 'evidenceItemId', 'kind', 'wouldBeAbsentIf', 'needsFromUser'],
+        required: ['statement', 'appliesWhen', 'evidence', 'evidenceItemId', 'kind', 'wouldBeAbsentIf'],
         additionalProperties: false,
       },
     },

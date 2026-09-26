@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 // this repository opens the CLI first. What lives here is the state a command cannot avoid touching:
 // where data goes, how a run advances, and how a model is reached.
 
+import type { SkillMode } from '../core/ratification/suggest.js';
 import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { join, dirname, resolve } from 'node:path';
@@ -46,14 +47,14 @@ export const VALUED_OPTIONS: readonly string[] = [
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'from', 'from-hook', 'held-out', 'host', 'id', 'invocation', 'kind',
+  'exclude', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind',
   'add', 'labels', 'materiality', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite',
   'questions', 'reason', 'required-n', 'reserve', 'role',
-  'rule', 'skill', 'source-author', 'statement', 'strict-schema',
+  'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
   'task', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
@@ -61,7 +62,7 @@ export const VALUED_OPTIONS: readonly string[] = [
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
-  'accept-new-binding', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
+  'accept', 'accept-new-binding', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
   'bare', 'holdout', 'json', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
@@ -88,7 +89,7 @@ const parsed = ((): Parsed => {
 export const cmd = argv[0] ?? '';
 
 /** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
-export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude'];
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set'];
 
 /** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
  *  spell `--name` (a statement, a task) is never counted as the option itself. */
@@ -556,6 +557,23 @@ export interface Session {
    * that shipped with the first version and was called by nothing; this field is where it lands.
    */
   ledger?: RatificationLedger | null;
+  /**
+   * What discovery knew about each proposal that the requirement does not carry: which vantages
+   * reached it, how else it was phrased, how often it held in work the proposer never read, and what
+   * following it needs from the person. The review screen orders and suggests from this. It is kept
+   * beside the proposals, not inside them, because none of it belongs in the standard's identity.
+   */
+  proposalMeta?: Readonly<Record<string, ProposalMeta>> | null;
+  /** what the person said the skill is for, when they said it (`atelier new`), and the mode read off it */
+  intent?: { readonly text: string; readonly mode: SkillMode } | null;
+}
+
+export interface ProposalMeta {
+  readonly framings: readonly string[];
+  readonly alsoPhrasedAs: readonly string[];
+  /** held-out pieces where the rule could apply, and where it was followed; null when nothing was held out */
+  readonly heldOut: { readonly applicable: number; readonly present: number } | null;
+  readonly needs: string | null;
 }
 
 /**

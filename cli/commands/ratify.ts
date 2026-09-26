@@ -57,7 +57,10 @@ export function pending(): void {
     supportingUnitIds: r.evidenceItemId ? [r.evidenceItemId] : [],
     counterUnitIds: [], contextIds: r.evidenceItemId ? [r.evidenceItemId] : [],
     clusterIds: r.evidenceItemId ? [r.evidenceItemId] : [],
-    boundaryProbed: false, heldOutRecurrence: 0, framingsFound: [],
+    // From discovery's own record rather than hardcoded empty: the union's grouping and the held-out
+    // recurrence were computed, documented as what this view orders by, and dropped before it.
+    boundaryProbed: false, heldOutRecurrence: s.proposalMeta?.[r.requirementId]?.heldOut?.present ?? 0,
+    framingsFound: [...(s.proposalMeta?.[r.requirementId]?.framings ?? [])],
     hasCounterfactual: r.wouldBeAbsentIf !== null }));
   console.log(`\n${describeCoverage(cov)}`);
   // Clusters of observed-but-unexplained behaviour come from the discovery union, which this

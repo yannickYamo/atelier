@@ -22,6 +22,7 @@ import { readJson } from '../../core/state/read-json.js';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spend } from '../../core/inference/client.js';
+import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
 import type { Budget } from '../../core/inference/client.js';
 import { obligationsForStandard } from '../../core/contract/obligation.js';
 import { generateCases, GenerationRefused } from '../../core/contract/generate.js';
@@ -167,8 +168,7 @@ export async function contract(): Promise<void> {
   if (override !== null) {
     budgetProv = budgetFromOverride(override);
   } else {
-    const probe: ProbeObservation[] = [];
-    for (const c of toRun.slice(0, PROBE_N)) probe.push(await probeOne(c.task));
+    const probe: ProbeObservation[] = await mapLimit(toRun.slice(0, PROBE_N), PROBE_N, (c) => probeOne(c.task));
     try {
       budgetProv = budgetFromProbe(probe, PROBE_CAP, { suiteHash: suite.suiteHash });
     } catch (e) {
@@ -179,10 +179,27 @@ export async function contract(): Promise<void> {
   const maxTokens = budgetProv.maxTokens;
   console.log(`  budget: ${describeBudget(budgetProv)}\n`);
 
-  /** Every arm runs through this, so the only thing that can differ between them is the bytes. */
+  /**
+   * Every arm runs through this, so the only thing that can differ between them is the bytes.
+   *
+   * SIDE BY SIDE, VISIBLE, AND RESUMABLE. Thirty-six generations used to run strictly in sequence with
+   * nothing on screen — fifty minutes in which work and a hang looked the same — and one failure at
+   * case 26 discarded the 26 already paid for. Cases now run concurrently, each prints as it lands,
+   * and each finished outcome is written to a progress file keyed by the suite, the arm's exact bytes
+   * and the token budget; running the command again picks up where it stopped, and a change to any of
+   * the three starts clean.
+   */
   const runArm = async (arm: ContractArm, bytes: string | null): Promise<CaseOutcome[]> => {
-    const outcomes: CaseOutcome[] = [];
-    for (const c of toRun) {
+    const progressPath = `${path}.progress-${arm}-${sha(`${bytes ?? ''}|${maxTokens}|${suite.suiteHash}`)}.json`;
+    const cached = new Map<string, CaseOutcome>(existsSync(progressPath)
+      ? readJson<CaseOutcome[]>(progressPath, { what: 'a contract run in progress' }).map((o) => [o.caseId, o]) : []);
+    if (cached.size) console.log(`  ${arm}: resuming — ${cached.size} of ${toRun.length} case(s) already run`);
+    const MARKS: Record<string, string> = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
+      APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed', EXECUTION_INVALID: 'NOT RUN' };
+    let done = cached.size;
+    return mapLimit(toRun, DEFAULT_CONCURRENCY, async (c) => {
+      const prior = cached.get(c.caseId);
+      if (prior) return prior;
       const outcome = await runCase(client, budget, c, async (task) => {
         const ctx: ArmContext = {
           // NOT A CONSTANT. This was 1200 for the life of the command, against a measured 6606-token
@@ -214,14 +231,12 @@ export async function contract(): Promise<void> {
           return { output: '', validity: validityFromError(e) };
         }
       });
-      outcomes.push(outcome);
-      if (arm !== 'BARE') {
-        const MARKS: Record<string, string> = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
-          APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed', EXECUTION_INVALID: 'NOT RUN' };
-        console.log(`  ${c.caseId}  ${(MARKS[outcome.verdict] ?? '?').padEnd(14)} ${c.obligationId}`);
-      }
-    }
-    return outcomes;
+      cached.set(c.caseId, outcome);
+      writeAtomic(progressPath, JSON.stringify([...cached.values()], null, 1));
+      done += 1;
+      console.log(`  ${arm.padEnd(9)} ${String(done).padStart(3)}/${toRun.length}  ${c.caseId}  ${(MARKS[outcome.verdict] ?? '?').padEnd(14)} ${c.obligationId}`);
+      return outcome;
+    });
   };
 
   const role = onHoldout ? 'HOLDOUT' as const : 'SEARCH' as const;
