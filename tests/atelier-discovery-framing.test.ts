@@ -79,7 +79,7 @@ describe('the chain actually RUNS several vantages — not just able to', () => 
     const src = await import('node:fs').then((fs) =>
       fs.readFileSync(new URL('../core/discovery/run-chain.ts', import.meta.url), 'utf8'));
     expect(src).toMatch(/framings: readonly FramingId\[\] = DEFAULT_FRAMINGS/);
-    expect(src).toMatch(/for \(const framing of framings\)/);
+    expect(src).toMatch(/mapLimit\(framings, framings.length, async \(framing\)/);
     expect(src).toMatch(/chainProposerSystemFor\(framing\)/);
     // and the ids are assigned after the union, so p3 names a decision not a framing's third guess
     expect(src).toMatch(/proposedId: `p\$\{i \+ 1\}`/);

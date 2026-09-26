@@ -20,8 +20,9 @@ import { DATA, die, flag, argv, numericFlag, clientAndBinding, describeBinding, 
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { spend } from '../../core/inference/client.js';
+import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
 import type { Budget } from '../../core/inference/client.js';
 import { obligationsForStandard } from '../../core/contract/obligation.js';
 import { generateCases, GenerationRefused } from '../../core/contract/generate.js';
@@ -167,8 +168,7 @@ export async function contract(): Promise<void> {
   if (override !== null) {
     budgetProv = budgetFromOverride(override);
   } else {
-    const probe: ProbeObservation[] = [];
-    for (const c of toRun.slice(0, PROBE_N)) probe.push(await probeOne(c.task));
+    const probe: ProbeObservation[] = await mapLimit(toRun.slice(0, PROBE_N), PROBE_N, (c) => probeOne(c.task));
     try {
       budgetProv = budgetFromProbe(probe, PROBE_CAP, { suiteHash: suite.suiteHash });
     } catch (e) {
@@ -179,10 +179,31 @@ export async function contract(): Promise<void> {
   const maxTokens = budgetProv.maxTokens;
   console.log(`  budget: ${describeBudget(budgetProv)}\n`);
 
-  /** Every arm runs through this, so the only thing that can differ between them is the bytes. */
+  /**
+   * Every arm runs through this, so the only thing that can differ between them is the bytes.
+   *
+   * SIDE BY SIDE, VISIBLE, AND RESUMABLE. Thirty-six generations used to run strictly in sequence with
+   * nothing on screen — fifty minutes in which work and a hang looked the same — and one failure at
+   * case 26 discarded the 26 already paid for. Cases now run concurrently, each prints as it lands,
+   * and each finished outcome is written to a progress file keyed by the suite, the arm's exact bytes
+   * and the token budget; running the command again picks up where it stopped, and a change to any of
+   * the three starts clean.
+   */
   const runArm = async (arm: ContractArm, bytes: string | null): Promise<CaseOutcome[]> => {
-    const outcomes: CaseOutcome[] = [];
-    for (const c of toRun) {
+    // Keyed by everything that changes what a case measures: the suite, the arm's bytes, the token
+    // budget, the runtime binding (a different model is a different measurement), and the role.
+    const progressPath = `${path}.progress-${arm}-${sha(`${bytes ?? ''}|${maxTokens}|${suite.suiteHash}|${bindingHash(binding)}|${onHoldout ? 'H' : 'S'}`)}.json`;
+    // A case that never ran (a transient error, a truncation) is retried on resume, not replayed.
+    const cached = new Map<string, CaseOutcome>(existsSync(progressPath)
+      ? readJson<CaseOutcome[]>(progressPath, { what: 'a contract run in progress' })
+        .filter((o) => o.verdict !== 'EXECUTION_INVALID').map((o) => [o.caseId, o]) : []);
+    if (cached.size) console.log(`  ${arm}: resuming — ${cached.size} of ${toRun.length} case(s) already run`);
+    const MARKS: Record<string, string> = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
+      APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed', EXECUTION_INVALID: 'NOT RUN' };
+    let done = cached.size;
+    const all = await mapLimit(toRun, DEFAULT_CONCURRENCY, async (c) => {
+      const prior = cached.get(c.caseId);
+      if (prior) return prior;
       const outcome = await runCase(client, budget, c, async (task) => {
         const ctx: ArmContext = {
           // NOT A CONSTANT. This was 1200 for the life of the command, against a measured 6606-token
@@ -214,14 +235,16 @@ export async function contract(): Promise<void> {
           return { output: '', validity: validityFromError(e) };
         }
       });
-      outcomes.push(outcome);
-      if (arm !== 'BARE') {
-        const MARKS: Record<string, string> = { PASS: 'pass', FAIL: 'FAIL', APPARENT_PASS: 'appears ok',
-          APPARENT_FAIL: 'APPEARS WRONG', UNOBSERVED: 'not observed', EXECUTION_INVALID: 'NOT RUN' };
-        console.log(`  ${c.caseId}  ${(MARKS[outcome.verdict] ?? '?').padEnd(14)} ${c.obligationId}`);
-      }
-    }
-    return outcomes;
+      cached.set(c.caseId, outcome);
+      writeAtomic(progressPath, JSON.stringify([...cached.values()], null, 1));
+      done += 1;
+      console.log(`  ${arm.padEnd(9)} ${String(done).padStart(3)}/${toRun.length}  ${c.caseId}  ${(MARKS[outcome.verdict] ?? '?').padEnd(14)} ${c.obligationId}`);
+      return outcome;
+    });
+    // Finished: the progress file has done its job. Leaving it would make the next run replay this
+    // one instead of measuring again.
+    rmSync(progressPath, { force: true });
+    return all;
   };
 
   const role = onHoldout ? 'HOLDOUT' as const : 'SEARCH' as const;
@@ -343,7 +366,7 @@ export async function contract(): Promise<void> {
         candidateArch = applyEscalation(candidateArch, p.operation,
           sha(`${candidateArch.architectureHash}|${p.operation.requirementId}|${p.operation.to}`));
       }
-      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`);
+      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`, store.getExemplar(L));
       // The optimizer changed an arrangement. It may not have changed the target, and saying so is
       // cheap next to discovering later that it did.
       assertSameTarget(v, v);

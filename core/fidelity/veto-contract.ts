@@ -229,8 +229,8 @@ export const NO_VETO_MEANING =
  * `SealedApplicability` in `conditional-fidelity.ts` is the expert's own ruling, sealed per context
  * before any output exists, so it is binary and AMBIGUOUS would be a contradiction. This one is a
  * machine's reading, so AMBIGUOUS is a real answer and `admitsToVetoSensor` is what refuses to
- * spend a veto on it. `MethodApplicability` in `methodology-evidence.ts` is a different question
- * entirely: whether a METHOD is required for a situation.
+ * spend a veto on it. Whether a METHOD is required for a situation was a different question entirely
+ * (it lived in `methodology-evidence.ts`, deleted on 2026-09-26).
  *
  * They shared the name `Applicability` until it was clear that collapsing them would have thrown
  * away the distinction between what a person decided and what a model guessed.

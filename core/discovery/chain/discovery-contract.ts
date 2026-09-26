@@ -64,6 +64,8 @@ export interface ProposedFactor {
   readonly readFrom: readonly string[];
   /** the proposer's own statement of what would show this factor ABSENT. Forces falsifiability. */
   readonly wouldBeAbsentIf: string;
+  /** what a writer must be given to follow it truthfully; empty when nothing. A suggestion, never a prerequisite until approved. */
+  readonly needs?: string;
   /**
    * A VERBATIM SPAN FROM THE WORK, showing the rule happening.
    *

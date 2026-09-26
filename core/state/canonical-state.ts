@@ -90,6 +90,21 @@ export type Provenance =
   | 'EXPERT_STATED';
 export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
 
+/**
+ * HOW A RULE IS MEASURED, WHEN IT CAN BE — DECLARED, NEVER INFERRED FROM ITS WORDS.
+ *
+ * Deterministic observers whose verdict is a fact about the text rather than a judgement of it: a
+ * banned phrase is present or it is not; a median sentence length is a number. A rule carries one
+ * only when a person ratified a rule that was proposed WITH it (discovery measures the corpus and
+ * proposes the target) or declared it themselves. The obligation layer's refusal to read
+ * checkability off prose stands; this is the assertion path it always named and never had.
+ */
+export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE';
+export interface Measurement {
+  readonly observer: ObserverId;
+  readonly params: Readonly<Record<string, number | readonly string[]>>;
+}
+
 /** 1. What the expert supplied. Frozen at seal time; its hash is the run's identity. */
 export interface ExpertEvidence {
   readonly evidenceId: string;
@@ -193,6 +208,8 @@ export interface Requirement {
    * model to satisfy it anyway produced an invented statistic rather than a refusal.
    */
   readonly prerequisites?: readonly Prerequisite[];
+  /** a deterministic measurement of this rule, when it has one. See `Measurement`. */
+  readonly measurement?: Measurement;
 }
 
 /**
@@ -480,6 +497,24 @@ export interface InvocationRecord {
   /** Kept in full, not only hashed. A hash proves identity; it cannot be read back to diagnose. */
   readonly input: string;
   readonly output: string;
+  /**
+   * When the output was checked against the standard's measured rules and spans were rewritten, what
+   * happened: the rules broken before and after, and the hash of what the model first wrote. `output`
+   * is what was delivered. Absent when nothing was checked or nothing needed fixing.
+   */
+  readonly repair?: RepairRecord;
+}
+
+export interface RepairRecord {
+  readonly passes: number;
+  readonly violatedBefore: readonly string[];
+  readonly violatedAfter: readonly string[];
+  readonly originalOutputHash: string;
+  /** what the model first wrote. Kept whole so a later comparison can be made draft against draft. */
+  readonly draft?: string;
+  /** host repairs only: whether text outside the named spans changed (an instruction there, not a splice) */
+  readonly outsideSpansChanged?: boolean;
+  readonly why: string;
 }
 
 /**

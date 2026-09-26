@@ -17,7 +17,7 @@ import { supportStage, describeProfile, UNMEASURED, type ModelCapabilityProfile 
 import { bindingHash } from '../../core/runtime/binding.js';
 import { ATELIER_CLI_DELIVERY, describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import * as store from '../../core/state/store.js';
-import { DATA, die, flag, argv, clientAndBinding, describeBinding, pickHost, assertSkillName, type Role } from '../runtime.js';
+import { DATA, die, flag, argv, clientAndBinding, describeBinding, proposerModel, modelFor, pickHost, assertSkillName, type Role } from '../runtime.js';
 
 const PROFILES = (): string => join(DATA, 'profiles');
 
@@ -38,7 +38,17 @@ export async function check(): Promise<void> {
   if (raw !== 'discovery' && raw !== 'target') return die(`unknown --role "${raw}". Available: discovery, target.`);
   const role: Role = raw;
 
-  const { client, binding } = clientAndBinding(role);
+  // Discovery runs TWO models by default: the proposer that reads the corpus and the one that
+  // diagnoses. Checking one under the heading of both was how a green check preceded a 400.
+  const models = role === 'discovery' ? [...new Set([proposerModel(), modelFor('discovery')])] : [modelFor('target')];
+  if (models.length > 1) console.log(`The discovery runtime uses ${models.length} models: ${models.join(', ')}. Checking each.\n`);
+  const failed: string[] = [];
+  for (const m of models) if (!(await checkOne(role, m))) failed.push(m);
+  if (failed.length) die(`${failed.join(', ')} did not pass. Nothing was recorded as verified for ${failed.length > 1 ? 'them' : 'it'}.`);
+}
+
+async function checkOne(role: Role, model: string): Promise<boolean> {
+  const { client, binding } = clientAndBinding(role, model);
   console.log(`Checking the ${role} runtime — ${describeBinding(binding)}\n`);
 
   // The negative probe needs a client that will be given an impossible budget. Same configuration,
@@ -75,7 +85,7 @@ export async function check(): Promise<void> {
   console.log(describeProfile(profile));
   console.log(`\nSupport stage: ${supportStage(profile)}`);
   console.log(`Recorded at ${join(PROFILES(), `${bindingHash(binding)}.json`)}\n`);
-  if (!report.passed) die('this backend did not pass. Nothing was recorded as verified.');
+  return report.passed;
 }
 
 /** Everything measured so far, so the README can be written from records rather than from memory. */

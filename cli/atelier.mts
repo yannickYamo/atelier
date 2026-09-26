@@ -31,7 +31,12 @@ import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
 import { record } from './commands/record.js';
 import { fix } from './commands/fix.js';
+import { newSkill } from './commands/new.js';
+import { review } from './commands/review.js';
+import { verify } from './commands/verify.js';
+import { mcp } from './commands/mcp.js';
 import { existsSync } from 'node:fs';
+import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 import { policyFor } from '../core/state/policy.js';
 
@@ -50,6 +55,10 @@ const EVAL_ONLY: readonly string[] = ['study'];
 
 /** Every command the dispatcher answers. Exported so a test can pin it against the docs. */
 export const COMMANDS: readonly string[] = [
+  'new',
+  'review',
+  'verify',
+  'mcp',
   'abort',
   'skill',
   'plan',
@@ -90,7 +99,17 @@ export const COMMANDS: readonly string[] = [
 ];
 
 const main = async (): Promise<void> => {
+  // Answered BEFORE dispatch, so no command can run when asked about. `abort --help` used to abort.
+  if (cmd === '--version' || cmd === '-v' || cmd === 'version') { console.log(version()); return; }
+  if (COMMANDS.includes(cmd) && wantsHelp(argv)) {
+    console.log(`usage: ${USAGE[cmd] ?? `atelier ${cmd}`}`);
+    return;
+  }
   switch (cmd) {
+    case 'new': return newSkill();
+    case 'review': { await review(); return; }
+    case 'verify': return verify();
+    case 'mcp': return mcp();
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
     case 'intake': { intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
     case 'discover': return discover();
@@ -182,13 +201,15 @@ const main = async (): Promise<void> => {
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}".\n  commands: ${known}`);
       }
-      console.log('atelier skill "<your rules>"  ·  atelier skill --from <path-to-your-work>     create');
+      console.log('atelier new <folder-of-your-best-work> "<what it is for>"                     create');
+      console.log('  or state it:  atelier skill "<your rules>"');
       console.log('  /<name> or atelier invoke --skill <name> "<task>"                            use');
       console.log('  atelier fix "<what was wrong>"                                               correct');
       console.log('  staged spelling: create <path> · pending · ratify --decisions <json> · ratify-close · build --name <name>');
       console.log(`  every command: ${known}`);
       console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
-      console.log('   held-out: reference --skill <name>   then: reference --score --labels <json>');
+      console.log('   check any text: verify --skill <name> <file>');
+      console.log('        lab: reference --skill <name> (then --score --labels <json>) · contract --skill <name> [--bare] · study');
       return;
     }
   }

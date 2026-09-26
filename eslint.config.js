@@ -31,10 +31,11 @@ export default defineConfig(
   {
     languageOptions: {
       parserOptions: {
-        // Config and script files sit outside the app tsconfig on purpose — they are tooling, not
-        // shipped code. `allowDefaultProject` lets them be linted without widening what gets built.
+        // Config files sit outside the app tsconfig on purpose — they are tooling, not shipped code.
+        // Scripts and the plugin generator are IN it now (typechecked, still not built): outside it,
+        // `tsx` ran them unchecked and a script wrote an invalid Provenance into the store.
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'scripts/*.mts', 'plugins/*.mts'],
+          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts'],
         },
         tsconfigRootDir: import.meta.dirname,
       },

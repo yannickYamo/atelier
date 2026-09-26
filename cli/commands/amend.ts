@@ -4,6 +4,9 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { parseMeasure } from './ratify.js';
+import { describeMeasurement } from '../../core/observers/verify.js';
+import { describeBackup } from '../../adapters/install-tree.js';
 import {mkdirSync, existsSync} from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
@@ -16,7 +19,7 @@ import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, MODEL, projectDir, pickHost, clientFor, numericFlag, skillArg } from '../runtime.js';
+import { sha, DATA, die, argv, flag, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel } from '../runtime.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
@@ -39,7 +42,13 @@ import { draftHash, appendDecision, stampVersion } from '../../core/ratification
 export function amend(): void {
   const name = skillArg();
   const ruleId = flag('--rule') ?? die('--rule required');
-  const statement = flag('--statement') ?? die('--statement "<the rule in your words>" required');
+  const statement = flag('--statement');
+  const materiality = flag('--materiality');
+  const measureSpec = flag('--measure');
+  if (!statement && !materiality && measureSpec === undefined) {
+    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|… or --measure <observer>:<params>|none required');
+  }
+  const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
   const appliesWhen = flag('--applies-when');
   const reason = flag('--reason') ?? die('--reason required — a version history without reasons can be counted, not audited.');
   const L: store.StoreLayout = { root: DATA, skillName: name };
@@ -49,7 +58,7 @@ export function amend(): void {
   const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in ${prev.standardVersionHash}.`);
 
   let amended;
-  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen }); }
+  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, ...(measurement === undefined ? {} : { measurement }) }); }
   catch (e) { return void die((e as Error).message); }
   const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
@@ -75,7 +84,7 @@ export function amend(): void {
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
-  const pkg = renderAgentSkill(next, arch, name, desc);
+  const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L));
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
@@ -83,6 +92,7 @@ export function amend(): void {
   store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch);
   store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
   const inst = pickHost().install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
   // The act is a ratification decision like any other, and until now it left no ledger record —
@@ -92,14 +102,23 @@ export function amend(): void {
   store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
 
   console.log(`\nAmended ${ruleId}.`);
-  console.log(`  was: ${target.statement}`);
-  console.log(`  now: ${statement}`);
+  if (statement) {
+    console.log(`  was: ${target.statement}`);
+    console.log(`  now: ${statement}`);
+    console.log(`  authority ${target.authority} -> EXPERT_AUTHORED   (you wrote these words)`);
+  }
   if (appliesWhen) console.log(`  applies when: ${target.appliesWhen}  ->  ${appliesWhen}`);
-  console.log(`  authority ${target.authority} -> EXPERT_AUTHORED   (you wrote these words)`);
+  if (materiality) console.log(`  weight ${target.materiality ?? 'undeclared'} -> ${amended.requirement.materiality}`);
+  if (measurement !== undefined || (statement && target.measurement && !amended.requirement.measurement)) {
+    console.log(`  check: ${describeMeasurement(target) ?? 'none'} -> ${describeMeasurement(amended.requirement) ?? 'none'}`
+      + (measurement === undefined ? '   (reworded, so the old check no longer states what the rule asks)' : ''));
+  }
   console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}`);
   console.log(`  reason: ${reason}`);
-  console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);
-  console.log(`Labels for that rule do not carry over.`);
+  if (statement || appliesWhen) {
+    console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);
+    console.log(`Labels for that rule do not carry over.`);
+  }
 }
 
 
@@ -138,7 +157,7 @@ export async function sharpen(): Promise<void> {
   for (const c of picked) console.log(`  ${c.requirementId}  ${c.statement.slice(0, 78)}`);
   if (argv.includes('--dry-run')) { console.log('\n--dry-run: nothing generated.'); return; }
 
-  const client = clientFor(flag('--model') ?? MODEL);
+  const client = clientFor(diagnoserModel());
   const dir = join(DATA, 'skills', name, 'probes');
   mkdirSync(dir, { recursive: true });
   for (const [i, c] of picked.entries()) {

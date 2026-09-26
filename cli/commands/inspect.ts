@@ -4,7 +4,9 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { describeBackup } from '../../adapters/install-tree.js';
 import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
+import { survival } from '../../core/ratification/decision-record.js';
 import * as store from '../../core/state/store.js';
 
 import { DATA, die, flag, projectDir, pickHost, skillArg, runFile } from '../runtime.js';
@@ -37,7 +39,14 @@ export function inspect(): void {
     console.log(`installed file against. This SkillVersion predates package persistence. Rebuild it to make it checkable.`);
   } else {
     const ver = pickHost().verifyInstallation(pkg, projectDir());
-    console.log(ver.present ? (ver.matchesPackage ? 'installed file matches the package that was built.' : `\nMATERIALIZATION DRIFT: ${ver.detail}\nThe installed file was edited by hand. It now serves something the StandardVersion does not say.`) : `not installed: ${ver.detail}`);
+    // The two drifts have different causes and different remedies. Extra files are what an older
+    // Atelier left behind by never clearing the directory — not the author's doing, and blaming
+    // them for it is the failure this command was already corrected for once.
+    const extra = ver.detail.startsWith('UNCOMPILED FILES');
+    console.log(ver.present ? (ver.matchesPackage ? 'installed file matches the package that was built.'
+      : extra ? `\nMATERIALIZATION DRIFT: ${ver.detail}\nA host that reads the skill directory reads these too. Reinstall exactly what was built:\n  atelier rollback --skill ${L.skillName} --to ${active}`
+        : `\nMATERIALIZATION DRIFT: ${ver.detail}\nThe installed file was edited by hand. It now serves something the StandardVersion does not say.`)
+      : `not installed: ${ver.detail}`);
   }
   for (const r of v.requirements) console.log(`  [${r.kind[0]}] ${r.statement}${isGeneralScope(r.appliesWhen) ? '' : `  (when: ${r.appliesWhen})`}`);
 }
@@ -54,6 +63,12 @@ export function historyCmd(): void {
     const std = h.skillVersion.standardVersionHash;
     const reason = h.standard?.reason && firstOn.get(std) === h.skillVersion.skillVersionHash ? `  — ${h.standard.reason}` : '';
     console.log(`${h.active ? '*' : ' '} ${h.skillVersion.skillVersionHash}  ${h.skillVersion.builtAt}  standard ${std}${reason}`);
+    // Who decided the standard, once, on the line that introduced it.
+    const ledger = firstOn.get(std) === h.skillVersion.skillVersionHash ? store.getLedger(L, std) : null;
+    if (ledger?.records.length) {
+      const su = survival(ledger);
+      console.log(`    ratified: ${su.shown} shown · ${su.approved} approved · ${su.edited} edited · ${su.rejected} rejected · ${su.deferred} open`);
+    }
   }
 }
 
@@ -73,6 +88,7 @@ export function rollback(): void {
     ?? die(`package ${sv.materializedHash} is not in the store, so ${to} cannot be reinstalled as it was built. `
       + `This version predates package persistence. Nothing was changed — the active pointer is untouched.`);
   const r = pickHost().install(pkg, projectDir());
+  { const moved = describeBackup(r); if (moved) console.log(moved); }
   if (!r.ok) return void die(`reinstall failed: ${r.reason}`);
   store.setActive(L, to);
   console.log(`rolled back to ${to}. Reinstalled package ${sv.materializedHash}, the one it built.`);

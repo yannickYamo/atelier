@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { refineToStandard } from '../../core/loop/run-repair.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -15,7 +16,7 @@ import { resolveProvenance } from '../../core/fidelity/provenance.js';
 import { runOnce } from './improve.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
-import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, assertSkillName, runFile } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
 // ── invoke ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -120,8 +121,14 @@ export function resolveServedSkill(name: string): ServedSkill {
 
 export async function invoke(): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
-  const task = flag('--task') ?? positional([name])
+  const asked = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
+  // What `--with` binds travels WITH the task, so the model has the material the rule needs, and the
+  // record's input is what was actually served.
+  const material = boundMaterial();
+  const task = material.length
+    ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
+    : asked;
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
   // ── CAN THIS STANDARD BE EXECUTED TRUTHFULLY ON THIS INVOCATION ───────────────────────────
   //
@@ -162,9 +169,19 @@ export async function invoke(): Promise<void> {
   // THE CONTRACT GOES IN. It used to be listed in the delivery metadata and then ignored by the very
   // call the metadata described, which is how a carrier can be installed, hashed, verified and dark all
   // at once. `runOnce` hands it to the provider as the schema and hashes what was actually sent.
+  // ── CHECKED BEFORE IT IS DELIVERED ──────────────────────────────────────────────────────────
+  //
+  // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
+  // and only those — at most twice, each rewrite kept only if it breaks nothing that held. The rules
+  // that are about judgement are not touched: nothing here has the standing to rewrite for them.
+  const refine = argv.includes('--no-repair') || !std ? null
+    : async (draft: string) => {
+      const r = await refineToStandard(client, budget, name, std, draft);
+      return { output: r.output, repair: r.repair };
+    };
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
-    flag('--task') ? 'FLAG' : 'POSITIONAL');
+    flag('--task') ? 'FLAG' : 'POSITIONAL', refine);
 
   // A PROVIDER-SIDE VERSION FLIP UNDER AN UNCHANGED CONFIGURATION. Reported, never fatal: the user
   // changed nothing, and refusing to run would punish them for someone else's release.
@@ -179,6 +196,14 @@ export async function invoke(): Promise<void> {
   }
 
   console.log(`\n${rec.output}\n`);
+  if (rec.repair) {
+    const r = rec.repair;
+    console.log(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
+      + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
+    if (r.violatedAfter.length) console.log(`  ${r.why}`);
+  } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
+    console.log('checked against the standard: every REQUIRED measured rule holds.');
+  }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
   // passing them in would report a breach on every invocation.
   const breaches = findOwnershipBreaches(rec.output);
