@@ -169,7 +169,9 @@ Every draft is checked before you see it. The rules that carry a measurement are
 finished piece, and when a REQUIRED one is broken, only the sentences that broke it are rewritten
 (the rest of the draft cannot change, because the model never holds the pen for it), and a rewrite
 that breaks anything that held is thrown away. In Claude Code the plugin does the same thing at the
-end of the turn: the answer is sent back once with just the spans to fix. `--no-repair` delivers the
+end of the turn: the answer is sent back once with just the spans to fix. There the host holds the pen
+for the whole answer, so "only these spans" is an instruction rather than a splice, and the record says
+whether anything outside them changed or got worse. `--no-repair` delivers the
 raw draft. To give the model your whole voice rather than rule fragments, ship one of your own pieces
 with the skill: `atelier build --name my-skill --exemplar ./my-best-piece.md`.
 
@@ -232,7 +234,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1309 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1316 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

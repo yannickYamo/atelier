@@ -22,6 +22,7 @@
 // `assertStandardUnchanged` throws; it does not log.
 
 import { verifyText } from '../../core/observers/verify.js';
+import { regressions } from '../../core/loop/repair.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -345,11 +346,15 @@ async function settleBlindPick(
   const measuredRule = std?.requirements.find((r) => r.requirementId === move.requirementId && r.measurement);
   let counted: 'a' | 'b' | 'same' | null = null;
   if (std && measuredRule && !flag('--pick')) {
-    const verdictOf = (text: string): Map<string, string> =>
-      new Map(verifyText(name, std, text).checked.map((c) => [c.requirementId, c.result.verdict]));
-    const champ = verdictOf(inv.output); const cand = verdictOf(candRec.output);
+    // DRAFT AGAINST DRAFT. The current version's recorded output may already have been repaired by the
+    // loop, and the candidate's has not: comparing the two would score the loop, not the carrier, and
+    // reject every change. The draft the model first wrote is what the candidate is compared with.
+    const champText = inv.repair?.draft ?? inv.output;
+    const champReport = verifyText(name, std, champText); const candReport = verifyText(name, std, candRec.output);
+    const verdictOf = (r: typeof champReport): Map<string, string> => new Map(r.checked.map((c) => [c.requirementId, c.result.verdict]));
+    const champ = verdictOf(champReport); const cand = verdictOf(candReport);
     const fixes = champ.get(move.requirementId) === 'VIOLATED' && cand.get(move.requirementId) === 'MET';
-    const breaks = [...cand].some(([id, v]) => v === 'VIOLATED' && champ.get(id) === 'MET');
+    const breaks = regressions(champReport, candReport).length > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
     const candLetter = championFirst ? 'b' : 'a'; const champLetter = championFirst ? 'a' : 'b';
     if (fixes && !breaks) counted = candLetter;

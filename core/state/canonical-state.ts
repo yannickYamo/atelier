@@ -510,6 +510,10 @@ export interface RepairRecord {
   readonly violatedBefore: readonly string[];
   readonly violatedAfter: readonly string[];
   readonly originalOutputHash: string;
+  /** what the model first wrote. Kept whole so a later comparison can be made draft against draft. */
+  readonly draft?: string;
+  /** host repairs only: whether text outside the named spans changed (an instruction there, not a splice) */
+  readonly outsideSpansChanged?: boolean;
   readonly why: string;
 }
 
