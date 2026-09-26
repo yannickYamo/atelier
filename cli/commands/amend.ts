@@ -4,6 +4,8 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { parseMeasure } from './ratify.js';
+import { describeMeasurement } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import {mkdirSync, existsSync} from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
@@ -42,7 +44,11 @@ export function amend(): void {
   const ruleId = flag('--rule') ?? die('--rule required');
   const statement = flag('--statement');
   const materiality = flag('--materiality');
-  if (!statement && !materiality) die('--statement "<the rule in your words>" or --materiality REQUIRED|PREFERRED|… required');
+  const measureSpec = flag('--measure');
+  if (!statement && !materiality && measureSpec === undefined) {
+    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|… or --measure <observer>:<params>|none required');
+  }
+  const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
   const appliesWhen = flag('--applies-when');
   const reason = flag('--reason') ?? die('--reason required — a version history without reasons can be counted, not audited.');
   const L: store.StoreLayout = { root: DATA, skillName: name };
@@ -52,7 +58,7 @@ export function amend(): void {
   const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in ${prev.standardVersionHash}.`);
 
   let amended;
-  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality }); }
+  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, ...(measurement === undefined ? {} : { measurement }) }); }
   catch (e) { return void die((e as Error).message); }
   const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
@@ -103,6 +109,10 @@ export function amend(): void {
   }
   if (appliesWhen) console.log(`  applies when: ${target.appliesWhen}  ->  ${appliesWhen}`);
   if (materiality) console.log(`  weight ${target.materiality ?? 'undeclared'} -> ${amended.requirement.materiality}`);
+  if (measurement !== undefined || (statement && target.measurement && !amended.requirement.measurement)) {
+    console.log(`  check: ${describeMeasurement(target) ?? 'none'} -> ${describeMeasurement(amended.requirement) ?? 'none'}`
+      + (measurement === undefined ? '   (reworded, so the old check no longer states what the rule asks)' : ''));
+  }
   console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}`);
   console.log(`  reason: ${reason}`);
   console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);

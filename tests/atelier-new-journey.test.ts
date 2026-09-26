@@ -179,5 +179,9 @@ describe('the purpose is read from what the skill is asked to DO', () => {
     ['reply to support tickets like our best agent', 'RESPOND'],
     ['ensure all content outputs follow the corpus', 'GUARD'],
     ['check every draft against our house style', 'GUARD'],
+    ['make sure every email follows our tone', 'GUARD'],
+    ['review drafts for tone', 'GUARD'],
+    ['write a support article', 'GENERATE'],
+    ['draft replies to customer emails', 'RESPOND'],
   ])('%s → %s', (intent, mode) => { expect(modeFromIntent(intent).mode).toBe(mode); });
 });

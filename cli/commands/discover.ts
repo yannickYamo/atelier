@@ -261,12 +261,13 @@ export async function discover(): Promise<void> {
   // Sentence and paragraph length, hedging, and the stock phrases the author never uses — proposed
   // with their measurement attached, over the pieces discovery was allowed to read (never the
   // reserve). They go on the same screen and take the same ruling as everything else.
-  const measured = deriveMeasuredRules(openItems, sourceProvenance());
+  const readIds = new Set(openGoldens.filter((g) => g.role === 'PROPOSAL').map((g) => g.contextId));
+  const measured = deriveMeasuredRules(openItems.filter((i) => readIds.has(i.id)), openItems.filter((i) => heldIds.has(i.id)), sourceProvenance());
   if (measured.length) {
     console.log(`${measured.length} measurable rule(s) counted from the same pieces: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
     proposals = [...proposals, ...measured.map((m) => m.requirement)];
     proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
-      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.inSample } satisfies ProposalMeta])) };
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance } satisfies ProposalMeta])) };
   }
   saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
 
