@@ -210,7 +210,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 90 files and 1279 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 91 files and 1283 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
