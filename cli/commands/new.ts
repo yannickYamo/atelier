@@ -24,7 +24,6 @@ import { discover } from './discover.js';
 import { review } from './review.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { adoptAllFromPublicSource } from './improve.js';
 
 const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 
@@ -32,7 +31,7 @@ const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 const sealedFrom = (): string | null => {
   const f = runFile('corpus-paths.json');
   if (!existsSync(f)) return null;
-  const files = readJson<{ id: string; path: string }[]>(f, { what: 'the sealed corpus paths' });
+  const files = readJson<{ id: string; path: string }[]>(f, { kind: 'array', what: 'the sealed corpus paths' });
   const first = files[0] as { id: string; path: string } | undefined;
   return first ? first.path.slice(0, first.path.length - first.id.length).replace(/\/$/, '') : null;
 };
@@ -98,8 +97,14 @@ export async function newSkill(): Promise<void> {
         + '\n  atelier add --statement "<the rule>" --kind GENERATIVE|BOUNDARY    then run this again');
       return;
     }
-    if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') adoptAllFromPublicSource();
-    else if (!(await review())) return;
+    // Someone else's public work goes through the same screen. Accepting there ADOPTS a rule for the
+    // person's own skill — recorded as USER_ADOPTED, never as that author's ratified standard (the
+    // ceiling in `decide` enforces it) — and the person decides which adopted rules instruct.
+    if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') {
+      console.log(`These rules were read from ${s.publicSource ?? 'someone else\'s public work'}. Accepting ADOPTS them for your skill;`
+        + ' it does not make them that author\'s standard, and the record will always say where they came from.\n');
+    }
+    if (!(await review())) return;
     s = loadSession();
     if (!s.decided.some((d) => d.authority !== 'EXPERT_REJECTED')) {
       console.log('\nEvery rule was rejected, so there is nothing to build.'

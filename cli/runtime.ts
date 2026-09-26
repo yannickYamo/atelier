@@ -570,6 +570,8 @@ export interface Session {
   source?: string | null;
   /** the spending cap the person gave `atelier new`, kept so continuing the run keeps their limit */
   cap?: string | null;
+  /** when the corpus is someone else's public work: whose. Decided at intake, kept for the run. */
+  publicSource?: string | null;
 }
 
 export interface ProposalMeta {
@@ -714,7 +716,9 @@ export const listSessions = (): { file: string; projectDir: string | null; here:
  * a system that inferred authorship would be wrong in the direction that matters.
  */
 export const sourceProvenance = (): 'MACHINE_DISCOVERED' | 'PUBLIC_BEHAVIOUR_INFERRED' =>
-  (argv.includes('--public-source') || Boolean(flag('--source-author'))) ? 'PUBLIC_BEHAVIOUR_INFERRED' : 'MACHINE_DISCOVERED';
+  (argv.includes('--public-source') || Boolean(flag('--source-author')) || Boolean(loadSession().publicSource))
+    ? 'PUBLIC_BEHAVIOUR_INFERRED' : 'MACHINE_DISCOVERED';
+
 
 export const step = (s: Session, to: Run['state'], ctx: Parameters<typeof transition>[2] = {}): Session => {
   // A REFUSAL IS STILL A REFUSAL. Re-sealing a corpus and closing ratification twice are distinct
