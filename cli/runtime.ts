@@ -5,9 +5,10 @@ import { parseArgs } from 'node:util';
 // this repository opens the CLI first. What lives here is the state a command cannot avoid touching:
 // where data goes, how a run advances, and how a model is reached.
 
-import { mkdirSync, existsSync, renameSync, readdirSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
@@ -45,7 +46,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'candidate', 'cap', 'complaint', 'context', 'decision',
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
-  'exclude', 'from', 'from-hook', 'host', 'id', 'invocation', 'kind',
+  'exclude', 'from', 'from-hook', 'held-out', 'host', 'id', 'invocation', 'kind',
   'add', 'labels', 'materiality', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
@@ -60,7 +61,7 @@ export const VALUED_OPTIONS: readonly string[] = [
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
-  'accept-new-binding', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
+  'accept-new-binding', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
   'bare', 'holdout', 'json', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
@@ -89,12 +90,20 @@ export const cmd = argv[0] ?? '';
 /** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
 export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude'];
 
+/** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
+ *  spell `--name` (a statement, a task) is never counted as the option itself. */
 const occurrences = (name: string): string[] => {
   const out: string[] = [];
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
-    if (a === `--${name}` && argv[i + 1] !== undefined) out.push(argv[i + 1]);
-    else if (a.startsWith(`--${name}=`)) out.push(a.slice(name.length + 3));
+    if (a === '--') break;
+    const eq = a.indexOf('=');
+    const opt = a.startsWith('--') ? (eq === -1 ? a.slice(2) : a.slice(2, eq)) : null;
+    if (opt === null) continue;
+    const valued = VALUED_OPTIONS.includes(opt) || opt === name;
+    const value = eq !== -1 ? a.slice(eq + 1) : valued ? argv[i + 1] : undefined;
+    if (valued && eq === -1) i++;                         // the next token is this option's value
+    if (opt === name && value !== undefined) out.push(value);
   }
   return out;
 };
@@ -254,7 +263,11 @@ export const modelFor = (role: Role, fallback = MODEL): string => {
  * the other one the moment discovery ran. Every discovery-side proposer call and the check that stands
  * behind it resolve through here, so what was verified is what runs.
  */
-export const proposerModel = (): string => modelFor('discovery', PROPOSER);
+export const proposerModel = (): string =>
+  roleFlag('discovery', 'model') ?? flag('--model') ?? process.env.ATELIER_PROPOSER_MODEL ?? modelFor('discovery', PROPOSER);
+
+/** The model that diagnoses and proposes repairs. Every such command resolves it here, so `check` verifies it. */
+export const diagnoserModel = (): string => modelFor('discovery');
 
 /**
  * Schema enforcement is part of the RUNTIME IDENTITY, not a formatting preference.
@@ -429,9 +442,60 @@ export const boundResources = (): ReadonlySet<string> => {
   return names;
 };
 
+/**
+ * The CONTENTS of what `--with` binds, handed to the model with the task.
+ *
+ * Binding only ever satisfied the check: `--with figures=./q3.csv` let a REQUIRED rule that needs real
+ * figures pass `checkSatisfiable`, and then the file was never read — the model was still asked to
+ * quantify with nothing to quantify from. A precondition that is met on paper and absent from the
+ * request is the fabrication path with an extra step.
+ */
+export const boundMaterial = (): { name: string; path: string; text: string }[] => {
+  const out: { name: string; path: string; text: string }[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== '--with') continue;
+    const spec = argv[i + 1] ?? '';
+    if (!spec.includes('=')) continue;                    // a bare name binds a resource the caller holds elsewhere
+    const name = spec.slice(0, spec.indexOf('='));
+    const path = spec.slice(spec.indexOf('=') + 1);
+    if (!existsSync(path)) die(`--with ${name}=${path}: there is no file at ${path}.`);
+    out.push({ name, path, text: readFileSync(path, 'utf8') });
+  }
+  return out;
+};
+
 // ── hosts ────────────────────────────────────────────────────────────────────────────────────
-export const projectDir = (): string =>
-  process.env.ATELIER_PROJECT_DIR ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+/**
+ * The project a command belongs to. An explicit ATELIER_PROJECT_DIR wins. Otherwise the nearest
+ * directory at or above where the command started that already has a run: `atelier fix` typed in
+ * `docs/` of a project whose run lives at its root used to find "nothing to fix yet", while the use it
+ * was about had been recorded one level up.
+ */
+export const projectDir = (): string => {
+  if (process.env.ATELIER_PROJECT_DIR) return process.env.ATELIER_PROJECT_DIR;
+  const start = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+  return nearestProject(start, (d) => existsSync(join(DATA, 'sessions', `${keyFor(d)}.json`)) || existsSync(join(DATA, 'runs', keyFor(d)))) ?? start;
+};
+
+/**
+ * Walk up from `start`; the first directory `has` accepts, or null. Bounded, so a run somewhere above
+ * cannot capture unrelated work: the walk never leaves a git repository it started in, and never
+ * climbs to the home directory or above it.
+ */
+export const nearestProject = (start: string, has: (dir: string) => boolean): string | null => {
+  const home = resolve(homedir());
+  for (let d = resolve(start); ; d = dirname(d)) {
+    if (d !== resolve(start) && (d === home || home.startsWith(`${d}/`))) return null;
+    if (has(d)) return d;
+    if (existsSync(join(d, '.git')) || dirname(d) === d) return null;
+  }
+};
+
+/** The run key for a directory — the one `projectKey` computes for the current project. */
+export const keyFor = (dir: string): string => {
+  const leaf = (dir.split('/').filter(Boolean).pop() ?? 'root').replace(/[^A-Za-z0-9._-]/g, '-');
+  return `${leaf}-${sha(dir)}`;
+};
 
 export function pickHost(): HostAdapter {
   const want = (flag('--host') ?? process.env.ATELIER_HOST ?? 'claude-code').toLowerCase();
@@ -507,11 +571,7 @@ export interface Session {
  * to. The directory PATH is hashed rather than used as a name so a session cannot be addressed by
  * guessing, and the readable basename is kept alongside it so `ls sessions/` is legible to a person.
  */
-const projectKey = (): string => {
-  const dir = projectDir();
-  const leaf = (dir.split('/').filter(Boolean).pop() ?? 'root').replace(/[^A-Za-z0-9._-]/g, '-');
-  return `${leaf}-${sha(dir)}`;
-};
+const projectKey = (): string => keyFor(projectDir());
 
 export const sessionPath = (): string => join(DATA, 'sessions', `${projectKey()}.json`);
 

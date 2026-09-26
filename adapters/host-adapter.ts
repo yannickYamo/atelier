@@ -16,7 +16,11 @@ export interface HostCapabilities {
   readonly invocationStyle: string;
 }
 
-export type InstallResult = { readonly ok: true; readonly installedAt: string } | { readonly ok: false; readonly reason: string };
+export type InstallResult =
+  | { readonly ok: true; readonly installedAt: string;
+      /** files the previous install held that this package does not, moved aside rather than deleted */
+      readonly backedUp?: { readonly to: string; readonly files: readonly string[] } | null }
+  | { readonly ok: false; readonly reason: string };
 export interface VerificationResult { readonly present: boolean; readonly matchesPackage: boolean; readonly detail: string }
 
 /**

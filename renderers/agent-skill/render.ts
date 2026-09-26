@@ -259,19 +259,20 @@ export function renderAgentSkill(
   // its condition are untouched; only the sentence that carries them changes, which is a carrier
   // decision the compiler owns.
   //
-  // HOW IT READS. The first form was "When <condition>, <statement lowercased>. When that does not
-  // hold, do not." — which lowercased an author's "I" into "i", left the condition's internal
-  // semicolons as machine punctuation ("When final paragraph; the story invites…"), and read as
-  // generated text on the page an owner shows people. The condition now leads as a label, the
-  // statement keeps the author's own capitalisation, and both branches are still stated.
+  // THE SENTENCE IS THE MEASURED ONE. "When <condition>, <statement>. When that does not hold, do not."
+  // is the form the negative-branch study measured (restraint +0.292), so it stays until a study says
+  // otherwise. Two defects in how it was FILLED are fixed without touching the frame: an author's "I"
+  // (or an acronym) is no longer lowercased into "i", and the "; " Atelier itself uses to join a
+  // condition's predicates reads as " and ".
   const conditionalLine = (statement: string, appliesWhen: string): string => {
-    const cond = appliesWhen.trim().replace(/[.\s]+$/, '')
-      .replace(/^(only\s+)?when\s+/i, '')
-      .split(/\s*;\s*/).filter(Boolean).join(', and ')
-      // "At section transitions" follows "Only when" mid-sentence; "I", "API" and the like keep their case.
-      .replace(/^([A-Z])([a-z])/, (_m, a: string, b: string) => a.toLowerCase() + b);
+    // The author's condition, verbatim, with a leading "when" only if they did not write one.
+    const w = appliesWhen.trim().replace(/[.\s]+$/, '').split(/\s*;\s*/).filter(Boolean).join(' and ');
+    const clause = /^when\b/i.test(w) ? w : `when ${w}`;
     const body = statement.trim().replace(/[.\s]+$/, '');
-    return `Only when ${cond}: ${body}. Otherwise, don't.`;
+    const keepCase = /^(I\b|I'|[A-Z]{2,})/.test(body);
+    const lead = keepCase ? body : body.charAt(0).toLowerCase() + body.slice(1);
+    return `${clause.charAt(0).toUpperCase() + clause.slice(1)}, ${lead}. `
+      + 'When that does not hold, do not.';
   };
 
   const line = (r: typeof v.requirements[number], i: number): string => {
@@ -279,7 +280,11 @@ export function renderAgentSkill(
     const text = isGeneralScope(r.appliesWhen)
       ? r.statement
       : conditionalLine(r.statement, r.appliesWhen);
-    return `${i + 1}. ${text}\n   <!-- ${r.requirementId} · ${prov} -->`;
+    // A rule that needs material the model does not have is where invention happens. `atelier invoke`
+    // refuses before the call; a host serving this file directly cannot be made to, so the file says it.
+    const needs = (r.prerequisites ?? []).map((p) =>
+      `\n   Needs: ${p.why.replace(/[.\s]+$/, '')}. If you were not given it, ask for it. Never invent it.`).join('');
+    return `${i + 1}. ${text}${needs}\n   <!-- ${r.requirementId} · ${prov} -->`;
   };
 
   const avoidSection = bound.length

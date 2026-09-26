@@ -146,7 +146,20 @@ export interface RatificationDecision {
   readonly statement?: string;
   readonly appliesWhen?: string;
   readonly kind?: string;
+  /**
+   * what following this rule truthfully needs from the person — "the real figures for the period".
+   * Becomes a prerequisite: invoke refuses a REQUIRED rule whose material is not bound, and a host
+   * reading the skill is told to ask for it rather than invent it.
+   */
+  readonly needs?: string;
 }
+
+/** "The real figures for the quarter" → "real-figures-quarter": what `--with <name>=<file>` binds. */
+export const prerequisiteName = (why: string): string => {
+  const STOP = new Set(['the', 'a', 'an', 'of', 'for', 'to', 'and', 'or', 'in', 'on', 'with', 'from', 'my', 'our', 'your', 'their', 'any', 'some']);
+  const words = why.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w));
+  return words.slice(0, 4).join('-') || 'material';
+};
 
 
 /**
@@ -188,11 +201,19 @@ export function ratifyBatch(): void {
   }
 
   const raw = flag('--decisions') ?? die('--decisions <json> required — array of '
-    + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?}'
+    + '{id, decision, materiality?, form?, shape?, statement?, appliesWhen?, kind?, needs?}'
     + '\n  Or write a page you can read and mark up:  atelier ratify --page rulings.html');
   let list: RatificationDecision[];
   try { list = JSON.parse(raw) as RatificationDecision[]; } catch { return void die('--decisions is not valid JSON.'); }
+  applyDecisions(list);
+}
 
+/**
+ * Every outstanding proposal, ruled on at once. The batch command, the review screen and the page all
+ * land here, so there is one place a decision becomes part of a standard.
+ */
+export function applyDecisions(list: readonly RatificationDecision[]): void {
+  const s = loadSession();
   const decidedIds = new Set(s.decided.map((d) => d.requirementId));
   const outstanding = s.proposals.filter((p) => !decidedIds.has(p.requirementId)).map((p) => p.requirementId);
   const given = new Set(list.filter((d) => d.id !== 'new' && d.decision).map((d) => d.id!));
@@ -238,6 +259,16 @@ export function ratifyBatch(): void {
         materiality: d.materiality, form: d.form, shape: d.shape, realizes: typeof d.realizes === 'string' ? d.realizes : null,
         findRule: (rid) => s.proposals.find((x) => x.requirementId === rid) ?? decided.find((x) => x.requirementId === rid) });
     } catch (e) { return void die((e as Error).message); }
+    // WHAT THIS RULE NEEDS FROM THE PERSON, DECLARED AT THE MOMENT THEY APPROVE IT. The anti-
+    // fabrication guard (`checkSatisfiable`) had a reader in invoke and a display in plan, and the only
+    // writer in the tree was a test fixture: a rule like "quantify with the awkward real figure" was
+    // approved, served, and satisfied with invented figures. The name is what `--with <name>=<file>`
+    // binds at invocation.
+    if (d.needs?.trim()) {
+      const why = d.needs.trim();
+      outcome = { ...outcome, requirement: { ...outcome.requirement,
+        prerequisites: [{ kind: 'CONTEXT' as const, name: prerequisiteName(why), why }] } };
+    }
     decided.push(outcome.requirement);
     // The record stores what was SHOWN and, on an edit, what replaced it. Storing only the survivor
     // would answer a question the standard already answers.
@@ -409,9 +440,12 @@ export function ratifyClose(): void {
       + ' Mark a rule REQUIRED for it to instruct.');
   }
   if (!instructing) {
-    console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. Every rule is shown, not followed, because none of them');
-    console.log('  carries your decision. A skill built now would instruct nothing.');
-    console.log('  Rule on them first:  atelier pending');
+    // Two different reasons, two different next steps: rules nobody has ruled on yet, and rules that
+    // were ruled on and deliberately not made obligatory.
+    const undecided = kept.filter((r) => r.materiality === null && r.authority === 'DERIVED_UNRATIFIED').length;
+    console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.');
+    if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
+    else console.log('  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:\n    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
   }
   if (!process.env.ATELIER_ORCHESTRATED) {
     console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');

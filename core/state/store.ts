@@ -86,7 +86,12 @@ export function putStandard(l: StoreLayout, v: StandardVersion): void {
  * standard and what they were shown. Keyed by the standard's hash, written once, never replaced.
  */
 export function putLedger(l: StoreLayout, standardVersionHash: string, ledger: RatificationLedger): void {
-  putByHash(join(dirs(l).ledgers, `${standardVersionHash}.json`), standardVersionHash, ledger, 'ratification ledger');
+  // THE FIRST RECORD WINS, as the first mint of a standard does. The same rules ratified again — in
+  // another project, or after an abort — mint the same standard hash with a ledger that differs by
+  // its timestamps, and treating that as a conflicting identity blocked the build permanently.
+  const p = join(dirs(l).ledgers, `${standardVersionHash}.json`);
+  if (existsSync(p)) return;
+  putByHash(p, standardVersionHash, ledger, 'ratification ledger');
 }
 export function getLedger(l: StoreLayout, standardVersionHash: string): RatificationLedger | null {
   const p = join(dirs(l).ledgers, `${standardVersionHash}.json`);
