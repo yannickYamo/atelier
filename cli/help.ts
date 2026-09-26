@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 export const USAGE: Readonly<Record<string, string>> = {
+  new: 'atelier new <folder-of-your-best-work> "<what the skill is for>" [--name <name>] [--reserve <file>]...\n  Read your work, show the rules it found with a suggested ruling for each, and build the skill once you accept. Run it again to continue.',
+  review: 'atelier review [--accept] [--set <id>=<choice>]...\n  The rules waiting for your ruling, with suggestions. --accept records them as shown; --set changes one (reject, approve, required, preferred, exemplar, tolerated, incidental).',
   skill: 'atelier skill "<your rules>" [--name <name>] [--yes]\n  atelier skill --from <path-to-your-work> [--reserve <file>]... [--name <name>]\n  Create a skill from rules you state, or from work you show.',
   create: 'atelier create <path-to-your-work> [--reserve <file>]... [--work-type <type>]\n  Read your work, seal the corpus, and propose rules. Nothing is compiled until you approve.',
   intake: 'atelier intake <path> [--work-type <type>] [--reserve <file>]... [--exclude <file>]... [--dry-run]\n  Read and seal the corpus. Reserved pieces are never read by discovery.',

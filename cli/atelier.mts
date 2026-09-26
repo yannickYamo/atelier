@@ -31,6 +31,8 @@ import { check, profiles, carriers } from './commands/check.js';
 import { reference } from './commands/reference.js';
 import { record } from './commands/record.js';
 import { fix } from './commands/fix.js';
+import { newSkill } from './commands/new.js';
+import { review } from './commands/review.js';
 import { existsSync } from 'node:fs';
 import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
@@ -51,6 +53,8 @@ const EVAL_ONLY: readonly string[] = ['study'];
 
 /** Every command the dispatcher answers. Exported so a test can pin it against the docs. */
 export const COMMANDS: readonly string[] = [
+  'new',
+  'review',
   'abort',
   'skill',
   'plan',
@@ -98,6 +102,8 @@ const main = async (): Promise<void> => {
     return;
   }
   switch (cmd) {
+    case 'new': return newSkill();
+    case 'review': { await review(); return; }
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
     case 'intake': { intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
     case 'discover': return discover();
@@ -189,7 +195,8 @@ const main = async (): Promise<void> => {
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}".\n  commands: ${known}`);
       }
-      console.log('atelier skill "<your rules>"  ·  atelier skill --from <path-to-your-work>     create');
+      console.log('atelier new <folder-of-your-best-work> "<what it is for>"                     create');
+      console.log('  or state it:  atelier skill "<your rules>"');
       console.log('  /<name> or atelier invoke --skill <name> "<task>"                            use');
       console.log('  atelier fix "<what was wrong>"                                               correct');
       console.log('  staged spelling: create <path> · pending · ratify --decisions <json> · ratify-close · build --name <name>');
