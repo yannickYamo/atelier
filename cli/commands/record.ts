@@ -59,15 +59,16 @@ const modelFromTranscript = (path: string | undefined): string | null => {
 };
 
 /**
- * Claude Code names the project root for hook commands in CLAUDE_PROJECT_DIR. Where it does not, the
- * nearest ancestor of the hook's cwd that holds an installed skills directory is the project.
+ * The project a hook belongs to: the nearest ancestor holding an installed skills directory, searched
+ * upward from where Claude Code started. CLAUDE_PROJECT_DIR is only a starting point — outside a git
+ * repository Claude Code sets it to the launch directory, which is the subdirectory itself.
  */
 const hostProjectRoot = (cwd: string | undefined): string | undefined => {
-  if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
-  if (!cwd) return undefined;
-  for (let d = resolve(cwd); ; d = dirname(d)) {
+  const start = cwd ?? process.env.CLAUDE_PROJECT_DIR;
+  if (!start) return undefined;
+  for (let d = resolve(start); ; d = dirname(d)) {
     if (existsSync(join(d, '.claude', 'skills'))) return d;
-    if (dirname(d) === d) return cwd;
+    if (dirname(d) === d) return start;
   }
 };
 
