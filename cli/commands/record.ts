@@ -18,7 +18,7 @@
 // with no model line yields an UNREPORTED observation, never a guess.
 
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 
 import { writeAtomic } from '../../core/state/fs-atomic.js';
@@ -27,7 +27,7 @@ import { observeRuntime, type RuntimeBinding } from '../../core/runtime/binding.
 import { persistInvocation } from '../../core/runtime/record.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
-import { sha, DATA, die, flag, runFile, pickHost } from '../runtime.js';
+import { sha, DATA, die, flag, runFile, pickHost, nearestProject, keyFor } from '../runtime.js';
 
 interface PromptPayload { prompt?: string; cwd?: string; prompt_id?: string; transcript_path?: string }
 interface StopPayload { prompt_id?: string; cwd?: string; transcript_path?: string; last_assistant_message?: string }
@@ -58,31 +58,17 @@ const modelFromTranscript = (path: string | undefined): string | null => {
   return null;
 };
 
-/**
- * The project a hook belongs to: the nearest ancestor holding an installed skills directory, searched
- * upward from where Claude Code started. CLAUDE_PROJECT_DIR is only a starting point — outside a git
- * repository Claude Code sets it to the launch directory, which is the subdirectory itself.
- */
-const hostProjectRoot = (cwd: string | undefined): string | undefined => {
-  const start = cwd ?? process.env.CLAUDE_PROJECT_DIR;
-  if (!start) return undefined;
-  for (let d = resolve(start); ; d = dirname(d)) {
-    if (existsSync(join(d, '.claude', 'skills'))) return d;
-    if (dirname(d) === d) return start;
-  }
-};
-
 export async function record(): Promise<void> {
   const mode = flag('--from-hook') ?? die('atelier record is written by the host hooks, not typed. (--from-hook prompt|stop)');
   let payload: PromptPayload & StopPayload;
   try { payload = JSON.parse(await readStdin()) as PromptPayload & StopPayload; }
   catch { return; }                                   // a malformed hook payload records nothing, loudly nowhere
-  // The hook fires in the project the person is working in; the run's files are keyed by it. That is
-  // the PROJECT ROOT, not the hook's cwd: Claude Code started in a subdirectory reported the
-  // subdirectory, the skill was not found there, and the use was dropped without a trace.
-  const root = hostProjectRoot(payload.cwd);
-  if (root) process.env.ATELIER_PROJECT_DIR = root;
-  const pendingPath = runFile('pending-invocation.json');
+  // The hook fires wherever Claude Code started, which may be a subdirectory of the project the skill
+  // is installed in; outside a git repository CLAUDE_PROJECT_DIR is that same subdirectory. The use
+  // used to be dropped without a trace. The project is found by walking up: at prompt time to the
+  // directory where THIS skill is installed, at stop time to the one holding the pending use.
+  const start = payload.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+  const pendingIn = (d: string): string => join(DATA, 'runs', keyFor(d), 'pending-invocation.json');
 
   if (mode === 'prompt') {
     const m = /^\/([a-z0-9][a-z0-9-]{0,39})(?:\s+([\s\S]*))?$/.exec((payload.prompt ?? '').trim());
@@ -96,8 +82,12 @@ export async function record(): Promise<void> {
     if (!sv || !pkg) return;
     // The delivery question is answered AT THE MOMENT OF USE: were the installed bytes the stored
     // package's? By stop-time the person may have rebuilt, and the answer would describe that.
-    const ver = pickHost().verifyInstallation(pkg, root ?? process.cwd());
-    if (!ver.present) return;                          // installed elsewhere; not this project's use
+    const host = pickHost();
+    const root = nearestProject(start, (d) => host.verifyInstallation(pkg, d).present);
+    if (!root) return;                                 // installed nowhere above here; not this project's use
+    const ver = host.verifyInstallation(pkg, root);
+    process.env.ATELIER_PROJECT_DIR = root;
+    const pendingPath = runFile('pending-invocation.json');
     const pending: PendingInvocation = {
       promptId: payload.prompt_id ?? '', skillName: name, input: (rest ?? '').trim(), at: new Date().toISOString(),
       skillVersionHash: sv.skillVersionHash, standardVersionHash: sv.standardVersionHash,
@@ -110,7 +100,10 @@ export async function record(): Promise<void> {
   }
 
   if (mode !== 'stop') die(`unknown --from-hook "${mode}" (prompt|stop)`);
-  if (!existsSync(pendingPath)) return;
+  const root = nearestProject(start, (d) => existsSync(pendingIn(d)));
+  if (!root) return;
+  process.env.ATELIER_PROJECT_DIR = root;
+  const pendingPath = runFile('pending-invocation.json');
   const pending = readJson<PendingInvocation>(pendingPath, { what: 'the pending invocation', requireKeys: ['promptId', 'skillName'] });
   if (!pending.promptId || pending.promptId !== (payload.prompt_id ?? '')) return;   // a different turn ended
   rmSync(pendingPath, { force: true });

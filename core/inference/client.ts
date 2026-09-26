@@ -211,7 +211,14 @@ export interface InferenceClient {
  * cap never binds and a runaway loop runs until something else stops it. `calls` is the bound that
  * still works there, and it is counted for every provider so the two never disagree.
  */
-export interface Budget { spentUsd: number; readonly capUsd: number; calls?: number; readonly maxCalls?: number }
+export interface Budget {
+  spentUsd: number; readonly capUsd: number; calls?: number; readonly maxCalls?: number;
+  /**
+   * Estimates of calls in flight. Calls run concurrently now, and a cap checked only against what
+   * has already been SPENT would admit every parallel call before the first one reported its cost.
+   */
+  inFlightUsd?: number;
+}
 
 export class CallBudgetExceeded extends Error {
   constructor(public readonly made: number, public readonly max: number) {
@@ -267,13 +274,17 @@ export class UnboundedRuntime extends Error {
  * is what let an unpriced runtime look fully accounted for.
  */
 export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Promise<{ value: T; cost: InferenceCost }>): Promise<T> {
-  if (budget.spentUsd + estimateUsd > budget.capUsd) throw new BudgetExceeded(budget.spentUsd + estimateUsd, budget.capUsd);
+  const inFlight = budget.inFlightUsd ?? 0;
+  if (budget.spentUsd + inFlight + estimateUsd > budget.capUsd) throw new BudgetExceeded(budget.spentUsd + inFlight + estimateUsd, budget.capUsd);
   const used = budget.calls ?? 0;
   if (budget.maxCalls !== undefined && used >= budget.maxCalls) {
     throw new CallBudgetExceeded(used, budget.maxCalls);
   }
   budget.calls = used + 1;
-  const { value, cost } = await fn();
+  budget.inFlightUsd = inFlight + estimateUsd;
+  let result: { value: T; cost: InferenceCost };
+  try { result = await fn(); } finally { budget.inFlightUsd = (budget.inFlightUsd ?? 0) - estimateUsd; }
+  const { value, cost } = result;
   budget.spentUsd += budgetUsd(cost);
   // AFTER ONE CALL, AND NOT BEFORE. What a call costs is reported by the provider, so the first one
   // is what establishes whether a dollar cap is capable of binding this runtime at all. If it is not,

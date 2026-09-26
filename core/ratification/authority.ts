@@ -161,13 +161,25 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
   }
 
   if (d.verb === 'AMEND') {
-    if (!d.statement) throw new Error(`${id}: AMEND records the owner's words; --statement is required.`);
-    const requirement: Requirement = { ...shown, statement: d.statement,
+    // The owner may reword a rule, reweigh it, or both. Reweighing alone was impossible: a rule closed
+    // as PREFERRED could never be made REQUIRED, because the one command that re-rules a closed standard
+    // insisted on new words, and the ledger is append-only everywhere else.
+    if (!d.statement && !d.materiality) {
+      throw new Error(`${id}: AMEND changes the rule's words (--statement) or its weight (--materiality); give at least one.`);
+    }
+    const ob = d.materiality
+      ? validateObligation(id, { ...d, form: d.form ?? shown.realizationTolerance, shape: d.shape ?? shown.outputShape })
+      : null;
+    const requirement: Requirement = { ...shown,
+      ...(d.statement ? { statement: d.statement, authority: 'EXPERT_AUTHORED' as const,
+        provenance: fromPublicSource ? shown.provenance : 'SUBSTANTIVELY_REWRITTEN' as const } : {}),
+      // A weight declared by the owner is a ruling on the rule as it stands.
+      ...(!d.statement && shown.authority === 'DERIVED_UNRATIFIED' ? { authority: 'EXPERT_RATIFIED' as const } : {}),
       ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}),
-      authority: 'EXPERT_AUTHORED',
-      provenance: fromPublicSource ? shown.provenance : 'SUBSTANTIVELY_REWRITTEN' };
+      ...(ob ? { materiality: ob.materiality, realizationTolerance: ob.form, outputShape: ob.shape } : {}) };
     assertAuthorityCeiling(requirement);
-    return { requirement, ledgerDecision: 'EDIT', rewritten: true };
+    // EDIT either way: the requirement changed, and the ledger keeps the before and the after.
+    return { requirement, ledgerDecision: 'EDIT', rewritten: Boolean(d.statement) };
   }
 
   // APPROVE / REWRITE / CONTEXTUAL — a ruling on something proposed.

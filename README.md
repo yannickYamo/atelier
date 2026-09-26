@@ -123,8 +123,10 @@ the real one.
 | setting | what it does |
 |---|---|
 | `ATELIER_DATA` | where standards, skills and runs live (default `~/.atelier`) |
-| `ATELIER_MODEL` | the model for every role, unless a role names its own |
-| `ATELIER_PROPOSER_MODEL` | the model discovery proposes rules with |
+| `ATELIER_MODEL` | the model for every role, unless a more specific setting names one |
+| `ATELIER_DISCOVERY_MODEL`, `ATELIER_TARGET_MODEL` | the model for one role: reading and diagnosing, or running the skill |
+| `ATELIER_PROPOSER_MODEL` | the model discovery proposes rules with; wins over `ATELIER_MODEL` for that one call |
+| `ATELIER_PROVIDER` | `anthropic` (default) or `openai-compatible`; per role as `ATELIER_DISCOVERY_PROVIDER` / `ATELIER_TARGET_PROVIDER` |
 | `ATELIER_BACKEND`, `ATELIER_BASE_URL` | a named backend preset, and the endpoint for an OpenAI-compatible provider |
 | `ATELIER_PRICE_IN`, `ATELIER_PRICE_OUT` | your per-million-token rates, when the shipped table does not know the model |
 | `ATELIER_HOST` | `claude-code` (default) or `codex`: where a built skill is installed |
@@ -198,7 +200,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1283 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1295 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
