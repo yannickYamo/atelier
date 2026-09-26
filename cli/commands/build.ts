@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { verifyText } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
@@ -99,10 +100,20 @@ export function build(nameArg?: string): void {
     else {
       if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
       const text = readFileSync(ex, 'utf8');
-      if (s.reservation?.reserved.some((u) => u.artifact.trim() === text.trim())) {
+      // Compared as text, not bytes: a copy with a BOM, Windows line ends or other whitespace is the same piece.
+      const norm = (t: string): string => t.replace(/^\uFEFF/, '').normalize('NFC').replace(/\r\n?/g, '\n').replace(/\s+/g, ' ').trim();
+      if (s.reservation?.reserved.some((u) => norm(u.artifact) === norm(text))) {
         die('--exemplar names a piece that was reserved to test the skill blind. Pick one discovery was allowed to read.');
       }
+      // The exemplar is what the model imitates, so it should meet the standard it illustrates.
+      const report = verifyText(name, v, text);
+      const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED');
+      if (broken.length) {
+        console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
+          + 'The model will imitate it as it is.');
+      }
       store.setExemplar(L, text);
+      console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
     }
   }
   const pkg0 = renderAgentSkill(v, arch, name, desc, store.getExemplar(L));

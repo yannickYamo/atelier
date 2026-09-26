@@ -368,7 +368,10 @@ export function parseMeasure(spec: string): Measurement {
       const parts = kv.split('=').map((x) => x.trim());
       if (parts.length !== 2 || !parts[0] || !/^\d+(\.\d+)?$/.test(parts[1])) die(`--measure: "${kv}" is not name=number`);
       const n = Number(parts[1]);
-      if (n <= 0) die(`--measure: ${parts[0]} must be greater than zero`);
+      const KEYS: Readonly<Record<string, readonly string[]>> = {
+        SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'] };
+      if (KEYS[observer] && !KEYS[observer].includes(parts[0])) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${parts[0]}"`);
+      if (n <= 0 && !(observer === 'HEDGE_RATE' && n === 0)) die(`--measure: ${parts[0]} must be greater than zero`);
       return [parts[0], n];
     }));
   const m: Measurement = { observer, params };

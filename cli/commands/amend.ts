@@ -115,8 +115,10 @@ export function amend(): void {
   }
   console.log(`\nStandardVersion ${next.standardVersionHash} supersedes ${prev.standardVersionHash}`);
   console.log(`  reason: ${reason}`);
-  console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);
-  console.log(`Labels for that rule do not carry over.`);
+  if (statement || appliesWhen) {
+    console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);
+    console.log(`Labels for that rule do not carry over.`);
+  }
 }
 
 
