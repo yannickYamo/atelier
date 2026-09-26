@@ -49,11 +49,14 @@ const standardOf = (skill: string): StandardVersion => {
 const call = (name: string, args: Record<string, unknown>): { text: string; isError: boolean } => {
   if (name === 'atelier_list_skills') {
     const dir = join(DATA, 'skills');
-    const names = existsSync(dir) ? readdirSync(dir).filter((n) => store.getActive({ root: DATA, skillName: n })) : [];
-    const rows = names.map((n) => {
-      const L: store.StoreLayout = { root: DATA, skillName: n };
-      const sv = store.getSkillVersion(L, store.getActive(L) ?? '');
-      return `${n}  —  ${sv?.description ?? ''}`;
+    // One unreadable skill must not hide the others.
+    const rows = (existsSync(dir) ? readdirSync(dir) : []).flatMap((n) => {
+      try {
+        const L: store.StoreLayout = { root: DATA, skillName: n };
+        const active = store.getActive(L);
+        if (!active) return [];
+        return [`${n}  —  ${store.getSkillVersion(L, active)?.description ?? ''}`];
+      } catch { return [`${n}  —  (unreadable)`]; }
     });
     return { text: rows.length ? rows.join('\n') : 'No skills are built on this machine yet.', isError: false };
   }
@@ -67,6 +70,7 @@ const call = (name: string, args: Record<string, unknown>): { text: string; isEr
   }
   if (name === 'atelier_verify') {
     const text = typeof args.text === 'string' ? args.text : '';
+    if (!text.trim()) return { isError: true, text: 'there is no text to check. An empty input passing would read as a clean result.' };
     const report = verifyText(skill, standardOf(skill), text);
     return { isError: false, text: `${describeVerify(report)}\n\n${JSON.stringify({ failed: report.failed,
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
@@ -75,38 +79,52 @@ const call = (name: string, args: Record<string, unknown>): { text: string; isEr
   throw new Error(`unknown tool "${name}"`);
 };
 
+const SUPPORTED = ['2025-06-18', '2025-03-26', '2024-11-05'];
+
+function handle(req: Rpc): unknown {
+  if (req.id === undefined || req.id === null) return null;            // a notification: nothing to answer
+  if (!req.method) return null;                                         // a response to us: nothing to answer
+  const ok = (result: unknown): unknown => ({ jsonrpc: '2.0', id: req.id, result });
+  try {
+    switch (req.method) {
+      case 'initialize': {
+        // Echo the client's version when it is one we speak; otherwise offer our newest.
+        const asked = typeof req.params?.protocolVersion === 'string' ? req.params.protocolVersion : '';
+        return ok({ protocolVersion: SUPPORTED.includes(asked) ? asked : SUPPORTED[0],
+          capabilities: { tools: {} }, serverInfo: { name: 'atelier', version: version() } });
+      }
+      case 'ping': return ok({});
+      case 'tools/list': return ok({ tools: TOOLS });
+      case 'tools/call': {
+        const name = typeof req.params?.name === 'string' ? req.params.name : '';
+        const args = (req.params?.arguments ?? {}) as Record<string, unknown>;
+        try {
+          const r = call(name, args);
+          return ok({ content: [{ type: 'text', text: r.text }], isError: r.isError });
+        } catch (e) {
+          return ok({ content: [{ type: 'text', text: (e as Error).message }], isError: true });
+        }
+      }
+      default: return { jsonrpc: '2.0', id: req.id, error: { code: -32601, message: `method not found: ${req.method}` } };
+    }
+  } catch (e) {
+    return { jsonrpc: '2.0', id: req.id, error: { code: -32603, message: (e as Error).message } };
+  }
+}
+
 export async function mcp(): Promise<void> {
   const send = (msg: unknown): void => { process.stdout.write(`${JSON.stringify(msg)}\n`); };
   const rl = createInterface({ input: process.stdin });
   for await (const line of rl) {
     if (!line.trim()) continue;
-    let req: Rpc;
-    try { req = JSON.parse(line) as Rpc; } catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); continue; }
-    if (req.id === undefined || req.id === null) continue;              // a notification: nothing to answer
-    const reply = (result: unknown): void => { send({ jsonrpc: '2.0', id: req.id, result }); };
-    try {
-      switch (req.method) {
-        case 'initialize':
-          reply({ protocolVersion: typeof req.params?.protocolVersion === 'string' ? req.params.protocolVersion : '2025-06-18',
-            capabilities: { tools: {} }, serverInfo: { name: 'atelier', version: version() } });
-          break;
-        case 'ping': reply({}); break;
-        case 'tools/list': reply({ tools: TOOLS }); break;
-        case 'tools/call': {
-          const name = typeof req.params?.name === 'string' ? req.params.name : '';
-          const args = (req.params?.arguments ?? {}) as Record<string, unknown>;
-          try {
-            const r = call(name, args);
-            reply({ content: [{ type: 'text', text: r.text }], isError: r.isError });
-          } catch (e) {
-            reply({ content: [{ type: 'text', text: (e as Error).message }], isError: true });
-          }
-          break;
-        }
-        default: send({ jsonrpc: '2.0', id: req.id, error: { code: -32601, message: `method not found: ${req.method}` } });
-      }
-    } catch (e) {
-      send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: (e as Error).message } });
+    let parsed: Rpc | Rpc[];
+    try { parsed = JSON.parse(line) as Rpc | Rpc[]; } catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); continue; }
+    if (Array.isArray(parsed)) {
+      const replies = parsed.map(handle).filter((r) => r !== null);
+      if (replies.length) send(replies);
+    } else {
+      const r = handle(parsed);
+      if (r !== null) send(r);
     }
   }
 }
