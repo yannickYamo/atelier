@@ -10,6 +10,8 @@
 // reconstructed from anything else in the store. Keeping the two jobs in one file made it easy to
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
+import { validateMeasurement } from '../../core/observers/registry.js';
+import type { Measurement, ObserverId } from '../../core/state/canonical-state.js';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
 import { coverageOf, describeCoverage } from '../../core/coverage/standard-coverage.js';
 import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spot.js';
@@ -321,6 +323,32 @@ export function ratifyOne(): void {
   console.log(`${id} ${d.toLowerCase()}.`);
 }
 
+/**
+ * `--measure` in the author's own terms, for a rule they write themselves:
+ *   LEXICON:leverage|utilize|synergy
+ *   SENTENCE_LENGTH:medianMax=15,p90Max=28
+ *   PARAGRAPH_LENGTH:maxSentences=4
+ *   HEDGE_RATE:maxPer1000=3
+ * Declared, never inferred: the statement's words are not read to decide whether it is measurable.
+ */
+export function parseMeasure(spec: string): Measurement {
+  const i = spec.indexOf(':');
+  const observer = (i === -1 ? spec : spec.slice(0, i)).trim().toUpperCase() as ObserverId;
+  const rest = i === -1 ? '' : spec.slice(i + 1);
+  const params: Record<string, number | string[]> = observer === 'LEXICON'
+    ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
+    : Object.fromEntries(rest.split(',').filter(Boolean).map((kv) => {
+      const [k, v] = kv.split('=').map((x) => x.trim());
+      const n = Number(v);
+      if (!k || !Number.isFinite(n)) die(`--measure: "${kv}" is not name=number`);
+      return [k, n];
+    }));
+  const m: Measurement = { observer, params };
+  const problem = validateMeasurement(m);
+  if (problem) die(`--measure ${spec}: ${problem}`);
+  return m;
+}
+
 export function addOne(): void {
   const s = loadSession();
   const statement = flag('--statement') ?? die('--statement required');
@@ -339,9 +367,12 @@ export function addOne(): void {
       + '  GENERATIVE  something to DO      ("lead with the next action")\n'
       + '  BOUNDARY    something NOT to do  ("never open with a preamble")\n'
       + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
+  const measureSpec = flag('--measure');
+  const measurement = measureSpec === undefined ? undefined : parseMeasure(measureSpec);
   const base: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
     kind, authority: 'DERIVED_UNRATIFIED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
-    wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
+    wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null,
+    ...(measurement ? { measurement } : {}) };
   let req: Requirement;
   try { req = decide(base, { verb: 'ADD', materiality: flag('--materiality') }).requirement; }
   catch (e) { return void die((e as Error).message); }

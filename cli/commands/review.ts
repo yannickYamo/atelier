@@ -14,6 +14,7 @@ import { die, argv, flagAll, loadSession } from '../runtime.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { suggest, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
 import { applyDecisions, type RatificationDecision } from './ratify.js';
+import { describeMeasurement } from './verify.js';
 
 const WEIGHTS: Readonly<Record<string, string>> = {
   required: 'REQUIRED', preferred: 'PREFERRED', exemplar: 'EXEMPLAR_ONLY', tolerated: 'TOLERATED', incidental: 'INCIDENTAL',
@@ -80,6 +81,8 @@ export async function review(): Promise<boolean> {
     if (p.evidence) console.log(`       e.g.: "${p.evidence.slice(0, 110)}${p.evidence.length > 110 ? '…' : ''}"`);
     if (meta?.alsoPhrasedAs.length) console.log(`       also read as: ${meta.alsoPhrasedAs[0].slice(0, 100)}`);
     if (r.s.needs) console.log(`       needs from you: ${r.s.needs}  (it will ask for this rather than invent it)`);
+    const measures = describeMeasurement(p);
+    if (measures) console.log(`       measured: ${measures}`);
     console.log(`       → ${label({ decision: r.s.decision, materiality: r.s.materiality })}   ${r.s.why}\n`);
   }
 
