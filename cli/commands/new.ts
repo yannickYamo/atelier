@@ -8,12 +8,17 @@
 // standard says; everything else is machinery that runs itself.
 //
 // Re-entrant: run it again in the same project and it continues from wherever the run stopped, so a
-// person who quit at the review screen does not pay for discovery twice.
+// person who quit at the review screen does not pay for discovery twice. It refuses, rather than
+// continues, when the second call names a different folder: continuing would build from work the
+// person did not just point at.
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { die, argv, flag, positional, loadSession, saveSession, assertReachable, sourceProvenance } from '../runtime.js';
-import { modeFromIntent } from '../../core/ratification/suggest.js';
+import { die, argv, flag, positional, loadSession, saveSession, assertReachable, sourceProvenance, runFile, DATA } from '../runtime.js';
+import { readJson } from '../../core/state/read-json.js';
+import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
+import * as store from '../../core/state/store.js';
+import { measure } from '../../core/observers/registry.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { review } from './review.js';
@@ -21,32 +26,61 @@ import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 import { adoptAllFromPublicSource } from './improve.js';
 
+const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
+
+/** The folder the sealed corpus was read from, for runs that predate recording it. */
+const sealedFrom = (): string | null => {
+  const f = runFile('corpus-paths.json');
+  if (!existsSync(f)) return null;
+  const files = readJson<{ id: string; path: string }[]>(f, { what: 'the sealed corpus paths' });
+  const first = files[0] as { id: string; path: string } | undefined;
+  return first ? first.path.slice(0, first.path.length - first.id.length).replace(/\/$/, '') : null;
+};
+
 export async function newSkill(): Promise<void> {
   const corpus = positional([]) ?? die('usage: atelier new <folder-of-your-best-work> "<what the skill is for>"\n'
     + '  e.g.  atelier new ./posts "write me a blog post in the voice and style of these"');
-  const intent = flag('--intent') ?? positional([corpus]) ?? null;
   const path = resolve(corpus);
   if (!existsSync(path)) die(`there is nothing at ${path}.`);
-  const name = flag('--name') ?? basename(path);
-  const { mode, why } = modeFromIntent(intent ?? '');
+  let s = loadSession();
+
+  // ── THE SAME RUN, OR A REFUSAL — NEVER A SILENT SWITCH ────────────────────────────────────────
+  const from = s.source ?? sealedFrom();
+  if (s.evidence && from && resolve(from) !== path) {
+    die(`this project's run was made from ${from}, not ${path}.\n`
+      + '  To continue that run, point at the same folder.\n'
+      + '  To build a different skill, run this in another project directory, or start over here: atelier abort');
+  }
+
+  const typed = flag('--intent') ?? positional([corpus]) ?? null;
+  const intent = typed ?? s.intent?.text ?? null;
+  const declared = flag('--mode')?.toUpperCase();
+  if (declared && !MODES.includes(declared as SkillMode)) die(`--mode must be one of ${MODES.map((m) => m.toLowerCase()).join(', ')}.`);
+  const read = modeFromIntent(intent ?? '');
+  const mode: SkillMode = (declared as SkillMode | undefined) ?? s.intent?.mode ?? read.mode;
+  if (s.intent && typed && typed !== s.intent.text) {
+    console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
+  }
+  const name = flag('--name') ?? s.skillName ?? basename(path);
 
   process.env.ATELIER_ORCHESTRATED = '1';
-  let s = loadSession();
 
   // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
   if (s.run.state === 'EMPTY' || !s.evidence) {
     assertReachable('discovery');
     if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
-    else console.log(`For: "${intent}" — ${why}.\n`);
+    else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read.why}.\n`);
     // A held-out check without having to know what one is: some of the work is set aside before
-    // anything reads it, unless the person named their own.
+    // anything reads it (when there are six or more pieces), unless the person named their own.
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
     intake(path, flag('--work-type') ?? 'writing');
     s = loadSession();
+    saveSession({ ...s, source: path, ...(intent ? { intent: { text: intent, mode } } : {}) });
+    s = loadSession();
   } else {
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
+    if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
   }
-  if (intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
 
   if (s.run.state === 'CORPUS_SEALED' || s.run.state === 'LIST_SEALED') {
     console.log('\nReading your work…');
@@ -55,9 +89,22 @@ export async function newSkill(): Promise<void> {
   }
 
   if (s.run.state === 'PROPOSED') {
+    if (!s.proposals.length && !s.decided.length) {
+      console.log('Discovery proposed no rules from this work, so there is nothing to build. Add one in your own words:'
+        + '\n  atelier add --statement "<the rule>" --kind GENERATIVE|BOUNDARY    then run this again');
+      return;
+    }
     if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') adoptAllFromPublicSource();
     else if (!(await review())) return;
-    // The purpose becomes how a host decides to load the skill at all.
+    s = loadSession();
+    if (!s.decided.some((d) => d.authority !== 'EXPERT_REJECTED')) {
+      console.log('\nEvery rule was rejected, so there is nothing to build.'
+        + '\n  Add one in your own words:  atelier add --statement "<the rule>" --kind GENERATIVE|BOUNDARY   then run this again'
+        + '\n  Or start over:              atelier abort');
+      return;
+    }
+    // The purpose becomes how a host decides to load the skill at all — from the run, so a second
+    // call without the sentence still carries it.
     if (intent && !argv.includes('--description')) argv.push('--description', `Use when asked to: ${intent.replace(/[.\s]+$/, '')}.`);
     ratifyClose();
     s = loadSession();
@@ -69,10 +116,39 @@ export async function newSkill(): Promise<void> {
   }
 
   if (s.run.state !== 'BUILT') return;
-  console.log(`\nUse it:   /${name} <your task>          (in Claude Code)`);
-  console.log(`          atelier invoke --skill ${name} "<your task>"`);
+  const built = s.skillName ?? name;
+  heldOutCheck(built);
+  console.log(`\nUse it:   /${built} <your task>          (in Claude Code)`);
+  console.log(`          atelier invoke --skill ${built} "<your task>"`);
+  console.log(`Check any text against it:  atelier verify --skill ${built} <file>`);
   console.log(`Correct:  atelier fix "<what was wrong>"`);
   if (s.reservation?.reserved.length) {
-    console.log(`Test it blind against the ${s.reservation.reserved.length} piece(s) held back:  atelier reference --skill ${name}`);
+    console.log(`Compare it blind against the ${s.reservation.reserved.length} piece(s) held back:  atelier reference --skill ${built}`);
+  }
+}
+
+/**
+ * THE FREE CHECK, RUN EVERY TIME. The measured rules are counted against the pieces that were held
+ * back before anything read them: work the author wrote and discovery never saw. A target the
+ * author's own unseen work misses is a target that describes the pieces it was counted from, and the
+ * person should hear that now rather than from a rewrite loop later. Costs nothing: no model is called.
+ */
+function heldOutCheck(skill: string): void {
+  const s = loadSession();
+  const reserved = s.reservation?.reserved ?? [];
+  const L: store.StoreLayout = { root: DATA, skillName: skill };
+  const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  const measured = (v?.requirements ?? []).filter((r) => r.measurement && r.authority !== 'EXPERT_REJECTED');
+  if (!reserved.length || !measured.length) return;
+  console.log(`\nChecked against the ${reserved.length} piece(s) held back before anything read them:`);
+  for (const r of measured) {
+    const m = r.measurement;
+    if (!m) continue;
+    const results = reserved.map((u) => measure(u.artifact, m));
+    const applicable = results.filter((x) => x.verdict !== 'NOT_APPLICABLE');
+    const met = applicable.filter((x) => x.verdict === 'MET').length;
+    console.log(`  ${r.requirementId}  ${applicable.length ? `${met} of ${applicable.length} meet it` : 'not measurable on these pieces'}   ${r.statement.slice(0, 70)}`);
   }
 }

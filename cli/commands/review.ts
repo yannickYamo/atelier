@@ -119,10 +119,17 @@ export async function review(): Promise<boolean> {
 
   const decisions: RatificationDecision[] = rows.map((r) => {
     const f = finalOf(r, changes);
+    const suggested = { decision: r.s.decision, materiality: r.s.materiality, why: r.s.why };
     return f.decision === 'REJECT'
-      ? { id: r.id, decision: 'REJECT' }
-      : { id: r.id, decision: 'APPROVE', materiality: f.materiality ?? 'PREFERRED', ...(r.s.needs ? { needs: r.s.needs } : {}) };
+      ? { id: r.id, decision: 'REJECT', suggested }
+      : { id: r.id, decision: 'APPROVE', materiality: f.materiality ?? 'PREFERRED', suggested, ...(r.s.needs ? { needs: r.s.needs } : {}) };
   });
+  if (changes.size) {
+    console.log(`With your changes: ${[...changes].map(([id]) => `${id} → ${label(finalOf(rows.find((r) => r.id === id) ?? rows[0], changes))}`).join(' · ')}`);
+  }
   applyDecisions(decisions);
+  if (!process.env.ATELIER_ORCHESTRATED) {
+    console.log('Recorded. To build it: atelier new <the same folder>   (or: atelier ratify-close, then atelier build --name <name>)');
+  }
   return true;
 }

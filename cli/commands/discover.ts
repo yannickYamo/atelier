@@ -49,7 +49,6 @@ export async function discover(): Promise<void> {
       + `\n  See where it is: atelier status`);
   }
 
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', 60) };
   const client = clientFor(proposerModel());
   let proposals: Requirement[];
   let proposalMeta: Record<string, ProposalMeta>;
@@ -85,8 +84,19 @@ export async function discover(): Promise<void> {
   const tokOf = (t: string): number => Math.ceil(t.length / 4);
   const proposalIds = new Set(openGoldens.filter((g) => g.role === 'PROPOSAL').map((g) => g.contextId));
   const poolTok = openItems.filter((i) => proposalIds.has(i.id)).reduce((n, i) => n + tokOf(i.text), 0);
-  const heldItems = openItems.filter((i) => !proposalIds.has(i.id));
+  // HELD-OUT ONLY. This counted every piece that was not a proposal, so pieces past the proposer's
+  // one-pass read were quoted as observation calls that never happen, and a 14-piece corpus was
+  // quoted at twice its cost and refused at the default cap.
+  const heldIds = new Set(openGoldens.filter((g) => g.role === 'HELD_OUT').map((g) => g.contextId));
+  const heldItems = openItems.filter((i) => heldIds.has(i.id));
   const heldCount = Math.max(1, heldItems.length);
+  // THE CALL BOUND FOLLOWS THE SPLIT. It was a flat 60, and the split now holds out up to eight
+  // pieces: eight pieces times twelve rules is 96 observation calls, so a larger corpus spent its
+  // budget and stopped at call 60 with nothing saved. The bound is the worst case this run can make —
+  // both vantages, the matcher, every rule the union can keep against every held-out piece — so it
+  // binds a runaway without binding the run it was sized for.
+  const worstCaseCalls = 2 /* vantages */ + 2 /* matcher */ + 24 * heldCount + 4;
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', worstCaseCalls) };
   const heldTok = heldItems.reduce((n, i) => n + tokOf(i.text), 0);
   // ── THE ESTIMATE USES THE RATE THAT WILL ACTUALLY BE CHARGED ──────────────────────────────
   //

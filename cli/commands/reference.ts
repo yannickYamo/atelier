@@ -13,6 +13,7 @@
 // does not reveal; `score` unblinds. One command that did both would let the person scoring see which
 // side was theirs, and a result obtained that way is a different result.
 
+import { BudgetExceeded, CallBudgetExceeded } from '../../core/inference/client.js';
 import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
@@ -240,6 +241,9 @@ async function preparePhase(): Promise<void> {
       outputs.set(a, new Map(reserved.map((u, i) => [u.unitId, recs[i].output])));
       console.log(`  ${a} ready across ${reserved.length} unit(s)`);
     } catch (e) {
+      // Out of budget is not an arm failing: every later arm would fail the same way and be reported
+      // as NOT RUN one by one. Stop, with what was spent.
+      if (e instanceof BudgetExceeded || e instanceof CallBudgetExceeded) throw e;
       failedArms.set(a, (e as Error).message);
       console.log(`  ${a} FAILED — ${(e as Error).message}`);
     }
