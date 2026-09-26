@@ -25,6 +25,7 @@
 // standard it was compiled from. They are constructed, they come from one procedure, and they are
 // not independent draws from any deployment distribution — see the sealed warning in `suite.ts`.
 
+import { observerFor } from '../observers/registry.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { applicabilityModeOf } from '../state/canonical-state.js';
 
@@ -53,7 +54,9 @@ export type ObligationKind =
   /** two requirements meeting in one task, where satisfying one could break the other */
   | 'INTERACTION'
   /** the output must hold a machine-checkable shape */
-  | 'OUTPUT_SHAPE';
+  | 'OUTPUT_SHAPE'
+  /** the output must meet a declared deterministic measurement (see core/observers) */
+  | 'MEASURED';
 
 /**
  * HOW ANYONE WOULD KNOW whether this obligation was met.
@@ -114,7 +117,9 @@ export function obligationsFor(r: Requirement): readonly Obligation[] {
   // this backwards is the inversion that motivated the module, so it is read from `kind` and never
   // from the statement's wording.
   const primary: ObligationKind = r.kind === 'BOUNDARY' ? 'SHOULD_NOT_FIRE' : 'SHOULD_FIRE';
-  out.push({
+  // A measured rule's presence is decided by its count, below. A reader asked the same question in
+  // prose would duplicate it with an instrument that certifies nothing.
+  if (!r.measurement) out.push({
     obligationId: idFor(primary, ids), requirementIds: ids, kind: primary,
     situation: mode === 'GENERAL'
       ? 'an ordinary task of this work type'
@@ -145,6 +150,19 @@ export function obligationsFor(r: Requirement): readonly Obligation[] {
       observation: 'UNQUALIFIED',
       why: 'the edge of a condition is where an implementation reveals how it read the condition, and '
         + 'no automatic verdict is available there',
+    });
+  }
+
+  if (r.measurement) {
+    out.push({
+      obligationId: idFor('MEASURED', ids), requirementIds: ids, kind: 'MEASURED',
+      // Long enough to measure: under three sentences or a hundred words, the observers abstain.
+      situation: mode === 'GENERAL'
+        ? 'a task asking for a finished piece of at least 300 words'
+        : `a task asking for a finished piece of at least 300 words, where this holds: ${r.appliesWhen}`,
+      expectation: `the output must meet: ${observerFor(r.measurement.observer).describe(r.measurement.params)} [measure ${JSON.stringify(r.measurement)}]`,
+      observation: 'DETERMINISTIC',
+      why: 'the owner ratified this rule with a measurement, so its verdict is a count, not a judgement',
     });
   }
 

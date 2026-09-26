@@ -121,3 +121,11 @@ than to the executor or to a reported carrier gap, the boundary leaked.
 | P1 | `atelier check` against Anthropic | VERIFIED | |
 | P2 | `atelier check --provider openai-compatible --backend ollama --model <id>` | VERIFIED, or a named failure | |
 | P3 | the README table | no backend is listed as verified without a run behind it | |
+
+## THE INSTALLED TREE
+
+| # | check | expected | pass? |
+|---|---|---|---|
+| IT1 | build, reject a rule, close and build again; list the skill directory | exactly the files in the new package: no example of the rejected rule | |
+| IT2 | drop any extra file into the installed skill directory, then `atelier inspect --skill <name>` | reports UNCOMPILED FILES naming the file, never "matches" | |
+| IT3 | `/plugin marketplace add yannickYamo/atelier`, `/plugin install atelier@atelier`, then `/my-skill <task>` in a subdirectory of the project | one HOST_PLUGIN record in `atelier history`'s store, and `atelier fix "..."` finds it | |

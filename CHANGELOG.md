@@ -10,6 +10,90 @@ a run in progress may not be.
 
 ### Added
 
+- **`atelier new <folder> "<what it is for>"` — the whole journey in one command.** Reserves part of
+  the work before anything reads it, discovers, and puts every rule on ONE review screen, strongest
+  evidence first, each with a suggested ruling and the reason ("followed in 4 of 5 pieces it never
+  read"). Nothing compiles until the person accepts (Enter, or `p3=reject p5=preferred` on the same
+  line; `--accept` / `--set` for an assistant relaying the person's answer). Accepting mints, builds
+  and installs. Re-entrant: running it again continues from wherever the run stopped.
+- **Suggestions from evidence, never decisions** (`core/ratification/suggest.ts`): the purpose sentence
+  sets a mode (generate / guard / respond) that moves only the default weight; held-out recurrence and
+  cross-vantage agreement set the rest. A conditional rule for a support-style skill is suggested as
+  shown, not instructed, unless the evidence is strong — the measured restraint weak spot.
+- **Prerequisites have a writer.** Discovery asks what each rule needs from the person; ruling on it
+  declares a prerequisite; `invoke` refuses a REQUIRED rule without it, `--with name=file` now sends
+  the file's contents, and SKILL.md tells a host to ask rather than invent.
+- **`amend --materiality`**: a closed PREFERRED rule can be made REQUIRED (recorded supersession).
+- **`<command> --help`, `--version`**, answered before dispatch.
+- **The plugin installs**: `/plugin marketplace add yannickYamo/atelier`, `/plugin install atelier@atelier`.
+
+- **Measured rules** (`core/observers/`): deterministic observers whose verdict is a fact about the
+  text — banned words and substitution lists (LEXICON), sentence length, paragraph length, hedging —
+  each returning the exact spans that broke the rule. Discovery counts the measurable part of the
+  corpus and proposes it on the review screen with how many of the author's own pieces meet it,
+  including a stock-phrase ban built only from phrases the author never uses. `add --measure` lets an
+  author declare one on their own rule. A measured rule is tested by a count, never a reader, and its
+  target is stated in SKILL.md.
+- **`atelier verify --skill <name> <file>`** (or stdin, `--json`): any text against every measured
+  rule, with spans; exits 1 on a broken REQUIRED rule. After `atelier new` builds, the measured rules
+  are checked for free against the pieces held back.
+- **A census for dark fields**: every optional Requirement field must have a writer on a reachable path.
+
+- **Generate, check, repair** (`core/loop/`): every `invoke` counts the draft against each measured
+  rule and rewrites ONLY the spans that break a REQUIRED one (sentence-grown, spliced back
+  deterministically, at most two passes); a rewrite that breaks anything that held is discarded. The
+  record keeps what the model first wrote and what changed. `--no-repair` opts out.
+- **The same loop in Claude Code**: the plugin's Stop hook counts the answer and, once, sends it back
+  with only the spans to rewrite (verified live against a real Claude Code session).
+- **`atelier mcp`**: the checker as MCP tools (`atelier_verify`, `atelier_rules`,
+  `atelier_list_skills`), registered by the plugin; read-only, no model called.
+- **`fix` decides by count when the rule is measured**: a candidate implementation is kept only if it
+  meets the moved rule where the current one did not and breaks nothing that held; recorded as a
+  DETERMINISTIC observation. Only ties go to a person.
+- **Exemplar carrier**: `build --exemplar <file>` ships one complete piece of the owner's, read first
+  for voice and never for content; carried through every rebuild; a reserved piece is refused.
+
+- **The proof study, drafted** (`studies/PROOF_STUDY_PREREGISTRATION.md`, DRAFT until the owner seals
+  it): recall of discovery against the owner's hand-built house standard as a sealed answer key
+  (`scripts/recall-sheet.mts`, which refuses to open the key before discovery has finished), the
+  shipped loop against a model's own guide (`atelier reference --loop`), and a deterministic
+  measured-rule table per arm, whole piece and first vs last third (`scripts/measured-conformance.mts`).
+
+### Changed (product phases, 2026-09-26)
+
+- **The discovery split scales with the corpus**: about a third held out (capped at 8), everything
+  else read up to a one-pass token cap, overflow named. It was two pieces proposed, whatever the size.
+- **Discovery, `reference` and `contract` run calls concurrently**, with the budget reserving in-flight
+  estimates. `contract` prints each case as it lands and resumes from a progress file; `reference`
+  isolates a failed arm and reports every comparison that could not run instead of discarding all six.
+- **`check` verifies the models discovery actually runs**; every diagnosing command resolves its model
+  through one function.
+- The review, `pending` and coverage views read discovery's grouping and held-out recurrence, which
+  were computed and then dropped.
+
+### Removed (product phases, 2026-09-26)
+
+- **The taste-discovery ladder** (priority fold, blueprint assembly, the dark discrimination channel,
+  the methodology fold and the method-registry class): reachable only through `import type`, never
+  executed, and capped at ADVISORY by construction. Evidence to weight now runs through the review
+  screen's suggestion and the person's ruling.
+
+### Fixed (product phases, 2026-09-26)
+
+- **Rejected rules shipped inside the installed skill.** Installs were additive; the directory is now
+  exactly the package, and `inspect` fails on any file the package does not name. Nothing Atelier did
+  not write is ever deleted: it is moved to `.atelier-backups/` and named.
+- `--reserve a --reserve b` kept only `b`; a single-valued option given twice is now refused.
+- `abort --help` aborted the run; `discover --help` spent budget.
+- A re-entered `fix`/`improve` complaint lost its record in a bare `catch`.
+- `npm run build` left the linked binary non-executable, silently breaking every hook.
+- A `/skill` use from a subdirectory was dropped; `fix` in a subdirectory found nothing.
+- The ratification ledger is kept beside the standard it produced and shown by `history`.
+- `ANTHROPIC_AUTH_TOKEN` is accepted.
+- A second `ratify-close` on a standard you wrote yourself asked for `--work-type` again.
+
+### Added (earlier in this release)
+
 - **`atelier fix` — one correction path.** A complaint goes in; Atelier resolves the latest
   recorded use (and says which), diagnoses, and either repairs the implementation — one lateral
   carrier candidate, the same task re-run, a blinded A/B, one keystroke, the winner active AND

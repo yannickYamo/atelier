@@ -175,7 +175,10 @@ describe('the numbers in prose', () => {
       for (const m of read(doc).matchAll(/([0-9]{3,}) tests/g)) {
         const n = Number(m[1]);
         expect(n, `${doc} says ${n} tests; ${written} are written in tests/`).toBeGreaterThanOrEqual(written);
-        expect(n - written, `${doc} says ${n}, only ${written} are written`).toBeLessThanOrEqual(15);
+        // The slack is for parameterised tests: an `it.each` or `describe.each` is written once and runs
+        // once per row, so the suite reports more tests than a static count finds. Forty covers the rows
+        // in the tree today; a README claim beyond that is drift, not parameterisation.
+        expect(n - written, `${doc} says ${n}, only ${written} are written`).toBeLessThanOrEqual(40);
       }
     }
 

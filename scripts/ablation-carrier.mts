@@ -188,7 +188,7 @@ async function arm(id: ArmId, tasks: readonly string[], budget: Budget): Promise
     const rec = await runOnce(
       L, { skillVersionHash: `k-${id}`, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash },
       pkg.runtime['SKILL.md'], 'p', { expectedPackageHash: 'p', servedPackageHash: 'p', matched: true, servedFiles: [] },
-      task, client, budget, binding, 'HARNESS_GENERATED',
+      task, client, budget, binding, 'DEV_PROBE',
       pkg.runtime['contracts/output.schema.json'] ?? null,
     );
     const m = measure(rec.output);

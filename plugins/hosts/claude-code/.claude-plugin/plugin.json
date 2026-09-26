@@ -1,0 +1,17 @@
+{
+  "name": "atelier",
+  "version": "0.2.0",
+  "description": "Proposes what makes your work yours, you ratify it, and it builds a portable skill. Ships with an optional experiment.",
+  "author": {
+    "name": "Atelier"
+  },
+  "license": "MIT",
+  "keywords": [
+    "writing",
+    "standards",
+    "authorship",
+    "agent-skills"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

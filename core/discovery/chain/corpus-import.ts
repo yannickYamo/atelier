@@ -68,22 +68,66 @@ export interface ImportPlan {
   readonly refusals: readonly string[];
   /** what the user is told, in their language, with no branch question */
   readonly summary: string;
+  /** usable pieces past what the proposer reads in one pass — named, never silently dropped */
+  readonly unread?: readonly string[];
 }
 
 /** Below this a "golden" is a fragment, not an example of finished work. */
 export const MIN_GOLDEN_CHARS = 200;
 
-function assignRoles(ids: readonly string[]): GoldenRef[] {
-  // Sorted, then the first MIN_PROPOSAL propose and the remainder are held out. Deterministic and
-  // content-blind by construction: the ordering depends only on identifiers.
-  const sorted = [...ids].sort();
-  return sorted.map((contextId, i) => ({
-    contextId,
-    role: i < MIN_PROPOSAL_GOLDENS ? 'PROPOSAL' : 'HELD_OUT',
-  }));
+/**
+ * THE SPLIT SCALES WITH THE CORPUS. It used the MINIMUM as the value: two pieces proposed, whatever the
+ * corpus held, so forty documents yielded rules read off the two whose filenames sorted first and
+ * nothing in pieces three to forty could ever be proposed. "Point it at a folder of your best work"
+ * was untrue in exactly the case it is said about.
+ *
+ * Now roughly a third is held out to check the proposals (never fewer than two, never more than
+ * MAX_HELD_OUT, because every held-out piece is observed against every rule and that is where the cost
+ * lands), and everything else is read — up to what the proposer can read in one pass. The defaults
+ * are the ones a person gets without being asked; `heldOut` overrides the count.
+ *
+ * Still content-blind: which piece lands where depends only on the sorted identifiers. Held-out
+ * pieces are taken at an even stride through that order rather than as its tail, because names often
+ * carry dates, and a tail would test last year's rules only on this year's work.
+ */
+export const HELD_OUT_SHARE = 0.3;
+export const MAX_HELD_OUT = 8;
+/** What the proposer is given in one read, in tokens (~4 characters each). Beyond it, pieces wait. */
+export const PROPOSAL_POOL_TOKENS = 100_000;
+
+export interface SplitOptions {
+  /** held-out count, when the author declares one */
+  readonly heldOut?: number;
+  readonly poolTokens?: number;
 }
 
-export function planImport(material: readonly ImportedMaterial[]): ImportPlan {
+export function assignRoles(goldens: readonly { readonly id: string; readonly text: string }[], opts: SplitOptions = {}): {
+  readonly refs: GoldenRef[]; readonly unread: readonly string[];
+} {
+  const sorted = [...goldens].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const n = sorted.length;
+  const maxHeld = n - MIN_PROPOSAL_GOLDENS;
+  const want = opts.heldOut ?? Math.min(MAX_HELD_OUT, Math.round(n * HELD_OUT_SHARE));
+  const h = Math.max(MIN_HELD_OUT_GOLDENS, Math.min(maxHeld, want));
+  const heldIdx = new Set<number>();
+  for (let k = 0; k < h; k++) heldIdx.add(Math.floor(((k + 0.5) * n) / h));
+  const cap = opts.poolTokens ?? PROPOSAL_POOL_TOKENS;
+  const refs: GoldenRef[] = [];
+  const unread: string[] = [];
+  let pool = 0;
+  sorted.forEach((g, i) => {
+    if (heldIdx.has(i)) { refs.push({ contextId: g.id, role: 'HELD_OUT' }); return; }
+    const tok = Math.ceil(g.text.length / 4);
+    const proposing = refs.filter((r) => r.role === 'PROPOSAL').length;
+    // The floor is honoured even past the cap: two pieces is what makes a pattern a pattern.
+    if (proposing >= MIN_PROPOSAL_GOLDENS && pool + tok > cap) { unread.push(g.id); return; }
+    pool += tok;
+    refs.push({ contextId: g.id, role: 'PROPOSAL' });
+  });
+  return { refs, unread };
+}
+
+export function planImport(material: readonly ImportedMaterial[], opts: SplitOptions & { readonly reserved?: readonly string[] } = {}): ImportPlan {
   const goldens = material.filter(m => m.kind === 'GOLDEN');
   const rejected = material.filter(m => m.kind === 'REJECTED');
   const methodology = material.filter(m => m.kind === 'METHODOLOGY');
@@ -96,7 +140,9 @@ export function planImport(material: readonly ImportedMaterial[]): ImportPlan {
     refusals.push(`"${t.id}" is too short to be an example of finished work — we would be reading a fragment`);
   }
 
-  const usable = goldens.filter(g => g.text.trim().length >= MIN_GOLDEN_CHARS);
+  // Reserved pieces take no role at all: nothing in discovery reads them, not even the observer.
+  const reserved = new Set(opts.reserved ?? []);
+  const usable = goldens.filter(g => g.text.trim().length >= MIN_GOLDEN_CHARS && !reserved.has(g.id));
   const need = MIN_PROPOSAL_GOLDENS + MIN_HELD_OUT_GOLDENS;
   if (usable.length < need) {
     refusals.push(
@@ -109,7 +155,8 @@ export function planImport(material: readonly ImportedMaterial[]): ImportPlan {
     refusals.push('we have examples you rejected but none you consider good — we can only learn what you want by contrast with work you would ship');
   }
 
-  const refs = refusals.length ? [] : assignRoles(usable.map(g => g.id));
+  const split = refusals.length ? { refs: [], unread: [] } : assignRoles(usable, opts);
+  const refs = split.refs;
 
   return {
     journey,
@@ -118,7 +165,8 @@ export function planImport(material: readonly ImportedMaterial[]): ImportPlan {
     methodologyCount: methodology.length,
     existingSkillId: skill?.id,
     refusals,
-    summary: buildSummary(journey, refs, rejected.length, methodology.length, skill?.id, refusals),
+    unread: split.unread,
+    summary: buildSummary(journey, refs, rejected.length, methodology.length, skill?.id, refusals, split.unread),
   };
 }
 
@@ -129,6 +177,7 @@ function buildSummary(
   methodologyCount: number,
   skillId: string | undefined,
   refusals: readonly string[],
+  unread: readonly string[] = [],
 ): string {
   if (refusals.length) {
     return `We cannot start yet.\n\n${refusals.map(r => `- ${r}`).join('\n')}`;
@@ -148,5 +197,6 @@ function buildSummary(
     + `We will read **${proposal}** of your examples to find candidate patterns, and keep **${heldOut}** back\n`
     + `to check them against work the analysis has not seen. That split is why a pattern we report is a\n`
     + `finding rather than a restatement of the examples we read.\n`
-    + (extras.length ? `\nAlso using: ${extras.join('; ')}.\n` : '');
+    + (extras.length ? `\nAlso using: ${extras.join('; ')}.\n` : '')
+    + (unread.length ? `\n${unread.length} more piece(s) are past what the proposer reads in one pass and are not read: ${unread.join(', ')}.\n` : '');
 }

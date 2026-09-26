@@ -22,6 +22,8 @@
 // the first is not, and because three model-based instruments in this programme produced zero
 // abstentions across 150 observations when asked the first kind of question.
 
+import { measure } from '../observers/registry.js';
+import type { Measurement } from '../state/canonical-state.js';
 import type { InferenceClient, Budget, InferenceTermination } from '../inference/client.js';
 import { spend, isReadableTermination, GenerationIncomplete } from '../inference/client.js';
 import type { ContractTestCase, ContractResult, ContractTestSuite, SuiteRole } from './suite.js';
@@ -185,6 +187,15 @@ export async function runCase(
   // polarity depend on which casing an obligation happened to use, and would invert silently the
   // first time somebody reworded a sentence.
   const negative = c.obligationKind === 'SHOULD_NOT_FIRE' || c.obligationKind === 'SHOULD_NOT_APPLY';
+
+  if (c.obligationKind === 'MEASURED') {
+    const m = JSON.parse(/\[measure (\{.*\})\]\s*$/.exec(c.expectation)?.[1] ?? 'null') as Measurement | null;
+    if (!m) return { caseId: c.caseId, output, validity, verdict: 'UNOBSERVED', evidence: null, why: 'the case carries no measurement to apply' };
+    const r = measure(output, m);
+    return { caseId: c.caseId, output, validity,
+      verdict: r.verdict === 'NOT_APPLICABLE' ? 'UNOBSERVED' : r.verdict === 'MET' ? 'PASS' : 'FAIL',
+      evidence: r.spans[0]?.text ?? null, why: r.detail };
+  }
 
   if (c.observation === 'DETERMINISTIC') {
     const { ok, why } = checkShape(output, c.expectation);

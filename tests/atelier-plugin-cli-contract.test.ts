@@ -60,8 +60,8 @@ describe('the plugin may only call commands the CLI implements', () => {
   // it passes vacuously, which is worse than absent.
 
   it('both generated plugin trees stay in sync with the same source', () => {
-    const c = walk('plugins/dist/claude-code/skills').map((p) => p.split('/').slice(-2).join('/')).sort();
-    const x = walk('plugins/dist/codex/skills').map((p) => p.split('/').slice(-2).join('/')).sort();
+    const c = walk('plugins/hosts/claude-code/skills').map((p) => p.split('/').slice(-2).join('/')).sort();
+    const x = walk('plugins/hosts/codex/skills').map((p) => p.split('/').slice(-2).join('/')).sort();
     expect(c).toEqual(x);
   });
 });

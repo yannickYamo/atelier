@@ -27,8 +27,9 @@
  * authored methodology sections unreachable in any serving context, roughly 143,700 tokens the user
  * was never receiving. Invisible to reading the output; findable only by checking.
  *
- * WHY THIS MODULE EXISTS RATHER THAN A DIRECT WIRE. `sweepMethodologies()` needs a `MethodRegistry`
- * of `MethodSpec`s carrying obligations WITH SIGNATURES. For our own skills those can be authored.
+ * WHY THIS MODULE EXISTS RATHER THAN A DIRECT WIRE. The methodology channel needs `MethodSpec`s
+ * carrying obligations WITH SIGNATURES (the registry and sweep that consumed them were deleted with
+ * the taste ladder on 2026-09-26). For our own skills those can be authored.
  * For a user's folder they must be derived from their documents, so the methodology channel is a
  * second discovery step — of methods rather than taste — and it deserves its own contract.
  *
