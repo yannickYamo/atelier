@@ -64,6 +64,10 @@ export async function newSkill(): Promise<void> {
   const name = flag('--name') ?? s.skillName ?? basename(path);
 
   process.env.ATELIER_ORCHESTRATED = '1';
+  // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.
+  const cap = flag('--cap') ?? s.cap ?? null;
+  if (cap && !argv.includes('--cap')) argv.push('--cap', cap);
+  if (cap && cap !== s.cap && s.run.state !== 'EMPTY') { saveSession({ ...s, cap }); s = loadSession(); }
 
   // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
   if (s.run.state === 'EMPTY' || !s.evidence) {
@@ -75,7 +79,7 @@ export async function newSkill(): Promise<void> {
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
     intake(path, flag('--work-type') ?? 'writing');
     s = loadSession();
-    saveSession({ ...s, source: path, ...(intent ? { intent: { text: intent, mode } } : {}) });
+    saveSession({ ...s, source: path, ...(cap ? { cap } : {}), ...(intent ? { intent: { text: intent, mode } } : {}) });
     s = loadSession();
   } else {
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
