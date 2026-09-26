@@ -14,7 +14,7 @@
  * seeds are DERIVED_UNRATIFIED (model/extraction-proposed, provenance-linked), never
  * claimed EXPERT_AUTHORED here.
  *
- * CONSUMER: methodology-evidence.ts assesses presence/applicability/execution against a
+ * CONSUMER (historical): methodology-evidence.ts, deleted 2026-09-26 with the taste ladder, assessed presence/applicability/execution against a
  * registered MethodSpec; the aggregation stage folds MethodologyEvidence into the Blueprint.
  */
 import type { ConstructScope } from './construct-scope.js';
@@ -44,23 +44,6 @@ export interface MethodSpec {
   readonly provenance: { readonly authoredBy: string; readonly sourceRef?: string };
 }
 
-/** A DERIVED_UNRATIFIED method's REQUIRED necessity is a PROPOSAL — never enforced as load-bearing. */
-export function canBeRequired(m: MethodSpec): boolean {
-  return m.authority !== 'DERIVED_UNRATIFIED';
-}
-/** A DERIVED_UNRATIFIED method cannot authorize a repair (mirrors TasteFactor law 4). */
-export function canAuthorizeRepair(m: MethodSpec): boolean {
-  return m.authority !== 'DERIVED_UNRATIFIED';
-}
-
-export class MethodRegistry {
-  private readonly methods = new Map<string, MethodSpec>();
-  register(m: MethodSpec): void {
-    if (!m.constructScope.standardDimensions?.length) throw new Error(`method '${m.id}' must declare a construct scope (no universal methods)`);
-    this.methods.set(m.id, m);
-  }
-  get(id: string): MethodSpec | undefined { return this.methods.get(id); }
-  ids(): string[] { return [...this.methods.keys()]; }
-  /** methods whose declared scope covers a standard dimension — the candidate set for a situation. */
-  forDimension(dim: string): MethodSpec[] { return [...this.methods.values()].filter((m) => m.constructScope.standardDimensions.includes(dim)); }
-}
+// The registry class and its authority guards (`canBeRequired`, `canAuthorizeRepair`) served only the
+// taste ladder's methodology fold, deleted with it on 2026-09-26. The types above are still read by
+// the methodology channel (`run-methods.ts`, `method-extraction.ts`).

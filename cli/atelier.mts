@@ -33,6 +33,7 @@ import { record } from './commands/record.js';
 import { fix } from './commands/fix.js';
 import { newSkill } from './commands/new.js';
 import { review } from './commands/review.js';
+import { verify } from './commands/verify.js';
 import { existsSync } from 'node:fs';
 import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
@@ -55,6 +56,7 @@ const EVAL_ONLY: readonly string[] = ['study'];
 export const COMMANDS: readonly string[] = [
   'new',
   'review',
+  'verify',
   'abort',
   'skill',
   'plan',
@@ -104,6 +106,7 @@ const main = async (): Promise<void> => {
   switch (cmd) {
     case 'new': return newSkill();
     case 'review': { await review(); return; }
+    case 'verify': return verify();
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
     case 'intake': { intake(argv[1] ?? die('usage: atelier intake <path> [--work-type <type>]'), process.argv.includes('--work-type') ? process.argv[process.argv.indexOf('--work-type') + 1] : 'writing'); return; }
     case 'discover': return discover();
