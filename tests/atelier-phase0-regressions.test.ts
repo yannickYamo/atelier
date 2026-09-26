@@ -94,8 +94,65 @@ describe('a conditional rule reads as English', () => {
   } as unknown as StandardVersion;
   const md = renderAgentSkill(v, compileArchitecture(v), 'voice', 'd').files['SKILL.md'];
 
-  it('the author\'s "I" survives, the semicolon is resolved, and both branches are stated', () => {
-    expect(md).toContain('Only when final paragraph, and the story invites a generic best-practice moral: I close by refusing the obvious takeaway. Otherwise, don\'t.');
+  it('the author\'s "I" survives, the join reads as English, and the measured two-branch frame is kept', () => {
+    expect(md).toContain('When final paragraph and the story invites a generic best-practice moral, I close by refusing the obvious takeaway. When that does not hold, do not.');
     expect(md).not.toMatch(/\bi close\b/);
+  });
+});
+
+// ── Found by the Phase 0 gap audit ─────────────────────────────────────────────────────────────
+import * as store from '../core/state/store.js';
+import { mkdirSync } from 'node:fs';
+
+const runIn = (data: string, cwd: string, ...args: string[]): string => {
+  const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data };
+  delete env.ATELIER_PROJECT_DIR; delete env.CLAUDE_PROJECT_DIR;
+  try { return execFileSync('node', [CLI, ...args], { encoding: 'utf8', cwd, env }); }
+  catch (e) { const err = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${err.status}\n${err.stderr ?? ''}${err.stdout ?? ''}`; }
+};
+
+describe('a command typed in a subdirectory finds the project run above it', () => {
+  it('status in docs/ reports the run made at the project root', () => {
+    const { data, proj } = fresh();
+    runIn(data, proj, 'add', '--statement', 'Lead with the action.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL');
+    const sub = join(proj, 'docs', 'drafts');
+    mkdirSync(sub, { recursive: true });
+    const out = runIn(data, sub, 'status');
+    expect(out).toMatch(/decided 1/);
+    expect(out).toContain(`project ${proj}`);
+  });
+});
+
+describe('a closed rule can be reweighed', () => {
+  it('amend --materiality REQUIRED makes a PREFERRED rule instruct, as a recorded supersession', () => {
+    const { data, proj } = fresh();
+    run(data, proj, 'add', '--statement', 'Open with a scene.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL', '--materiality', 'PREFERRED');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'demo');
+    const out = run(data, proj, 'amend', '--skill', 'demo', '--rule', 'x1', '--materiality', 'REQUIRED', '--reason', 'it is not optional');
+    expect(out).toMatch(/weight PREFERRED -> REQUIRED/);
+    const text = run(data, proj, 'plan', '--skill', 'demo', '--json');
+    const plan = JSON.parse(text.slice(text.lastIndexOf('\n{'))) as { rows: { materiality: string; gateRole: string }[] };
+    expect(plan.rows[0].materiality).toBe('REQUIRED');
+    expect(plan.rows[0].gateRole).toBe('ENFORCE');
+  });
+});
+
+describe('the ledger store', () => {
+  it('the first ledger for a standard wins; a second, differing only by time, does not block the build', () => {
+    const root = mkdtempSync(join(tmpdir(), 'atelier-ledger-'));
+    const L: store.StoreLayout = { root, skillName: 'demo' };
+    const rec = (at: string) => ({ standardDraftHash: 'd', records: [{ requirementId: 'p1', decision: 'APPROVE', decidedAt: at, resultingStandardVersionHash: 's1' }] }) as never;
+    store.putLedger(L, 's1', rec('2026-01-01'));
+    expect(() => { store.putLedger(L, 's1', rec('2026-02-02')); }).not.toThrow();
+    expect(JSON.stringify(store.getLedger(L, 's1'))).toContain('2026-01-01');
+  });
+});
+
+describe('a value is not an option', () => {
+  it('a statement that spells --name does not trip the duplicate-option refusal', () => {
+    const { data, proj } = fresh();
+    const out = run(data, proj, 'add', '--statement', '--name', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL', '--name', 'x');
+    expect(out).not.toMatch(/given more than once/);
   });
 });

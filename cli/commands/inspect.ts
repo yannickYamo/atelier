@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { describeBackup } from '../../adapters/install-tree.js';
 import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
 import { survival } from '../../core/ratification/decision-record.js';
 import * as store from '../../core/state/store.js';
@@ -87,6 +88,7 @@ export function rollback(): void {
     ?? die(`package ${sv.materializedHash} is not in the store, so ${to} cannot be reinstalled as it was built. `
       + `This version predates package persistence. Nothing was changed — the active pointer is untouched.`);
   const r = pickHost().install(pkg, projectDir());
+  { const moved = describeBackup(r); if (moved) console.log(moved); }
   if (!r.ok) return void die(`reinstall failed: ${r.reason}`);
   store.setActive(L, to);
   console.log(`rolled back to ${to}. Reinstalled package ${sv.materializedHash}, the one it built.`);

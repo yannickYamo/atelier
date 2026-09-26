@@ -28,7 +28,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, MODEL, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel } from '../runtime.js';
 import type { InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -114,7 +114,7 @@ export async function improve(): Promise<void> {
   // The standard THAT RAN, not the current one. A complaint is about the version that produced it.
   const ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.5), maxCalls: numericFlag('--max-calls', 12) };
-  const client = clientFor(flag('--model') ?? MODEL);
+  const client = clientFor(diagnoserModel());
   const d = await diagnose(client, budget, ranStandard, inv, fb);
 
   console.log(`\ndiagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
