@@ -21,7 +21,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
-import { sha, die, argv, proposerModel, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
+import { sha, die, argv, proposerModel, type ProposalMeta, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -51,6 +51,7 @@ export async function discover(): Promise<void> {
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', 60) };
   const client = clientFor(proposerModel());
   let proposals: Requirement[];
+  let proposalMeta: Record<string, ProposalMeta>;
 
   // ─── THE SPLIT IS USED WHENEVER THE CORPUS ALLOWS IT ────────────────────────────────────────
   //
@@ -170,6 +171,9 @@ export async function discover(): Promise<void> {
       }
       console.log(`\nThese are defects, not opinions. Candidates are still shown; you are deciding on them either way.`);
     }
+    proposalMeta = Object.fromEntries(union.members.map((m, i) => [`p${i + 1}`, {
+      framings: m.framings, alsoPhrasedAs: m.rules.slice(1).map((r) => r.rule.statement),
+      heldOut: null, needs: null } satisfies ProposalMeta]));
     proposals = union.members.map((m, i) => {
       const r = m.rules[0].rule;
       return {
@@ -181,6 +185,17 @@ export async function discover(): Promise<void> {
   } else {
     console.log(`\nProposed from ${chain.proposalIds.length} piece(s): ${chain.proposalIds.join(', ')}`);
     console.log(`Checked against ${chain.heldOutIds.length} the proposer never saw: ${chain.heldOutIds.join(', ')}  (${chain.observeCalls} checks)`);
+    proposalMeta = Object.fromEntries(chain.hypotheses.map((h, i) => {
+      const d = h.hypothesis.description;
+      const member = chain.framingUnion?.members.find((m) => m.rules.some((r) => r.rule.description === d));
+      const factor = chain.proposed.find((f) => f.description === d);
+      const applicable = h.golden.filter((g) => g.applicable).length;
+      return [`p${i + 1}`, {
+        framings: member?.framings ?? [],
+        alsoPhrasedAs: (member?.rules ?? []).map((r) => r.rule.description).filter((x) => x !== d),
+        heldOut: { applicable, present: h.golden.filter((g) => g.applicable && g.present).length },
+        needs: factor?.needs?.trim() ? factor.needs.trim() : null } satisfies ProposalMeta];
+    }));
     proposals = chain.hypotheses.map((h, i) => ({
       requirementId: `p${i + 1}`, statement: h.hypothesis.description,
       appliesWhen: h.hypothesis.appliesWhen.map((x) => x.describe).join('; ') || 'GENERAL',
@@ -230,7 +245,7 @@ export async function discover(): Promise<void> {
   //
   // Ordering is the fix, not a bigger try. Once inference has been spent, its result is written
   // before any step that may fail, so no later refusal can reach back and delete it.
-  saveSession({ ...s, run: (t as { run: Run }).run, proposals });
+  saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
     try {

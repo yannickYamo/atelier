@@ -136,17 +136,26 @@ the real one.
 
 Three verbs. Everything else is machinery you can inspect and never have to operate.
 
-**Create.** Two ways in, one system:
+**Create.** A folder of your best work, and a sentence saying what the skill is for:
 
 ```bash
-atelier skill "lead with the action, number the steps when there are steps"   # state it
-atelier skill --from ./my-best-work --reserve held-out.md                     # show it
+atelier new ./my-best-work "write me a blog post in the voice and style of these"
+atelier new ./support-replies "customer support needs to always answer this way"
+atelier new ./approved-copy "ensure all content outputs follow these"
 ```
 
-Atelier splits what you gave it into rules and **compiles nothing until you say yes**. Rules
-grounded in your own words instruct the model. Anything that is the machine's reading is labelled
-as such and shown without instructing, until you declare otherwise. On the taste path you rule on
-every proposal (mine, not mine, in my words, only when) and on how much each one matters.
+Atelier holds some of the work back before anything reads it, reads the rest for the decisions
+behind it, and shows you every rule it found on one screen, strongest evidence first, each with the
+ruling the evidence suggests and why ("followed in 4 of 5 pieces it never read"). **Nothing is
+compiled until you accept.** Press Enter to accept them as shown, or change any on the same line
+(`p3=reject p5=preferred`). A REQUIRED rule instructs the model; the others are shown to it as
+examples. A rule that needs material only you have ("the real figures") is marked, and the skill
+asks for it instead of inventing it. Accepting builds and installs the skill. Run the same command
+again to pick up wherever you stopped.
+
+If you would rather state the rules than show them: `atelier skill "lead with the action, number the
+steps when there are steps"`. Rules grounded in your own words instruct the model; anything that is
+the machine's reading is labelled as such and shown without instructing, until you declare otherwise.
 
 **Use.** Invoke it like any skill:
 
@@ -200,7 +209,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1295 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 93 files and 1303 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
