@@ -164,10 +164,18 @@ export function intake(path: string, workType: string): void {
     console.log(`\n${pkg.summary}`);
   }
 
+  // DECLARED BY WHERE A FILE SITS OR HOW ITS NAME BEGINS — never by words inside a title. A blog post
+  // called "the-data-engineering-playbook-for-ai" is finished work, and reading "playbook" in it as
+  // "this is a methodology document" dropped two of an author's seven posts out of the corpus on the
+  // first real run. A folder named methodology/ or rejected/, or a name that starts with the word,
+  // is a person saying so.
+  const role = (f: string, words: RegExp): boolean =>
+    f.split('/').slice(0, -1).some((dir) => words.test(dir) && new RegExp(`^(${words.source})s?$`, 'i').test(dir))
+    || new RegExp(`^(${words.source})[-_. ]`, 'i').test(basename(f));
   const classify = (f: string) =>
     /(^|\/)SKILL\.md$/i.test(f) ? 'EXISTING_SKILL' as const
-    : /methodolog|framework|process|playbook/i.test(basename(f)) ? 'METHODOLOGY' as const
-    : /reject|bad|before/i.test(basename(f)) ? 'REJECTED' as const : 'GOLDEN' as const;
+    : role(f, /methodology|methodologies|methods?|framework|process|playbook/i) ? 'METHODOLOGY' as const
+    : role(f, /rejected|reject|bad|before/i) ? 'REJECTED' as const : 'GOLDEN' as const;
 
   // Package components other than the SKILL.md itself are carried by `pkg`, not by the corpus.
   // `planImport` has no material kind for a template or a reference, and handing it one as a GOLDEN

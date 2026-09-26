@@ -22,7 +22,8 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
-import { sha, die, argv, proposerModel, type ProposalMeta, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
+import { GenerationIncomplete } from '../../core/inference/client.js';
+import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -136,8 +137,24 @@ export async function discover(): Promise<void> {
       + `\n  Or spend less:    point at fewer pieces, or shorter ones.`);
   }
 
-  const chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens,
-    { standardDimensions: [ev.workType] }, proposerModel());
+  // ── A REFUSAL FROM THE PROPOSER IS NOT THE END OF DISCOVERY ──────────────────────────────────
+  //
+  // On the first real run against an author's own posts, the default proposer stopped with
+  // stop_reason "refusal" on the rule-extraction call, twice, while the discovery-side model answered
+  // it cleanly. A classifier's false positive on "describe how this author writes" should cost one
+  // retry on the other configured model, said out loud — not the run.
+  const fallbackModel = diagnoserModel();
+  let usedModel = proposerModel();
+  let chain: Awaited<ReturnType<typeof runDiscoveryChain>>;
+  try {
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+  } catch (e) {
+    const refused = e instanceof GenerationIncomplete && e.termination.kind === 'REFUSAL';
+    if (!refused || fallbackModel === usedModel) throw e;
+    console.log(`\n${usedModel} declined the request (a refusal, not an error in your work). Retrying once with ${fallbackModel}.`);
+    usedModel = fallbackModel;
+    chain = await runDiscoveryChain(clientFor(fallbackModel), budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+  }
 
   if ('refused' in chain) {
     // GOLDENS ONLY, even here. The chain refuses on a thin corpus and this is the degraded path, but
@@ -292,9 +309,13 @@ export async function discover(): Promise<void> {
 
   const b = proposals.filter((p) => p.kind === 'BOUNDARY').length;
   console.log(`\n${proposals.length} rule(s)${b ? `, ${b} of them boundaries` : ''}.  ($${budget.spentUsd.toFixed(3)})`);
-  for (const p of proposals) {
-    const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    applies when: ${p.appliesWhen}`;
-    console.log(`  [${p.requirementId}] ${p.statement}${cond}`);
+  // Under `atelier new` the review screen shows every rule next; listing them here too printed the
+  // same twenty rules twice in a row.
+  if (!process.env.ATELIER_ORCHESTRATED) {
+    for (const p of proposals) {
+      const cond = isGeneralScope(p.appliesWhen) ? '' : `\n    applies when: ${p.appliesWhen}`;
+      console.log(`  [${p.requirementId}] ${p.statement}${cond}`);
+    }
   }
   if (!process.env.ATELIER_ORCHESTRATED) console.log(`\nRun \`atelier ratify-close\` to mint the standard.`);
 }

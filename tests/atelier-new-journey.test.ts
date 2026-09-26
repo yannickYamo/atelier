@@ -65,13 +65,16 @@ describe('atelier new: a folder and a sentence', () => {
   it('shows every rule with a suggested ruling, and compiles NOTHING without a yes', () => {
     expect(first).toMatch(/Lead with the decision/);
     expect(first).toMatch(/→ REQUIRED — instructs/);
+    expect(first).toMatch(/needs your material, so shown until you make it required/);
     expect(first).toMatch(/needs from you: the actual figures for the period/);
     expect(first).toMatch(/Nothing was decided/);
     expect(existsSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'))).toBe(false);
   });
 
   it('running it again with --accept continues from review — no second discovery — and builds a skill that instructs', () => {
-    const second = run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
+    // A rule that needs the person's own material is suggested as shown when producing new work (a
+    // REQUIRED one would refuse every task that does not bind it); the person makes it required here.
+    const second = run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept', '--set', 'p2=required');
     expect(second).toMatch(/Continuing the run already in this project/);
     expect(second).not.toMatch(/Reading your work/);
     const md = readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8');
@@ -86,6 +89,7 @@ describe('atelier new: a folder and a sentence', () => {
   it('invoke refuses a REQUIRED rule whose material is not bound, before any call', () => {
     const out = run(data, proj, 'invoke', '--skill', 'voice', 'write about the quarter');
     expect(out).toMatch(/MISSING_REQUIRED_EVIDENCE/);
+    expect(out).toMatch(/--with actual-figures-period=<file>/);
   });
 });
 

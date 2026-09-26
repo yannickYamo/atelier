@@ -101,6 +101,6 @@ export function describeSatisfiability(v: SatisfiabilityVerdict): string | null 
     + 'A REQUIRED rule depends on a source this invocation does not have. Running anyway would ask the\n'
     + 'model to satisfy it without the evidence, and a model asked for a counted observation it cannot\n'
     + 'make will produce a plausible one. That is not a risk to be warned about; it is the outcome.\n\n'
-    + '  Bind the source:   --with <name>=<path>\n'
+    + `  Bind the source:   ${v.missing.filter((m) => m.materiality === 'REQUIRED').map((m) => `--with ${m.prerequisite.name}=<file>`).join(' ')}\n`
     + '  Or run a version of the standard that does not require it.\n';
 }
