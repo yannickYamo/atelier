@@ -91,9 +91,9 @@ export async function fix(): Promise<void> {
   console.log(`diagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
   console.log(`  ${d.reason}\n`);
   // Written ONCE, after diagnosis, so the record can name the rule the miss was attributed to.
-  // The id is content-derived, so re-entering with the same complaint writes the same bytes.
-  try { store.putFeedback(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb); }
-  catch { /* the identical record from a previous phase of this same complaint already exists */ }
+  // The id is content-derived: re-entering the same complaint keeps the first record, and says so.
+  const kept = store.putFeedbackOnce(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb);
+  if (!kept.written) console.log(`  (this complaint about this output was already recorded at ${kept.record.at}; that record stands and is not counted twice)`);
 
   // ── DELIVERY: the standard is not involved; put the approved bytes back ─────────────────────
   if (d.route === 'DELIVERY_FAILURE') {

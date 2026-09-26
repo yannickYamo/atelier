@@ -21,7 +21,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
-import { sha, die, argv, flag, PROPOSER, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
+import { sha, die, argv, proposerModel, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ export async function discover(): Promise<void> {
   }
 
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: numericFlag('--max-calls', 60) };
-  const client = clientFor(flag('--model') ?? PROPOSER);
+  const client = clientFor(proposerModel());
   let proposals: Requirement[];
 
   // ─── THE SPLIT IS USED WHENEVER THE CORPUS ALLOWS IT ────────────────────────────────────────
@@ -100,7 +100,7 @@ export async function discover(): Promise<void> {
   const outTok = 4000 * VANTAGES + 300 * RULES * heldCount;
   // The override wins: a person who names their rate is the authority on it. The shipped table is a
   // dated seed for the case where nobody has.
-  const modelName = flag('--discovery-model') ?? flag('--model') ?? PROPOSER;
+  const modelName = proposerModel();
   const rate = priceOverrideFor('discovery') ?? priceFor(ANTHROPIC_PRICING, modelName);
   if (!rate) {
     console.log(`\nEstimated discovery size ~${Math.round(inTok).toLocaleString()} in / ~${outTok.toLocaleString()} out tokens `
@@ -125,7 +125,7 @@ export async function discover(): Promise<void> {
   }
 
   const chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens,
-    { standardDimensions: [ev.workType] }, flag('--model') ?? PROPOSER);
+    { standardDimensions: [ev.workType] }, proposerModel());
 
   if ('refused' in chain) {
     // GOLDENS ONLY, even here. The chain refuses on a thin corpus and this is the degraded path, but

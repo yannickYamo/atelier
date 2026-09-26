@@ -397,6 +397,24 @@ export function ratifyClose(): void {
       + `${su.rejected} rejected · ${su.decidedNotRequirement} kept as non-obligation · ${su.deferred} open`);
     console.log(`  survival ${(su.survivalRate * 100).toFixed(0)}%  ·  decided ${(su.decidedRate * 100).toFixed(0)}%  ·  ${runFile('ratification-ledger.json')}`);
   }
-  if (!process.env.ATELIER_ORCHESTRATED) console.log('Run `atelier build --name <name>`.');
+  // A standard in which NOTHING instructs is legal — governance lets it be minted and built — but the
+  // printed next step used to walk a person straight into building a skill whose instruction section
+  // is empty. Say so, and point at the decision that would change it.
+  const instructing = kept.filter((r) => roleFor(r) === 'ENFORCE').length;
+  // PREFERRED compiles exactly as EXEMPLAR_ONLY — shown, never binding — which is the governance
+  // (the owner said breaking it is not thereby worse) but was never said. Say it where it is decided.
+  const preferredShown = kept.filter((r) => r.materiality === 'PREFERRED' && roleFor(r) !== 'ENFORCE');
+  if (preferredShown.length) {
+    console.log(`  ${preferredShown.map((r) => r.requirementId).join(', ')}: PREFERRED is shown to the model as an example, not instructed.`
+      + ' Mark a rule REQUIRED for it to instruct.');
+  }
+  if (!instructing) {
+    console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. Every rule is shown, not followed, because none of them');
+    console.log('  carries your decision. A skill built now would instruct nothing.');
+    console.log('  Rule on them first:  atelier pending');
+  }
+  if (!process.env.ATELIER_ORCHESTRATED) {
+    console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');
+  }
 }
 

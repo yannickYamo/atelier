@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
@@ -121,6 +121,20 @@ describe('the happy path: /focus in the host becomes a canonical InvocationRecor
   it('and the pending file is consumed — a second stop records nothing', () => {
     run(data, proj, ['record', '--from-hook', 'stop'], stopPayload(proj, t, 'a second answer'));
     expect(store.listInvocations(L)).toHaveLength(1);
+  });
+});
+
+describe('Claude Code started in a subdirectory of the project', () => {
+  // The hook's cwd is wherever the session started. Verifying the install there found no skill and
+  // dropped the use without a trace; the project root is the nearest ancestor holding the skill.
+  it('the use is still recorded, against the project the skill is installed in', () => {
+    const { data, proj } = seeded();
+    const sub = join(proj, 'docs', 'drafts');
+    mkdirSync(sub, { recursive: true });
+    const t = transcript(proj, 'm');
+    run(data, proj, ['record', '--from-hook', 'prompt'], promptPayload(sub, '/focus a note', t));
+    run(data, proj, ['record', '--from-hook', 'stop'], stopPayload(sub, t, 'A note.'));
+    expect(store.listInvocations({ root: data, skillName: 'focus' })).toHaveLength(1);
   });
 });
 

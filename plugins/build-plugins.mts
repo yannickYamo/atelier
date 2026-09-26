@@ -16,24 +16,28 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, 'shared', 'skills');
-const OUT = join(HERE, 'dist');
+// COMMITTED, not gitignored. A marketplace install clones the repository and reads the plugin from a
+// path inside it; the tree used to be emitted into gitignored `plugins/dist`, so the one install route
+// a user has fetched a checkout with no plugin in it. CI rebuilds and fails on any diff.
+const OUT = join(HERE, 'hosts');
+const REPO = join(HERE, '..');
+// One version, the package's. The manifest was a hand-typed 0.1.0 against a 0.2.0 package.
+const VERSION = (JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')) as { version: string }).version;
 
 interface HostSpec {
   readonly id: string;
   readonly manifestDir: string;
   readonly prefix: string;          // how a user invokes a plugin skill here
-  readonly dataEnv: string;
 }
 
 const HOSTS: readonly HostSpec[] = [
-  { id: 'claude-code', manifestDir: '.claude-plugin', prefix: '/atelier:', dataEnv: 'CLAUDE_PLUGIN_DATA' },
-  { id: 'codex', manifestDir: '.codex-plugin', prefix: '$atelier:', dataEnv: 'CODEX_PLUGIN_DATA' },
+  { id: 'claude-code', manifestDir: '.claude-plugin', prefix: '/atelier:' },
+  { id: 'codex', manifestDir: '.codex-plugin', prefix: '$atelier:' },
 ];
 
 const MANIFEST = (_h: HostSpec): string => JSON.stringify({
   name: 'atelier',
-  displayName: 'Atelier Research Preview',
-  version: '0.1.0',
+  version: VERSION,
   description: 'Proposes what makes your work yours, you ratify it, and it builds a portable skill. Ships with an optional experiment.',
   author: { name: 'Atelier' },
   license: 'MIT',
@@ -105,10 +109,15 @@ for (const h of HOSTS) {
   console.log(`built ${h.id}: ${readdirSync(join(root, 'skills')).length} skills, manifest ${h.manifestDir}/plugin.json`);
 }
 
-// marketplace entry, one file, both hosts
-writeFileSync(join(OUT, 'marketplace.json'), `${JSON.stringify({
-  plugins: [{ name: 'atelier', displayName: 'Atelier Research Preview',
-    description: 'Turn your own work into a reusable skill you own. Portable across hosts.',
-    source: { type: 'github', owner: 'yannickYamo', repo: 'atelier' } }],
+// The marketplace Claude Code reads: `.claude-plugin/marketplace.json` at the repository root, naming
+// the committed plugin tree by relative path. `/plugin marketplace add yannickYamo/atelier` then
+// `/plugin install atelier@atelier` is the whole install.
+mkdirSync(join(REPO, '.claude-plugin'), { recursive: true });
+writeFileSync(join(REPO, '.claude-plugin', 'marketplace.json'), `${JSON.stringify({
+  name: 'atelier',
+  owner: { name: 'Yannick Maurice' },
+  description: 'Atelier: a standard you ratify, compiled into a skill any model can run.',
+  plugins: [{ name: 'atelier', source: './plugins/hosts/claude-code', version: VERSION,
+    description: 'Turn your own work into a reusable skill you own. Portable across hosts.' }],
 }, null, 2)}\n`);
-console.log(`built marketplace.json`);
+console.log(`built .claude-plugin/marketplace.json`);
