@@ -28,8 +28,8 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, MODEL, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession } from '../runtime.js';
-import type { InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
+import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel } from '../runtime.js';
+import type { RepairRecord, InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
 
@@ -114,15 +114,15 @@ export async function improve(): Promise<void> {
   // The standard THAT RAN, not the current one. A complaint is about the version that produced it.
   const ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.5), maxCalls: numericFlag('--max-calls', 12) };
-  const client = clientFor(flag('--model') ?? MODEL);
+  const client = clientFor(diagnoserModel());
   const d = await diagnose(client, budget, ranStandard, inv, fb);
 
   console.log(`\ndiagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
   console.log(`  ${d.reason}`);
   // ONE write, after diagnosis, carrying the attributed rule when there is one — two writes under
   // one content-derived id is a store refusal, and evidence should name its rule anyway.
-  try { store.putFeedback(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb); }
-  catch { /* identical record already recorded */ }
+  const kept = store.putFeedbackOnce(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb);
+  if (!kept.written) console.log(`  (this complaint about this output was already recorded at ${kept.record.at}; that record stands and is not counted twice)`);
 
   if (d.route === 'DELIVERY_FAILURE') {
     console.log(`\nThis is a SERVING problem, not a taste problem. Your standard is not involved and nothing about`);
@@ -189,7 +189,7 @@ export async function improve(): Promise<void> {
   // INHERITED from the version being repaired. A repair changes the arrangement, never how the
   // skill describes itself, and reconstructing the default here reverted a description set on build.
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L));
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
@@ -290,6 +290,11 @@ export async function runOnce(
   contractText: string | null = null,
   /** where the task came from, so a wrong task is traceable to the surface that produced it */
   taskSource: TaskSource = 'POSITIONAL',
+  /**
+   * Check the draft and rewrite what broke a rule, before anything is recorded — `invoke` passes it,
+   * measurement arms never do: a study's arm must be what the model wrote, not what a loop fixed.
+   */
+  refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -302,7 +307,10 @@ export async function runOnce(
         + 'generating without it would produce an output the ratified shape never constrained.');
     }
   }
-  const { piece: output, reportedModel, schemaSent, servedTask } = await spendOneWithResult(client, budget, servedText, task, contract);
+  const { piece: draft, reportedModel, schemaSent, servedTask } = await spendOneWithResult(client, budget, servedText, task, contract);
+  // A structured output is held by its contract, not by prose rules; it is never span-rewritten.
+  const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: null };
+  const output = refined.output;
   const at = new Date().toISOString();
   // THE PROOF. Not "the file is in the package" — the schema the provider received, hashed, against the
   // contract that was compiled. Equal means the carrier reached the model; anything else is a serving
@@ -325,7 +333,8 @@ export async function runOnce(
     // then asserted equal before anything is written down.
     request: { resolvedTaskHash: sha(task), servedTaskHash: sha(servedTask), source: taskSource },
     outputHash: sha(output),
-    at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output };
+    at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
+    ...(refined.repair ? { repair: refined.repair } : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.

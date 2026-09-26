@@ -4,6 +4,7 @@
 // Changing them here would silently invalidate the comparison between this build and the measurements
 // that justified it, so they move without edits.
 
+import { mapLimit } from '../inference/concurrency.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { framedPreamble, DEFAULT_FRAMINGS, type FramingId } from './framing.js';
@@ -128,11 +129,12 @@ export async function proposeAcrossFramings(
 ): Promise<{ readonly union: RuleUnion<ProposedRule>;
   readonly byFraming: readonly { framing: FramingId; rules: readonly ProposedRule[]; conformance: ConformanceReport }[] }> {
   if (!framings.length) throw new Error('DISCOVERY: no framing selected. A vantage is required; there is no unframed proposer.');
-  const byFraming: { framing: FramingId; rules: readonly ProposedRule[]; conformance: ConformanceReport }[] = [];
-  for (const framing of framings) {
-    const { rules, conformance } = await proposeRules(client, budget, corpus, estimateUsd, framing);
-    byFraming.push({ framing, rules, conformance });
-  }
+  // Independent calls over the same corpus: side by side, results in framing order.
+  const byFraming: { framing: FramingId; rules: readonly ProposedRule[]; conformance: ConformanceReport }[] =
+    await mapLimit(framings, framings.length, async (framing) => {
+      const { rules, conformance } = await proposeRules(client, budget, corpus, estimateUsd, framing);
+      return { framing, rules, conformance };
+    });
   const union = await unionFramedRules(client, budget, byFraming, (r) => r.statement);
   return { union, byFraming };
 }

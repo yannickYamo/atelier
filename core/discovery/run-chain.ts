@@ -21,6 +21,7 @@
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
+import { mapLimit, DEFAULT_CONCURRENCY } from '../inference/concurrency.js';
 import { framedPreamble, DEFAULT_FRAMINGS, type FramingId } from './framing.js';
 import { unionFramedRules } from './union.js';
 import { planDiscovery, ingestProbeResults, type ProbeResults, type InferenceRequest } from './chain/discovery-orchestration.js';
@@ -48,6 +49,9 @@ const CHAIN_FIELDS = `For each rule give:
                    condition claims to hold everywhere, which is almost never true of taste.
   READ_FROM        which of the pieces above you read it off
   WOULD_BE_ABSENT_IF  what you would see in a piece if this rule were NOT operating
+  NEEDS_FROM_USER  what a writer must be GIVEN to follow this rule truthfully rather than invent it —
+                   real figures, the actual incident, a customer's name. Empty when the rule needs
+                   nothing beyond the task itself, which is most rules.
   QUOTE            a SHORT VERBATIM span from one of the pieces where this rule is visibly happening.
                    Copy it exactly, character for character — it is checked against the source and
                    dropped if it does not appear there. Prefer the shortest span that still shows the
@@ -97,9 +101,10 @@ export const PROPOSER_SCHEMA: Record<string, unknown> = {
             required: ['id', 'describe'], additionalProperties: false } },
           readFrom: { type: 'array', items: { type: 'string' } },
           wouldBeAbsentIf: { type: 'string' },
+          needsFromUser: { type: 'string' },
           quote: { type: 'string' },
         },
-        required: ['description', 'appliesWhen', 'readFrom', 'wouldBeAbsentIf', 'quote'], additionalProperties: false,
+        required: ['description', 'appliesWhen', 'readFrom', 'wouldBeAbsentIf', 'needsFromUser', 'quote'], additionalProperties: false,
       },
     },
   },
@@ -158,6 +163,7 @@ export async function runDiscoveryChain(
   client: InferenceClient, budget: Budget, skillId: string, items: readonly CorpusItem[],
   goldens: readonly GoldenRef[], scope: ConstructScope, modelPin: string,
   framings: readonly FramingId[] = DEFAULT_FRAMINGS,
+  concurrency: number = DEFAULT_CONCURRENCY,
 ): Promise<ChainRun | ChainRefusal> {
   const textOf = (id: string): string => items.find((i) => i.id === id)?.text ?? '';
 
@@ -179,8 +185,8 @@ export async function runDiscoveryChain(
   // separates a real rule from a description of one example, and it should get the richer set to
   // work on. It also means the extra vantage buys nothing it cannot defend — a rule only framing A
   // found still has to be seen again in work the proposer never read.
-  const perFraming: { framing: FramingId; rules: readonly ProposedFactor[] }[] = [];
-  for (const framing of framings) {
+  // The vantages are independent calls over the same pool, so they run side by side.
+  const perFraming: { framing: FramingId; rules: readonly ProposedFactor[] }[] = await mapLimit(framings, framings.length, async (framing) => {
     const res = await spend(budget, 0.6, async () => {
       const r = await client.complete({
         stableBlock: chainProposerSystemFor(framing), variableBlock: plan.proposeRequest.contextPrompt,
@@ -190,13 +196,13 @@ export async function runDiscoveryChain(
       return { value: r, cost: r.cost };
     });
     const raw = ((res.json as { factors?: Record<string, unknown>[] } | null)?.factors ?? []);
-    perFraming.push({ framing, rules: raw.map((f) => ({
+    return { framing, rules: raw.map((f) => ({
       proposedId: '', description: asText(f.description),
       appliesWhen: (f.appliesWhen as ProposedFactor['appliesWhen']),
       readFrom: asTextList(f.readFrom), wouldBeAbsentIf: asText(f.wouldBeAbsentIf),
-      quote: asText(f.quote),
-    })).filter((f) => f.description) });
-  }
+      needs: asText(f.needsFromUser), quote: asText(f.quote),
+    })).filter((f) => f.description) };
+  });
 
   // One vantage is the degenerate case and must not pay for a matcher call.
   const union = perFraming.length > 1
@@ -221,8 +227,13 @@ export async function runDiscoveryChain(
   const requests = plan.observeRequestsFor(proposed).filter(isObserve)
     .sort((a, b) => a.contextId.localeCompare(b.contextId) || a.proposedId.localeCompare(b.proposedId));
 
-  const observations: { proposedId: string; observation: GoldenObservation }[] = [];
-  for (const req of requests) {
+  // DOCUMENTS IN PARALLEL, FACTORS IN SEQUENCE WITHIN ONE. Every call against a document shares its
+  // prefix, so the first call writes the cache and the rest read it; running one document's calls
+  // concurrently would race them all past an empty cache. Different documents share nothing, so they
+  // run side by side. The order of the result is the order of `requests` either way.
+  const byDoc = new Map<string, ObserveRequest[]>();
+  for (const req of requests) byDoc.set(req.contextId, [...(byDoc.get(req.contextId) ?? []), req]);
+  const observeOne = async (req: ObserveRequest): Promise<{ proposedId: string; observation: GoldenObservation }> => {
     const r = await spend(budget, 0.02, async () => {
       const x = await client.complete({
         // the DOCUMENT is the stable block — it repeats across factors and is the expensive half
@@ -251,9 +262,15 @@ export async function runDiscoveryChain(
         + 'Recording it as "not applicable" would turn a missing observation into evidence against '
         + 'a rule the expert may well hold.');
     }
-    observations.push({ proposedId: req.proposedId, observation: {
-      contextId: req.contextId, applicable: j.applicable, present: j.applicable && j.present } });
-  }
+    return { proposedId: req.proposedId, observation: {
+      contextId: req.contextId, applicable: j.applicable, present: j.applicable && j.present } };
+  };
+  const perDoc = await mapLimit([...byDoc.values()], concurrency, async (reqs) => {
+    const done: { proposedId: string; observation: GoldenObservation }[] = [];
+    for (const req of reqs) done.push(await observeOne(req));
+    return done;
+  });
+  const observations = perDoc.flat();
 
   // PROSPECTIVE, because these calls just happened. `assertProspective` exists so a cached result
   // cannot be replayed into a product claim, and mislabelling here is how that guard gets defeated

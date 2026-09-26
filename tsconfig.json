@@ -10,6 +10,6 @@
     "noImplicitOverride": true, "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true, "esModuleInterop": true, "allowImportingTsExtensions": false
   },
-  "include": ["core/**/*.ts", "cli/**/*.mts", "cli/**/*.ts", "renderers/**/*.ts", "adapters/**/*.ts", "providers/**/*.ts", "tests/**/*.ts"],
+  "include": ["core/**/*.ts", "cli/**/*.mts", "cli/**/*.ts", "renderers/**/*.ts", "adapters/**/*.ts", "providers/**/*.ts", "tests/**/*.ts", "scripts/**/*.mts", "plugins/**/*.mts"],
   "exclude": ["dist"]
 }

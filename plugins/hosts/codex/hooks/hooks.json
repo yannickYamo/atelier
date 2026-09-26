@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CODEX_PLUGIN_ROOT}\"/scripts/capability-check.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

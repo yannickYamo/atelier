@@ -32,7 +32,7 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { sha, die, flag, argv, positional, clientFor, PROPOSER, loadSession, saveSession, authoredIdAllocator, type ProposalSet, type ProposedRule } from '../runtime.js';
+import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, type ProposalSet, type ProposedRule } from '../runtime.js';
 import { groundedInUserText } from '../../core/ratification/grounding.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -163,7 +163,7 @@ export async function skill(): Promise<void> {
   let pset: ProposalSet | null = s.proposalSet?.promptHash === promptHash ? (s.proposalSet ?? null) : null;
 
   if (!pset) {
-    const client = clientFor(PROPOSER);
+    const client = clientFor(proposerModel());
     const budget: Budget = { spentUsd: 0, capUsd: 0.5, maxCalls: 2 };
     const r = await spend(budget, 0.02, async () => {
       const x = await client.complete({

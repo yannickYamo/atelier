@@ -14,7 +14,7 @@ import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../.
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
 
-import { sha, die, argv, flag, loadSession, saveSession, step, runFile } from '../runtime.js';
+import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile } from '../runtime.js';
 
 // ── intake ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -40,6 +40,17 @@ export function walk(root: string, rel = '', depth = 0): string[] {
   return out;
 }
 
+/**
+ * About 15% of the pieces, at least one, and only when there are six or more — below that, every
+ * piece is needed to find and check rules at all. Content-blind: chosen by a hash of the name, so
+ * neither the files' order nor their contents decide which are held back.
+ */
+export function autoReserveIds(ids: readonly string[]): string[] {
+  if (ids.length < 6) return [];
+  const k = Math.max(1, Math.round(ids.length * 0.15));
+  return [...ids].sort((a, b) => sha(a).localeCompare(sha(b))).slice(0, k);
+}
+
 export function intake(path: string, workType: string): void {
   const dir = resolve(path);
   if (!existsSync(dir)) die(`no such path: ${dir}`);
@@ -47,7 +58,7 @@ export function intake(path: string, workType: string): void {
   // if it were an example produces rules about README-writing, attributed to them. The skip list catches
   // the obvious cases; the printed file list catches everything else, because the only reliable filter
   // is a person looking at what is about to be read.
-  const excl = (flag('--exclude') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  const excl = flagAll('--exclude');
   const isDir = statSync(dir).isDirectory();
   const base = isDir ? dir : dirname(dir);
   const all = isDir ? walk(dir) : [basename(dir)];
@@ -153,10 +164,18 @@ export function intake(path: string, workType: string): void {
     console.log(`\n${pkg.summary}`);
   }
 
+  // DECLARED BY WHERE A FILE SITS OR HOW ITS NAME BEGINS — never by words inside a title. A blog post
+  // called "the-data-engineering-playbook-for-ai" is finished work, and reading "playbook" in it as
+  // "this is a methodology document" dropped two of an author's seven posts out of the corpus on the
+  // first real run. A folder named methodology/ or rejected/, or a name that starts with the word,
+  // is a person saying so.
+  const role = (f: string, words: RegExp): boolean =>
+    f.split('/').slice(0, -1).some((dir) => words.test(dir) && new RegExp(`^(${words.source})s?$`, 'i').test(dir))
+    || new RegExp(`^(${words.source})[-_. ]`, 'i').test(basename(f));
   const classify = (f: string) =>
     /(^|\/)SKILL\.md$/i.test(f) ? 'EXISTING_SKILL' as const
-    : /methodolog|framework|process|playbook/i.test(basename(f)) ? 'METHODOLOGY' as const
-    : /reject|bad|before/i.test(basename(f)) ? 'REJECTED' as const : 'GOLDEN' as const;
+    : role(f, /methodology|methodologies|methods?|framework|process|playbook/i) ? 'METHODOLOGY' as const
+    : role(f, /rejected|reject|bad|before/i) ? 'REJECTED' as const : 'GOLDEN' as const;
 
   // Package components other than the SKILL.md itself are carried by `pkg`, not by the corpus.
   // `planImport` has no material kind for a template or a reference, and handing it one as a GOLDEN
@@ -172,8 +191,77 @@ export function intake(path: string, workType: string): void {
   const usableRead = classified.filter((r) => !thinGoldens.includes(r));
   if (!usableRead.some((r) => r.kind === 'GOLDEN')) die('no examples of finished work here — every candidate was too short to read as one.');
 
+  // ── RESERVE BEFORE ANYTHING READS ────────────────────────────────────────────────────────
+  //
+  // This runs at INTAKE and nowhere else, because a split chosen later is not a holdout. The cost of
+  // not doing it is already recorded: a four-artefact corpus produced a ratified standard and left
+  // ONE uncontaminated artefact, not because anyone erred but because the validation set was never
+  // set aside. By the time anybody looked for one there was no unspent evidence to make it out of.
+  //
+  // `--reserve` names the goldens held back. With none named nothing is reserved and the run says so
+  // — which is a legitimate Level-1 state and must not block onboarding, but must not be silent.
+  // THE CLUSTER IS NOT THE FILE. File-as-cluster says every file is its own project, which turns a
+  // repository into 200 independent projects and inflates every across-project claim silently. The
+  // rule claims a boundary only where one is observable, and says which rule it used.
+  const goldenFiles = usableRead.filter((r) => r.kind === 'GOLDEN');
+  const clusters = clusterAssignment(goldenFiles.map((r) => r.file), argv.includes('--cluster-per-file'));
+  const goldenUnits: GoldenUnit[] = goldenFiles.map((r) => ({
+    unitId: r.file, kind: 'PROSE_SECTION', context: workType, task: `produce ${r.file}`,
+    expertAction: 'the expert produced this artefact as it stands', artifact: r.text,
+    provenance: { sourceRef: join(base, r.file), clusterId: clusters.clusterOf(r.file),
+      contextId: r.file, clusterBasis: clusters.basis, consumedBy: [] } }));
+  const clusterCount = new Set(goldenUnits.map((u) => u.provenance.clusterId)).size;
+  console.log(`\n${goldenUnits.length} piece(s) in ${clusterCount} project cluster(s) [${clusters.basis}]`);
+  console.log(`  ${clusters.why}`);
+  //
+  // DECIDED BEFORE THE SPLIT, so the split is made over what discovery may read. A reserve applied
+  // after roles were assigned let a reserved piece hold a proposal slot and left the proposer short.
+  // `--auto-reserve` (what `atelier new` passes) holds back about 15% when the corpus can spare it,
+  // chosen content-blind, so a first-time user gets a held-out check without knowing what one is.
+  const explicitReserve = flagAll('--reserve');
+  const auto = !explicitReserve.length && argv.includes('--auto-reserve');
+  const reserveIds = explicitReserve.length ? explicitReserve : auto ? autoReserveIds(goldenUnits.map((u) => u.unitId)) : [];
+  let reservation: Reservation | null = null;
+  if (reserveIds.length) {
+    const unknown = reserveIds.filter((id) => !goldenUnits.some((u) => u.unitId === id));
+    if (unknown.length) die(`--reserve names material that is not a golden here: ${unknown.join(', ')}`);
+    const r = reserve(goldenUnits, reserveIds, 'ACROSS_CLUSTERS', 0.15);
+    if ('refused' in r) {
+      // An automatic reserve the corpus cannot support is not the person's error: say so, go on.
+      if (!auto) { die(`${r.reason}: ${r.why}`); return; }
+      console.log(`\nNot reserving automatically: ${r.why}`);
+    } else {
+      reservation = r;
+      console.log(`\nRESERVED, before anything read them: ${r.reserved.map((u) => u.unitId).join(', ')}`);
+      console.log(`  ${r.why}`);
+      console.log(`  ${describeGoldenEvidence(r.reserved, 'ACROSS_CLUSTERS')}`);
+    }
+  }
+  if (!reservation) {
+    console.log(`\nNOTHING RESERVED. Every piece here is available to discovery, so none of it can later`);
+    console.log(`  test whether the standard generalises. That is a fine place to start and it is a`);
+    console.log(`  decision: pass --reserve <file,file> at intake to hold work back. It cannot be done`);
+    console.log(`  afterwards — a split chosen once discovery has read the corpus is not a holdout.`);
+  }
+
   const material = usableRead.map((r) => ({ id: r.file, text: r.text, kind: r.kind }));
-  const plan = planImport(material);
+  const heldOutFlag = flag('--held-out');
+  const heldOut = heldOutFlag === undefined ? undefined : Number(heldOutFlag);
+  if (heldOut !== undefined && (!Number.isInteger(heldOut) || heldOut < 2)) {
+    die(`--held-out must be a whole number of pieces, at least 2; got "${heldOutFlag}". Two is the floor: a `
+      + 'rule checked against one unread piece has been checked against an anecdote.');
+  }
+  const plan = planImport(material, {
+    reserved: reservation?.reserved.map((u) => u.unitId) ?? [],
+    ...(heldOut === undefined ? {} : { heldOut }),
+  });
+  const heldActual = plan.goldens.filter((g) => g.role === 'HELD_OUT').length;
+  if (heldOut !== undefined && heldActual !== heldOut && !plan.refusals.length) {
+    console.log(`\n--held-out ${heldOut} is more than this corpus can spare while leaving two pieces to read; holding out ${heldActual}.`);
+  }
+  if (plan.refusals.length && reservation) {
+    console.log(`\n(${reservation.reserved.length} piece(s) are reserved and not counted above. Reserve fewer, or add work.)`);
+  }
   console.log(`\n${plan.summary}`);
   if (plan.refusals.length) process.exit(1);
   if (argv.includes('--dry-run')) { console.log('\n--dry-run: nothing sealed.'); return; }
@@ -213,46 +301,6 @@ export function intake(path: string, workType: string): void {
   } else if (aiAssisted) {
     console.log('\n  provenance: AI-ASSISTED, declared. Recorded on the evidence, and it travels with');
     console.log('  every result derived from this corpus.\n');
-  }
-
-  // ── RESERVE BEFORE ANYTHING READS ────────────────────────────────────────────────────────
-  //
-  // This runs at INTAKE and nowhere else, because a split chosen later is not a holdout. The cost of
-  // not doing it is already recorded: a four-artefact corpus produced a ratified standard and left
-  // ONE uncontaminated artefact, not because anyone erred but because the validation set was never
-  // set aside. By the time anybody looked for one there was no unspent evidence to make it out of.
-  //
-  // `--reserve` names the goldens held back. With none named nothing is reserved and the run says so
-  // — which is a legitimate Level-1 state and must not block onboarding, but must not be silent.
-  // THE CLUSTER IS NOT THE FILE. File-as-cluster says every file is its own project, which turns a
-  // repository into 200 independent projects and inflates every across-project claim silently. The
-  // rule claims a boundary only where one is observable, and says which rule it used.
-  const goldenFiles = usableRead.filter((r) => r.kind === 'GOLDEN');
-  const clusters = clusterAssignment(goldenFiles.map((r) => r.file), argv.includes('--cluster-per-file'));
-  const goldenUnits: GoldenUnit[] = goldenFiles.map((r) => ({
-    unitId: r.file, kind: 'PROSE_SECTION', context: workType, task: `produce ${r.file}`,
-    expertAction: 'the expert produced this artefact as it stands', artifact: r.text,
-    provenance: { sourceRef: join(base, r.file), clusterId: clusters.clusterOf(r.file),
-      contextId: r.file, clusterBasis: clusters.basis, consumedBy: [] } }));
-  const clusterCount = new Set(goldenUnits.map((u) => u.provenance.clusterId)).size;
-  console.log(`\n${goldenUnits.length} piece(s) in ${clusterCount} project cluster(s) [${clusters.basis}]`);
-  console.log(`  ${clusters.why}`);
-  const reserveIds = (flag('--reserve') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-  let reservation: Reservation | null = null;
-  if (reserveIds.length) {
-    const unknown = reserveIds.filter((id) => !goldenUnits.some((u) => u.unitId === id));
-    if (unknown.length) die(`--reserve names material that is not a golden here: ${unknown.join(', ')}`);
-    const r = reserve(goldenUnits, reserveIds, 'ACROSS_CLUSTERS', 0.15);
-    if ('refused' in r) { die(`${r.reason}: ${r.why}`); return; }
-    reservation = r;
-    console.log(`\nRESERVED, before anything read them: ${r.reserved.map((u) => u.unitId).join(', ')}`);
-    console.log(`  ${r.why}`);
-    console.log(`  ${describeGoldenEvidence(r.reserved, 'ACROSS_CLUSTERS')}`);
-  } else {
-    console.log(`\nNOTHING RESERVED. Every piece here is available to discovery, so none of it can later`);
-    console.log(`  test whether the standard generalises. That is a fine place to start and it is a`);
-    console.log(`  decision: pass --reserve <file,file> at intake to hold work back. It cannot be done`);
-    console.log(`  afterwards — a split chosen once discovery has read the corpus is not a holdout.`);
   }
 
   let s = loadSession();

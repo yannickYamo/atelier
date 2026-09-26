@@ -59,8 +59,11 @@ Public work keeps its provenance too. If you adopt a behaviour inferred from som
 Atelier records that you adopted it. It does not pretend you ratified that person's standard on their
 behalf.
 
-Every one of these decisions is written to an append-only ledger beside the standard, and the ledger
-stores **what you were shown**, not what survived. A rewrite keeps the original wording next to your
+Every one of these decisions is written to an append-only ledger, and the ledger stores **what you
+were shown**, not what survived. The ledger of a ratification session is kept beside the standard it
+produced (`skills/<name>/ledgers/<standard>.json`, shown by `atelier history`); a later `amend`,
+`confirm` or `fix` decision is appended to the skill's event log. A standard made only of rules you
+added yourself has no proposals to record, so it has no session ledger. A rewrite keeps the original wording next to your
 replacement. A rejection is recorded as a rejection rather than as an absence. The standard can
 already tell you what is in it; only the ledger can tell you what a person was looking at and what
 they did about it, and that is not reconstructable afterwards.

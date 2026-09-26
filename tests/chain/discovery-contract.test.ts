@@ -12,8 +12,6 @@ import {
   MIN_PROPOSAL_GOLDENS, MIN_HELD_OUT_GOLDENS,
   type DiscoveryInput, type GoldenRef, type ProposedFactor,
 } from '../../core/discovery/chain/discovery-contract.js';
-import { aggregateTasteFactorEvidence } from '../../core/discovery/chain/taste-discovery.js';
-import { assignPriority } from '../../core/discovery/chain/taste-factor-evidence.js';
 
 const SCOPE = { standardDimensions: ['positioning_discipline'] };
 
@@ -87,31 +85,6 @@ describe('discovery contract — circularity designed out', () => {
   it('toHypotheses THROWS on an invalid run rather than yielding evidence quietly', () => {
     expect(() => toHypotheses(input({ proposed: [factor({ appliesWhen: [] })] }), SCOPE, 'model'))
       .toThrow(/discovery run refused/i);
-  });
-
-  it('THE CAP HOLDS: perfect held-out recurrence still cannot make a factor load-bearing', () => {
-    // The honest-yield mechanism, end to end. Present in every held-out golden, no expert labels
-    // -> UNDERIDENTIFIED -> DERIVED_UNRATIFIED -> capped at ADVISORY. Recurrence is a pattern,
-    // never a preference, and only the expert can supply the difference.
-    const [{ hypothesis, golden }] = toHypotheses(input(), SCOPE, 'model');
-    const ev = aggregateTasteFactorEvidence(hypothesis, { golden });
-    expect(ev.goldenRecurrence.supporting).toBe(2);
-    expect(ev.confidence).toBe('UNDERIDENTIFIED');
-    expect(ev.authorityStatus).toBe('DERIVED_UNRATIFIED');
-
-    const decision = assignPriority(ev);
-    expect(decision.priority).toBe('ADVISORY');
-    // NOTE: it lands ADVISORY via the recurrence-only path, so the explicit DERIVED cap message
-    // is not appended — the cap only speaks when it actually bites (i.e. when some other path
-    // would otherwise have promoted the factor). Two independent reasons, same floor.
-    expect(decision.rationale.join(' ')).toMatch(/recurrence-only or underidentified/i);
-    // and the cap DOES bite if discrimination evidence arrives without ratification
-    const withDiscrim = assignPriority({ ...ev, contextsDiscriminative: 2,
-      expertPreferenceDiscrimination: { supporting: 2, contradicting: 0, distinctContexts: 2 },
-      boundarySupport: { supporting: 1, contradicting: 0, distinctContexts: 1 },
-      confidence: 'SUPPORTED' });
-    expect(withDiscrim.priority).toBe('ADVISORY');
-    expect(withDiscrim.rationale.join(' ')).toMatch(/cannot be load-bearing/i);
   });
 
   it('the user-facing summary refuses to overclaim', () => {

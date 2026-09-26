@@ -58,6 +58,18 @@ export interface RatificationRecord {
   readonly decidedAt: string;
   /** the version this decision fed into, once one is minted. Null while the draft is still open. */
   readonly resultingStandardVersionHash: string | null;
+  /**
+   * WHAT WAS DECIDED, NOT ONLY THAT SOMETHING WAS. The weight the person gave, what the review screen
+   * suggested beside it, and whether they took the suggestion or overrode it. Without these, a
+   * one-keystroke acceptance of every suggestion and a rule-by-rule ruling left identical records,
+   * and the one human act in the product could not be audited. Absent on records written before it.
+   */
+  readonly ruling?: {
+    readonly materiality: string | null;
+    readonly needs: string | null;
+    readonly suggested: { readonly decision: string; readonly materiality: string | null; readonly why: string } | null;
+    readonly took: 'SUGGESTION' | 'OVERRIDE' | 'NO_SUGGESTION';
+  };
 }
 
 export interface RatificationLedger {
@@ -82,7 +94,8 @@ export function draftHash(proposals: readonly Requirement[]): string {
  */
 export function appendDecision(
   ledger: RatificationLedger, shown: Requirement, decision: RatificationDecision,
-  opts: { readonly humanRevision?: Requirement; readonly note?: string; readonly decidedAt: string },
+  opts: { readonly humanRevision?: Requirement; readonly note?: string; readonly decidedAt: string;
+    readonly ruling?: RatificationRecord['ruling'] },
 ): RatificationLedger {
   if (ledger.records.some((r) => r.shown.requirementId === shown.requirementId)) {
     throw new Error(
@@ -104,6 +117,7 @@ export function appendDecision(
     note: opts.note ?? null,
     decidedAt: opts.decidedAt,
     resultingStandardVersionHash: null,
+    ...(opts.ruling ? { ruling: opts.ruling } : {}),
   }] };
 }
 

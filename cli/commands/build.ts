@@ -4,7 +4,9 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { existsSync, rmSync } from 'node:fs';
+import { verifyText } from '../../core/observers/verify.js';
+import { describeBackup } from '../../adapters/install-tree.js';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
@@ -88,7 +90,33 @@ export function build(nameArg?: string): void {
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
   const desc = flag('--description') ?? defaultDescription(v.workType);
-  const pkg0 = renderAgentSkill(v, arch, name, desc);
+  // ── THE EXEMPLAR, WHEN THE OWNER NAMES ONE ──────────────────────────────────────────────────
+  //
+  // Never a reserved piece: that work is held back to test the skill blind, and a skill that ships it
+  // has read the answer key.
+  const ex = flag('--exemplar');
+  if (ex !== undefined) {
+    if (ex.trim().toLowerCase() === 'none') store.setExemplar(L, null);
+    else {
+      if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
+      const text = readFileSync(ex, 'utf8');
+      // Compared as text, not bytes: a copy with a BOM, Windows line ends or other whitespace is the same piece.
+      const norm = (t: string): string => t.replace(/^\uFEFF/, '').normalize('NFC').replace(/\r\n?/g, '\n').replace(/\s+/g, ' ').trim();
+      if (s.reservation?.reserved.some((u) => norm(u.artifact) === norm(text))) {
+        die('--exemplar names a piece that was reserved to test the skill blind. Pick one discovery was allowed to read.');
+      }
+      // The exemplar is what the model imitates, so it should meet the standard it illustrates.
+      const report = verifyText(name, v, text);
+      const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED');
+      if (broken.length) {
+        console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
+          + 'The model will imitate it as it is.');
+      }
+      store.setExemplar(L, text);
+      console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
+    }
+  }
+  const pkg0 = renderAgentSkill(v, arch, name, desc, store.getExemplar(L));
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
@@ -119,6 +147,11 @@ export function build(nameArg?: string): void {
   // Only when there IS a corpus. A directly authored standard has no evidence record, and writing an
   // empty one to satisfy a call would fabricate a file that later reads as a sealed corpus.
   if (s.evidence) store.putEvidence(L, s.evidence);
+  // The record of who decided this standard travels with it. Only the ledger stamped with THIS
+  // version: a directly authored rule set, or a rebuild of an older standard, has none to carry.
+  if (s.ledger?.records.some((r) => r.resultingStandardVersionHash === v.standardVersionHash)) {
+    store.putLedger(L, v.standardVersionHash, s.ledger);
+  }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
@@ -186,6 +219,7 @@ export function build(nameArg?: string): void {
   const pkg = pkg0;
   assertPortable(pkg);
   const inst = host.install(pkg, projectDir());
+  { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
   saveSession({ ...s, skillName: name });
