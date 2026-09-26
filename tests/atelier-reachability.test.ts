@@ -152,12 +152,7 @@ const PARKED: Readonly<Record<string, string>> = {
     'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
     + 'because it is a record rather than a component: testing an instrument whose construct was not '
     + 'established would assert behaviour nobody is entitled to rely on.',
-  'core/discovery/chain/discrimination-probe.ts':
-    'DELIBERATELY DARK — DEFERRED BY POLICY. Probes are not fired in the AUTONOMOUS_LOOP_READY '
-    + 'milestone. The planner emits a ProbeSpec on the live path; turning one into a blind, '
-    + 'counterbalanced, manipulation-checked pair is this module\'s job and happens the first time a '
-    + 'probe actually runs.',
-  'core/coverage/abstraction-check.ts':
+    'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
 };
@@ -219,7 +214,8 @@ describe('the census: nothing is dark by accident', () => {
   // cannot drift apart.
   it('a module declaring itself DELIBERATELY DARK is unreachable, and one that is parked says why', () => {
     const declared = shipped().filter((f) => readFileSync(f, 'utf8').startsWith('// DELIBERATELY DARK'));
-    expect(declared.length, 'no module declares itself dark — the marker has changed').toBeGreaterThanOrEqual(3);
+    // Two remain after the taste ladder and its dark discrimination channel were deleted (2026-09-26).
+    expect(declared.length, 'no module declares itself dark — the marker has changed').toBeGreaterThanOrEqual(2);
 
     const reachable = reachableFromCli();
     const wired = declared.filter((f) => reachable.has(f));
@@ -274,10 +270,7 @@ const PARKED_VALUES: Readonly<Record<string, string>> = {
   'core/discovery/chain/discovery-orchestration.ts:assertProspective':
     'Refuses a product claim built on cached evidence. No claim path consumes ingest outcomes yet, '
     + 'which is why it is uncalled rather than why it is unnecessary.',
-  'core/discovery/chain/taste-factor-evidence.ts:recurrenceRate':
-    'Appearances over APPLICABLE contexts. The chain reports counts and lets a person read them; '
-    + 'nothing converts to a rate, and a rate is the shape most likely to be quoted as a finding.',
-  'core/discovery/chain/taste-factor.ts:canVeto':
+    'core/discovery/chain/taste-factor.ts:canVeto':
     'LAW 4: only a calibrated, ratified factor may veto. The veto mechanism itself is parked one '
     + 'level up, so its precondition has nothing to gate.',
   'core/discovery/chain/taste-factor.ts:isRepairApplicable':

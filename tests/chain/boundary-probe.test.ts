@@ -10,7 +10,6 @@ import { describe, it, expect } from 'vitest';
 import {
   designProbe, blindProbe, foldProbeAnswer, interpretProbe, type WrittenVariant,
 } from '../../core/discovery/chain/boundary-probe.js';
-import { isFalsifiableProbe, aggregateTasteFactorEvidence } from '../../core/discovery/chain/taste-discovery.js';
 
 const design = designProbe(
   'gates_as_schedule_not_calendar', 'fresh_ctx',
@@ -31,7 +30,8 @@ describe('boundary probe', () => {
   it('is symmetric — three levels, so indifference and dispreference are expressible', () => {
     expect(design.variants.map(v => v.level)).toEqual(['TOO_LITTLE', 'ACCEPTABLE', 'TOO_MUCH']);
     const { probe } = blindProbe(design, written, 7);
-    expect(isFalsifiableProbe(probe)).toBe(true);
+    // falsifiable: at least two distinct levels a person can choose between
+    expect(new Set(probe.variants.map((v) => v.level)).size).toBeGreaterThanOrEqual(2);
   });
 
   it('LEAKS NO LEVEL LABELS — an expert who can see the right answer is being led', () => {
@@ -59,13 +59,6 @@ describe('boundary probe', () => {
     const label = foldProbeAnswer(b, { shipped: tag });
     expect(label.preferredLevel).toBe('ACCEPTABLE');
     expect(interpretProbe(label)).toMatch(/discriminates here/);
-
-    // and it reaches the channel confidenceFrom() actually reads
-    const ev = aggregateTasteFactorEvidence(
-      { proposedId: 'f', description: 'd', constructScope: { standardDimensions: ['x'] }, appliesWhen: [{ id: 'a', describe: 'a' }], provenance: { proposedBy: 'm', fromGoldens: [] } },
-      { boundary: [label] });
-    expect(ev.boundarySupport.supporting).toBe(1);
-    expect(ev.confidence).toBe('EMERGING');
   });
 
   it('"no preference" folds to INDIFFERENT — scope information, NOT disagreement', () => {
@@ -75,12 +68,6 @@ describe('boundary probe', () => {
     const label = foldProbeAnswer(b, { noPreference: [b.key[0].tag, b.key[1].tag] });
     expect(label.preferredLevel).toBe('INDIFFERENT');
     expect(interpretProbe(label)).toMatch(/narrows its scope rather than refuting it/);
-
-    const ev = aggregateTasteFactorEvidence(
-      { proposedId: 'f', description: 'd', constructScope: { standardDimensions: ['x'] }, appliesWhen: [{ id: 'a', describe: 'a' }], provenance: { proposedBy: 'm', fromGoldens: [] } },
-      { boundary: [label] });
-    expect(ev.counterEvidence.supporting).toBe(0);   // never counted as disagreement
-    expect(ev.contextsIndifferent).toBe(1);          // recorded as scope
   });
 
   it('"none of them" also folds to INDIFFERENT, not to a preferred level', () => {

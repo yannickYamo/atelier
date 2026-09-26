@@ -48,7 +48,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind',
-  'add', 'labels', 'materiality', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
+  'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
@@ -574,6 +574,8 @@ export interface ProposalMeta {
   /** held-out pieces where the rule could apply, and where it was followed; null when nothing was held out */
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
+  /** for a measured rule: of the pieces it was measured on, how many could be measured and how many meet it */
+  readonly inSample?: { readonly applicable: number; readonly present: number } | null;
 }
 
 /**

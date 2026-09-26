@@ -21,6 +21,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
+import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { sha, die, argv, proposerModel, type ProposalMeta, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
@@ -245,6 +246,18 @@ export async function discover(): Promise<void> {
   //
   // Ordering is the fix, not a bigger try. Once inference has been spent, its result is written
   // before any step that may fail, so no later refusal can reach back and delete it.
+  // ── THE MEASURABLE PART, COUNTED RATHER THAN READ ─────────────────────────────────────────────
+  //
+  // Sentence and paragraph length, hedging, and the stock phrases the author never uses — proposed
+  // with their measurement attached, over the pieces discovery was allowed to read (never the
+  // reserve). They go on the same screen and take the same ruling as everything else.
+  const measured = deriveMeasuredRules(openItems, sourceProvenance());
+  if (measured.length) {
+    console.log(`${measured.length} measurable rule(s) counted from the same pieces: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
+    proposals = [...proposals, ...measured.map((m) => m.requirement)];
+    proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.inSample } satisfies ProposalMeta])) };
+  }
   saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {

@@ -43,6 +43,8 @@ export interface ProposalEvidence {
   readonly framings: readonly string[];
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
+  /** a measured rule's conformance on the pieces it was counted from */
+  readonly inSample?: { readonly applicable: number; readonly present: number } | null;
 }
 
 export interface Suggestion {
@@ -58,6 +60,17 @@ export interface Suggestion {
 
 export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: SkillMode): Suggestion {
   const needs = e?.needs ?? null;
+  // A MEASURED rule is a count, and its evidence is how much of the author's own work meets it. When
+  // almost all of it does, the target describes them and is checkable on every output: required, in
+  // every mode. When much of it does not, the number describes an average nobody writes to.
+  if (p.measurement && e?.inSample && e.inSample.applicable > 0) {
+    const { applicable, present } = e.inSample;
+    const r = present / applicable;
+    const seen = `${present} of ${applicable} of your pieces meet it; checked on every output`;
+    if (r >= 0.8) return { decision: 'APPROVE', materiality: 'REQUIRED', needs, strength: 3, why: seen };
+    if (r >= 0.5) return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: seen };
+    return { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} of your pieces meet it` };
+  }
   const agreed = (e?.framings.length ?? 0) > 1;
   const h = e?.heldOut ?? null;
   const rate = h && h.applicable > 0 ? h.present / h.applicable : null;

@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 
 export const USAGE: Readonly<Record<string, string>> = {
   new: 'atelier new <folder-of-your-best-work> "<what the skill is for>" [--name <name>] [--reserve <file>]...\n  Read your work, show the rules it found with a suggested ruling for each, and build the skill once you accept. Run it again to continue.',
+  verify: 'atelier verify --skill <name> <file> [--json]   (or pipe the text in)\n  Check any text against every measured rule in the standard, with the exact spans that break one. Exits 1 when a REQUIRED rule is broken.',
   review: 'atelier review [--accept] [--set <id>=<choice>]...\n  The rules waiting for your ruling, with suggestions. --accept records them as shown; --set changes one (reject, approve, required, preferred, exemplar, tolerated, incidental).',
   skill: 'atelier skill "<your rules>" [--name <name>] [--yes]\n  atelier skill --from <path-to-your-work> [--reserve <file>]... [--name <name>]\n  Create a skill from rules you state, or from work you show.',
   create: 'atelier create <path-to-your-work> [--reserve <file>]... [--work-type <type>]\n  Read your work, seal the corpus, and propose rules. Nothing is compiled until you approve.',
@@ -19,7 +20,7 @@ export const USAGE: Readonly<Record<string, string>> = {
   pending: 'atelier pending [--json]\n  Show the proposals waiting for your decision.',
   ratify: 'atelier ratify --decisions <json>   or: atelier ratify --page <file.html>\n  Rule on every proposal at once, or write a page to rule on them in a browser.',
   'ratify-one': 'atelier ratify-one --id <id> --decision <decision>\n  Rule on one proposal.',
-  add: 'atelier add --statement "<rule>" --kind GENERATIVE|BOUNDARY [--applies-when "<condition>"] [--materiality <level>]\n  Add a rule in your own words.',
+  add: 'atelier add --statement "<rule>" --kind GENERATIVE|BOUNDARY [--applies-when "<condition>"] [--materiality <level>] [--measure <observer>:<params>]\n  Add a rule in your own words. --measure makes it checkable: LEXICON:leverage|utilize · SENTENCE_LENGTH:medianMax=15,p90Max=28 · PARAGRAPH_LENGTH:maxSentences=4 · HEDGE_RATE:maxPer1000=3',
   'ratify-close': 'atelier ratify-close [--work-type <kind>] [--reason "<why>"]\n  Close ratification and mint the standard. --work-type is required when you wrote every rule yourself.',
   build: 'atelier build --name <name> [--description "<text>"]\n  Compile the ratified standard and install the skill.',
   confirm: 'atelier confirm --rule <id> [--drop]\n  Confirm or drop a boundary on a rule.',
