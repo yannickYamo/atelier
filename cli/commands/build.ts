@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { describeBackup } from '../../adapters/install-tree.js';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
@@ -89,7 +89,23 @@ export function build(nameArg?: string): void {
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
   const desc = flag('--description') ?? defaultDescription(v.workType);
-  const pkg0 = renderAgentSkill(v, arch, name, desc);
+  // ── THE EXEMPLAR, WHEN THE OWNER NAMES ONE ──────────────────────────────────────────────────
+  //
+  // Never a reserved piece: that work is held back to test the skill blind, and a skill that ships it
+  // has read the answer key.
+  const ex = flag('--exemplar');
+  if (ex !== undefined) {
+    if (ex.trim().toLowerCase() === 'none') store.setExemplar(L, null);
+    else {
+      if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
+      const text = readFileSync(ex, 'utf8');
+      if (s.reservation?.reserved.some((u) => u.artifact.trim() === text.trim())) {
+        die('--exemplar names a piece that was reserved to test the skill blind. Pick one discovery was allowed to read.');
+      }
+      store.setExemplar(L, text);
+    }
+  }
+  const pkg0 = renderAgentSkill(v, arch, name, desc, store.getExemplar(L));
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 

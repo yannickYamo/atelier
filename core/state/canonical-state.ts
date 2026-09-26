@@ -497,6 +497,20 @@ export interface InvocationRecord {
   /** Kept in full, not only hashed. A hash proves identity; it cannot be read back to diagnose. */
   readonly input: string;
   readonly output: string;
+  /**
+   * When the output was checked against the standard's measured rules and spans were rewritten, what
+   * happened: the rules broken before and after, and the hash of what the model first wrote. `output`
+   * is what was delivered. Absent when nothing was checked or nothing needed fixing.
+   */
+  readonly repair?: RepairRecord;
+}
+
+export interface RepairRecord {
+  readonly passes: number;
+  readonly violatedBefore: readonly string[];
+  readonly violatedAfter: readonly string[];
+  readonly originalOutputHash: string;
+  readonly why: string;
 }
 
 /**
