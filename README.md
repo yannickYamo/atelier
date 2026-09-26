@@ -168,6 +168,18 @@ atelier invoke --skill my-skill "..."  # or the CLI
 A host does not always deliver every carrier the CLI does. Atelier reports the gap instead of
 silently weakening your standard: `atelier carriers --skill my-skill --host codex`.
 
+**Check.** Hold any text to the standard, a draft, a reply, a page someone else wrote:
+
+```bash
+atelier verify --skill my-skill draft.md
+```
+
+Every rule that carries a measurement (sentence and paragraph length, hedging, words you never use,
+or a list you declare with `add --measure LEXICON:leverage|utilize`) is counted against the text, and
+each violation is printed with the span that caused it. It exits non-zero when a REQUIRED rule is
+broken, so it can gate a pipeline. Rules about when or why are listed as not checked: those stay a
+person's call.
+
 **Correct.** Say what was wrong, in your own words:
 
 ```bash
