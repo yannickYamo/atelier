@@ -30,12 +30,17 @@ export type SkillMode = 'GENERATE' | 'GUARD' | 'RESPOND';
 
 export function modeFromIntent(intent: string): { readonly mode: SkillMode; readonly why: string } {
   const t = ` ${intent.toLowerCase()} `;
-  if (/\b(support|customers?|client|reply|replies|respond|responses?|answers?|tickets?|inquir\w*|helpdesk|help desk)\b/.test(t)) {
-    return { mode: 'RESPOND', why: 'you described answering people, so every rule you keep is a policy the answers must follow' };
-  }
-  if (/\b(ensure|always|every|all|must|comply|compliance|check|review|audit|consistent|follow)\b/.test(t)) {
-    return { mode: 'GUARD', why: 'you described holding outputs to the standard, so the rules you keep default to required' };
-  }
+  // THE VERB FIRST. "always write in my voice" is generation with an adverb, and "write a post for all
+  // our customers" is generation with an audience; keyword-spotting read the first as guarding and
+  // the second as support. What the person asks the skill to DO decides; the rest only qualifies it.
+  const produces = /^\s*(please\s+)?(write|draft|compose|create|generate|produce|make)\b/.test(t)
+    || /\b(write|draft|compose)\s+(me\s+)?(a|an|the|my|our)\b/.test(t);
+  const checks = /\b(ensure|enforce|check|audit|comply|compliance|make sure|verify|lint|gate|hold .* to)\b/.test(t)
+    || /\ball\s+(of\s+)?(our|my|the)?\s*(content|outputs?|copy|posts|docs|documents|pages|emails)\b/.test(t);
+  const answers = /\b(support|help ?desk|tickets?|inquir\w*|complaints?)\b/.test(t)
+    || (/\b(customers?|clients?|users?)\b/.test(t) && /\b(answer|answers|reply|replies|respond|responses?)\b/.test(t) && !produces);
+  if (answers && !checks) return { mode: 'RESPOND', why: 'you described answering people, so every rule you keep is a policy the answers must follow' };
+  if (checks && !produces) return { mode: 'GUARD', why: 'you described holding outputs to the standard, so the rules you keep default to required' };
   return { mode: 'GENERATE', why: 'you described producing new work, so rules default to required only where the evidence is strong' };
 }
 
@@ -83,7 +88,9 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
   }
   const held = rate !== null && rate >= 0.5;
   const strength = ((held ? 2 : 0) + (agreed ? 1 : 0)) as 0 | 1 | 2 | 3;
-  const seen = h && h.applicable > 0 ? `followed in ${h.present} of ${h.applicable} unread pieces where it applies` : 'not checked against unread work';
+  const seen = !h ? 'not checked against unread work'
+    : h.applicable > 0 ? `followed in ${h.present} of ${h.applicable} unread pieces where it applies`
+      : 'never applied in the unread pieces, so they could not confirm it';
   const also = agreed ? '; two independent readings found it' : '';
 
   const required = mode === 'GENERATE' ? held : (held || agreed);

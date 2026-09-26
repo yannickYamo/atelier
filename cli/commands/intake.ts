@@ -238,10 +238,22 @@ export function intake(path: string, workType: string): void {
 
   const material = usableRead.map((r) => ({ id: r.file, text: r.text, kind: r.kind }));
   const heldOutFlag = flag('--held-out');
+  const heldOut = heldOutFlag === undefined ? undefined : Number(heldOutFlag);
+  if (heldOut !== undefined && (!Number.isInteger(heldOut) || heldOut < 2)) {
+    die(`--held-out must be a whole number of pieces, at least 2; got "${heldOutFlag}". Two is the floor: a `
+      + 'rule checked against one unread piece has been checked against an anecdote.');
+  }
   const plan = planImport(material, {
     reserved: reservation?.reserved.map((u) => u.unitId) ?? [],
-    ...(heldOutFlag === undefined ? {} : { heldOut: Number(heldOutFlag) }),
+    ...(heldOut === undefined ? {} : { heldOut }),
   });
+  const heldActual = plan.goldens.filter((g) => g.role === 'HELD_OUT').length;
+  if (heldOut !== undefined && heldActual !== heldOut && !plan.refusals.length) {
+    console.log(`\n--held-out ${heldOut} is more than this corpus can spare while leaving two pieces to read; holding out ${heldActual}.`);
+  }
+  if (plan.refusals.length && reservation) {
+    console.log(`\n(${reservation.reserved.length} piece(s) are reserved and not counted above. Reserve fewer, or add work.)`);
+  }
   console.log(`\n${plan.summary}`);
   if (plan.refusals.length) process.exit(1);
   if (argv.includes('--dry-run')) { console.log('\n--dry-run: nothing sealed.'); return; }
