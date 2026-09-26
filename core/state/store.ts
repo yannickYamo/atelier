@@ -10,7 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
-import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
 import { join, dirname } from 'node:path';
@@ -96,6 +96,22 @@ export function putLedger(l: StoreLayout, standardVersionHash: string, ledger: R
 export function getLedger(l: StoreLayout, standardVersionHash: string): RatificationLedger | null {
   const p = join(dirs(l).ledgers, `${standardVersionHash}.json`);
   return existsSync(p) ? readJson<RatificationLedger>(p, { what: 'a ratification ledger' }) : null;
+}
+
+/**
+ * The owner's chosen exemplar for a skill: one complete piece of their own, shipped with every build.
+ * Kept beside the skill rather than in a SkillVersion, so every re-render (amend, confirm, fix) carries
+ * the same one until the owner changes it.
+ */
+export function getExemplar(l: StoreLayout): { text: string } | null {
+  const p = join(dirs(l).base, 'exemplar.md');
+  return existsSync(p) ? { text: readFileSync(p, 'utf8') } : null;
+}
+export function setExemplar(l: StoreLayout, text: string | null): void {
+  const p = join(dirs(l).base, 'exemplar.md');
+  if (text === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, text);
 }
 
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {

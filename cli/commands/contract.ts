@@ -366,7 +366,7 @@ export async function contract(): Promise<void> {
         candidateArch = applyEscalation(candidateArch, p.operation,
           sha(`${candidateArch.architectureHash}|${p.operation.requirementId}|${p.operation.to}`));
       }
-      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`);
+      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`, store.getExemplar(L));
       // The optimizer changed an arrangement. It may not have changed the target, and saying so is
       // cheap next to discovering later that it did.
       assertSameTarget(v, v);

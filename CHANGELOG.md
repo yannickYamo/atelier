@@ -39,6 +39,20 @@ a run in progress may not be.
   are checked for free against the pieces held back.
 - **A census for dark fields**: every optional Requirement field must have a writer on a reachable path.
 
+- **Generate, check, repair** (`core/loop/`): every `invoke` counts the draft against each measured
+  rule and rewrites ONLY the spans that break a REQUIRED one (sentence-grown, spliced back
+  deterministically, at most two passes); a rewrite that breaks anything that held is discarded. The
+  record keeps what the model first wrote and what changed. `--no-repair` opts out.
+- **The same loop in Claude Code**: the plugin's Stop hook counts the answer and, once, sends it back
+  with only the spans to rewrite (verified live against a real Claude Code session).
+- **`atelier mcp`**: the checker as MCP tools (`atelier_verify`, `atelier_rules`,
+  `atelier_list_skills`), registered by the plugin; read-only, no model called.
+- **`fix` decides by count when the rule is measured**: a candidate implementation is kept only if it
+  meets the moved rule where the current one did not and breaks nothing that held; recorded as a
+  DETERMINISTIC observation. Only ties go to a person.
+- **Exemplar carrier**: `build --exemplar <file>` ships one complete piece of the owner's, read first
+  for voice and never for content; carried through every rebuild; a reserved piece is refused.
+
 ### Changed (product phases, 2026-09-26)
 
 - **The discovery split scales with the corpus**: about a third held out (capped at 8), everything
@@ -70,6 +84,7 @@ a run in progress may not be.
 - A `/skill` use from a subdirectory was dropped; `fix` in a subdirectory found nothing.
 - The ratification ledger is kept beside the standard it produced and shown by `history`.
 - `ANTHROPIC_AUTH_TOKEN` is accepted.
+- A second `ratify-close` on a standard you wrote yourself asked for `--work-type` again.
 
 ### Added (earlier in this release)
 

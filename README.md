@@ -165,6 +165,14 @@ the machine's reading is labelled as such and shown without instructing, until y
 atelier invoke --skill my-skill "..."  # or the CLI
 ```
 
+Every draft is checked before you see it. The rules that carry a measurement are counted on the
+finished piece, and when a REQUIRED one is broken, only the sentences that broke it are rewritten
+(the rest of the draft cannot change, because the model never holds the pen for it), and a rewrite
+that breaks anything that held is thrown away. In Claude Code the plugin does the same thing at the
+end of the turn: the answer is sent back once with just the spans to fix. `--no-repair` delivers the
+raw draft. To give the model your whole voice rather than rule fragments, ship one of your own pieces
+with the skill: `atelier build --name my-skill --exemplar ./my-best-piece.md`.
+
 A host does not always deliver every carrier the CLI does. Atelier reports the gap instead of
 silently weakening your standard: `atelier carriers --skill my-skill --host codex`.
 
@@ -178,7 +186,9 @@ Every rule that carries a measurement (sentence and paragraph length, hedging, w
 or a list you declare with `add --measure LEXICON:leverage|utilize`) is counted against the text, and
 each violation is printed with the span that caused it. It exits non-zero when a REQUIRED rule is
 broken, so it can gate a pipeline. Rules about when or why are listed as not checked: those stay a
-person's call.
+person's call. The same check is a tool any agent can call: the plugin registers `atelier mcp`
+(`atelier_verify`, `atelier_rules`, `atelier_list_skills`), so a second agent writing your support
+replies or your docs can hold its own output to your standard.
 
 **Correct.** Say what was wrong, in your own words:
 
@@ -222,7 +232,7 @@ it has no advantage to claim.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, are in
 [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 91 files and 1298 tests,
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1309 tests,
 runs offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

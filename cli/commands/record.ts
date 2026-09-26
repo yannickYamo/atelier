@@ -17,6 +17,8 @@
 // `persistInvocation` the CLI path uses. What cannot be known is recorded as unknown: a transcript
 // with no model line yields an UNREPORTED observation, never a guess.
 
+import { verifyText } from '../../core/observers/verify.js';
+import { planRepair } from '../../core/loop/repair.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
@@ -30,12 +32,14 @@ import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { sha, DATA, die, flag, runFile, pickHost, nearestProject, keyFor } from '../runtime.js';
 
 interface PromptPayload { prompt?: string; cwd?: string; prompt_id?: string; transcript_path?: string }
-interface StopPayload { prompt_id?: string; cwd?: string; transcript_path?: string; last_assistant_message?: string }
+interface StopPayload { prompt_id?: string; cwd?: string; transcript_path?: string; last_assistant_message?: string; stop_hook_active?: boolean }
 
 interface PendingInvocation {
   promptId: string; skillName: string; input: string; at: string;
   skillVersionHash: string; standardVersionHash: string; architectureHash: string;
   expectedPackageHash: string; servedPackageHash: string; matched: boolean; servedFiles: string[];
+  /** set when the Stop hook sent the answer back once for its broken REQUIRED rules */
+  repairOf?: { outputHash: string; violated: string[] };
 }
 
 const readStdin = async (): Promise<string> => {
@@ -105,12 +109,32 @@ export async function record(): Promise<void> {
   process.env.ATELIER_PROJECT_DIR = root;
   const pendingPath = runFile('pending-invocation.json');
   const pending = readJson<PendingInvocation>(pendingPath, { what: 'the pending invocation', requireKeys: ['promptId', 'skillName'] });
-  if (!pending.promptId || pending.promptId !== (payload.prompt_id ?? '')) return;   // a different turn ended
-  rmSync(pendingPath, { force: true });
+  // A different turn ended — unless this is the continuation the hook itself asked for.
+  if (!pending.promptId || (pending.promptId !== (payload.prompt_id ?? '') && !pending.repairOf)) return;
   const output = payload.last_assistant_message ?? '';
-  if (!output) return;                                 // a turn with no assistant text witnessed nothing
+  if (!output) { rmSync(pendingPath, { force: true }); return; }   // a turn with no assistant text witnessed nothing
 
   const L: store.StoreLayout = { root: DATA, skillName: pending.skillName };
+
+  // ── THE SAME LOOP AS `invoke`, IN THE HOST ───────────────────────────────────────────────────
+  //
+  // The answer is counted against every measured rule. When a REQUIRED one is broken, the turn is not
+  // allowed to end: the host is handed the spans that broke it and asked to rewrite only those, once.
+  // The continuation is recorded as the use, with what changed. Once only — `stop_hook_active` and
+  // `repairOf` both guard it — so a draft the model cannot fix is delivered as it is, and says so.
+  const std = store.getStandard(L, pending.standardVersionHash);
+  const report = std ? verifyText(pending.skillName, std, output) : null;
+  const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
+  if (report?.failed && !payload.stop_hook_active && !pending.repairOf) {
+    writeAtomic(pendingPath, JSON.stringify({ ...pending, repairOf: { outputHash: sha(output), violated: brokenNow.map((c) => c.requirementId) } }, null, 1));
+    const targets = planRepair(output, report);
+    const reason = `Your answer breaks ${brokenNow.length} REQUIRED rule(s) of the /${pending.skillName} standard. `
+      + 'Rewrite ONLY these spans, keep everything else exactly as it is, and give the full revised answer:\n\n'
+      + targets.map((t) => `${t.id}. "${t.text}"\n   ${t.reasons.join('\n   ')}`).join('\n\n');
+    process.stdout.write(`${JSON.stringify({ decision: 'block', reason })}\n`);
+    return;
+  }
+  rmSync(pendingPath, { force: true });
   const at = new Date().toISOString();
   const model = modelFromTranscript(payload.transcript_path);
   // The binding records what is KNOWN about this runtime: the host composed the request, and the
@@ -134,6 +158,9 @@ export async function record(): Promise<void> {
     delivery: { expectedPackageHash: pending.expectedPackageHash, servedPackageHash: pending.servedPackageHash,
       matched: pending.matched, servedFiles: pending.servedFiles, outputContract: null },
     input: pending.input, output,
+    ...(pending.repairOf ? { repair: { passes: 1, violatedBefore: pending.repairOf.violated,
+      violatedAfter: brokenNow.map((c) => c.requirementId), originalOutputHash: pending.repairOf.outputHash,
+      why: brokenNow.length ? 'the host rewrote once and a REQUIRED rule still does not hold' : 'every REQUIRED measured rule now holds' } } : {}),
   };
   assertRequestBound(rec.request, pending.input);
   persistInvocation(L, rec, binding, store.getStandard(L, pending.standardVersionHash));
