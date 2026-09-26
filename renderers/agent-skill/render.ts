@@ -198,6 +198,13 @@ export function renderAgentSkill(
   arch: SkillArchitecture,
   skillId: string,
   description: string,
+  /**
+   * ONE COMPLETE PIECE BY THE AUTHOR, shipped with the skill and read before drafting. Per-rule
+   * fragments show a move; only a whole piece shows how the moves sit together over its length, which
+   * is where a voice drifts. It is an implementation carrier, chosen by the owner, never part of the
+   * standard — and it is labelled as something to take the voice from, never the content.
+   */
+  exemplar: { readonly text: string } | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
@@ -364,7 +371,13 @@ description: ${description}
 
 Apply the standard below as judgment, not as a checklist — including knowing when a rule does not
 apply.
+${exemplar ? `
+## Read first
 
+\`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
+voice, rhythm and structure from it: how it opens, how long its sentences and paragraphs run, how it
+moves from point to point. Never take its topic, facts, names, figures or sentences.
+` : ''}
 ## What to do
 
 ${gen.map(line).join('\n\n') || '_(none)_'}
@@ -486,7 +499,8 @@ mintedAt:        ${v.mintedAt}
       appliesWhen: x.r.appliesWhen })),
   }, null, 2)}\n` } : {};
 
-  const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap };
+  const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
+    ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
   const artifactFor = (c: Carrier, id: string): string | null =>

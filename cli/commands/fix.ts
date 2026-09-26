@@ -21,6 +21,7 @@
 // equals the hash after, asserted where the candidate is minted and again before promotion —
 // `assertStandardUnchanged` throws; it does not log.
 
+import { verifyText } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -176,7 +177,7 @@ export async function fix(): Promise<void> {
     const arch = compileArchitecture(next);
     const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
     const desc = activeSv?.description ?? defaultDescription(next.workType);
-    const pkg = renderAgentSkill(next, arch, name, desc);
+    const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L));
     assertPortable(pkg);
     const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
       standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
@@ -282,7 +283,7 @@ export async function fix(): Promise<void> {
 
   const nextArch = applyEscalation(ranArch, op, sha(JSON.stringify(op) + ranArch.architectureHash));
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L));
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
@@ -331,9 +332,38 @@ async function settleBlindPick(
   console.log('──── B ────────────────────────────────────────────');
   console.log(bRec.output);
   console.log('───────────────────────────────────────────────────\n');
+  // ── WHEN THE RULE IS COUNTED, THE COUNT DECIDES ─────────────────────────────────────────────
+  //
+  // The blinded eye exists because nothing else is qualified to say which output better follows a
+  // rule about taste. A rule the owner ratified WITH a measurement is different: whether an output
+  // meets it is a fact, the owner already decided what the fact must be, and asking them to eyeball
+  // it would be asking them to redo their own count. So when the moved rule is measured, the candidate
+  // is kept only if it meets that rule where the current version did not and breaks no other measured
+  // rule the current version met; it is dropped if it is worse; and only a tie goes to a person.
+  // This changes an implementation, never the standard, and the record names the instrument.
+  const std = store.getStandard(L, candidate.standardVersionHash);
+  const measuredRule = std?.requirements.find((r) => r.requirementId === move.requirementId && r.measurement);
+  let counted: 'a' | 'b' | 'same' | null = null;
+  if (std && measuredRule && !flag('--pick')) {
+    const verdictOf = (text: string): Map<string, string> =>
+      new Map(verifyText(name, std, text).checked.map((c) => [c.requirementId, c.result.verdict]));
+    const champ = verdictOf(inv.output); const cand = verdictOf(candRec.output);
+    const fixes = champ.get(move.requirementId) === 'VIOLATED' && cand.get(move.requirementId) === 'MET';
+    const breaks = [...cand].some(([id, v]) => v === 'VIOLATED' && champ.get(id) === 'MET');
+    const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
+    const candLetter = championFirst ? 'b' : 'a'; const champLetter = championFirst ? 'a' : 'b';
+    if (fixes && !breaks) counted = candLetter;
+    else if (worse || breaks) counted = champLetter;
+    if (counted) {
+      console.log(`${move.requirementId} is a measured rule, so this was decided by its count, not by eye: `
+        + (counted === candLetter ? 'the new implementation meets it and breaks nothing that held.' : 'the new implementation does worse on the measured rules.'));
+    }
+  }
   const pick = flag('--pick')?.toLowerCase()
+    ?? counted
     ?? await ask('Which is better?  (a / b / same)  ', ['a', 'b', 'same'])
     ?? null;
+  const decidedBy: 'HUMAN' | 'DETERMINISTIC' = counted && !flag('--pick') ? 'DETERMINISTIC' : 'HUMAN';
   if (!pick) {
     console.log('Decide when you have read them:');
     console.log(`  atelier fix ${JSON.stringify(complaint)} --pick a|b|same`);
@@ -349,7 +379,7 @@ async function settleBlindPick(
   store.putObservation(L, { requirementId: move.requirementId, domain: 'BEHAVIOR', contextId: inv.inputHash,
     invocationId: candRec.invocationId, generationIndex: 0,
     verdict: pick === 'same' ? 'EQUAL' : choseCandidate ? 'CANDIDATE_PREFERRED' : 'CHAMPION_PREFERRED',
-    producer: 'expert-blind-ab', producerVersion: '1', authority: 'HUMAN',
+    producer: decidedBy === 'HUMAN' ? 'expert-blind-ab' : 'ratified-measurement', producerVersion: '1', authority: decidedBy,
     evidence: { order: championFirst ? 'champion-first' : 'candidate-first', complaint, champion: inv.invocationId }, at });
   store.appendEvent(L, { kind: 'JUDGEMENT_RECORDED', requirementId: move.requirementId,
     championSkillVersionHash: inv.skillVersionHash, candidateSkillVersionHash: candidate.skillVersionHash,
@@ -357,7 +387,7 @@ async function settleBlindPick(
 
   if (!choseCandidate) {
     store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'REJECTED',
-      evaluationBasis: { generations: 1, instrument: 'HUMAN_EYE', orderInvariant: null }, at, note: complaint });
+      evaluationBasis: { generations: 1, instrument: decidedBy === 'HUMAN' ? 'HUMAN_EYE' : 'QUALIFIED_OBSERVER', orderInvariant: null }, at, note: complaint });
     console.log(pick === 'same'
       ? '\nSame to your eye — the current version stays, and this move is recorded as tried.'
       : '\nThe current version stays. Recorded, so this move is not re-proposed on evidence this weak;');
@@ -376,7 +406,7 @@ async function settleBlindPick(
   if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was promoted — the active version is unchanged.`);
   store.setActive(L, candidate.skillVersionHash);
   store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED',
-    evaluationBasis: { generations: 1, instrument: 'HUMAN_EYE', orderInvariant: null }, at, note: complaint });
+    evaluationBasis: { generations: 1, instrument: decidedBy === 'HUMAN' ? 'HUMAN_EYE' : 'QUALIFIED_OBSERVER', orderInvariant: null }, at, note: complaint });
   store.appendEvent(L, { kind: 'PROMOTED', at, skillVersionHash: candidate.skillVersionHash,
     supersededActive: prevActive, evaluatedInvocation: candRec.invocationId, packageHash: pkg.packageHash });
   console.log(`\nKept. ${pickHost().invocationHint(name).trim()} now serves the new implementation.`);

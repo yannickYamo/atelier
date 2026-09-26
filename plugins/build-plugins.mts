@@ -98,6 +98,11 @@ for (const h of HOSTS) {
   writeFileSync(join(root, h.manifestDir, 'plugin.json'), `${MANIFEST(h)}\n`);
   writeFileSync(join(root, 'hooks', 'hooks.json'), `${HOOKS(h)}\n`);
   writeFileSync(join(root, 'scripts', 'capability-check.sh'), CAPABILITY_CHECK, { mode: 0o755 });
+  // The checker as a tool any agent in the session can call: `atelier mcp` over stdio. Declared at
+  // the plugin root, where Claude Code reads a plugin's servers.
+  if (h.id === 'claude-code') {
+    writeFileSync(join(root, '.mcp.json'), `${JSON.stringify({ mcpServers: { atelier: { command: 'atelier', args: ['mcp'] } } }, null, 2)}\n`);
+  }
   if (h.id === 'claude-code') writeFileSync(join(root, 'scripts', 'record-hook.sh'), RECORD_HOOK, { mode: 0o755 });
 
   for (const skill of readdirSync(SRC)) {
