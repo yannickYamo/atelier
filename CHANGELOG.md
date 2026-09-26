@@ -27,6 +27,18 @@ a run in progress may not be.
 - **`<command> --help`, `--version`**, answered before dispatch.
 - **The plugin installs**: `/plugin marketplace add yannickYamo/atelier`, `/plugin install atelier@atelier`.
 
+- **Measured rules** (`core/observers/`): deterministic observers whose verdict is a fact about the
+  text — banned words and substitution lists (LEXICON), sentence length, paragraph length, hedging —
+  each returning the exact spans that broke the rule. Discovery counts the measurable part of the
+  corpus and proposes it on the review screen with how many of the author's own pieces meet it,
+  including a stock-phrase ban built only from phrases the author never uses. `add --measure` lets an
+  author declare one on their own rule. A measured rule is tested by a count, never a reader, and its
+  target is stated in SKILL.md.
+- **`atelier verify --skill <name> <file>`** (or stdin, `--json`): any text against every measured
+  rule, with spans; exits 1 on a broken REQUIRED rule. After `atelier new` builds, the measured rules
+  are checked for free against the pieces held back.
+- **A census for dark fields**: every optional Requirement field must have a writer on a reachable path.
+
 ### Changed (product phases, 2026-09-26)
 
 - **The discovery split scales with the corpus**: about a third held out (capped at 8), everything
@@ -38,6 +50,13 @@ a run in progress may not be.
   through one function.
 - The review, `pending` and coverage views read discovery's grouping and held-out recurrence, which
   were computed and then dropped.
+
+### Removed (product phases, 2026-09-26)
+
+- **The taste-discovery ladder** (priority fold, blueprint assembly, the dark discrimination channel,
+  the methodology fold and the method-registry class): reachable only through `import type`, never
+  executed, and capped at ADVISORY by construction. Evidence to weight now runs through the review
+  screen's suggestion and the person's ruling.
 
 ### Fixed (product phases, 2026-09-26)
 
