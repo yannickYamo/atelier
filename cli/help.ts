@@ -33,7 +33,7 @@ export const USAGE: Readonly<Record<string, string>> = {
   promote: 'atelier promote --skill <name> --candidate <hash> --why "<what made you pick it>"\n  Install a candidate implementation. The standard does not move.',
   judgements: 'atelier judgements --skill <name>\n  Every A/B pick recorded for a skill.',
   invoke: 'atelier invoke --skill <name> "<task>"\n  Run the skill on a task.',
-  amend: 'atelier amend --skill <name> --rule <id> [--statement "<new wording>"] [--materiality REQUIRED|PREFERRED|…] --reason "<why>"\n  Reword or reweigh a rule, recorded as a supersession.',
+  amend: 'atelier amend --skill <name> --rule <id> [--statement "<new wording>"] [--materiality REQUIRED|PREFERRED|…] [--measure <observer>:<params>|none] --reason "<why>"\n  Reword, reweigh or re-target a rule, recorded as a supersession.',
   sharpen: 'atelier sharpen --rule <id>\n  Ask the questions that would make a rule\'s condition precise.',
   answer: 'atelier answer --rule <id> --pick <option>\n  Answer a boundary probe.',
   improve: 'atelier improve --skill <name> [--invocation <id> --complaint "<what was wrong>"]\n  Propose one alternative implementation for a complaint.',
