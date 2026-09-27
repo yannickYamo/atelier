@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { normalizeClass } from '../../core/observers/doc-class.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -115,6 +116,14 @@ export function build(nameArg?: string): void {
       store.setExemplar(L, text);
       console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
     }
+  }
+  // The kind of document the standard measures; `verify`, `invoke` and the MCP tool refuse a text
+  // declared as another kind. `none` clears it.
+  const cls = flag('--class');
+  if (cls !== undefined) {
+    store.setDocClass(L, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
+    const now = store.getDocClass(L);
+    console.log(now ? `Document class: ${now}. A text declared as another class is refused by verify and invoke.` : 'Document class cleared.');
   }
   const pkg0 = renderAgentSkill(v, arch, name, desc, store.getExemplar(L));
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,

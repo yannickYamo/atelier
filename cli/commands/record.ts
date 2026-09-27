@@ -19,6 +19,7 @@
 
 import { checkDraft } from '../../core/loop/run-repair.js';
 import { planRepair, regressions } from '../../core/loop/repair.js';
+import { spanIntegrity } from '../../core/loop/integrity.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
@@ -142,7 +143,8 @@ export async function record(): Promise<void> {
     writeAtomic(pendingPath, JSON.stringify({ ...pending, repairOf: { outputHash: sha(output), violated: brokenNow.map((c) => c.requirementId),
       draft: output, spans: targets.map((t) => ({ start: t.start, end: t.end })) } }, null, 1));
     const reason = `Your answer breaks ${brokenNow.length} REQUIRED rule(s) of the /${pending.skillName} standard. `
-      + 'Rewrite ONLY these spans, keep everything else exactly as it is, and give the full revised answer:\n\n'
+      + 'Rewrite ONLY these spans, keep everything else exactly as it is, keep every figure, name, negation, [placeholder] and '
+      + 'qualifier ("may", "most", "roughly") the span carries unless the reason names that word, and give the full revised answer:\n\n'
       + targets.map((t) => `${t.id}. "${t.text}"\n   ${t.reasons.join('\n   ')}`).join('\n\n');
     process.stdout.write(`${JSON.stringify({ decision: 'block', reason })}\n`);
     return;
@@ -161,11 +163,17 @@ export async function record(): Promise<void> {
       return out.map((x) => x.trim()).filter(Boolean);
     };
     const outsideSpansChanged = !keep(draft, pending.repairOf.spans).every((piece) => output.includes(piece));
+    // The same meaning check the CLI splice enforces, over the whole answer: the host held the pen, so a
+    // lost figure or qualifier cannot be put back here, only named where the person will see it.
+    const asked = planRepair(draft, before);
+    const meaning = spanIntegrity(draft, output, new Set(asked.flatMap((t) => t.drops)), asked.some((t) => t.specifics));
     repair = { passes: 1, violatedBefore: pending.repairOf.violated, violatedAfter: brokenNow.map((c) => c.requirementId),
       originalOutputHash: pending.repairOf.outputHash, draft, outsideSpansChanged,
+      ...(meaning.ok ? {} : { meaningLost: meaning.lost }),
       why: [brokenNow.length ? 'the host rewrote once and a REQUIRED rule still does not hold' : 'every REQUIRED measured rule now holds',
         worse.length ? `the rewrite made ${worse.join(', ')} worse` : '',
-        outsideSpansChanged ? 'text outside the named spans changed' : ''].filter(Boolean).join('; ') };
+        outsideSpansChanged ? 'text outside the named spans changed' : '',
+        meaning.ok ? '' : `the rewrite lost ${meaning.lost.join(', ')}`].filter(Boolean).join('; ') };
   }
 
   const at = new Date().toISOString();
