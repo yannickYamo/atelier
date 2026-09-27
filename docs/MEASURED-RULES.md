@@ -31,6 +31,7 @@ it, but there is nothing specific to rewrite.
 | `OPENING` | the first prose paragraph: phrases it must not use, and a length band | `OPENING:avoid=in today's\|imagine,maxWords=80` |
 | `CLOSING` | the last prose paragraph: the same | `CLOSING:avoid=ultimately\|in conclusion` |
 | `HEADINGS` | section headings: phrases, sentence or title case, length, how many per 1,000 words | `HEADINGS:avoid=the thing\|gets wrong,case=SENTENCE,maxWords=8` |
+| `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
@@ -68,8 +69,11 @@ screen as every other rule, and nothing is enforced until you accept it.
    - which of two competing words each side reaches for ("but" or "however", "it's" or "it is")
    - the connectives you lean on
    - the stock vocabulary the model leans on
-   - the sentence-length mix
-   - the function-word profile
+   - the sentence-length mix, and how much sentence, paragraph and section lengths vary (pace)
+   - the function-word profile, kept only if each of your own pieces and each model draft, left out in
+     turn, lands on its own side
+   - the spaced hyphen the em-dash rule substitutes, capped at your own rate so the substitute cannot
+     take over
    - stock moves at the edges: phrases models open and close with ("In today's…", "Ultimately,"), heading
      tropes ("The thing everyone gets wrong…", "Why this matters"), heading case and opening length
 
@@ -107,6 +111,16 @@ that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
 - **Accuracy comes before style.** Rules marked `--phase ACCURACY` and invented claims (UNSOURCED, see
   `core/loop/claims.ts`) get their own first pass.
 - **It changes the output, never the standard.** The loop has no authority to relax a target.
+
+### What is deliberately not proposed
+
+- **Positive vocabulary beyond connectives.** Words you use far more than the model were tried as a
+  floor on a real 20-post corpus. They turned out to be the author's topic ("verification", "loops",
+  "quality"), not their voice, and a floor over them would push that vocabulary into an article on
+  another subject. The connectives floor is the topic-free part. Coined labels and favoured verbs are
+  left to the reading-based rules, which are judged in context.
+- **Figure consistency.** Whether a piece keeps one governing metaphor is a reading-based rule. No
+  count can tell a governing figure from a recurring topic word.
 
 ## The regression floor
 

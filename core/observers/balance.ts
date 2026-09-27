@@ -20,7 +20,8 @@
 
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, Span } from './registry.js';
-import { findTerms, sentencesOf, proseRegions, wordsOf } from './text.js';
+import { findTerms, sentencesOf, proseRegions, wordsOf, paragraphsOf } from './text.js';
+import { headingsOf } from './structure.js';
 
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
 const list = (p: Measurement['params'], k: string): readonly string[] | null => {
@@ -193,5 +194,67 @@ export const DISTRIBUTION: Observer = {
           + (toward !== undefined ? `; rewrite it as ${bandLabel(edges, toward)}` : '') };
     });
     return { verdict: 'VIOLATED', spans, value: r2(d), detail: `${mix}; ${Math.round(d * 100)}% off the target mix (at most ${Math.round(tol * 100)}%)` };
+  },
+};
+
+// ── RHYTHM ───────────────────────────────────────────────────────────────────────────────────────
+//
+// Pace is not how long sentences are on average; it is how much they vary. A writer who follows three
+// long sentences with a short one has a rhythm; a model's plain prose tends to hold one medium length,
+// and one medium paragraph after another, which a reader hears as flat. RHYTHM measures the variation
+// (coefficient of variation: standard deviation over mean) of sentence, paragraph or section lengths,
+// held to a floor, a cap, or both. It points at nothing to rewrite: it is used to choose between
+// drafts, and to watch that a new version does not flatten the pace.
+
+export type RhythmUnit = 'SENTENCE' | 'PARAGRAPH' | 'SECTION';
+
+/** Lengths in words of each unit, in order. Sections are the prose between section headings. */
+export function unitLengths(text: string, unit: RhythmUnit): number[] {
+  if (unit === 'SENTENCE') return sentencesOf(text).map((s) => s.words);
+  if (unit === 'PARAGRAPH') return paragraphsOf(text).map((p) => wordsOf(p.text).length);
+  const hs = headingsOf(text);
+  if (!hs.length) return [];
+  const bounds = [...hs.map((h) => h.start), text.length];
+  return hs.map((_, i) => proseRegions(text.slice(hs[i].end, bounds[i + 1])).reduce((n, r) => n + wordsOf(r.text).length, 0)).filter((n) => n > 0);
+}
+
+export const coefficientOfVariation = (xs: readonly number[]): number => {
+  if (xs.length < 2) return 0;
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  if (!m) return 0;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1));
+  return Math.round((sd / m) * 100) / 100;
+};
+
+/** The fewest units a variation means anything over. */
+export const RHYTHM_MIN_UNITS: Readonly<Record<RhythmUnit, number>> = { SENTENCE: 10, PARAGRAPH: 5, SECTION: 3 };
+
+const UNIT_LABEL: Readonly<Record<RhythmUnit, string>> = { SENTENCE: 'sentence', PARAGRAPH: 'paragraph', SECTION: 'section' };
+
+export const RHYTHM: Observer = {
+  id: 'RHYTHM',
+  describe: (p) => {
+    const u = (list(p, 'unit') ?? ['SENTENCE'])[0] as RhythmUnit;
+    const lo = num(p, 'minCv'); const hi = num(p, 'maxCv');
+    return `${UNIT_LABEL[u] ?? 'sentence'} lengths that vary: ${lo !== null ? `at least ${lo}` : ''}${lo !== null && hi !== null ? ' and ' : ''}${hi !== null ? `at most ${hi}` : ''} (standard deviation over mean)`;
+  },
+  validate: (p) => {
+    const u = (list(p, 'unit') ?? [])[0];
+    if (u === undefined || !['SENTENCE', 'PARAGRAPH', 'SECTION'].includes(u)) return 'unit is SENTENCE, PARAGRAPH or SECTION';
+    const lo = num(p, 'minCv'); const hi = num(p, 'maxCv');
+    if (lo === null && hi === null) return 'needs minCv, maxCv or both';
+    if (lo !== null && hi !== null && lo > hi) return 'minCv cannot exceed maxCv';
+    return null;
+  },
+  observe(text, p) {
+    const u = (list(p, 'unit') ?? ['SENTENCE'])[0] as RhythmUnit;
+    const xs = unitLengths(text, u);
+    if (xs.length < RHYTHM_MIN_UNITS[u]) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `fewer than ${RHYTHM_MIN_UNITS[u]} ${UNIT_LABEL[u]}s` };
+    const cv = coefficientOfVariation(xs);
+    const lo = num(p, 'minCv'); const hi = num(p, 'maxCv');
+    const detail = `${UNIT_LABEL[u]} lengths vary by ${cv} (over ${xs.length})`;
+    if (lo !== null && cv < lo) return { verdict: 'VIOLATED', spans: [], value: cv, detail: `${detail}; at least ${lo}: the pace is flat` };
+    if (hi !== null && cv > hi) return { verdict: 'VIOLATED', spans: [], value: cv, detail: `${detail}; at most ${hi}` };
+    return { verdict: 'MET', spans: [], value: cv, detail };
   },
 };
