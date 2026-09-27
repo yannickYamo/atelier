@@ -12,7 +12,7 @@ import { compileArchitecture, observedBoundaries } from '../../core/architecture
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, projectDir, pickHost, skillArg, servedContrast } from '../runtime.js';
+import { sha, DATA, die, argv, flag, projectDir, pickHost, skillArg, carriedFrom } from '../runtime.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
@@ -62,7 +62,8 @@ export function confirmBoundary(): void {
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
-  const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L), servedContrast(L, next));
+  const carried = carriedFrom(L, sv.skillVersionHash, next);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,

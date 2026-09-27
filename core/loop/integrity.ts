@@ -16,7 +16,9 @@
 //
 // A rewrite that loses one is refused and the original span kept. The exceptions are exact and come
 // from the rule being repaired: a banned term may go (that is the repair), a hedge a hedge cap flagged
-// may go, and a span flagged as an invented story or figure is expected to lose its specifics.
+// may go, a competing word a ratio flagged may be swapped (but "is not" → "is" is still a lost
+// negation: only "is not" → "isn't" is a swap), and a span flagged as an invented story or figure is
+// expected to lose its specifics.
 // Paraphrase that keeps all four is not checked further: this guards the strength of a claim, not its
 // wording, and it certifies nothing beyond the four.
 
@@ -74,13 +76,16 @@ export interface Integrity { readonly ok: boolean; readonly lost: readonly strin
  * asked to remove; `specificsExpected` is true for an invented story or figure, whose specifics are
  * meant to go.
  */
-export function spanIntegrity(original: string, replacement: string, allowedDrops: ReadonlySet<string>, specificsExpected: boolean): Integrity {
+export function spanIntegrity(original: string, replacement: string, allowedDrops: ReadonlySet<string>, specificsExpected: boolean,
+  /** words to be swapped for a competing form: they may go, but a negation they carry must survive */
+  swaps: ReadonlySet<string> = new Set()): Integrity {
   if (specificsExpected) return { ok: true, lost: [] };
   const lost: string[] = [];
   // A term the rule asked to remove licenses whatever it contains: removing "not X, it's Y" removes a
   // negation, and removing a flagged "perhaps" removes a qualifier. That is the repair, not a loss.
   const drops = [...allowedDrops];
-  const licensed = (term: string): boolean => drops.some((d) => d === term.toLowerCase() || hasTerm(d, term));
+  const words = [...drops, ...swaps];
+  const licensed = (term: string): boolean => words.some((d) => d === term.toLowerCase() || hasTerm(d, term));
   const after = tally(numbersIn(replacement));
   for (const [n, k] of tally(numbersIn(original))) if ((after.get(n) ?? 0) < k) lost.push(`the figure ${n}`);
   // Negation may fall by exactly what the licensed drops carried ("not X, it's Y" recast), never more,

@@ -20,9 +20,12 @@ import { sentencesOf, paragraphsOf } from '../observers/registry.js';
 import type { VerifyReport } from '../observers/verify.js';
 import { spanIntegrity } from './integrity.js';
 
-/** Observers whose spans ARE the thing to remove or swap: a banned term, a flagged hedge, a counted
- *  habit, an occurrence over a word rate, the competing word in a ratio. */
-const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE', 'RATIO']);
+/** Observers whose spans ARE the thing to remove: a banned term, a flagged hedge, a counted habit, an
+ *  occurrence over a word rate. */
+const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE']);
+/** Observers whose spans are to be SWAPPED for a competing form ("is not" for "isn't"): the word may go,
+ *  but what it asserted may not, so a swap never licenses dropping a negation. */
+const SWAPS_SPAN = new Set(['RATIO']);
 
 export interface RepairTarget {
   readonly id: number;
@@ -33,6 +36,8 @@ export interface RepairTarget {
   readonly requirementIds: readonly string[];
   /** words the broken rules asked to remove; the integrity check lets exactly these go */
   readonly drops: readonly string[];
+  /** words the broken rules asked to swap for a competing form; they may go, their negations may not */
+  readonly swaps?: readonly string[];
   /** an invented story or figure: its specifics are meant to be replaced by a placeholder */
   readonly specifics: boolean;
 }
@@ -47,7 +52,7 @@ export function planRepair(text: string, report: VerifyReport,
   const requiredOnly = opts.requiredOnly ?? true;
   const sentences = sentencesOf(text);
   const paragraphs = paragraphsOf(text);
-  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; specifics: boolean }[] = [];
+  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
     if (requiredOnly && c.materiality !== 'REQUIRED') continue;
@@ -64,11 +69,12 @@ export function planRepair(text: string, report: VerifyReport,
         // opening That's") asks for the sentence to be recast, not for its claims to be dropped.
         drop: c.observer && REMOVES_SPAN.has(c.observer) && !(sent && sp.start <= sent.start && sp.end >= sent.end)
           ? sp.text.trim().toLowerCase() : null,
+        swap: c.observer && SWAPS_SPAN.has(c.observer) ? sp.text.trim().toLowerCase() : null,
         specifics: c.requirementId === 'UNSOURCED' });
     }
   }
   raw.sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; specifics: boolean }[] = [];
+  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean }[] = [];
   for (const r of raw) {
     const last = merged[merged.length - 1];
     if (last && r.start < last.end) {
@@ -76,11 +82,12 @@ export function planRepair(text: string, report: VerifyReport,
       if (!last.reasons.includes(r.reason)) last.reasons.push(r.reason);
       if (!last.rids.includes(r.rid)) last.rids.push(r.rid);
       if (r.drop && !last.drops.includes(r.drop)) last.drops.push(r.drop);
+      if (r.swap && !last.swaps.includes(r.swap)) last.swaps.push(r.swap);
       last.specifics ||= r.specifics;
-    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], specifics: r.specifics });
+    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [], specifics: r.specifics });
   }
   return merged.map((m, i) => ({ id: i + 1, start: m.start, end: m.end, text: text.slice(m.start, m.end),
-    reasons: m.reasons, requirementIds: m.rids, drops: m.drops, specifics: m.specifics }));
+    reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics }));
 }
 
 export const REPAIR_SYSTEM = `You revise marked spans of a draft so that each one meets the rules it broke.
@@ -138,7 +145,7 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
   for (const t of [...targets].sort((a, b) => b.start - a.start)) {
     const rep = byId.get(t.id);
     if (rep === undefined) continue;
-    const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false);
+    const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false, new Set(t.swaps ?? []));
     if (!integrity.ok) { reverted.push({ id: t.id, lost: integrity.lost }); continue; }
     out = out.slice(0, t.start) + rep.trim() + out.slice(t.end);
     applied.push({ id: t.id, before: t.text, after: rep.trim() });

@@ -20,6 +20,8 @@ import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.
 import * as store from '../../core/state/store.js';
 import { measure } from '../../core/observers/registry.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
+import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
+import { extract } from '../../core/intake/extract.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { review } from './review.js';
@@ -132,6 +134,7 @@ export async function newSkill(): Promise<void> {
   if (s.run.state !== 'BUILT') return;
   const built = s.skillName ?? name;
   heldOutCheck(built);
+  proposeFloor(built);
   console.log(`\nUse it:   /${built} <your task>          (in Claude Code)`);
   console.log(`          atelier invoke --skill ${built} "<your task>"`);
   console.log(`Check any text against it:  atelier verify --skill ${built} <file>`);
@@ -165,4 +168,30 @@ function heldOutCheck(skill: string): void {
     const met = applicable.filter((x) => x.verdict === 'MET').length;
     console.log(`  ${r.requirementId}  ${applicable.length ? `${met} of ${applicable.length} meet it` : 'not measurable on these pieces'}   ${r.statement.slice(0, 70)}`);
   }
+}
+
+/**
+ * THE FLOOR'S MARGINS, PROPOSED WHILE THE CORPUS IS AT HAND. Each measured rule's margin is half the
+ * spread of the author's own pieces on it (core/distinctiveness/measured.ts); every dimension starts
+ * OBSERVE, so nothing blocks until the owner says so. Costs nothing: no model is called. Reserved pieces
+ * are left out: they are held back for the blind comparison and nothing reads them early.
+ */
+function proposeFloor(skill: string): void {
+  const L: store.StoreLayout = { root: DATA, skillName: skill };
+  if (store.getFloor(L).contract) return;
+  const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  if (!v) return;
+  const dims = floorDimensions(v);
+  const pathsFile = runFile('corpus-paths.json');
+  if (!dims.length || !existsSync(pathsFile)) return;
+  const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
+  const files = readJson<{ id: string; path: string }[]>(pathsFile, { kind: 'array', what: 'the sealed corpus path list' });
+  const texts = files.filter((f) => !reserved.has(f.id)).flatMap((f) => { const r = extract(f.path); return r.ok ? [(r as { text: string }).text] : []; });
+  const proposals = proposeMargins(dims, texts);
+  if (!proposals.length) return;
+  store.setFloor(L, { ...store.getFloor(L), contract: buildContract(proposals, dims, null) });
+  console.log(`\nRegression floor: margins proposed for ${proposals.length} measured rule(s) from your own spread, all watched, none blocking yet.`);
+  console.log(`  See and set it:  atelier floor --skill ${skill}`);
 }

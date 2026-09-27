@@ -16,7 +16,7 @@
 // not a holdout.
 
 import * as store from '../../core/state/store.js';
-import { DATA, die, flag, argv, numericFlag, clientAndBinding, describeBinding, skillArg, servedContrast } from '../runtime.js';
+import { DATA, die, flag, argv, numericFlag, clientAndBinding, describeBinding, skillArg, carriedFrom } from '../runtime.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
 import { join } from 'node:path';
@@ -366,7 +366,8 @@ export async function contract(): Promise<void> {
         candidateArch = applyEscalation(candidateArch, p.operation,
           sha(`${candidateArch.architectureHash}|${p.operation.requirementId}|${p.operation.to}`));
       }
-      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`, store.getExemplar(L), servedContrast(L, v));
+      const carried = carriedFrom(L, sv.skillVersionHash, v);
+      const candidatePkg = renderAgentSkill(v, candidateArch, name, sv.description ?? `Applies a compiled standard (${v.workType})`, carried.exemplar, carried.contrast);
       // The optimizer changed an arrangement. It may not have changed the target, and saying so is
       // cheap next to discovering later that it did.
       assertSameTarget(v, v);

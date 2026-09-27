@@ -119,6 +119,12 @@ export interface QualityFloorContract {
  * So a contract must be constructed per standard, and constructing one is the work
  * BUILD_DISTINCTIVENESS_BASELINE names. Until then the gate reports UNQUALIFIED and PROMOTE stays
  * unreachable.
+ *
+ * ./measured.ts is that construction for the measured rules: each is a dimension, scored by its own
+ * deterministic observer, with a margin PROPOSED from the author's spread across their own pieces and
+ * decided by the owner (`atelier floor`). That is not a margin from instrument noise: the observers have
+ * none, and the spread is a property of the writer. Every dimension still starts OBSERVE, and EARNED
+ * still needs a measured false-alarm rate (an A/A run), exactly as below.
  */
 export function requireFloorContract(contract: QualityFloorContract | null): QualityFloorContract {
   if (!contract || Object.keys(contract.dimensions).length === 0) {

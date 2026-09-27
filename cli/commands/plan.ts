@@ -16,7 +16,7 @@
 // from what the installed skill actually is.
 
 import * as store from '../../core/state/store.js';
-import { ruleKey } from '../../core/state/rule-key.js';
+import { keysOf } from '../../core/state/rule-key.js';
 import { DATA, die, skillArg, argv } from '../runtime.js';
 import { applicabilityModeOf, sourceModeOf, type Requirement } from '../../core/state/canonical-state.js';
 import { obligationsForStandard, coverageOf } from '../../core/contract/obligation.js';
@@ -71,6 +71,7 @@ export function plan(): void {
     + `${'carrier'.padEnd(w.car)} ${'watched'.padEnd(w.gate)} reaches the model`);
   console.log('-'.repeat(110));
 
+  const keys = keysOf(v.requirements);
   for (const [i, r] of v.requirements.entries()) {
     const m = rows.get(r.requirementId);
     // A requirement with no manifest row is the defect the manifest exists to expose: the
@@ -78,7 +79,7 @@ export function plan(): void {
     const carrier = m?.carrier ?? 'NO MANIFEST ROW';
     const gate = m?.gateRole === 'ENFORCE' ? 'instructs' : m?.gateRole === 'OBSERVE' ? 'watched' : '—';
     const reaches = m?.emitted ? (m.artifact ?? 'yes') : 'nothing is served for it';
-    console.log(`${String(i + 1).padEnd(w.n)} ${r.requirementId.padEnd(w.id)} ${ruleKey(r).padEnd(w.key)} ${SOURCE[r.provenance].padEnd(w.src)} `
+    console.log(`${String(i + 1).padEnd(w.n)} ${r.requirementId.padEnd(w.id)} ${keys[i].padEnd(w.key)} ${SOURCE[r.provenance].padEnd(w.src)} `
       + `${(APPLICABILITY[applicabilityModeOf(r.appliesWhen)] ?? '?').padEnd(w.app)} `
       + `${carrier.padEnd(w.car)} ${gate.padEnd(w.gate)} ${reaches}`);
   }

@@ -11,6 +11,7 @@
 // standards and events.
 
 import type { ContrastPair } from '../compiler/contrast-examples.js';
+import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
@@ -113,6 +114,38 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+}
+
+/**
+ * THE REGRESSION FLOOR's state for a skill (see ../distinctiveness/measured.ts): the contract (which
+ * rules it watches, the margin on each, ENFORCE or OBSERVE), the tasks it is measured on, and the
+ * qualification an A/A run earned. The qualification names the contract and tasks it was earned on;
+ * change either and it no longer applies.
+ */
+export interface FloorState {
+  readonly contract: QualityFloorContract | null;
+  readonly tasks: readonly string[];
+  readonly qualification: (FloorQualification & { readonly contractHash: string }) | null;
+  /** A/A evidence so far, on the contract, tasks and model it was gathered under; runs accumulate */
+  readonly aa?: { readonly contractHash: string; readonly falseAlarms: number; readonly trials: number };
+}
+const floorDir = (l: StoreLayout): string => join(dirs(l).base, 'floor');
+export function getFloor(l: StoreLayout): FloorState {
+  const p = join(floorDir(l), 'state.json');
+  return existsSync(p) ? readJson<FloorState>(p, { what: 'the regression floor' }) : { contract: null, tasks: [], qualification: null };
+}
+export function setFloor(l: StoreLayout, f: FloorState): void {
+  mkdirSync(floorDir(l), { recursive: true });
+  writeAtomic(join(floorDir(l), 'state.json'), JSON.stringify(f, null, 1));
+}
+/** The frozen per-task scores of one SkillVersion: what a candidate is compared against. */
+export function getBaseline(l: StoreLayout, skillVersionHash: string): readonly FrozenBaselineEntry[] | null {
+  const p = join(floorDir(l), `baseline-${skillVersionHash}.json`);
+  return existsSync(p) ? readJson<FrozenBaselineEntry[]>(p, { kind: 'array', what: 'a frozen floor baseline' }) : null;
+}
+export function setBaseline(l: StoreLayout, skillVersionHash: string, entries: readonly FrozenBaselineEntry[]): void {
+  mkdirSync(floorDir(l), { recursive: true });
+  writeAtomic(join(floorDir(l), `baseline-${skillVersionHash}.json`), JSON.stringify(entries, null, 1));
 }
 
 /**

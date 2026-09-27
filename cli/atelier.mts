@@ -23,6 +23,7 @@ import { pending, ratifyBatch, ratifyOne, addOne, ratifyClose } from './commands
 import { build, revert } from './commands/build.js';
 import { confirmBoundary } from './commands/confirm.js';
 import { inspect, historyCmd, rollback, feedback } from './commands/inspect.js';
+import { floor } from './commands/floor.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
@@ -79,6 +80,7 @@ export const COMMANDS: readonly string[] = [
   'enrol',
   'feedback',
   'fix',
+  'floor',
   'history',
   'improve',
   'inspect',
@@ -125,6 +127,7 @@ const main = async (): Promise<void> => {
     case 'confirm': { confirmBoundary(); return; }
     case 'inspect': { inspect(); return; }
     case 'history': { historyCmd(); return; }
+    case 'floor': { await floor(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
     case 'study': { study(); return; }

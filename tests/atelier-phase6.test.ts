@@ -7,7 +7,13 @@ import { join, resolve } from 'node:path';
 import { measure, validateMeasurement } from '../core/observers/registry.js';
 import { lengthMix, mixDistance } from '../core/observers/balance.js';
 import { deriveContrastRules } from '../core/observers/contrast.js';
-import { contentKey, ruleKey, resolveRule, diffStandards } from '../core/state/rule-key.js';
+import { contentKey, ruleKey, resolveRule, diffStandards, keysOf, measurementId } from '../core/state/rule-key.js';
+import { spanIntegrity } from '../core/loop/integrity.js';
+import { planRepair, applyRepair, type Reverted } from '../core/loop/repair.js';
+import { checkDraft } from '../core/loop/run-repair.js';
+import { toHundredths } from '../core/observers/contrast.js';
+import { renderAgentSkill } from '../renderers/agent-skill/render.js';
+import { compileArchitecture } from '../core/architecture/compile.js';
 import { decide } from '../core/ratification/authority.js';
 import { refineToStandard } from '../core/loop/run-repair.js';
 import { selectContrastPairs, contrastFor, renderContrastFile, MAX_PAIRS } from '../core/compiler/contrast-examples.js';
@@ -147,10 +153,10 @@ describe('write this, not that: pairs from accepted repairs, re-verified, bounde
   it('an accepted repair records the pair under the rule\'s key', async () => {
     const client: InferenceClient = { complete: async () => anInferenceResult({ json: { replacements: [{ id: 1, text: 'We use the data.' }] } }) };
     const out = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'd', v, 'We leverage the data. Then we ship.', 2, { guardClaims: false });
-    expect(out.repair?.pairs).toEqual([{ key: ruleKey(rule), before: 'We leverage the data.', after: 'We use the data.' }]);
+    expect(out.repair?.pairs).toEqual([{ key: ruleKey(rule), check: measurementId(rule.measurement!), before: 'We leverage the data.', after: 'We use the data.' }]);
   });
-  const inv = (pairs: { key: string; before: string; after: string }[], at: string): InvocationRecord =>
-    ({ at, repair: { pairs } } as unknown as InvocationRecord);
+  const inv = (pairs: { key: string; before: string; after: string; check?: string }[], at: string, input = 'write something'): InvocationRecord =>
+    ({ at, input, repair: { pairs } } as unknown as InvocationRecord);
   it('selection keeps pairs that still teach the current standard, newest first, two per rule', () => {
     const k = ruleKey(rule);
     const picked = selectContrastPairs([
@@ -228,5 +234,129 @@ describe('through the binary', () => {
     expect(store.getDocClass(L)).toBe('blog');
     expect(store.getContrast(L).off).toBe(true);
     expect(readFileSync(join(proj, '.claude', 'skills', 'peek', 'SKILL.md'), 'utf8')).not.toContain('Write this, not that');
+  });
+});
+
+describe('Phase 6 audit: the gaps it found, closed', () => {
+  const k = (r: Requirement): string => ruleKey(r);
+  const lex = aRequirement({ requirementId: 'x1', kind: 'BOUNDARY', statement: 'Never say leverage.', materiality: 'REQUIRED',
+    measurement: { observer: 'LEXICON', params: { terms: ['leverage=>use'] } } });
+  const vl = { standardVersionHash: 's', requirements: [lex] } as unknown as StandardVersion;
+  const inv = (pairs: { key: string; before: string; after: string; check?: string }[], at: string, input = 'write something'): InvocationRecord =>
+    ({ at, input, repair: { pairs } } as unknown as InvocationRecord);
+
+  it('a ratio swap may change the word, never drop the negation it carried', () => {
+    expect(spanIntegrity('The plan is not ready.', 'The plan is ready.', new Set(), false, new Set(['is not'])).ok).toBe(false);
+    expect(spanIntegrity('The plan is not ready.', "The plan isn't ready.", new Set(), false, new Set(['is not'])).ok).toBe(true);
+    const v = { requirements: [aRequirement({ requirementId: 'r1', statement: 'Contract.', materiality: 'REQUIRED',
+      measurement: { observer: 'RATIO', params: { numerator: ["isn't"], denominator: ['is not'], minShare: 0.9 } } })] } as unknown as StandardVersion;
+    const draft = 'It is not done. It is not ready. It is not safe. It is not over.';
+    const targets = planRepair(draft, checkDraft('d', v, draft, { guardClaims: false }));
+    expect(targets[0].swaps).toEqual(['is not']);
+    expect(targets[0].drops).toEqual([]);
+    const reverted: Reverted[] = [];
+    applyRepair(draft, targets, targets.map((t) => ({ id: t.id, text: t.text.replace('is not', 'is') })), reverted);
+    expect(reverted.length).toBe(targets.length);
+  });
+
+  it('pairs written for a held-back task, or quoting a held-back piece, never ship', () => {
+    const p = { key: k(lex), before: 'We leverage A.', after: 'We use A.' };
+    expect(selectContrastPairs([inv([p], '2026-01-01', 'the reserved task')], vl, { tasks: ['the reserved task'], texts: [] })).toEqual([]);
+    expect(selectContrastPairs([inv([p], '2026-01-01')], vl, { tasks: [], texts: ['Intro. We leverage A. More.'] })).toEqual([]);
+    expect(selectContrastPairs([inv([p], '2026-01-01')], vl)).toHaveLength(1);
+  });
+
+  it('a pair recorded under a different check (an amended threshold or list) no longer ships', () => {
+    const p = { key: k(lex), check: 'deadbe', before: 'We leverage A.', after: 'We use A.' };
+    expect(selectContrastPairs([inv([p], '2026-01-01')], vl)).toEqual([]);
+    expect(selectContrastPairs([inv([{ ...p, check: measurementId(lex.measurement!) }], '2026-01-01')], vl)).toHaveLength(1);
+  });
+
+  it('word-counting checks are re-counted on the passage: a ratio pair must reduce the competing word', () => {
+    const ratio = aRequirement({ requirementId: 'r1', statement: 'But, not however.', measurement: { observer: 'RATIO', params: { numerator: ['but'], denominator: ['however'], minShare: 0.8 } } });
+    const v = { requirements: [ratio] } as unknown as StandardVersion;
+    expect(selectContrastPairs([inv([{ key: k(ratio), before: 'However, it held.', after: 'But it held.' }], '2026-01-01')], v)).toHaveLength(1);
+    expect(selectContrastPairs([inv([{ key: k(ratio), before: 'However, it held.', after: 'However it held fine.' }], '2026-01-01')], v)).toEqual([]);
+  });
+
+  it('two rules with the same content key get distinct keys, and the diff reports a removal as a removal', () => {
+    const a = aRequirement({ requirementId: 'm1', statement: 'Short sentences.', measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 15, p90Max: 28 } } });
+    const b = aRequirement({ requirementId: 'm2', statement: 'Shorter still.', measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 12, p90Max: 20 } } });
+    const keys = keysOf([a, b]);
+    expect(keys[1]).toBe(`${keys[0]}-2`);
+    const v = (rs: Requirement[]): StandardVersion => ({ requirements: rs } as unknown as StandardVersion);
+    expect(diffStandards(v([a, b]), v([a])).map((c) => c.change)).toEqual(['REMOVED']);
+  });
+
+  it('a floor and a cap on the same thing are different rules', () => {
+    const floor = aRequirement({ requirementId: 'c1', measurement: { observer: 'PATTERN_RATE', params: { pattern: ['BOLD_SPAN'], minPer1000: 1 } } });
+    const cap = aRequirement({ requirementId: 'c2', measurement: { observer: 'PATTERN_RATE', params: { pattern: ['BOLD_SPAN'], maxPer1000: 3 } } });
+    expect(contentKey(floor)).not.toBe(contentKey(cap));
+  });
+
+  it('a proposed mix never has a negative share, and always sums to one', () => {
+    const shares = toHundredths([0.3366, 0.3366, 0.3268, 0]);
+    expect(shares.every((x) => x >= 0)).toBe(true);
+    expect(Math.round(shares.reduce((a, b) => a + b, 0) * 100)).toBe(100);
+    expect(validateMeasurement({ observer: 'DISTRIBUTION', params: { edges: [8, 18, 30], shares: [0.5, 0.5, 0.1, -0.1], tolerance: 0.2 } })).toMatch(/between 0 and 1/);
+  });
+
+  it('a mix sends no more sentences to a band than it lacks', () => {
+    const mid = 'This sentence is here to sit in the middle band of lengths.';
+    const text = Array.from({ length: 10 }, () => mid).join(' ');
+    const r = measure(text, { observer: 'DISTRIBUTION', params: { edges: [8, 18, 30], shares: [0.3, 0.4, 0.2, 0.1], tolerance: 0.1 } });
+    expect(r.verdict).toBe('VIOLATED');
+    expect(r.spans.length).toBe(3);
+  });
+
+  it('"it is not" is one use, not one of each side', () => {
+    const r = measure("It is not done. It's fine. It is not ready. Don't go.", { observer: 'RATIO', params: { numerator: ["it's", "don't", "isn't"], denominator: ['it is', 'do not', 'is not'], minShare: 0.9 } });
+    expect(r.detail).toMatch(/50% of 4 uses/);
+    expect(r.spans[0].why).toMatch(/write "isn't" here/);
+  });
+
+  it('the contrast pass proposes a ratio only where most drafts fail it, and drops one the author\'s held-out work fails', () => {
+    const author = (i: number, word: string): { id: string; text: string } => ({ id: `a${i}.md`,
+      text: prose(`We shipped it ${word} the tests were thin. We fixed that ${word} kept going. Piece ${i} ends here.`, 300) });
+    const model = prose('We shipped it; however, the tests were thin. We fixed that; however, we kept going.', 300);
+    const read = [0, 1, 2, 3].map((i) => author(i, 'but'));
+    const ratios = (held: { id: string; text: string }[]) => deriveContrastRules(read, held, [model, model, model], 'MACHINE_DISCOVERED')
+      .filter((r) => r.requirement.measurement?.observer === 'RATIO');
+    expect(ratios([4, 5].map((i) => author(i, 'but')))).toHaveLength(1);
+    expect(ratios([4, 5].map((i) => author(i, 'however')))).toEqual([]);
+  });
+
+  it('a candidate carries the pairs its source version served, through the package, not the store', () => {
+    const v = { standardVersionHash: 's', evidenceId: 'e', workType: 'writing', requirements: [{ ...lex, authority: 'EXPERT_RATIFIED' }] } as unknown as StandardVersion;
+    const pairs = [{ key: k(lex), before: 'We leverage A.', after: 'We use A.', statement: lex.statement }];
+    const pkg = renderAgentSkill(v, compileArchitecture(v), 'demo', 'd', null, pairs);
+    expect(JSON.parse(pkg.assurance['contrast-pairs.json'])).toEqual(pairs);
+    expect(pkg.files['examples/contrast.md']).toContain('model-written');
+    expect(pkg.packageHash).toBe(renderAgentSkill(v, compileArchitecture(v), 'demo', 'd', null, pairs).packageHash);
+  });
+});
+
+describe('carriedFrom reads the source version\'s package, and honours --contrast none', () => {
+  it('pairs and exemplar come from the version rebuilt from; a rule no longer taught drops its pair', async () => {
+    const { carriedFrom } = await import('../cli/runtime.js');
+    const root = mkdtempSync(join(tmpdir(), 'atelier-p6-carry-'));
+    const L = { root, skillName: 'carry' };
+    const lex = aRequirement({ requirementId: 'x1', kind: 'BOUNDARY', statement: 'Never say leverage.', authority: 'EXPERT_RATIFIED',
+      measurement: { observer: 'LEXICON', params: { terms: ['leverage=>use'] } } });
+    const v = { standardVersionHash: 's1', evidenceId: 'e', workType: 'writing', requirements: [lex] } as unknown as StandardVersion;
+    const pairs = [{ key: ruleKey(lex), before: 'We leverage A.', after: 'We use A.', statement: lex.statement }];
+    const pkg = renderAgentSkill(v, compileArchitecture(v), 'carry', 'd', { text: 'My piece.' }, pairs);
+    store.putPackage(L, pkg);
+    store.putSkillVersion(L, { skillVersionHash: 'sv1', skillName: 'carry', standardVersionHash: 's1', architectureHash: 'a',
+      materializedHash: pkg.packageHash, builtAt: '2026-01-01', description: 'd' } as Parameters<typeof store.putSkillVersion>[1]);
+    // The store's own exemplar has since changed: the candidate must not pick that up.
+    store.setExemplar(L, 'A later piece.');
+    const carried = carriedFrom(L, 'sv1', v);
+    expect(carried.exemplar?.text).toBe('My piece.');
+    expect(carried.contrast).toEqual(pairs);
+    const rejected = { ...v, requirements: [{ ...lex, authority: 'EXPERT_REJECTED' as const }] } as StandardVersion;
+    expect(carriedFrom(L, 'sv1', rejected).contrast).toEqual([]);
+    store.setContrast(L, { off: true, pairs: [] });
+    expect(carriedFrom(L, 'sv1', v).contrast).toEqual([]);
   });
 });
