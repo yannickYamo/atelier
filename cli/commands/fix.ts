@@ -44,8 +44,11 @@ import type { InstallablePackage } from '../../adapters/host-adapter.js';
 import { bindingHash } from '../../core/runtime/binding.js';
 import type { Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
+import { resolveServedVersion } from './invoke.js';
+import { checkCandidate, floorStateFor, promoteChecked } from './floor.js';
+import { keysOf } from '../../core/state/rule-key.js';
 import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
-  projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, servedContrast } from '../runtime.js';
+  projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, carriedFrom } from '../runtime.js';
 
 const ask = async (question: string, allowed: readonly string[]): Promise<string | null> => {
   if (!process.stdin.isTTY) return null;
@@ -179,7 +182,8 @@ export async function fix(): Promise<void> {
     const arch = compileArchitecture(next);
     const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
     const desc = activeSv?.description ?? defaultDescription(next.workType);
-    const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L), servedContrast(L, next));
+    const carried = carriedFrom(L, activeSv?.skillVersionHash ?? null, next);
+    const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast);
     assertPortable(pkg);
     const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
       standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
@@ -219,12 +223,11 @@ export async function fix(): Promise<void> {
         die(`Your standard has moved since that run (${inv.standardVersionHash} -> ${current.standardVersionHash}) and no longer carries ${d.requirementId}, the rule this complaint was attributed to. Nothing to repair.`);
       }
       console.log(`Your standard has moved since that run (${inv.standardVersionHash} -> ${current.standardVersionHash}). Re-running the same task on the current version first, so the repair is about what you actually have.\n`);
-      const curPkg = store.getPackage(L, activeSv.materializedHash) ?? die(`package ${activeSv.materializedHash} missing.`);
       const { client: c0, binding: b0 } = clientAndBinding('target');
       const budget0: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
-      inv = await runOnce(L, activeSv, curPkg.files['SKILL.md'] ?? '', curPkg.packageHash,
-        { expectedPackageHash: curPkg.packageHash, servedPackageHash: curPkg.packageHash, matched: true, servedFiles: Object.keys(curPkg.files) },
-        inv.input, c0, budget0, b0, 'ORGANIC_USE', curPkg.files['contracts/output.schema.json'] ?? null, 'HOST_PROMPT');
+      const cur = resolveServedVersion(L, activeSv.skillVersionHash, '');
+      inv = await runOnce(L, activeSv, cur.servedText, cur.servedHash, cur.delivery,
+        inv.input, c0, budget0, b0, 'ORGANIC_USE', cur.contractFile, 'HOST_PROMPT');
       ranStandard = current;
     }
   }
@@ -285,7 +288,8 @@ export async function fix(): Promise<void> {
 
   const nextArch = applyEscalation(ranArch, op, sha(JSON.stringify(op) + ranArch.architectureHash));
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L), servedContrast(L, ranStandard));
+  const carried = carriedFrom(L, inv.skillVersionHash, ranStandard);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
@@ -306,9 +310,11 @@ export async function fix(): Promise<void> {
   console.log(`Trying a different implementation of ${op.requirementId}: ${op.from} → ${op.to} (a different mechanism, not a "stronger" one).`);
   console.log('Re-running your task on it…\n');
   const { client, binding } = clientAndBinding('target');
-  const candRec = await runOnce(L, candidate, pkg.files['SKILL.md'] ?? '', pkg.packageHash,
-    { expectedPackageHash: pkg.packageHash, servedPackageHash: pkg.packageHash, matched: true, servedFiles: Object.keys(pkg.files) },
-    inv.input, client, budget, binding, 'ORGANIC_USE', pkg.files['contracts/output.schema.json'] ?? null, 'HOST_PROMPT');
+  // Served exactly as `invoke` serves it, examples included: the champion's run saw them, so the
+  // candidate's must, or the pair compares two ways of serving rather than two implementations.
+  const served = resolveServedVersion(L, candidate.skillVersionHash, '');
+  const candRec = await runOnce(L, candidate, served.servedText, served.servedHash, served.delivery,
+    inv.input, client, budget, binding, 'ORGANIC_USE', served.contractFile, 'HOST_PROMPT');
 
   await settleBlindPick(L, name, inv, candidate, candRec, pkg,
     { requirementId: op.requirementId, from: op.from, to: op.to },
@@ -392,6 +398,41 @@ async function settleBlindPick(
         console.log(`${move.requirementId} is a measured rule, and its count favours one of these two; which one is shown after you pick.`);
         console.log(`That is one draft on one input and says nothing about what the rules do not count, so it is not installed on its own (${gate.unmet[0]}).`);
       }
+    }
+  }
+  // ── WITH AN EARNED FLOOR, THE COUNT CAN BE CONFIRMED WITHOUT YOU ─────────────────────────────
+  //
+  // One draft on one input cannot authorise an install. Several drafts on each of the floor's tasks,
+  // compared rule by rule with the current version's frozen scores under a floor whose false-alarm rate
+  // was measured on this skill, can: the promotion gate reads that evidence and may install, reject,
+  // or still hand the choice to you. Only when the floor is EARNED; otherwise this spends nothing.
+  if (countFavoursCandidate && measuredRule && !flag('--pick') && std) {
+    const { client, binding } = clientAndBinding('target');
+    const active = store.getActive(L);
+    if (active && floorStateFor(L, active, binding.requestedModel).state === 'EARNED') {
+      console.log('Your regression floor is earned, so the count is being confirmed on its tasks before anything is installed…');
+      const f = store.getFloor(L);
+      const fires = Math.max(2, Math.floor(numericFlag('--fires', 3)));
+      const targetKey = keysOf(std.requirements)[std.requirements.indexOf(measuredRule)];
+      const check = await checkCandidate(L, std, active, candidate.skillVersionHash, targetKey, fires,
+        { spentUsd: 0, capUsd: numericFlag('--floor-cap', 3), maxCalls: f.tasks.length * fires }, client, binding.requestedModel);
+      console.log(`floor: ${check.composite} · ${move.requirementId}: ${check.comparison} · gate: ${check.decision.authority}`);
+      const at = new Date().toISOString();
+      if (check.decision.authority === 'AUTO_PROMOTE') {
+        promoteChecked(L, name, candidate.skillVersionHash, check, complaint);
+        store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED',
+          evaluationBasis: { generations: fires, instrument: 'QUALIFIED_OBSERVER', orderInvariant: null }, at, note: complaint });
+        console.log(`\nKept, by the gate: ${move.requirementId} improved across your floor's tasks and no enforced rule regressed.`);
+        console.log(`  The previous version remains in history:  atelier rollback --skill ${name} --to ${active}`);
+        return;
+      }
+      if (check.decision.authority === 'AUTO_REJECT') {
+        store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'REJECTED',
+          evaluationBasis: { generations: fires, instrument: 'QUALIFIED_OBSERVER', orderInvariant: null }, at, note: complaint });
+        console.log(`\nThe current version stays: ${check.decision.why}`);
+        return;
+      }
+      console.log(`The gate still needs you: ${check.decision.why}\n`);
     }
   }
   const pick = flag('--pick')?.toLowerCase()

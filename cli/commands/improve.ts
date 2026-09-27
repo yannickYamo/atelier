@@ -17,6 +17,8 @@ import { foldRepairs, foldProhibitions, mayPropose, describeHistory, WEAKEST_EVA
   type EvidenceBasis } from '../../core/architecture/repair-memory.js';
 import { runSpine, explainSpine } from '../../core/convergence/controller.js';
 import { proposeFloor } from '../../core/distinctiveness/contract.js';
+import { NOTHING_EARNED } from '../../core/convergence/state-machine.js';
+import { floorStateFor } from './floor.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -29,7 +31,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, servedContrast } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, carriedFrom, modelFor } from '../runtime.js';
 import type { RepairRecord, InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -74,13 +76,16 @@ export async function improve(): Promise<void> {
     const repairs = foldRepairs(events);
     const prohibitions = foldProhibitions(events);
 
+    const distinctiveness = floorStateFor(L, activeHash, modelFor('target'));
     console.log(`\nWhat the evidence says:\n`);
     const spines = [];
     for (const r of prev.requirements) {
       const carrying = arch.components.find((c) => c.carries.includes(r.requirementId));
       const cur = carrying?.carrier;
       const spine = runSpine({ requirementId: r.requirementId, invocations, observations, repairs,
-        prohibitions, currentCarrier: cur, nextCarrier: cur ? nextLevel(cur) : null });
+        prohibitions, currentCarrier: cur, nextCarrier: cur ? nextLevel(cur) : null,
+        // The regression floor's real state (atelier floor), not the default of "nothing earned".
+        gates: { ...NOTHING_EARNED, distinctiveness: distinctiveness.state } });
       spines.push(spine);
       console.log(explainSpine(spine).split('\n').map((l) => `  ${l}`).join('\n'));
     }
@@ -94,8 +99,9 @@ export async function improve(): Promise<void> {
       const floor = proposeFloor(prev, new Set(), []);
       console.log(`\nProtecting your standard would mean holding these still while the skill improves:\n`);
       for (const d of floor.dimensions) console.log(`  ${d.sourceRequirementIds.join(',')}  ${d.protectedBehavior.slice(0, 88)}...`);
-      console.log(`\nNone of them is protected yet: how much of each you would accept losing is yours to decide,`);
-      console.log(`and it cannot be computed from anything measured.\n`);
+      console.log(`\nNone of them is protected yet (${distinctiveness.why}). How much of each you would accept losing is`);
+      console.log(`yours to decide. For the measured ones, margins can be proposed from your own pieces and set by you:`);
+      console.log(`  atelier floor --skill ${name}\n`);
     }
 
     const recent = invocations.slice(0, 3);
@@ -190,7 +196,8 @@ export async function improve(): Promise<void> {
   // INHERITED from the version being repaired. A repair changes the arrangement, never how the
   // skill describes itself, and reconstructing the default here reverted a description set on build.
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L), servedContrast(L, ranStandard));
+  const carried = carriedFrom(L, inv.skillVersionHash, ranStandard);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,

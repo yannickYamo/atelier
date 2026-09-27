@@ -195,7 +195,12 @@ and shows you both, blind. When the rule is measured, a count that says the new 
 rejects it on its own; a count that says it is better is shown to you as the count's view, and the new
 version is installed only when you pick it, because one draft on one input cannot speak for what the
 rules do not count. The count goes through the same promotion gate whether you pick or it does: a
-pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong. If your standard does not cover it, that is an authority question and it is yours alone:
+pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong.
+To let a repair install itself, earn a regression floor: `atelier floor` proposes, from your own pieces,
+how much each measured rule may move, runs the current version on your tasks, and measures its own
+false-alarm rate. Once that rate is under 5%, a repair whose rule improves across your tasks while no
+rule you enforce gets worse is installed without asking. Each step is explained in
+[docs/MEASURED-RULES.md](docs/MEASURED-RULES.md#the-regression-floor). If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession.
 
@@ -248,7 +253,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 95 files and 1398 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 96 files and 1427 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

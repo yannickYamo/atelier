@@ -14,33 +14,65 @@
 // rule the person amended is still the rule they amended. Two runs that discover the same measured
 // rule, or the same sentence, give it the same key without coordinating.
 //
-// Rules can be named three ways wherever a command takes `--rule`: the run id (`c2`), the key
-// (`R-3f9a1c`, any case, with or without the `R-`), or the rule's position in the standard (`19`).
+// `amend`, `confirm` and `floor` take a rule three ways: the run id (`c2`), the key (`R-3f9a1c`, any
+// case, with or without the `R-`), or the rule's position in the standard (`19`, as `atelier plan`
+// numbers it). Commands tied to a probe or a comparison record (`answer`, `compare`) take the id.
 
 import { createHash } from 'node:crypto';
-import type { Requirement, StandardVersion } from './canonical-state.js';
+import type { Measurement, Requirement, StandardVersion } from './canonical-state.js';
 
 const short = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 6);
 
-/** Params that say WHAT a measurement counts, as opposed to how much of it is allowed. */
+/** Params that say WHAT a measurement counts, as opposed to how much of it is allowed. A `role` names
+ *  what a list is for (the contrast pass's "connectives" floor) so a list that differs from run to run
+ *  does not make the rule a different rule. */
 const IDENTITY_PARAMS = new Set(['pattern', 'terms', 'numerator', 'denominator', 'edges', 'words', 'maxWords']);
+/** Which bounds a measurement sets: a floor and a cap on the same thing are two rules. */
+const BOUND_PARAMS = ['minPer1000', 'maxPer1000', 'minShare', 'maxShare'];
 
 const fold = (s: string): string => s.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 
 /** The key a rule has from its content alone, before any lineage is carried onto it. */
 export function contentKey(r: Pick<Requirement, 'kind' | 'statement' | 'measurement'>): string {
   if (r.measurement) {
-    const what = Object.entries(r.measurement.params)
+    const p = r.measurement.params;
+    const role = Array.isArray(p.role) ? `role=${(p.role as readonly string[]).join('|')}` : null;
+    const what = role ?? Object.entries(p)
       .filter(([k]) => IDENTITY_PARAMS.has(k))
       .map(([k, v]) => `${k}=${Array.isArray(v) ? [...(v as readonly (string | number)[])].map(String).sort().join('|') : String(v)}`)
       .sort().join(';');
-    return `R-${short(`M|${r.measurement.observer}|${what}`)}`;
+    const bounds = BOUND_PARAMS.filter((k) => typeof p[k] === 'number').join(',');
+    return `R-${short(`M|${r.measurement.observer}|${what}|${bounds}`)}`;
   }
   return `R-${short(`S|${r.kind}|${fold(r.statement)}`)}`;
 }
 
 /** A rule's key: the one it carries, or the one its content gives it. */
 export const ruleKey = (r: Requirement): string => r.key ?? contentKey(r);
+
+/**
+ * Every rule's key within one standard, unique. Two rules can share a content key (two sentence-length
+ * rules, say); the second and later get `-2`, `-3` in standard order, so a map keyed by rule never
+ * silently loses one. Use this, not `ruleKey`, wherever rules are looked up by key.
+ */
+export function keysOf(requirements: readonly Requirement[]): string[] {
+  const seen = new Map<string, number>();
+  return requirements.map((r) => {
+    const k = ruleKey(r);
+    const n = (seen.get(k) ?? 0) + 1;
+    seen.set(k, n);
+    return n === 1 ? k : `${k}-${n}`;
+  });
+}
+
+/** Rules by unique key: see `keysOf`. */
+export const byKey = (requirements: readonly Requirement[]): Map<string, Requirement> => {
+  const keys = keysOf(requirements);
+  return new Map(requirements.map((r, i) => [keys[i], r]));
+};
+
+/** A measurement's exact identity, thresholds included: a pair recorded under one check is not evidence for another. */
+export const measurementId = (m: Measurement): string => short(JSON.stringify({ o: m.observer, p: Object.fromEntries(Object.entries(m.params).sort(([a], [b]) => a.localeCompare(b))) }));
 
 /**
  * Find a rule by any of the names a person might use for it. Refuses an ambiguous name rather than
@@ -51,9 +83,9 @@ export function resolveRule(requirements: readonly Requirement[], ref: string): 
   const byId = requirements.find((r) => r.requirementId === want);
   if (byId) return { rule: byId };
   const asKey = want.toUpperCase().startsWith('R-') ? want.toUpperCase() : `R-${want.toUpperCase()}`;
-  const byKey = requirements.filter((r) => ruleKey(r).toUpperCase() === asKey);
-  if (byKey.length === 1) return { rule: byKey[0] };
-  if (byKey.length > 1) return { error: `${ref} names ${byKey.length} rules (${byKey.map((r) => r.requirementId).join(', ')}); use the id.` };
+  const keys = keysOf(requirements);
+  const hit = requirements.filter((_, i) => keys[i].toUpperCase() === asKey);
+  if (hit.length === 1) return { rule: hit[0] };
   const pos = /^#?(\d+)$/.exec(want);
   if (pos) {
     const i = Number(pos[1]) - 1;
@@ -73,8 +105,8 @@ export interface RuleChange {
 
 /** Which rules moved between two versions of a standard, matched by key rather than by run id. */
 export function diffStandards(prev: StandardVersion, next: StandardVersion): RuleChange[] {
-  const before = new Map(prev.requirements.map((r) => [ruleKey(r), r]));
-  const after = new Map(next.requirements.map((r) => [ruleKey(r), r]));
+  const before = byKey(prev.requirements);
+  const after = byKey(next.requirements);
   const out: RuleChange[] = [];
   for (const [key, r] of after) {
     const was = before.get(key);

@@ -66,12 +66,22 @@ export function resolveServedSkill(name: string): ServedSkill {
   // A CANDIDATE is served by explicit id and is NOT active. That asymmetry is the product: a person
   // must be able to run the thing being proposed WITHOUT it having been adopted first.
   const wanted = flag('--candidate') ?? store.getActive(L) ?? die(`no active version for ${name}. Build it first.`);
+  return resolveServedVersion(L, wanted, flag('--context') ?? '');
+}
+
+/**
+ * What a SkillVersion serves a model, exactly as `invoke` serves it: SKILL.md and every example file
+ * whose condition holds, fenced as reference material. `fix`'s candidate run and the regression floor's
+ * runs serve through this too, so a comparison between two versions is never a comparison between two
+ * ways of serving them.
+ */
+export function resolveServedVersion(L: store.StoreLayout, wanted: string, context: string): ServedSkill {
   const sv = store.getSkillVersion(L, wanted) ?? die(`SkillVersion ${wanted} is missing from the store.`);
   const pkg = store.getPackage(L, sv.materializedHash)
     ?? die(`package ${sv.materializedHash} is not in the store — this SkillVersion was built before packages were persisted, so what it served cannot be reconstructed. Rebuild it.`);
   const skillMd = pkg.files['SKILL.md'] ?? die('the stored package has no SKILL.md.');
 
-  const ctxFlag = (flag('--context') ?? '').toLowerCase();
+  const ctxFlag = context.toLowerCase();
   const cmap = pkg.files['context-map.json']
     ? (JSON.parse(pkg.files['context-map.json']) as { components: { requirementId: string; appliesWhen: string }[] })
     : { components: [] };
@@ -97,7 +107,8 @@ export function resolveServedSkill(name: string): ServedSkill {
   // NOT. No heading to continue, and an explicit statement that the deliverable starts after it.
   const exampleBlock = servedExamples.length
     ? `\n\n=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===\n\n`
-      + `Everything up to the end marker shows how the author works. It is context for you, never\n`
+      + `Everything up to the end marker shows how the author works, or how this skill's rules apply\n`
+      + `(a "write this, not that" file is model-written, never the author's). It is context for you, never\n`
       + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
       + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
       + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
