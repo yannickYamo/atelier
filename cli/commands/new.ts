@@ -27,6 +27,7 @@ import { discover } from './discover.js';
 import { review } from './review.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 
 const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 
@@ -67,7 +68,7 @@ export async function newSkill(): Promise<void> {
   // The kind of document this work is, kept for the skill from the first call: the build that uses it
   // may be a later continuation that does not repeat the flag.
   const cls = flag('--class');
-  if (cls) store.setDocClass({ root: DATA, skillName: name }, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
+  if (cls) store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
 
   process.env.ATELIER_ORCHESTRATED = '1';
   // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.
@@ -85,11 +86,16 @@ export async function newSkill(): Promise<void> {
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
     intake(path, flag('--work-type') ?? 'writing');
     s = loadSession();
-    saveSession({ ...s, source: path, ...(cap ? { cap } : {}), ...(intent ? { intent: { text: intent, mode } } : {}) });
+    // The name is the run's from the first call: a continuation that does not repeat --name must build
+    // the same skill (it once built one named after the folder, and the class set on the first call
+    // went to a skill that was never built).
+    saveSession({ ...s, source: path, ...(cap ? { cap } : {}), ...(intent ? { intent: { text: intent, mode } } : {}),
+      ...(flag('--name') ? { skillName: skillNameFrom(name) } : {}) });
     s = loadSession();
   } else {
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
     if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
+    if (flag('--name') && s.skillName !== skillNameFrom(name)) { saveSession({ ...s, skillName: skillNameFrom(name) }); s = loadSession(); }
   }
 
   if (s.run.state === 'CORPUS_SEALED' || s.run.state === 'LIST_SEALED') {

@@ -3,6 +3,7 @@
 // `atelier new <folder> "<purpose>"` against a scripted backend: the corpus is split and some of it
 // reserved before anything reads it, discovery proposes, the review screen suggests a ruling for each
 // rule, nothing is compiled until the person accepts, and accepting builds a skill that instructs.
+import * as store from '../core/state/store.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
@@ -138,6 +139,18 @@ describe('re-entry is the same run, or a refusal — never a silent switch', () 
     run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice');
     run(data, proj, 'new', dir, '--name', 'voice', '--accept');
     expect(readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8')).toMatch(/Use when asked to: write me a blog post like these/);
+  });
+
+  it('the name and class given on the first call hold on a continuation that does not repeat them', () => {
+    // Found in a real run: the second call built a skill named after the folder, and the class set on
+    // the first call went to a skill that was never built.
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new5-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new5-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'my-voice', '--class', 'blog-post');
+    run(data, proj, 'new', dir, '--accept');
+    expect(existsSync(join(proj, '.claude', 'skills', 'my-voice', 'SKILL.md'))).toBe(true);
+    expect(store.getDocClass({ root: data, skillName: 'my-voice' })).toBe('blog-post');
   });
 
   it('the ledger records the weight chosen, the suggestion beside it, and whether it was taken', () => {

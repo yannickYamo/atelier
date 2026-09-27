@@ -27,7 +27,7 @@ import type { Measurement, Requirement, StandardVersion } from '../state/canonic
 import { isGeneralScope } from '../state/canonical-state.js';
 import { keysOf } from '../state/rule-key.js';
 import { measure, type ObserverResult } from '../observers/registry.js';
-import { quantile } from '../observers/text.js';
+import { quantile, wordsOf, sentencesOf } from '../observers/text.js';
 import { dimensionVerdict, type DimScores, type DimensionFloor, type DimFloorResult, type FloorQualification, type FloorVerdict, type FrozenBaselineEntry, type QualityFloorContract, type QualityFloorResult } from './floor.js';
 import { tCrit, mean, sd, sampleFrom, type Sample } from './stats.js';
 import type { ComparisonVerdict } from '../comparison/compare.js';
@@ -99,9 +99,30 @@ export interface MarginProposal {
 export const MIN_MARGIN = 0.05;
 
 /**
- * Default margins from the author's own pieces: half their interquartile range on each dimension. A
- * dimension that applied to fewer than three pieces has no spread to speak of and gets none; it is left
- * out of the proposal rather than given a guess.
+ * The smallest change a rule can register, in its own units, at the author's typical length: one
+ * occurrence of a counted thing, one sentence of a share, one word of a median. A margin finer than
+ * this is finer than the rule can measure (found in a real run: an author who never writes "not X,
+ * it's Y" has no spread at all, and a margin of 0.05 per 1,000 words sat far below the 0.4 that one
+ * occurrence in one of their pieces is), so no difference could ever resolve.
+ */
+export function resolution(m: Measurement, authorTexts: readonly string[]): number {
+  const med = (xs: number[]): number => (xs.length ? quantile(xs, 0.5) : 0);
+  const words = med(authorTexts.map((t) => wordsOf(t).length)) || 1000;
+  const sentences = med(authorTexts.map((t) => sentencesOf(t).length)) || 30;
+  switch (m.observer) {
+    case 'PATTERN_RATE': case 'TERM_RATE': case 'HEDGE_RATE': return Math.round((1000 / words) * 100) / 100;   // one occurrence, per 1,000 words
+    case 'FRAGMENT_SHARE': return Math.round((100 / sentences) * 100) / 100;                                     // one sentence, in percent
+    case 'DISTRIBUTION': return Math.round((1 / sentences) * 1000) / 1000;                                        // one sentence moving band
+    case 'RATIO': return 0.1;
+    case 'STYLE_DISTANCE': return MIN_MARGIN;
+    default: return 1;                                                                                            // one use, one word, one sentence, one heading
+  }
+}
+
+/**
+ * Default margins from the author's own pieces: half their interquartile range on each dimension, and
+ * never finer than the rule can register (`resolution`). A dimension that applied to fewer than three
+ * pieces has no spread to speak of and gets none; it is left out of the proposal rather than guessed.
  */
 export function proposeMargins(dims: readonly FloorDimension[], authorTexts: readonly string[]): MarginProposal[] {
   const scores = perFire(dims, authorTexts);
@@ -109,7 +130,8 @@ export function proposeMargins(dims: readonly FloorDimension[], authorTexts: rea
     const xs = scores[d.key] ?? [];
     if (xs.length < 3) return [];
     const spread = quantile(xs, 0.75) - quantile(xs, 0.25);
-    return [{ key: d.key, margin: Math.max(MIN_MARGIN, Math.round((spread / 2) * 1000) / 1000), spread: Math.round(spread * 1000) / 1000, pieces: xs.length }];
+    const margin = Math.max(MIN_MARGIN, resolution(d.rule.measurement!, authorTexts), Math.round((spread / 2) * 1000) / 1000);
+    return [{ key: d.key, margin, spread: Math.round(spread * 1000) / 1000, pieces: xs.length }];
   });
 }
 
@@ -120,8 +142,9 @@ export function buildContract(proposals: readonly MarginProposal[], dims: readon
   const dimensions: Record<string, DimensionFloor> = {};
   for (const p of proposals) {
     const had = prior?.dimensions[p.key];
-    dimensions[p.key] = had ?? { nonInferiorityMargin: p.margin, gateRole: 'OBSERVE',
-      rationale: `half the author's interquartile range (${p.spread}) across ${p.pieces} piece(s) on: ${statement.get(p.key) ?? p.key}` };
+    // A margin the owner set stands; a proposed one is re-proposed. The role is always the owner's.
+    dimensions[p.key] = had?.rationale === 'set by the owner' ? had : { nonInferiorityMargin: p.margin, gateRole: had?.gateRole ?? 'OBSERVE',
+      rationale: `half the author's interquartile range (${p.spread}) across ${p.pieces} piece(s), and at least one occurrence at their length, on: ${statement.get(p.key) ?? p.key}` };
   }
   return { instrument: 'scoreDimensionByPolicy', dimensions };
 }
