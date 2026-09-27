@@ -130,7 +130,7 @@ describe('P1: the skill carries passages the author wrote', () => {
     const pkg = renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], v);
     const md = pkg.files['SKILL.md'];
     expect(md).toContain('## How I sound');
-    expect(md).toMatch(/Never take their topic, facts, names, figures, sentences or turns of phrase/);
+    expect(md).toMatch(/Never take my topics, facts,\s+names, figures, sentences, coined terms or stories/);
     expect(md).toContain(`> ${v.passages[0].split('\n')[0]}`);
     expect(md).toMatch(/run about \d+ to \d+ words/);
     expect(JSON.parse(pkg.assurance['voice.json'])).toEqual(JSON.parse(JSON.stringify(v)));
@@ -152,5 +152,117 @@ describe('the eval\'s own measures live in the product, not in a study script', 
     const xs = ['RAW', 'CONTEXT', 'GUIDE', 'ATELIER'];
     expect(seededShuffle(xs, 3)).toEqual(seededShuffle(xs, 3));
     expect([...seededShuffle(xs, 3)].sort()).toEqual([...xs].sort());
+  });
+});
+
+describe('round 5 design: describe the voice, guard the edges, never displace', () => {
+  it('register is counted as contractions against forms left whole, not as pronouns', () => {
+    const memo = 'I do not think it is ready. You are right that we have not tested it. I am not sure.';
+    const talk = "I don't think it's ready. You're right that we haven't tested it. I'm not sure.";
+    expect(findPattern(memo, 'FULL_FORM').length).toBeGreaterThanOrEqual(5);
+    expect(findPattern(memo, 'CONTRACTION')).toEqual([]);
+    expect(findPattern(talk, 'CONTRACTION').length).toBeGreaterThanOrEqual(5);
+    expect(findPattern(talk, 'FULL_FORM')).toEqual([]);
+    expect(findPattern(memo, 'FIRST_PERSON').length).toBe(findPattern(talk, 'FIRST_PERSON').length);   // same pronouns, different register
+  });
+  it('the contrast move is one family, whatever its spelling, and a repair that swaps spellings has displaced it', async () => {
+    const { displacedFamilies } = await import('../core/observers/style.js');
+    const before = "The fix is not moral suasion, it's coupling. The problem is not speed, it's review.";
+    const after = 'The fix is coupling rather than moral suasion. The problem has little to do with speed; what matters is review.';
+    expect(findPattern(after, 'RATHER_THAN')).toHaveLength(1);
+    expect(findPattern(after, 'REFRAME').length).toBeGreaterThanOrEqual(1);
+    expect(displacedFamilies(before, after)[0]).toMatch(/^contrast: NOT_X_ITS_Y down/);
+    expect(displacedFamilies(before, 'The fix is coupling. The problem is review.')).toEqual([]);
+    expect(findPattern('Hero absorption is the first one. Alert laundering is the next one. Pager fatalism is the one that hides best.', 'ORDINAL_CATALOGUE')).toHaveLength(3);
+  });
+  it('the repair loop refuses a pass that displaces a banned move, and keeps the draft', async () => {
+    const { refineToStandard } = await import('../core/loop/run-repair.js');
+    const filler = 'We shipped the change on a Tuesday and watched the dashboards through the afternoon. '.repeat(30);
+    const draft = `${filler}The fix is not moral suasion, it's coupling.`;
+    const std = { standardVersionHash: 's', requirements: [aRequirement({ requirementId: 'c2', statement: 'No not X, it\'s Y.', kind: 'BOUNDARY', materiality: 'REQUIRED',
+      measurement: { observer: 'PATTERN_RATE', params: { pattern: ['NOT_X_ITS_Y'], maxPer1000: 0 } } })] } as unknown as StandardVersion;
+    const client = { complete: async () => ({ json: { replacements: [{ id: 1, text: 'The fix is coupling rather than moral suasion.' }] }, cost: { basis: 'API_METERED', billingUsd: 0 } }) } as never;
+    const r = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'x', std, draft, 2, { guardClaims: false });
+    expect(r.output).toBe(draft);
+    expect(r.repair?.why).toMatch(/moved a banned move onto a sibling \(contrast/);
+  });
+  it('an invented story is cut by default, not left as a slot, and what was cut is recorded', async () => {
+    const { refineToStandard, checkDraft: check } = await import('../core/loop/run-repair.js');
+    const std = { standardVersionHash: 's', requirements: [] } as unknown as StandardVersion;
+    const draft = 'Review matters. Two years ago I shipped a migration that broke billing for a week. Tests would have caught it.';
+    expect(check('x', std, draft).checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans[0].why).toMatch(/rewrite the span without it/);
+    expect(check('x', std, draft, { placeholders: true }).checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans[0].why).toMatch(/placeholder/);
+    const client = { complete: async () => ({ json: { replacements: [{ id: 1, text: 'Migrations are where this bites.' }] }, cost: { basis: 'API_METERED', billingUsd: 0 } }) } as never;
+    const r = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'x', std, draft, 2, {});
+    expect(r.output).not.toMatch(/\[your story/);
+    expect(r.repair?.storiesCut?.[0]).toMatch(/Two years ago I shipped/);
+  });
+  it('for new writing, a reading rule is required only when the author nearly always does it', async () => {
+    const { suggest } = await import('../core/ratification/suggest.js');
+    const rule = aRequirement({ requirementId: 'p1', statement: 'I state the case against my own position.' });
+    const meta = (present: number, applicable: number) => ({ framings: ['a', 'b'], alsoPhrasedAs: [], heldOut: { present, applicable }, needs: null });
+    expect(suggest(rule, meta(3, 5), 'GENERATE').materiality).toBe('PREFERRED');
+    expect(suggest(rule, meta(4, 5), 'GENERATE').materiality).toBe('REQUIRED');
+    expect(suggest(rule, meta(2, 2), 'GENERATE').materiality).toBe('PREFERRED');   // too few pieces to say "nearly always"
+  });
+  it('a move the author sometimes makes is compiled with its rate and a per-piece cap, not as an instruction', () => {
+    const rules = [
+      aRequirement({ requirementId: 'p1', statement: 'I state the case against my own position.', materiality: 'PREFERRED', observedRate: { present: 2, applicable: 5 } }),
+      aRequirement({ requirementId: 'p2', statement: 'I name what would change my mind.', materiality: 'PREFERRED', observedRate: { present: 3, applicable: 5 } }),
+      aRequirement({ requirementId: 'p3', statement: 'I tier advice by blast radius.', materiality: 'PREFERRED', observedRate: { present: 1, applicable: 4 } }),
+    ];
+    const std = { standardVersionHash: 's', evidenceId: 'e', workType: 'writing', requirements: rules, authorityState: 'RATIFIED', mintedAt: '2026-09-27T00:00:00Z' } as unknown as StandardVersion;
+    const md = renderAgentSkill(std, compileArchitecture(std), 'x', 'd').files['SKILL.md'];
+    expect(md).toContain('## Moves I sometimes make');
+    expect(md).toContain('I state the case against my own position. (in 2 of 5 of my pieces where it could apply)');
+    expect(md).toMatch(/Use about 1 of them in one piece/);   // 0.4 + 0.6 + 0.25 moves per piece, on the author's own rates
+  });
+  it('the persona keeps only points proven by a verbatim quote, with how often', async () => {
+    const { groundPersona, describePersona } = await import('../core/compiler/persona.js');
+    const corpus = ["I'll be honest: I don't know yet. My 2c is that you should start small."];
+    const p = groundPersona([
+      { aspect: 'hedging', description: 'Admits uncertainty plainly.', frequency: 'OFTEN', quote: "I don't know yet" },
+      { aspect: 'invented', description: 'Quotes Shakespeare.', frequency: 'ALWAYS', quote: 'To be or not to be' },
+      { aspect: 'bad', description: 'No frequency.', frequency: 'NEVER' as never, quote: 'start small' },
+    ], corpus);
+    expect(p.points.map((x) => x.aspect)).toEqual(['hedging']);
+    expect(p.dropped).toBe(2);
+    expect(describePersona(p)).toBe('- (often) Admits uncertainty plainly. e.g. "I don\'t know yet"');
+  });
+  it('whole pieces are chosen to span the author\'s modes, within a word budget', async () => {
+    const { selectVoicePieces } = await import('../core/compiler/voice.js');
+    const essay = (i: number): string => Array.from({ length: 8 }, () => `I think this matters, and I don't say that lightly. Piece ${i} makes one long argument in plain paragraphs that run on for a while.`).join('\n\n');
+    const list = (i: number): string => `# List ${i}\n\n${Array.from({ length: 20 }, (_, k) => `- **Item ${k}.** A short point.`).join('\n')}`;
+    const chosen = selectVoicePieces([essay(1), essay(2), essay(3), list(1), list(2)], 5000);
+    expect(chosen.some((t) => t.startsWith('# List'))).toBe(true);
+    expect(chosen.some((t) => !t.startsWith('# List'))).toBe(true);
+    expect(selectVoicePieces([essay(1), essay(2)], 5000)).toEqual([]);
+  });
+  it('the persona and whole pieces are served, and the pieces are reference files that never ask to be reused', () => {
+    const r = aRequirement({ requirementId: 'p1', statement: 'I split the answer by situation.', materiality: 'REQUIRED' });
+    const std = { standardVersionHash: 's', evidenceId: 'e', workType: 'writing', requirements: [r], authorityState: 'RATIFIED', mintedAt: '2026-09-27T00:00:00Z' } as unknown as StandardVersion;
+    const voice = { passages: [], lengthWords: [2000, 3000] as const, pieces: ['A whole piece.'],
+      persona: { points: [{ aspect: 'a', description: 'Talks to the reader directly.', frequency: 'OFTEN' as const, quote: 'you' }], dropped: 0 } };
+    const pkg = renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], voice);
+    expect(pkg.files['SKILL.md']).toContain('- (often) Talks to the reader directly.');
+    expect(pkg.files['SKILL.md']).toContain('`examples/voice-1.md` is a whole piece');
+    expect(pkg.files['examples/voice-1.md']).toMatch(/never reuse its topic, facts, names, figures, sentences or coined terms/);
+  });
+});
+
+describe('the voice layer: register, and bands that choose rather than steer', () => {
+  const author = (i: number): { id: string; text: string } => ({ id: `a${i}.md`, text: Array.from({ length: 14 }, (_, k) =>
+    `I don't think review ${k + i} is optional. It's where we catch what we'd otherwise ship, and you'll thank yourself later. We've seen it pay off, haven't we? That's the point.`).join('\n\n') });
+  const model = (i: number): string => Array.from({ length: 14 }, (_, k) =>
+    `It is important to note that review ${k + i} is not optional. We do not ship without it, and you will not regret it. It is the process that we have.`).join('\n\n');
+  const rules = deriveContrastRules([0, 1, 2, 3].map(author), [4, 5].map(author), [model(0), model(1), model(2)], 'MACHINE_DISCOVERED');
+  it('an author who contracts gets a cap on forms left whole', () => {
+    const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FULL_FORM');
+    expect(r?.requirement.statement).toMatch(/^Contract as I do/);
+    expect(r?.conformance.weak).toBeUndefined();
+  });
+  it('first-person and signature bands are weak: checked and used to choose, never instructed', () => {
+    const fp = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FIRST_PERSON');
+    expect(fp?.conformance.weak).toBe(true);
   });
 });

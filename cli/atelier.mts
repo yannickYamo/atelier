@@ -131,7 +131,7 @@ const main = async (): Promise<void> => {
     case 'ratify-one': { ratifyOne(); return; }
     case 'add': { addOne(); return; }
     case 'ratify-close': { ratifyClose(); return; }
-    case 'build': { build(); return; }
+    case 'build': { await build(); return; }
     case 'confirm': { confirmBoundary(); return; }
     case 'inspect': { inspect(); return; }
     case 'history': { historyCmd(); return; }

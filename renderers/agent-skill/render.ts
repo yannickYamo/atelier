@@ -13,6 +13,7 @@
 
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import type { VoicePassages } from '../../core/compiler/voice.js';
+import { describePersona } from '../../core/compiler/persona.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
@@ -380,6 +381,45 @@ export function renderAgentSkill(
         + (always(x.r) ? 'relevant to any piece of this kind' : condition(x.r.appliesWhen))).join('\n') + '\n'
     : '';
 
+  // ── HOW I SOUND (core/compiler/voice.ts, persona.ts) ───────────────────────────────────────────
+  //
+  // The voice is carried by description and by the author's own writing, not by rules: four blind
+  // rounds found rules alone never produced it. The persona says how the author sounds and HOW OFTEN;
+  // whole pieces show their modes; the length is theirs. Never their topics, facts or sentences.
+  const pieceFiles = (voice?.pieces ?? []).map((_, i) => `examples/voice-${i + 1}.md`);
+  const voiceParts = [
+    voice?.persona?.points.length ? `How I sound, and how often (each point is quoted from my own pieces; a "sometimes" is not an "always"):\n\n${describePersona(voice.persona)}` : '',
+    pieceFiles.length ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.` : '',
+    voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
+    voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0]} to ${voice.lengthWords[1]} words.` : '',
+  ].filter(Boolean);
+  const voiceSection = voiceParts.length ? `
+## How I sound
+
+${voiceParts.join('\n\n')}
+
+Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
+names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.
+` : '';
+  // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────
+  //
+  // A move the author makes in some pieces, instructed as a rule, is made in every piece, and several
+  // such moves together became a template a blind reader recognised across five topics. So the moves a
+  // standard holds but does not require are stated with how often the author makes them, and one piece
+  // may use about as many as the author's own pieces carry on average, never all of them.
+  const sometimes = exampleCarried.map((x) => x.r).filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE');
+  const rateOf = (r: StandardVersion['requirements'][number]): number | null => (r.observedRate && r.observedRate.applicable > 0 ? r.observedRate.present / r.observedRate.applicable : null);
+  const expected = sometimes.reduce((n, r) => n + (rateOf(r) ?? 0.5), 0);
+  const perPiece = Math.max(1, Math.min(sometimes.length, Math.round(expected)));
+  const sometimesSection = sometimes.length ? `
+## Moves I sometimes make
+
+Not rules: things I do in some pieces and not others. Use about ${perPiece} of them in one piece, only where the piece
+calls for one, and never the same set every time.
+
+${sometimes.map((r) => `- ${r.statement.trim()}${r.observedRate ? ` (in ${r.observedRate.present} of ${r.observedRate.applicable} of my pieces where it could apply)` : ''}`).join('\n')}
+` : '';
+
   const skillMd = `---
 name: ${skillId}
 description: ${description}
@@ -395,18 +435,7 @@ ${exemplar ? `
 \`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
 voice, rhythm and structure from it: how it opens, how long its sentences and paragraphs run, how it
 moves from point to point. Never take its topic, facts, names, figures or sentences.
-` : ''}${voice?.passages.length ? `
-## How I sound
-
-${voice.passages.length} passage(s) of my own, from different pieces. Take the voice from them: who is speaking and how
-sure I sound, where I hedge, the rhythm of the sentences and paragraphs, the asides, the spelling.
-Never take their topic, facts, names, figures, sentences or turns of phrase.${voice.lengthWords ? ` My pieces of this kind
-run about ${voice.lengthWords[0]} to ${voice.lengthWords[1]} words.` : ''}
-
-${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}
-` : voice?.lengthWords ? `
-My pieces of this kind run about ${voice.lengthWords[0]} to ${voice.lengthWords[1]} words.
-` : ''}${contrast.length ? `
+` : ''}${voiceSection}${sometimesSection}${contrast.length ? `
 ## Write this, not that
 
 \`examples/contrast.md\` has ${contrast.length} sentence(s) written for this skill that broke one of its rules, each
@@ -535,6 +564,8 @@ mintedAt:        ${v.mintedAt}
 
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
     ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}),
+    ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,
+      `[voice-${i + 1}] One whole piece of mine, for how I sound. Not content: never reuse its topic, facts, names, figures, sentences or coined terms.\n\n${t}`])),
     ...(contrast.length ? { 'examples/contrast.md': renderContrastFile(contrast, v) } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────

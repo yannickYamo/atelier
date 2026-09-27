@@ -293,6 +293,10 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     // writer in the tree was a test fixture: a rule like "quantify with the awkward real figure" was
     // approved, served, and satisfied with invented figures. The name is what `--with <name>=<file>`
     // binds at invocation.
+    // HOW OFTEN THE AUTHOR DOES IT, carried onto the rule: a move made in three of five pieces is compiled
+    // as something the author sometimes does, with that rate, not as an obligation on every piece.
+    const held = d.id ? s.proposalMeta?.[d.id]?.heldOut : undefined;
+    if (held && held.applicable > 0) outcome = { ...outcome, requirement: { ...outcome.requirement, observedRate: { present: held.present, applicable: held.applicable } } };
     if (d.needs?.trim()) {
       const why = d.needs.trim();
       outcome = { ...outcome, requirement: { ...outcome.requirement,

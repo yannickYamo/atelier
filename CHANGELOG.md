@@ -57,6 +57,27 @@ a run in progress may not be.
 - **The front door** (`atelier` with no command) lists the everyday verbs first: create, use,
   correct, status, calibrate, set up the floor, tend.
 
+### Changed (after the fourth blind voice round: describe the voice, guard the edges)
+
+The fourth round (five briefs, five versions) ranked the rebuilt skill fourth of five: 21 required rules
+bought compliance and a recognisable Atelier house style, and no voice. A model-written style guide came
+second with almost no copying. The changes, all derived from the corpus, none tuned to one author:
+
+- **A persona brief** (`core/compiler/persona.ts`): how the author sounds, each point with how often and a
+  verbatim quote; a point whose quote is not in the corpus is dropped. Derived at build (one model call).
+- **Whole pieces** chosen to span the author's modes (farthest-point sampling on mode features, within a
+  word budget) replace the three short passages.
+- **Required means nearly always**: a reading rule instructs only when followed in four of five unread
+  pieces; the rest compile as "moves I sometimes make", with their rate and a per-piece cap
+  (`Requirement.observedRate`).
+- **Signature and first-person bands are weak**: checked and used to choose drafts, never instructed.
+- **Register**: `CONTRACTION` / `FULL_FORM` patterns and a contraction rule for authors who contract.
+- **Displacement**: pattern families (contrast, opener) with `RATHER_THAN`, `REFRAME`, `ORDINAL_CATALOGUE`;
+  a repair pass that lowers one member and raises another is refused.
+- **Invented stories are cut by default**, and listed after the output; `--placeholders` restores slots.
+- **`verify --repair`**: the guard for text written anywhere else.
+- `build` is async (it may call the model for the persona); `--voice` and `--persona` take none|auto.
+
 ### Changed (after the third blind voice round: sound like the author, not just unlike a model)
 
 A skill that met every one of its rules was ranked least like the author of four versions. The causes,
