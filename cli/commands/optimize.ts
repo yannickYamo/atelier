@@ -133,8 +133,12 @@ export async function optimize(): Promise<void> {
   // ── 2. BUILD ───────────────────────────────────────────────────────────────────────────────────
   const candidates: Candidate[] = proposals.map((p) => build(L, name, v, sv, arch, carried, p, scope, evidence, keyOfRule, dims));
   const finish = (best: readonly Candidate[], promoted: Candidate | null, aborted: string | null): void => {
-    // Anything the round built and never tested is settled as untested, so it is not held against a retry.
-    for (const c of candidates.filter((x) => !x.settled && x.screen === undefined)) settle(L, c, 'REJECTED', UNTESTED, aborted ? `round stopped: ${aborted}` : 'not tested');
+    // Anything the round built and did not finish judging is settled as untested, so it is not held
+    // against a retry. On a stop that includes candidates the screen had already reached: their round
+    // never ranked them. Finalists left for a person are the only ones that stay waiting.
+    for (const c of candidates.filter((x) => !x.settled && (aborted ? !best.includes(x) : x.screen === undefined))) {
+      settle(L, c, 'REJECTED', UNTESTED, aborted ? `round stopped: ${aborted}` : 'not tested');
+    }
     record(L, active, candidates, best, promoted, aborted);
   };
 

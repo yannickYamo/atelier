@@ -78,7 +78,9 @@ export interface Integrity { readonly ok: boolean; readonly lost: readonly strin
  */
 export function spanIntegrity(original: string, replacement: string, allowedDrops: ReadonlySet<string>, specificsExpected: boolean,
   /** words to be swapped for a competing form: they may go, but a negation they carry must survive */
-  swaps: ReadonlySet<string> = new Set()): Integrity {
+  swaps: ReadonlySet<string> = new Set(),
+  /** a heading whose case the rule asks to change: its capitals say nothing about names */
+  recase = false): Integrity {
   if (specificsExpected) return { ok: true, lost: [] };
   const lost: string[] = [];
   // A term the rule asked to remove licenses whatever it contains: removing "not X, it's Y" removes a
@@ -112,7 +114,9 @@ export function spanIntegrity(original: string, replacement: string, allowedDrop
   const replacementWords = new Set(wordsOf(replacement));
   for (const name of namesIn(original)) {
     if (dropped(name)) continue;
-    if (!replacement.includes(name) && !replacementWords.has(name)) lost.push(`the name "${name}"`);
+    // For a heading being recased ("Real Cost" → "real cost"), capitals are not names: compared without case.
+    const kept = recase ? replacement.toLowerCase().includes(name.toLowerCase()) : replacement.includes(name) || replacementWords.has(name);
+    if (!kept) lost.push(`the name "${name}"`);
   }
   return { ok: lost.length === 0, lost };
 }

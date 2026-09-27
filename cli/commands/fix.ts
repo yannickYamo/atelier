@@ -157,7 +157,7 @@ export async function fix(): Promise<void> {
     if (activeNow && activeNow.standardVersionHash !== ranStandard.standardVersionHash) {
       console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${activeNow.standardVersionHash}); the addition goes on the current one.`);
     }
-    const added = addRuleToActive(L, name, proposal, answer === 'required' ? 'REQUIRED' : 'PREFERRED', complaint, ranStandard);
+    const added = addRuleToActive(L, name, proposal, answer === 'required' ? 'REQUIRED' : 'PREFERRED', complaint, ranStandard, [fb.feedbackId]);
     console.log(`Added as ${answer.toUpperCase()} — ${added.requirement.requirementId} ${answer === 'required' ? 'instructs' : 'is shown'}.`);
     console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes}  (reason: your complaint, on file)`);
     console.log(`Rebuilt and installed: ${pickHost().invocationHint(name).trim()} now serves it.`);
@@ -209,6 +209,9 @@ export async function fix(): Promise<void> {
   // from this carrier, under this (standard, model) pairing — a loss elsewhere excludes nothing.
   const rejectedHere = new Set<Carrier>(repairs
     .filter((r) => r.outcome === 'REJECTED' && r.requirementId === ev.requirementId && r.from === ev.carrierAtServe
+      // Not a judgement of this complaint: an untested candidate, or an optimizer's cheap screen.
+      && (r.evaluationBasis?.generations ?? 1) > 0
+      && !((r as { origin?: string }).origin === 'OPTIMIZE' && r.evaluationBasis?.instrument === 'UNQUALIFIED_COMPARATOR')
       && (r.standardVersionHash ?? scope.standardVersionHash) === scope.standardVersionHash
       && (r.providerAdapter ?? scope.providerAdapter) === scope.providerAdapter
       && (r.requestedModel ?? scope.requestedModel) === scope.requestedModel)
@@ -267,13 +270,16 @@ export async function fix(): Promise<void> {
   const evidence: EvidenceBasis = {
     missContexts: new Set([inv.inputHash, ...misses.map((r) => r.inputHash)]).size,
     invocationIds: [...new Set([inv.invocationId, ...misses.map((r) => r.invocationId)])] };
-  let may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to, { evidence, evaluation: WEAKEST_EVALUATION }, scope);
+  // A cheap screen in `atelier optimize` measured the floor's tasks, not this complaint: it does not
+  // stand in for your judgement of this output, so it is not held against the move here.
+  const memory = repairs.filter((r) => !((r as { origin?: string }).origin === 'OPTIMIZE' && r.evaluationBasis?.instrument === 'UNQUALIFIED_COMPARATOR'));
+  let may = mayPropose(memory, prohibitions, op.requirementId, op.from, op.to, { evidence, evaluation: WEAKEST_EVALUATION }, scope);
   // Reflection chose a move repair memory refuses: the fixed ordering's choice, which was checked for
   // legality the same way, stands instead.
   if (!may.allowed && proposer === 'REFLECTIVE') {
     console.log(`Reflection's choice is not available (${may.reason.split('.')[0]}); the fixed ordering chooses.`);
     op = fixed; proposer = 'FIXED_ORDER';
-    may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to, { evidence, evaluation: WEAKEST_EVALUATION }, scope);
+    may = mayPropose(memory, prohibitions, op.requirementId, op.from, op.to, { evidence, evaluation: WEAKEST_EVALUATION }, scope);
   }
   if (!may.allowed) { console.log(`No repair proposed — ${may.reason}`); return; }
 
