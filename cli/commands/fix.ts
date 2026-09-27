@@ -346,7 +346,10 @@ async function settleBlindPick(
   const std = store.getStandard(L, candidate.standardVersionHash);
   const measuredRule = std?.requirements.find((r) => r.requirementId === move.requirementId && r.measurement);
   let counted: 'a' | 'b' | 'same' | null = null;
-  if (std && measuredRule && !flag('--pick')) {
+  let gateRejected: string | null = null; let countFavoursCandidate = false;
+  // The gate runs whether or not a pick was given: `--pick` is a person's answer to the blind question,
+  // not a way around a count that already says the candidate is worse.
+  if (std && measuredRule) {
     // DRAFT AGAINST DRAFT. The current version's recorded output may already have been repaired by the
     // loop, and the candidate's has not: comparing the two would score the loop, not the carrier, and
     // reject every change. The draft the model first wrote is what the candidate is compared with.
@@ -357,7 +360,7 @@ async function settleBlindPick(
     const fixes = champ.get(move.requirementId) === 'VIOLATED' && cand.get(move.requirementId) === 'MET';
     const breaks = regressions(champReport, candReport).length > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
-    const candLetter = championFirst ? 'b' : 'a'; const champLetter = championFirst ? 'a' : 'b';
+    const champLetter = championFirst ? 'a' : 'b';
     // THE COUNT IS EVIDENCE; THE GATE DECIDES WHAT IT AUTHORISES.
     //
     // A count that says the candidate is worse is an evidenced negative, and rejects on its own. A count
@@ -376,12 +379,19 @@ async function settleBlindPick(
     store.appendEvent(L, { kind: 'PROMOTION_GATE', candidateSkillVersionHash: candidate.skillVersionHash,
       requirementId: move.requirementId, authority: gate.authority, unmet: gate.unmet, why: gate.why, at: new Date().toISOString() });
     if (gate.authority === 'AUTO_REJECT') {
-      counted = champLetter;
-      console.log(`${move.requirementId} is a measured rule, so this was decided by its count, not by eye: `
-        + `the new implementation does worse on the measured rules (${gate.why.split('.')[0]}).`);
+      gateRejected = gate.why.split('.')[0];
+      if (!flag('--pick')) {
+        counted = champLetter;
+        console.log(`${move.requirementId} is a measured rule, so this was decided by its count, not by eye: `
+          + `the new implementation does worse on the measured rules (${gateRejected}).`);
+      }
     } else if (fixes && !breaks) {
-      console.log(`${move.requirementId} is a measured rule: the count favours ${candLetter.toUpperCase()}, which meets it and breaks nothing that held.`);
-      console.log(`That is one draft on one input and says nothing about what the rules do not count, so it is not installed on its own (${gate.unmet[0]}).`);
+      countFavoursCandidate = true;
+      // Not which letter: naming it before the pick would unblind the only qualified instrument here.
+      if (!flag('--pick')) {
+        console.log(`${move.requirementId} is a measured rule, and its count favours one of these two; which one is shown after you pick.`);
+        console.log(`That is one draft on one input and says nothing about what the rules do not count, so it is not installed on its own (${gate.unmet[0]}).`);
+      }
     }
   }
   const pick = flag('--pick')?.toLowerCase()
@@ -398,6 +408,11 @@ async function settleBlindPick(
   }
   if (!['a', 'b', 'same'].includes(pick)) die(`--pick takes a|b|same; got "${pick}".`);
   const choseCandidate = pick !== 'same' && ((pick === 'a') !== championFirst);
+  if (choseCandidate && gateRejected) {
+    die(`the pick is refused: the count on ${move.requirementId}, a rule you ratified with a measurement, says the new implementation is worse (${gateRejected}). `
+      + 'Nothing was promoted. To change what the rule demands, amend it: atelier amend --skill ' + name + ' --rule ' + move.requirementId + ' --measure <observer>:<params>|none --reason "<why>"');
+  }
+  if (countFavoursCandidate) console.log(`(the count favoured ${championFirst ? 'B' : 'A'}, the new implementation)`);
   const at = new Date().toISOString();
 
   // The pick is the first BEHAVIOR observation this system has ever recorded — the expert is the

@@ -65,6 +65,17 @@ export function build(nameArg?: string): void {
       + '  From what you can state:  atelier skill "<the rules, in your words>"');
   }
   const pending = readJson<StandardVersion>(pendingPath, { what: 'the pending standard' });
+  // The document class is not part of the package, so changing it on a skill already built needs no
+  // rebuild — and a rebuild of a BUILT run is refused by the run's state machine.
+  const clsOnly = flag('--class');
+  if (clsOnly !== undefined && s.run.state === 'BUILT') {
+    const L0: store.StoreLayout = { root: DATA, skillName: name };
+    if (!store.getActive(L0)) die(`no built skill called "${name}".`);
+    store.setDocClass(L0, clsOnly.trim().toLowerCase() === 'none' ? null : normalizeClass(clsOnly));
+    const now = store.getDocClass(L0);
+    console.log(now ? `Document class for ${name}: ${now}. A text declared as another class is refused by verify and invoke.` : `Document class for ${name} cleared.`);
+    return;
+  }
   // ── THE STANDARD MUST BE THIS RUN'S ──────────────────────────────────────────────────────────
   //
   // The run records the hash it ratified; the file on disk is what will be compiled. Before this

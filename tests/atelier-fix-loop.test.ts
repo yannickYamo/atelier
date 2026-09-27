@@ -148,7 +148,8 @@ describe('a counted decision goes through the promotion gate: it may reject on i
     const activeBefore = store.getActive(L)!;
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the plain answer' } });
     const out = run(data, proj, 'fix', 'it said synergy');
-    expect(out).toContain('the count favours');
+    expect(out).toContain('its count favours one of these two; which one is shown after you pick');
+    expect(out, 'the count named a letter before the blind pick').not.toMatch(/favours [AB]\b/);
     expect(out).toContain('not installed on its own');
     expect(out).toContain('--pick a|b|same');
     expect(store.getActive(L), 'a counted win installed itself').toBe(activeBefore);
@@ -169,6 +170,28 @@ describe('a counted decision goes through the promotion gate: it may reject on i
     expect(gate?.authority).toBe('AUTO_REJECT');
     expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'REJECTED')).toBe(true);
   }, 120_000);
+
+  it('a --pick of the candidate the count rejects is refused: --pick is not a way around the gate', async () => {
+    // The pair's order is sealed until shown, so `--pick a` lands on either arm. Fresh seeds until it
+    // lands on the candidate (each is a coin flip), so the refusal itself is what is proven.
+    let refused = false;
+    for (let attempt = 0; attempt < 12 && !refused; attempt++) {
+      const { data, proj } = await seededMeasured('the plain answer');
+      const L: store.StoreLayout = { root: data, skillName: 'focus' };
+      const activeBefore = store.getActive(L)!;
+      await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the synergy answer' } });
+      const out = run(data, proj, 'fix', 'it was vague', '--pick', 'a');
+      expect((store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined)?.authority,
+        'a --pick skipped the gate').toBe('AUTO_REJECT');
+      expect(store.getActive(L)).toBe(activeBefore);
+      if (out.indexOf('the synergy answer') < out.indexOf('the plain answer')) {
+        expect(out).toMatch(/^EXIT:1/);
+        expect(out).toContain('the pick is refused');
+        refused = true;
+      }
+    }
+    expect(refused, 'never drew the candidate as A in 12 seeds').toBe(true);
+  }, 300_000);
 });
 
 describe('STANDARD_GAP: one approval mints, compiles and installs — or one refusal is remembered', () => {
