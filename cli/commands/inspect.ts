@@ -8,6 +8,7 @@ import { describeBackup } from '../../adapters/install-tree.js';
 import { assertSourceIsNotAuthority, isGeneralScope } from '../../core/state/canonical-state.js';
 import { survival } from '../../core/ratification/decision-record.js';
 import * as store from '../../core/state/store.js';
+import { diffStandards } from '../../core/state/rule-key.js';
 
 import { DATA, die, flag, projectDir, pickHost, skillArg, runFile } from '../runtime.js';
 import { existsSync } from 'node:fs';
@@ -63,6 +64,14 @@ export function historyCmd(): void {
     const std = h.skillVersion.standardVersionHash;
     const reason = h.standard?.reason && firstOn.get(std) === h.skillVersion.skillVersionHash ? `  — ${h.standard.reason}` : '';
     console.log(`${h.active ? '*' : ' '} ${h.skillVersion.skillVersionHash}  ${h.skillVersion.builtAt}  standard ${std}${reason}`);
+    // Which rules moved, by key, on the line that introduced the standard: an amendment that reworded
+    // one rule reads as that rule changing, not as a rule removed and another added.
+    const prevStd = h.standard?.supersedes ? store.getStandard(L, h.standard.supersedes) : null;
+    if (h.standard && prevStd && firstOn.get(std) === h.skillVersion.skillVersionHash) {
+      for (const c of diffStandards(prevStd, h.standard)) {
+        console.log(`    ${c.change === 'ADDED' ? '+' : c.change === 'REMOVED' ? '-' : '~'} ${c.key} ${c.id}  ${c.statement.slice(0, 70)}${c.fields.length ? `  (${c.fields.join('; ')})` : ''}`);
+      }
+    }
     // Who decided the standard, once, on the line that introduced it.
     const ledger = firstOn.get(std) === h.skillVersion.skillVersionHash ? store.getLedger(L, std) : null;
     if (ledger?.records.length) {
