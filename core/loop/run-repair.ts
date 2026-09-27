@@ -10,7 +10,7 @@ import type { StandardVersion, RepairRecord } from '../state/canonical-state.js'
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
-import { ruleKey } from '../state/rule-key.js';
+import { keysOf, measurementId } from '../state/rule-key.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
@@ -56,7 +56,9 @@ export async function refineToStandard(
   // pass that makes no progress is dropped and the loop moves on to style: it never ends the loop.
   let accuracyTried = false; let stylePasses = 0;
   const pairs: RepairPair[] = [];
-  const keyOf = new Map(v.requirements.map((r) => [r.requirementId, ruleKey(r)]));
+  const keys = keysOf(v.requirements);
+  const keyOf = new Map(v.requirements.map((r, i) => [r.requirementId, keys[i]]));
+  const checkOf = new Map(v.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, measurementId(r.measurement)] as const] : [])));
   while (report.failed && stylePasses < maxPasses) {
     const accuracy = accuracyTried ? [] : planRepair(text, report, { phase: 'ACCURACY' });
     const accuracyPass = accuracy.length > 0 && planRepair(text, report, { phase: 'STYLE' }).length > 0;
@@ -100,8 +102,9 @@ export async function refineToStandard(
     // and never an invented claim turned placeholder: that teaches nothing about writing.
     for (const a of applied) {
       const t = targets.find((x) => x.id === a.id);
-      const key = t && !t.specifics && t.requirementIds.length === 1 ? keyOf.get(t.requirementIds[0]) : undefined;
-      if (key && a.before !== a.after) pairs.push({ key, before: a.before, after: a.after });
+      const rid = t && !t.specifics && t.requirementIds.length === 1 ? t.requirementIds[0] : undefined;
+      const key = rid ? keyOf.get(rid) : undefined;
+      if (rid && key && a.before !== a.after) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }

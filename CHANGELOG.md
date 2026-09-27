@@ -8,6 +8,25 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Added (Phase 7: the regression floor, fed and earned)
+
+- **The floor has a producer** (`core/distinctiveness/measured.ts`). Every measured rule is a floor
+  dimension, scored by its own observer and oriented so that higher is better.
+  - **Margins:** proposed from the author's own spread (half the interquartile range across their
+    pieces). `atelier new` proposes them automatically. Every dimension starts OBSERVE.
+  - **Verdicts:** tasks are the unit. A per-task three-state verdict (an unscorable enforced dimension
+    is INCONCLUSIVE, never "held") and a paired, across-tasks comparison on the repaired rule.
+  - **Qualification:** exact Clopper–Pearson false-alarm bounds from accumulating A/A runs.
+- **`atelier floor`**: `--corpus`, `--tasks`, `--margin`, `--enforce`, `--observe`, `--baseline`,
+  `--qualify`, and `--check <version> [--target] [--promote]`. Changing the contract, tasks or model
+  voids the qualification.
+- **The gate's automatic path is reachable.** When a count favours the candidate and the floor is
+  EARNED, `fix` confirms the count on the floor's tasks, and the promotion gate may install it
+  (AUTO_PROMOTE), reject it, or hand it to the person. A promoted version's scores become the next
+  baseline.
+- **`improve`** reads the floor's real state instead of assuming nothing is earned, and points at
+  `atelier floor`.
+
 ### Added (Phase 6: more of the standard measured)
 
 - **Proportion observers** (`core/observers/balance.ts`): `TERM_RATE` (a word list per 1,000 words,
@@ -31,6 +50,24 @@ a run in progress may not be.
 
 ### Fixed (Phase 6)
 
+- Audit remediation:
+  - A ratio's competing word is now a swap, not a drop: "is not" → "is" is refused as a lost
+    negation, while "is not" → "isn't" passes.
+  - Runs on held-back tasks (`reference --loop`) no longer record pairs, and `build` skips any pair
+    written for, or quoting, a held-back piece.
+  - A pair ships only under the same check it was recorded with, and word-counting checks are
+    re-counted on the passage.
+  - Keys distinguish a floor from a cap, carry a `role` for corpus-picked lists, and are made unique
+    within a standard, so a diff reports a removal as a removal.
+  - Every contrast proportion must fail at least three in five model drafts.
+  - The held-out guard falls back to the read pieces instead of passing vacuously.
+  - Mixes never propose negative shares.
+  - A mix repair sends no more sentences to a band than it lacks.
+  - A ratio counts "it is not" once and suggests the matching counterpart.
+  - Candidates carry the exemplar and pairs of the version they are rebuilt from.
+  - `fix` now serves candidates, and re-runs the champion, exactly as `invoke` serves them, example
+    files included. Before this, the blind A/B compared a champion that saw examples with a candidate
+    that did not.
 - `build --review` wrote the exemplar (and, since Phase 5, the document class) before stopping. Every
   build-time choice is now held in memory and written only when the build commits.
 

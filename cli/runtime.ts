@@ -55,6 +55,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
+  'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -68,7 +69,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'allow-unsourced', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
-  'review', 'score', 'skip', 'skip-methods', 'yes',
+  'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
 ];
 
 export const argv = process.argv.slice(2);
@@ -91,7 +92,7 @@ const parsed = ((): Parsed => {
 export const cmd = argv[0] ?? '';
 
 /** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
-export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set'];
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe'];
 
 /** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
  *  spell `--name` (a statement, a task) is never counted as the option itself. */
@@ -782,11 +783,21 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
 };
 
 /**
- * The contrast examples a rebuild serves: the pairs chosen at the last build, kept only where they
- * still teach the standard being rendered. Every command that renders a package uses this, so the
- * package is the same whichever of them renders it.
+ * WHAT A REBUILD CARRIES FROM THE VERSION IT IS DERIVED FROM: the exemplar and the contrast pairs that
+ * version's package served. A candidate built to be compared with that version must differ from it in
+ * what the change is about and nothing else; reading the store's current exemplar or pairs instead
+ * would mix in whatever changed since, after a later build or a rollback. The pairs are then kept only
+ * where they still teach the standard being rendered.
  */
-export function servedContrast(L: store.StoreLayout, v: StandardVersion): ContrastPair[] {
-  const c = store.getContrast(L);
-  return c.off ? [] : contrastFor(c.pairs, v);
+export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
+  exemplar: { text: string } | null; contrast: ContrastPair[];
+} {
+  const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
+  const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [] };
+  const ex = pkg.files['examples/exemplar.md'];
+  // Packages stored before the split between runtime and assurance have no assurance at all.
+  const raw = pkg.assurance?.['contrast-pairs.json'];
+  const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
+  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v) };
 }

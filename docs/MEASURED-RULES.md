@@ -78,19 +78,52 @@ that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
   holds, and the broken REQUIRED rules are fewer or broken in fewer places.
 - **A rewrite may change how something is said, never what it claims** (`core/loop/integrity.ts`).
   Every rewritten span must keep its figures, negations, qualifiers ("may", "most", "roughly"), proper
-  names and `[placeholders]`, unless the broken rule named that very word. A rewrite that loses one is
-  refused, and the original sentence is kept.
+  names and `[placeholders]`, unless the broken rule named that very word. A ratio's competing word may
+  be swapped, but the swap must keep what it asserted: "is not" may become "isn't", never "is". A
+  rewrite that loses one is refused, and the original sentence is kept.
 - **Accuracy comes before style.** Rules marked `--phase ACCURACY` and invented claims (UNSOURCED, see
   `core/loop/claims.ts`) get their own first pass.
 - **It changes the output, never the standard.** The loop has no authority to relax a target.
+
+## The regression floor
+
+A new implementation that fixes the rule you complained about can quietly make three others worse.
+The floor notices (`atelier floor`, `core/distinctiveness/measured.ts`). Every measured rule that
+applies everywhere is a dimension, scored by its own observer and turned so that higher is always
+better.
+
+| step | command | what it does |
+|---|---|---|
+| margins | `--corpus <folder>` (done by `atelier new`) | proposes a margin per rule: half the interquartile range of your own pieces on it. A change smaller than the difference between two of your typical pieces is not a regression of your voice. Every rule starts OBSERVE. |
+| your call | `--margin <rule>=<n>`, `--enforce <rule>`, `--observe <rule>` | which rules may block a new version, and by how much |
+| tasks | `--tasks <file>` | the tasks it is measured on, separated by blank lines; at least three |
+| baseline | `--baseline` | fires the active version several times per task and freezes its scores |
+| qualify | `--qualify` | an A/A run: the same version again, compared with its own baseline. Every regression is a false alarm. Runs accumulate, and the floor is EARNED when the exact upper 95% bound on false alarms is at most 5%, which takes about 60 resolved comparisons with none (ten tasks and six enforced rules, or several runs). Changing the tasks, margins, roles or model starts the count again. |
+| check | `--check <version> [--target <rule>] [--promote]` | fires a candidate the same way; each task gets a three-state verdict (REGRESSION, NONINFERIOR, INCONCLUSIVE), and the worst task decides |
+
+What it authorises is the promotion gate's decision (`core/convergence/promotion.ts`), not the
+floor's. A candidate installs itself only when all of these hold:
+- the floor is EARNED
+- no enforced rule regressed on any task
+- the rule the repair was about improved **across tasks**, where each task counts once however many
+  drafts it had
+
+`atelier fix` does this for you when a count favours the candidate and the floor is earned. Otherwise
+a person decides, as before. A promoted version's own scores become the next baseline. Floor runs are
+raw drafts, not repaired output, so they measure the implementation, and they are never recorded as
+invocations.
 
 ## Rule keys
 
 A rule's id (`p3`, `c2`) is its position in one discovery run. A second run numbers again from 1. The
 **key** (`R-3f9a1c`) is the rule's identity across versions (`core/state/rule-key.ts`):
 
-- **Measured rules:** the key comes from the observer and what it counts, never the threshold.
-  Tightening a cap is the same rule.
+- **Measured rules:** the key comes from the observer, what it counts and which bounds it sets, never
+  the thresholds. Tightening a cap is the same rule; a floor and a cap on the same thing are two. A list
+  the contrast pass picks from your corpus carries a `role` ("connectives"), so a later run that picks
+  a slightly different list still names the same rule.
+- **Duplicates:** two rules in one standard with the same content key get `-2`, `-3` in order, so no
+  lookup by key can silently lose one.
 - **Other rules:** the key comes from the kind and the folded statement.
 - **Amendments:** an amendment carries the key onto the new wording.
 
@@ -100,12 +133,22 @@ changed, and how.
 
 ## Write this, not that
 
-When the loop repairs a span and the pass is accepted, the before/after pair is recorded with the
-broken rule's key. At build, up to six recent pairs (two per rule) that still teach the current
-standard ship with the skill as `examples/contrast.md`. Each pair is re-checked against the current
-standard before it ships. Pairs come from model output only, never from your corpus or a held-out
-piece. They do not come from the ratification ledger either: the ledger holds rule wordings, and a
-rejected rule must never reach the model. Turn them off with `atelier build --contrast none`.
+When the loop in `atelier invoke` repairs a span and the pass is accepted, the before/after pair is
+recorded with the broken rule's key and its exact check. (In Claude Code the host rewrites the whole
+answer, so there is no verified span pair to record.) At build, up to six recent pairs (two per rule)
+ship with the skill as `examples/contrast.md`, and only pairs that still teach the current standard:
+- the rule is still live
+- its check is unchanged
+- where the rule counts words, the "after" has fewer of them than the "before"
+
+Pairs are model output only, and the file says so. They never come from your corpus, from a run on a
+task held back for the blind comparison, or from text quoting a held-back piece. They do not come from
+the ratification ledger either: the ledger holds rule wordings, and a rejected rule must never reach the
+model.
+
+The pairs travel with the package that served them. A candidate rebuilt from a version carries that
+version's pairs and exemplar, never whatever the store holds now. Turn them off with
+`atelier build --contrast none`.
 
 ## Document class
 

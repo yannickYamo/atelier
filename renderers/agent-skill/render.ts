@@ -546,8 +546,11 @@ mintedAt:        ${v.mintedAt}
     }, null, 2)}\n`,
   };
 
+  // The pairs themselves, as data, travel with the package that served them (never served, never
+  // hashed), so a candidate rebuilt from this version carries the same ones: see carriedFrom in cli/runtime.ts.
+  const withPairs = contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance;
   return { skillId, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash,
-    runtime, assurance, files: runtime, packageHash: sha(JSON.stringify(runtime)) };
+    runtime, assurance: withPairs, files: runtime, packageHash: sha(JSON.stringify(runtime)) };
 }
 
 /** Refuses a package that has picked up host-only frontmatter. */

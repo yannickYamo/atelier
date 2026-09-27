@@ -94,7 +94,19 @@ export const RATIO: Observer = {
   },
   observe(text, p) {
     const numer = list(p, 'numerator') ?? []; const denom = list(p, 'denominator') ?? [];
-    const a = findTerms(text, numer); const b = findTerms(text, denom);
+    // One stretch of text is one use: "it is not" must not count as both "it is" and "is not". Longer
+    // matches win, then earlier ones; anything overlapping a kept match is dropped.
+    const all = [...findTerms(text, numer).map((s) => ({ s, side: 'a' as const })), ...findTerms(text, denom).map((s) => ({ s, side: 'b' as const }))]
+      .sort((x, y) => (y.s.end - y.s.start) - (x.s.end - x.s.start) || x.s.start - y.s.start);
+    const kept: typeof all = [];
+    for (const m of all) if (!kept.some((k) => m.s.start < k.s.end && k.s.start < m.s.end)) kept.push(m);
+    kept.sort((x, y) => x.s.start - y.s.start);
+    const a = kept.filter((m) => m.side === 'a').map((m) => m.s); const b = kept.filter((m) => m.side === 'b').map((m) => m.s);
+    // Lists given in matching order ("it's"/"it is", "don't"/"do not") suggest the one counterpart.
+    const counterpart = (word: string, from: readonly string[], to: readonly string[]): string => {
+      const i = from.findIndex((w) => w.toLowerCase() === word.toLowerCase().replace(/’/g, '\''));
+      return from.length === to.length && i >= 0 ? `"${to[i]}"` : quoted(to);
+    };
     const n = a.length + b.length;
     if (n < RATIO_MIN_EVENTS) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${n} use(s) of either; a share needs ${RATIO_MIN_EVENTS}` };
     const share = a.length / n;
@@ -105,12 +117,12 @@ export const RATIO: Observer = {
     // as it takes to reach the floor, so a text is not rewritten further than the rule asks.
     if (lo !== null && share < lo) {
       const need = Math.ceil(lo * n - a.length);
-      const swap: Span[] = b.slice(0, Math.max(1, need)).map((s) => ({ ...s, why: `write ${quoted(numer)} here, not "${s.text}": ${detail}, at least ${Math.round(lo * 100)}%` }));
+      const swap: Span[] = b.slice(0, Math.max(1, need)).map((s) => ({ ...s, why: `write ${counterpart(s.text, denom, numer)} here, not "${s.text}": ${detail}, at least ${Math.round(lo * 100)}%` }));
       return { verdict: 'VIOLATED', spans: swap, value: r2(share), detail: `${detail}; at least ${Math.round(lo * 100)}%` };
     }
     if (hi !== null && share > hi) {
       const need = Math.ceil(a.length - hi * n);
-      const swap: Span[] = a.slice(0, Math.max(1, need)).map((s) => ({ ...s, why: `write ${quoted(denom)} here, not "${s.text}": ${detail}, at most ${Math.round(hi * 100)}%` }));
+      const swap: Span[] = a.slice(0, Math.max(1, need)).map((s) => ({ ...s, why: `write ${counterpart(s.text, numer, denom)} here, not "${s.text}": ${detail}, at most ${Math.round(hi * 100)}%` }));
       return { verdict: 'VIOLATED', spans: swap, value: r2(share), detail: `${detail}; at most ${Math.round(hi * 100)}%` };
     }
     return { verdict: 'MET', spans: [], value: r2(share), detail };
@@ -153,6 +165,7 @@ export const DISTRIBUTION: Observer = {
     if (!edges?.length || !shares || tol === null) return 'needs edges, shares and tolerance';
     if (shares.length !== edges.length + 1) return 'shares needs one more entry than edges (the last band is open)';
     if (edges.some((e, i) => e <= 0 || (i > 0 && e <= edges[i - 1]))) return 'edges are positive and increasing';
+    if (shares.some((x) => x < 0 || x > 1)) return 'each share is between 0 and 1';
     if (Math.abs(shares.reduce((s, x) => s + x, 0) - 1) > 0.02) return 'shares sum to 1';
     if (tol <= 0 || tol >= 1) return 'tolerance is a share between 0 and 1';
     return null;
@@ -168,9 +181,12 @@ export const DISTRIBUTION: Observer = {
     // The band furthest over its share is where the rewrite acts: its sentences, as many as the excess.
     const over = shares.map((s, i) => s - want[i]);
     const worst = over.indexOf(Math.max(...over));
-    const excess = Math.ceil((over[worst] - tol / 2) * ss.length);
     const toward = over.map((x, i) => ({ x, i })).filter((b) => b.x < 0).sort((a, b) => a.x - b.x)[0]?.i;
-    const spans: Span[] = bands[worst].slice(0, Math.max(1, excess)).map((i) => {
+    // As many as the over-full band exceeds its share by, and no more than the band they are sent to
+    // lacks: moving more would overfill that band and the next pass would move them back.
+    const excess = Math.ceil((over[worst] - tol / 2) * ss.length);
+    const room = toward === undefined ? excess : Math.ceil(-over[toward] * ss.length);
+    const spans: Span[] = bands[worst].slice(0, Math.max(1, Math.min(excess, room))).map((i) => {
       const s = ss[i];
       return { start: s.start, end: s.end, text: s.text,
         why: `a ${s.words}-word sentence; ${Math.round(shares[worst] * 100)}% of sentences are ${bandLabel(edges, worst)} (target ${Math.round(want[worst] * 100)}%)`

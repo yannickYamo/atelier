@@ -522,6 +522,9 @@ export interface InvocationRecord {
 export interface RepairPair {
   /** the broken rule's key (see ../state/rule-key.ts), so the pair follows the rule across versions */
   readonly key: string;
+  /** the exact check the rule had when the pair was recorded, thresholds included; a pair recorded
+   *  under one check is not an example of another (see measurementId in ../state/rule-key.ts) */
+  readonly check?: string;
   readonly before: string;
   readonly after: string;
 }
