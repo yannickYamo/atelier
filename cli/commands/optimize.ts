@@ -140,6 +140,7 @@ export async function optimize(): Promise<void> {
       settle(L, c, 'REJECTED', UNTESTED, aborted ? `round stopped: ${aborted}` : 'not tested');
     }
     record(L, active, candidates, best, promoted, aborted);
+    console.log(`(this round: ${budget.calls ?? 0} model call(s), $${budget.spentUsd.toFixed(3)} of $${budget.capUsd})`);
   };
 
   // ── 3. SCREEN ──────────────────────────────────────────────────────────────────────────────────

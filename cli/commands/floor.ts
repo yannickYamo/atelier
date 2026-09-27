@@ -257,7 +257,13 @@ export async function floor(): Promise<void> {
   if (JSON.stringify(f) !== before) store.setFloor(L, f);
 
   const fires = Math.max(2, Math.floor(numericFlag('--fires', DEFAULT_FIRES)));
-  const budgetFor = (calls: number): Budget => ({ spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: calls });
+  // Every model call this command makes is metered, and what it spent is said at the end.
+  const used: Budget[] = [];
+  const budgetFor = (calls: number): Budget => { const b: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: calls }; used.push(b); return b; };
+  const spent = (): void => {
+    const usd = used.reduce((n, b) => n + b.spentUsd, 0); const calls = used.reduce((n, b) => n + (b.calls ?? 0), 0);
+    if (calls) console.log(`(${calls} model call(s), $${usd.toFixed(3)})`);
+  };
   const ready = (): void => {
     if (!f.contract || !Object.keys(f.contract.dimensions).length) die(`no floor contract yet: atelier floor --skill ${name} --corpus <folder of your pieces>`);
     if (f.tasks.length < MIN_TASKS) die(`the floor needs at least ${MIN_TASKS} tasks: atelier floor --skill ${name} --tasks <file> (tasks separated by blank lines).`);
@@ -271,6 +277,7 @@ export async function floor(): Promise<void> {
     const { runs } = await fire(L, active, f.tasks, fires, client, budgetFor(f.tasks.length * fires));
     store.setBaseline(L, active, freeze(active, model, dims, runs));
     console.log(`Baseline frozen for ${active} under ${model}.`);
+    spent();
   }
 
   // ── A/A: the false-alarm rate, from runs that are independent of each other ──────────────────
@@ -305,6 +312,7 @@ export async function floor(): Promise<void> {
     console.log(q.qualification ? 'The floor is EARNED for this version, standard, contract, baseline, task set, runtime and draft count.'
       : `Not qualified yet: false alarms at most 5% (upper bound) over at least ${MIN_TASKS} tasks, and at least ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+ planted regressions caught. `
         + 'Run --qualify again to add evidence, add tasks or drafts (--fires), or widen margins that are tighter than your writing varies.');
+    spent();
   }
 
   // ── Check a candidate ───────────────────────────────────────────────────────────────────────
@@ -321,6 +329,7 @@ export async function floor(): Promise<void> {
     }
     console.log(`floor: ${check.composite} · target: ${check.comparison} · floor state: ${check.state}`);
     console.log(`gate: ${check.decision.authority} — ${check.decision.why}`);
+    spent();
     store.appendEvent(L, { kind: 'FLOOR_CHECK', candidateSkillVersionHash: cand, floor: check.composite, comparison: check.comparison,
       authority: check.decision.authority, at: new Date().toISOString() });
     if (argv.includes('--promote')) {

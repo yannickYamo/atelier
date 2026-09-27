@@ -199,13 +199,13 @@ describe('through the binary: one round of optimize', () => {
   it('proposes by reflection and by the fixed order, screens, confirms on the floor, installs only through the gate, and never moves the standard', async () => {
     const { data, proj } = await seed(60);
     const L = { root: data, skillName: 'focus' };
-    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [{ change: 1, why: 'the failures show the rule is skimmed while drafting' }] } } });
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [{ change: 1, why: 'the failures show the rule is skimmed while drafting' }] } } });
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
     expect(run(data, proj, 'floor', '--skill', 'focus', '--qualify')).toContain('EARNED');
     const std = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     const before = store.getActive(L);
     // Any version whose SKILL.md checks the draft before finalizing writes the plain answer.
-    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [{ change: 1, why: 'the failures show the rule is skimmed while drafting' }] } },
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [{ change: 1, why: 'the failures show the rule is skimmed while drafting' }] } },
       when: [{ contains: 'Before you finalize', answer: { piece: 'the plain answer' } }] });
     const out = run(data, proj, 'optimize', '--skill', 'focus', '--promote', '--cap', '50');
     expect(out).toContain('by reflection');
@@ -224,7 +224,7 @@ describe('through the binary: one round of optimize', () => {
   it('a round that runs out of budget stops cleanly: recorded, and nothing it built is held against a retry', async () => {
     const { data, proj } = await seed(3);
     const L = { root: data, skillName: 'focus' };
-    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] } } });
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] } } });
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
     const out = run(data, proj, 'optimize', '--skill', 'focus', '--cap', '0.0000001');
     expect(out).toContain('could not finish');
@@ -236,11 +236,11 @@ describe('through the binary: one round of optimize', () => {
   it('a candidate left waiting for a person does not break fix: fix says where to decide it', async () => {
     const { data, proj } = await seed(60);
     const L = { root: data, skillName: 'focus' };
-    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] } } });
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] } } });
     expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation')).not.toMatch(/^EXIT:/);
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
     run(data, proj, 'floor', '--skill', 'focus', '--qualify');
-    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] },
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] },
       emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' } },
     when: [{ contains: 'Before you finalize', answer: { piece: 'the plain answer' } }] });
     const opt = run(data, proj, 'optimize', '--skill', 'focus', '--cap', '50');
