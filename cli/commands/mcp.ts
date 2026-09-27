@@ -20,6 +20,8 @@ import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
+import { describeTaste } from '../../core/taste/reader.js';
+import { recordTaste } from './taste.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { observerFor } from '../../core/observers/registry.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
@@ -37,7 +39,9 @@ const TOOLS = [
   { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for first-person stories or figures presented as findings that are not in the skill\'s material (UNSOURCED). Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; replace an UNSOURCED claim with a placeholder, never another invented one.',
     inputSchema: { type: 'object', properties: { skill: { type: 'string' }, text: { type: 'string' },
       class: { type: 'string', description: 'the kind of document the text is ("blog-post", "support-reply"); refused when the skill measures another kind' },
-      material: { type: 'string', description: 'notes, figures or sources the text may draw on, beyond the skill\'s own material' } },
+      material: { type: 'string', description: 'notes, figures or sources the text may draw on, beyond the skill\'s own material' },
+      taste: { type: 'boolean', description: 'also read the rules no count can check (argument, figure, register…); calls a model' },
+      task: { type: 'string', description: 'the task the text was written for, so conditional rules are judged against it' } },
     required: ['skill', 'text'], additionalProperties: false } },
 ] as const;
 
@@ -51,7 +55,7 @@ const standardOf = (skill: string): StandardVersion => {
   return v;
 };
 
-const call = (name: string, args: Record<string, unknown>): { text: string; isError: boolean } => {
+const call = async (name: string, args: Record<string, unknown>): Promise<{ text: string; isError: boolean }> => {
   if (name === 'atelier_list_skills') {
     const dir = join(DATA, 'skills');
     // One unreadable skill must not hide the others.
@@ -82,16 +86,26 @@ const call = (name: string, args: Record<string, unknown>): { text: string; isEr
     if (!cls.ok) return { isError: true, text: cls.why };
     const material = [...store.getMaterial(L).map((m) => m.text), typeof args.material === 'string' ? args.material : ''].join('\n\n');
     const report = checkDraft(skill, v, text, { material });
-    return { isError: false, text: `${describeVerify(report)}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed,
+    // The reading-based rules, on request: this calls a model, and every other check here is free.
+    let taste: { verdicts: unknown[]; text: string } | null = null;
+    if (args.taste === true) {
+      const { readings, permissions } = await recordTaste(L, v, text, typeof args.task === 'string' ? args.task : null, null,
+        { spentUsd: 0, capUsd: 1, maxCalls: 3 });
+      taste = { text: describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto),
+        verdicts: readings.map((r) => ({ rule: r.requirementId, verdict: r.verdict, kind: r.kind ?? null, quote: r.quote ?? null, why: r.why,
+          authority: permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
+    }
+    return { isError: false, text: `${describeVerify(report)}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed,
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
-        detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })) })}` };
+        detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })),
+      ...(taste ? { taste: taste.verdicts } : {}) })}` };
   }
   throw new Error(`unknown tool "${name}"`);
 };
 
 const SUPPORTED = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-function handle(req: Rpc): unknown {
+async function handle(req: Rpc): Promise<unknown> {
   if (req.id === undefined || req.id === null) return null;            // a notification: nothing to answer
   if (!req.method) return null;                                         // a response to us: nothing to answer
   const ok = (result: unknown): unknown => ({ jsonrpc: '2.0', id: req.id, result });
@@ -109,7 +123,7 @@ function handle(req: Rpc): unknown {
         const name = typeof req.params?.name === 'string' ? req.params.name : '';
         const args = (req.params?.arguments ?? {}) as Record<string, unknown>;
         try {
-          const r = call(name, args);
+          const r = await call(name, args);
           return ok({ content: [{ type: 'text', text: r.text }], isError: r.isError });
         } catch (e) {
           return ok({ content: [{ type: 'text', text: (e as Error).message }], isError: true });
@@ -130,10 +144,10 @@ export async function mcp(): Promise<void> {
     let parsed: Rpc | Rpc[];
     try { parsed = JSON.parse(line) as Rpc | Rpc[]; } catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); continue; }
     if (Array.isArray(parsed)) {
-      const replies = parsed.map(handle).filter((r) => r !== null);
+      const replies = (await Promise.all(parsed.map(handle))).filter((r) => r !== null);
       if (replies.length) send(replies);
     } else {
-      const r = handle(parsed);
+      const r = await handle(parsed);
       if (r !== null) send(r);
     }
   }

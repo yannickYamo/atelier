@@ -1,7 +1,7 @@
 # Measured rules
 
 Most of a standard is judgement: when to concede a point, what counts as enough evidence, how a
-piece should end. Some of it is countable. A measured rule is a rule the owner ratified *with* a
+piece should end. That part is read, not counted: see [TASTE.md](TASTE.md). Some of it is countable. A measured rule is a rule the owner ratified *with* a
 deterministic check, and for those rules whether an output follows the rule is a fact, not an opinion.
 This page is the reference for what can be measured, how rules are proposed, and what the loop does
 with them.
@@ -202,11 +202,9 @@ improvement. Only an EARNED floor lets it install anything.
    reads the result.
    - A change to an unmeasured rule, or to whether the exemplar or examples ship, is left for you. It
      never installs itself.
-   - A reader that has earned VETO may block a finalist on a REQUIRED rule nothing measures (the
-     first three such rules, on three of the floor's tasks). To earn it, it needs 30 comparisons with
-     your own rulings on those rules, at least 5 each way, and agreement beyond chance: Cohen's kappa
-     of 0.6, with a 95% lower bound of 0.4. A reader that always says "keep the old one" never earns
-     it. It never clears a finalist.
+   - The taste reader ([TASTE.md](TASTE.md)) may block a finalist that, on three of the floor's
+     tasks, misses a rule more often than the current version does. This applies only to rules where
+     your blind labels have earned it VETO. It never clears a finalist.
 5. **Adopt.** Only with `--promote`, only on AUTO_PROMOTE, and only one change per round.
 
 `--cap` is the whole round's budget, with a call ceiling for runtimes that have no known prices. A

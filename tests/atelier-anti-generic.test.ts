@@ -53,7 +53,7 @@ describe('contrast: rules from the gap, guarded by the author\'s own held-out wo
   });
   it('the author\'s own mark, which the model never uses, becomes a floor', () => {
     const floor = rules.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'SPACED_HYPHEN'
-      && typeof r.requirement.measurement.params.minPer1000 === 'number');
+      && typeof r.requirement.measurement?.params.minPer1000 === 'number');
     expect(floor?.requirement.measurement?.params.minPer1000).toBeGreaterThan(0);
   });
   it('the substitute the em-dash rule names gets a cap at the author\'s own rate, so it cannot take over', () => {

@@ -304,7 +304,7 @@ export async function runOnce(
    */
   refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
   /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
-  select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } } | null = null,
+  select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } | Promise<{ index: number; why: string }> } | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -319,7 +319,7 @@ export async function runOnce(
   }
   const n = select && contract === null ? Math.max(1, Math.floor(select.n)) : 1;
   const written = await mapLimit(Array.from({ length: n }, (_, i) => i), n, () => spendOneWithResult(client, budget, servedText, task, contract));
-  const picked = n > 1 && select ? select.choose(written.map((w) => w.piece)) : { index: 0, why: '' };
+  const picked = n > 1 && select ? await select.choose(written.map((w) => w.piece)) : { index: 0, why: '' };
   const { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   // A structured output is held by its contract, not by prose rules; it is never span-rewritten.
   const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: null };

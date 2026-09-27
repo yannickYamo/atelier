@@ -44,6 +44,38 @@ a run in progress may not be.
   recurring gap into a rule on the owner's word, through the same path as `fix` (now shared in
   `cli/commands/addition.ts`). `--phrase` asks a model to propose a wording.
 
+### Added (plan phases A and B: the taste reader)
+
+- **The taste reader** (`core/taste/reader.ts`, design and pre-registered bar in docs/TASTE.md). Every
+  output is read against the rules no count can check:
+  - applicability is decided from the task alone
+  - behaviour is read twice, the second time with the markdown flattened and the rules reversed
+  - verdicts must quote real passages, and a verdict that moves between the two readings is UNSTABLE
+- **Calibration from the owner, blind** (`core/taste/calibration.ts`, `atelier taste --calibrate`):
+  - labels are taken without showing the reader's verdict
+  - VETO requires the exact upper bound on false blocks to be at most 15%, pooled, with per-rule
+    revocation
+  - scoped to the reader model and the rule's wording; never CERTIFY
+- **Wired everywhere the loop runs:**
+  - `invoke` reads and records every output
+  - with VETO, `invoke` repairs quoted misses (`core/taste/repair.ts`), kept only when the reader
+    confirms and no count regresses
+  - with VETO, `--drafts` prefers the draft missing the fewest taste rules
+  - `verify --taste` and the MCP `taste` flag
+  - the optimizer blocks candidates that miss VETO rules more often
+  - readings feed `improve` as behavioural observations
+- **The coverage map** (`core/taste/dimensions.ts`): every rule sorted into argument, evidence,
+  vocabulary, figure, pace, structure, register and cadence, shown on the review screen and in
+  `atelier plan`, with the gaps named.
+- **Already in the code, now serving.** A wiring audit found much of a taste instrument built but
+  unwired: a quoting single-output reader, a both-orders comparator, permission types, and the
+  judgement ledger. The new reader follows their contracts (the observation store's `VETO_QUALIFIED`
+  authority, `MISSED` as a miss verdict for the convergence loop).
+- **Replaced:** the optimizer's pooled pairwise reader (`core/optimizer/veto.ts`), which could only
+  earn VETO from `compare` followed by `promote`, is gone. Its role is the taste reader's.
+- **Fixed:** `fix` recorded count-decided picks and "same" into the judgement ledger as if they were
+  the owner's preferences. Only a person's actual preference is recorded now.
+
 ### Added (plan phase C: more of the taste measured, honestly)
 
 - **`RHYTHM`**: pace as variation of sentence, paragraph or section length. It is proposed from the
