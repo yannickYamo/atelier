@@ -40,17 +40,30 @@ export function deriveContrastRules(
   const checkOn = held.length ? held.map((p) => p.text) : authorTexts;
   const out: MeasuredProposal[] = [];
   let n = 0;
-  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak = false): void => {
-    const rs = checkOn.map((t) => measure(t, measurement));
+  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak = false, separate = false): void => {
+    // MUST SEPARATE. A proportion the model's own drafts already meet measures nothing about the voice:
+    // at least three in five drafts, each measured on its own, must fail it.
+    if (separate) {
+      const d = drafts.map((t) => measure(t, measurement)).filter((x) => x.verdict !== 'NOT_APPLICABLE');
+      const failing = d.filter((x) => x.verdict === 'VIOLATED').length;
+      if (!d.length || failing / d.length < 0.6) return;
+      evidence = `${evidence}; ${failing} of ${d.length} of its drafts fail it`;
+    }
+    // THE FALSE-POSITIVE GUARD. A cap the author's own held-out writing breaks is a rule against them.
+    // Where no held-out piece is long enough for the rule to apply (common for a ratio, which needs
+    // several uses), the pieces it was counted from are the check, and the proposal says so; where none
+    // of those applies either, there is no evidence the author meets it, and it is not proposed.
+    let independent = held.length > 0;
+    let rs = checkOn.map((t) => measure(t, measurement));
+    if (!rs.some((x) => x.verdict !== 'NOT_APPLICABLE')) { rs = authorTexts.map((t) => measure(t, measurement)); independent = false; }
     const applicable = rs.filter((x) => x.verdict !== 'NOT_APPLICABLE').length;
     const present = rs.filter((x) => x.verdict === 'MET').length;
-    // THE FALSE-POSITIVE GUARD. A cap the author's own held-out writing breaks is a rule against them.
-    if (applicable && present / applicable < 0.8) return;
+    if (!applicable || present / applicable < 0.8) return;
     n += 1;
     out.push({
       requirement: { requirementId: `c${n}`, statement, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
         evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, measurement },
-      conformance: { applicable, present, independent: held.length > 0, ...(weak ? { weak: true } : {}) },
+      conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}) },
     });
   };
 
@@ -128,7 +141,7 @@ export function deriveContrastRules(
   return out;
 }
 
-type Propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean) => void;
+type Propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean, separate?: boolean) => void;
 
 /**
  * Competing ways to say the same thing. The first list is the plain register, the second the one a
@@ -182,12 +195,12 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
       const min = Math.max(0.05, Math.round((Math.min(perPiece.length ? quantile(perPiece, 0.1) : sa, sa) - 0.1) * 20) / 20);
       if (min <= sm) continue;
       propose(`Prefer ${say(a)} to ${say(b)}: at least ${pct(min)} of the uses of either.`, 'GENERATIVE',
-        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], minShare: min } }, ev);
+        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], minShare: min } }, ev, false, true);
     } else {
       const max = Math.min(0.95, Math.round((Math.max(perPiece.length ? quantile(perPiece, 0.9) : sa, sa) + 0.1) * 20) / 20);
       if (max >= sm) continue;
       propose(`Prefer ${say(b)} to ${say(a)}: at most ${pct(max)} of the uses of either are ${say(a)}.`, 'GENERATIVE',
-        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], maxShare: max } }, ev);
+        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], maxShare: max } }, ev, false, true);
     }
   }
 
@@ -200,11 +213,11 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
   const group = CONNECTIVES.filter((c) => { const a = meanRate(authorTexts, [c]); const m = meanRate(drafts, [c]); return a >= 1 && a >= 1.5 * m + 0.3; });
   if (group.length >= 2) {
     const floor = r1(perPieceP(authorTexts, (t) => rate(t, group), 0.1) * 0.9);
-    const below = drafts.filter((t) => rate(t, group) < floor).length;
-    if (floor > 0 && below / drafts.length >= 0.6) {
+    if (floor > 0) {
+      // `role` keeps the rule's key stable when a later run finds a slightly different group.
       propose(`Lean on my connectives (${say(group)}): at least ${floor} per 1,000 words together.`, 'GENERATIVE',
-        { observer: 'TERM_RATE', params: { terms: group, minPer1000: floor } },
-        `you: ${meanRate(authorTexts, group)} per 1,000 words for these; the model on its own: ${meanRate(drafts, group)}; ${below} of ${drafts.length} of its drafts fall below ${floor}`);
+        { observer: 'TERM_RATE', params: { terms: group, minPer1000: floor, role: ['connectives'] } },
+        `you: ${meanRate(authorTexts, group)} per 1,000 words for these; the model on its own: ${meanRate(drafts, group)}`, false, true);
     }
   }
 
@@ -216,8 +229,8 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
       const cap = r1(Math.max(perPieceP(authorTexts, (t) => rate(t, used), 0.9) * 1.5, 0.5));
       if (cap < m) {
         propose(`Keep the model's stock vocabulary rare (${say(used)}): at most ${cap} per 1,000 words together.`, 'BOUNDARY',
-          { observer: 'TERM_RATE', params: { terms: used, maxPer1000: cap } },
-          `you: ${a} per 1,000 words for these; the model on its own: ${m} per 1,000`);
+          { observer: 'TERM_RATE', params: { terms: used, maxPer1000: cap, role: ['model-vocabulary'] } },
+          `you: ${a} per 1,000 words for these; the model on its own: ${m} per 1,000`, false, true);
       }
     }
   }
@@ -236,14 +249,23 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
     // Proposed only if it separates: most of the model's drafts, each on its own, fall outside it.
     const outside = draftMixable.filter((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author) > tolerance).length;
     if (gap >= 0.1 && outside / draftMixable.length >= 0.6) {
-      const shares = author.map((x) => Math.round(x * 100) / 100);
-      shares[shares.length - 1] = Math.round((1 - shares.slice(0, -1).reduce((x, y) => x + y, 0)) * 100) / 100;
+      const shares = toHundredths(author);
       const show = (m: readonly number[]): string => m.map((x, i) => `${pct(x)} ${bandLabel(LENGTH_EDGES, i)}`).join(', ');
       propose(`Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
         { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
         `you: ${show(author)}; the model on its own: ${show(model)} (${pct(gap)} of its sentences in a different band)`);
     }
   }
+}
+
+/** Shares rounded to hundredths that still sum to exactly 1 (largest remainder), never negative. */
+export function toHundredths(xs: readonly number[]): number[] {
+  const scaled = xs.map((x) => Math.max(0, x) * 100);
+  const floors = scaled.map(Math.floor);
+  let left = 100 - floors.reduce((a, b) => a + b, 0);
+  const order = scaled.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r);
+  for (const { i } of order) { if (left <= 0) break; floors[i] += 1; left -= 1; }
+  return floors.map((x) => x / 100);
 }
 
 /** Topics for the model's plain drafts: the author's own titles, so the comparison is like for like. */

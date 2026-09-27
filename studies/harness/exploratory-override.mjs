@@ -47,6 +47,8 @@ const next = existing ?? minted;
 const activeHash = store.getActive(L);
 const sv = store.getSkillVersion(L, activeHash);
 const arch = compileArchitecture(next);
+// Rendered as the study ran it, before exemplars and contrast examples existed: this script reproduces
+// that build, so it deliberately passes neither.
 const pkg = renderAgentSkill(next, arch, 'reviewer-voice', sv.description ?? 'exploratory override build');
 assertPortable(pkg);
 const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: 'reviewer-voice',

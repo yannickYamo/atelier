@@ -20,7 +20,7 @@ import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel, servedContrast } from '../runtime.js';
+import { sha, DATA, die, argv, flag, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel, carriedFrom } from '../runtime.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
@@ -90,7 +90,8 @@ export function amend(): void {
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
-  const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L), servedContrast(L, next));
+  const carried = carriedFrom(L, sv.skillVersionHash, next);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,

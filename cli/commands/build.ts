@@ -146,7 +146,8 @@ export function build(nameArg?: string): void {
     die('--contrast takes none (ship no contrast examples) or auto (choose them from past repairs, the default)');
   }
   const contrastOff = contrastFlag === undefined ? store.getContrast(L).off : contrastFlag.trim().toLowerCase() === 'none';
-  const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v) };
+  const heldBack = { tasks: (s.reservation?.reserved ?? []).map((u) => u.task), texts: (s.reservation?.reserved ?? []).map((u) => u.artifact) };
+  const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v, heldBack) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped);
