@@ -133,7 +133,7 @@ export async function newSkill(): Promise<void> {
   }
 
   if (s.run.state === 'RATIFIED') {
-    build(name);
+    await build(name);
     s = loadSession();
   }
 

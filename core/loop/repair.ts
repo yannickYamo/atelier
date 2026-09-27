@@ -105,10 +105,10 @@ replacement that:
   - keeps the meaning, facts, names and figures of the original span, and every negation and qualifier
     ("not", "may", "most", "roughly"), unless a reason names that very word as the problem: a rewrite
     that drops one is refused and the original kept;
-  - where a reason says a story or figure is not in the author's material, replaces just that story or
-    figure with a short
-    bracketed placeholder saying what belongs there, e.g. [your story: a time a control got routed around],
-    and never substitute another invented one;
+  - where a reason says a story or figure is not in the author's material, does exactly what that
+    reason says: either rewrites the span without it, keeping the point it made, or replaces just that
+    story or figure with a short bracketed placeholder saying what belongs there, e.g. [your story: a time
+    a control got routed around]. Never substitute another invented one;
   - keeps every [bracketed placeholder] already in the span, word for word;
   - reads naturally in place: the text immediately before and after it will not change;
   - uses no em dash (—) anywhere, placeholders included; write a comma, a colon or " - " instead.

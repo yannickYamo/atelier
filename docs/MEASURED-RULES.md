@@ -105,9 +105,39 @@ Two guards apply to every proposal.
   lose them. In a blind round the skill's output had no first person at all and British spelling
   throughout, for an American first-person author, while every cap it carried held.
 
-Why the positive half matters: caps on the model's tells alone produce a careful, de-AI'd writer, not
-this writer. In that round the skill's output had the cleanest negative profile of four versions and
-sounded least like the author.
+Why the positive half matters, and why it is checked rather than instructed: caps on the model's tells
+alone produce a careful, de-AI'd writer, not this writer. But an author does not write at a rate: in
+one corpus one-line paragraphs ran 0.4 to 10.4 per 1,000 words by piece, first person 0.7 to 36. A rule
+that instructs the average steers every piece toward one the author never wrote. So signature bands
+and the first-person band span the author's own range and are **weak**: checked on every output,
+reported, used to choose between drafts, never instructed and never rewritten toward. The voice itself
+is carried by the persona and the author's pieces (README, "It carries how you sound").
+
+Also in the voice layer, **register**: an author who contracts at least 75% of the forms that can be
+contracted gets a cap on forms left whole ("do not", "it is"), and a formal author a cap on
+contractions. Pronouns are not register; this is.
+
+### A banned move may not move
+
+Some tells are one move with several spellings. The **contrast** family is "not X, it's Y", "X rather
+than Y" and the reframes ("has little to do with", "what matters is"); the **opener** family is
+"That's…", "Here's…", repeated openings and catalogue announcements ("is the first one", "is the next
+one"). A repair pass that lowers one member of a family while raising another is refused: in a blind
+round, capping "not X, it's Y" produced "X rather than Y" in its place, and the reader saw through it.
+
+### Invented stories are cut, not left as slots
+
+A first-person story or a figure that is not in your material is rewritten out of the text, keeping the
+point it made, and the output lists where a story of your own would fit. `--placeholders` asks for
+bracketed slots instead. A slot in the delivered text was honest, but every blind reader took it for a
+broken draft.
+
+### Required means nearly always
+
+For new writing, a reading-based rule is suggested as REQUIRED only when the author followed it in at
+least four in five unread pieces where it applied (three or more). The rest are compiled as moves the
+author sometimes makes, each with its rate, and a piece may use about as many as the author's own
+pieces carry on average.
 
 ## What the loop does with them
 

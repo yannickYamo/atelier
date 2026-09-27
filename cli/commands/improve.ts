@@ -370,7 +370,7 @@ export async function create(path: string): Promise<void> {
   if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') adoptAllFromPublicSource();
   ratifyClose();
   // Default the name from the folder, so the minimum a person types is a path.
-  build(flag('--name') ?? basename(resolve(path)));
+  await build(flag('--name') ?? basename(resolve(path)));
 }
 
 /**
