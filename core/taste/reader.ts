@@ -31,6 +31,9 @@ export interface TasteReading {
   readonly why: string;
 }
 
+/** A MISSED reading that points at a passage: the only kind that may act, and the only kind a false block is. */
+export const actsAsMiss = (r: Pick<TasteReading, 'verdict' | 'kind'>): boolean => r.verdict === 'MISSED' && r.kind === 'PRESENCE';
+
 /** The rules the reader reads: live, and without a measurement (a count decides those). */
 export function tasteRules(v: StandardVersion): { rule: Requirement; key: string }[] {
   const keys = keysOf(v.requirements);
@@ -77,14 +80,30 @@ export const READING_SCHEMA: Record<string, unknown> = {
   required: ['readings'], additionalProperties: false,
 };
 
-const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
-/** A quote is real when it is in the text, whitespace aside (line wrapping is not fabrication). */
-export const quoteIsReal = (quote: string, text: string): boolean => quote.trim().length >= 3 && squash(text).includes(squash(quote));
+/** Whitespace collapsed: line wrapping is layout, not wording. */
+export const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
+/** Emphasis markers removed: `*very* important` and "very important" are the same words. */
+const unmark = (s: string): string => s.replace(/\*\*|__|`/g, '').replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s.,;:!?)]|$)/g, '$1$2');
 
-/** The same text, shown differently: markdown markers removed, so a verdict that tracked formatting moves. */
+/** A quote is real when it is in the text, whitespace and emphasis markers aside (neither is wording). */
+export const quoteIsReal = (quote: string, text: string): boolean =>
+  quote.trim().length >= 3 && (squash(text).includes(squash(quote)) || squash(unmark(text)).includes(squash(unmark(quote))));
+
+/**
+ * The same text, shown differently: markdown markers removed, so a verdict that tracked formatting moves.
+ * Code is left alone (fenced blocks and inline spans are content), links keep their words, and only a
+ * short number followed by a space counts as a list marker, so "2024. was a year" keeps its year.
+ */
 export function flatten(text: string): string {
-  return text.split('\n').map((l) => l.replace(/^\s*#{1,6}\s+/, '').replace(/^\s*>\s?/, '').replace(/^\s*([-*+]|\d+[.)])\s+/, '')
-    .replace(/\*\*|__/g, '').replace(/(^|\s)[*_](\S[^*_]*\S|\S)[*_](?=\s|[.,;:!?]|$)/g, '$1$2')).join('\n');
+  let fenced = false;
+  return text.split('\n').map((l) => {
+    if (/^\s*(```|~~~)/.test(l)) { fenced = !fenced; return l; }
+    if (fenced) return l;
+    const body = l.replace(/^\s*#{1,6}\s+/, '').replace(/^\s*>\s?/, '').replace(/^\s*([-*+]|\d{1,3}[.)])\s+(?=\S)/, '')
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1');
+    // Emphasis only outside inline code.
+    return body.split(/(`[^`]*`)/).map((part, i) => i % 2 ? part : unmark(part)).join('');
+  }).join('\n');
 }
 
 interface RawReading { n: number | string; verdict: 'FOLLOWED' | 'MISSED' | 'UNCLEAR'; kind: 'PRESENCE' | 'OMISSION' | null; quote: string | null; why: string }
@@ -127,6 +146,10 @@ export async function applicability(client: InferenceClient, budget: Budget, tas
   return out;
 }
 
+/** `applicability` for a standard's reading-based rules, in `tasteRules` order: decide once, read many. */
+export const applicabilityFor = (client: InferenceClient, budget: Budget, v: StandardVersion, task: string | null): Promise<boolean[]> =>
+  applicability(client, budget, task, tasteRules(v).map((x) => x.rule));
+
 /** A pass's reading, checked: an unverifiable quote makes it UNCLEAR. */
 function checked(r: RawReading | undefined, text: string): { verdict: 'FOLLOWED' | 'MISSED' | 'UNCLEAR'; kind?: 'PRESENCE' | 'OMISSION'; quote?: string; why: string } {
   if (!r) return { verdict: 'UNCLEAR', why: 'no reading returned' };
@@ -142,11 +165,14 @@ function checked(r: RawReading | undefined, text: string): { verdict: 'FOLLOWED'
 /**
  * Read one text against a standard's reading-based rules. `task`, when known, decides applicability.
  * Two behaviour calls (and one applicability call when any rule has a condition), metered on `budget`.
+ * Applicability depends on the task only, so a caller reading several texts for one task decides it once
+ * (`applicabilityFor`) and passes it in.
  */
-export async function readTaste(client: InferenceClient, budget: Budget, v: StandardVersion, text: string, task: string | null = null): Promise<TasteReading[]> {
+export async function readTaste(client: InferenceClient, budget: Budget, v: StandardVersion, text: string, task: string | null = null,
+  decided: readonly boolean[] | null = null): Promise<TasteReading[]> {
   const rules = tasteRules(v);
   if (!rules.length) return [];
-  const applies = await applicability(client, budget, task, rules.map((x) => x.rule));
+  const applies = decided ?? await applicability(client, budget, task, rules.map((x) => x.rule));
   const live = rules.filter((_, i) => applies[i]);
   const flat = flatten(text);
   const reversed = [...live].reverse();
@@ -167,9 +193,18 @@ export async function readTaste(client: InferenceClient, budget: Budget, v: Stan
   });
 }
 
-/** One line per reading, for the terminal. */
-export function describeTaste(readings: readonly TasteReading[], rules: ReadonlyMap<string, Requirement>, permitted: ReadonlySet<string> = new Set()): string {
+/**
+ * One line per reading, for the terminal. A held-back reading (./calibration.ts `heldBack`) shows no
+ * verdicts at all: it is kept blind so the owner can label it; `vetoMisses` still says whether it acted.
+ */
+export function describeTaste(readings: readonly TasteReading[], rules: ReadonlyMap<string, Requirement>, permitted: ReadonlySet<string> = new Set(),
+  held = false): string {
   if (!readings.length) return 'No reading-based rules to read.';
+  if (held) {
+    const acted = readings.filter((r) => actsAsMiss(r) && permitted.has(r.key)).length;
+    return `read against ${readings.length} reading-based rule(s); this reading is held back so that your labels stay blind`
+      + `${acted ? ` (${acted} rule(s) the reader holds VETO on were read as missed)` : ''}. Label it with: atelier taste --calibrate`;
+  }
   const count = (v: TasteVerdict): number => readings.filter((r) => r.verdict === v).length;
   const head = `read against ${readings.length} reading-based rule(s): ${count('FOLLOWED')} followed, ${count('MISSED')} missed, `
     + `${count('UNCLEAR') + count('UNSTABLE')} could not be told, ${count('NOT_APPLICABLE')} did not apply`;
@@ -178,3 +213,7 @@ export function describeTaste(readings: readonly TasteReading[], rules: Readonly
     + `    ${r.kind === 'PRESENCE' && r.quote ? `"${r.quote.slice(0, 140)}"` : 'nowhere in the text'}: ${r.why.slice(0, 160)}`);
   return [head, ...lines].join('\n');
 }
+
+/** The misses that act: PRESENCE misses on rules the reader holds VETO on. */
+export const vetoMisses = (readings: readonly TasteReading[], veto: ReadonlySet<string>): TasteReading[] =>
+  readings.filter((r) => actsAsMiss(r) && veto.has(r.key));

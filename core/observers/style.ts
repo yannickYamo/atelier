@@ -120,7 +120,22 @@ export const FUNCTION_WORDS: readonly string[] = [
   'every', 'should', 'could', 'may', 'might', 'must', 'it\'s', 'that\'s', 'don\'t', 'you\'re',
 ];
 
+// Profiles are pure in the text, and the contrast pass's leave-one-out asks for each piece's profile once
+// per held-out piece: (A+D)² tokenisations without this, A+D with it. Bounded, first in first out.
+const PROFILES = new Map<string, number[]>();
+const PROFILE_CACHE = 256;
+
 export const functionProfile = (text: string, words: readonly string[] = FUNCTION_WORDS): number[] => {
+  if (words !== FUNCTION_WORDS) return profileOf(text, words);
+  const had = PROFILES.get(text);
+  if (had) return had;
+  const p = profileOf(text, words);
+  if (PROFILES.size >= PROFILE_CACHE) PROFILES.delete(PROFILES.keys().next().value!);
+  PROFILES.set(text, p);
+  return p;
+};
+
+const profileOf = (text: string, words: readonly string[]): number[] => {
   const tokens = proseRegions(text).flatMap((r) => wordsOf(r.text).map((w) => w.toLowerCase().replace(/’/g, '\'')));
   const n = tokens.length || 1;
   const counts = new Map<string, number>();
@@ -146,7 +161,7 @@ export function deltaReference(authorTexts: readonly string[], modelTexts: reado
   const r = (x: number): number => Math.round(x * 1e4) / 1e4;
   const z = (p: number[]): number[] => p.map((v, i) => r((v - mean[i]) / sd[i]));
   return { words: FUNCTION_WORDS, mean: mean.map((x) => Math.round(x * 1e6) / 1e6), sd: sd.map((x) => Math.round(x * 1e6) / 1e6),
-    authorDocs: authorTexts.map((t) => z(functionProfile(t))), modelDocs: modelTexts.map((t) => z(functionProfile(t))) };
+    authorDocs: profiles.slice(0, authorTexts.length).map(z), modelDocs: profiles.slice(authorTexts.length).map(z) };
 }
 
 /** Mean Delta from a text to each author piece and to each model draft. Lower is closer. */

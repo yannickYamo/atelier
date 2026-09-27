@@ -1,8 +1,9 @@
 # Measured rules
 
 Most of a standard is judgement: when to concede a point, what counts as enough evidence, how a
-piece should end. That part is read, not counted: see [TASTE.md](TASTE.md). Some of it is countable. A measured rule is a rule the owner ratified *with* a
-deterministic check, and for those rules whether an output follows the rule is a fact, not an opinion.
+piece should end. That part is read, not counted (see [TASTE.md](TASTE.md)). Some of it is countable.
+A measured rule is a rule the owner ratified *with* a deterministic check, and for those rules whether
+an output follows the rule is a fact, not an opinion.
 This page is the reference for what can be measured, how rules are proposed, and what the loop does
 with them.
 
@@ -129,24 +130,39 @@ The floor notices (`atelier floor`, `core/distinctiveness/measured.ts`). Every m
 applies everywhere is a dimension, scored by its own observer and turned so that higher is always
 better.
 
+**The quick way:** `atelier floor --skill <name> --setup` does every step below with its default, says
+how many drafts it will spend first, and stops as soon as the floor is earned (`--runs`, default 6, caps
+the A/A runs). It takes margins and tasks from your pieces (`--corpus <folder>`, or the folder
+`atelier new` read): each task is `Write a piece titled "<title>"`, one per `# ` title. It enforces every
+REQUIRED counted rule when nothing is enforced yet. `atelier tend` (below) reports whether it is needed.
+
 | step | command | what it does |
 |---|---|---|
 | margins | `--corpus <folder>` (done by `atelier new`) | proposes a margin per rule: half the interquartile range of your own pieces on it. A change smaller than the difference between two of your typical pieces is not a regression of your voice. Every rule starts OBSERVE. |
 | your call | `--margin <rule>=<n>`, `--enforce <rule>`, `--observe <rule>` | which rules may block a new version, and by how much |
-| tasks | `--tasks <file>` | the tasks it is measured on, separated by blank lines; at least three |
-| baseline | `--baseline` | fires the active version several times per task and freezes its scores |
-| qualify | `--qualify` | A/A runs: the same version drafts twice as many times per task, and one half is compared with the other. Both halves are fresh in every run, so runs are independent, and each task is one trial. A task that regresses is a false alarm. The floor is EARNED when the exact upper 95% bound on false alarms is at most 5% and it catches planted regressions (below). With no false alarm at all, that bound takes 59 resolved task comparisons (twenty tasks over three runs, say). |
-| check | `--check <version> [--target <rule>] [--promote]` | fires a candidate the same way. Each task gets a three-state verdict (REGRESSION, NONINFERIOR, INCONCLUSIVE), and the worst task decides. |
+| tasks | `--tasks <file>` | the tasks it is measured on, separated by blank lines; at least five |
+| baseline | `--baseline` | drafts the active version once per task (`--fires` for more) and freezes its scores |
+| qualify | `--qualify` | one A/A run: the same version drafts twice per task, and one half is compared with the other, exactly as a candidate would be. Both halves are fresh in every run, so runs are independent. Each enforced rule gives one trial per run, and a rule the comparison calls a REGRESSION is a false alarm. |
+| check | `--check <version> [--target <rule>] [--promote]` | drafts a candidate the same way and gives each rule one verdict across tasks: REGRESSION, NONINFERIOR or INCONCLUSIVE |
 
-Counts are sparse, so two drafts that both used a word zero times show no spread at all. Each side's
-spread is therefore taken as at least half the rule's margin. With three drafts a side, a drop of one
-margin stays INCONCLUSIVE and a drop of two resolves.
+**Tasks are the unit.** For each rule, the candidate's mean score on a task is paired with the
+champion's on the same task, and one paired test runs over the per-task differences: a one-sided 95%
+t-interval, NONINFERIOR when its lower bound is above minus the margin, REGRESSION when its upper bound
+is below it. Counts are sparse (two drafts that both used a word zero times show no spread at all), so
+the spread is taken as at least half the rule's margin. Fewer than five tasks gives no verdict. One
+draft per task is enough, because the variation between tasks is what the test is about: a floor on
+ten tasks costs ten drafts per version, where the earlier per-task design needed about sixty.
 
-A false-alarm rate says how often the floor blocks a version that is no worse, and that errs toward
-safety. The failure that matters for letting it act alone is the other one: a worse version passed. So
-qualification also plants a regression of **two margins** on each enforced rule in the same fresh A/A
-draws, and requires the floor to catch at least 80% of at least 20 such plantings. A floor whose margins
-are tighter than the writing's own variation fails this, and says so.
+**Earned** means two pre-registered bars, both measured on this skill:
+
+- **Sensitivity first.** The failure that matters for letting the floor act alone is a worse version
+  passed. So every A/A run also plants a regression of **two margins** on each enforced rule in the same
+  fresh draws, and the floor must catch at least **80% of at least 10** such plantings. A floor whose
+  margins are tighter than the writing's own variation fails this, and says so.
+- **Calibration.** False alarms, over at least **11** trials, with the exact (Clopper–Pearson) upper
+  95% bound at most **25%**. With no false alarm at all, eleven trials clear it: for example six runs
+  with two enforced rules. This bound checks that the test is not grossly miscalibrated; the t-test
+  itself runs at 5%, and a false alarm only ever blocks, sending the choice back to you.
 
 A qualification is a rate **of** one situation:
 - this version of the skill and its standard
@@ -166,8 +182,8 @@ floor's. A candidate installs itself only when all of these hold:
   it had, and it takes at least three tasks.
 - that rule is left out of the floor's verdict, since guarding the target with the floor would count
   it twice
-- at least one **other** enforced rule is watching, and it held (NONINFERIOR) on every task. An
-  INCONCLUSIVE task blocks as surely as a regression.
+- at least one **other** enforced rule is watching, and every other enforced rule held (NONINFERIOR
+  across tasks). An INCONCLUSIVE rule blocks as surely as a regression.
 
 `atelier fix` does this for you when a count favours the candidate and the floor is earned. If the
 floor run cannot finish (a budget, a refusal), the choice goes back to you. Otherwise a person decides,
@@ -202,9 +218,10 @@ improvement. Only an EARNED floor lets it install anything.
    reads the result.
    - A change to an unmeasured rule, or to whether the exemplar or examples ship, is left for you. It
      never installs itself.
-   - The taste reader ([TASTE.md](TASTE.md)) may block a finalist that, on three of the floor's
-     tasks, misses a rule more often than the current version does. This applies only to rules where
-     your blind labels have earned it VETO. It never clears a finalist.
+   - The taste reader ([TASTE.md](TASTE.md)) may block a finalist. Both versions draft once on four of
+     the floor's tasks, and a finalist is blocked when it misses a rule on at least two more tasks than
+     the current version. One extra miss is within what one draft per task does by chance. This applies
+     only to rules where your blind labels have earned the reader VETO. It never clears a finalist.
 5. **Adopt.** Only with `--promote`, only on AUTO_PROMOTE, and only one change per round.
 
 `--cap` is the whole round's budget, with a call ceiling for runtimes that have no known prices. A
@@ -218,6 +235,27 @@ Every proposal records who proposed it. `atelier optimize --report` compares how
 proposals are kept with the fixed ordering's. `atelier fix --reflect` runs the same comparison one
 complaint at a time, and falls back to the fixed ordering when repair memory refuses reflection's
 choice.
+
+## Tending: the loop on a schedule
+
+`atelier tend --skill <name> [--cap <usd>] [--auto]` runs everything below the standard, in order, and
+ends with a digest of what happened and what waits for you:
+
+1. **mine** what keeps going wrong (next section), recorded for `atelier mine --add`;
+2. **taste**: what the reader has earned, and how many held-back readings wait for your label;
+3. **floor**: whether a change could install itself, or the one command that sets it up;
+4. **optimize**: one round when the floor has a baseline. With `--auto`, a winner the promotion gate
+   allows is installed (the previous version stays one `atelier rollback` away); otherwise it waits.
+
+It never adds, removes or rewords a rule. Run it by hand or from cron, for example weekly:
+
+```
+0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log
+```
+
+`atelier status --skill <name>` is the one-page view: rules (counted and read), which of the eight
+dimensions they cover, what the taste reader holds, the floor's state, uses, what waits, and when the
+skill was last tended.
 
 ## What keeps going wrong
 

@@ -18,10 +18,6 @@ a run in progress may not be.
   invalid choices are discarded and counted.
 - **Pareto selection** (`core/optimizer/pareto.ts`) over the measured rules, with a cheap-model screen
   before the confirmation (successive halving).
-- **A veto-only reader** (`core/optimizer/veto.ts`): SSO's instrument with its authority cut to
-  blocking. It earns VETO only by agreeing with the owner's own rulings on the rules it reads, beyond
-  chance (Cohen's kappa of at least 0.6, with a 95% lower bound of at least 0.4, over 30 rulings, 5 in
-  each direction), and never CERTIFY.
 - **`atelier optimize`**: propose, build, screen, confirm on the regression floor, and adopt only on
   AUTO_PROMOTE with `--promote`. Rounds are recorded, and `--report` compares the reflective and the
   fixed proposers' keep rates. **`atelier fix --reflect`** runs the same experiment one complaint at a
@@ -43,6 +39,58 @@ a run in progress may not be.
   keeps breaking, and repairs refused for changing meaning, each with its remedy. `--add` turns a
   recurring gap into a rule on the owner's word, through the same path as `fix` (now shared in
   `cli/commands/addition.ts`). `--phrase` asks a model to propose a wording.
+
+### Added (plan phase D: the loop runs itself; a simpler front door)
+
+- **The regression floor takes tasks as the unit.** One paired test per rule across tasks (a one-sided
+  95% t-interval on the per-task differences, spread at least half the margin, at least five tasks),
+  one draft per task by default. A floor on ten tasks now costs ten drafts per version instead of about
+  sixty.
+- **Qualification is sensitivity first.** The floor must catch at least 80% of at least 10 planted
+  regressions of two margins, and its false alarms must stay under an upper 95% bound of 25% over at
+  least 11 trials (one per enforced rule per fresh A/A run).
+- **`atelier floor --setup`**: margins and tasks from your own titled pieces, the REQUIRED counted
+  rules enforced, a baseline frozen and A/A runs until earned, with the spend said first.
+- **`atelier tend`**: mining, the taste reader's status, the floor and one optimizer round in one
+  command, with a digest; `--auto` lets the promotion gate install a winner. Written for cron.
+- **`atelier status --skill <name>`**: where a skill stands, on one page.
+- **The front door** (`atelier` with no command) lists the everyday verbs first: create, use,
+  correct, status, calibrate, set up the floor, tend.
+
+### Fixed (gap audit of phases A to C)
+
+- `invoke` on a runtime with only a target model died resolving the reader model, even with
+  `--no-taste`. The reader model is resolved only when the reader runs, and falls back to the target
+  model.
+- A reader failure (rate limit, budget) inside the repair or the draft ranking aborted `invoke` after
+  the drafts were paid for. It now delivers the counted result and says why.
+- **Labels were not blind in practice**: the owner was asked to label passages whose verdicts had just
+  been printed. About a third of readings are now held back (acted on, never displayed), and only
+  those are put to the owner.
+- `--label` took a position in a list that shifted as items were labelled, so a later label could land
+  on the wrong reading. Labels now use a stable token, and a reading labelled twice in one command is
+  refused.
+- The call ceiling undercounted the reader once it had VETO, silently dropping repairs. Applicability
+  is decided once per task, a draft already read is not read again, and the ceiling is 3 per draft
+  plus 7.
+- OBSERVE-only readings, and readings of other people's text, were recorded as behavioural evidence
+  for `improve`. Only readings of the skill's own output on rules holding VETO are now.
+- A taste rewrite was kept when the reader could no longer tell (UNCLEAR, UNSTABLE); it now needs a
+  FOLLOWED. A quote that cannot be located no longer spends a rewrite call, and a quote across a
+  paragraph break is not spliced.
+- The MCP verify reply now fails on a VETO miss, marks VETO only on misses, and keeps the counted report
+  when the reader fails.
+- The passage shown for labelling is a window centred on the quote, so a quote late in a long
+  paragraph, or across paragraphs, can be labelled.
+- The optimizer's taste block needs a rule missed on at least two more of four tasks, not one more of
+  three.
+- RHYTHM counts sentences of prose only: bullets no longer read as varied pace.
+- The dash-substitute cap is based on the author's median piece and proposed only when the model's
+  dashes, moved over, would exceed it.
+- Flattening leaves code alone, keeps link words and a year that starts a line; a quote matches with
+  or without emphasis markers. Function-word profiles are computed once per text.
+- Docs: TASTE.md on costs, hold-back, what earns VETO and what becomes evidence; README on SSO, verify
+  --taste and the floor; MEASURED-RULES on the floor, pace and tending.
 
 ### Added (plan phases A and B: the taste reader)
 

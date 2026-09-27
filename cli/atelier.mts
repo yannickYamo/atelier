@@ -12,7 +12,7 @@
  * This file is dispatch and nothing else. Each command lives in `commands/`, and what they share
  * lives in `runtime.ts`.
  */
-import { cmd, argv, die, loadSession, saveSession, listSessions, projectDir, archiveSession, sessionPath } from './runtime.js';
+import { cmd, argv, die, flag, loadSession, saveSession, listSessions, projectDir, archiveSession, sessionPath } from './runtime.js';
 import { intake } from './commands/intake.js';
 import { discover } from './commands/discover.js';
 import { plan } from './commands/plan.js';
@@ -27,6 +27,7 @@ import { floor } from './commands/floor.js';
 import { optimize } from './commands/optimize.js';
 import { mine } from './commands/mine.js';
 import { taste } from './commands/taste.js';
+import { tend, skillDashboard } from './commands/tend.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
@@ -91,6 +92,7 @@ export const COMMANDS: readonly string[] = [
   'invoke',
   'mine',
   'taste',
+  'tend',
   'optimize',
   'judgements',
   'pending',
@@ -137,6 +139,7 @@ const main = async (): Promise<void> => {
     case 'optimize': { await optimize(); return; }
     case 'mine': { await mine(); return; }
     case 'taste': { await taste(); return; }
+    case 'tend': { await tend(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
     case 'study': { study(); return; }
@@ -160,6 +163,9 @@ const main = async (): Promise<void> => {
     case 'fix': return fix();
     case 'reference': return reference();
     case 'status': {
+      // With a skill: the one-page dashboard. Without: the run in flight in this project.
+      const dash = flag('--skill');
+      if (dash) { skillDashboard(dash); return; }
       const s = loadSession();
       console.log(`state ${s.run.state}  skill ${s.skillName ?? '(none)'}  proposals ${s.proposals.length}`
         + `  decided ${s.decided.length}  studies [${s.run.enrolments.map((e) => e.study).join(', ')}]`);
@@ -216,15 +222,21 @@ const main = async (): Promise<void> => {
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}".\n  commands: ${known}`);
       }
+      // The front door: the everyday verbs first, in the order a skill is lived with; then everything else.
       console.log('atelier new <folder-of-your-best-work> "<what it is for>"                     create');
       console.log('  or state it:  atelier skill "<your rules>"');
       console.log('  /<name> or atelier invoke --skill <name> "<task>"                            use');
       console.log('  atelier fix "<what was wrong>"                                               correct');
+      console.log('  atelier status --skill <name>                                                where it stands');
+      console.log('  atelier taste --skill <name> --calibrate                                     teach the reader');
+      console.log('  atelier floor --skill <name> --setup                                         once, so changes can install themselves');
+      console.log('  atelier tend --skill <name> [--cap <usd>] [--auto]                           look after it (by hand or from cron)');
+      console.log('');
+      console.log('   check any text: verify --skill <name> [--taste] <file>');
+      console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
+      console.log('        lab: optimize · mine · reference --skill <name> (then --score --labels <json>) · contract --skill <name> [--bare] · study');
       console.log('  staged spelling: create <path> · pending · ratify --decisions <json> · ratify-close · build --name <name>');
       console.log(`  every command: ${known}`);
-      console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
-      console.log('   check any text: verify --skill <name> <file>');
-      console.log('        lab: reference --skill <name> (then --score --labels <json>) · contract --skill <name> [--bare] · study');
       return;
     }
   }

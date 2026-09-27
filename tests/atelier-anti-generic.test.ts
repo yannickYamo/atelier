@@ -56,9 +56,21 @@ describe('contrast: rules from the gap, guarded by the author\'s own held-out wo
       && typeof r.requirement.measurement?.params.minPer1000 === 'number');
     expect(floor?.requirement.measurement?.params.minPer1000).toBeGreaterThan(0);
   });
-  it('the substitute the em-dash rule names gets a cap at the author\'s own rate, so it cannot take over', () => {
-    const cap = rules.find((r) => (r.requirement.measurement?.params.role as string[] | undefined)?.[0] === 'dash-substitute');
-    expect(cap?.requirement.measurement?.params.maxPer1000).toBeGreaterThan(0);
+  const substituteCap = (rs: typeof rules) => rs.find((r) => (r.requirement.measurement?.params.role as string[] | undefined)?.[0] === 'dash-substitute');
+  it('the substitute the em-dash rule names gets a cap near the author\'s own rate, when the model\'s dashes moved over would exceed it', () => {
+    // An author who uses a spaced hyphen in one sentence of five, against a model with a dash in every one.
+    const sparing = (i: number): { id: string; text: string } => ({ id: `s${i}.md`, text: Array.from({ length: 30 }, (_, k) => k % 5
+      ? `In practice the team reviewed item ${k + i} against the checklist and recorded what changed in the log.`
+      : `In practice the team - which owns the loop - reviewed item ${k + i} and recorded what changed.`).join(' ') });
+    const rs = deriveContrastRules([0, 1, 2, 3].map(sparing), [4, 5].map(sparing), [model(0), model(1), model(2)], 'MACHINE_DISCOVERED');
+    const cap = substituteCap(rs)?.requirement.measurement?.params.maxPer1000 as number;
+    const own = patternRate(sparing(0).text, 'SPACED_HYPHEN');
+    expect(cap).toBeGreaterThanOrEqual(own);
+    expect(cap).toBeLessThanOrEqual(own * 1.6);
+    expect(cap).toBeLessThan(patternRate(model(0), 'EM_DASH'));
+  });
+  it('no substitute cap where the author already writes more spaced hyphens than the model has dashes to move', () => {
+    expect(substituteCap(rules)).toBeUndefined();
   });
   it('a style distance is proposed, and every rule held on the author\'s held-out pieces', () => {
     expect(rules.some((r) => r.requirement.measurement?.observer === 'STYLE_DISTANCE')).toBe(true);

@@ -26,8 +26,9 @@ import { join, extname, basename } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { resolveRule } from '../../core/state/rule-key.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
-import { floorDimensions, perFire, proposeMargins, buildContract, evaluateTask, compositeAcross, targetComparison,
-  qualifyFromAA, countAA, plantedDetections, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, type FloorDimension } from '../../core/distinctiveness/measured.js';
+import { floorDimensions, perFire, proposeMargins, buildContract, evaluateAcross, pairsFor, targetComparison,
+  qualifyFromAA, countAA, plantedDetections, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, MIN_TASKS_FOR_VERDICT, AA_BAR, MIN_AA_TRIALS,
+  type FloorDimension } from '../../core/distinctiveness/measured.js';
 import { gateState, type FrozenBaselineEntry, type QualityFloorResult, type FloorVerdict,
   type DistinctivenessState } from '../../core/distinctiveness/floor.js';
 import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
@@ -42,9 +43,10 @@ import { describeBackup } from '../../adapters/install-tree.js';
 import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientAndBinding, modelFor, providerFor, pickHost, projectDir,
   loadSession } from '../runtime.js';
 
-/** The fewest tasks a floor verdict or a qualification can rest on. */
-export const MIN_TASKS = 3;
-const DEFAULT_FIRES = 3;
+/** The fewest tasks a floor verdict or a qualification can rest on: tasks are the unit of the test. */
+export const MIN_TASKS = MIN_TASKS_FOR_VERDICT;
+/** One draft per task per version: the test is across tasks, and more tasks, not more drafts, narrows it. */
+const DEFAULT_FIRES = 1;
 
 /**
  * What a runtime is, for the floor: provider, model and sampling settings. Read from configuration,
@@ -137,7 +139,8 @@ function baselineFor(L: store.StoreLayout, name: string, active: string, tasks: 
 
 export interface CandidateCheck {
   readonly composite: FloorVerdict;
-  readonly perTask: readonly QualityFloorResult[];
+  /** each dimension's verdict across tasks */
+  readonly result: QualityFloorResult;
   readonly comparison: ComparisonVerdict;
   readonly state: DistinctivenessState;
   readonly decision: PromotionDecision;
@@ -164,12 +167,9 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   const frozen = freeze(candidate, model, dims, runs);
   const exclude = new Set(targetKey ? [targetKey] : []);
   const guarded = Object.entries(contract.dimensions).some(([k, d]) => d.gateRole === 'ENFORCE' && !exclude.has(k));
-  const perTask = frozen.map((c) => evaluateTask(c.perFireScores ?? {}, baseline.find((b) => b.fixtureContextId === c.fixtureContextId)!, contract, exclude));
-  const composite: FloorVerdict = guarded ? compositeAcross(perTask) : 'INCONCLUSIVE';
-  const comparison = targetKey
-    ? targetComparison(frozen.map((c) => ({ candidate: c.perFireScores?.[targetKey] ?? [],
-      champion: baseline.find((b) => b.fixtureContextId === c.fixtureContextId)?.perFireScores?.[targetKey] ?? [] })))
-    : 'INCONCLUSIVE';
+  const result = evaluateAcross(frozen, baseline, contract, exclude);
+  const composite: FloorVerdict = guarded ? result.composite : 'INCONCLUSIVE';
+  const comparison = targetKey ? targetComparison(pairsFor(targetKey, frozen, baseline)) : 'INCONCLUSIVE';
   const activeSv = store.getSkillVersion(L, active); const candSv = store.getSkillVersion(L, candidate);
   const decision = resolvePromotion({
     incumbentStandardHash: activeSv?.standardVersionHash ?? '', candidateStandardHash: candSv?.standardVersionHash ?? '?',
@@ -180,7 +180,7 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
     fidelityAuthority: targetKey ? 'CERTIFY' : 'OBSERVE', comparison, distinctiveness: st.state, floor: composite,
   });
   const unguarded = guarded ? '' : '; no enforced rule other than the target is watching, so nothing guards what the change did not aim at (--enforce another rule)';
-  return { composite, perTask, comparison, state: st.state, decision: { ...decision, why: `${decision.why}${unguarded}` } };
+  return { composite, result, comparison, state: st.state, decision: { ...decision, why: `${decision.why}${unguarded}` } };
 }
 
 /**
@@ -256,7 +256,7 @@ export async function floor(): Promise<void> {
   }
   if (JSON.stringify(f) !== before) store.setFloor(L, f);
 
-  const fires = Math.max(2, Math.floor(numericFlag('--fires', DEFAULT_FIRES)));
+  const fires = Math.max(1, Math.floor(numericFlag('--fires', DEFAULT_FIRES)));
   // Every model call this command makes is metered, and what it spent is said at the end.
   const used: Budget[] = [];
   const budgetFor = (calls: number): Budget => { const b: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 3), maxCalls: calls }; used.push(b); return b; };
@@ -270,18 +270,18 @@ export async function floor(): Promise<void> {
   };
 
   // ── Freeze the active version ───────────────────────────────────────────────────────────────
-  if (argv.includes('--baseline')) {
+  const doBaseline = async (): Promise<void> => {
     ready();
     const { client } = clientAndBinding('target');
     console.log(`Firing the active version ${fires} time(s) on each of ${f.tasks.length} task(s)…`);
     const { runs } = await fire(L, active, f.tasks, fires, client, budgetFor(f.tasks.length * fires));
     store.setBaseline(L, active, freeze(active, model, dims, runs));
     console.log(`Baseline frozen for ${active} under ${model}.`);
-    spent();
-  }
+  };
 
   // ── A/A: the false-alarm rate, from runs that are independent of each other ──────────────────
-  if (argv.includes('--qualify')) {
+  /** One A/A run. Returns whether the floor is now EARNED. */
+  const doQualify = async (): Promise<boolean> => {
     ready();
     baselineFor(L, name, active, f.tasks, model);
     if (!Object.values(f.contract!.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
@@ -291,29 +291,72 @@ export async function floor(): Promise<void> {
     console.log(`A/A: firing the same version ${2 * fires} time(s) on each task and comparing one half with the other…`);
     const { runs } = await fire(L, active, f.tasks, 2 * fires, client, budgetFor(f.tasks.length * 2 * fires));
     // Both halves are fresh in every run, so runs are independent of each other; the unit is the task.
-    const halves = runs.map((r) => ({
-      a: freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(0, fires) }])[0],
-      b: freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(fires) }])[0] }));
-    const results = halves.map(({ a, b }) => evaluateTask(b.perFireScores ?? {}, a, f.contract!));
-    const planted = halves.reduce((t, { a, b }) => { const x = plantedDetections(b.perFireScores ?? {}, a, f.contract!); return { hits: t.hits + x.hits, trials: t.trials + x.trials }; }, { hits: 0, trials: 0 });
+    const a = runs.map((r) => freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(0, fires) }])[0]);
+    const b = runs.map((r) => freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(fires) }])[0]);
+    const result = evaluateAcross(b, a, f.contract!);
+    const planted = plantedDetections(b, a, f.contract!);
     // Runs on the same situation accumulate; change anything the rate is a rate of and the count restarts.
     const key = qualificationKey(L, f, active, v.standardVersionHash, runtime, fires);
-    const now = countAA(results);
+    const now = countAA(result);
     const prior = f.aa?.contractHash === key ? f.aa : { falseAlarms: 0, trials: 0, plantedHits: 0, planted: 0 };
     const tally = { falseAlarms: prior.falseAlarms + now.falseAlarms, trials: prior.trials + now.trials,
       plantedHits: (prior.plantedHits ?? 0) + planted.hits, planted: (prior.planted ?? 0) + planted.trials };
     const q = qualifyFromAA(tally, f.tasks.length, `${name}: ${Object.keys(f.contract!.dimensions).length} measured dimension(s), ${f.tasks.length} task(s), ${fires} draft(s) per side, under ${runtime}`);
-    console.log(`This run: ${now.falseAlarms} false alarm(s) in ${now.trials} resolved task comparison(s) (${results.length - now.trials} unresolved); `
+    console.log(`This run: ${now.falseAlarms} false alarm(s) in ${now.trials} resolved rule comparison(s) across ${f.tasks.length} task(s); `
       + `caught ${planted.hits} of ${planted.trials} planted regression(s) of ${PLANTED_MARGINS} margins.`);
-    console.log(`So far: ${tally.falseAlarms} false alarm(s) in ${tally.trials} (upper 95% bound ${(q.upper95 * 100).toFixed(1)}%); `
-      + `sensitivity ${q.sensitivity === null ? 'unmeasured' : `${Math.round(q.sensitivity * 100)}% of ${tally.planted}`}.`);
+    console.log(`So far: ${tally.falseAlarms} false alarm(s) in ${tally.trials} (upper 95% bound ${(q.upper95 * 100).toFixed(1)}%, bar ${AA_BAR * 100}% over ${MIN_AA_TRIALS}+); `
+      + `sensitivity ${q.sensitivity === null ? 'unmeasured' : `${Math.round(q.sensitivity * 100)}% of ${tally.planted}`} (bar ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+).`);
     f = { ...f, aa: { contractHash: key, ...tally }, qualification: q.qualification ? { ...q.qualification, contractHash: key, fires } : null };
     store.setFloor(L, f);
     console.log(q.qualification ? 'The floor is EARNED for this version, standard, contract, baseline, task set, runtime and draft count.'
-      : `Not qualified yet: false alarms at most 5% (upper bound) over at least ${MIN_TASKS} tasks, and at least ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+ planted regressions caught. `
-        + 'Run --qualify again to add evidence, add tasks or drafts (--fires), or widen margins that are tighter than your writing varies.');
+      : `Not qualified yet: at least ${MIN_TASKS} tasks, at least ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+ planted regressions caught, and false alarms at most ${AA_BAR * 100}% (upper bound) over ${MIN_AA_TRIALS}+. `
+        + 'Run --qualify again to add evidence, add tasks, or widen margins that are tighter than your writing varies.');
+    return q.qualification !== null;
+  };
+
+  // ── ONE COMMAND: SET UP AND EARN ────────────────────────────────────────────────────────────
+  //
+  // The floor used to take seven commands. `--setup` does what each would have done with its default,
+  // says what it will spend first, and stops as soon as the floor is earned or the runs are used up:
+  //   tasks       titles of your own pieces (--corpus, or the corpus `new` read), when fewer than MIN_TASKS are set
+  //   margins     proposed from the same pieces, when there is no contract
+  //   enforce     every REQUIRED counted rule, when nothing is enforced yet
+  //   baseline    the active version, one draft per task
+  //   qualify     A/A runs, up to --runs (default 6)
+  if (argv.includes('--setup')) {
+    // Your pieces: --corpus, else the folder `new` read for this skill (only when the session is this skill's).
+    const session = loadSession();
+    const source = flag('--corpus') ?? (session.skillName === null || session.skillName === name ? session.source ?? null : null);
+    const texts = source && existsSync(source) ? readCorpus(source) : [];
+    if (!f.contract) {
+      if (!texts.length) die(`--setup needs your pieces to propose margins: atelier floor --skill ${name} --corpus <folder>`);
+      f = { ...f, contract: buildContract(proposeMargins(dims, texts), dims, null) };
+    }
+    if (f.tasks.length < MIN_TASKS) {
+      const titles = [...new Set(texts.map((t) => (/^#\s+(.+)$/m.exec(t)?.[1] ?? '').trim()).filter((x) => x.length > 3))].slice(0, 12);
+      if (titles.length < MIN_TASKS) die(`--setup found ${titles.length} titled piece(s); the floor needs ${MIN_TASKS} tasks. Give them: atelier floor --skill ${name} --tasks <file>`);
+      f = { ...f, tasks: titles.map((t) => `Write a piece titled "${t}".`) };
+      console.log(`Tasks: ${f.tasks.length}, from the titles of your own pieces.`);
+    }
+    if (!Object.values(f.contract!.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
+      const required = new Set(dims.filter((d) => d.rule.materiality === 'REQUIRED').map((d) => d.key));
+      f = { ...f, contract: { ...f.contract!, dimensions: Object.fromEntries(Object.entries(f.contract!.dimensions)
+        .map(([k, d]) => [k, required.has(k) ? { ...d, gateRole: 'ENFORCE' as const } : d])) } };
+      console.log(`Enforced: ${required.size} REQUIRED counted rule(s).${required.size < 2 ? ' A repair\'s own rule never guards itself, so a self-installing repair needs at least two.' : ''}`);
+    }
+    store.setFloor(L, f);
+    const runsMax = Math.max(1, Math.floor(numericFlag('--runs', 6)));
+    const drafts = (store.getBaseline(L, active) ? 0 : f.tasks.length * fires) + runsMax * f.tasks.length * 2 * fires;
+    console.log(`At most ${drafts} draft(s) on ${model} (stopping as soon as the floor is earned), within --cap $${numericFlag('--cap', 3)} per step.`);
+    if (!store.getBaseline(L, active)) await doBaseline();
+    for (let i = 0; i < runsMax; i++) if (await doQualify()) break;
     spent();
+    return;
   }
+
+  if (argv.includes('--baseline')) { await doBaseline(); spent(); }
+  if (argv.includes('--qualify')) { await doQualify(); spent(); }
+
 
   // ── Check a candidate ───────────────────────────────────────────────────────────────────────
   const cand = flag('--check');
@@ -324,8 +367,8 @@ export async function floor(): Promise<void> {
     const { client } = clientAndBinding('target');
     const st = floorStateFor(L, active, runtime);
     const check = await checkCandidate(L, name, v, active, cand, targetKey, budgetFor(f.tasks.length * st.fires), client, model, runtime);
-    for (const [i, r] of check.perTask.entries()) {
-      console.log(`task ${i + 1}: ${r.composite}${r.drivenBy.length ? ` (${r.drivenBy.join(', ')})` : ''}`);
+    for (const d of check.result.perDim) {
+      console.log(`  ${d.dim}  ${d.gateRole.padEnd(7)} ${d.verdict.padEnd(12)} mean change ${d.delta.toFixed(2)} (margin ${d.margin})`);
     }
     console.log(`floor: ${check.composite} · target: ${check.comparison} · floor state: ${check.state}`);
     console.log(`gate: ${check.decision.authority} — ${check.decision.why}`);

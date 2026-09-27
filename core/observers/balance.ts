@@ -20,7 +20,7 @@
 
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, Span } from './registry.js';
-import { findTerms, sentencesOf, proseRegions, wordsOf, paragraphsOf } from './text.js';
+import { findTerms, sentencesOf, proseSentencesOf, proseRegions, wordsOf, paragraphsOf } from './text.js';
 import { headingsOf } from './structure.js';
 
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -210,7 +210,8 @@ export type RhythmUnit = 'SENTENCE' | 'PARAGRAPH' | 'SECTION';
 
 /** Lengths in words of each unit, in order. Sections are the prose between section headings. */
 export function unitLengths(text: string, unit: RhythmUnit): number[] {
-  if (unit === 'SENTENCE') return sentencesOf(text).map((s) => s.words);
+  // Sentences of prose only: list items are fragments by design, and counting them made bullets read as varied pace.
+  if (unit === 'SENTENCE') return proseSentencesOf(text).map((s) => s.words);
   if (unit === 'PARAGRAPH') return paragraphsOf(text).map((p) => wordsOf(p.text).length);
   const hs = headingsOf(text);
   if (!hs.length) return [];

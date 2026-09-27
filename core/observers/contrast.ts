@@ -87,12 +87,18 @@ export function deriveContrastRules(
       propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } }, ev);
       // THE SUBSTITUTE GETS A CAP OF ITS OWN. Told to write " - " where it would have written "—", a model
       // moves every dash it would have used onto the substitute: in a real run spaced hyphens went to
-      // 8.7 per 1,000 words against the author's 4.0. So the substitute is held to the author's own rate.
+      // 8.7 per 1,000 words against the author's 4.0. So the substitute is held near the author's own rate:
+      // half as much again as their typical piece (the median, not the 90th percentile, which with few
+      // pieces is simply the most dash-heavy one) or their overall rate. It is proposed only when the
+      // model's own dashes, moved over, would exceed it.
       if (prefer) {
-        const sh = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'SPACED_HYPHEN'), 0.9) * 1.25, spacedHyphen * 1.5));
-        propose(`Use spaced hyphens (" - ") as I do, not in place of every dash: at most ${sh} per 1,000 words.`, 'BOUNDARY',
-          { observer: 'PATTERN_RATE', params: { pattern: ['SPACED_HYPHEN'], maxPer1000: sh, role: ['dash-substitute'] } },
-          `you: ${spacedHyphen} per 1,000 words; a model told to swap its em dashes for them overshoots (8.7 against 4.0 in a real run)`);
+        const sh = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'SPACED_HYPHEN'), 0.5) * 1.5, spacedHyphen * 1.5, 0.3));
+        const moved = r1(m + meanRate(drafts, 'SPACED_HYPHEN'));
+        if (moved > sh) {
+          propose(`Use spaced hyphens (" - ") as I do, not in place of every dash: at most ${sh} per 1,000 words.`, 'BOUNDARY',
+            { observer: 'PATTERN_RATE', params: { pattern: ['SPACED_HYPHEN'], maxPer1000: sh, role: ['dash-substitute'] } },
+            `you: ${spacedHyphen} per 1,000 words; the model's dashes moved onto them would make ${moved}`);
+        }
       }
     } else if (MODEL_TYPICAL.has(p) && a <= 0.5 && m > a + 0.2) {
       // A construction models reach for, which this author almost never uses. The cap sits at the
@@ -340,9 +346,10 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
 }
 
 /**
- * PACE: how much sentence, paragraph and section lengths vary (./balance.ts RHYTHM). Proposed as a floor
- * where the author varies more than the model and most drafts fall below the author's least varied
- * piece; as a cap in the rarer opposite case.
+ * PACE: how much sentence, paragraph and section lengths vary (./balance.ts RHYTHM). Where the author
+ * varies more than the model on average (by 0.1 or more), a floor just under the author's 10th-percentile
+ * piece (×0.95), proposed only if the model's mean falls below it; in the rarer opposite case, a cap just
+ * over the author's 90th-percentile piece. Every proposal then passes the contrast pass's separation guard.
  */
 function proposePace(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
   const label: Readonly<Record<RhythmUnit, string>> = { SENTENCE: 'sentence', PARAGRAPH: 'paragraph', SECTION: 'section' };
@@ -350,14 +357,14 @@ function proposePace(authorTexts: readonly string[], drafts: readonly string[], 
     const cvs = (texts: readonly string[]): number[] => texts.map((t) => unitLengths(t, unit)).filter((xs) => xs.length >= RHYTHM_MIN_UNITS[unit]).map(coefficientOfVariation);
     const a = cvs(authorTexts); const m = cvs(drafts);
     if (a.length < 3 || m.length < 2) continue;
-    const am = r1x(mean(a)); const mm = r1x(mean(m));
+    const am = r2(mean(a)); const mm = r2(mean(m));
     const ev = `your ${label[unit]} lengths vary by ${am} on average (standard deviation over mean); the model's plain drafts by ${mm}`;
     if (am >= mm + 0.1) {
-      const floor = r1x(quantile(a, 0.1) * 0.95);
+      const floor = r2(quantile(a, 0.1) * 0.95);
       if (floor > mm) propose(`Vary ${label[unit]} length as I do: at least ${floor} variation, not one even length after another.`, 'GENERATIVE',
         { observer: 'RHYTHM', params: { unit: [unit], minCv: floor } }, ev, false, true);
     } else if (mm >= am + 0.1) {
-      const cap = r1x(quantile(a, 0.9) * 1.05);
+      const cap = r2(quantile(a, 0.9) * 1.05);
       if (cap < mm) propose(`Keep ${label[unit]} lengths as even as mine: at most ${cap} variation.`, 'GENERATIVE',
         { observer: 'RHYTHM', params: { unit: [unit], maxCv: cap } }, ev, false, true);
     }
@@ -372,7 +379,8 @@ function proposePace(authorTexts: readonly string[], drafts: readonly string[], 
 // label, a favoured verb), which a reader checks in context.
 
 const mean = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
-const r1x = (x: number): number => Math.round(x * 100) / 100;
+/** Two decimals: a coefficient of variation needs them, where a rate per 1,000 words (`r1`) does not. */
+const r2 = (x: number): number => Math.round(x * 100) / 100;
 
 /** Shares rounded to hundredths that still sum to exactly 1 (largest remainder), never negative. */
 export function toHundredths(xs: readonly number[]): number[] {
