@@ -25,7 +25,9 @@ core/coverage/        weak support, blind spots, unresolved boundaries
 core/ratification/    append-only human authority: what you saw, and what you did
 core/architecture/    requirement → minimum carrier, and decisions apart from their realizations
 core/delivery/        what each execution surface actually delivers, per carrier
-core/state/           the six objects, prerequisites, and the request binding
+core/state/           the six objects, prerequisites, the request binding, and rule keys
+core/observers/       measured rules: deterministic checks with spans (docs/MEASURED-RULES.md)
+core/loop/            check → rewrite only the broken spans → check, with the meaning guard
 core/runtime/         provider, model and configuration binding
 core/inference/       the one seam a model reaches through, and the budget that bounds it
 renderers/            SkillPackage generation

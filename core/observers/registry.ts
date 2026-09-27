@@ -11,10 +11,12 @@
 // rules that are about WHEN or WHY stay with a person, or with a reader that certifies nothing.
 //
 // What these buy is the part of a house style that is measurable — banned words, substitution
-// tables, sentence and paragraph length, hedging — checked on every output, with the exact span that
+// tables, sentence and paragraph length, hedging, the rates and proportions in ./balance.ts, the
+// model's habits in ./style.ts — checked on every output, with the exact span that
 // broke the rule, so a repair can rewrite that span and nothing else.
 
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
+import { TERM_RATE, RATIO, DISTRIBUTION } from './balance.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
 
 export interface Span { readonly start: number; readonly end: number; readonly text: string; readonly why: string }
@@ -193,6 +195,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
         detail: `distance to the author ${d.author}, to the model ${d.model}: ${closer ? 'closer to the author' : 'closer to the model'}` };
     },
   },
+  // ── Proportions: rates with floors, ratios between word lists, the mix of sentence lengths ────
+  TERM_RATE, RATIO, DISTRIBUTION,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];

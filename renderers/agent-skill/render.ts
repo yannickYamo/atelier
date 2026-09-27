@@ -11,6 +11,7 @@
 // meaning the same thing. So the renderer emits ONLY `name` and `description`, and anything
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
+import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
@@ -205,6 +206,12 @@ export function renderAgentSkill(
    * standard — and it is labelled as something to take the voice from, never the content.
    */
   exemplar: { readonly text: string } | null = null,
+  /**
+   * WRITE THIS, NOT THAT: sentences written for this skill that broke one of its measured rules, each
+   * next to the rewrite that met it (see core/compiler/contrast-examples.ts). Chosen at build from the
+   * loop's accepted repairs; model output only, never the author's corpus.
+   */
+  contrast: readonly ContrastPair[] = [],
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
@@ -377,6 +384,11 @@ ${exemplar ? `
 \`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
 voice, rhythm and structure from it: how it opens, how long its sentences and paragraphs run, how it
 moves from point to point. Never take its topic, facts, names, figures or sentences.
+` : ''}${contrast.length ? `
+## Write this, not that
+
+\`examples/contrast.md\` has ${contrast.length} sentence(s) written for this skill that broke one of its rules, each
+next to the rewrite that met it. Before finalizing, check your draft for the same moves.
 ` : ''}
 ## What to do
 
@@ -500,7 +512,8 @@ mintedAt:        ${v.mintedAt}
   }, null, 2)}\n` } : {};
 
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
-    ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}) };
+    ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}),
+    ...(contrast.length ? { 'examples/contrast.md': renderContrastFile(contrast, v) } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
   const artifactFor = (c: Carrier, id: string): string | null =>

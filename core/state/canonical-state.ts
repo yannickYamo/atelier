@@ -100,7 +100,7 @@ export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
  * checkability off prose stands; this is the assertion path it always named and never had.
  */
 export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE'
-  | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE';
+  | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
@@ -217,6 +217,11 @@ export interface Requirement {
    * never runs over a claim that is about to be corrected. Unset reads as STYLE.
    */
   readonly phase?: 'ACCURACY' | 'STYLE';
+  /**
+   * THE RULE'S NAME ACROSS VERSIONS (see ../state/rule-key.ts). Unset, it is derived from the rule's
+   * content; an amendment writes the old key onto the new wording so the lineage survives a reword.
+   */
+  readonly key?: string;
 }
 
 /**
@@ -514,6 +519,13 @@ export interface InvocationRecord {
   readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string };
 }
 
+export interface RepairPair {
+  /** the broken rule's key (see ../state/rule-key.ts), so the pair follows the rule across versions */
+  readonly key: string;
+  readonly before: string;
+  readonly after: string;
+}
+
 export interface RepairRecord {
   readonly passes: number;
   readonly violatedBefore: readonly string[];
@@ -527,6 +539,11 @@ export interface RepairRecord {
   readonly integrityReverted?: readonly string[];
   /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */
   readonly meaningLost?: readonly string[];
+  /**
+   * The spans an accepted pass rewrote, before and after, with the rule they broke (by key). A verified
+   * "write this, not that" from this author's own standard: the source of the skill's contrast examples.
+   */
+  readonly pairs?: readonly RepairPair[];
   readonly why: string;
 }
 

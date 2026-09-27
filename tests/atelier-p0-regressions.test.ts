@@ -180,7 +180,9 @@ describe('P0-4: a project is never a dead end', () => {
     expect(readFileSync(skillFile(proj, 'grow'), 'utf8')).toContain('second rule');
 
     const history = run(data, proj, 'history', '--skill', 'grow');
-    expect(history.trim().split('\n')).toHaveLength(2);
+    // Two versions; the lines under a version are the rules that moved in it.
+    expect(history.trim().split('\n').filter((l) => /^[* ] [0-9a-f]/.test(l))).toHaveLength(2);
+    expect(history).toMatch(/\+ R-[0-9a-f]{6} \w+ {2}second rule/);
     const stored = JSON.parse(readFileSync(join(data, 'skills', 'grow', 'standards', `${v2}.json`), 'utf8')) as { supersedes: string | null; reason: string | null };
     expect(stored.supersedes).toBe(v1);
     expect(stored.reason).toBe('forgot one');

@@ -45,7 +45,7 @@ import { bindingHash } from '../../core/runtime/binding.js';
 import type { Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
 import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
-  projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel } from '../runtime.js';
+  projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, servedContrast } from '../runtime.js';
 
 const ask = async (question: string, allowed: readonly string[]): Promise<string | null> => {
   if (!process.stdin.isTTY) return null;
@@ -179,7 +179,7 @@ export async function fix(): Promise<void> {
     const arch = compileArchitecture(next);
     const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
     const desc = activeSv?.description ?? defaultDescription(next.workType);
-    const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L));
+    const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L), servedContrast(L, next));
     assertPortable(pkg);
     const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
       standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
@@ -285,7 +285,7 @@ export async function fix(): Promise<void> {
 
   const nextArch = applyEscalation(ranArch, op, sha(JSON.stringify(op) + ranArch.architectureHash));
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L));
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L), servedContrast(L, ranStandard));
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
