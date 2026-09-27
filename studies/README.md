@@ -24,6 +24,7 @@ else in these records has been altered, and no result depends on the identities.
 
 | | |
 |---|---|
+| [VOICE_ROUND5_PREREGISTRATION.md](VOICE_ROUND5_PREREGISTRATION.md) | **SEALED.** After four blind voice rounds on one public author's corpus: seven arms (raw, corpus in context with and without Atelier's guard, a model's guide with and without it, Atelier with and without its persona), six reserved pieces as the stylometric reference, and the decision rule for whether Atelier generates or guards. Run with `studies/harness/voice-round.mjs`. |
 | [PROOF_STUDY_PREREGISTRATION.md](PROOF_STUDY_PREREGISTRATION.md) | **DRAFT.** Recall of discovery against the owner's hand-built house standard (sealed answer key), and the shipped loop against a model's own guide to the same corpus, with a deterministic measured-rule table anyone can recompute (`scripts/measured-conformance.mts`, `scripts/recall-sheet.mts`). Sealed only by the owner's commit, before discovery reads the corpus. |
 
 ### The one reproducible study
