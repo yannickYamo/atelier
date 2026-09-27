@@ -170,7 +170,7 @@ export async function record(): Promise<void> {
     const asked = planRepair(draft, before);
     let held = draft;
     for (const t of [...asked].filter((x) => x.specifics).sort((a, b) => b.start - a.start)) held = held.slice(0, t.start) + held.slice(t.end);
-    const meaning = spanIntegrity(held, output, new Set(asked.flatMap((t) => t.drops)), false);
+    const meaning = spanIntegrity(held, output, new Set(asked.flatMap((t) => t.drops)), false, new Set(asked.flatMap((t) => t.swaps ?? [])));
     repair = { passes: 1, violatedBefore: pending.repairOf.violated, violatedAfter: brokenNow.map((c) => c.requirementId),
       originalOutputHash: pending.repairOf.outputHash, draft, outsideSpansChanged,
       ...(meaning.ok ? {} : { meaningLost: meaning.lost }),
