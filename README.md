@@ -192,6 +192,13 @@ may change how something is said, never what it claims: one that drops a figure,
 a qualifier ("may", "most", "roughly") is refused and the original sentence kept, unless the broken rule
 named that very word. Rules marked `--phase ACCURACY` are repaired before any style rule.
 
+**It carries your writing, not just rules about it.** A build serves three passages of your own,
+chosen from the pieces discovery read (the most typical of your style, from different pieces and
+topics, never a reserved one), with your usual piece length. The model takes the voice from them and
+the rules and checks sit on top. We learned this the hard way: a skill that met every one of its rules
+but served no paragraph of the author's was ranked least like them of four versions in a blind round.
+`build --voice none` turns them off.
+
 Counts are half of a voice. The other half is how you argue, what you concede, which figure carries a
 piece, how a section closes, when a conversational aside stands: the rules discovery finds by reading,
 not counting. **The taste reader** reads every output against those, twice (the second time with the
@@ -297,7 +304,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 101 files and 1515 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 102 files and 1530 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

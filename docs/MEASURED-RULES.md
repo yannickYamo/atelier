@@ -73,8 +73,15 @@ screen as every other rule, and nothing is enforced until you accept it.
    - the sentence-length mix, and how much sentence, paragraph and section lengths vary (pace)
    - the function-word profile, kept only if each of your own pieces and each model draft, left out in
      turn, lands on its own side
-   - the spaced hyphen the em-dash rule substitutes, capped at your own rate so the substitute cannot
-     take over
+   - dash asides of any kind (—, – or " - "), capped near your own rate when the em dash is banned, so
+     the aside cannot move onto another mark (it did: 8.9 spaced hyphens per 1,000 words against the
+     author's 2.9)
+   - **your positive signature, as two-sided bands**: bold phrases, one-sentence paragraphs (prose
+     only: captions, link lines and bold labels do not count), rhetorical questions and semicolons,
+     where you use them. Between 0.6× your lower-quartile piece and 1.5× your 90th-percentile piece (or twice your average).
+   - **the voice layer**, true of every piece whatever the topic: your point of view (a first-person
+     writer gets a band on "I", "my", "me", and the rule says a view in the first person needs no
+     source while a first-hand story does) and your dialect (a cap on the other dialect's spellings)
    - stock moves at the edges: phrases models open and close with ("In today's…", "Ultimately,"), heading
      tropes ("The thing everyone gets wrong…", "Why this matters"), heading case and opening length
 
@@ -92,8 +99,15 @@ Two guards apply to every proposal.
 
 - **It must not fail you.** At least four in five of your held-out pieces must meet it. A rule your
   own unseen work breaks is a rule against you, and it is dropped.
-- **It must separate you from the model.** Floors and mixes are proposed only if most of the model's
-  drafts fail them. A rule that passes everything measures nothing.
+- **It must separate you from the model.** Mixes and pace are proposed only if most of the model's
+  drafts fail them. A rule that passes everything measures nothing. Signature bands and the voice
+  layer are the exception, on evidence: a model's plain drafts may meet them and a skill's output still
+  lose them. In a blind round the skill's output had no first person at all and British spelling
+  throughout, for an American first-person author, while every cap it carried held.
+
+Why the positive half matters: caps on the model's tells alone produce a careful, de-AI'd writer, not
+this writer. In that round the skill's output had the cleanest negative profile of four versions and
+sounded least like the author.
 
 ## What the loop does with them
 

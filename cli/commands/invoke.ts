@@ -9,6 +9,7 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
+import { overlapIndex } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
@@ -79,6 +80,9 @@ export function resolveServedSkill(name: string): ServedSkill {
  * runs serve through this too, so a comparison between two versions is never a comparison between two
  * ways of serving them.
  */
+/** A run of this many words repeated from a served passage is copying, not an echo of a phrase. */
+export const LIFTED_RUN = 12;
+
 export function resolveServedVersion(L: store.StoreLayout, wanted: string, context: string): ServedSkill {
   const sv = store.getSkillVersion(L, wanted) ?? die(`SkillVersion ${wanted} is missing from the store.`);
   const pkg = store.getPackage(L, sv.materializedHash)
@@ -323,6 +327,13 @@ export async function invoke(): Promise<void> {
     }
   }
   if (cls.ok && cls.note && std?.requirements.some((q) => q.measurement)) console.log(`(${cls.note})`);
+  // THE AUTHOR'S PASSAGES ARE FOR VOICE, NOT FOR COPYING. The skill serves a few of them
+  // (core/compiler/voice.ts); an output that repeats a long run of one verbatim has lifted it.
+  const voice = store.getVoice(L);
+  if (voice?.passages.length) {
+    const lifted = overlapIndex(voice.passages)(rec.output).longestShared;
+    if (lifted >= LIFTED_RUN) console.log(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
+  }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
   // passing them in would report a breach on every invocation.
   const breaches = findOwnershipBreaches(rec.output);

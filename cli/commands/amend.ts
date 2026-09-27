@@ -91,7 +91,7 @@ export function amend(): void {
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
   const carried = carriedFrom(L, sv.skillVersionHash, next);
-  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
