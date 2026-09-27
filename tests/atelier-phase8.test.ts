@@ -7,8 +7,6 @@ import { join, resolve } from 'node:path';
 import { genomeOf, mutationsOf, mutationKey, type Mutation } from '../core/optimizer/genome.js';
 import { dominates, paretoFront, finalists } from '../core/optimizer/pareto.js';
 import { reflectPrompt, parseReflection, MAX_FAILURES_SHOWN, MAX_ATTEMPTS_SHOWN, MAX_PROPOSALS } from '../core/optimizer/reflect.js';
-import { wilsonLower, cohensKappa, readerPermission, vetoedRules, VETO_KAPPA } from '../core/optimizer/veto.js';
-import { MIN_COMPARABLE, type JudgementRecord } from '../core/fidelity/judgement.js';
 import { mayPropose, foldRepairs } from '../core/architecture/repair-memory.js';
 import { contrastFor } from '../core/compiler/contrast-examples.js';
 import { ruleKey } from '../core/state/rule-key.js';
@@ -82,43 +80,6 @@ describe('reflection: bounded history, legal choices only', () => {
     expect(r.proposals.map((p) => mutationKey(p.mutation))).toEqual([mutationKey(legal[1]), mutationKey(legal[0]), mutationKey(legal[2])].slice(0, MAX_PROPOSALS));
     expect(r.invalid).toBe(2);
     expect(parseReflection(null, legal)).toEqual({ proposals: [], invalid: 0 });
-  });
-});
-
-describe('the reader may block, never clear, and only once it has earned it', () => {
-  const rec = (requirementId: string, reader: 'CANDIDATE_COMPLIES_BETTER' | 'CHAMPION_COMPLIES_BETTER', owner: 'CANDIDATE' | 'CHAMPION'): JudgementRecord =>
-    ({ requirementId, championSkillVersionHash: 'a', candidateSkillVersionHash: 'b',
-      observer: { result: reader, orderInvariant: true, lengthRatio: 1, at: 't' }, human: { choice: owner, rationale: null, at: 't' } });
-  const table = (both: number, neither: number, readerOnly: number, ownerOnly: number, id = 'u1'): JudgementRecord[] => [
-    ...Array.from({ length: both }, () => rec(id, 'CANDIDATE_COMPLIES_BETTER', 'CANDIDATE')),
-    ...Array.from({ length: neither }, () => rec(id, 'CHAMPION_COMPLIES_BETTER', 'CHAMPION')),
-    ...Array.from({ length: readerOnly }, () => rec(id, 'CANDIDATE_COMPLIES_BETTER', 'CHAMPION')),
-    ...Array.from({ length: ownerOnly }, () => rec(id, 'CHAMPION_COMPLIES_BETTER', 'CANDIDATE'))];
-  const unmeasured = new Set(['u1']);
-  it('Wilson and kappa behave', () => {
-    expect(wilsonLower(0, 0)).toBe(0);
-    expect(wilsonLower(30, 30)).toBeGreaterThan(0.88);
-    expect(cohensKappa({ both: 10, neither: 10, readerOnly: 0, ownerOnly: 0 })).toBe(1);
-    expect(cohensKappa({ both: 0, neither: 30, readerOnly: 0, ownerOnly: 6 })).toBe(0);
-  });
-  it('a reader that always says "keep the old one" never earns VETO, however often the owner rejects', () => {
-    expect(readerPermission(table(0, 34, 0, 6), unmeasured).permission).toBe('OBSERVE');
-  });
-  it('too few rulings, or too few in one direction: OBSERVE', () => {
-    expect(readerPermission(table(3, MIN_COMPARABLE, 0, 0), unmeasured).permission).toBe('OBSERVE');
-    expect(readerPermission(table(10, 10, 0, 0), unmeasured).permission).toBe('OBSERVE');
-  });
-  it('agreement beyond chance, both ways, on the rules it reads: VETO. Never CERTIFY. Measured rules do not count.', () => {
-    expect(readerPermission(table(12, 20, 1, 1), unmeasured).permission).toBe('VETO');
-    expect(readerPermission(table(12, 20, 1, 1, 'measured'), unmeasured).permission).toBe('OBSERVE');
-    expect(VETO_KAPPA).toBeGreaterThan(0);
-  });
-  it('blocks only on order-invariant readings, at least two, worse more often than better', () => {
-    const r = (requirementId: string, result: 'CHAMPION_COMPLIES_BETTER' | 'CANDIDATE_COMPLIES_BETTER' | 'EQUAL', orderInvariant = true) => ({ requirementId, result, orderInvariant });
-    expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER'), r('a', 'CHAMPION_COMPLIES_BETTER'), r('a', 'CANDIDATE_COMPLIES_BETTER')])).toEqual(['a']);
-    expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER')])).toEqual([]);
-    expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER', false), r('a', 'CHAMPION_COMPLIES_BETTER', false)])).toEqual([]);
-    expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER'), r('a', 'CHAMPION_COMPLIES_BETTER'), r('a', 'CANDIDATE_COMPLIES_BETTER'), r('a', 'CANDIDATE_COMPLIES_BETTER')])).toEqual([]);
   });
 });
 

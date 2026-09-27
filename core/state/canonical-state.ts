@@ -550,6 +550,8 @@ export interface RepairRecord {
    * "write this, not that" from this author's own standard: the source of the skill's contrast examples.
    */
   readonly pairs?: readonly RepairPair[];
+  /** the taste pass (core/taste/repair.ts): rules the reader, holding VETO, read as missed, and which it no longer does */
+  readonly taste?: { readonly targeted: readonly string[]; readonly fixed: readonly string[]; readonly why: string };
   readonly why: string;
 }
 
