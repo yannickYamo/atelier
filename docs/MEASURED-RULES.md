@@ -6,7 +6,9 @@ deterministic check, and for those rules whether an output follows the rule is a
 This page is the reference for what can be measured, how rules are proposed, and what the loop does
 with them.
 
-Everything here lives in `core/observers/` and `core/loop/`. No observer calls a model.
+The observers live in `core/observers/`, the repair loop in `core/loop/`, the regression floor in
+`core/distinctiveness/`, the optimizer in `core/optimizer/` and failure mining in `core/mining/`. No
+observer calls a model.
 
 ## The observers
 
@@ -35,8 +37,16 @@ Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT
 `THAT_OPENER`, `HERES_OPENER`, `SIGNPOST`, `INTENSIFIER`, `SHORT_VERDICT`, `BOLD_SPAN`,
 `ONE_LINE_PARAGRAPH`, `RHETORICAL_QUESTION`, `REPEATED_OPENER`.
 
-Each observer states when it cannot measure, rather than returning a number that means nothing. A
-per-1,000 rate needs 150 words, a ratio needs four uses of either list, and a mix needs ten sentences.
+Each observer states when it cannot measure, rather than returning a number that means nothing:
+- a per-1,000 rate needs 150 words
+- a ratio needs four uses of either list
+- a mix needs ten sentences
+- an opening or closing rule needs two prose paragraphs
+- a heading rule needs a section heading, and a heading rate needs 300 words
+
+Headings are read by a section model that skips a lone title, code and front matter, and understands
+setext (`===` / `---`) headings. Openings and closings skip images, footnote definitions and link
+references.
 
 Declare one on your own rule with `atelier add --statement "…" --kind BOUNDARY --measure "<spec>"`,
 or add one to an existing rule with `atelier amend --rule <rule> --measure "<spec>" --reason "…"`. The
@@ -64,8 +74,10 @@ screen as every other rule, and nothing is enforced until you accept it.
      tropes ("The thing everyone gets wrong…", "Why this matters"), heading case and opening length
 
    Edge tropes often appear only once a skill asks for a voice, not in the model's plain drafts. So
-   every trope the author never uses in that position is proposed: firm where the plain drafts already
-   use it, and weak (shown, and used to choose between drafts) where they do not. On a real 20-post
+   there is one rule per position listing every trope the author never uses there. It is firm when at
+   least three in five of the plain drafts it applies to break it, and weak (shown, and used to choose
+   between drafts) otherwise. If the author's held-out work uses one of the tropes, the whole rule is
+   dropped: the list was wrong about them. On a real 20-post
    corpus, the heading rule passed every held-out post and flagged three headings in an output a reader
    had called AI-written.
 
@@ -176,15 +188,18 @@ improvement. Only an EARNED floor lets it install anything.
    reads the result.
    - A change to an unmeasured rule, or to whether the exemplar or examples ship, is left for you. It
      never installs itself.
-   - A reader that has earned VETO may block a finalist on a REQUIRED rule nothing measures. To earn
-     it, it needs 30 comparisons with your own rulings on those rules, at least 5 each way, and
-     agreement beyond chance (Cohen's kappa of 0.6). A reader that always says "keep the old one"
-     never earns it. It never clears a finalist.
+   - A reader that has earned VETO may block a finalist on a REQUIRED rule nothing measures (the
+     first three such rules, on three of the floor's tasks). To earn it, it needs 30 comparisons with
+     your own rulings on those rules, at least 5 each way, and agreement beyond chance: Cohen's kappa
+     of 0.6, with a 95% lower bound of 0.4. A reader that always says "keep the old one" never earns
+     it. It never clears a finalist.
 5. **Adopt.** Only with `--promote`, only on AUTO_PROMOTE, and only one change per round.
 
 `--cap` is the whole round's budget, with a call ceiling for runtimes that have no known prices. A
-round that runs out stops cleanly. It is recorded, and anything it built but did not test is marked
-untested, so it is not held against a retry. A candidate left for you waits for `atelier promote` or
+round that runs out stops cleanly. It is recorded, and anything it built but did not finish judging is
+marked untested, so it is not held against a retry. A move the cheap screen dropped is not re-proposed
+by `optimize` on the same evidence, but it is never held against `fix`: a screen of the floor's tasks
+is not your judgement of a complaint. A candidate left for you waits for `atelier promote` or
 `atelier reject`, and `atelier fix` points there instead of building another.
 
 Every proposal records who proposed it. `atelier optimize --report` compares how often reflection's
@@ -201,10 +216,14 @@ lists what recurs, strongest first, each with its remedy.
 |---|---|---|
 | gap | two or more complaints that say the same thing, about no rule the standard has | a rule to add, in your words or a proposed wording you approve: `--add <n> --materiality required\|preferred [--statement "…"]` |
 | missed rule | complaints attributed to the same rule, again and again | the rule is not reaching the model: `atelier optimize`, or reword it with `amend` |
-| broken draft | a measured rule the first draft breaks in most runs, repaired every time | the loop pays for it on every run; a different carrier may prevent it |
-| lost meaning | a rule whose repairs keep being refused for changing what the text claims | the rule may conflict with how you qualify claims; look at it with `amend` |
+| broken draft | a measured rule the first draft breaks in at least half the runs on the current standard (with how often the loop repaired it) | the loop pays for it on every run; a different carrier may prevent it |
+| lost meaning | a rule whose repairs keep being refused for changing what the text claims, charged to the rule each refusal was for | the rule may conflict with how you qualify claims; look at it with `amend` |
 
-Complaints are grouped by the content words they share. Nothing here calls a model unless you pass
+Complaints are grouped by the content words they share: average-link clustering on Jaccard similarity
+of at least 0.3, so a chain of loosely related complaints does not become one group. A gap takes the
+wording `fix` proposed for one of its own complaints, unless that wording was ever declined. A gap a
+rule was already added for is not offered again, and `--add` refuses a report made before the
+standard changed. Nothing here calls a model unless you pass
 `--phrase`, which asks one to word a rule for a gap that has none; the wording is a proposal like any
 other. Listing changes nothing, and a gap becomes a rule only with `--add`.
 

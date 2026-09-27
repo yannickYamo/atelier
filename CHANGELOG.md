@@ -19,8 +19,9 @@ a run in progress may not be.
 - **Pareto selection** (`core/optimizer/pareto.ts`) over the measured rules, with a cheap-model screen
   before the confirmation (successive halving).
 - **A veto-only reader** (`core/optimizer/veto.ts`): SSO's instrument with its authority cut to
-  blocking. It earns VETO only by agreeing with the owner's own rulings (at least 30 comparisons, and
-  a Wilson lower bound of 70%), and never CERTIFY.
+  blocking. It earns VETO only by agreeing with the owner's own rulings on the rules it reads, beyond
+  chance (Cohen's kappa of at least 0.6, with a 95% lower bound of at least 0.4, over 30 rulings, 5 in
+  each direction), and never CERTIFY.
 - **`atelier optimize`**: propose, build, screen, confirm on the regression floor, and adopt only on
   AUTO_PROMOTE with `--promote`. Rounds are recorded, and `--report` compares the reflective and the
   fixed proposers' keep rates. **`atelier fix --reflect`** runs the same experiment one complaint at a
@@ -42,6 +43,35 @@ a run in progress may not be.
   keeps breaking, and repairs refused for changing meaning, each with its remedy. `--add` turns a
   recurring gap into a rule on the owner's word, through the same path as `fix` (now shared in
   `cli/commands/addition.ts`). `--phrase` asks a model to propose a wording.
+
+### Fixed (final audit)
+
+- **The floor now scores an OPENING or CLOSING rule by what is wrong.** It counts banned phrases plus
+  words outside the band. Before, it scored word count, so a short opening with a trope counted as
+  "better".
+- **A heading can be recased.** Its capitals no longer read as names the rewrite lost, but only for
+  a heading case repair; elsewhere names are still compared exactly.
+- **An optimizer round that stops leaves nothing pending but its finalists.** Any candidate never
+  evaluated blocks nothing. An optimizer's cheap screen is never held against `fix` as if you had
+  rejected the move.
+- **The edge observers ignore non-prose at the edges.** They read setext headings, keep a `#` that
+  belongs to a heading ("Learn C#"), and skip images, footnote definitions and link references.
+- **Heading case is read from common words**, not names, acronyms or product words. ALL CAPS reads as
+  Title Case.
+- **Mining:**
+  - Complaints cluster by average link, so unrelated complaints no longer chain together, and
+    two-letter words ("em") count.
+  - A proposal is matched to its own complaint's timestamp. A wording ever declined is not offered
+    again, and neither is a gap a rule was already added for.
+  - Drafts are counted on the current standard, with repairs checked.
+  - A refused rewrite is charged to the rule it was for.
+  - `mine --add` refuses a report made before the standard changed.
+  - `--phrase` has one budget.
+- **Additions install before they activate**, so a failed install leaves the previous version
+  serving.
+- **Edge rules count only the drafts they apply to.** An opening and a close with both a trope and a
+  length problem send both to be fixed.
+- **The reader's kappa must clear a lower confidence bound** as well as its point estimate.
 
 ### Fixed (Phase 8 audit)
 

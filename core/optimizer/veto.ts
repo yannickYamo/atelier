@@ -15,7 +15,9 @@
 // And even blocking is earned. The reader starts OBSERVE (reported, ignored by the gate) and holds VETO
 // only after its readings have been checked against the owner's own blind picks
 // (../fidelity/judgement.ts), on the rules it is asked about: at least MIN_COMPARABLE pairs where both
-// ruled, with MIN_EACH_WAY in each direction, agreeing beyond chance (Cohen's kappa of VETO_KAPPA). A
+// ruled, with MIN_EACH_WAY in each direction, agreeing beyond chance (Cohen's kappa of VETO_KAPPA, with
+// a 95% lower bound of VETO_KAPPA_LOWER). Rulings are matched by rule id, so they count within the
+// standard version they were made on. A
 // reader that disagrees with the owner as often as not is noise, and noise that can block would stall
 // every improvement.
 //
@@ -41,8 +43,10 @@ export function wilsonLower(successes: number, n: number): number {
   return Math.max(0, (centre - margin) / (1 + (z * z) / n));
 }
 
+interface Table { readonly both: number; readonly neither: number; readonly readerOnly: number; readonly ownerOnly: number }
+
 /** Cohen's kappa over a 2×2 table of (reader's pick, owner's pick). */
-export function cohensKappa(t: { readonly both: number; readonly neither: number; readonly readerOnly: number; readonly ownerOnly: number }): number {
+export function cohensKappa(t: Table): number {
   const n = t.both + t.neither + t.readerOnly + t.ownerOnly;
   if (!n) return 0;
   const po = (t.both + t.neither) / n;
@@ -50,6 +54,22 @@ export function cohensKappa(t: { readonly both: number; readonly neither: number
   const pe = pr * pw + (1 - pr) * (1 - pw);
   return pe === 1 ? 0 : (po - pe) / (1 - pe);
 }
+
+/** A one-sided 95% lower bound on kappa (the large-sample standard error): a point estimate at thirty
+ *  rulings is too noisy to hand anything the power to block. */
+export function kappaLower(t: Table): number {
+  const n = t.both + t.neither + t.readerOnly + t.ownerOnly;
+  if (!n) return 0;
+  const po = (t.both + t.neither) / n;
+  const pr = (t.both + t.readerOnly) / n; const pw = (t.both + t.ownerOnly) / n;
+  const pe = pr * pw + (1 - pr) * (1 - pw);
+  if (pe === 1) return 0;
+  const se = Math.sqrt((po * (1 - po)) / (n * (1 - pe) ** 2));
+  return cohensKappa(t) - 1.645 * se;
+}
+
+/** The lower bound kappa must clear, beside the point estimate. */
+export const VETO_KAPPA_LOWER = 0.4;
 
 /**
  * What the reader may do, from its record against the owner's own rulings on the rules nothing measures
@@ -70,9 +90,10 @@ export function readerPermission(records: readonly JudgementRecord[], unmeasured
   if (n < MIN_COMPARABLE || ownerCand < MIN_EACH_WAY || ownerChamp < MIN_EACH_WAY) {
     return { permission: 'OBSERVE', why: `${n} of the ${MIN_COMPARABLE} comparisons it needs with your rulings on unmeasured rules (${ownerCand} kept the new version, ${ownerChamp} the old; it needs ${MIN_EACH_WAY} of each); its readings are reported, never acted on` };
   }
-  return k >= VETO_KAPPA
-    ? { permission: 'VETO', why: `agrees with you beyond chance (kappa ${k.toFixed(2)} over ${n}); it may block, never approve` }
-    : { permission: 'OBSERVE', why: `agrees with you too little beyond chance to block (kappa ${k.toFixed(2)} over ${n}, needs ${VETO_KAPPA})` };
+  const lower = kappaLower(t);
+  return k >= VETO_KAPPA && lower >= VETO_KAPPA_LOWER
+    ? { permission: 'VETO', why: `agrees with you beyond chance (kappa ${k.toFixed(2)}, at least ${lower.toFixed(2)}, over ${n}); it may block, never approve` }
+    : { permission: 'OBSERVE', why: `agrees with you too little beyond chance to block (kappa ${k.toFixed(2)}, lower bound ${lower.toFixed(2)}, over ${n}; needs ${VETO_KAPPA} and ${VETO_KAPPA_LOWER})` };
 }
 
 export interface Reading { readonly requirementId: string; readonly result: ObserverResult; readonly orderInvariant: boolean }

@@ -10,10 +10,10 @@
 // a gap that has none yet; its wording is a proposal like any other.
 
 import * as store from '../../core/state/store.js';
-import { findRecurrences, type Recurrence } from '../../core/mining/recurrence.js';
-import { spend } from '../../core/inference/client.js';
+import { findRecurrences, type Recurrence, type ProposalEvent } from '../../core/mining/recurrence.js';
+import { spend, type Budget } from '../../core/inference/client.js';
 import { addRuleToActive } from './addition.js';
-import { DATA, die, argv, flag, skillArg, clientFor, diagnoserModel } from '../runtime.js';
+import { DATA, die, argv, flag, numericFlag, skillArg, clientFor, diagnoserModel } from '../runtime.js';
 
 const PHRASE_SYSTEM = `You word ONE rule for a writing standard from complaints its owner made about several outputs.
 
@@ -30,13 +30,21 @@ export async function mine(): Promise<void> {
   const v = store.getStandard(L, sv.standardVersionHash) ?? die(`standard ${sv.standardVersionHash} is missing.`);
 
   const addRef = flag('--add');
-  if (addRef !== undefined) { add(L, name, addRef); return; }
+  if (addRef !== undefined) { add(L, name, addRef, v.standardVersionHash); return; }
 
-  const proposals = store.readEvents(L).filter((e) => e.kind === 'PROPOSED_CHANGE')
-    .map((e) => ({ proposal: String(e.proposal), at: String(e.at), accepted: (e.accepted ?? null) as boolean | null }));
-  let items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listInvocations(L), requirements: v.requirements, proposals });
-  if (argv.includes('--phrase')) items = await Promise.all(items.map(async (r) => (r.kind === 'GAP' && !r.proposal ? { ...r, proposal: await phrase(r.complaints) } : r)));
-  store.setMining(L, { at: new Date().toISOString(), items });
+  const proposals: ProposalEvent[] = store.readEvents(L).filter((e) => e.kind === 'PROPOSED_CHANGE')
+    .map((e) => ({ proposal: String(e.proposal), at: String(e.at), accepted: (e.accepted ?? null) as boolean | null,
+      ...(Array.isArray(e.feedbackIds) ? { feedbackIds: e.feedbackIds as string[] } : {}) }));
+  let items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listInvocations(L), requirements: v.requirements,
+    standardVersionHash: v.standardVersionHash, proposals });
+  if (argv.includes('--phrase')) {
+    // One budget for the whole command, however many gaps.
+    const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: items.filter((r) => r.kind === 'GAP').length };
+    const phrased: Recurrence[] = [];
+    for (const r of items) phrased.push(r.kind === 'GAP' && !r.proposal ? { ...r, proposal: await phrase(r.complaints, budget) } : r);
+    items = phrased;
+  }
+  store.setMining(L, { at: new Date().toISOString(), standardVersionHash: v.standardVersionHash, items });
 
   if (!items.length) { console.log(`Nothing recurs yet in what ${name} has recorded. One complaint is an anecdote; two that say the same thing are a pattern.`); return; }
   console.log(`What keeps going wrong with ${name}, strongest first:\n`);
@@ -55,17 +63,17 @@ function describe(r: Recurrence, name: string, n: number): string {
         + `   It is not reaching the model. Try another way of carrying it:  atelier optimize --skill ${name}\n`
         + `   or, if the words are the problem:  atelier amend --skill ${name} --rule ${r.requirementId} --statement "..." --reason "..."`;
     case 'BROKEN_DRAFT':
-      return `A rule the first draft breaks in ${r.broken} of ${r.runs} runs: ${r.requirementId} "${r.statement}"\n`
-        + `   The loop repairs it every time, which costs a rewrite each run. A different carrier may prevent it:  atelier optimize --skill ${name}`;
+      return `A rule the first draft breaks in ${r.broken} of ${r.runs} runs on this version: ${r.requirementId} "${r.statement}" (repaired in ${r.repaired})\n`
+        + `   The loop pays a rewrite for it on each of those runs. A different carrier may prevent it:  atelier optimize --skill ${name}`;
     case 'LOST_MEANING':
       return `Repairs for ${r.requirementId} "${r.statement}" were refused ${r.refused} times for changing what the text claims\n`
         + `   The rule may conflict with how you qualify claims. Look at it:  atelier amend --skill ${name} --rule ${r.requirementId} --reason "..."`;
   }
 }
 
-async function phrase(complaints: readonly string[]): Promise<string | null> {
+async function phrase(complaints: readonly string[], budget: Budget): Promise<string | null> {
   try {
-    const res = await spend({ spentUsd: 0, capUsd: 0.25, maxCalls: 1 }, 0.03, async () => {
+    const res = await spend(budget, 0.03, async () => {
       const x = await clientFor(diagnoserModel()).complete({ stableBlock: PHRASE_SYSTEM, variableBlock: '',
         userMessage: `THE COMPLAINTS\n${complaints.slice(0, 6).map((c) => `- ${c}`).join('\n')}`, toolName: 'emit_rule',
         toolDescription: 'The one rule the complaints imply.', schema: PHRASE_SCHEMA, maxTokens: 300 });
@@ -79,8 +87,11 @@ async function phrase(complaints: readonly string[]): Promise<string | null> {
   }
 }
 
-function add(L: store.StoreLayout, name: string, ref: string): void {
+function add(L: store.StoreLayout, name: string, ref: string, current: string): void {
   const report = store.getMining(L) ?? die(`run atelier mine --skill ${name} first, so --add names an item you have read.`);
+  // The report is about one version of the standard. After any change (an addition included) its
+  // numbers may point at something else, and adding the same gap twice would duplicate the rule.
+  if (report.standardVersionHash !== current) die(`your standard has changed since that report. Run atelier mine --skill ${name} again and add from the new list.`);
   const n = Number(ref);
   const item = Number.isInteger(n) ? report.items[n - 1] : undefined;
   if (!item) return die(`--add takes a number from the last report (1–${report.items.length}).`);
@@ -88,7 +99,7 @@ function add(L: store.StoreLayout, name: string, ref: string): void {
   const m = flag('--materiality')?.toUpperCase();
   if (m !== 'REQUIRED' && m !== 'PREFERRED') return die('--materiality required|preferred: whether the rule binds, or is shown with other forms still acceptable.');
   const statement = flag('--statement') ?? item.proposal ?? die(`item ${n} has no proposed wording: give yours with --statement "<the rule>", or re-run with --phrase.`);
-  const added = addRuleToActive(L, name, statement, m, `recurring: ${item.count} complaints, e.g. "${item.complaints[0]}"`);
+  const added = addRuleToActive(L, name, statement, m, `recurring: ${item.count} complaints, e.g. "${item.complaints[0]}"`, null, item.feedbackIds);
   console.log(`Added as ${m} — ${added.requirement.requirementId}: ${statement}`);
   console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes}. Rebuilt and installed.`);
 }

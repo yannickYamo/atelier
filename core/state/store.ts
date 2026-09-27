@@ -118,11 +118,12 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
 }
 
 /** The last `atelier mine` report, so `--add <n>` names the item the owner read. */
-export function getMining(l: StoreLayout): { readonly at: string; readonly items: readonly Recurrence[] } | null {
+export interface MiningReport { readonly at: string; readonly standardVersionHash?: string; readonly items: readonly Recurrence[] }
+export function getMining(l: StoreLayout): MiningReport | null {
   const p = join(dirs(l).base, 'mine.json');
-  return existsSync(p) ? readJson<{ at: string; items: Recurrence[] }>(p, { what: 'the last mining report' }) : null;
+  return existsSync(p) ? readJson<MiningReport>(p, { what: 'the last mining report' }) : null;
 }
-export function setMining(l: StoreLayout, report: { readonly at: string; readonly items: readonly Recurrence[] }): void {
+export function setMining(l: StoreLayout, report: MiningReport): void {
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(join(dirs(l).base, 'mine.json'), JSON.stringify(report, null, 1));
 }
