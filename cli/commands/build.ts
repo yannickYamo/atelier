@@ -5,7 +5,16 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { selectVoicePassages, selectVoicePieces, type VoicePassages } from '../../core/compiler/voice.js';
-import { derivePersona } from '../../core/compiler/persona.js';
+import { derivePersona, reconcilePersona } from '../../core/compiler/persona.js';
+import { measure } from '../../core/observers/registry.js';
+import { findPattern, type PatternId } from '../../core/observers/style.js';
+import type { Requirement } from '../../core/state/canonical-state.js';
+
+/** Whether a text contains the very pattern a PATTERN_RATE rule caps (a short text rarely reaches a rate). */
+const findPatternOf = (text: string, r: Requirement): boolean => {
+  const p = r.measurement?.observer === 'PATTERN_RATE' ? (r.measurement.params.pattern as string[] | undefined)?.[0] : undefined;
+  return p !== undefined && findPattern(text, p as PatternId).length > 0;
+};
 import type { Budget } from '../../core/inference/client.js';
 import { readCorpus } from './floor.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -97,7 +106,12 @@ export async function build(nameArg?: string): Promise<void> {
   // This transition used to be checked LAST: the store was written, the active pointer moved and
   // the skill installed, and then the run refused to advance — so a refused build looked exactly
   // like a successful one on disk and reported failure on the terminal.
-  s = step(s, 'BUILT');
+  //
+  // A BUILT run may be built again: the same ratified standard, compiled into a new implementation (the
+  // voice turned on or off, the persona derived again, another skill name). The standard's hash was
+  // checked above, so nothing about what "good" means can change here; the new SkillVersion becomes
+  // active and the previous one stays in history (`atelier rollback`).
+  if (s.run.state !== 'BUILT') s = step(s, 'BUILT');
   // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS. `mintedAt` sits outside the hash; re-closing
   // identical content in another project would otherwise make the store refuse a body that differs
   // only by timestamp. Same rule as `amend`.
@@ -178,10 +192,15 @@ export async function build(nameArg?: string): Promise<void> {
   else if (voice && readable.length >= 3 && (personaFlag === 'auto' || !voice.persona)) {
     const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
     try {
-      const persona = await derivePersona(clientFor(proposerModel()), budget, readable);
+      // A point that describes or quotes a move a REQUIRED boundary forbids is dropped: the standard wins.
+      const boundaries = v.requirements.filter((r) => r.materiality === 'REQUIRED' && r.kind === 'BOUNDARY' && r.measurement);
+      const forbids = (text: string): boolean => boundaries.some((r) => (r.measurement!.observer === 'LEXICON'
+        ? measure(text, r.measurement!).verdict === 'VIOLATED' : findPatternOf(text, r)));
+      const persona = reconcilePersona(await derivePersona(clientFor(proposerModel()), budget, readable), forbids);
       voice = { ...voice, persona };
       console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
-        + `${persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
+        + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
+        + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
     } catch (e) {
       console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
     }

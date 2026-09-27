@@ -266,3 +266,16 @@ describe('the voice layer: register, and bands that choose rather than steer', (
     expect(fp?.conformance.weak).toBe(true);
   });
 });
+
+describe('the standard wins over the persona', () => {
+  it('a persona point that describes a move a REQUIRED boundary forbids is dropped', async () => {
+    const { reconcilePersona } = await import('../core/compiler/persona.js');
+    const p = { points: [
+      { aspect: 'a', description: 'Compresses the argument into a "not X, it\'s Y" line.', frequency: 'ALWAYS' as const, quote: "It's not speed, it's review." },
+      { aspect: 'b', description: 'Talks to the reader directly.', frequency: 'OFTEN' as const, quote: 'you should' },
+    ], dropped: 0 };
+    const r = reconcilePersona(p, (t) => findPattern(t, 'NOT_X_ITS_Y').length > 0);
+    expect(r.points.map((x) => x.aspect)).toEqual(['b']);
+    expect(r.conflicting).toBe(1);
+  });
+});
