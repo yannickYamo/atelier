@@ -16,8 +16,8 @@ import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { readTaste, tasteRules, describeTaste, actsAsMiss, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions, calibrationQueue, statementHash, passageAround, heldBack, HOLDBACK, type TastePermissions, type OwnerLabel } from '../../core/taste/calibration.js';
 import { coverageOf, describeCoverage } from '../../core/taste/dimensions.js';
-import type { Budget } from '../../core/inference/client.js';
-import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientFor, diagnoserModel, hasModelFor, modelFor } from '../runtime.js';
+import type { Budget, InferenceClient } from '../../core/inference/client.js';
+import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientFor, diagnoserModel, hasModelFor, modelFor, clientAndBinding } from '../runtime.js';
 
 /**
  * The model the reader runs on: its own setting, else the discovery model, else (when the discovery
@@ -26,6 +26,17 @@ import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientFor, 
  */
 export const readerModel = (): string => flag('--reader-model') ?? process.env.ATELIER_READER_MODEL
   ?? (hasModelFor('discovery') ? diagnoserModel() : modelFor('target'));
+
+/**
+ * A client for the reader. The discovery runtime when it has a model (or one was named for the reader);
+ * otherwise the TARGET runtime, with its own provider and base URL, since a model id means nothing on a
+ * backend it was not named for.
+ */
+export const readerClient = (): InferenceClient => {
+  const named = flag('--reader-model') ?? process.env.ATELIER_READER_MODEL;
+  if (named || hasModelFor('discovery')) return clientFor(readerModel());
+  return clientAndBinding('target').client;
+};
 
 /** The share of readings held back for calibration: ATELIER_TASTE_HOLDBACK, else a third. */
 const holdbackShare = (): number => {
@@ -56,7 +67,7 @@ export async function recordTaste(L: store.StoreLayout, v: StandardVersion, text
   const rules = tasteRules(v);
   const permissions = tastePermissions(rules, store.readEvents(L), model);
   if (!rules.length) return { readings: [], permissions, held: false };
-  const readings = taken ?? await readTaste(clientFor(model), budget, v, text, task);
+  const readings = taken ?? await readTaste(readerClient(), budget, v, text, task);
   const at = new Date().toISOString();
   const readingId = sha(`${v.standardVersionHash}|${sha(text)}|${at}`);
   const held = heldBack(readingId, holdbackShare());

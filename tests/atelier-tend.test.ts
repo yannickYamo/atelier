@@ -49,7 +49,7 @@ describe('floor --setup: one command from nothing to an earned floor', () => {
     await post({ byTool: { emit_piece: { piece: 'the plain answer' } } });
     const out = run(data, proj, 'floor', '--skill', 'focus', '--setup', '--corpus', corpus, '--runs', '12');
     expect(out).toContain('Tasks: 6, from the titles of your own pieces');
-    expect(out).toContain('Enforced: 2 REQUIRED counted rule(s)');
+    expect(out).toContain('Enforced: 2 counted rule(s).');
     expect(out).toMatch(/At most \d+ draft\(s\)/);
     expect(out).toContain('Baseline frozen');
     expect(out).toContain('EARNED');
@@ -68,6 +68,30 @@ describe('floor --setup: one command from nothing to an earned floor', () => {
     const out = run(data, proj, 'floor', '--skill', 'focus', '--setup', '--corpus', few);
     expect(out).toMatch(/^EXIT:1[\s\S]*found 2 titled piece\(s\); the floor needs 5 tasks/);
     expect(store.getBaseline({ root: data, skillName: 'focus' }, store.getActive({ root: data, skillName: 'focus' })!)).toBeNull();
+  });
+});
+
+describe('the audit\'s refusals come before any spend', () => {
+  it('floor --setup refuses with fewer than two enforceable rules, before drafting anything', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-tend1-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-tend1-proj-'));
+    run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--materiality', 'REQUIRED', '--measure', 'LEXICON:synergy');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    const corpus = join(proj, 'mine'); mkdirSync(corpus);
+    for (let i = 0; i < 6; i++) writeFileSync(join(corpus, `p${i}.md`), `# Title number ${i}\n\nPiece ${i}. Plain words, no jargon.`);
+    const out = run(data, proj, 'floor', '--skill', 'focus', '--setup', '--corpus', corpus);
+    expect(out).toMatch(/^EXIT:1[\s\S]*needs at least two[\s\S]*Nothing was spent/);
+    expect(out).not.toContain('model call');
+  });
+  it('optimize refuses a baseline frozen under another model before its screen spends anything', async () => {
+    const { data, proj, corpus } = seed();
+    await post({ byTool: { emit_piece: { piece: 'the plain answer' } } });
+    expect(run(data, proj, 'floor', '--skill', 'focus', '--setup', '--corpus', corpus, '--runs', '1')).toContain('Baseline frozen');
+    const L = { root: data, skillName: 'focus' };
+    const other = run(data, proj, 'optimize', '--skill', 'focus', '--target-model', 'scripted-v2');
+    expect(other).toMatch(/^EXIT:1[\s\S]*frozen under scripted, not scripted-v2/);
+    // Nothing was proposed, so nothing is left PENDING to block the next round.
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_PROPOSED')).toBe(false);
   });
 });
 

@@ -123,7 +123,9 @@ export function tastePermissions(
   for (const e of events) {
     if (e.kind !== 'TASTE_READING') continue;
     const ev = e as unknown as TasteReadingEvent;
-    if (ev.readerModel !== readerModel) continue;
+    // Only held-back readings count: a label on a reading whose verdict had been displayed (or one recorded
+    // before readings were held back) is not blind, so it cannot earn anything.
+    if (ev.readerModel !== readerModel || !ev.blind) continue;
     for (const r of ev.readings) readings.set(`${ev.readingId}|${r.key}`, r);
   }
   const labels = new Map<string, OwnerLabel>();

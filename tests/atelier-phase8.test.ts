@@ -179,6 +179,8 @@ describe('through the binary: one round of optimize', () => {
     const events = store.readEvents(L);
     expect(events.some((e) => e.kind === 'REPAIR_PROPOSED' && (e as { proposer?: string }).proposer === 'REFLECTIVE')).toBe(true);
     expect(events.some((e) => e.kind === 'OPTIMIZE_ROUND')).toBe(true);
+    // Nothing built on the replaced version is left waiting: promoting it would revert the install.
+    expect(foldRepairs(events).some((r) => r.outcome === 'PENDING')).toBe(false);
     const report = run(data, proj, 'optimize', '--skill', 'focus', '--report');
     expect(report).toMatch(/REFLECTIVE\s+\d+ proposed · 1 kept/);
   }, 300_000);
