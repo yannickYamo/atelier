@@ -28,8 +28,8 @@ import { isGeneralScope } from '../state/canonical-state.js';
 import { keysOf } from '../state/rule-key.js';
 import { measure, type ObserverResult } from '../observers/registry.js';
 import { quantile } from '../observers/text.js';
-import { evaluateQualityFloor, type DimScores, type DimensionFloor, type DimFloorResult, type FloorQualification, type FloorVerdict, type FrozenBaselineEntry, type QualityFloorContract, type QualityFloorResult } from './floor.js';
-import { tCrit, mean, sd } from './stats.js';
+import { dimensionVerdict, type DimScores, type DimensionFloor, type DimFloorResult, type FloorQualification, type FloorVerdict, type FrozenBaselineEntry, type QualityFloorContract, type QualityFloorResult } from './floor.js';
+import { tCrit, mean, sd, sampleFrom, type Sample } from './stats.js';
 import type { ComparisonVerdict } from '../comparison/compare.js';
 
 export interface FloorDimension { readonly key: string; readonly rule: Requirement }
@@ -127,21 +127,34 @@ export function buildContract(proposals: readonly MarginProposal[], dims: readon
 }
 
 /**
- * One task's floor verdict. The comparator in floor.ts rightly throws on a dimension it cannot score;
- * here a dimension can be unscorable for an honest reason (a rate rule on a reply under 150 words), so
- * such a dimension is reported INCONCLUSIVE for this task rather than dropped. An ENFORCE dimension
- * that could not be measured therefore holds the composite at INCONCLUSIVE: never read as "held".
+ * One task's floor verdict.
+ *
+ * Built on floor.ts's `dimensionVerdict`, with two differences that matter for counts:
+ *
+ *   UNSCORABLE IS INCONCLUSIVE. A dimension can be unscorable for an honest reason (a rate rule on a
+ *   reply under 150 words). It is reported INCONCLUSIVE for this task rather than dropped, so an
+ *   ENFORCE dimension that could not be measured holds the composite at INCONCLUSIVE: never "held".
+ *
+ *   A VARIANCE FLOOR. Counts are sparse: two drafts that both used a banned word zero times have no
+ *   spread, and Welch then resolves ANY difference with certainty, so one extra use in each of two
+ *   drafts reads as a proven regression. Each side's spread is taken as at least half the dimension's
+ *   margin: with three drafts a side, a drop of one margin stays INCONCLUSIVE and a drop of two
+ *   resolves. (A floor of the whole margin would need about eight drafts a side to resolve anything.)
+ *
+ * `exclude` leaves dimensions out of the composite, never out of the report: the rule a repair is
+ * about is its target, and guarding the target with the floor double-counts it (floor.ts).
  */
-export function evaluateTask(candidate: Record<string, readonly number[]>, frozen: FrozenBaselineEntry, contract: QualityFloorContract): QualityFloorResult {
-  const scored = Object.keys(contract.dimensions).filter((d) => (candidate[d]?.length ?? 0) >= 2 && (frozen.perFireScores?.[d]?.length ?? 0) >= 2);
-  const measured = scored.length
-    ? evaluateQualityFloor(candidate, frozen, { ...contract, dimensions: Object.fromEntries(scored.map((d) => [d, contract.dimensions[d]])) })
-    : { perDim: [], composite: 'INCONCLUSIVE' as FloorVerdict, drivenBy: [] };
-  const unscored: DimFloorResult[] = Object.keys(contract.dimensions).filter((d) => !scored.includes(d)).map((d) => ({
-    dim: d, verdict: 'INCONCLUSIVE', gateRole: contract.dimensions[d].gateRole, margin: contract.dimensions[d].nonInferiorityMargin,
-    delta: 0, lowerBound: -Infinity, upperBound: Infinity }));
-  const perDim = [...measured.perDim, ...unscored];
-  const enforced = perDim.filter((d) => d.gateRole === 'ENFORCE');
+export function evaluateTask(candidate: Record<string, readonly number[]>, frozen: FrozenBaselineEntry, contract: QualityFloorContract,
+  exclude: ReadonlySet<string> = new Set()): QualityFloorResult {
+  const perDim: DimFloorResult[] = Object.entries(contract.dimensions).map(([dim, d]) => {
+    const c = candidate[dim] ?? []; const f = frozen.perFireScores?.[dim] ?? [];
+    if (c.length < 2 || f.length < 2) {
+      return { dim, verdict: 'INCONCLUSIVE', gateRole: d.gateRole, margin: d.nonInferiorityMargin, delta: 0, lowerBound: -Infinity, upperBound: Infinity };
+    }
+    const floorSd = (xs: readonly number[]): Sample => { const x = sampleFrom(xs); return { ...x, sd: Math.max(x.sd, d.nonInferiorityMargin / 2) }; };
+    return { dim, gateRole: d.gateRole, margin: d.nonInferiorityMargin, ...dimensionVerdict(floorSd(c), floorSd(f), d.nonInferiorityMargin) };
+  });
+  const enforced = perDim.filter((d) => d.gateRole === 'ENFORCE' && !exclude.has(d.dim));
   if (!enforced.length) return { perDim, composite: 'INCONCLUSIVE', drivenBy: [] };
   const regressed = enforced.filter((d) => d.verdict === 'REGRESSION');
   const unresolved = enforced.filter((d) => d.verdict === 'INCONCLUSIVE');
@@ -169,7 +182,8 @@ export function compositeAcross(results: readonly QualityFloorResult[]): FloorVe
  */
 export function targetComparison(perTask: readonly { readonly candidate: readonly number[]; readonly champion: readonly number[] }[]): ComparisonVerdict {
   const deltas = perTask.filter((t) => t.candidate.length && t.champion.length).map((t) => mean(t.candidate) - mean(t.champion));
-  if (deltas.length < 2) return 'INCONCLUSIVE';
+  // Three tasks at least: two that happen to move by the same amount would otherwise read as proof.
+  if (deltas.length < 3) return 'INCONCLUSIVE';
   const m = mean(deltas); const s = sd(deltas);
   // Every task moved by exactly the same amount (a count that never varies): the sign decides.
   if (s === 0) return m > 0 ? 'IMPROVED' : m < 0 ? 'REGRESSED' : 'PLATEAU';
@@ -177,19 +191,24 @@ export function targetComparison(perTask: readonly { readonly candidate: readonl
   return m - half > 0 ? 'IMPROVED' : m + half < 0 ? 'REGRESSED' : 'INCONCLUSIVE';
 }
 
-/** An A/A run's tally: every ENFORCE comparison is a trial, and every REGRESSION among them a false alarm. */
+/**
+ * An A/A run's tally. Each run fires the SAME version twice as many times as a check would, splits
+ * the drafts for each task into two halves, and compares one half with the other as if it were a
+ * baseline, so both sides are fresh in every run and runs are independent of one another. (Comparing
+ * every run with one frozen baseline is not independent: a baseline that happened to be a lucky draw
+ * would make every run look clean.) The unit is the task: a task whose composite over the enforced
+ * dimensions is REGRESSION is one false alarm, and a task that resolved either way is one trial.
+ */
 export function countAA(results: readonly QualityFloorResult[]): { falseAlarms: number; trials: number } {
-  const enforced = results.flatMap((r) => r.perDim.filter((d) => d.gateRole === 'ENFORCE' && d.verdict !== 'INCONCLUSIVE'));
-  return { trials: enforced.length, falseAlarms: enforced.filter((d) => d.verdict === 'REGRESSION').length };
+  const resolved = results.filter((r) => r.composite !== 'INCONCLUSIVE');
+  return { trials: resolved.length, falseAlarms: resolved.filter((r) => r.composite === 'REGRESSION').length };
 }
 
 /**
- * The false-alarm rate, from A/A runs: the champion fired again and compared with its own frozen
- * baseline, so every REGRESSION on an ENFORCE dimension is a false alarm. The upper one-sided 95% bound
- * is exact (Clopper–Pearson). With no false alarm at all it takes about 60 resolved comparisons to
- * bring that bound under 5% (ten tasks and six enforced rules, or several runs), and that is the price
- * of letting the floor act alone. Qualified only over at least three tasks; otherwise null, and the
- * gate stays UNQUALIFIED.
+ * The false-alarm rate, from independent A/A runs (see `countAA`). The upper one-sided 95% bound is
+ * exact (Clopper–Pearson). With no false alarm at all it takes 59 resolved task comparisons to bring it
+ * to 5% (twenty tasks and three runs, say), and that is the price of letting the floor act alone.
+ * Qualified only over at least three distinct tasks; otherwise null, and the gate stays UNQUALIFIED.
  */
 export function qualifyFromAA(tally: { falseAlarms: number; trials: number }, tasks: number, estimand: string,
   maxRate = 0.05, at = new Date().toISOString()): { qualification: FloorQualification | null; upper95: number } {

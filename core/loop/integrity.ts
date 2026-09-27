@@ -84,8 +84,6 @@ export function spanIntegrity(original: string, replacement: string, allowedDrop
   // A term the rule asked to remove licenses whatever it contains: removing "not X, it's Y" removes a
   // negation, and removing a flagged "perhaps" removes a qualifier. That is the repair, not a loss.
   const drops = [...allowedDrops];
-  const words = [...drops, ...swaps];
-  const licensed = (term: string): boolean => words.some((d) => d === term.toLowerCase() || hasTerm(d, term));
   const after = tally(numbersIn(replacement));
   for (const [n, k] of tally(numbersIn(original))) if ((after.get(n) ?? 0) < k) lost.push(`the figure ${n}`);
   // Negation may fall by exactly what the licensed drops carried ("not X, it's Y" recast), never more,
@@ -93,16 +91,27 @@ export function spanIntegrity(original: string, replacement: string, allowedDrop
   const negBefore = count(original, NEGATION); const negAfter = count(replacement, NEGATION);
   const negLicensed = drops.reduce((n, d) => n + count(d, NEGATION), 0);
   if (negAfter > negBefore || negBefore - negAfter > negLicensed) lost.push(`negation (${negBefore} → ${negAfter})`);
+  // A qualifier the rule named for removal may go. One named only to be SWAPPED may change into another
+  // qualifier ("may" → "might") but not vanish, so across swapped qualifiers the total must hold.
+  const dropped = (t: string): boolean => drops.some((d) => d === t.toLowerCase() || hasTerm(d, t));
+  const swapped = (t: string): boolean => [...swaps].some((d) => d === t.toLowerCase() || hasTerm(d, t));
+  let swapBefore = 0; let swapAfter = 0;
   for (const q of QUALIFIERS) {
-    if (licensed(q)) continue;
+    if (dropped(q)) continue;
+    if (swapped(q)) { swapBefore += termCount(original, q); swapAfter += termCount(replacement, q); continue; }
     if (termCount(replacement, q) < termCount(original, q)) lost.push(`the qualifier "${q}"`);
+  }
+  if (swapAfter < swapBefore) {
+    const allAfter = QUALIFIERS.filter((q) => !dropped(q)).reduce((n, q) => n + termCount(replacement, q), 0);
+    const allBefore = QUALIFIERS.filter((q) => !dropped(q)).reduce((n, q) => n + termCount(original, q), 0);
+    if (allAfter < allBefore) lost.push('a qualifier the rule asked to swap, not remove');
   }
   for (const m of original.matchAll(/\[[^\]\n]{3,200}\](?!\()/g)) {   // a [link](url) is not a placeholder
     if (!replacement.includes(m[0])) lost.push(`the placeholder ${m[0].slice(0, 40)}`);
   }
   const replacementWords = new Set(wordsOf(replacement));
   for (const name of namesIn(original)) {
-    if (licensed(name)) continue;
+    if (dropped(name)) continue;
     if (!replacement.includes(name) && !replacementWords.has(name)) lost.push(`the name "${name}"`);
   }
   return { ok: lost.length === 0, lost };

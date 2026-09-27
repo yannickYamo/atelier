@@ -18,7 +18,7 @@ import { foldRepairs, foldProhibitions, mayPropose, describeHistory, WEAKEST_EVA
 import { runSpine, explainSpine } from '../../core/convergence/controller.js';
 import { proposeFloor } from '../../core/distinctiveness/contract.js';
 import { NOTHING_EARNED } from '../../core/convergence/state-machine.js';
-import { floorStateFor } from './floor.js';
+import { floorStateFor, runtimeIdentity } from './floor.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -31,7 +31,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, carriedFrom, modelFor } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, carriedFrom } from '../runtime.js';
 import type { RepairRecord, InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -76,7 +76,7 @@ export async function improve(): Promise<void> {
     const repairs = foldRepairs(events);
     const prohibitions = foldProhibitions(events);
 
-    const distinctiveness = floorStateFor(L, activeHash, modelFor('target'));
+    const distinctiveness = floorStateFor(L, activeHash, runtimeIdentity());
     console.log(`\nWhat the evidence says:\n`);
     const spines = [];
     for (const r of prev.requirements) {

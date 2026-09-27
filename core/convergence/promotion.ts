@@ -104,9 +104,10 @@ export function resolvePromotion(ev: PromotionEvidence): PromotionDecision {
   if (ev.comparison !== 'IMPROVED') {
     unmet.push(`a resolved improvement (comparison is ${ev.comparison})`);
   }
-  // A floor that says NONINFERIOR from an unqualified instrument has said nothing that can authorise.
-  if (ev.floor === 'INCONCLUSIVE') {
-    unmet.push('a floor verdict the evidence could resolve (currently INCONCLUSIVE)');
+  // Only a floor that RESOLVED as non-inferior can authorise. INCONCLUSIVE is the evidence failing to
+  // separate; no verdict at all (null) is the floor never having been asked, which is not a pass.
+  if (ev.floor !== 'NONINFERIOR') {
+    unmet.push(ev.floor === null ? 'a floor verdict (none was taken)' : `a floor verdict the evidence could resolve (currently ${ev.floor})`);
   }
 
   if (unmet.length) {

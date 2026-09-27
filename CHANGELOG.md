@@ -8,6 +8,24 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Added (Phase 8: search the implementation, never the standard)
+
+- **The genome** (`core/optimizer/genome.ts`): everything the compiler derives from a ratified
+  standard (each rule's carrier, whether the exemplar and contrast examples ship), with legal
+  single-gene mutations taken from each rule's own typed properties.
+- **Reflective proposals** (`core/optimizer/reflect.ts`), GEPA's step. A model reads bounded recent
+  failures and attempts (SkillOpt's history budget) and chooses among legal changes by number;
+  invalid choices are discarded and counted.
+- **Pareto selection** (`core/optimizer/pareto.ts`) over the measured rules, with a cheap-model screen
+  before the confirmation (successive halving).
+- **A veto-only reader** (`core/optimizer/veto.ts`): SSO's instrument with its authority cut to
+  blocking. It earns VETO only by agreeing with the owner's own rulings (at least 30 comparisons, and
+  a Wilson lower bound of 70%), and never CERTIFY.
+- **`atelier optimize`**: propose, build, screen, confirm on the regression floor, and adopt only on
+  AUTO_PROMOTE with `--promote`. Rounds are recorded, and `--report` compares the reflective and the
+  fixed proposers' keep rates. **`atelier fix --reflect`** runs the same experiment one complaint at a
+  time.
+
 ### Added (Phase 7: the regression floor, fed and earned)
 
 - **The floor has a producer** (`core/distinctiveness/measured.ts`). Every measured rule is a floor
@@ -26,6 +44,22 @@ a run in progress may not be.
   baseline.
 - **`improve`** reads the floor's real state instead of assuming nothing is earned, and points at
   `atelier floor`.
+- Audit remediation:
+  - A qualification is a rate of one situation: version, standard, contract, task set, runtime and
+    draft count. Any change, a promotion included, voids it.
+  - A/A runs compare two fresh halves, so runs are independent; the task is the unit. Before this,
+    every run was compared with one frozen baseline, which overstated the evidence roughly tenfold.
+  - A variance floor stops sparse counts from resolving a one-margin blip as a proven regression.
+  - The repaired rule is left out of the floor's verdict, and at least one other enforced rule must
+    hold.
+  - A promotion's check scores are not reused as the next baseline.
+  - The gate treats a missing floor verdict as unmet.
+  - `fix` falls back to a person if the floor run cannot finish.
+  - Baselines are refused if they do not cover the tasks or were frozen under another model.
+  - Pairs keep their check id, and a pair without one is stale.
+  - A candidate built from a package stored before pairs travelled with it still carries them.
+  - Margins come only from the author's own (GOLDEN) pieces, and `--corpus` skips reserved pieces.
+  - A swapped qualifier may change but not vanish, and the host path passes its swaps.
 
 ### Added (Phase 6: more of the standard measured)
 

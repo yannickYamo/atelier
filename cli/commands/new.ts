@@ -173,8 +173,8 @@ function heldOutCheck(skill: string): void {
 /**
  * THE FLOOR'S MARGINS, PROPOSED WHILE THE CORPUS IS AT HAND. Each measured rule's margin is half the
  * spread of the author's own pieces on it (core/distinctiveness/measured.ts); every dimension starts
- * OBSERVE, so nothing blocks until the owner says so. Costs nothing: no model is called. Reserved pieces
- * are left out: they are held back for the blind comparison and nothing reads them early.
+ * OBSERVE, so nothing blocks until the owner says so. Costs nothing: no model is called. Only the author's
+ * own pieces count; reserved ones are left out, held back for the blind comparison.
  */
 function proposeFloor(skill: string): void {
   const L: store.StoreLayout = { root: DATA, skillName: skill };
@@ -187,8 +187,11 @@ function proposeFloor(skill: string): void {
   const pathsFile = runFile('corpus-paths.json');
   if (!dims.length || !existsSync(pathsFile)) return;
   const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
-  const files = readJson<{ id: string; path: string }[]>(pathsFile, { kind: 'array', what: 'the sealed corpus path list' });
-  const texts = files.filter((f) => !reserved.has(f.id)).flatMap((f) => { const r = extract(f.path); return r.ok ? [(r as { text: string }).text] : []; });
+  const files = readJson<{ id: string; path: string; kind?: string }[]>(pathsFile, { kind: 'array', what: 'the sealed corpus path list' });
+  // The author's own work only: not a "before"/rejected example, a methodology note or an existing skill,
+  // each of which would widen the spread the margins are read from. (An older list has no kinds: all count.)
+  const texts = files.filter((f) => !reserved.has(f.id) && (f.kind ?? 'GOLDEN') === 'GOLDEN')
+    .flatMap((f) => { const r = extract(f.path); return r.ok ? [(r as { text: string }).text] : []; });
   const proposals = proposeMargins(dims, texts);
   if (!proposals.length) return;
   store.setFloor(L, { ...store.getFloor(L), contract: buildContract(proposals, dims, null) });
