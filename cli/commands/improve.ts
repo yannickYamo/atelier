@@ -393,7 +393,7 @@ export function adoptAllFromPublicSource(): void {
     ledger = appendDecision(ledger, p, outcome.ledgerDecision, { decidedAt });
   }
   saveSession({ ...s, decided, ledger });
-  console.log(`\nAdopted all ${decided.length} as observed technique from ${flag('--source-author') ?? 'a public source'}: `
+  console.log(`\nAdopted all ${decided.length} as observed technique from ${flag('--source-author') ?? loadSession().publicSource ?? 'a public source'}: `
     + 'shown to the model, enforced by none of them. That is the ceiling a stranger\'s work can carry.'
     + '\nJudge the output, then say what is wrong:  atelier fix "<what was wrong>"');
 }

@@ -134,7 +134,7 @@ export async function record(): Promise<void> {
   // the host holds the pen for the whole answer, so "only these spans" is an instruction there, not a
   // splice — and the record says whether anything outside them changed, and whether anything got worse.
   const std = store.getStandard(L, pending.standardVersionHash);
-  const checks = { material: store.getMaterial(L).map((m) => m.text).join('\n\n') };
+  const checks = { material: [pending.input, ...store.getMaterial(L).map((m) => m.text)].join('\n\n') };
   const report = std ? checkDraft(pending.skillName, std, output, checks) : null;
   const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
   const targets = report?.failed ? planRepair(output, report) : [];

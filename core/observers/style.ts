@@ -40,10 +40,11 @@ export const PATTERN_IDS = Object.keys(PATTERN_LABEL) as PatternId[];
 
 const REGEX: Partial<Record<PatternId, RegExp>> = {
   EM_DASH: /—/g,
-  SPACED_HYPHEN: /\s-\s/g,
-  SEMICOLON: /;/g,
-  NOT_X_ITS_Y: /\bnot [^.;!?—]{1,60}?(?:,|;|—|\s-\s)\s?(?:it'?s|it is|but|that'?s|they'?re)\b|\b(?:it'?s|that'?s|this is|this isn'?t|it isn'?t) not [^.!?]{1,60}[.!?]\s+(?:it'?s|that'?s|it is)\b/gi,
-  SIGNPOST: /\b(?:let me (?:be|explain|walk|start|offer|put|say|give)|I want to (?:spend|talk|be|start|make|offer)|here'?s (?:the thing|what|why|how|the part)|here is (?:the thing|what|why|how)|in other words|to be clear|the (?:short|long|honest) answer|let'?s be (?:clear|honest))\b/gi,
+  SPACED_HYPHEN: /(?<!\d)\s-\s(?!\d)/g,
+  SEMICOLON: /(?<!&[a-z]{1,8});/g,
+  // "not X, it's Y", "isn't X. It's Y", "not X — it's Y". Not "not X, but Y": that is an ordinary concession.
+  NOT_X_ITS_Y: /\b(?:not|isn'?t|aren'?t|wasn'?t|is not|are not) [^.;!?—]{1,60}?(?:[,;.]|—|\s-\s)\s?(?:it'?s|it is|that'?s|they'?re|they are)\b/gi,
+  SIGNPOST: /\b(?:let me (?:be|explain|walk|start|offer|put|say|give)|I want to (?:spend|talk|be|start|make|offer)|in other words|to be clear|the (?:short|long|honest) answer|let'?s be (?:clear|honest)|here'?s the thing)\b/gi,
   INTENSIFIER: /\b(?:quietly|genuinely|deeply|truly|fundamentally|incredibly|remarkably|profoundly)\b/gi,
   BOLD_SPAN: /\*\*[^*\n]+\*\*/g,
 };
@@ -70,9 +71,9 @@ export function findPattern(text: string, p: PatternId): Span[] {
   switch (p) {
     case 'THAT_OPENER': return sentences.filter((s) => /^(?:That'?s|That is|This is)\b/.test(s.text)).map(asSpan);
     case 'HERES_OPENER': return sentences.filter((s) => /^Here(?:'?s| is| are)\b/.test(s.text)).map(asSpan);
-    case 'RHETORICAL_QUESTION': return sentences.filter((s) => /\?["'”’)]*$/.test(s.text)).map(asSpan);
+    case 'RHETORICAL_QUESTION': return sentences.filter((s) => /\?["'”’)]*$/.test(s.text) && !/^["“'‘]/.test(s.text)).map(asSpan);
     case 'SHORT_VERDICT': return sentences.filter((s) => s.words <= 6
-      && /\b(?:is|are|was) (?:dead|over|broken|gone|the point|everything|nothing|real|wrong)\b|\b(?:breaks|matters|moved|wins|changes everything|is scheduling)[.!]$/i.test(s.text)).map(asSpan);
+      && /\b(?:is|are|was) (?:dead|over|broken|gone|the point|everything|nothing|real|wrong)\b|\b(?:breaks|matters|moved|wins|changes everything)[.!]$/i.test(s.text)).map(asSpan);
     case 'ONE_LINE_PARAGRAPH': return paragraphsOf(text).filter((x) => x.sentences === 1)
       .map((x) => ({ start: x.start, end: x.end, text: x.text, why: PATTERN_LABEL[p] }));
     case 'REPEATED_OPENER': {
@@ -131,33 +132,30 @@ export interface DeltaReference {
   readonly words: readonly string[];
   readonly mean: readonly number[];
   readonly sd: readonly number[];
-  /** mean z-profile of the author's pieces */
-  readonly author: readonly number[];
-  /** mean z-profile of the model's plain drafts */
-  readonly model: readonly number[];
+  /** each author piece's z-profile */
+  readonly authorDocs: readonly (readonly number[])[];
+  /** each of the model's plain drafts' z-profile */
+  readonly modelDocs: readonly (readonly number[])[];
 }
 
 export function deltaReference(authorTexts: readonly string[], modelTexts: readonly string[]): DeltaReference {
   const profiles = [...authorTexts, ...modelTexts].map((t) => functionProfile(t));
   const k = FUNCTION_WORDS.length;
-  const mean = Array.from({ length: k }, (_, i) => profiles.reduce((s, p) => s + p[i], 0) / profiles.length);
-  const sd = Array.from({ length: k }, (_, i) => Math.sqrt(profiles.reduce((s, p) => s + (p[i] - mean[i]) ** 2, 0) / Math.max(1, profiles.length - 1)) || 1e-6);
-  const z = (p: number[]): number[] => p.map((v, i) => (v - mean[i]) / sd[i]);
-  const centroid = (ps: number[][]): number[] => Array.from({ length: k }, (_, i) => ps.reduce((s, p) => s + p[i], 0) / (ps.length || 1));
-  const r = (x: number): number => Math.round(x * 1e6) / 1e6;
-  return {
-    words: FUNCTION_WORDS, mean: mean.map(r), sd: sd.map(r),
-    author: centroid(authorTexts.map((t) => z(functionProfile(t)))).map(r),
-    model: centroid(modelTexts.map((t) => z(functionProfile(t)))).map(r),
-  };
+  const mean = Array.from({ length: k }, (_, i) => profiles.reduce((s0, p) => s0 + p[i], 0) / profiles.length);
+  const sd = Array.from({ length: k }, (_, i) => Math.sqrt(profiles.reduce((s0, p) => s0 + (p[i] - mean[i]) ** 2, 0) / Math.max(1, profiles.length - 1)) || 1e-6);
+  const r = (x: number): number => Math.round(x * 1e4) / 1e4;
+  const z = (p: number[]): number[] => p.map((v, i) => r((v - mean[i]) / sd[i]));
+  return { words: FUNCTION_WORDS, mean: mean.map((x) => Math.round(x * 1e6) / 1e6), sd: sd.map((x) => Math.round(x * 1e6) / 1e6),
+    authorDocs: authorTexts.map((t) => z(functionProfile(t))), modelDocs: modelTexts.map((t) => z(functionProfile(t))) };
 }
 
-/** Distance of a text to the author and to the model. Lower is closer. */
-export function styleDistance(text: string, ref: DeltaReference): { author: number; model: number } {
+/** Mean Delta from a text to each author piece and to each model draft. Lower is closer. */
+export function styleDistanceDocs(text: string, ref: DeltaReference): { author: number; model: number } {
   const p = functionProfile(text, ref.words);
   const z = p.map((v, i) => (v - ref.mean[i]) / ref.sd[i]);
-  const d = (c: readonly number[]): number => z.reduce((s, v, i) => s + Math.abs(v - c[i]), 0) / z.length;
-  return { author: Math.round(d(ref.author) * 1000) / 1000, model: Math.round(d(ref.model) * 1000) / 1000 };
+  const d = (doc: readonly number[]): number => z.reduce((s0, v, i) => s0 + Math.abs(v - doc[i]), 0) / z.length;
+  const avg = (docs: readonly (readonly number[])[]): number => docs.reduce((s0, doc) => s0 + d(doc), 0) / Math.max(1, docs.length);
+  return { author: Math.round(avg(ref.authorDocs) * 1000) / 1000, model: Math.round(avg(ref.modelDocs) * 1000) / 1000 };
 }
 
 export const perPieceP = (texts: readonly string[], f: (t: string) => number, q: number): number => quantile(texts.map(f), q);
