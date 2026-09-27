@@ -12,6 +12,7 @@
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
+import type { VoicePassages } from '../../core/compiler/voice.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
 import type { StandardVersion, Provenance } from '../../core/state/canonical-state.js';
@@ -212,6 +213,11 @@ export function renderAgentSkill(
    * loop's accepted repairs; model output only, never the author's corpus.
    */
   contrast: readonly ContrastPair[] = [],
+  /**
+   * A FEW PASSAGES OF THE AUTHOR'S OWN (core/compiler/voice.ts), inline in SKILL.md, with their usual
+   * piece length. Rules describe a writer; these are how the writer sounds. Implementation, not standard.
+   */
+  voice: VoicePassages | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
@@ -283,10 +289,15 @@ export function renderAgentSkill(
     // The author's condition, verbatim, with a leading "when" only if they did not write one.
     const w = appliesWhen.trim().replace(/[.\s]+$/, '').split(/\s*;\s*/).filter(Boolean).join(' and ');
     const clause = /^when\b/i.test(w) ? w : `when ${w}`;
-    const body = statement.trim().replace(/[.\s]+$/, '');
+    let body = statement.trim().replace(/[.\s]+$/, '');
+    // A statement with a "when" of its own joins the condition rather than following it: "When A, when
+    // B, I do C" read as two conditions with a comma splice. It becomes "When A and B, I do C".
+    let joined = clause;
+    const own = /^when\s+([^,]+),\s*(.+)$/i.exec(body);
+    if (own) { joined = `${clause} and ${own[1]}`; body = own[2]; }
     const keepCase = /^(I\b|I'|[A-Z]{2,})/.test(body);
     const lead = keepCase ? body : body.charAt(0).toLowerCase() + body.slice(1);
-    return `${clause.charAt(0).toUpperCase() + clause.slice(1)}, ${lead}. `
+    return `${joined.charAt(0).toUpperCase() + joined.slice(1)}, ${lead}. `
       + 'When that does not hold, do not.';
   };
 
@@ -384,6 +395,17 @@ ${exemplar ? `
 \`examples/exemplar.md\` is one complete piece by the author. Read it before drafting and take its
 voice, rhythm and structure from it: how it opens, how long its sentences and paragraphs run, how it
 moves from point to point. Never take its topic, facts, names, figures or sentences.
+` : ''}${voice?.passages.length ? `
+## How I sound
+
+${voice.passages.length} passage(s) of my own, from different pieces. Take the voice from them: who is speaking and how
+sure I sound, where I hedge, the rhythm of the sentences and paragraphs, the asides, the spelling.
+Never take their topic, facts, names, figures, sentences or turns of phrase.${voice.lengthWords ? ` My pieces of this kind
+run about ${voice.lengthWords[0]} to ${voice.lengthWords[1]} words.` : ''}
+
+${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}
+` : voice?.lengthWords ? `
+My pieces of this kind run about ${voice.lengthWords[0]} to ${voice.lengthWords[1]} words.
 ` : ''}${contrast.length ? `
 ## Write this, not that
 
@@ -548,7 +570,8 @@ mintedAt:        ${v.mintedAt}
 
   // The pairs themselves, as data, travel with the package that served them (never served, never
   // hashed), so a candidate rebuilt from this version carries the same ones: see carriedFrom in cli/runtime.ts.
-  const withPairs = contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance;
+  const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),
+    ...(voice ? { 'voice.json': `${JSON.stringify(voice, null, 1)}\n` } : {}) };
   return { skillId, standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash,
     runtime, assurance: withPairs, files: runtime, packageHash: sha(JSON.stringify(runtime)) };
 }

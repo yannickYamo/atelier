@@ -63,11 +63,14 @@ export function planRepair(text: string, report: VerifyReport,
     if (opts.phase && (c.phase ?? 'STYLE') !== opts.phase) continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
-      // grows to the sentence around it.
+      // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not
+      // X. It's") used to stop mid-sentence, and the rewrite, which finishes the thought, left the rest
+      // of that sentence behind it: "…rather than moral suasion: coupling: make market access…".
       const para = paragraphs.find((p) => sp.start <= p.start && sp.end >= p.end);
       const sent = sentences.find((s) => sp.start >= s.start && sp.start < s.end);
+      const last = sentences.find((s) => sp.end > s.start && sp.end <= s.end);
       const start = para ? para.start : sent ? Math.min(sent.start, sp.start) : sp.start;
-      const end = para ? para.end : sent ? Math.max(sent.end, sp.end) : sp.end;
+      const end = para ? para.end : Math.max(sent?.end ?? sp.end, last?.end ?? sp.end, sp.end);
       raw.push({ start, end, reason: `${c.requirementId}: ${c.statement} (${sp.why})`, rid: c.requirementId,
         // Only a PART of a sentence is licensed to go. A span that is the whole sentence ("sentences
         // opening That's") asks for the sentence to be recast, not for its claims to be dropped.
@@ -151,10 +154,41 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     if (rep === undefined) continue;
     const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false, new Set(t.swaps ?? []), t.recase ?? false);
     if (!integrity.ok) { reverted.push({ id: t.id, lost: integrity.lost }); continue; }
+    // The seams: a replacement that repeats the words just after it (or just before it) left a stutter.
+    const seam = seamRepeat(out.slice(0, t.start), rep.trim(), out.slice(t.end), t.text);
+    if (seam) { reverted.push({ id: t.id, lost: [`a repeated "${seam}" at the join`] }); continue; }
     out = out.slice(0, t.start) + rep.trim() + out.slice(t.end);
     applied.push({ id: t.id, before: t.text, after: rep.trim() });
   }
   return out;
+}
+
+const seamWords = (s: string): string[] => s.toLowerCase().match(/[a-z0-9'’]+/g) ?? [];
+
+/**
+ * The words a splice would repeat across a join, or null.
+ *
+ *   repeated   the last one to four words of the replacement are the same as the words just after the
+ *              span (or its first words as those just before). A single repeated word counts only when
+ *              it is a content word (four letters or more): "the the" is rare, "coupling coupling" is not.
+ *   absorbed   a span that stops mid-sentence, rewritten into a replacement that uses the word right
+ *              after the span, which the original span did not have: the rewrite finished the thought
+ *              and the rest of the sentence is still there. "It's" + "coupling: make…" rewritten as
+ *              "…rather than moral suasion:" left "…moral suasion: coupling: make market access…".
+ */
+export function seamRepeat(before: string, replacement: string, after: string, original = ''): string | null {
+  const r = seamWords(replacement); const a = seamWords(after.slice(0, 200)); const b = seamWords(before.slice(-200));
+  for (let k = Math.min(4, r.length); k >= 1; k--) {
+    const tail = r.slice(-k).join(' '); const head = r.slice(0, k).join(' ');
+    const ok = (w: string): boolean => k > 1 || w.length >= 4;
+    if (a.length >= k && a.slice(0, k).join(' ') === tail && ok(tail)) return tail;
+    if (b.length >= k && b.slice(-k).join(' ') === head && ok(head)) return head;
+  }
+  if (original && !/[.!?]["'”’)*_]*\s*$/.test(original)) {
+    const had = new Set(seamWords(original)); const next = a[0];
+    if (next && next.length >= 4 && r.includes(next) && !had.has(next)) return next;
+  }
+  return null;
 }
 
 export interface RegressionVerdict { readonly ok: boolean; readonly why: string }
