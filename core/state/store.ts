@@ -125,7 +125,8 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
 export interface FloorState {
   readonly contract: QualityFloorContract | null;
   readonly tasks: readonly string[];
-  readonly qualification: (FloorQualification & { readonly contractHash: string }) | null;
+  /** `contractHash` names everything the rate is a rate of (see qualificationKey in cli/commands/floor.ts) */
+  readonly qualification: (FloorQualification & { readonly contractHash: string; readonly fires: number }) | null;
   /** A/A evidence so far, on the contract, tasks and model it was gathered under; runs accumulate */
   readonly aa?: { readonly contractHash: string; readonly falseAlarms: number; readonly trials: number };
 }

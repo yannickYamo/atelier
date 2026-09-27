@@ -38,7 +38,8 @@ export const MAX_PAIR_CHARS = 400;
  */
 function stillTeaches(p: RepairPair, rule: Requirement | undefined): rule is Requirement {
   if (!rule?.measurement || rule.authority === 'EXPERT_REJECTED' || rule.materiality === 'INCIDENTAL') return false;
-  if (p.check !== undefined && p.check !== measurementId(rule.measurement)) return false;
+  // A pair recorded without its check (before checks were recorded) cannot show it still teaches this one.
+  if (p.check !== measurementId(rule.measurement)) return false;
   if (!p.before.trim() || !p.after.trim() || p.before.trim() === p.after.trim()) return false;
   if (p.before.length > MAX_PAIR_CHARS || p.after.length > MAX_PAIR_CHARS) return false;
   const counted = wordsCounted(rule.measurement);
@@ -85,7 +86,7 @@ export function selectContrastPairs(invocations: readonly InvocationRecord[], v:
       if (inHeldBackText(p.before) || inHeldBackText(p.after)) continue;
       seen.add(id);
       perRule.set(p.key, (perRule.get(p.key) ?? 0) + 1);
-      out.push({ key: p.key, before: p.before, after: p.after, statement: rule.statement });
+      out.push({ key: p.key, check: p.check, before: p.before, after: p.after, statement: rule.statement });
     }
   }
   return out;

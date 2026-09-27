@@ -158,28 +158,28 @@ describe('write this, not that: pairs from accepted repairs, re-verified, bounde
   const inv = (pairs: { key: string; before: string; after: string; check?: string }[], at: string, input = 'write something'): InvocationRecord =>
     ({ at, input, repair: { pairs } } as unknown as InvocationRecord);
   it('selection keeps pairs that still teach the current standard, newest first, two per rule', () => {
-    const k = ruleKey(rule);
+    const k = ruleKey(rule); const check = measurementId(rule.measurement!);
     const picked = selectContrastPairs([
-      inv([{ key: k, before: 'We leverage A.', after: 'We use A.' }], '2026-01-01'),
-      inv([{ key: k, before: 'We leverage B.', after: 'We use B.' }, { key: k, before: 'We leverage C.', after: 'We use C.' }], '2026-02-01'),
-      inv([{ key: k, before: 'No banned word here.', after: 'Still fine.' }], '2026-03-01'),       // before never broke it
-      inv([{ key: k, before: 'We leverage D.', after: 'We leverage less.' }], '2026-03-02'),      // after still breaks it
-      inv([{ key: 'R-000000', before: 'We leverage E.', after: 'We use E.' }], '2026-03-03'),     // no such rule now
+      inv([{ key: k, check, before: 'We leverage A.', after: 'We use A.' }], '2026-01-01'),
+      inv([{ key: k, check, before: 'We leverage B.', after: 'We use B.' }, { key: k, check, before: 'We leverage C.', after: 'We use C.' }], '2026-02-01'),
+      inv([{ key: k, check, before: 'No banned word here.', after: 'Still fine.' }], '2026-03-01'),       // before never broke it
+      inv([{ key: k, check, before: 'We leverage D.', after: 'We leverage less.' }], '2026-03-02'),      // after still breaks it
+      inv([{ key: 'R-000000', check, before: 'We leverage E.', after: 'We use E.' }], '2026-03-03'),     // no such rule now
     ], v);
     expect(picked.map((p) => p.before)).toEqual(['We leverage B.', 'We leverage C.']);
     expect(picked[0].statement).toBe('Never say leverage.');
   });
   it('a rejected rule\'s pairs never ship, and the total is bounded', () => {
     const rejected = { ...v, requirements: [{ ...rule, authority: 'EXPERT_REJECTED' as const }] } as StandardVersion;
-    expect(contrastFor([{ key: ruleKey(rule), before: 'We leverage A.', after: 'We use A.', statement: 's' }], rejected)).toEqual([]);
+    expect(contrastFor([{ key: ruleKey(rule), check: measurementId(rule.measurement!), before: 'We leverage A.', after: 'We use A.', statement: 's' }], rejected)).toEqual([]);
     const many = Array.from({ length: 20 }, (_, i) => aRequirement({ requirementId: `x${i}`, statement: `Never say w${i}.`, kind: 'BOUNDARY',
       measurement: { observer: 'LEXICON', params: { terms: [`w${i}`] } } }));
     const vm = { requirements: many } as unknown as StandardVersion;
-    const invs = many.map((r, i) => inv([{ key: ruleKey(r), before: `Say w${i} now.`, after: 'Say it now.' }], `2026-01-${String(i + 1).padStart(2, '0')}`));
+    const invs = many.map((r, i) => inv([{ key: ruleKey(r), check: measurementId(r.measurement!), before: `Say w${i} now.`, after: 'Say it now.' }], `2026-01-${String(i + 1).padStart(2, '0')}`));
     expect(selectContrastPairs(invs, vm)).toHaveLength(MAX_PAIRS);
   });
   it('the shipped file shows each pair under its rule', () => {
-    const f = renderContrastFile([{ key: ruleKey(rule), before: 'We leverage A.', after: 'We use A.', statement: 'Never say leverage.' }], v);
+    const f = renderContrastFile([{ key: ruleKey(rule), check: measurementId(rule.measurement!), before: 'We leverage A.', after: 'We use A.', statement: 'Never say leverage.' }], v);
     expect(f).toContain('## 1. Never say leverage.');
     expect(f).toMatch(/Not this:\n\n> We leverage A\.\n\nThis:\n\n> We use A\./);
   });
@@ -260,7 +260,7 @@ describe('Phase 6 audit: the gaps it found, closed', () => {
   });
 
   it('pairs written for a held-back task, or quoting a held-back piece, never ship', () => {
-    const p = { key: k(lex), before: 'We leverage A.', after: 'We use A.' };
+    const p = { key: k(lex), check: measurementId(lex.measurement!), before: 'We leverage A.', after: 'We use A.' };
     expect(selectContrastPairs([inv([p], '2026-01-01', 'the reserved task')], vl, { tasks: ['the reserved task'], texts: [] })).toEqual([]);
     expect(selectContrastPairs([inv([p], '2026-01-01')], vl, { tasks: [], texts: ['Intro. We leverage A. More.'] })).toEqual([]);
     expect(selectContrastPairs([inv([p], '2026-01-01')], vl)).toHaveLength(1);
@@ -270,13 +270,15 @@ describe('Phase 6 audit: the gaps it found, closed', () => {
     const p = { key: k(lex), check: 'deadbe', before: 'We leverage A.', after: 'We use A.' };
     expect(selectContrastPairs([inv([p], '2026-01-01')], vl)).toEqual([]);
     expect(selectContrastPairs([inv([{ ...p, check: measurementId(lex.measurement!) }], '2026-01-01')], vl)).toHaveLength(1);
+    const { check: _dropped, ...unchecked } = { ...p, check: measurementId(lex.measurement!) }; void _dropped;
+    expect(selectContrastPairs([inv([unchecked], '2026-01-01')], vl), 'a pair with no recorded check still shipped').toEqual([]);
   });
 
   it('word-counting checks are re-counted on the passage: a ratio pair must reduce the competing word', () => {
     const ratio = aRequirement({ requirementId: 'r1', statement: 'But, not however.', measurement: { observer: 'RATIO', params: { numerator: ['but'], denominator: ['however'], minShare: 0.8 } } });
     const v = { requirements: [ratio] } as unknown as StandardVersion;
-    expect(selectContrastPairs([inv([{ key: k(ratio), before: 'However, it held.', after: 'But it held.' }], '2026-01-01')], v)).toHaveLength(1);
-    expect(selectContrastPairs([inv([{ key: k(ratio), before: 'However, it held.', after: 'However it held fine.' }], '2026-01-01')], v)).toEqual([]);
+    expect(selectContrastPairs([inv([{ key: k(ratio), check: measurementId(ratio.measurement!), before: 'However, it held.', after: 'But it held.' }], '2026-01-01')], v)).toHaveLength(1);
+    expect(selectContrastPairs([inv([{ key: k(ratio), check: measurementId(ratio.measurement!), before: 'However, it held.', after: 'However it held fine.' }], '2026-01-01')], v)).toEqual([]);
   });
 
   it('two rules with the same content key get distinct keys, and the diff reports a removal as a removal', () => {
@@ -328,7 +330,7 @@ describe('Phase 6 audit: the gaps it found, closed', () => {
 
   it('a candidate carries the pairs its source version served, through the package, not the store', () => {
     const v = { standardVersionHash: 's', evidenceId: 'e', workType: 'writing', requirements: [{ ...lex, authority: 'EXPERT_RATIFIED' }] } as unknown as StandardVersion;
-    const pairs = [{ key: k(lex), before: 'We leverage A.', after: 'We use A.', statement: lex.statement }];
+    const pairs = [{ key: k(lex), check: measurementId(lex.measurement!), before: 'We leverage A.', after: 'We use A.', statement: lex.statement }];
     const pkg = renderAgentSkill(v, compileArchitecture(v), 'demo', 'd', null, pairs);
     expect(JSON.parse(pkg.assurance['contrast-pairs.json'])).toEqual(pairs);
     expect(pkg.files['examples/contrast.md']).toContain('model-written');
@@ -344,11 +346,11 @@ describe('carriedFrom reads the source version\'s package, and honours --contras
     const lex = aRequirement({ requirementId: 'x1', kind: 'BOUNDARY', statement: 'Never say leverage.', authority: 'EXPERT_RATIFIED',
       measurement: { observer: 'LEXICON', params: { terms: ['leverage=>use'] } } });
     const v = { standardVersionHash: 's1', evidenceId: 'e', workType: 'writing', requirements: [lex] } as unknown as StandardVersion;
-    const pairs = [{ key: ruleKey(lex), before: 'We leverage A.', after: 'We use A.', statement: lex.statement }];
+    const pairs = [{ key: ruleKey(lex), check: measurementId(lex.measurement!), before: 'We leverage A.', after: 'We use A.', statement: lex.statement }];
     const pkg = renderAgentSkill(v, compileArchitecture(v), 'carry', 'd', { text: 'My piece.' }, pairs);
     store.putPackage(L, pkg);
     store.putSkillVersion(L, { skillVersionHash: 'sv1', skillName: 'carry', standardVersionHash: 's1', architectureHash: 'a',
-      materializedHash: pkg.packageHash, builtAt: '2026-01-01', description: 'd' } as Parameters<typeof store.putSkillVersion>[1]);
+      materializedHash: pkg.packageHash, builtAt: '2026-01-01', description: 'd' });
     // The store's own exemplar has since changed: the candidate must not pick that up.
     store.setExemplar(L, 'A later piece.');
     const carried = carriedFrom(L, 'sv1', v);

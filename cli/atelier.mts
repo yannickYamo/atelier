@@ -24,6 +24,7 @@ import { build, revert } from './commands/build.js';
 import { confirmBoundary } from './commands/confirm.js';
 import { inspect, historyCmd, rollback, feedback } from './commands/inspect.js';
 import { floor } from './commands/floor.js';
+import { optimize } from './commands/optimize.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
@@ -86,6 +87,7 @@ export const COMMANDS: readonly string[] = [
   'inspect',
   'intake',
   'invoke',
+  'optimize',
   'judgements',
   'pending',
   'profiles',
@@ -128,6 +130,7 @@ const main = async (): Promise<void> => {
     case 'inspect': { inspect(); return; }
     case 'history': { historyCmd(); return; }
     case 'floor': { await floor(); return; }
+    case 'optimize': { await optimize(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
     case 'study': { study(); return; }
