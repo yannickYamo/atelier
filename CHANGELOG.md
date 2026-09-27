@@ -26,6 +26,45 @@ a run in progress may not be.
   fixed proposers' keep rates. **`atelier fix --reflect`** runs the same experiment one complaint at a
   time.
 
+### Added (Phase 9: structure, and what keeps going wrong)
+
+- **Position-aware observers** (`core/observers/structure.ts`):
+  - `OPENING` and `CLOSING`: phrases the first and last prose paragraph must not use, and a length
+    band.
+  - `HEADINGS`: tropes, sentence or Title Case, length, and headings per 1,000 words, over a section
+    model that ignores the title, code and front matter.
+- **The contrast pass proposes edge rules.** Stock openings, closings and heading tropes the author
+  never uses are proposed firm where the model's plain drafts use them, and weak otherwise, since
+  these often appear only under a voice instruction. It also proposes heading case and opening length.
+  On a real 20-post corpus, the heading rule passed every held-out post and flagged three headings in
+  an output a reader had called AI-written.
+- **`atelier mine`** (`core/mining/recurrence.ts`): recurring gaps, missed rules, rules the draft
+  keeps breaking, and repairs refused for changing meaning, each with its remedy. `--add` turns a
+  recurring gap into a rule on the owner's word, through the same path as `fix` (now shared in
+  `cli/commands/addition.ts`). `--phrase` asks a model to propose a wording.
+
+### Fixed (Phase 8 audit)
+
+- Repair memory now judges optimizer retries against the round's first test (a one-draft screen), and
+  records the evidence it claims: a move rejected at confirmation or screened out is not re-proposed
+  on the same grounds.
+- Every candidate a round builds ends settled, untested (a round that stopped), or explicitly waiting
+  for a person. `fix` no longer dies on a waiting candidate; it says where to decide it.
+- `--cap` is one budget for the whole round, with a call ceiling. A round that runs out stops cleanly
+  and is recorded.
+- Only a change to a measured rule can install itself. Changes to unmeasured rules, and exemplar or
+  examples toggles, are left for a person.
+- The screen counts a change only beyond each rule's margin.
+- The reader earns VETO by agreeing beyond chance (Cohen's kappa), in both directions, on the
+  unmeasured rules it reads.
+- Qualification now also requires sensitivity: the floor must catch at least 80% of 20 or more planted
+  regressions of two margins. The frozen baseline is part of what a qualification is of.
+- Legacy contrast pairs without a check are kept where the passage proves them (and stamped), rather
+  than silently dropped.
+- "Ship the contrast examples" can be proposed, and toggles are not retried on the same version.
+- Reflection's history is the most recent attempts on the rules in play.
+- `fix --reflect` falls back to the fixed ordering when repair memory refuses reflection's choice.
+
 ### Added (Phase 7: the regression floor, fed and earned)
 
 - **The floor has a producer** (`core/distinctiveness/measured.ts`). Every measured rule is a floor

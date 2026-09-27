@@ -119,11 +119,16 @@ mutation (a model reads real failures and chooses the change) and its Pareto fro
 From SkillOpt it takes one edit per candidate and a small history budget, and it screens on a cheap
 model before confirming on the real one. The search space is everything the compiler derives from the
 standard (how each rule reaches the model, whether the exemplar and contrast examples ship), never the
-standard's text. A candidate is installed only by the promotion gate: on a regression floor whose
-false-alarm rate was measured on this skill, with the repaired rule improved across your tasks and
-every other enforced rule held. SSO's reader is adopted with its authority cut to one direction: it may
+standard's text. A candidate is installed only by the promotion gate, and only when all of these
+hold:
+- the candidate changed a rule you measure
+- the regression floor's false-alarm rate and its sensitivity were measured on this skill
+- that rule improved across your tasks
+- every other rule you enforce held
+
+Anything else is left for you. SSO's reader is adopted with its authority cut to one direction: it may
 block a candidate on the rules nothing measures, and only after it has agreed with your own rulings
-often enough; it can never approve one. `atelier optimize --report` shows whether reflection's
+beyond chance; it can never approve one. `atelier optimize --report` shows whether reflection's
 proposals are kept more often than the fixed ordering's, which is an open question here.
 
 Atelier has not been benchmarked against these systems on a shared task yet. The difference above is
@@ -169,7 +174,8 @@ five-word fragments, "that's not X, it's Y", "here's the thing", "quietly". Each
 a rule with both numbers ("you: none in 42,605 words; the model on its own: 8.4 per 1,000"), and only
 if your own held-out work passes it. Proportions count too: which of two competing words you reach for
 ("but" or "however"), the connectives you lean on, the stock vocabulary the model leans on, and the mix
-of short and long sentences. Each is proposed only if most of the model's drafts fail it. This is the part of a voice no reader, human or model, thinks to
+of short and long sentences. Each is proposed only if most of the model's drafts fail it. So do the
+edges: how you open and close, and what your headings never say ("The thing everyone gets wrong about…"). This is the part of a voice no reader, human or model, thinks to
 write down, and the part a reader recognises as machine-written. **Nothing compiles until you accept**, and the
 same command continues wherever you stopped. Prefer to state your rules? `atelier skill "lead with the
 action, number the steps when there are steps"`.
@@ -214,7 +220,9 @@ false-alarm rate. Once that rate is at most 5% for this exact version and setup,
 improves across your tasks, while every other rule you enforce holds, is installed without asking. Each step is explained in
 [docs/MEASURED-RULES.md](docs/MEASURED-RULES.md#the-regression-floor). If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
-rule as a recorded supersession.
+rule as a recorded supersession. `atelier mine` reads every complaint and repair on record and lists
+what keeps recurring: a gap no rule covers, a rule that keeps being missed, a rule the first draft keeps
+breaking. Each comes with its remedy, and nothing is added without you.
 
 Every rule has a key (`R-3f9a1c`) that survives new versions and rewording, so `--rule` takes the id,
 the key or the rule's number, and `atelier history` shows which rules moved in each version. Repairs
@@ -265,7 +273,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 97 files and 1446 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 98 files and 1469 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
