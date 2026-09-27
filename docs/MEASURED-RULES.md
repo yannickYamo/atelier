@@ -98,20 +98,61 @@ better.
 | your call | `--margin <rule>=<n>`, `--enforce <rule>`, `--observe <rule>` | which rules may block a new version, and by how much |
 | tasks | `--tasks <file>` | the tasks it is measured on, separated by blank lines; at least three |
 | baseline | `--baseline` | fires the active version several times per task and freezes its scores |
-| qualify | `--qualify` | an A/A run: the same version again, compared with its own baseline. Every regression is a false alarm. Runs accumulate, and the floor is EARNED when the exact upper 95% bound on false alarms is at most 5%, which takes about 60 resolved comparisons with none (ten tasks and six enforced rules, or several runs). Changing the tasks, margins, roles or model starts the count again. |
-| check | `--check <version> [--target <rule>] [--promote]` | fires a candidate the same way; each task gets a three-state verdict (REGRESSION, NONINFERIOR, INCONCLUSIVE), and the worst task decides |
+| qualify | `--qualify` | A/A runs: the same version drafts twice as many times per task, and one half is compared with the other. Both halves are fresh in every run, so runs are independent, and each task is one trial. A task that regresses is a false alarm. The floor is EARNED when the exact upper 95% bound on false alarms is at most 5%. That takes 59 resolved task comparisons with none (twenty tasks over three runs, say). |
+| check | `--check <version> [--target <rule>] [--promote]` | fires a candidate the same way. Each task gets a three-state verdict (REGRESSION, NONINFERIOR, INCONCLUSIVE), and the worst task decides. |
+
+Counts are sparse, so two drafts that both used a word zero times show no spread at all. Each side's
+spread is therefore taken as at least half the rule's margin. With three drafts a side, a drop of one
+margin stays INCONCLUSIVE and a drop of two resolves.
+
+A qualification is a false-alarm rate **of** one situation: this version of the skill, its standard,
+the floor's margins and roles, the task set, the runtime (provider, model, temperature) and the number
+of drafts per task. Change any of them and the floor is no longer EARNED until it is re-qualified. That
+includes a promotion, which changes the version.
 
 What it authorises is the promotion gate's decision (`core/convergence/promotion.ts`), not the
 floor's. A candidate installs itself only when all of these hold:
 - the floor is EARNED
-- no enforced rule regressed on any task
-- the rule the repair was about improved **across tasks**, where each task counts once however many
-  drafts it had
+- the rule the repair was about improved **across tasks**. Each task counts once, however many drafts
+  it had, and it takes at least three tasks.
+- that rule is left out of the floor's verdict, since guarding the target with the floor would count
+  it twice
+- at least one **other** enforced rule is watching, and it held (NONINFERIOR) on every task. An
+  INCONCLUSIVE task blocks as surely as a regression.
 
-`atelier fix` does this for you when a count favours the candidate and the floor is earned. Otherwise
-a person decides, as before. A promoted version's own scores become the next baseline. Floor runs are
-raw drafts, not repaired output, so they measure the implementation, and they are never recorded as
+`atelier fix` does this for you when a count favours the candidate and the floor is earned. If the
+floor run cannot finish (a budget, a refusal), the choice goes back to you. Otherwise a person decides,
+as before. A promoted version's check scores are not reused as its baseline, because they were the draw
+that made it look good. The floor is re-frozen and re-earned before it acts again. Floor runs are raw
+drafts, not repaired output, so they measure the implementation, and they are never recorded as
 invocations.
+
+## Searching the implementation
+
+`atelier optimize` (`cli/commands/optimize.ts`, `core/optimizer/`) runs one round of search over how
+the skill is implemented. It needs an earned regression floor, because a search with nothing guarding
+what it does not target makes the writing worse while reporting an improvement.
+
+1. **Propose.** The search space is the genome: each rule's carrier, and whether the exemplar and the
+   contrast examples ship. Each candidate changes one gene.
+   - A reflective proposer reads recent failures and past attempts, both bounded, and chooses among the
+     legal changes by number. Anything else it returns is discarded and counted.
+   - The fixed ordering fills the remaining slots.
+   - Repair memory removes changes already rejected on evidence at least as strong.
+2. **Build.** Each candidate is rebuilt from the ratified standard, never edited. The standard's hash
+   is asserted unchanged at the mint.
+3. **Screen.** One draft per task on a cheap model (`--screen-model`), and each candidate is scored on
+   every measured rule. Candidates the champion dominates, or that beat it on nothing, are dropped. The
+   Pareto front is ranked, and a few finalists go on.
+4. **Confirm.** Finalists are fired on the real model against the floor, and the promotion gate reads
+   the result. A reader that has earned VETO may block a finalist on a REQUIRED rule nothing measures.
+   To earn it, the reader needs at least 30 comparisons with your own rulings, and a 95% lower bound of
+   70% on its agreement. It never clears one.
+5. **Adopt.** Only with `--promote`, only on AUTO_PROMOTE, and only one change per round.
+
+Every proposal records who proposed it. `atelier optimize --report` compares how often reflection's
+proposals are kept with the fixed ordering's. `atelier fix --reflect` runs the same comparison one
+complaint at a time.
 
 ## Rule keys
 

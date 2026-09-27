@@ -114,6 +114,18 @@ gets a better objective, so Atelier sits upstream of them, not against them. It 
 a red-team of autonomous skill generation exploits (arXiv:2608.30429): nothing becomes a rule without
 a person.
 
+Atelier runs the same kind of search inside that boundary. `atelier optimize` takes GEPA's reflective
+mutation (a model reads real failures and chooses the change) and its Pareto front over objectives.
+From SkillOpt it takes one edit per candidate and a small history budget, and it screens on a cheap
+model before confirming on the real one. The search space is everything the compiler derives from the
+standard (how each rule reaches the model, whether the exemplar and contrast examples ship), never the
+standard's text. A candidate is installed only by the promotion gate: on a regression floor whose
+false-alarm rate was measured on this skill, with the repaired rule improved across your tasks and
+every other enforced rule held. SSO's reader is adopted with its authority cut to one direction: it may
+block a candidate on the rules nothing measures, and only after it has agreed with your own rulings
+often enough; it can never approve one. `atelier optimize --report` shows whether reflection's
+proposals are kept more often than the fixed ordering's, which is an open question here.
+
 Atelier has not been benchmarked against these systems on a shared task yet. The difference above is
 architectural and checkable in the code; the benchmark is drafted (see [Evidence](#evidence)).
 
@@ -198,8 +210,8 @@ rules do not count. The count goes through the same promotion gate whether you p
 pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong.
 To let a repair install itself, earn a regression floor: `atelier floor` proposes, from your own pieces,
 how much each measured rule may move, runs the current version on your tasks, and measures its own
-false-alarm rate. Once that rate is under 5%, a repair whose rule improves across your tasks while no
-rule you enforce gets worse is installed without asking. Each step is explained in
+false-alarm rate. Once that rate is at most 5% for this exact version and setup, a repair whose rule
+improves across your tasks, while every other rule you enforce holds, is installed without asking. Each step is explained in
 [docs/MEASURED-RULES.md](docs/MEASURED-RULES.md#the-regression-floor). If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession.
@@ -253,7 +265,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 96 files and 1427 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 97 files and 1446 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

@@ -56,6 +56,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
+  'finalists', 'screen-model',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -70,6 +71,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
+  'reflect', 'no-reflect', 'report',
 ];
 
 export const argv = process.argv.slice(2);
@@ -796,8 +798,10 @@ export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v:
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
   if (!pkg) return { exemplar: store.getExemplar(L), contrast: [] };
   const ex = pkg.files['examples/exemplar.md'];
-  // Packages stored before the split between runtime and assurance have no assurance at all.
-  const raw = pkg.assurance?.['contrast-pairs.json'];
+  // Packages stored before pairs travelled with them served examples/contrast.md with no data beside
+  // it: the build's own record of the pairs it chose is the closest thing to what they served.
+  const raw = pkg.assurance?.['contrast-pairs.json']
+    ?? ('examples/contrast.md' in pkg.files ? JSON.stringify(store.getContrast(L).pairs) : undefined);
   const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
   return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v) };
 }

@@ -6,6 +6,8 @@
 // wearing a hang's clothes. Out of process, the server answers while the test process blocks.
 //
 //   POST /chat/completions  → the scripted payload, as a forced tool call
+//                             (`when`: [{ contains, answer }] answers a request whose body contains
+//                              the text first, so a candidate and its champion can answer differently)
 //   POST /__set             → replace the scripted payload (JSON body)
 //   GET  /__count           → how many /chat/completions requests have been served
 //
@@ -18,6 +20,7 @@ let payload = { rules: [], workType: 'writing' };
 // generation). /__set with { byTool: { emit_coverage: {...}, emit_piece: {...} } } routes on the
 // forced tool name in the request; a flat body keeps the single-payload behaviour.
 let byTool = null;
+let when = [];
 let count = 0;
 
 const server = createServer((req, res) => {
@@ -27,6 +30,7 @@ const server = createServer((req, res) => {
     res.setHeader('content-type', 'application/json');
     if (req.url === '/__set') {
       const parsed = JSON.parse(body);
+      when = Array.isArray(parsed.when) ? parsed.when : [];
       if (parsed.byTool) { byTool = parsed.byTool; } else { payload = parsed; byTool = null; }
       res.end('{"ok":true}'); return;
     }
@@ -37,6 +41,8 @@ const server = createServer((req, res) => {
       const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name;
       if (tool && byTool[tool] !== undefined) answer = byTool[tool];
     }
+    const hit = when.find((w) => body.includes(w.contains));
+    if (hit) answer = hit.answer;
     res.end(JSON.stringify({
       choices: [{ finish_reason: 'stop', message: { tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
       usage: { prompt_tokens: 10, completion_tokens: 10 },

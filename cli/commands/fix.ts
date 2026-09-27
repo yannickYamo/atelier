@@ -42,11 +42,13 @@ import { draftHash, appendDecision, stampVersion } from '../../core/ratification
 import { authorityStateOf, assertSupersessionRecorded, type Requirement, type StandardVersion, type InvocationRecord } from '../../core/state/canonical-state.js';
 import type { InstallablePackage } from '../../adapters/host-adapter.js';
 import { bindingHash } from '../../core/runtime/binding.js';
-import type { Budget } from '../../core/inference/client.js';
+import { spend, type Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
 import { resolveServedVersion } from './invoke.js';
-import { checkCandidate, floorStateFor, promoteChecked } from './floor.js';
+import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, type CandidateCheck } from './floor.js';
 import { keysOf } from '../../core/state/rule-key.js';
+import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure } from '../../core/optimizer/reflect.js';
+import type { Mutation } from '../../core/optimizer/genome.js';
 import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
   projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, carriedFrom } from '../runtime.js';
 
@@ -272,8 +274,24 @@ export async function fix(): Promise<void> {
       pendingRepair.repairId, complaint);
     return;
   }
-  const op = proposeReplacement(ev, ranArch, requirement, rejectedHere);
-  if ('refused' in op) { console.log(`No repair proposed: ${op.reason}`); return; }
+  const fixed = proposeReplacement(ev, ranArch, requirement, rejectedHere);
+  if ('refused' in fixed) { console.log(`No repair proposed: ${fixed.reason}`); return; }
+  // ── REFLECTION, AS AN EXPERIMENT (--reflect) ─────────────────────────────────────────────────
+  // The fixed ordering picked `fixed.to`. With --reflect, a model reads your complaint and the output
+  // it was about, and chooses among the same legal alternatives (core/optimizer/reflect.ts). The event
+  // records which proposer chose, so `atelier optimize --report` can say which is kept more often.
+  let op = fixed; let proposer: 'REFLECTIVE' | 'FIXED_ORDER' = 'FIXED_ORDER';
+  if (argv.includes('--reflect')) {
+    const legal: Mutation[] = eligibleCarriers(requirement).filter((c) => c !== fixed.from && !rejectedHere.has(c))
+      .map((to) => ({ kind: 'CARRIER', requirementId: fixed.requirementId, from: fixed.from, to }));
+    const reflection = await reflectOnce(ranStandard, legal, [{ requirementId: fixed.requirementId, text: inv.output, why: complaint }], repairs);
+    const choice = reflection.proposals[0]?.mutation;
+    if (choice?.kind === 'CARRIER') {
+      op = { ...fixed, to: choice.to, rationale: `chosen by reflection: ${reflection.proposals[0].why}` };
+      proposer = 'REFLECTIVE';
+      console.log(`Reflection chose ${choice.from} → ${choice.to}: ${reflection.proposals[0].why}`);
+    } else console.log('Reflection proposed nothing legal; the fixed ordering chooses.');
+  }
 
   const misses = store.listFeedback(L)
     .filter((f) => f.requirementId === d.requirementId)
@@ -301,7 +319,7 @@ export async function fix(): Promise<void> {
   }
   store.putArchitecture(L, nextArch); store.putPackage(L, pkg); store.putSkillVersion(L, candidate);
   store.appendEvent(L, { kind: 'REPAIR_PROPOSED', repairId: sha(repairKey(op.requirementId, op.from, op.to) + candidate.skillVersionHash),
-    skillName: name, requirementId: op.requirementId, from: op.from, to: op.to,
+    skillName: name, requirementId: op.requirementId, from: op.from, to: op.to, proposer,
     ...scope, bindingHash: bindingHash(inv.runtimeBinding),
     ordering: eligibleCarriers(requirement).join('>'),
     sourceSkillVersionHash: inv.skillVersionHash, candidateSkillVersionHash: candidate.skillVersionHash,
@@ -407,32 +425,39 @@ async function settleBlindPick(
   // was measured on this skill, can: the promotion gate reads that evidence and may install, reject,
   // or still hand the choice to you. Only when the floor is EARNED; otherwise this spends nothing.
   if (countFavoursCandidate && measuredRule && !flag('--pick') && std) {
-    const { client, binding } = clientAndBinding('target');
     const active = store.getActive(L);
-    if (active && floorStateFor(L, active, binding.requestedModel).state === 'EARNED') {
+    const runtime = runtimeIdentity();
+    const st = active ? floorStateFor(L, active, runtime) : null;
+    if (active && st?.state === 'EARNED') {
       console.log('Your regression floor is earned, so the count is being confirmed on its tasks before anything is installed…');
-      const f = store.getFloor(L);
-      const fires = Math.max(2, Math.floor(numericFlag('--fires', 3)));
+      const { client, binding } = clientAndBinding('target');
       const targetKey = keysOf(std.requirements)[std.requirements.indexOf(measuredRule)];
-      const check = await checkCandidate(L, std, active, candidate.skillVersionHash, targetKey, fires,
-        { spentUsd: 0, capUsd: numericFlag('--floor-cap', 3), maxCalls: f.tasks.length * fires }, client, binding.requestedModel);
-      console.log(`floor: ${check.composite} · ${move.requirementId}: ${check.comparison} · gate: ${check.decision.authority}`);
-      const at = new Date().toISOString();
-      if (check.decision.authority === 'AUTO_PROMOTE') {
-        promoteChecked(L, name, candidate.skillVersionHash, check, complaint);
-        store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED',
-          evaluationBasis: { generations: fires, instrument: 'QUALIFIED_OBSERVER', orderInvariant: null }, at, note: complaint });
-        console.log(`\nKept, by the gate: ${move.requirementId} improved across your floor's tasks and no enforced rule regressed.`);
-        console.log(`  The previous version remains in history:  atelier rollback --skill ${name} --to ${active}`);
-        return;
+      const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--floor-cap', 3), maxCalls: store.getFloor(L).tasks.length * st.fires };
+      // A floor run that cannot finish (a budget, a refusal, a network error) hands the choice back to
+      // you rather than ending the command with the pair shown and nothing recorded.
+      let check: CandidateCheck | null = null;
+      try { check = await checkCandidate(L, name, std, active, candidate.skillVersionHash, targetKey, budget, client, binding.requestedModel, runtime); }
+      catch (e) { console.log(`The floor could not finish (${(e as Error).message.split('\n')[0]}); the choice is yours.\n`); }
+      if (check) {
+        const at = new Date().toISOString();
+        console.log(`floor: ${check.composite} · ${move.requirementId}: ${check.comparison} · gate: ${check.decision.authority}`);
+        store.appendEvent(L, { kind: 'PROMOTION_GATE', candidateSkillVersionHash: candidate.skillVersionHash, requirementId: move.requirementId,
+          authority: check.decision.authority, unmet: check.decision.unmet, why: check.decision.why, floor: check.composite, comparison: check.comparison, at });
+        const basis = { generations: st.fires, instrument: 'QUALIFIED_OBSERVER' as const, orderInvariant: null };
+        if (check.decision.authority === 'AUTO_PROMOTE') {
+          promoteChecked(L, name, candidate.skillVersionHash, check, complaint);
+          store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED', evaluationBasis: basis, at, note: complaint });
+          console.log(`\nKept, by the gate: ${move.requirementId} improved across your floor's tasks and every other enforced rule held.`);
+          console.log(`  The previous version remains in history:  atelier rollback --skill ${name} --to ${active}`);
+          return;
+        }
+        if (check.decision.authority === 'AUTO_REJECT') {
+          store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'REJECTED', evaluationBasis: basis, at, note: complaint });
+          console.log(`\nThe current version stays: ${check.decision.why}`);
+          return;
+        }
+        console.log(`The gate still needs you: ${check.decision.why}\n`);
       }
-      if (check.decision.authority === 'AUTO_REJECT') {
-        store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'REJECTED',
-          evaluationBasis: { generations: fires, instrument: 'QUALIFIED_OBSERVER', orderInvariant: null }, at, note: complaint });
-        console.log(`\nThe current version stays: ${check.decision.why}`);
-        return;
-      }
-      console.log(`The gate still needs you: ${check.decision.why}\n`);
     }
   }
   const pick = flag('--pick')?.toLowerCase()
@@ -494,4 +519,23 @@ async function settleBlindPick(
   console.log(`\nKept. ${pickHost().invocationHint(name).trim()} now serves the new implementation.`);
   console.log(`  StandardVersion ${candidate.standardVersionHash} — unchanged, which is the point.`);
   console.log(`  The previous version remains in history:  atelier rollback --skill ${name} --to ${prevActive ?? ''}`);
+}
+
+/** One reflective choice, on the diagnoser model; nothing on failure (the fixed ordering stands). */
+async function reflectOnce(v: StandardVersion, legal: readonly Mutation[], failures: readonly Failure[],
+  repairs: readonly { requirementId: string; from: Carrier; to: Carrier; outcome: string }[]): Promise<ReturnType<typeof parseReflection>> {
+  if (!legal.length) return { proposals: [], invalid: 0 };
+  const rules = new Map(v.requirements.map((r) => [r.requirementId, r]));
+  try {
+    const res = await spend({ spentUsd: 0, capUsd: 0.5, maxCalls: 1 }, 0.05, async () => {
+      const x = await clientFor(diagnoserModel()).complete({ stableBlock: REFLECT_SYSTEM, variableBlock: '',
+        userMessage: reflectPrompt(rules, legal, failures, repairs), toolName: 'emit_proposals',
+        toolDescription: 'Choose legal changes by number.', schema: REFLECT_SCHEMA, maxTokens: 1000 });
+      return { value: x, cost: x.cost };
+    });
+    return parseReflection(res.json, legal);
+  } catch (e) {
+    console.log(`(reflection could not run: ${(e as Error).message.split('\n')[0]})`);
+    return { proposals: [], invalid: 0 };
+  }
 }
