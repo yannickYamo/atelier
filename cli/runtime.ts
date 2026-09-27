@@ -581,7 +581,7 @@ export interface ProposalMeta {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
-  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
 }
 
 /**

@@ -293,6 +293,8 @@ export async function discover(): Promise<void> {
   // The model that will run the skill writes a few plain drafts on the author's own topics, and every
   // named pattern (em dashes, fragments, "not X, it's Y", signposting…) is counted in both. Wide gaps
   // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
+  // Saved BEFORE the optional comparison: whatever happens to it, the discovery already paid for is kept.
+  saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
   if (!argv.includes('--no-contrast')) {
     try {
       const read = openItems.filter((i) => readIds.has(i.id));
@@ -303,13 +305,14 @@ export async function discover(): Promise<void> {
         proposals = [...proposals, ...contrast.map((c) => c.requirement)];
         proposalMeta = { ...proposalMeta, ...Object.fromEntries(contrast.map((c) => [c.requirement.requirementId, {
           framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance } satisfies ProposalMeta])) };
+        // An addition to what is already saved, not a second save of the run.
+        saveSession({ ...loadSession(), proposals, proposalMeta });
       }
     } catch (e) {
       // Optional, and never allowed to cost the discovery already paid for.
       console.log(`(the comparison with the model's own drafts did not run: ${(e as Error).message.split('\n')[0]})`);
     }
   }
-  saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
     try {
@@ -349,13 +352,16 @@ export async function discover(): Promise<void> {
  */
 async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string): Promise<string[]> {
   const path = runFile('contrast-drafts.json');
+  const { client, binding } = clientAndBinding('target');
+  // Keyed by corpus AND model: another model's habits are another comparison.
+  const key = `${corpusHash}|${binding.requestedModel}`;
   if (existsSync(path)) {
-    const cached = readJson<{ corpusHash: string; drafts: string[] }>(path, { what: 'the contrast drafts' });
-    if (cached.corpusHash === corpusHash && cached.drafts.length) return cached.drafts;
+    const cached = readJson<{ corpusHash: string; key?: string; drafts: string[] }>(path, { what: 'the contrast drafts' });
+    if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return cached.drafts;
   }
-  const { client } = clientAndBinding('target');
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', 1.0), maxCalls: 4 };
-  const topics = contrastTopics(read, 3);
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', 1.5), maxCalls: 6 };
+  // Five: fewer and a style distance cannot tell the model's own drafts from the author's (measured).
+  const topics = contrastTopics(read, 5);
   console.log(`Asking the model for ${topics.length} plain drafts on your topics, to see its habits against yours…`);
   const drafts = await mapLimit(topics, topics.length, async (topic) => {
     const r = await spend(budget, 0.1, async () => {
@@ -369,6 +375,6 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
     return typeof piece === 'string' ? piece : '';
   });
   const kept = drafts.filter((d) => d.trim());
-  writeAtomic(path, JSON.stringify({ corpusHash, drafts: kept }, null, 1));
+  writeAtomic(path, JSON.stringify({ corpusHash, key, drafts: kept }, null, 1));
   return kept;
 }

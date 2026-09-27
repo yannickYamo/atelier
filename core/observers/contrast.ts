@@ -11,7 +11,7 @@
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { measure } from './registry.js';
-import { PATTERN_IDS, PATTERN_LABEL, patternRate, fragmentShare, deltaReference, proseWords, perPieceP, type PatternId } from './style.js';
+import { PATTERN_IDS, PATTERN_LABEL, patternRate, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import type { MeasuredProposal } from './derive.js';
 
 interface Piece { readonly id: string; readonly text: string }
@@ -34,7 +34,7 @@ export function deriveContrastRules(
   const checkOn = held.length ? held.map((p) => p.text) : authorTexts;
   const out: MeasuredProposal[] = [];
   let n = 0;
-  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string): void => {
+  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak = false): void => {
     const rs = checkOn.map((t) => measure(t, measurement));
     const applicable = rs.filter((x) => x.verdict !== 'NOT_APPLICABLE').length;
     const present = rs.filter((x) => x.verdict === 'MET').length;
@@ -44,14 +44,17 @@ export function deriveContrastRules(
     out.push({
       requirement: { requirementId: `c${n}`, statement, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
         evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, measurement },
-      conformance: { applicable, present, independent: held.length > 0 },
+      conformance: { applicable, present, independent: held.length > 0, ...(weak ? { weak: true } : {}) },
     });
   };
 
-  const authorRate = (p: PatternId): number => patternRate(authorAll, p);
+  // Mean of per-piece rates, not the rate of everything joined: a pattern that counts repeats (the same
+  // opening three times) grows with length, and a corpus joined into one text inflated it eightfold.
+  const meanRate = (texts: readonly string[], p: PatternId): number => r1(texts.reduce((s0, t) => s0 + patternRate(t, p), 0) / Math.max(1, texts.length));
+  const authorRate = (p: PatternId): number => meanRate(authorTexts, p);
   const spacedHyphen = authorRate('SPACED_HYPHEN');
   for (const p of PATTERN_IDS) {
-    const a = authorRate(p); const m = patternRate(modelAll, p);
+    const a = authorRate(p); const m = meanRate(drafts, p);
     const perPiece = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
     const ev = `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model on its own: ${m} per 1,000`;
     if (overUsed(a, m)) {
@@ -59,22 +62,24 @@ export function deriveContrastRules(
       // Where the author has their own mark for the same job, the rule says to use it.
       const prefer = p === 'EM_DASH' && spacedHyphen >= 1 ? [' - '] : undefined;
       const statement = cap === 0
-        ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen ( - ) instead' : ''}.`
+        ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen (" - ") instead' : ''}.`
         : `Keep ${PATTERN_LABEL[p]} to at most ${cap} per 1,000 words.`;
       propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } }, ev);
-    } else if (MODEL_TYPICAL.has(p) && a <= 0.5) {
-      // A construction models reach for, which this author almost never uses. Plain drafts do not always
-      // show the gap — the tic can come from the skill's own instructions, as it did when a rule asking
-      // for "a short declarative reversal" produced one per paragraph — so the author's near-absence is
-      // the evidence, and the cap sits at their own rate.
+    } else if (MODEL_TYPICAL.has(p) && a <= 0.5 && m > a + 0.2) {
+      // A construction models reach for, which this author almost never uses. The cap sits at the
+      // author's own rate. Where the model's plain drafts already exceed it, the evidence is direct;
+      // where they do not, the tic may only appear under a skill's instructions (as it did when a rule
+      // asking for "a short declarative reversal" produced one per paragraph), and the rule is proposed
+      // as WEAK: shown and used to choose between drafts, not instructed, until the owner says so.
       const cap = r1(Math.max(perPiece(0.9) * 1.5, 0.5));
       propose(`Keep ${PATTERN_LABEL[p]} rare: at most ${cap} per 1,000 words.`, 'BOUNDARY',
         { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap } },
-        `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; a construction models use by default (${m} per 1,000 in its plain drafts here)`);
+        `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model's plain drafts here: ${m} per 1,000`,
+        m <= cap);
     } else if (underUsed(a, m)) {
       const floor = r1(perPiece(0.1) * 0.8);
       if (floor > 0) {
-        propose(`Use ${PATTERN_LABEL[p]}: at least ${floor} per 1,000 words, as I do.`, 'GENERATIVE',
+        propose(`Use ${PATTERN_LABEL[p]}: at least ${floor} per 1,000 words (I use about ${a}).`, 'GENERATIVE',
           { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: floor } }, ev);
       }
     }
@@ -88,11 +93,30 @@ export function deriveContrastRules(
       `you: ${Math.round(aFrag * 100)}% of sentences; the model on its own: ${Math.round(mFrag * 100)}%`);
   }
 
-  if (read.length >= 4) {
+  // ── Style distance, only where it can tell the two apart ────────────────────────────────────────
+  //
+  // Distances are to each document, averaged — not to a centroid, which with a dozen author pieces and
+  // three drafts sits near the pooled mean and calls anything "closer to the author". And it is proposed
+  // only when it works on this corpus: every model draft, left out in turn, must land on the model's
+  // side, and every held-out piece on the author's. Otherwise it would be a number that sounds like a
+  // measure of voice and is not one.
+  if (read.length >= 4 && drafts.length >= 3) {
     const ref = deltaReference(authorTexts, drafts);
-    propose('Sound like me, not like the model: closer to my function-word profile than to its own.', 'GENERATIVE',
-      { observer: 'STYLE_DISTANCE', params: { words: [...ref.words], mean: [...ref.mean], sd: [...ref.sd], author: [...ref.author], model: [...ref.model] } },
-      `Burrows' Delta over ${ref.words.length} function words, from ${read.length} of your pieces and ${drafts.length} plain drafts by the model`);
+    // At least four in five: one borderline draft should not veto a measure that otherwise separates
+    // (measured on real data: 4 of 5 drafts recognised, the fifth by 0.03).
+    const recognised = drafts.filter((d, i) => {
+      const others = drafts.filter((_, j) => j !== i);
+      const x = styleDistanceDocs(d, deltaReference(authorTexts, others));
+      return x.model < x.author;
+    }).length;
+    const loo = recognised / drafts.length >= 0.8;
+    const heldOk = (held.length ? held.map((p) => p.text) : []).every((t) => { const x = styleDistanceDocs(t, ref); return x.author < x.model; });
+    if (loo && heldOk) {
+      propose('Stay closer to my word habits than to your defaults (the function words I use, and how often).', 'GENERATIVE',
+        { observer: 'STYLE_DISTANCE', params: { words: [...ref.words], mean: [...ref.mean], sd: [...ref.sd],
+          authorDocs: ref.authorDocs.flat(), modelDocs: ref.modelDocs.flat() } },
+        `Burrows' Delta over ${ref.words.length} function words, from ${read.length} of your pieces and ${drafts.length} plain drafts by the model; ${recognised} of ${drafts.length} drafts, each left out in turn, were recognised as the model's`);
+    }
   }
   return out;
 }
