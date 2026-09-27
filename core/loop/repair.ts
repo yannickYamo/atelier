@@ -69,7 +69,10 @@ export const REPAIR_SYSTEM = `You revise marked spans of a draft so that each on
 You are given the whole draft for context, and a numbered list of spans. For each span, write a
 replacement that:
   - fixes every reason listed for that span, and nothing else;
-  - keeps the meaning, facts, names and figures of the original span;
+  - keeps the meaning, facts, names and figures of the original span — except where a reason says the
+    story or figure is not in the author's material: then replace just that story or figure with a short
+    bracketed placeholder saying what belongs there, e.g. [your story: a time a control got routed around],
+    and never substitute another invented one;
   - reads naturally in place: the text immediately before and after it will not change.
 
 Return a replacement for every numbered span. Do not return the rest of the draft.`;

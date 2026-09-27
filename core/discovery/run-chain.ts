@@ -195,7 +195,12 @@ export async function runDiscoveryChain(
       });
       return { value: r, cost: r.cost };
     });
-    const raw = ((res.json as { factors?: Record<string, unknown>[] } | null)?.factors ?? []);
+    // A schema is what was ASKED for. A real model has returned the list as a JSON-encoded string, and
+    // `.map` on a string ended discovery after it was paid for. Decode that case; anything else is no rules.
+    const field: unknown = (res.json as { factors?: unknown } | null)?.factors;
+    let decoded: unknown = field;
+    if (typeof field === 'string') { try { decoded = JSON.parse(field) as unknown; } catch { decoded = []; } }
+    const raw = (Array.isArray(decoded) ? decoded : []).filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null);
     return { framing, rules: raw.map((f) => ({
       proposedId: '', description: asText(f.description),
       appliesWhen: (f.appliesWhen as ProposedFactor['appliesWhen']),

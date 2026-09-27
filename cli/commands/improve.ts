@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { mapLimit } from '../../core/inference/concurrency.js';
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
@@ -295,6 +296,8 @@ export async function runOnce(
    * measurement arms never do: a study's arm must be what the model wrote, not what a loop fixed.
    */
   refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
+  /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
+  select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } } | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -307,7 +310,10 @@ export async function runOnce(
         + 'generating without it would produce an output the ratified shape never constrained.');
     }
   }
-  const { piece: draft, reportedModel, schemaSent, servedTask } = await spendOneWithResult(client, budget, servedText, task, contract);
+  const n = select && contract === null ? Math.max(1, Math.floor(select.n)) : 1;
+  const written = await mapLimit(Array.from({ length: n }, (_, i) => i), n, () => spendOneWithResult(client, budget, servedText, task, contract));
+  const picked = n > 1 && select ? select.choose(written.map((w) => w.piece)) : { index: 0, why: '' };
+  const { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   // A structured output is held by its contract, not by prose rules; it is never span-rewritten.
   const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: null };
   const output = refined.output;
@@ -334,7 +340,8 @@ export async function runOnce(
     request: { resolvedTaskHash: sha(task), servedTaskHash: sha(servedTask), source: taskSource },
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
-    ...(refined.repair ? { repair: refined.repair } : {}) };
+    ...(refined.repair ? { repair: refined.repair } : {}),
+    ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why } } : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.

@@ -77,6 +77,15 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
     const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
     if (r < 0.5) return { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` };
+    // A style distance is a measure to pick drafts by, not a span anything can rewrite; a floor ("at
+    // least so many bold phrases") has nothing to point a repair at either. Both are shown by default.
+    if (p.measurement.observer === 'STYLE_DISTANCE') {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2,
+        why: `${present} of ${applicable} ${where} are closer to you than to the model; used to choose between drafts` };
+    }
+    if (p.measurement.observer === 'PATTERN_RATE' && typeof p.measurement.params.minPer1000 === 'number') {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: `${seen}; a floor, so it guides draft selection rather than a rewrite` };
+    }
     const lexicon = p.measurement.observer === 'LEXICON';
     const strong = independent && r >= 0.8 && !lexicon;
     return { decision: 'APPROVE', materiality: strong ? 'REQUIRED' : 'PREFERRED', needs, strength: strong ? 3 : 1,

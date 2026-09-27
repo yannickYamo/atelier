@@ -17,7 +17,7 @@
 // `persistInvocation` the CLI path uses. What cannot be known is recorded as unknown: a transcript
 // with no model line yields an UNREPORTED observation, never a guess.
 
-import { verifyText } from '../../core/observers/verify.js';
+import { checkDraft } from '../../core/loop/run-repair.js';
 import { planRepair, regressions } from '../../core/loop/repair.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -134,7 +134,8 @@ export async function record(): Promise<void> {
   // the host holds the pen for the whole answer, so "only these spans" is an instruction there, not a
   // splice — and the record says whether anything outside them changed, and whether anything got worse.
   const std = store.getStandard(L, pending.standardVersionHash);
-  const report = std ? verifyText(pending.skillName, std, output) : null;
+  const checks = { material: store.getMaterial(L).map((m) => m.text).join('\n\n') };
+  const report = std ? checkDraft(pending.skillName, std, output, checks) : null;
   const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
   const targets = report?.failed ? planRepair(output, report) : [];
   if (report?.failed && targets.length && !payload.stop_hook_active && !pending.repairOf) {
@@ -150,7 +151,7 @@ export async function record(): Promise<void> {
   let repair: RepairRecord | undefined;
   if (continuation && pending.repairOf && std) {
     const draft = pending.repairOf.draft;
-    const before = verifyText(pending.skillName, std, draft);
+    const before = checkDraft(pending.skillName, std, draft, checks);
     const worse = report ? regressions(before, report) : [];
     // Outside the spans: the draft's text between and around them, compared with the answer's.
     const keep = (t: string, spans: { start: number; end: number }[]): string[] => {

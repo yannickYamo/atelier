@@ -151,7 +151,12 @@ our copy follows these"), or answering people ("customer support always answers 
 the work is held back before anything reads it (six pieces or more; name your own with `--reserve`),
 the rest is read from two independent vantages, and each rule is checked against the pieces the
 reader never saw. The countable part of your voice (sentence and paragraph length, hedging, stock
-phrases you never use) is measured rather than read. **Nothing compiles until you accept**, and the
+phrases you never use) is measured rather than read. Then the model writes a few plain drafts on your
+own topics, and Atelier counts what it does that you don't: em dashes where you write a spaced hyphen,
+five-word fragments, "that's not X, it's Y", "here's the thing", "quietly". Each wide gap is proposed as
+a rule with both numbers ("you: none in 42,605 words; the model on its own: 8.4 per 1,000"), and only
+if your own held-out work passes it. This is the part of a voice no reader, human or model, thinks to
+write down, and the part a reader recognises as machine-written. **Nothing compiles until you accept**, and the
 same command continues wherever you stopped. Prefer to state your rules? `atelier skill "lead with the
 action, number the steps when there are steps"`.
 
@@ -160,8 +165,11 @@ piece, and when a REQUIRED one is broken, only the sentences that broke it are r
 the draft cannot change, because the model never holds the pen for it, and a rewrite that makes
 anything worse is thrown away. In Claude Code the plugin does the same at the end of the turn; there
 the host holds the pen for the whole answer, so "only these spans" is an instruction, and the record
-says whether anything outside them changed. To give the model your whole voice rather than rule
-fragments, ship one of your own pieces with the skill: `atelier build --name <name> --exemplar
+says whether anything outside them changed. A voice may not invent your life or your numbers: a first-person
+story or a cited figure that is not in the material you vouch for (`atelier material --skill <name>
+notes.md`) is replaced with a visible placeholder, `[your story: …]`, for you to fill or cut.
+`--drafts 3` writes three drafts and keeps the one the counts favour. To give the model your whole
+voice rather than rule fragments, ship one of your own pieces with the skill: `atelier build --name <name> --exemplar
 ./my-best-piece.md`. A host does not always deliver everything the CLI does; `atelier carriers --skill
 <name> --host codex` reports the gap instead of hiding it.
 
@@ -224,7 +232,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 92 files and 1318 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 93 files and 1332 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
