@@ -78,7 +78,7 @@ describe('calibration: VETO only from the owner\'s blind labels, under the pre-r
   const rules = tasteRules(v);
   const keyOf = (id: string): string => rules.find((r) => r.rule.requirementId === id)!.key;
   const reading = (id: string, rule: Requirement, verdict: 'FOLLOWED' | 'MISSED', passage = 'a passage'): Record<string, unknown> =>
-    ({ kind: 'TASTE_READING', readingId: id, invocationId: null, standardVersionHash: 's', readerModel: 'm', at: id,
+    ({ kind: 'TASTE_READING', readingId: id, invocationId: null, standardVersionHash: 's', readerModel: 'm', at: id, blind: true,
       readings: [{ requirementId: rule.requirementId, key: keyOf(rule.requirementId), verdict, kind: verdict === 'MISSED' ? 'PRESENCE' : undefined, quote: 'q', why: 'w', statementHash: statementHash(rule), passage }] });
   const label = (id: string, rule: Requirement, l: 'FOLLOWED' | 'MISSED' | 'UNSURE'): Record<string, unknown> =>
     ({ kind: 'TASTE_LABEL', readingId: id, key: keyOf(rule.requirementId), statementHash: statementHash(rule), label: l, at: id });
@@ -117,8 +117,12 @@ describe('calibration: VETO only from the owner\'s blind labels, under the pre-r
     expect(calibrationQueue(rules, blind, 'm').map((q) => q.readingId)).toEqual(['a']);
   });
   it('only held-back readings are put to the owner: a verdict that was displayed is never labelled', () => {
-    expect(calibrationQueue(rules, [reading('a', close, 'FOLLOWED')], 'm')).toEqual([]);
+    expect(calibrationQueue(rules, [{ ...reading('a', close, 'FOLLOWED'), blind: false }], 'm')).toEqual([]);
     expect(calibrationQueue(rules, [{ ...reading('a', close, 'FOLLOWED'), blind: true }], 'm').map((q) => q.token)).toEqual([labelToken('a', keyOf('p14'))]);
+  });
+  it('labels on readings whose verdict was displayed earn nothing, however many', () => {
+    const shown = Array.from({ length: 30 }, (_, i) => [{ ...reading(`s${i}`, close, 'MISSED'), blind: false }, label(`s${i}`, close, 'MISSED')]).flat();
+    expect(tastePermissions(rules, shown, 'm').pooled.trials).toBe(0);
   });
   it('the hold-back is decided by the reading id alone, at about the share asked for', () => {
     const ids = Array.from({ length: 3000 }, (_, i) => `r${i}`);
@@ -298,6 +302,10 @@ describe('through the binary: every output is read, labels earn authority, and t
     const out = run(data, proj, 'verify', '--skill', 'voice', file, '--taste');
     expect(out).toContain('1 missed');
     expect(out).not.toMatch(/^EXIT:1/);                     // observed, not enforced: no VETO yet
+    // --json with --taste is one object a pipeline can parse, taste included.
+    const json = JSON.parse(run(data, proj, 'verify', '--skill', 'voice', file, '--taste', '--json')) as { failed: boolean; taste?: { verdicts: { verdict: string }[] } };
+    expect(json.taste?.verdicts[0]?.verdict).toBe('MISSED');
+    expect(json.failed).toBe(false);
     const input = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'voice', text: 'At the end, review matters.', taste: true } } });
     const reply = JSON.parse(execFileSync('node', [CLI, 'mcp', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'],
       { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_TASTE_HOLDBACK: '0' }, input }).trim()) as { result: { content: { text: string }[] } };

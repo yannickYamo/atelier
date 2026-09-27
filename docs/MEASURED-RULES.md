@@ -133,8 +133,9 @@ better.
 **The quick way:** `atelier floor --skill <name> --setup` does every step below with its default, says
 how many drafts it will spend first, and stops as soon as the floor is earned (`--runs`, default 6, caps
 the A/A runs). It takes margins and tasks from your pieces (`--corpus <folder>`, or the folder
-`atelier new` read): each task is `Write a piece titled "<title>"`, one per `# ` title. It enforces every
-REQUIRED counted rule when nothing is enforced yet. `atelier tend` (below) reports whether it is needed.
+`atelier new` read): each task is `Write a piece titled "<title>"`, one per `# ` title, up to twelve. It
+enforces every REQUIRED counted rule when nothing is enforced yet, and refuses, before spending anything,
+when fewer than two rules can be enforced: a repair's own rule never guards itself. `atelier tend` (below) reports whether it is needed.
 
 | step | command | what it does |
 |---|---|---|
@@ -142,7 +143,7 @@ REQUIRED counted rule when nothing is enforced yet. `atelier tend` (below) repor
 | your call | `--margin <rule>=<n>`, `--enforce <rule>`, `--observe <rule>` | which rules may block a new version, and by how much |
 | tasks | `--tasks <file>` | the tasks it is measured on, separated by blank lines; at least five |
 | baseline | `--baseline` | drafts the active version once per task (`--fires` for more) and freezes its scores |
-| qualify | `--qualify` | one A/A run: the same version drafts twice per task, and one half is compared with the other, exactly as a candidate would be. Both halves are fresh in every run, so runs are independent. Each enforced rule gives one trial per run, and a rule the comparison calls a REGRESSION is a false alarm. |
+| qualify | `--qualify` | one A/A run: the same version drafts twice per task, and one half is compared with the other, exactly as a candidate would be. Both halves are fresh in every run, so runs are independent of each other. Each enforced rule the comparison resolves (NONINFERIOR or REGRESSION) is one trial, and a REGRESSION is a false alarm. |
 | check | `--check <version> [--target <rule>] [--promote]` | drafts a candidate the same way and gives each rule one verdict across tasks: REGRESSION, NONINFERIOR or INCONCLUSIVE |
 
 **Tasks are the unit.** For each rule, the candidate's mean score on a task is paired with the
@@ -157,12 +158,18 @@ ten tasks costs ten drafts per version, where the earlier per-task design needed
 
 - **Sensitivity first.** The failure that matters for letting the floor act alone is a worse version
   passed. So every A/A run also plants a regression of **two margins** on each enforced rule in the same
-  fresh draws, and the floor must catch at least **80% of at least 10** such plantings. A floor whose
-  margins are tighter than the writing's own variation fails this, and says so.
-- **Calibration.** False alarms, over at least **11** trials, with the exact (Clopper–Pearson) upper
-  95% bound at most **25%**. With no false alarm at all, eleven trials clear it: for example six runs
-  with two enforced rules. This bound checks that the test is not grossly miscalibrated; the t-test
-  itself runs at 5%, and a false alarm only ever blocks, sending the choice back to you.
+  fresh draws, and the floor must catch at least **80% of at least 10** such plantings. What this
+  measures, honestly, is how often a uniform two-margin drop *resolves* as REGRESSION. A regression
+  concentrated on a few tasks tends to come out INCONCLUSIVE instead, which blocks just the same, since
+  an enforced rule that is not NONINFERIOR holds the gate. A floor whose margins are tighter than the
+  writing's own variation fails this, and says so.
+- **Calibration.** False alarms, over at least **11** resolved trials, with the exact (Clopper–Pearson)
+  upper 95% bound at most **25%**. With no false alarm at all, eleven trials clear it: for example six
+  runs with two enforced rules that both resolve. This is a check against gross miscalibration, not an
+  estimate of the test's size: in simulation the one-sided test (upper bound below minus the margin
+  when the true change is zero) almost never calls a REGRESSION, and a false alarm only ever blocks,
+  sending the choice back to you. Rules in the same run share drafts, so trials within a run are not
+  fully independent; runs are.
 
 A qualification is a rate **of** one situation:
 - this version of the skill and its standard
@@ -170,7 +177,8 @@ A qualification is a rate **of** one situation:
 - its frozen baseline
 - the task set
 - the runtime (provider, model, temperature)
-- the number of drafts per task
+- the number of drafts per task (a baseline frozen with another number is refused, not compared)
+- how drafts are scored (`FLOOR_SCORING_VERSION`, bumped whenever an observer's counting changes)
 
 Change any of them and the floor is no longer EARNED until it is re-qualified. That includes a
 promotion, which changes the version.
@@ -218,7 +226,8 @@ improvement. Only an EARNED floor lets it install anything.
    reads the result.
    - A change to an unmeasured rule, or to whether the exemplar or examples ship, is left for you. It
      never installs itself.
-   - The taste reader ([TASTE.md](TASTE.md)) may block a finalist. Both versions draft once on four of
+   - The taste reader ([TASTE.md](TASTE.md)) may block a finalist, here and on every other path where a
+     candidate could install itself (`fix`, `floor --check --promote`). Both versions draft once on four of
      the floor's tasks, and a finalist is blocked when it misses a rule on at least two more tasks than
      the current version. One extra miss is within what one draft per task does by chance. This applies
      only to rules where your blind labels have earned the reader VETO. It never clears a finalist.
@@ -244,13 +253,16 @@ ends with a digest of what happened and what waits for you:
 1. **mine** what keeps going wrong (next section), recorded for `atelier mine --add`;
 2. **taste**: what the reader has earned, and how many held-back readings wait for your label;
 3. **floor**: whether a change could install itself, or the one command that sets it up;
-4. **optimize**: one round when the floor has a baseline. With `--auto`, a winner the promotion gate
-   allows is installed (the previous version stays one `atelier rollback` away); otherwise it waits.
+4. **optimize**: one round, only when the floor is EARNED (a round that could install nothing is yours to
+   run with `atelier optimize`). With `--auto`, a winner the promotion gate allows is installed (the
+   previous version stays one `atelier rollback` away) and the other candidates of that round, built on
+   the replaced version, are set aside. The floor must then be re-earned for the new version
+   (`atelier floor --setup` again), and the digest says so.
 
 It never adds, removes or rewords a rule. Run it by hand or from cron, for example weekly:
 
 ```
-0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log
+0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 ```
 
 `atelier status --skill <name>` is the one-page view: rules (counted and read), which of the eight

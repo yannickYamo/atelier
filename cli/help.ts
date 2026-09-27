@@ -53,7 +53,7 @@ export const USAGE: Readonly<Record<string, string>> = {
   contract: 'atelier contract --skill <name> [--bare] [--cap <usd>]\n  Test the skill against no skill at all.',
   reference: 'atelier reference --skill <name> [--loop]   then: atelier reference --skill <name> --score --labels <json>\n  Test the skill blind against work you reserved.',
   record: 'atelier record --from-hook prompt|stop\n  Internal: called by the host plugin\'s hooks.',
-  status: 'atelier status\n  Where the run in this project stands.',
+  status: 'atelier status [--skill <name>]\n  Where the run in this project stands; with --skill, where that skill stands, on one page: its rules, what they cover, what the taste reader holds, the regression floor, uses, and what waits for you.',
   abort: 'atelier abort\n  Abandon the run in this project. What was decided is kept.',
   enrol: 'atelier enrol --kind DISCOVERY_STUDY|BEHAVIOUR_STUDY\n  Enrol this run in a study.',
   study: 'atelier study <subcommand> [options]\n  Evaluation apparatus. Not part of the product surface.',
