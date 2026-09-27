@@ -31,6 +31,8 @@ export interface Persona {
   readonly points: readonly PersonaPoint[];
   /** points the model offered whose quote was not in the corpus: dropped, counted so the drop is visible */
   readonly dropped: number;
+  /** points dropped because they describe a move a REQUIRED boundary of the standard forbids */
+  readonly conflicting?: number;
 }
 
 export const PERSONA_SYSTEM = `You describe how a writer sounds, so another writer could sound like them on ANY topic.
@@ -93,4 +95,15 @@ const WORD: Readonly<Record<Frequency, string>> = { ALWAYS: 'always', OFTEN: 'of
 /** The persona as the skill states it: one line per point, its frequency first, its quote as evidence. */
 export function describePersona(p: Persona): string {
   return p.points.map((x) => `- (${WORD[x.frequency]}) ${x.description} e.g. "${x.quote}"`).join('\n');
+}
+
+/**
+ * THE STANDARD WINS. A persona point that describes, or quotes, a move a REQUIRED boundary of the
+ * standard caps or bans is dropped: the persona is how the author sounds, but the owner's ratified
+ * rules say what the output may not do. (A persona once said the author "always" writes "not X, it's
+ * Y" while the standard capped exactly that.)
+ */
+export function reconcilePersona(p: Persona, forbids: (text: string) => boolean): Persona {
+  const points = p.points.filter((x) => !forbids(`${x.description} ${x.quote}`));
+  return { points, dropped: p.dropped, ...(p.points.length - points.length ? { conflicting: p.points.length - points.length } : {}) };
 }
