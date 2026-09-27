@@ -52,7 +52,13 @@ describe('contrast: rules from the gap, guarded by the author\'s own held-out wo
     expect(r?.requirement.evidence).toMatch(/you: none in .* words; the model on its own: .* per 1,000/);
   });
   it('the author\'s own mark, which the model never uses, becomes a floor', () => {
-    expect(byPattern('SPACED_HYPHEN')?.requirement.measurement?.params.minPer1000).toBeGreaterThan(0);
+    const floor = rules.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'SPACED_HYPHEN'
+      && typeof r.requirement.measurement.params.minPer1000 === 'number');
+    expect(floor?.requirement.measurement?.params.minPer1000).toBeGreaterThan(0);
+  });
+  it('the substitute the em-dash rule names gets a cap at the author\'s own rate, so it cannot take over', () => {
+    const cap = rules.find((r) => (r.requirement.measurement?.params.role as string[] | undefined)?.[0] === 'dash-substitute');
+    expect(cap?.requirement.measurement?.params.maxPer1000).toBeGreaterThan(0);
   });
   it('a style distance is proposed, and every rule held on the author\'s held-out pieces', () => {
     expect(rules.some((r) => r.requirement.measurement?.observer === 'STYLE_DISTANCE')).toBe(true);

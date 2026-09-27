@@ -59,6 +59,11 @@ function oriented(m: Measurement, v: number): number {
       if (lo !== null && hi !== null) return -(Math.max(0, lo - v) + Math.max(0, v - hi));
       return lo !== null ? v : -v;
     }
+    case 'RHYTHM': {
+      const lo = num(m, 'minCv'); const hi = num(m, 'maxCv');
+      if (lo !== null && hi !== null) return -(Math.max(0, lo - v) + Math.max(0, v - hi));
+      return lo !== null ? v : -v;
+    }
     case 'RATIO': {
       const lo = num(m, 'minShare'); const hi = num(m, 'maxShare');
       if (lo !== null && hi !== null) return -(Math.max(0, lo - v) + Math.max(0, v - hi));
@@ -114,6 +119,7 @@ export function resolution(m: Measurement, authorTexts: readonly string[]): numb
     case 'FRAGMENT_SHARE': return Math.round((100 / sentences) * 100) / 100;                                     // one sentence, in percent
     case 'DISTRIBUTION': return Math.round((1 / sentences) * 1000) / 1000;                                        // one sentence moving band
     case 'RATIO': return 0.1;
+    case 'RHYTHM': return 0.05;
     case 'STYLE_DISTANCE': return MIN_MARGIN;
     default: return 1;                                                                                            // one use, one word, one sentence, one heading
   }

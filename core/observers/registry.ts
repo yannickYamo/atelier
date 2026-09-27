@@ -16,7 +16,7 @@
 // broke the rule, so a repair can rewrite that span and nothing else.
 
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
-import { TERM_RATE, RATIO, DISTRIBUTION } from './balance.js';
+import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS } from './structure.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
 
@@ -197,7 +197,7 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
     },
   },
   // ── Proportions: rates with floors, ratios between word lists, the mix of sentence lengths ────
-  TERM_RATE, RATIO, DISTRIBUTION,
+  TERM_RATE, RATIO, DISTRIBUTION, RHYTHM,
   // ── Position: the opening, the close, the headings (see ./structure.ts) ────────────────────────
   OPENING, CLOSING, HEADINGS,
 };
