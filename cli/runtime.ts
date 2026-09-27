@@ -56,7 +56,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
-  'finalists', 'screen-model', 'read', 'label', 'reader-model',
+  'finalists', 'screen-model', 'read', 'label', 'reader-model', 'runs',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -71,7 +71,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'taste', 'no-taste',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'taste', 'no-taste', 'setup', 'auto',
 ];
 
 export const argv = process.argv.slice(2);
@@ -271,6 +271,10 @@ export const modelFor = (role: Role, fallback = MODEL): string => {
  */
 export const proposerModel = (): string =>
   roleFlag('discovery', 'model') ?? flag('--model') ?? process.env.ATELIER_PROPOSER_MODEL ?? modelFor('discovery', PROPOSER);
+
+/** Whether a role has a model without dying for one: set explicitly, or an Anthropic default applies. */
+export const hasModelFor = (role: Role): boolean =>
+  Boolean(roleFlag(role, 'model') ?? flag('--model') ?? process.env.ATELIER_MODEL) || providerFor(role) === 'anthropic';
 
 /** The model that diagnoses and proposes repairs. Every such command resolves it here, so `check` verifies it. */
 export const diagnoserModel = (): string => modelFor('discovery');

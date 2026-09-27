@@ -25,6 +25,11 @@ describe('RHYTHM', () => {
     const m = { observer: 'RHYTHM' as const, params: { unit: ['SENTENCE'], minCv: 0.3 } };
     expect(orientedScore(m, measure(varied(1), m))!).toBeGreaterThan(orientedScore(m, measure(flat, m))!);
   });
+  it('counts sentences of prose only: a list of even bullets does not read as varied pace', () => {
+    const prose = Array.from({ length: 12 }, (_, i) => `This sentence has eight words in it, ${i}.`).join(' ');
+    const bullets = ['- Yes.', '- A much longer bullet item that goes on for quite a few more words than the others do.', '- No.'].join('\n');
+    expect(unitLengths(`${prose}\n\n${bullets}`, 'SENTENCE')).toEqual(unitLengths(prose, 'SENTENCE'));
+  });
   it('refuses a malformed target', () => {
     expect(validateMeasurement({ observer: 'RHYTHM', params: { unit: ['WORD'], minCv: 0.3 } })).toMatch(/unit/);
     expect(validateMeasurement({ observer: 'RHYTHM', params: { unit: ['SENTENCE'] } })).toMatch(/needs/);

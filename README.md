@@ -82,7 +82,7 @@ every run, or show you what it decided.
 | where good is defined | implicitly, re-inferred from examples on every run | an explicit StandardVersion you ratified |
 | when a rule applies | guessed, differently each time | written down as an `applies when` condition |
 | required vs preferred | not distinguished | declared by you, rule by rule |
-| after the draft | nothing checks it | every measured rule counted; broken spans rewritten |
+| after the draft | nothing checks it | every measured rule counted, broken spans rewritten; judgement rules read by a reader your labels calibrate |
 | inventing facts a rule needs | it will | the rule is marked; the skill asks you instead |
 | who can change the target | whoever edits the prompt | only you, through a recorded act |
 | switching models | re-prompt and hope | recompile the same standard |
@@ -126,8 +126,8 @@ hold:
 - that rule improved across your tasks
 - every other rule you enforce held
 
-Anything else is left for you. SSO's reader is adopted with its authority cut to one direction: the
-taste reader may block a candidate that misses the rules nothing counts, and only after your own blind
+Anything else is left for you. Where SSO trusts a model reader outright, Atelier's reader is cut to one
+direction: the taste reader may block a candidate that misses the rules nothing counts, and only after your own blind
 labels have shown its misses hold up; it can never approve one. `atelier optimize --report` shows whether reflection's
 proposals are kept more often than the fixed ordering's, which is an open question here.
 
@@ -198,10 +198,15 @@ not counting. **The taste reader** reads every output against those, twice (the 
 formatting stripped and the rules reordered, so a verdict that follows presentation is thrown away),
 and every verdict must quote the passage it rests on. At first it only reports. You teach it what it
 may do with `atelier taste --skill <name> --calibrate`: it shows a rule and a passage, never its own
-verdict, and you answer followed, broken or can't tell. Once its misses hold up against your answers (a
+verdict, and you answer followed, broken or can't tell. So that you never label a passage right after
+seeing what the reader thought of it, about a third of readings are held back: acted on as usual, not
+shown, and those are the ones you are asked about. Once its misses hold up against your answers (a
 bar fixed in advance, in [docs/TASTE.md](docs/TASTE.md)), it can rewrite a passage it quotes, prefer the
 draft that misses fewer of your rules, and block an optimizer candidate. It can never approve anything.
-`atelier plan` shows which parts of good writing your standard covers, and which it doesn't.
+`atelier plan` shows which parts of good writing your standard covers, and which it doesn't. The
+reader costs two or three model calls per output (on the discovery model unless `--reader-model` or
+`ATELIER_READER_MODEL` names a cheaper one), and about three per draft once it acts; `--no-taste` turns
+it off for a call.
 
 `--drafts 3` writes three drafts and keeps the best: by the taste reader where it has earned it, then by
 the counts. To give the model your whole
@@ -217,8 +222,9 @@ and the MCP tool refuse a text declared (`--class`) as another kind rather than 
 thresholds read off essays. Declare your own checkable rules, including substitutions, with `atelier add
 --statement "…" --kind BOUNDARY --measure "LEXICON:leverage=>use|utilize=>use"`. The same check is an
 MCP tool (`atelier_verify`, `atelier_rules`, `atelier_list_skills`), so another agent writing your
-support replies or docs can hold its own output to your standard. Rules about when or why are listed
-as not checked: those stay a person's call.
+support replies or docs can hold its own output to your standard. Rules about when or why are not
+counted; `verify --taste` (and `taste: true` on the MCP tool) has the taste reader read them, and a
+miss on a rule where it has earned VETO fails the check.
 
 **Correct.** `atelier fix "<what was wrong>"`. No ids. If your standard already covers the complaint,
 it is an implementation problem: Atelier tries a different way of carrying the rule, reruns your task,
@@ -227,17 +233,20 @@ rejects it on its own; a count that says it is better is shown to you as the cou
 version is installed only when you pick it, because one draft on one input cannot speak for what the
 rules do not count. The count goes through the same promotion gate whether you pick or it does: a
 pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong.
-To let a repair install itself, earn a regression floor: `atelier floor` proposes, from your own pieces,
-how much each measured rule may move, runs the current version on your tasks, and measures its own
-false-alarm rate and its sensitivity. Once that rate is at most 5%, and the floor catches at least 80%
-of planted regressions, for this exact version, baseline and setup, a repair whose rule improves across
+To let a repair install itself, earn a regression floor, once: `atelier floor --skill <name> --setup`
+proposes, from your own pieces, how much each measured rule may move, takes tasks from their titles,
+drafts the current version once per task, and measures the floor's own sensitivity and false-alarm
+rate. Once it catches at least 80% of planted regressions and its false alarms are bounded (at most 25%
+at the upper 95% bound, over eleven or more trials), for this exact version, baseline and setup, a repair whose rule improves across
 your tasks while every other rule you enforce holds is installed without asking. Each step is explained in
 [docs/MEASURED-RULES.md](docs/MEASURED-RULES.md#the-regression-floor). If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession. `atelier mine` reads every complaint and repair on record and lists
 what keeps recurring: a gap no rule covers, a rule that keeps being missed, a rule the first draft keeps
 breaking, a rule whose repairs keep being refused for changing meaning. Each comes with its remedy, and
-nothing is added without you.
+nothing is added without you. `atelier tend --skill <name> [--auto]` runs all of this in one go (mine,
+the reader's status, the floor, one optimizer round) and is meant for cron; `atelier status --skill
+<name>` is the one-page view of where a skill stands.
 
 Every rule has a key (`R-3f9a1c`) that survives new versions and rewording, so `--rule` takes the id,
 the key or the rule's number, and `atelier history` shows which rules moved in each version. Repairs
@@ -288,7 +297,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 100 files and 1499 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 101 files and 1512 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

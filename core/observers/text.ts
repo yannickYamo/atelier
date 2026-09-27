@@ -115,6 +115,11 @@ export function sentencesOf(text: string): Sentence[] {
   return blocksOf(text).flatMap((b) => splitSentences(join(b)));
 }
 
+/** Sentences of paragraphs only, not list items: a bullet is a fragment by design and says nothing of a writer's pace. */
+export function proseSentencesOf(text: string): Sentence[] {
+  return blocksOf(text).filter((b) => b.kind === 'PARA').flatMap((b) => splitSentences(join(b)));
+}
+
 /** Paragraphs of prose — not list items — with their extent in the original text. */
 export function paragraphsOf(text: string): { start: number; end: number; text: string; sentences: number }[] {
   return blocksOf(text).filter((b) => b.kind === 'PARA').map((b) => {

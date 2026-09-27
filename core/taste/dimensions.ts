@@ -64,7 +64,7 @@ export interface Coverage {
   readonly byDimension: Readonly<Record<Dimension, readonly Requirement[]>>;
   /** dimensions no live rule is about */
   readonly gaps: readonly Dimension[];
-  /** dimensions covered only by rules nothing checks yet (reading-based, not yet read) */
+  /** dimensions covered only by reading-based rules: no count checks them, only the taste reader does */
   readonly unchecked: readonly Dimension[];
 }
 

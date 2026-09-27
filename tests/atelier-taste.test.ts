@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readTaste, tasteRules, flatten, quoteIsReal, type TasteReading } from '../core/taste/reader.js';
-import { tastePermissions, calibrationQueue, statementHash, passageAround, FALSE_BLOCK_BAR } from '../core/taste/calibration.js';
+import { tastePermissions, calibrationQueue, statementHash, passageAround, heldBack, labelToken, HOLDBACK, FALSE_BLOCK_BAR } from '../core/taste/calibration.js';
 import { dimensionOf, coverageOf } from '../core/taste/dimensions.js';
 import { refineTaste, spanOfQuote } from '../core/taste/repair.js';
 import { keysOf } from '../core/state/rule-key.js';
@@ -62,6 +62,16 @@ describe('the reader', () => {
     expect(quoteIsReal('rung by\nrung', 'We climb it rung by rung.')).toBe(true);
     expect(quoteIsReal('ab', 'ab')).toBe(false);
   });
+  it('flatten leaves code alone, keeps link words, and keeps a year that starts a line', () => {
+    expect(flatten('```\n# not a heading\n- **kept**\n```')).toBe('```\n# not a heading\n- **kept**\n```');
+    expect(flatten('Run `a **b** c` now')).toBe('Run `a **b** c` now');
+    expect(flatten('See [the docs](https://x.y) first')).toBe('See the docs first');
+    expect(flatten('2024. was a year')).toBe('2024. was a year');
+  });
+  it('a quote without the emphasis markers is still the text\'s words', () => {
+    expect(quoteIsReal('very important', 'This is *very* important.')).toBe(true);
+    expect(quoteIsReal('**very** important', 'This is very important.')).toBe(true);
+  });
 });
 
 describe('calibration: VETO only from the owner\'s blind labels, under the pre-registered bar', () => {
@@ -103,10 +113,31 @@ describe('calibration: VETO only from the owner\'s blind labels, under the pre-r
   it('the queue is blind to outcome: FOLLOWED and MISSED alike, oldest first, each once, never an omission', () => {
     const events = [reading('a', close, 'FOLLOWED'), reading('b', close, 'MISSED'), label('b', close, 'MISSED'),
       { ...reading('c', close, 'MISSED'), readings: [{ requirementId: 'p14', key: keyOf('p14'), verdict: 'MISSED', kind: 'OMISSION', why: 'w', statementHash: statementHash(close) }] }];
-    expect(calibrationQueue(rules, events, 'm').map((q) => q.readingId)).toEqual(['a']);
+    const blind = events.map((e) => (e.kind === 'TASTE_READING' ? { ...e, blind: true } : e));
+    expect(calibrationQueue(rules, blind, 'm').map((q) => q.readingId)).toEqual(['a']);
+  });
+  it('only held-back readings are put to the owner: a verdict that was displayed is never labelled', () => {
+    expect(calibrationQueue(rules, [reading('a', close, 'FOLLOWED')], 'm')).toEqual([]);
+    expect(calibrationQueue(rules, [{ ...reading('a', close, 'FOLLOWED'), blind: true }], 'm').map((q) => q.token)).toEqual([labelToken('a', keyOf('p14'))]);
+  });
+  it('the hold-back is decided by the reading id alone, at about the share asked for', () => {
+    const ids = Array.from({ length: 3000 }, (_, i) => `r${i}`);
+    const share = ids.filter((id) => heldBack(id)).length / ids.length;
+    expect(share).toBeGreaterThan(HOLDBACK - 0.04);
+    expect(share).toBeLessThan(HOLDBACK + 0.04);
+    expect(heldBack('x', 0)).toBe(false);
+    expect(heldBack('x', 1)).toBe(true);
+    expect(ids.map((id) => heldBack(id))).toEqual(ids.map((id) => heldBack(id)));
   });
   it('the owner sees the paragraph around a quote, not the whole piece', () => {
     expect(passageAround('One.\n\nTwo has the quote in it.\n\nThree.', 'the quote')).toBe('Two has the quote in it.');
+  });
+  it('in a long paragraph, or across paragraphs, the owner sees a window centred on the quote', () => {
+    const long = `${'Filler words here. '.repeat(80)}The quoted line sits late. ${'More filler follows. '.repeat(20)}`;
+    const p = passageAround(long, 'The quoted line sits late.', 300)!;
+    expect(p).toContain('The quoted line sits late.');
+    expect(p.length).toBeLessThanOrEqual(302);
+    expect(passageAround('First part ends here.\n\nSecond part starts.', 'ends here. Second part')).toContain('ends here.\n\nSecond part');
   });
 });
 
@@ -145,11 +176,29 @@ describe('taste repair: only where the reader holds VETO, only a quoted passage,
       emit_readings: () => readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: fixedText }]) });
     const refused = await refineTaste(deny, deny, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null);
     expect(refused.output).toBe(TEXT);
-    expect(refused.why).toMatch(/still reads/);
+    expect(refused.why).toMatch(/does not read any targeted rule as followed/);
+  });
+  it('a reader that can no longer tell has not confirmed a fix', async () => {
+    const fixedText = 'At the top, height got cheap and stopping stayed dear.';
+    const unsure = stub({ emit_replacements: () => ({ replacements: [{ id: 1, text: fixedText }] }),
+      emit_readings: () => readings([{ n: 1, verdict: 'UNCLEAR' }]) });
+    const r = await refineTaste(unsure, unsure, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null);
+    expect(r.output).toBe(TEXT);
+    expect(r.fixed).toEqual([]);
+  });
+  it('a quote that cannot be located is not targeted, and no call is spent on it', async () => {
+    const c = stub({});
+    const lost: TasteReading[] = [{ ...missed[0], quote: 'words that are nowhere' }];
+    const r = await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, lost, keys, null);
+    expect(r.targeted).toEqual([]);
+    expect(c.calls).toEqual([]);
   });
   it('the splice is the sentence around the quote', () => {
     const sp = spanOfQuote(TEXT, 'the ladder ends')!;
     expect(TEXT.slice(sp.start, sp.end)).toBe('At the top the ladder ends.');
+  });
+  it('a quote across a paragraph break is not spliced', () => {
+    expect(spanOfQuote('One ends.\n\nTwo starts.', 'ends.\n\nTwo')).toBeNull();
   });
 });
 
@@ -166,10 +215,12 @@ beforeAll(async () => {
   port = await new Promise<number>((ok) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); }); });
 });
 afterAll(() => { backend.kill(); });
+// The share of readings held back for calibration, per run: 0 shows every verdict, 1 holds every reading back.
+let holdback = '0';
 const run = (data: string, proj: string, ...args: string[]): string => {
   try {
     return execFileSync('node', [CLI, ...args, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'],
-      { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj } });
+      { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_TASTE_HOLDBACK: holdback } });
   } catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`; }
 };
 
@@ -183,20 +234,30 @@ describe('through the binary: every output is read, labels earn authority, and t
     const draft = 'Agents write most of the code now. At the end, review matters.';
     await post({ byTool: { emit_piece: { piece: draft },
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) } });
+    holdback = '0';
     const first = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review');
     expect(first).toContain('read against 1 reading-based rule(s): 0 followed, 1 missed');
     expect(first).toContain('has not earned any authority yet');
     expect(store.readEvents(L).some((e) => e.kind === 'TASTE_READING')).toBe(true);
-    expect(store.listObservations(L).some((o) => o.producer === 'taste-reader' && o.verdict === 'MISSED' && o.authority === 'OBSERVE_ONLY')).toBe(true);
+    // An OBSERVE-only verdict is a report, never evidence for the convergence loop.
+    expect(store.listObservations(L).some((o) => o.producer === 'taste-reader')).toBe(false);
+    // Its verdict was shown, so it is not put to the owner.
+    expect(run(data, proj, 'taste', '--skill', 'voice', '--list')).toContain('Nothing waiting for a label');
 
-    // Eighteen more readings of drafts, then the owner labels all nineteen blind.
+    // Nineteen held-back readings of drafts: no verdict shown, then the owner labels them blind.
+    holdback = '1';
     const file = join(proj, 'd.md'); writeFileSync(file, draft);
-    for (let i = 0; i < 18; i++) run(data, proj, 'taste', '--skill', 'voice', '--read', file);
+    for (let i = 0; i < 19; i++) expect(run(data, proj, 'taste', '--skill', 'voice', '--read', file)).toContain('held back');
     const list = run(data, proj, 'taste', '--skill', 'voice', '--list');
-    expect(list).toContain('19. ');
     expect(list).not.toMatch(/MISSED|FOLLOWED/);            // blind: the reader's verdict is not shown
-    const labels = Array.from({ length: 19 }, (_, i) => ['--label', `${i + 1}=missed`]).flat();
-    const status = run(data, proj, 'taste', '--skill', 'voice', ...labels);
+    const tokens = [...list.matchAll(/^(\S+:R-\S+)/gm)].map((m) => m[1]);
+    expect(tokens).toHaveLength(19);
+    // Tokens are stable: labelling the first does not shift the others.
+    expect(run(data, proj, 'taste', '--skill', 'voice', '--label', `${tokens[0]}=missed`)).toContain('1 label(s) recorded');
+    expect(run(data, proj, 'taste', '--skill', 'voice', '--list')).toContain(tokens[1]);
+    expect(run(data, proj, 'taste', '--skill', 'voice', '--label', `${tokens[0]}=followed`)).toMatch(/^EXIT:1[\s\S]*already labelled/);
+    expect(run(data, proj, 'taste', '--skill', 'voice', '--label', `${tokens[1]}=missed`, '--label', `${tokens[1]}=followed`)).toMatch(/^EXIT:1[\s\S]*twice/);
+    const status = run(data, proj, 'taste', '--skill', 'voice', ...tokens.slice(1).flatMap((t) => ['--label', `${t}=missed`]));
     expect(status).toContain('VETO earned');
 
     // Now a miss is repaired, and the rewrite is kept only because the reader confirms it.
@@ -204,10 +265,26 @@ describe('through the binary: every output is read, labels earn authority, and t
     await post({ byTool: { emit_piece: { piece: draft }, emit_replacements: { replacements: [{ id: 1, text: fixed }] },
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) },
     when: [{ contains: 'understanding it stayed dear', answer: readings([{ n: 1, verdict: 'FOLLOWED', quote: fixed }]) }] });
+    holdback = '0';
     const second = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review');
     expect(second).toContain(fixed);
-    expect(second).toContain('taste repair: 1 of 1 rule(s) no longer read as missed');
-    expect(store.listInvocations(L).find((i) => i.output.includes(fixed))?.repair?.taste?.fixed).toHaveLength(1);
+    expect(second).toContain('taste repair: 1 of 1 rule(s) now read as followed');
+    const inv = store.listInvocations(L).find((i) => i.output.includes(fixed));
+    expect(inv?.repair?.taste?.fixed).toHaveLength(1);
+    // With VETO, the reading of the skill's own output is evidence.
+    expect(store.listObservations(L).some((o) => o.producer === 'taste-reader' && o.invocationId === inv?.invocationId && o.authority === 'VETO_QUALIFIED')).toBe(true);
+
+    // With VETO, drafts are ranked by the reader, and a failing reader costs nothing but the ranking.
+    await post({ byTool: { emit_piece: { piece: draft }, emit_replacements: { replacements: [{ id: 1, text: fixed }] },
+      emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) },
+    when: [{ contains: 'understanding it stayed dear', answer: readings([{ n: 1, verdict: 'FOLLOWED', quote: fixed }]) }] });
+    const ranked = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review', '--drafts', '2');
+    expect(ranked).toMatch(/taste rule\(s\) read as missed/);
+    expect(ranked).not.toMatch(/^EXIT/);
+
+    // And verify --taste now fails on a miss, as a broken REQUIRED rule does.
+    const bad = join(proj, 'bad.md'); writeFileSync(bad, draft);
+    expect(run(data, proj, 'verify', '--skill', 'voice', bad, '--taste')).toMatch(/^EXIT:1/);
   }, 180_000);
 
   it('verify --taste fails on a miss only where the reader holds VETO; MCP returns the verdicts', async () => {
@@ -217,13 +294,24 @@ describe('through the binary: every output is read, labels earn authority, and t
     run(data, proj, 'build', '--name', 'voice');
     await post({ byTool: { emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'review matters' }]) } });
     const file = join(proj, 'd.md'); writeFileSync(file, 'At the end, review matters.');
+    holdback = '0';
     const out = run(data, proj, 'verify', '--skill', 'voice', file, '--taste');
     expect(out).toContain('1 missed');
     expect(out).not.toMatch(/^EXIT:1/);                     // observed, not enforced: no VETO yet
     const input = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'voice', text: 'At the end, review matters.', taste: true } } });
     const reply = JSON.parse(execFileSync('node', [CLI, 'mcp', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'],
-      { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj }, input }).trim()) as { result: { content: { text: string }[] } };
+      { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_TASTE_HOLDBACK: '0' }, input }).trim()) as { result: { content: { text: string }[] } };
     expect(reply.result.content[0].text).toMatch(/"taste":\[\{"rule":"x1","verdict":"MISSED"/);
+
+    // A runtime with only a target model named: the reader runs on it rather than dying for a discovery model.
+    await post({ byTool: { emit_piece: { piece: 'At the end, review matters.' }, emit_readings: readings([{ n: 1, verdict: 'FOLLOWED', quote: 'review matters' }]) } });
+    let targetOnly: string;
+    try {
+      targetOnly = execFileSync('node', [CLI, 'invoke', '--skill', 'voice', '--task', 'write', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`,
+        '--target-model', 'scripted', '--accept-new-binding'], { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_TASTE_HOLDBACK: '0' } });
+    } catch (e) { targetOnly = `EXIT ${String((e as { stderr?: string }).stderr)}`; }
+    expect(targetOnly).not.toMatch(/no model set/);
+    expect(targetOnly).toContain('1 followed');
   }, 120_000);
 });
 
