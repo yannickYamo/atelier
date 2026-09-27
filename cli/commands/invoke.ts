@@ -6,6 +6,10 @@
 
 import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
+import { readTaste, tasteRules, describeTaste, type TasteReading } from '../../core/taste/reader.js';
+import { tastePermissions } from '../../core/taste/calibration.js';
+import { refineTaste } from '../../core/taste/repair.js';
+import { recordTaste, readerModel } from './taste.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -17,7 +21,7 @@ import { resolveProvenance } from '../../core/fidelity/provenance.js';
 import { runOnce } from './improve.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
-import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientAndBinding, clientFor, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
 // ── invoke ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -165,7 +169,13 @@ export async function invoke(): Promise<void> {
   // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
   // cover is refused before anything is spent rather than failing halfway with nothing delivered.
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', 1)));
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4) };
+  // The taste reader (below) reads every output twice, plus once more per draft and for a repair when
+  // it has earned the authority to act; its calls are in the ceiling from the start.
+  const tasteOn = Boolean(std) && !argv.includes('--no-taste') && tasteRules(std!).length > 0;
+  const permissions = std ? tastePermissions(tasteRules(std), store.readEvents(L), readerModel()) : null;
+  const tasteActs = tasteOn && (permissions?.veto.size ?? 0) > 0;
+  const tasteCalls = tasteOn ? 3 + (tasteActs ? 5 + 2 * nDrafts : 0) : 0;
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4 + tasteCalls) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
 
   // ── WHICH RUNTIME, AND IS IT THE ONE THIS VERSION'S EVIDENCE CAME FROM ────────────────────
@@ -198,10 +208,24 @@ export async function invoke(): Promise<void> {
   // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
   const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced') };
+  // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
+  //
+  // The rules no count can check are read on every output, twice and with quotes, and the reading is
+  // shown and recorded. Only rules where the reader has EARNED VETO from your labels let it act: rewrite
+  // a passage it quotes, and prefer drafts that miss fewer of them. `--no-taste` turns it off.
+  let tasteTaken: readonly TasteReading[] | null = null;
   const refine = argv.includes('--no-repair') || !std ? null
     : async (draft: string) => {
       const r = await refineToStandard(client, budget, name, std, draft, 2, checks);
-      return { output: r.output, repair: r.repair };
+      if (!tasteActs || !permissions) return { output: r.output, repair: r.repair };
+      const readerClient = clientFor(readerModel());
+      const readings = await readTaste(readerClient, budget, std, r.output, asked);
+      const t = await refineTaste(client, readerClient, budget, name, std, r.output, readings, permissions.veto, asked, checks);
+      tasteTaken = t.readings;
+      if (!t.targeted.length) return { output: r.output, repair: r.repair };
+      const taste = { targeted: t.targeted, fixed: t.fixed, why: t.why };
+      return { output: t.output, repair: r.repair ? { ...r.repair, taste }
+        : { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, taste, why: t.why } };
     };
   // ── SEVERAL DRAFTS, THE BEST BY COUNT ─────────────────────────────────────────────────────────
   //
@@ -211,17 +235,22 @@ export async function invoke(): Promise<void> {
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
-  const select = std && nDrafts > 1 ? { n: nDrafts, choose: (drafts: readonly string[]) => {
+  const select = std && nDrafts > 1 ? { n: nDrafts, choose: async (drafts: readonly string[]) => {
+    // Taste first, where the reader has earned it: the draft missing the fewest VETO-holding rules.
+    const tasteMissed = tasteActs && permissions
+      ? await Promise.all(drafts.map(async (d) => (await readTaste(clientFor(readerModel()), budget, std, d, asked))
+        .filter((r) => r.verdict === 'MISSED' && r.kind === 'PRESENCE' && permissions.veto.has(r.key)).length))
+      : drafts.map(() => 0);
     const scored = drafts.map((d, i) => {
       const r = checkDraft(name, std, d, checks);
       const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
       const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED').length;
       const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
-      return { i, req, all, style };
+      return { i, req, all, style, taste: tasteMissed[i] };
     });
-    scored.sort((a, b) => a.req - b.req || b.style - a.style || a.all - b.all);
+    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || b.style - a.style || a.all - b.all);
     const best = scored[0];
-    return { index: best.i, why: `${best.req} REQUIRED rule(s) broken, ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
@@ -252,6 +281,16 @@ export async function invoke(): Promise<void> {
     }
   } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
+  }
+  if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
+  if (tasteOn && std) {
+    try {
+      const { readings, permissions: p } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, tasteTaken);
+      console.log(describeTaste(readings, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto));
+      if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
+    } catch (e) {
+      console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
+    }
   }
   if (cls.ok && cls.note && std?.requirements.some((q) => q.measurement)) console.log(`(${cls.note})`);
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and

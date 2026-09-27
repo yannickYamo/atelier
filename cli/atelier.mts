@@ -26,6 +26,7 @@ import { inspect, historyCmd, rollback, feedback } from './commands/inspect.js';
 import { floor } from './commands/floor.js';
 import { optimize } from './commands/optimize.js';
 import { mine } from './commands/mine.js';
+import { taste } from './commands/taste.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
@@ -89,6 +90,7 @@ export const COMMANDS: readonly string[] = [
   'intake',
   'invoke',
   'mine',
+  'taste',
   'optimize',
   'judgements',
   'pending',
@@ -134,6 +136,7 @@ const main = async (): Promise<void> => {
     case 'floor': { await floor(); return; }
     case 'optimize': { await optimize(); return; }
     case 'mine': { await mine(); return; }
+    case 'taste': { await taste(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
     case 'study': { study(); return; }

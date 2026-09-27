@@ -126,9 +126,9 @@ hold:
 - that rule improved across your tasks
 - every other rule you enforce held
 
-Anything else is left for you. SSO's reader is adopted with its authority cut to one direction: it may
-block a candidate on the rules nothing measures, and only after it has agreed with your own rulings
-beyond chance; it can never approve one. `atelier optimize --report` shows whether reflection's
+Anything else is left for you. SSO's reader is adopted with its authority cut to one direction: the
+taste reader may block a candidate that misses the rules nothing counts, and only after your own blind
+labels have shown its misses hold up; it can never approve one. `atelier optimize --report` shows whether reflection's
 proposals are kept more often than the fixed ordering's, which is an open question here.
 
 Atelier has not been benchmarked against these systems on a shared task yet. The difference above is
@@ -191,7 +191,20 @@ notes.md`) is replaced with a visible placeholder, `[your story: …]`, for you 
 may change how something is said, never what it claims: one that drops a figure, a negation, a name or
 a qualifier ("may", "most", "roughly") is refused and the original sentence kept, unless the broken rule
 named that very word. Rules marked `--phase ACCURACY` are repaired before any style rule.
-`--drafts 3` writes three drafts and keeps the one the counts favour. To give the model your whole
+
+Counts are half of a voice. The other half is how you argue, what you concede, which figure carries a
+piece, how a section closes, when a conversational aside stands: the rules discovery finds by reading,
+not counting. **The taste reader** reads every output against those, twice (the second time with the
+formatting stripped and the rules reordered, so a verdict that follows presentation is thrown away),
+and every verdict must quote the passage it rests on. At first it only reports. You teach it what it
+may do with `atelier taste --skill <name> --calibrate`: it shows a rule and a passage, never its own
+verdict, and you answer followed, broken or can't tell. Once its misses hold up against your answers (a
+bar fixed in advance, in [docs/TASTE.md](docs/TASTE.md)), it can rewrite a passage it quotes, prefer the
+draft that misses fewer of your rules, and block an optimizer candidate. It can never approve anything.
+`atelier plan` shows which parts of good writing your standard covers, and which it doesn't.
+
+`--drafts 3` writes three drafts and keeps the best: by the taste reader where it has earned it, then by
+the counts. To give the model your whole
 voice rather than rule fragments, ship one of your own pieces with the skill: `atelier build --name <name> --exemplar
 ./my-best-piece.md`. A host does not always deliver everything the CLI does; `atelier carriers --skill
 <name> --host codex` reports the gap instead of hiding it.
@@ -275,7 +288,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 99 files and 1486 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 100 files and 1499 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

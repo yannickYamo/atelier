@@ -9,6 +9,7 @@
 // What this screen does NOT do is decide when nobody is there. Without a terminal it prints the screen
 // and the command that accepts it; an assistant driving the CLI has to put that question to its person.
 
+import { coverageOf, describeCoverage } from '../../core/taste/dimensions.js';
 import { createInterface } from 'node:readline';
 import { die, argv, flagAll, loadSession } from '../runtime.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
@@ -85,6 +86,10 @@ export async function review(): Promise<boolean> {
     if (measures) console.log(`       measured: ${measures}`);
     console.log(`       → ${label({ decision: r.s.decision, materiality: r.s.materiality })}   ${r.s.why}\n`);
   }
+  // WHAT THIS STANDARD WOULD COVER, by what makes writing good, so a hole is visible before it is
+  // ratified rather than discovered in the output (core/taste/dimensions.ts).
+  const kept = rows.filter((r) => r.s.decision !== 'REJECT').flatMap((r) => { const p = byId.get(r.id); return p ? [p] : []; });
+  console.log(`What these rules cover:\n${describeCoverage(coverageOf(kept))}\n`);
 
   const ids = new Set(rows.map((r) => r.id));
   const fromFlags = parseChanges(flagAll('--set').join(' '), ids);
