@@ -271,7 +271,8 @@ describe('Phase 6 audit: the gaps it found, closed', () => {
     expect(selectContrastPairs([inv([p], '2026-01-01')], vl)).toEqual([]);
     expect(selectContrastPairs([inv([{ ...p, check: measurementId(lex.measurement!) }], '2026-01-01')], vl)).toHaveLength(1);
     const { check: _dropped, ...unchecked } = { ...p, check: measurementId(lex.measurement!) }; void _dropped;
-    expect(selectContrastPairs([inv([unchecked], '2026-01-01')], vl), 'a pair with no recorded check still shipped').toEqual([]);
+    // A pair from before checks were recorded ships only where the passage itself proves it, stamped.
+    expect(selectContrastPairs([inv([unchecked], '2026-01-01')], vl).map((x) => x.check)).toEqual([measurementId(lex.measurement!)]);
   });
 
   it('word-counting checks are re-counted on the passage: a ratio pair must reduce the competing word', () => {

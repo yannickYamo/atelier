@@ -26,6 +26,9 @@ it, but there is nothing specific to rewrite.
 | `TERM_RATE` | any of a word list per 1,000 words, capped or floored | `TERM_RATE:terms=but\|so,minPer1000=4` |
 | `RATIO` | the share one word list takes of two competing lists | `RATIO:numerator=but,denominator=however\|thus,minShare=0.8` |
 | `DISTRIBUTION` | the mix of sentence lengths across bands | `DISTRIBUTION:edges=8/18/30,shares=0.3/0.4/0.2/0.1,tolerance=0.2` |
+| `OPENING` | the first prose paragraph: phrases it must not use, and a length band | `OPENING:avoid=in today's\|imagine,maxWords=80` |
+| `CLOSING` | the last prose paragraph: the same | `CLOSING:avoid=ultimately\|in conclusion` |
+| `HEADINGS` | section headings: phrases, sentence or title case, length, how many per 1,000 words | `HEADINGS:avoid=the thing\|gets wrong,case=SENTENCE,maxWords=8` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
@@ -57,6 +60,14 @@ screen as every other rule, and nothing is enforced until you accept it.
    - the stock vocabulary the model leans on
    - the sentence-length mix
    - the function-word profile
+   - stock moves at the edges: phrases models open and close with ("In today's…", "Ultimately,"), heading
+     tropes ("The thing everyone gets wrong…", "Why this matters"), heading case and opening length
+
+   Edge tropes often appear only once a skill asks for a voice, not in the model's plain drafts. So
+   every trope the author never uses in that position is proposed: firm where the plain drafts already
+   use it, and weak (shown, and used to choose between drafts) where they do not. On a real 20-post
+   corpus, the heading rule passed every held-out post and flagged three headings in an output a reader
+   had called AI-written.
 
    Each proposal carries both numbers ("you: 13.2 per 1,000; the model on its own: 5.2").
 
@@ -98,17 +109,29 @@ better.
 | your call | `--margin <rule>=<n>`, `--enforce <rule>`, `--observe <rule>` | which rules may block a new version, and by how much |
 | tasks | `--tasks <file>` | the tasks it is measured on, separated by blank lines; at least three |
 | baseline | `--baseline` | fires the active version several times per task and freezes its scores |
-| qualify | `--qualify` | A/A runs: the same version drafts twice as many times per task, and one half is compared with the other. Both halves are fresh in every run, so runs are independent, and each task is one trial. A task that regresses is a false alarm. The floor is EARNED when the exact upper 95% bound on false alarms is at most 5%. That takes 59 resolved task comparisons with none (twenty tasks over three runs, say). |
+| qualify | `--qualify` | A/A runs: the same version drafts twice as many times per task, and one half is compared with the other. Both halves are fresh in every run, so runs are independent, and each task is one trial. A task that regresses is a false alarm. The floor is EARNED when the exact upper 95% bound on false alarms is at most 5% and it catches planted regressions (below). With no false alarm at all, that bound takes 59 resolved task comparisons (twenty tasks over three runs, say). |
 | check | `--check <version> [--target <rule>] [--promote]` | fires a candidate the same way. Each task gets a three-state verdict (REGRESSION, NONINFERIOR, INCONCLUSIVE), and the worst task decides. |
 
 Counts are sparse, so two drafts that both used a word zero times show no spread at all. Each side's
 spread is therefore taken as at least half the rule's margin. With three drafts a side, a drop of one
 margin stays INCONCLUSIVE and a drop of two resolves.
 
-A qualification is a false-alarm rate **of** one situation: this version of the skill, its standard,
-the floor's margins and roles, the task set, the runtime (provider, model, temperature) and the number
-of drafts per task. Change any of them and the floor is no longer EARNED until it is re-qualified. That
-includes a promotion, which changes the version.
+A false-alarm rate says how often the floor blocks a version that is no worse, and that errs toward
+safety. The failure that matters for letting it act alone is the other one: a worse version passed. So
+qualification also plants a regression of **two margins** on each enforced rule in the same fresh A/A
+draws, and requires the floor to catch at least 80% of at least 20 such plantings. A floor whose margins
+are tighter than the writing's own variation fails this, and says so.
+
+A qualification is a rate **of** one situation:
+- this version of the skill and its standard
+- the floor's margins and roles
+- its frozen baseline
+- the task set
+- the runtime (provider, model, temperature)
+- the number of drafts per task
+
+Change any of them and the floor is no longer EARNED until it is re-qualified. That includes a
+promotion, which changes the version.
 
 What it authorises is the promotion gate's decision (`core/convergence/promotion.ts`), not the
 floor's. A candidate installs itself only when all of these hold:
@@ -130,29 +153,60 @@ invocations.
 ## Searching the implementation
 
 `atelier optimize` (`cli/commands/optimize.ts`, `core/optimizer/`) runs one round of search over how
-the skill is implemented. It needs an earned regression floor, because a search with nothing guarding
-what it does not target makes the writing worse while reporting an improvement.
+the skill is implemented. It needs a regression floor with margins, tasks and a baseline, because a
+search with nothing guarding what it does not target makes the writing worse while reporting an
+improvement. Only an EARNED floor lets it install anything.
 
 1. **Propose.** The search space is the genome: each rule's carrier, and whether the exemplar and the
    contrast examples ship. Each candidate changes one gene.
-   - A reflective proposer reads recent failures and past attempts, both bounded, and chooses among the
-     legal changes by number. Anything else it returns is discarded and counted.
+   - A reflective proposer reads recent failures and the most recent attempts on the rules in play,
+     both bounded, and chooses among the legal changes by number. Anything else it returns is discarded
+     and counted.
    - The fixed ordering fills the remaining slots.
-   - Repair memory removes changes already rejected on evidence at least as strong.
+   - Repair memory removes moves already tried on evidence at least as strong as this round's first
+     test. A shown-and-dropped exemplar or examples toggle is not re-proposed on the same version.
 2. **Build.** Each candidate is rebuilt from the ratified standard, never edited. The standard's hash
    is asserted unchanged at the mint.
 3. **Screen.** One draft per task on a cheap model (`--screen-model`), and each candidate is scored on
-   every measured rule. Candidates the champion dominates, or that beat it on nothing, are dropped. The
-   Pareto front is ranked, and a few finalists go on.
-4. **Confirm.** Finalists are fired on the real model against the floor, and the promotion gate reads
-   the result. A reader that has earned VETO may block a finalist on a REQUIRED rule nothing measures.
-   To earn it, the reader needs at least 30 comparisons with your own rulings, and a 95% lower bound of
-   70% on its agreement. It never clears one.
+   every measured rule. A change counts only beyond that rule's margin. Candidates the champion
+   dominates, or that beat it on nothing, are dropped. The Pareto front is ranked, and a few finalists
+   go on.
+4. **Confirm.** Only a change to a **measured** rule can be shown better by a count. Those finalists are
+   fired on the real model against the floor, with that rule as the target, and the promotion gate
+   reads the result.
+   - A change to an unmeasured rule, or to whether the exemplar or examples ship, is left for you. It
+     never installs itself.
+   - A reader that has earned VETO may block a finalist on a REQUIRED rule nothing measures. To earn
+     it, it needs 30 comparisons with your own rulings on those rules, at least 5 each way, and
+     agreement beyond chance (Cohen's kappa of 0.6). A reader that always says "keep the old one"
+     never earns it. It never clears a finalist.
 5. **Adopt.** Only with `--promote`, only on AUTO_PROMOTE, and only one change per round.
+
+`--cap` is the whole round's budget, with a call ceiling for runtimes that have no known prices. A
+round that runs out stops cleanly. It is recorded, and anything it built but did not test is marked
+untested, so it is not held against a retry. A candidate left for you waits for `atelier promote` or
+`atelier reject`, and `atelier fix` points there instead of building another.
 
 Every proposal records who proposed it. `atelier optimize --report` compares how often reflection's
 proposals are kept with the fixed ordering's. `atelier fix --reflect` runs the same comparison one
-complaint at a time.
+complaint at a time, and falls back to the fixed ordering when repair memory refuses reflection's
+choice.
+
+## What keeps going wrong
+
+`atelier mine --skill <name>` (`core/mining/recurrence.ts`) reads everything the loop has recorded and
+lists what recurs, strongest first, each with its remedy.
+
+| recurrence | what it is | remedy |
+|---|---|---|
+| gap | two or more complaints that say the same thing, about no rule the standard has | a rule to add, in your words or a proposed wording you approve: `--add <n> --materiality required\|preferred [--statement "…"]` |
+| missed rule | complaints attributed to the same rule, again and again | the rule is not reaching the model: `atelier optimize`, or reword it with `amend` |
+| broken draft | a measured rule the first draft breaks in most runs, repaired every time | the loop pays for it on every run; a different carrier may prevent it |
+| lost meaning | a rule whose repairs keep being refused for changing what the text claims | the rule may conflict with how you qualify claims; look at it with `amend` |
+
+Complaints are grouped by the content words they share. Nothing here calls a model unless you pass
+`--phrase`, which asks one to word a rule for a gap that has none; the wording is a proposal like any
+other. Listing changes nothing, and a gap becomes a rule only with `--add`.
 
 ## Rule keys
 

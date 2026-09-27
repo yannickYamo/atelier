@@ -151,8 +151,7 @@ export function evaluateTask(candidate: Record<string, readonly number[]>, froze
     if (c.length < 2 || f.length < 2) {
       return { dim, verdict: 'INCONCLUSIVE', gateRole: d.gateRole, margin: d.nonInferiorityMargin, delta: 0, lowerBound: -Infinity, upperBound: Infinity };
     }
-    const floorSd = (xs: readonly number[]): Sample => { const x = sampleFrom(xs); return { ...x, sd: Math.max(x.sd, d.nonInferiorityMargin / 2) }; };
-    return { dim, gateRole: d.gateRole, margin: d.nonInferiorityMargin, ...dimensionVerdict(floorSd(c), floorSd(f), d.nonInferiorityMargin) };
+    return { dim, gateRole: d.gateRole, margin: d.nonInferiorityMargin, ...flooredVerdict(c, f, d.nonInferiorityMargin) };
   });
   const enforced = perDim.filter((d) => d.gateRole === 'ENFORCE' && !exclude.has(d.dim));
   if (!enforced.length) return { perDim, composite: 'INCONCLUSIVE', drivenBy: [] };
@@ -160,6 +159,38 @@ export function evaluateTask(candidate: Record<string, readonly number[]>, froze
   const unresolved = enforced.filter((d) => d.verdict === 'INCONCLUSIVE');
   return { perDim, composite: regressed.length ? 'REGRESSION' : unresolved.length ? 'INCONCLUSIVE' : 'NONINFERIOR',
     drivenBy: (regressed.length ? regressed : unresolved).map((d) => d.dim) };
+}
+
+/** floor.ts's verdict with each side's spread taken as at least half the margin (see `evaluateTask`). */
+function flooredVerdict(candidate: readonly number[], frozen: readonly number[], margin: number): ReturnType<typeof dimensionVerdict> {
+  const floorSd = (xs: readonly number[]): Sample => { const x = sampleFrom(xs); return { ...x, sd: Math.max(x.sd, margin / 2) }; };
+  return dimensionVerdict(floorSd(candidate), floorSd(frozen), margin);
+}
+
+/** The regression a floor must be able to see: twice what it is told to tolerate. */
+export const PLANTED_MARGINS = 2;
+/** How often it must see it, and over how many plantings at least. */
+export const MIN_SENSITIVITY = 0.8;
+export const MIN_PLANTED = 20;
+
+/**
+ * SENSITIVITY: would this floor notice a real regression? A false-alarm rate says how often it blocks a
+ * version that is no worse, and a false alarm errs toward safety. The failure that matters for letting
+ * the floor act alone is the other one: a version that IS worse, passed. So on the same fresh A/A draws,
+ * each enforced dimension of the second half is shifted down by PLANTED_MARGINS × its margin, and the
+ * floor is asked again. The share of plantings it calls REGRESSION is its sensitivity to a regression of
+ * that size, measured on this skill's own spread.
+ */
+export function plantedDetections(candidate: Record<string, readonly number[]>, frozen: FrozenBaselineEntry, contract: QualityFloorContract): { hits: number; trials: number } {
+  let hits = 0; let trials = 0;
+  for (const [dim, d] of Object.entries(contract.dimensions)) {
+    if (d.gateRole !== 'ENFORCE') continue;
+    const c = candidate[dim] ?? []; const f = frozen.perFireScores?.[dim] ?? [];
+    if (c.length < 2 || f.length < 2) continue;
+    trials += 1;
+    if (flooredVerdict(c.map((x) => x - PLANTED_MARGINS * d.nonInferiorityMargin), f, d.nonInferiorityMargin).verdict === 'REGRESSION') hits += 1;
+  }
+  return { hits, trials };
 }
 
 /** Across tasks, the worst verdict wins: one task regressing is a regression. */
@@ -205,17 +236,23 @@ export function countAA(results: readonly QualityFloorResult[]): { falseAlarms: 
 }
 
 /**
- * The false-alarm rate, from independent A/A runs (see `countAA`). The upper one-sided 95% bound is
- * exact (Clopper–Pearson). With no false alarm at all it takes 59 resolved task comparisons to bring it
- * to 5% (twenty tasks and three runs, say), and that is the price of letting the floor act alone.
- * Qualified only over at least three distinct tasks; otherwise null, and the gate stays UNQUALIFIED.
+ * The false-alarm rate, from independent A/A runs (see `countAA`), AND the sensitivity to a planted
+ * regression (see `plantedDetections`). The upper one-sided 95% bound on false alarms is exact
+ * (Clopper–Pearson); with none at all it takes 59 resolved task comparisons to bring it to 5% (twenty
+ * tasks and three runs, say). The floor must also catch at least MIN_SENSITIVITY of MIN_PLANTED or more
+ * planted regressions. Qualified only over at least three distinct tasks; otherwise null, and the gate
+ * stays UNQUALIFIED.
  */
-export function qualifyFromAA(tally: { falseAlarms: number; trials: number }, tasks: number, estimand: string,
-  maxRate = 0.05, at = new Date().toISOString()): { qualification: FloorQualification | null; upper95: number } {
+export function qualifyFromAA(tally: { falseAlarms: number; trials: number; plantedHits?: number; planted?: number }, tasks: number, estimand: string,
+  maxRate = 0.05, at = new Date().toISOString()): { qualification: FloorQualification | null; upper95: number; sensitivity: number | null } {
   const upper95 = tally.trials ? clopperPearsonUpper(tally.falseAlarms, tally.trials, 0.95) : 1;
-  const qualification = tally.trials && tasks >= 3 && upper95 <= maxRate
+  const planted = tally.planted ?? 0;
+  const sensitivity = planted ? (tally.plantedHits ?? 0) / planted : null;
+  // Both halves of the claim: it rarely blocks a version that is no worse, AND it catches one that is.
+  const sensitive = planted >= MIN_PLANTED && (sensitivity ?? 0) >= MIN_SENSITIVITY;
+  const qualification = tally.trials && tasks >= 3 && upper95 <= maxRate && sensitive
     ? { estimand, falseAlarmUpper95: upper95, independentContexts: tasks, decidedAt: at } : null;
-  return { qualification, upper95 };
+  return { qualification, upper95, sensitivity };
 }
 
 /** Exact one-sided upper confidence bound for a binomial proportion, by bisection on the tail. */

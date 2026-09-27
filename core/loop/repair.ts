@@ -22,7 +22,9 @@ import { spanIntegrity } from './integrity.js';
 
 /** Observers whose spans ARE the thing to remove: a banned term, a flagged hedge, a counted habit, an
  *  occurrence over a word rate. */
-const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE']);
+const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE', 'OPENING', 'CLOSING']);
+// Not HEADINGS: its span is the whole heading line, which is not a sentence, so licensing its text would
+// let a rewrite drop a name or a negation from the heading. A heading is rewritten under the full guard.
 /** Observers whose spans are to be SWAPPED for a competing form ("is not" for "isn't"): the word may go,
  *  but what it asserted may not, so a swap never licenses dropping a negation. */
 const SWAPS_SPAN = new Set(['RATIO']);
