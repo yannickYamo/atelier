@@ -49,7 +49,7 @@ export interface ProposalEvidence {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** a measured rule's conformance on the pieces it was counted from */
-  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
 }
 
 export interface Suggestion {
@@ -82,6 +82,10 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     if (p.measurement.observer === 'STYLE_DISTANCE') {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2,
         why: `${present} of ${applicable} ${where} are closer to you than to the model; used to choose between drafts` };
+    }
+    if (e.inSample.weak) {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
+        why: `${seen}; the model's plain drafts did not show this habit clearly, so it is shown and used to choose between drafts until you make it required` };
     }
     if (p.measurement.observer === 'PATTERN_RATE' && typeof p.measurement.params.minPer1000 === 'number') {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: `${seen}; a floor, so it guides draft selection rather than a rewrite` };

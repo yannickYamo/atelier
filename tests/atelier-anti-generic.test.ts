@@ -8,7 +8,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { findPattern, patternRate, fragmentShare, deltaReference, styleDistance } from '../core/observers/style.js';
+import { findPattern, patternRate, fragmentShare, deltaReference, styleDistanceDocs } from '../core/observers/style.js';
 import { deriveContrastRules } from '../core/observers/contrast.js';
 import { measure } from '../core/observers/registry.js';
 import { unsourcedClaims } from '../core/loop/claims.js';
@@ -65,7 +65,7 @@ describe('contrast: rules from the gap, guarded by the author\'s own held-out wo
   });
   it('style distance puts the author\'s unseen piece nearer the author than the model', () => {
     const ref = deltaReference(read.map((p) => p.text), [model(0), model(1), model(2)]);
-    const d = styleDistance(author(7).text, ref);
+    const d = styleDistanceDocs(author(7).text, ref);
     expect(d.author).toBeLessThan(d.model);
   });
 });
@@ -75,7 +75,7 @@ describe('PATTERN_RATE: caps name what to write instead; floors report without a
   it('a cap of zero flags every em dash, with the author\'s substitute in the reason', () => {
     const r = measure(long('It works — mostly.'), { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: 0, prefer: [' - '] } });
     expect(r.verdict).toBe('VIOLATED');
-    expect(r.spans[0].why).toMatch(/write "-" instead/);
+    expect(r.spans[0].why).toContain('write " - " instead');
   });
   it('too few is a violation with no span to rewrite', () => {
     const r = measure(long('No bold here.'), { observer: 'PATTERN_RATE', params: { pattern: ['BOLD_SPAN'], minPer1000: 2 } });
@@ -136,5 +136,49 @@ describe('through the binary: material, and several drafts chosen by count', () 
     const out2 = run('invoke', '--skill', 'inc', 'write it', ...be);
     expect(out2).toContain('Last year we shipped a loop that broke production.');
     expect(readFileSync(join(proj, '.claude', 'skills', 'inc', 'SKILL.md'), 'utf8')).toBeTruthy();
+  });
+});
+
+// ── Found by the audit of this build ──────────────────────────────────────────────────────────
+describe('the guard is precise, and never defeats itself', () => {
+  it('a story the person typed into the request is theirs; the whole invented story is caught, not its first line', () => {
+    const t = 'Last year we shipped a loop that broke production for a day. Everything else was routine.';
+    expect(unsourcedClaims(t, 'Write about how last year we shipped a loop that broke production for a day')).toEqual([]);
+    const story = 'Years ago I worked on a ground-segment integration. We shipped it. Six months later I was reviewing an incident. Nobody was malicious. The lesson is simple.';
+    expect(unsourcedClaims(story, '').map((c) => c.text)).toEqual([
+      'Years ago I worked on a ground-segment integration.', 'We shipped it.', 'Six months later I was reviewing an incident.', 'Nobody was malicious.']);
+  });
+  it('numbers match whole, a linked sentence is sourced, and a version number or a year is not a finding', () => {
+    expect(unsourcedClaims('According to the survey, 40% of teams agree.', 'the survey said 400 teams')).toHaveLength(1);
+    expect(unsourcedClaims('According to [the survey](https://x.org/s), 40% of teams agree.', '')).toEqual([]);
+    expect(unsourcedClaims('As of 2025, the API supports streaming. Python 3.12 reports errors better.', '')).toEqual([]);
+  });
+  it('no placeholder or repair instruction contains an em dash, so it cannot break an em-dash cap', () => {
+    const c = unsourcedClaims('According to the 2025 report, 40,000 objects are tracked.', '');
+    expect(c[0].why).not.toContain('—');
+  });
+});
+
+describe('contrast proposes nothing the evidence does not support', () => {
+  const read = [0, 1, 2, 3].map(author); const held = [4, 5].map(author);
+  it('when the "model drafts" write like the author, nothing is proposed from the gap', () => {
+    const same = deriveContrastRules(read, held, [6, 7, 8].map((i) => author(i).text), 'MACHINE_DISCOVERED');
+    expect(same.filter((r) => r.requirement.measurement?.observer === 'PATTERN_RATE')).toEqual([]);
+  });
+});
+
+describe('patterns match the tic, not ordinary prose', () => {
+  it('"isn\'t X. It\'s Y" is the tic; "not X, but Y" is a concession', () => {
+    expect(findPattern('The loop isn\'t a tool. It\'s a habit.', 'NOT_X_ITS_Y')).toHaveLength(1);
+    expect(findPattern('It\'s not foolproof, but it helps.', 'NOT_X_ITS_Y')).toHaveLength(0);
+  });
+  it('a numeric range is not a spaced hyphen', () => {
+    expect(findPattern('It takes 2 - 3 days.', 'SPACED_HYPHEN')).toHaveLength(0);
+  });
+  it('only the excess over a cap is sent to be rewritten', () => {
+    const t = `${'Plain words here make a long enough sentence for counting. '.repeat(60)} It works — mostly. It works — again.`;
+    const r = measure(t, { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: 2 } });
+    expect(r.verdict).toBe('VIOLATED');
+    expect(r.spans).toHaveLength(1);
   });
 });

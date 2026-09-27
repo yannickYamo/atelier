@@ -15,7 +15,7 @@
 // broke the rule, so a repair can rewrite that span and nothing else.
 
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
-import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistance, type PatternId } from './style.js';
+import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
 
 export interface Span { readonly start: number; readonly end: number; readonly text: string; readonly why: string }
 
@@ -123,7 +123,7 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const lo = num(p, 'minPer1000'); const hi = num(p, 'maxPer1000');
       const what = id ? PATTERN_LABEL[id] : 'a pattern';
       const prefer = (list(p, 'prefer') ?? [])[0];
-      if (hi === 0) return `no ${what}${prefer ? ` (write "${prefer.trim()}" instead)` : ''}`;
+      if (hi === 0) return `no ${what}${prefer ? `; write "${prefer}" instead` : ''}`;
       return `${what}: ${lo !== null ? `at least ${lo}` : ''}${lo !== null && hi !== null ? ' and ' : ''}${hi !== null ? `at most ${hi}` : ''} per 1,000 words`;
     },
     validate: (p) => {
@@ -137,10 +137,15 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const words = proseWords(text);
       if (words < 150) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 150 words' };
       const prefer = (list(p, 'prefer') ?? [])[0];
-      const hits = findPattern(text, id).map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer.trim()}" instead` } : s));
+      const hits = findPattern(text, id).map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
       const rate = Math.round((hits.length / words) * 10000) / 10;
       const lo = num(p, 'minPer1000'); const hi = num(p, 'maxPer1000');
-      if (hi !== null && rate > hi) return { verdict: 'VIOLATED', spans: hits, value: rate, detail: `${rate} per 1,000 words (at most ${hi})` };
+      // Only the EXCESS is sent to be rewritten: at a cap of 1 per 1,000 words, a 1,500-word piece keeps
+      // one; the later occurrences are the ones over the line.
+      if (hi !== null && rate > hi) {
+        const allowed = Math.floor((hi * words) / 1000);
+        return { verdict: 'VIOLATED', spans: hits.slice(allowed), value: rate, detail: `${rate} per 1,000 words (at most ${hi})` };
+      }
       // Too FEW is a real violation and has no span to point at; it is reported, and draft selection prefers texts that meet it.
       if (lo !== null && rate < lo) return { verdict: 'VIOLATED', spans: [], value: rate, detail: `${rate} per 1,000 words (at least ${lo})` };
       return { verdict: 'MET', spans: [], value: rate, detail: `${rate} per 1,000 words` };
@@ -160,22 +165,29 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const frags = ss.filter((s) => s.words <= w);
       const share = frags.length / ss.length;
       const pct = Math.round(share * 100);
+      // The excess only, shortest first: those read most like a tic and cost least to fold into a neighbour.
+      const excess = frags.length - Math.floor(max * ss.length);
+      const toFix = [...frags].sort((a, b) => a.words - b.words || a.start - b.start).slice(0, Math.max(0, excess)).sort((a, b) => a.start - b.start);
       return share > max
-        ? { verdict: 'VIOLATED', spans: frags.map((s) => ({ start: s.start, end: s.end, text: s.text, why: `a ${s.words}-word fragment; ${pct}% of sentences are this short (at most ${Math.round(max * 100)}%)` })), value: pct, detail: `${pct}% of sentences are ${w} words or fewer (at most ${Math.round(max * 100)}%)` }
+        ? { verdict: 'VIOLATED', spans: toFix.map((s) => ({ start: s.start, end: s.end, text: s.text, why: `a ${s.words}-word fragment; ${pct}% of sentences are this short (at most ${Math.round(max * 100)}%)` })), value: pct, detail: `${pct}% of sentences are ${w} words or fewer (at most ${Math.round(max * 100)}%)` }
         : { verdict: 'MET', spans: [], value: pct, detail: `${pct}% of sentences are ${w} words or fewer` };
     },
   },
   STYLE_DISTANCE: {
     id: 'STYLE_DISTANCE',
-    describe: () => 'closer to the author\'s function-word profile than to the model\'s own (Burrows\' Delta)',
+    describe: () => 'closer to the author\'s function-word profile than to the model\'s own (Burrows\' Delta, per document)',
     validate: (p) => {
       const k = (list(p, 'words') ?? []).length;
-      return k && ['mean', 'sd', 'author', 'model'].every((x) => nums(p, x)?.length === k) ? null : 'needs words, mean, sd, author and model of equal length';
+      const a = nums(p, 'authorDocs')?.length ?? 0; const m = nums(p, 'modelDocs')?.length ?? 0;
+      return k && nums(p, 'mean')?.length === k && nums(p, 'sd')?.length === k && a && m && a % k === 0 && m % k === 0
+        ? null : 'needs words, mean, sd and per-document authorDocs/modelDocs profiles';
     },
     observe(text, p) {
       if (proseWords(text) < 300) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 300 words' };
-      const ref = { words: list(p, 'words') ?? [], mean: nums(p, 'mean') ?? [], sd: nums(p, 'sd') ?? [], author: nums(p, 'author') ?? [], model: nums(p, 'model') ?? [] };
-      const d = styleDistance(text, ref);
+      const words = list(p, 'words') ?? []; const k = words.length;
+      const chunk = (xs: readonly number[]): number[][] => Array.from({ length: xs.length / k }, (_, i) => xs.slice(i * k, (i + 1) * k));
+      const ref = { words, mean: nums(p, 'mean') ?? [], sd: nums(p, 'sd') ?? [], authorDocs: chunk(nums(p, 'authorDocs') ?? []), modelDocs: chunk(nums(p, 'modelDocs') ?? []) };
+      const d = styleDistanceDocs(text, ref);
       const closer = d.author < d.model;
       return { verdict: closer ? 'MET' : 'VIOLATED', spans: [], value: Math.round((d.model - d.author) * 1000) / 1000,
         detail: `distance to the author ${d.author}, to the model ${d.model}: ${closer ? 'closer to the author' : 'closer to the model'}` };

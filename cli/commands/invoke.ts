@@ -129,7 +129,8 @@ export async function invoke(): Promise<void> {
   // The person's standing material for this skill (`atelier material`) and anything bound for this
   // task (`--with`): the only places a first-person story or a cited figure in the output may come from.
   const material = [...store.getMaterial(L), ...boundMaterial()];
-  const materialText = material.map((m) => m.text).join('\n\n');
+  // The request itself is material too: a story the person typed into the task is theirs to tell.
+  const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
   const task = material.length
     ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
     : asked;
@@ -146,7 +147,11 @@ export async function invoke(): Promise<void> {
   if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall!);
   if (shortfall) console.log(shortfall);
 
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 8) };
+  // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
+  // cover is refused before anything is spent rather than failing halfway with nothing delivered.
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', 1)));
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4) };
+  if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
 
   // ── WHICH RUNTIME, AND IS IT THE ONE THIS VERSION'S EVIDENCE CAME FROM ────────────────────
   //
@@ -188,7 +193,9 @@ export async function invoke(): Promise<void> {
   // `--drafts N` writes N drafts side by side and delivers the one that breaks the fewest REQUIRED
   // rules, then sits closest to the author's style (when the standard carries a style distance), then
   // breaks the fewest rules of any weight. A count picks it, never a judge's taste.
-  const nDrafts = numericFlag('--drafts', 1);
+  if (nDrafts > 1 && (!std || contractFile !== null)) {
+    console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
+  }
   const select = std && nDrafts > 1 ? { n: nDrafts, choose: (drafts: readonly string[]) => {
     const scored = drafts.map((d, i) => {
       const r = checkDraft(name, std, d, checks);
