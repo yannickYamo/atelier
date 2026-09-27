@@ -71,7 +71,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report',
+  'reflect', 'no-reflect', 'report', 'phrase',
 ];
 
 export const argv = process.argv.slice(2);

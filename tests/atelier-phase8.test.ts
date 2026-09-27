@@ -7,8 +7,12 @@ import { join, resolve } from 'node:path';
 import { genomeOf, mutationsOf, mutationKey, type Mutation } from '../core/optimizer/genome.js';
 import { dominates, paretoFront, finalists } from '../core/optimizer/pareto.js';
 import { reflectPrompt, parseReflection, MAX_FAILURES_SHOWN, MAX_ATTEMPTS_SHOWN, MAX_PROPOSALS } from '../core/optimizer/reflect.js';
-import { wilsonLower, readerPermission, vetoedRules, VETO_AGREEMENT } from '../core/optimizer/veto.js';
-import { MIN_COMPARABLE, type Agreement } from '../core/fidelity/judgement.js';
+import { wilsonLower, cohensKappa, readerPermission, vetoedRules, VETO_KAPPA } from '../core/optimizer/veto.js';
+import { MIN_COMPARABLE, type JudgementRecord } from '../core/fidelity/judgement.js';
+import { mayPropose, foldRepairs } from '../core/architecture/repair-memory.js';
+import { contrastFor } from '../core/compiler/contrast-examples.js';
+import { ruleKey } from '../core/state/rule-key.js';
+import { plantedDetections } from '../core/distinctiveness/measured.js';
 import type { SkillArchitecture } from '../core/architecture/compile.js';
 import type { Requirement, StandardVersion } from '../core/state/canonical-state.js';
 import * as store from '../core/state/store.js';
@@ -82,19 +86,32 @@ describe('reflection: bounded history, legal choices only', () => {
 });
 
 describe('the reader may block, never clear, and only once it has earned it', () => {
-  const agreementOf = (agreed: number, disagreed: number): Agreement => ({ comparable: agreed + disagreed, agreed, disagreed,
-    observerDeclined: 0, orderDependent: 0, humanOnly: 0, observerOnly: 0, withRationale: 0, humanRulings: agreed + disagreed });
-  it('Wilson lower bound behaves', () => {
+  const rec = (requirementId: string, reader: 'CANDIDATE_COMPLIES_BETTER' | 'CHAMPION_COMPLIES_BETTER', owner: 'CANDIDATE' | 'CHAMPION'): JudgementRecord =>
+    ({ requirementId, championSkillVersionHash: 'a', candidateSkillVersionHash: 'b',
+      observer: { result: reader, orderInvariant: true, lengthRatio: 1, at: 't' }, human: { choice: owner, rationale: null, at: 't' } });
+  const table = (both: number, neither: number, readerOnly: number, ownerOnly: number, id = 'u1'): JudgementRecord[] => [
+    ...Array.from({ length: both }, () => rec(id, 'CANDIDATE_COMPLIES_BETTER', 'CANDIDATE')),
+    ...Array.from({ length: neither }, () => rec(id, 'CHAMPION_COMPLIES_BETTER', 'CHAMPION')),
+    ...Array.from({ length: readerOnly }, () => rec(id, 'CANDIDATE_COMPLIES_BETTER', 'CHAMPION')),
+    ...Array.from({ length: ownerOnly }, () => rec(id, 'CHAMPION_COMPLIES_BETTER', 'CANDIDATE'))];
+  const unmeasured = new Set(['u1']);
+  it('Wilson and kappa behave', () => {
     expect(wilsonLower(0, 0)).toBe(0);
     expect(wilsonLower(30, 30)).toBeGreaterThan(0.88);
-    expect(wilsonLower(15, 30)).toBeLessThan(0.5);
+    expect(cohensKappa({ both: 10, neither: 10, readerOnly: 0, ownerOnly: 0 })).toBe(1);
+    expect(cohensKappa({ both: 0, neither: 30, readerOnly: 0, ownerOnly: 6 })).toBe(0);
   });
-  it('too few comparisons, or too little agreement: OBSERVE. Enough of both: VETO. Never CERTIFY.', () => {
-    expect(readerPermission(agreementOf(MIN_COMPARABLE - 1, 0)).permission).toBe('OBSERVE');
-    expect(readerPermission(agreementOf(20, 20)).permission).toBe('OBSERVE');
-    const strong = readerPermission(agreementOf(58, 2));
-    expect(strong.permission).toBe('VETO');
-    expect(wilsonLower(58, 60)).toBeGreaterThanOrEqual(VETO_AGREEMENT);
+  it('a reader that always says "keep the old one" never earns VETO, however often the owner rejects', () => {
+    expect(readerPermission(table(0, 34, 0, 6), unmeasured).permission).toBe('OBSERVE');
+  });
+  it('too few rulings, or too few in one direction: OBSERVE', () => {
+    expect(readerPermission(table(3, MIN_COMPARABLE, 0, 0), unmeasured).permission).toBe('OBSERVE');
+    expect(readerPermission(table(10, 10, 0, 0), unmeasured).permission).toBe('OBSERVE');
+  });
+  it('agreement beyond chance, both ways, on the rules it reads: VETO. Never CERTIFY. Measured rules do not count.', () => {
+    expect(readerPermission(table(12, 20, 1, 1), unmeasured).permission).toBe('VETO');
+    expect(readerPermission(table(12, 20, 1, 1, 'measured'), unmeasured).permission).toBe('OBSERVE');
+    expect(VETO_KAPPA).toBeGreaterThan(0);
   });
   it('blocks only on order-invariant readings, at least two, worse more often than better', () => {
     const r = (requirementId: string, result: 'CHAMPION_COMPLIES_BETTER' | 'CANDIDATE_COMPLIES_BETTER' | 'EQUAL', orderInvariant = true) => ({ requirementId, result, orderInvariant });
@@ -102,6 +119,36 @@ describe('the reader may block, never clear, and only once it has earned it', ()
     expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER')])).toEqual([]);
     expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER', false), r('a', 'CHAMPION_COMPLIES_BETTER', false)])).toEqual([]);
     expect(vetoedRules([r('a', 'CHAMPION_COMPLIES_BETTER'), r('a', 'CHAMPION_COMPLIES_BETTER'), r('a', 'CANDIDATE_COMPLIES_BETTER'), r('a', 'CANDIDATE_COMPLIES_BETTER')])).toEqual([]);
+  });
+});
+
+describe('Phase 8 audit: what was closed', () => {
+  it('a move rejected at confirmation is not re-proposed on this round\'s screen; an untested one is', () => {
+    const at = '2026-01-01T00:00:00Z';
+    const ev = (outcome: 'REJECTED', generations: number, instrument: 'QUALIFIED_OBSERVER' | 'UNQUALIFIED_COMPARATOR') => [
+      { kind: 'REPAIR_PROPOSED', repairId: 'r', skillName: 's', requirementId: 'p1', from: 'PROSE', to: 'SELF_CHECK', standardVersionHash: 'v', providerAdapter: 'x', requestedModel: 'm',
+        sourceSkillVersionHash: 'a', candidateSkillVersionHash: 'b', evidenceBasis: { missContexts: 20, invocationIds: [] }, at },
+      { kind: 'REPAIR_SETTLED', repairId: 'r', outcome, evaluationBasis: { generations, instrument, orderInvariant: null }, at, note: null }];
+    const screen = { evidence: { missContexts: 20, invocationIds: [] }, evaluation: { generations: 1, instrument: 'UNQUALIFIED_COMPARATOR' as const, orderInvariant: null } };
+    const scope = { standardVersionHash: 'v', providerAdapter: 'x', requestedModel: 'm' };
+    expect(mayPropose(foldRepairs(ev('REJECTED', 3, 'QUALIFIED_OBSERVER')), [], 'p1', 'PROSE', 'SELF_CHECK', screen, scope).allowed).toBe(false);
+    expect(mayPropose(foldRepairs(ev('REJECTED', 1, 'UNQUALIFIED_COMPARATOR')), [], 'p1', 'PROSE', 'SELF_CHECK', screen, scope).allowed).toBe(false);
+    expect(mayPropose(foldRepairs(ev('REJECTED', 0, 'UNQUALIFIED_COMPARATOR')), [], 'p1', 'PROSE', 'SELF_CHECK', screen, scope).allowed).toBe(true);
+  });
+  it('legacy pairs without a check: kept (and stamped) where the passage proves it, dropped where it cannot', () => {
+    const lex = rule('x1', { kind: 'BOUNDARY', measurement: { observer: 'LEXICON', params: { terms: ['leverage'] } } });
+    const len = rule('x2', { measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 15, p90Max: 28 } } });
+    const v = { requirements: [lex, len] } as unknown as StandardVersion;
+    const kept = contrastFor([{ key: ruleKey(lex), before: 'We leverage A.', after: 'We use A.', statement: '' },
+      { key: ruleKey(len), before: 'A very long sentence.', after: 'Short.', statement: '' }], v);
+    expect(kept.map((p) => p.key)).toEqual([ruleKey(lex)]);
+    expect(kept[0].check).toBeDefined();
+  });
+  it('sensitivity: a regression of two margins is caught from three drafts a side; none is planted on OBSERVE rules', () => {
+    const c = { instrument: 'scoreDimensionByPolicy' as const, dimensions: { a: { nonInferiorityMargin: 1, gateRole: 'ENFORCE' as const, rationale: '' },
+      b: { nonInferiorityMargin: 1, gateRole: 'OBSERVE' as const, rationale: '' } } };
+    const f = { clusterId: 'c', fixtureContextId: 't', nGen: 3, meanScores: {}, perFireScores: { a: [0, 0, 0], b: [0, 0, 0] } };
+    expect(plantedDetections({ a: [0, 0, 0], b: [0, 0, 0] }, f, c)).toEqual({ hits: 1, trials: 1 });
   });
 });
 
@@ -172,6 +219,51 @@ describe('through the binary: one round of optimize', () => {
     expect(events.some((e) => e.kind === 'OPTIMIZE_ROUND')).toBe(true);
     const report = run(data, proj, 'optimize', '--skill', 'focus', '--report');
     expect(report).toMatch(/REFLECTIVE\s+\d+ proposed · 1 kept/);
+  }, 300_000);
+
+  it('a round that runs out of budget stops cleanly: recorded, and nothing it built is held against a retry', async () => {
+    const { data, proj } = await seed(3);
+    const L = { root: data, skillName: 'focus' };
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] } } });
+    run(data, proj, 'floor', '--skill', 'focus', '--baseline');
+    const out = run(data, proj, 'optimize', '--skill', 'focus', '--cap', '0.0000001');
+    expect(out).toContain('could not finish');
+    const round = store.readEvents(L).find((e) => e.kind === 'OPTIMIZE_ROUND') as { aborted?: string } | undefined;
+    expect(round?.aborted).toBeTruthy();
+    expect(foldRepairs(store.readEvents(L)).every((r) => r.outcome !== 'PENDING')).toBe(true);
+  }, 300_000);
+
+  it('a candidate left waiting for a person does not break fix: fix says where to decide it', async () => {
+    const { data, proj } = await seed(60);
+    const L = { root: data, skillName: 'focus' };
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] } } });
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation')).not.toMatch(/^EXIT:/);
+    run(data, proj, 'floor', '--skill', 'focus', '--baseline');
+    run(data, proj, 'floor', '--skill', 'focus', '--qualify');
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] },
+      emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' } },
+    when: [{ contains: 'Before you finalize', answer: { piece: 'the plain answer' } }] });
+    const opt = run(data, proj, 'optimize', '--skill', 'focus', '--cap', '50');
+    expect(opt).toContain('to adopt it yourself');
+    expect(foldRepairs(store.readEvents(L)).some((r) => r.outcome === 'PENDING')).toBe(true);
+    const out = run(data, proj, 'fix', 'it said synergy');
+    expect(out).not.toMatch(/^EXIT:/);
+    expect(out).toContain('already waiting for your decision');
+  }, 300_000);
+
+  it('fix --reflect lets a model choose the change, and records who chose', async () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-p8r-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-p8r-proj-'));
+    const L = { root: data, skillName: 'focus' };
+    run(data, proj, 'add', '--statement', 'Lead with the action.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await post({ byTool: { emit_piece: { piece: 'the original answer' } } });
+    run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation');
+    await post({ byTool: { emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
+      emit_piece: { piece: 'the improved answer' }, emit_proposals: { proposals: [{ change: 1, why: 'it is skimmed while drafting' }] } } });
+    const out = run(data, proj, 'fix', 'the answer buried the recommendation', '--reflect');
+    expect(out).toContain('Reflection chose');
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_PROPOSED' && (e as { proposer?: string }).proposer === 'REFLECTIVE')).toBe(true);
   }, 300_000);
 
   it('without --promote nothing is installed, and a candidate nothing beats is screened out', async () => {

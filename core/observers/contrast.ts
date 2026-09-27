@@ -17,7 +17,8 @@ import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { measure, findTerms } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
-import { quantile, sentencesOf } from './text.js';
+import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
+import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
 import type { MeasuredProposal } from './derive.js';
 
 interface Piece { readonly id: string; readonly text: string }
@@ -138,6 +139,7 @@ export function deriveContrastRules(
     }
   }
   proposeProportions(authorTexts, drafts, propose);
+  proposeStructure(authorTexts, drafts, propose);
   return out;
 }
 
@@ -254,6 +256,66 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
       propose(`Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
         { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
         `you: ${show(author)}; the model on its own: ${show(model)} (${pct(gap)} of its sentences in a different band)`);
+    }
+  }
+}
+
+/**
+ * The edges and the signposts: phrases the model's drafts put in openings, closes and headings that the
+ * author's work never uses there, heading case, and how long the opening runs. Each is proposed only if
+ * most of the drafts fail it and the author's held-out work meets it.
+ */
+function proposeStructure(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  const first = (t: string): string => paragraphsOf(t)[0]?.text ?? '';
+  const last = (t: string): string => { const ps = paragraphsOf(t); return ps.length >= 2 ? ps[ps.length - 1].text : ''; };
+  const headingText = (t: string): string => headingsOf(t).map((h) => h.text).join('\n');
+  const seenIn = (texts: readonly string[], part: (t: string) => string, tropes: readonly string[]): string[] =>
+    tropes.filter((tr) => texts.some((t) => findTerms(part(t), [tr]).length > 0));
+  const say = (xs: readonly string[]): string => xs.slice(0, 4).map((x) => `"${x}"`).join(', ') + (xs.length > 4 ? '…' : '');
+
+  // STOCK MOVES AT THE EDGES. Like the model-typical tics above, these often appear only once a skill
+  // asks for a voice ("The thing everyone gets wrong about…" arrived in a skill's output, not in the
+  // model's plain drafts). So every trope the author never uses in that position is proposed: as a
+  // firm rule where the plain drafts already fail it, and as WEAK (shown, used to choose between
+  // drafts, not instructed) where they do not.
+  const edgeRule = (id: 'OPENING' | 'CLOSING' | 'HEADINGS', part: (t: string) => string, tropes: readonly string[],
+    statement: (xs: readonly string[]) => string): void => {
+    const absent = tropes.filter((tr) => !seenIn(authorTexts, part, [tr]).length);
+    if (!absent.length) return;
+    const inDrafts = seenIn(drafts, part, absent);
+    const m: Measurement = { observer: id, params: { avoid: absent, role: [`${id.toLowerCase()}-tropes`] } };
+    const failing = drafts.filter((t) => measure(t, m).verdict === 'VIOLATED').length;
+    propose(statement(absent), 'BOUNDARY', m,
+      inDrafts.length ? `your pieces never use these there; the model's plain drafts used ${say(inDrafts)}`
+        : 'your pieces never use these there; stock moves models reach for under a voice instruction',
+      failing / Math.max(1, drafts.length) < 0.6);
+  };
+  edgeRule('OPENING', first, OPENING_TROPES, (xs) => `Open the way I do, without the stock moves: never ${say(xs)}.`);
+  edgeRule('CLOSING', last, CLOSING_TROPES, (xs) => `Close the way I do, without the stock moves: never ${say(xs)}.`);
+  edgeRule('HEADINGS', headingText, HEADING_TROPES, (xs) => `Write headings that say what the section says, never ${say(xs)}.`);
+
+  // Openings: the author's own range of lengths, where the model's run outside it.
+  const openLen = (t: string): number => wordsOf(first(t)).length;
+  const lens = authorTexts.filter((t) => paragraphsOf(t).length >= 2).map(openLen);
+  if (lens.length >= 3) {
+    const lo = Math.max(0, Math.floor(quantile(lens, 0.1) * 0.8)); const hi = Math.ceil(quantile(lens, 0.9) * 1.25);
+    propose(`Keep the opening paragraph to my length: ${lo}–${hi} words.`, 'GENERATIVE',
+      { observer: 'OPENING', params: { minWords: lo, maxWords: hi } },
+      `your openings run ${Math.min(...lens)}–${Math.max(...lens)} words; the model's: ${drafts.map(openLen).join(', ')}`, false, true);
+  }
+
+  // Heading case.
+  const cases = (texts: readonly string[]): { title: number; sentence: number } => texts.flatMap((t) => headingsOf(t).map((h) => headingCase(h.text)))
+    .reduce((c, x) => ({ title: c.title + (x === 'TITLE' ? 1 : 0), sentence: c.sentence + (x === 'SENTENCE' ? 1 : 0) }), { title: 0, sentence: 0 });
+  const a = cases(authorTexts); const m = cases(drafts);
+  const aN = a.title + a.sentence; const mN = m.title + m.sentence;
+  if (aN >= 5 && mN >= 3) {
+    const want = a.sentence / aN >= 0.8 ? 'SENTENCE' : a.title / aN >= 0.8 ? 'TITLE' : null;
+    const modelOther = want === 'SENTENCE' ? m.title / mN : want === 'TITLE' ? m.sentence / mN : 0;
+    if (want && modelOther >= 0.5) {
+      propose(`Write headings in ${want === 'SENTENCE' ? 'sentence case' : 'Title Case'}, as I do.`, 'GENERATIVE',
+        { observer: 'HEADINGS', params: { case: [want] } },
+        `you: ${want === 'SENTENCE' ? a.sentence : a.title} of ${aN} headings; the model: ${want === 'SENTENCE' ? m.sentence : m.title} of ${mN}`, false, true);
     }
   }
 }
