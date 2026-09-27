@@ -12,6 +12,7 @@ import { decide } from '../core/ratification/authority.js';
 import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
 import { anInferenceResult } from './fixtures.js';
+import * as store from '../core/state/store.js';
 
 const none = new Set<string>();
 
@@ -44,6 +45,22 @@ describe('the meaning check: figures, negation, qualifiers and names survive a r
   });
   it('a placeholder an earlier pass left must survive a later one', () => {
     expect(spanIntegrity('[your story: a launch that slipped] We value synergy.', 'We value teamwork.', none, false).ok).toBe(false);
+  });
+  it('"cannot" is a negation, and "cannot" to "can\'t" keeps it', () => {
+    expect(spanIntegrity('You cannot skip the review.', 'You can skip the review.', none, false).ok).toBe(false);
+    expect(spanIntegrity('You cannot skip it.', "You can't skip it.", none, false).ok).toBe(true);
+  });
+  it('a licensed drop waives only the negations it carried', () => {
+    expect(spanIntegrity("We never shipped it, but it is not a bug, it's a feature.", 'We shipped it, and it is a feature.', new Set(["not a bug, it's"]), false).ok).toBe(false);
+  });
+  it('possessive names, and repeated qualifiers, are counted', () => {
+    expect(spanIntegrity("The plan came from NASA's team.", 'The plan came from a team.', none, false).lost).toContain('the name "NASA"');
+    expect(spanIntegrity('It holds in most cases and for most teams.', 'It holds in most cases and for teams.', none, false).ok).toBe(false);
+  });
+  it('title-cased headings, links and spelled-out numbers are not losses', () => {
+    expect(spanIntegrity('## Why It Matters', '## Why it matters', none, false).ok).toBe(true);
+    expect(spanIntegrity('See [the docs](http://x).', 'See the docs (http://x).', none, false).ok).toBe(true);
+    expect(spanIntegrity('We ran 3 tests.', 'We ran three tests.', none, false).ok).toBe(true);
   });
   it('an invented story or figure is expected to lose its specifics', () => {
     expect(spanIntegrity('In 2019 I saw 40% of launches slip.', '[your story: a launch that slipped]', none, true).ok).toBe(true);
@@ -93,6 +110,22 @@ describe('the loop: accuracy first, and refused rewrites are recorded', () => {
     expect(out.output).toBe('[figure: what failed, and its source] We value working together here. The rest is plain.');
     expect(out.repair?.passes).toBe(2);
   });
+  it('an accuracy pass that fixes only one of two invented claims is kept, and style still gets its passes', async () => {
+    const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
+    const draft = 'According to a 2023 survey, 73% of teams failed. We value synergy here. In 2021 I watched 40% of launches slip.';
+    let n = 0;
+    const client: InferenceClient = { complete: async (r: InferenceRequest) => {
+      n += 1;
+      if (n === 1) return anInferenceResult({ json: { replacements: [{ id: 1, text: '[figure: what failed, and its source]' }] } });
+      const spans = [...r.userMessage.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map((m) => ({ id: Number(m[1]), text: m[2] }));
+      return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.includes('2021')
+        ? '[your story: a launch that slipped]' : x.text.replace('synergy', 'working together') })) } });
+    } };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    expect(out.output).toContain('[figure: what failed, and its source]');
+    expect(out.output).toContain('working together');
+    expect(out.repair?.violatedAfter).toEqual([]);
+  });
   it('a pass whose every rewrite loses meaning ends the loop with the draft, and says why', async () => {
     const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['leverage'] } } }]);
     const draft = 'Most operators may leverage 40 tools. Nothing else changes here.';
@@ -109,6 +142,7 @@ describe('phase is a decision the owner makes, through decide()', () => {
     authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
     realizationTolerance: 'FLEXIBLE', outputShape: null } as unknown as Requirement;
   it('AMEND with only a phase is a change, recorded on the rule', () => {
+    expect(decide(r, { verb: 'AMEND', phase: 'STYLE' }).requirement.phase).toBe('STYLE');
     expect(decide(r, { verb: 'AMEND', phase: 'ACCURACY' }).requirement.phase).toBe('ACCURACY');
   });
 });
@@ -161,6 +195,17 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
     run('material', '--skill', 'nodrink', notes);
     expect(run('verify', '--skill', 'nodrink', f).code).toBe(0);
     expect(run('verify', '--skill', 'nodrink', join(proj, 'd.md'), '--allow-unsourced').code).toBe(0);
+  });
+  it('amend --phase reaches the built standard; a bad phase is refused; build --class none clears the class', () => {
+    const { data, run } = seed();
+    const L = { root: data, skillName: 'nodrink' };
+    const rule = () => store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!.requirements[0];
+    expect(rule().phase).toBe('STYLE');
+    expect(run('amend', '--skill', 'nodrink', '--rule', rule().requirementId, '--phase', 'accuracy', '--reason', 'claims first').code).toBe(0);
+    expect(rule().phase).toBe('ACCURACY');
+    expect(run('amend', '--skill', 'nodrink', '--rule', rule().requirementId, '--phase', 'loud', '--reason', 'x').code).not.toBe(0);
+    run('build', '--name', 'nodrink', '--class', 'none');
+    expect(store.getDocClass(L)).toBeNull();
   });
   it('invoke refuses another class before spending anything', () => {
     const { run } = seed();

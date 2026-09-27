@@ -184,7 +184,7 @@ export async function invoke(): Promise<void> {
   // ── CHECKED BEFORE IT IS DELIVERED ──────────────────────────────────────────────────────────
   //
   // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
-  // and only those — at most twice, each rewrite kept only if it breaks nothing that held. The rules
+  // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
   const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced') };
   const refine = argv.includes('--no-repair') || !std ? null

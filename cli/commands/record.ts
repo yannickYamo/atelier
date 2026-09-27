@@ -165,8 +165,12 @@ export async function record(): Promise<void> {
     const outsideSpansChanged = !keep(draft, pending.repairOf.spans).every((piece) => output.includes(piece));
     // The same meaning check the CLI splice enforces, over the whole answer: the host held the pen, so a
     // lost figure or qualifier cannot be put back here, only named where the person will see it.
+    // An invented claim is meant to lose its specifics, so its span is left out of the comparison; the
+    // rest of the answer is held to the check in full.
     const asked = planRepair(draft, before);
-    const meaning = spanIntegrity(draft, output, new Set(asked.flatMap((t) => t.drops)), asked.some((t) => t.specifics));
+    let held = draft;
+    for (const t of [...asked].filter((x) => x.specifics).sort((a, b) => b.start - a.start)) held = held.slice(0, t.start) + held.slice(t.end);
+    const meaning = spanIntegrity(held, output, new Set(asked.flatMap((t) => t.drops)), false);
     repair = { passes: 1, violatedBefore: pending.repairOf.violated, violatedAfter: brokenNow.map((c) => c.requirementId),
       originalOutputHash: pending.repairOf.outputHash, draft, outsideSpansChanged,
       ...(meaning.ok ? {} : { meaningLost: meaning.lost }),

@@ -162,7 +162,12 @@ export function regressions(before: VerifyReport, after: VerifyReport): string[]
 export function acceptRepair(before: VerifyReport, after: VerifyReport): RegressionVerdict {
   const worse = regressions(before, after);
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
-  const req = (r: VerifyReport): number => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
-  if (req(after) >= req(before)) return { ok: false, why: 'the rewrite fixed no REQUIRED rule' };
-  return { ok: true, why: `REQUIRED rules broken: ${req(before)} → ${req(after)}` };
+  const broken = (r: VerifyReport) => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
+  const req = (r: VerifyReport): number => broken(r).length;
+  // Progress is fewer broken REQUIRED rules, or the same rules broken in fewer places: fixing one of two
+  // invented figures is a step, and discarding it threw away a good placeholder and ended the loop.
+  const spans = (r: VerifyReport): number => broken(r).reduce((n, c) => n + Math.max(1, c.result.spans.length), 0);
+  if (req(after) < req(before)) return { ok: true, why: `REQUIRED rules broken: ${req(before)} → ${req(after)}` };
+  if (spans(after) < spans(before)) return { ok: true, why: `places breaking a REQUIRED rule: ${spans(before)} → ${spans(after)}` };
+  return { ok: false, why: 'the rewrite fixed no REQUIRED rule' };
 }
