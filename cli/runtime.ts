@@ -45,12 +45,12 @@ export const VALUED_OPTIONS: readonly string[] = [
   'with',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',
-  'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
+  'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'exemplar', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
   'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
-  'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
+  'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite',
   'questions', 'reason', 'required-n', 'reserve', 'role',
@@ -63,7 +63,7 @@ export const VALUED_OPTIONS: readonly string[] = [
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept', 'accept-new-binding', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'bare', 'holdout', 'json', 'loop', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'allow-unsourced', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes',

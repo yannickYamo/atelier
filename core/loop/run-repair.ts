@@ -8,6 +8,7 @@ import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
+import { unsourcedClaims } from './claims.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA } from './repair.js';
 import { createHash } from 'node:crypto';
 
@@ -16,10 +17,34 @@ const broken = (r: VerifyReport): string[] => r.checked.filter((c) => c.material
 
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
+export interface CheckOptions {
+  /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
+  readonly material?: string;
+  /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
+  readonly guardClaims?: boolean;
+}
+
+/**
+ * Every check a draft is held to: the standard's measured rules, and — always, unless turned off — the
+ * rule that a voice may not invent the person's experiences or their numbers. The second is not the
+ * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
+ */
+export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
+  const report = verifyText(skill, v, text);
+  if (opts.guardClaims === false) return report;
+  const claims = unsourcedClaims(text, opts.material ?? '');
+  const line = { requirementId: 'UNSOURCED', statement: 'Never invent a first-person story or a figure presented as a finding.',
+    materiality: 'REQUIRED',
+    result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: claims, value: claims.length,
+      detail: claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories or findings' } };
+  return { ...report, checked: [...report.checked, line], failed: report.failed || claims.length > 0 };
+}
+
 export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
+  opts: CheckOptions = {},
 ): Promise<Refined> {
-  const first = verifyText(skill, v, draft);
+  const first = checkDraft(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
   let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
   while (report.failed && passes < maxPasses) {
@@ -45,7 +70,7 @@ export async function refineToStandard(
     passes += 1;
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const next = applyRepair(text, targets, reps);
-    const after = verifyText(skill, v, next);
+    const after = checkDraft(skill, v, next, opts);
     const verdict = acceptRepair(report, after);
     if (!verdict.ok) { why = `a rewrite was discarded: ${verdict.why}`; break; }
     text = next; report = after;

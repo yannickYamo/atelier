@@ -114,6 +114,25 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   writeAtomic(p, text);
 }
 
+/**
+ * The person's MATERIAL for a skill: notes, anecdotes, figures and sources they vouch for. Served with
+ * every task, and the only place a first-person story or a cited figure in the output may come from.
+ */
+export function getMaterial(l: StoreLayout): { name: string; text: string }[] {
+  const d = join(dirs(l).base, 'material');
+  if (!existsSync(d)) return [];
+  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: f, text: readFileSync(join(d, f), 'utf8') }));
+}
+export function addMaterial(l: StoreLayout, name: string, text: string): void {
+  const d = join(dirs(l).base, 'material');
+  mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, name.replace(/[^A-Za-z0-9._-]/g, '-')), text);
+}
+export function clearMaterial(l: StoreLayout): void {
+  const d = join(dirs(l).base, 'material');
+  if (existsSync(d)) rmSync(d, { recursive: true, force: true });
+}
+
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
   const p = join(dirs(l).standards, `${hash}.json`);
   return existsSync(p) ? readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] }) : null;
