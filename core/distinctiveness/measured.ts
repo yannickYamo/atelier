@@ -32,6 +32,13 @@ import { type DimScores, type DimensionFloor, type DimFloorResult, type FloorQua
 import { tCrit, mean, sd } from './stats.js';
 import type { ComparisonVerdict } from '../comparison/compare.js';
 
+/**
+ * The version of how drafts are scored. A qualification is a rate of one scoring: when an observer's
+ * counting changes (RHYTHM counting prose sentences only, say), baselines frozen before it no longer
+ * measure the same thing. Bump this with any such change; every earned floor then re-qualifies.
+ */
+export const FLOOR_SCORING_VERSION = 2;
+
 export interface FloorDimension { readonly key: string; readonly rule: Requirement }
 
 /** The rules the floor watches: live, measured, and applying to every text. */

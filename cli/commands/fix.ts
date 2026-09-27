@@ -43,7 +43,7 @@ import { spend, type Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
 import { addRuleToActive } from './addition.js';
 import { resolveServedVersion } from './invoke.js';
-import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, type CandidateCheck } from './floor.js';
+import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, TASTE_GATE_CALLS, type CandidateCheck } from './floor.js';
 import { keysOf } from '../../core/state/rule-key.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure } from '../../core/optimizer/reflect.js';
 import type { Mutation } from '../../core/optimizer/genome.js';
@@ -411,7 +411,7 @@ async function settleBlindPick(
       console.log('Your regression floor is earned, so the count is being confirmed on its tasks before anything is installed…');
       const { client, binding } = clientAndBinding('target');
       const targetKey = keysOf(std.requirements)[std.requirements.indexOf(measuredRule)];
-      const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--floor-cap', 3), maxCalls: store.getFloor(L).tasks.length * st.fires };
+      const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--floor-cap', 3), maxCalls: store.getFloor(L).tasks.length * st.fires + TASTE_GATE_CALLS };
       // A floor run that cannot finish (a budget, a refusal, a network error) hands the choice back to
       // you rather than ending the command with the pair shown and nothing recorded.
       let check: CandidateCheck | null = null;

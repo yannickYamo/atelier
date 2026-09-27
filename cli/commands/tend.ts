@@ -10,13 +10,15 @@
 //   1. mine        what keeps going wrong (core/mining/recurrence.ts); recorded for `mine --add`
 //   2. taste       what the reader has earned, and how many readings wait for your label
 //   3. floor       whether a change could install itself (cli/commands/floor.ts)
-//   4. optimize    one round, when the floor has a baseline; with --auto, a winner the promotion gate
-//                  allows is installed, otherwise it waits for you
+//   4. optimize    one round, only when the floor is EARNED (a round that could install nothing is
+//                  left to `atelier optimize`, which you run by hand); with --auto, a winner the
+//                  promotion gate allows is installed. After an install the floor must be re-earned
+//                  for the new version, and the digest says so.
 //
 // It never changes what "good" means: nothing here adds, removes or rewords a rule. Run it by hand, or
 // on a schedule, for example weekly from cron:
 //
-//   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log
+//   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
 import * as store from '../../core/state/store.js';
 import { findRecurrences } from '../../core/mining/recurrence.js';
@@ -55,19 +57,23 @@ export async function tend(): Promise<void> {
   digest.push(`taste reader: ${perms.veto.size ? `acts on ${perms.veto.size} of ${rules.length} rule(s)` : `reports on ${rules.length} rule(s), acts on none yet`}`
     + (waiting ? `; ${waiting} reading(s) wait for your label (atelier taste --skill ${name} --calibrate)` : ''));
 
-  // 3. The floor, and 4. one round of search when there is something to compare against.
+  // 3. The floor, and 4. one round of search, only where it could install something.
   const floor = store.getFloor(L);
   const st = floorStateFor(L, active, runtimeIdentity());
-  const ready = floor.contract && floor.tasks.length >= MIN_TASKS && store.getBaseline(L, active);
-  digest.push(`regression floor: ${st.state}${ready ? '' : ` (set it up once: atelier floor --skill ${name} --setup)`}`);
-  if (ready) {
+  const setUp = floor.contract && floor.tasks.length >= MIN_TASKS;
+  digest.push(`regression floor: ${st.state}${st.state === 'EARNED' ? '' : ` (${st.why})`}`
+    + (st.state === 'EARNED' ? '' : setUp ? `; re-earn it for this version: atelier floor --skill ${name} --setup` : `; set it up once: atelier floor --skill ${name} --setup`));
+  if (st.state === 'EARNED') {
     if (argv.includes('--auto') && !argv.includes('--promote')) argv.push('--promote');
     console.log('── optimize ──');
+    const started = new Date().toISOString();
     await optimize();
-    const round = store.readEvents(L).filter((e) => e.kind === 'OPTIMIZE_ROUND').at(-1);
+    const round = store.readEvents(L).filter((e) => e.kind === 'OPTIMIZE_ROUND' && String(e.at) >= started).at(-1);
     const promoted = typeof round?.promoted === 'string' ? round.promoted : null;
-    digest.push(promoted ? `installed ${promoted}; the previous version remains: atelier rollback --skill ${name} --to ${active}`
-      : 'no change installed this round');
+    digest.push(!round ? 'optimize found nothing to try this round'
+      : promoted ? `installed ${promoted}; the previous version remains: atelier rollback --skill ${name} --to ${active}. `
+        + `The floor must be re-earned for the new version before anything else installs itself: atelier floor --skill ${name} --setup`
+        : 'no change installed this round');
   }
   const pending = foldRepairs(store.readEvents(L)).filter((r) => r.outcome === 'PENDING');
   if (pending.length) digest.push(`${pending.length} candidate(s) wait for your decision (atelier promote / atelier reject)`);

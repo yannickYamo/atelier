@@ -73,9 +73,13 @@ passage a reading quoted, *without the reader's verdict*, and asks: followed, br
   under a stable token (`<reading>:<rule key>`) and `--label <token>=followed|missed|unsure` records
   it; a token is never reused, and one labelled twice in one command is refused.
 - **Labels on the record:** labels are stored as events.
-- **Author's work as a control, not ground truth:** an author's own pieces are *not* taken as
-  ground truth for a rule, since a rule found in their work is followed in three of five pieces, not
-  every one. They are reported as a control, never counted as labels.
+- **The author's own pieces are not labels:** a rule found in their work is followed in three of five
+  pieces, not every one, so their pieces are never taken as ground truth for it.
+- **Only blind labels count:** a label on a reading whose verdict was displayed (including every
+  reading recorded before hold-back existed) earns nothing.
+- **The one thing a held-back reading still shows:** whether a check failed. `verify --taste` exits 1
+  and the MCP reply says `failed` when a rule the reader holds VETO on was missed, because a guard
+  cannot hide that. With a single VETO rule that says which rule; nothing says where.
 
 **The pre-registered bar for VETO**, fixed here before any data:
 
@@ -133,7 +137,7 @@ Without VETO it does none of these. Its readings are shown after every `invoke`,
 | `atelier invoke` | every output is read; the reading is printed (unless held back) and recorded as an event |
 | `atelier verify --taste`, MCP `atelier_verify` with `taste: true` | the reading is returned (unless held back); a quoted miss on a VETO rule fails `verify` and sets `failed` in the MCP reply. If the reader cannot run, the counted report still comes back. |
 | `atelier taste --skill <name>` | where each rule stands, the coverage map, and labelling (`--calibrate`, `--list`, `--label`) |
-| `atelier optimize` | a finalist that misses VETO rules more often than the current version is rejected |
+| `atelier optimize`, `atelier fix`, `atelier floor --check --promote` | a candidate that misses VETO rules on at least two more of four tasks than the current version is rejected instead of installed; if the reader cannot run, the choice goes back to you |
 | `atelier improve` | readings of the skill's own output (an invocation) on rules where the reader holds VETO become behavioural observations for the convergence loop. An OBSERVE-only verdict is a report, not evidence, and a reading of someone else's text (verify, `--read`, MCP) is never evidence about what this skill does. |
 
 `--no-taste` turns the reader off for one `invoke`. `--reader-model` or `ATELIER_READER_MODEL` chooses

@@ -9,7 +9,7 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
-import { recordTaste, readerModel } from './taste.js';
+import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -21,7 +21,7 @@ import { resolveProvenance } from '../../core/fidelity/provenance.js';
 import { runOnce } from './improve.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
-import { sha, DATA, die, argv, flag, clientAndBinding, clientFor, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
 // ── invoke ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -220,7 +220,7 @@ export async function invoke(): Promise<void> {
   // is delivered as the counted checks left it, and the failure is said.
   let tasteTaken: readonly TasteReading[] | null = null;
   const tasteNotes: string[] = [];
-  const readerClient = tasteActs ? clientFor(readerModel()) : null;
+  const readerClient = tasteActs ? readerClientFor() : null;
   // Applicability depends on the task alone: decided once for every draft and re-read.
   let decided: Promise<boolean[]> | null = null;
   const applies = (): Promise<boolean[]> => (decided ??= applicabilityFor(readerClient!, budget, std!, asked));
@@ -308,15 +308,17 @@ export async function invoke(): Promise<void> {
   } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
   }
-  if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
   for (const n of tasteNotes) console.log(`(${n}.)`);
   if (tasteOn && std) {
     try {
       const taken = tasteTaken ?? readings.get(rec.output) ?? null;
       const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
+      // A held-back reading shows nothing that names a rule, the taste repair included.
+      if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
       console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
       if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
     } catch (e) {
+      if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
       console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
     }
   }

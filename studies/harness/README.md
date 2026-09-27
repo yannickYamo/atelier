@@ -52,3 +52,12 @@ A runner may choose the behaviour, the number of contexts, the number of generat
 seed and where output lands. It may not decide what counts as a duplicate, as fired, or as valid,
 nor how an interval is computed. `tests/atelier-study-semantics-census.test.ts` fails if a rule
 reappears in a runner, and it is polarity-tested against a reintroduced percentile.
+
+## `voice-round.mjs`: an exploratory voice comparison
+
+One brief, four ways of asking the same model (RAW, the corpus in CONTEXT, a model-written GUIDE, and
+ATELIER as shipped), judged three ways: blind by the owner (letter files, key kept apart), pairwise by a
+model against the author's reserved pieces (both orders; a pair counts only when they agree), and
+deterministically by the skill's measured rules and the model tells. It decides nothing itself: the
+counts come from `dist/`. It is exploratory, not the pre-registered proof study, and its header
+says how to run it and what it spends.

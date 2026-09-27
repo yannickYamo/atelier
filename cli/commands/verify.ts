@@ -14,7 +14,7 @@ import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag } from '../runtime.js';
-import { describeTaste, vetoMisses } from '../../core/taste/reader.js';
+import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste } from './taste.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
@@ -46,24 +46,32 @@ export async function verify(): Promise<void> {
   // draft whose stories are theirs adds them to the material, or passes --allow-unsourced.
   const material = [...store.getMaterial(L), ...boundMaterial()].map((m) => m.text).join('\n\n');
   const report = checkDraft(name, v, text, { material, guardClaims: !argv.includes('--allow-unsourced') });
-  if (argv.includes('--json')) console.log(JSON.stringify({ ...report, ...(classNote ? { note: classNote } : {}) }, null, 1));
-  else {
+  // The reading-based rules, on request (`--taste`): this calls a model, and every count here is free.
+  // Read first, so `--json` prints one object holding both.
+  let taste: { text: string; failed: boolean; verdicts: unknown[] } | null = null;
+  if (argv.includes('--taste')) {
+    const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: 3 };
+    try {
+      const { readings, permissions, held } = await recordTaste(L, v, text, flag('--task') ?? null, null, budget);
+      taste = { text: describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto, held),
+        // A miss on a rule where the reader holds VETO fails the check, as a broken REQUIRED rule does.
+        failed: vetoMisses(readings, permissions.veto).length > 0,
+        verdicts: held ? [] : readings.map((r) => ({ rule: r.requirementId, verdict: r.verdict, kind: r.kind ?? null, quote: r.quote ?? null, why: r.why,
+          authority: actsAsMiss(r) && permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
+    } catch (e) { fail(`the taste reader could not run: ${(e as Error).message.split('\n')[0]}`); }
+  }
+  if (argv.includes('--json')) {
+    console.log(JSON.stringify({ ...report, failed: report.failed || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+      ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
+  } else {
     console.log(describeVerify(report));
     if (report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
       console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
     }
     if (classNote) console.log(`\n(${classNote})`);
+    if (taste) console.log(`\n${taste.text}`);
   }
-  // The reading-based rules, on request (`--taste`): this calls a model, and every check above is free.
-  if (argv.includes('--taste')) {
-    const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: 3 };
-    try {
-      const { readings, permissions, held } = await recordTaste(L, v, text, flag('--task') ?? null, null, budget);
-      console.log(`\n${describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto, held)}`);
-      // A miss on a rule where the reader holds VETO fails the check, as a broken REQUIRED rule does.
-      if (vetoMisses(readings, permissions.veto).length) process.exitCode = 1;
-    } catch (e) { fail(`the taste reader could not run: ${(e as Error).message.split('\n')[0]}`); }
-  }
+  if (taste?.failed) process.exitCode = 1;
   if (report.failed) process.exitCode = 1;
 }
 

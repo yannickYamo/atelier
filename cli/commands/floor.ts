@@ -10,15 +10,15 @@
 //
 // A new implementation that fixes the rule you complained about can quietly make three others worse.
 // The floor is what notices. Every measured rule is a dimension (core/distinctiveness/measured.ts); the
-// active version is fired several times on each of your tasks and its scores frozen; a candidate is
-// fired the same way and compared, task by task, with a three-state verdict that can say "I cannot
-// tell" (core/distinctiveness/floor.ts).
+// active version is drafted on each of your tasks and its scores frozen; a candidate is drafted the
+// same way, and each rule gets one paired verdict across tasks that can say "I cannot tell"
+// (core/distinctiveness/measured.ts).
 //
 // What it lets the system do without you is decided by the promotion gate (core/convergence/
 // promotion.ts), not here. The gate lets a candidate install itself only when the floor is EARNED for
 // exactly this situation (this version, standard, contract, task set, runtime and number of drafts),
-// every enforced rule other than the one being repaired held on every task, and the repaired rule
-// improved across tasks. Change any of those and the qualification no longer applies; an automatic
+// every enforced rule other than the one being repaired held across tasks, the repaired rule improved
+// across tasks, and the taste reader, where it holds VETO, did not read the candidate as worse. Change any of those and the qualification no longer applies; an automatic
 // promotion changes the version, so the floor must be re-frozen and re-earned before the next one.
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
@@ -27,11 +27,14 @@ import * as store from '../../core/state/store.js';
 import { resolveRule } from '../../core/state/rule-key.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { floorDimensions, perFire, proposeMargins, buildContract, evaluateAcross, pairsFor, targetComparison,
-  qualifyFromAA, countAA, plantedDetections, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, MIN_TASKS_FOR_VERDICT, AA_BAR, MIN_AA_TRIALS,
+  qualifyFromAA, countAA, plantedDetections, FLOOR_SCORING_VERSION, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, MIN_TASKS_FOR_VERDICT, AA_BAR, MIN_AA_TRIALS,
   type FloorDimension } from '../../core/distinctiveness/measured.js';
 import { gateState, type FrozenBaselineEntry, type QualityFloorResult, type FloorVerdict,
   type DistinctivenessState } from '../../core/distinctiveness/floor.js';
 import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
+import { readTaste, tasteRules, vetoMisses } from '../../core/taste/reader.js';
+import { tastePermissions } from '../../core/taste/calibration.js';
+import { readerModel } from './taste.js';
 import type { ComparisonVerdict } from '../../core/comparison/compare.js';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
@@ -40,8 +43,9 @@ import { walk } from './intake.js';
 import { resolveServedVersion } from './invoke.js';
 import { spendOneWithResult } from './improve.js';
 import { describeBackup } from '../../adapters/install-tree.js';
-import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientAndBinding, modelFor, providerFor, pickHost, projectDir,
+import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientAndBinding, modelFor, providerFor, hasModelFor, pickHost, projectDir,
   loadSession } from '../runtime.js';
+import { readerClient } from './taste.js';
 
 /** The fewest tasks a floor verdict or a qualification can rest on: tasks are the unit of the test. */
 export const MIN_TASKS = MIN_TASKS_FOR_VERDICT;
@@ -54,7 +58,9 @@ const DEFAULT_FIRES = 1;
  * says nothing about another.
  */
 export const runtimeIdentity = (): string =>
-  JSON.stringify({ provider: providerFor('target'), model: modelFor('target'), temperature: flag('--temperature') ?? null });
+  // Without a target model (a local provider named with no model) there is no runtime to match: the
+  // floor then reads as not earned for it, rather than dying where only a status was asked for.
+  JSON.stringify({ provider: providerFor('target'), model: hasModelFor('target') ? modelFor('target') : null, temperature: flag('--temperature') ?? null });
 
 /**
  * Everything a false-alarm rate is a rate OF. The qualification carries this hash; the floor is EARNED
@@ -62,7 +68,7 @@ export const runtimeIdentity = (): string =>
  * voids it.
  */
 const qualificationKey = (L: store.StoreLayout, f: store.FloorState, active: string, standardVersionHash: string, runtime: string, fires: number): string =>
-  sha(JSON.stringify({ contract: f.contract, tasks: f.tasks, active, standardVersionHash, runtime, fires,
+  sha(JSON.stringify({ contract: f.contract, tasks: f.tasks, active, standardVersionHash, runtime, fires, scoring: FLOOR_SCORING_VERSION,
     // The frozen baseline a check compares against is part of what a verdict means: re-freeze, re-earn.
     baseline: sha(JSON.stringify(store.getBaseline(L, active) ?? null)) }));
 
@@ -129,12 +135,55 @@ const freeze = (version: string, model: string, dims: readonly FloorDimension[],
     return { clusterId: version, fixtureContextId: sha(r.task), nGen: r.outputs.length, capturedUnderModel: model, meanScores: mean, perFireScores: scores };
   });
 
-/** The active version's baseline, refused unless it covers every task under this model. */
-function baselineFor(L: store.StoreLayout, name: string, active: string, tasks: readonly string[], model: string): readonly FrozenBaselineEntry[] {
-  const b = store.getBaseline(L, active) ?? die(`the active version has no frozen baseline: atelier floor --skill ${name} --baseline`);
-  if (!tasks.every((t) => b.some((e) => e.fixtureContextId === sha(t)))) die(`the baseline does not cover the current tasks (they changed after it was frozen): atelier floor --skill ${name} --baseline`);
-  if (b.some((e) => e.capturedUnderModel !== model)) die(`the baseline was frozen under ${b[0]?.capturedUnderModel ?? 'another model'}, not ${model}: comparing across models measures the model change as well. Re-freeze: atelier floor --skill ${name} --baseline`);
-  return b;
+/**
+ * Why the active version's baseline cannot be compared against, or null when it can: it must exist,
+ * cover every current task, and have been frozen under this model. Asked before anything is spent.
+ */
+export function baselineProblem(L: store.StoreLayout, name: string, active: string, tasks: readonly string[], model: string, fires: number | null = null): string | null {
+  const b = store.getBaseline(L, active);
+  if (!b) return `the active version has no frozen baseline: atelier floor --skill ${name} --baseline`;
+  if (!tasks.every((t) => b.some((e) => e.fixtureContextId === sha(t)))) return `the baseline does not cover the current tasks (they changed after it was frozen): atelier floor --skill ${name} --baseline`;
+  if (fires !== null && b.some((e) => e.nGen !== fires)) return `the baseline has ${b[0]?.nGen ?? '?'} draft(s) per task and this comparison uses ${fires}: comparing a mean of one with a mean of the other is not like for like. Re-freeze: atelier floor --skill ${name} --baseline --fires ${fires}`;
+  if (b.some((e) => e.capturedUnderModel !== model)) return `the baseline was frozen under ${b[0]?.capturedUnderModel ?? 'another model'}, not ${model}: comparing across models measures the model change as well. Re-freeze: atelier floor --skill ${name} --baseline`;
+  return null;
+}
+
+/** The active version's baseline. Throws (never exits) so a caller mid-round can settle what it started. */
+function baselineFor(L: store.StoreLayout, name: string, active: string, tasks: readonly string[], model: string, fires: number | null = null): readonly FrozenBaselineEntry[] {
+  const problem = baselineProblem(L, name, active, tasks, model, fires);
+  if (problem) throw new Error(problem);
+  return store.getBaseline(L, active)!;
+}
+
+/** Tasks both versions are drafted on for the taste check, and how many more tasks the candidate must miss a rule on to be blocked. */
+export const TASTE_SAMPLE = 4;
+export const TASTE_BLOCK_MARGIN = 2;
+/** The calls the taste check can need: both versions drafted on the sample, and each draft read (at most 3 calls). */
+export const TASTE_GATE_CALLS = 2 * TASTE_SAMPLE + 2 * TASTE_SAMPLE * 3;
+
+/**
+ * Does the candidate miss the taste rules the reader holds VETO on more often than the current version?
+ * Both are drafted once on a few of the floor's tasks and read; a rule the candidate misses on at least
+ * TASTE_BLOCK_MARGIN more tasks than the champion is returned. The reader's VETO bounds its error per
+ * reading, not per comparison: with one draft per task, a single extra miss is within what noise does,
+ * so one is not enough to block. Only passages the reader quotes count (an omission has no evidence to
+ * check). The reader blocks; it never clears.
+ */
+export async function tasteRegression(L: store.StoreLayout, v: StandardVersion, active: string, candidate: string, tasks: readonly string[],
+  client: InferenceClient, budget: Budget, veto: ReadonlySet<string>): Promise<string[]> {
+  const sample = tasks.slice(0, TASTE_SAMPLE);
+  const [champ, cand] = [await fire(L, active, sample, 1, client, budget), await fire(L, candidate, sample, 1, client, budget)];
+  const reader = readerClient();
+  // Tasks on which each rule was read as missed (a task counts once per rule).
+  const misses = async (runs: typeof champ.runs): Promise<Map<string, number>> => {
+    const n = new Map<string, number>();
+    for (const r of runs) {
+      for (const x of vetoMisses(await readTaste(reader, budget, v, r.outputs[0], r.task), veto)) n.set(x.requirementId, (n.get(x.requirementId) ?? 0) + 1);
+    }
+    return n;
+  };
+  const [a, b] = [await misses(champ.runs), await misses(cand.runs)];
+  return [...b.entries()].filter(([id, k]) => k - (a.get(id) ?? 0) >= TASTE_BLOCK_MARGIN).map(([id]) => id);
 }
 
 export interface CandidateCheck {
@@ -161,8 +210,8 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   const dims = floorDimensions(v);
   const contract = f.contract ?? die(`no floor contract: atelier floor --skill ${name} --corpus <folder>`);
   if (f.tasks.length < MIN_TASKS) die(`the floor needs at least ${MIN_TASKS} tasks: atelier floor --skill ${name} --tasks <file>`);
-  const baseline = baselineFor(L, name, active, f.tasks, model);
   const st = floorStateFor(L, active, runtime);
+  const baseline = baselineFor(L, name, active, f.tasks, model, st.fires);
   const { runs, servedHash } = await fire(L, candidate, f.tasks, st.fires, client, budget);
   const frozen = freeze(candidate, model, dims, runs);
   const exclude = new Set(targetKey ? [targetKey] : []);
@@ -180,7 +229,24 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
     fidelityAuthority: targetKey ? 'CERTIFY' : 'OBSERVE', comparison, distinctiveness: st.state, floor: composite,
   });
   const unguarded = guarded ? '' : '; no enforced rule other than the target is watching, so nothing guards what the change did not aim at (--enforce another rule)';
-  return { composite, result, comparison, state: st.state, decision: { ...decision, why: `${decision.why}${unguarded}` } };
+  let final: PromotionDecision = { ...decision, why: `${decision.why}${unguarded}` };
+  // THE TASTE READER, WHEREVER A CANDIDATE COULD INSTALL ITSELF (fix, floor --check, optimize, tend). On
+  // the rules where your labels have earned it VETO, it may turn an automatic promotion into a
+  // rejection; it can never make one. If it cannot run, the automatic promotion is withheld.
+  if (final.authority === 'AUTO_PROMOTE') {
+    const veto = tastePermissions(tasteRules(v), store.readEvents(L), readerModel()).veto;
+    if (veto.size) {
+      try {
+        const vetoed = await tasteRegression(L, v, active, candidate, f.tasks, client, budget, veto);
+        if (vetoed.length) final = { authority: 'AUTO_REJECT', unmet: [...final.unmet, 'taste'],
+          why: `the taste reader, which has earned VETO from your labels, reads it as missing ${vetoed.join(', ')} on at least ${TASTE_BLOCK_MARGIN} more tasks than the current version` };
+      } catch (e) {
+        final = { authority: 'HUMAN_GATED', unmet: [...final.unmet, 'taste'],
+          why: `the counts allow it, but the taste reader could not check it (${(e as Error).message.split('\n')[0]}), so it is yours to decide` };
+      }
+    }
+  }
+  return { composite, result, comparison, state: st.state, decision: final };
 }
 
 /**
@@ -283,7 +349,7 @@ export async function floor(): Promise<void> {
   /** One A/A run. Returns whether the floor is now EARNED. */
   const doQualify = async (): Promise<boolean> => {
     ready();
-    baselineFor(L, name, active, f.tasks, model);
+    { const problem = baselineProblem(L, name, active, f.tasks, model, fires); if (problem) die(problem); }
     if (!Object.values(f.contract!.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
       die('no dimension is ENFORCE, so there is nothing that could raise a false alarm. Choose which rules may block: --enforce <rule>');
     }
@@ -306,7 +372,10 @@ export async function floor(): Promise<void> {
       + `caught ${planted.hits} of ${planted.trials} planted regression(s) of ${PLANTED_MARGINS} margins.`);
     console.log(`So far: ${tally.falseAlarms} false alarm(s) in ${tally.trials} (upper 95% bound ${(q.upper95 * 100).toFixed(1)}%, bar ${AA_BAR * 100}% over ${MIN_AA_TRIALS}+); `
       + `sensitivity ${q.sensitivity === null ? 'unmeasured' : `${Math.round(q.sensitivity * 100)}% of ${tally.planted}`} (bar ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+).`);
-    f = { ...f, aa: { contractHash: key, ...tally }, qualification: q.qualification ? { ...q.qualification, contractHash: key, fires } : null };
+    // A qualification earned for another situation (another draft count, say) is left alone: it still
+    // describes that situation, and floorStateFor only honours the one that matches.
+    f = { ...f, aa: { contractHash: key, ...tally },
+      qualification: q.qualification ? { ...q.qualification, contractHash: key, fires } : f.qualification?.contractHash === key ? null : f.qualification ?? null };
     store.setFloor(L, f);
     console.log(q.qualification ? 'The floor is EARNED for this version, standard, contract, baseline, task set, runtime and draft count.'
       : `Not qualified yet: at least ${MIN_TASKS} tasks, at least ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+ planted regressions caught, and false alarms at most ${AA_BAR * 100}% (upper bound) over ${MIN_AA_TRIALS}+. `
@@ -342,8 +411,16 @@ export async function floor(): Promise<void> {
       const required = new Set(dims.filter((d) => d.rule.materiality === 'REQUIRED').map((d) => d.key));
       f = { ...f, contract: { ...f.contract!, dimensions: Object.fromEntries(Object.entries(f.contract!.dimensions)
         .map(([k, d]) => [k, required.has(k) ? { ...d, gateRole: 'ENFORCE' as const } : d])) } };
-      console.log(`Enforced: ${required.size} REQUIRED counted rule(s).${required.size < 2 ? ' A repair\'s own rule never guards itself, so a self-installing repair needs at least two.' : ''}`);
     }
+    // Refused BEFORE anything is spent: with fewer than two enforced rules the floor can never let a repair
+    // install itself (a repair's own rule never guards itself), and one rule gives too few A/A trials.
+    const enforced = Object.values(f.contract!.dimensions).filter((d) => d.gateRole === 'ENFORCE').length;
+    if (enforced < 2) {
+      store.setFloor(L, f);
+      die(`--setup: ${enforced} counted rule(s) can be enforced, and a floor that lets repairs install themselves needs at least two `
+        + `(a repair's own rule never guards itself). Enforce more: atelier floor --skill ${name} --enforce <rule> (see the rules with: atelier floor --skill ${name}). Nothing was spent.`);
+    }
+    console.log(`Enforced: ${enforced} counted rule(s).`);
     store.setFloor(L, f);
     const runsMax = Math.max(1, Math.floor(numericFlag('--runs', 6)));
     const drafts = (store.getBaseline(L, active) ? 0 : f.tasks.length * fires) + runsMax * f.tasks.length * 2 * fires;
@@ -366,7 +443,7 @@ export async function floor(): Promise<void> {
     const targetKey = target ? keyOf(target) : null;
     const { client } = clientAndBinding('target');
     const st = floorStateFor(L, active, runtime);
-    const check = await checkCandidate(L, name, v, active, cand, targetKey, budgetFor(f.tasks.length * st.fires), client, model, runtime);
+    const check = await checkCandidate(L, name, v, active, cand, targetKey, budgetFor(f.tasks.length * st.fires + TASTE_GATE_CALLS), client, model, runtime);
     for (const d of check.result.perDim) {
       console.log(`  ${d.dim}  ${d.gateRole.padEnd(7)} ${d.verdict.padEnd(12)} mean change ${d.delta.toFixed(2)} (margin ${d.margin})`);
     }
