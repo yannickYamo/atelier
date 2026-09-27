@@ -15,7 +15,7 @@
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { measure, findTerms } from './registry.js';
-import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES } from './balance.js';
+import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
@@ -85,6 +85,15 @@ export function deriveContrastRules(
         ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen (" - ") instead' : ''}.`
         : `Keep ${PATTERN_LABEL[p]} to at most ${cap} per 1,000 words.`;
       propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } }, ev);
+      // THE SUBSTITUTE GETS A CAP OF ITS OWN. Told to write " - " where it would have written "—", a model
+      // moves every dash it would have used onto the substitute: in a real run spaced hyphens went to
+      // 8.7 per 1,000 words against the author's 4.0. So the substitute is held to the author's own rate.
+      if (prefer) {
+        const sh = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'SPACED_HYPHEN'), 0.9) * 1.25, spacedHyphen * 1.5));
+        propose(`Use spaced hyphens (" - ") as I do, not in place of every dash: at most ${sh} per 1,000 words.`, 'BOUNDARY',
+          { observer: 'PATTERN_RATE', params: { pattern: ['SPACED_HYPHEN'], maxPer1000: sh, role: ['dash-substitute'] } },
+          `you: ${spacedHyphen} per 1,000 words; a model told to swap its em dashes for them overshoots (8.7 against 4.0 in a real run)`);
+      }
     } else if (MODEL_TYPICAL.has(p) && a <= 0.5 && m > a + 0.2) {
       // A construction models reach for, which this author almost never uses. The cap sits at the
       // author's own rate. Where the model's plain drafts already exceed it, the evidence is direct;
@@ -129,17 +138,25 @@ export function deriveContrastRules(
       const x = styleDistanceDocs(d, deltaReference(authorTexts, others));
       return x.model < x.author;
     }).length;
-    const loo = recognised / drafts.length >= 0.8;
+    // And the other side: each of the author's own pieces, left out in turn, must land on the author's
+    // side too. Without this the measure passed the held-out check and then failed 2 of 3 pieces the
+    // author had reserved (a real run): it had learned the pieces, not the voice.
+    const ownRecognised = authorTexts.filter((t, i) => {
+      const x = styleDistanceDocs(t, deltaReference(authorTexts.filter((_, j) => j !== i), drafts));
+      return x.author < x.model;
+    }).length;
+    const loo = recognised / drafts.length >= 0.8 && ownRecognised / authorTexts.length >= 0.8;
     const heldOk = (held.length ? held.map((p) => p.text) : []).every((t) => { const x = styleDistanceDocs(t, ref); return x.author < x.model; });
     if (loo && heldOk) {
       propose('Stay closer to my word habits than to your defaults (the function words I use, and how often).', 'GENERATIVE',
         { observer: 'STYLE_DISTANCE', params: { words: [...ref.words], mean: [...ref.mean], sd: [...ref.sd],
           authorDocs: ref.authorDocs.flat(), modelDocs: ref.modelDocs.flat() } },
-        `Burrows' Delta over ${ref.words.length} function words, from ${read.length} of your pieces and ${drafts.length} plain drafts by the model; ${recognised} of ${drafts.length} drafts, each left out in turn, were recognised as the model's`);
+        `Burrows' Delta over ${ref.words.length} function words, from ${read.length} of your pieces and ${drafts.length} plain drafts by the model; left out in turn, ${recognised} of ${drafts.length} drafts were recognised as the model's and ${ownRecognised} of ${authorTexts.length} of your pieces as yours`);
     }
   }
   proposeProportions(authorTexts, drafts, propose);
   proposeStructure(authorTexts, drafts, propose);
+  proposePace(authorTexts, drafts, propose);
   return out;
 }
 
@@ -321,6 +338,41 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
     }
   }
 }
+
+/**
+ * PACE: how much sentence, paragraph and section lengths vary (./balance.ts RHYTHM). Proposed as a floor
+ * where the author varies more than the model and most drafts fall below the author's least varied
+ * piece; as a cap in the rarer opposite case.
+ */
+function proposePace(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  const label: Readonly<Record<RhythmUnit, string>> = { SENTENCE: 'sentence', PARAGRAPH: 'paragraph', SECTION: 'section' };
+  for (const unit of ['SENTENCE', 'PARAGRAPH', 'SECTION'] as const) {
+    const cvs = (texts: readonly string[]): number[] => texts.map((t) => unitLengths(t, unit)).filter((xs) => xs.length >= RHYTHM_MIN_UNITS[unit]).map(coefficientOfVariation);
+    const a = cvs(authorTexts); const m = cvs(drafts);
+    if (a.length < 3 || m.length < 2) continue;
+    const am = r1x(mean(a)); const mm = r1x(mean(m));
+    const ev = `your ${label[unit]} lengths vary by ${am} on average (standard deviation over mean); the model's plain drafts by ${mm}`;
+    if (am >= mm + 0.1) {
+      const floor = r1x(quantile(a, 0.1) * 0.95);
+      if (floor > mm) propose(`Vary ${label[unit]} length as I do: at least ${floor} variation, not one even length after another.`, 'GENERATIVE',
+        { observer: 'RHYTHM', params: { unit: [unit], minCv: floor } }, ev, false, true);
+    } else if (mm >= am + 0.1) {
+      const cap = r1x(quantile(a, 0.9) * 1.05);
+      if (cap < mm) propose(`Keep ${label[unit]} lengths as even as mine: at most ${cap} variation.`, 'GENERATIVE',
+        { observer: 'RHYTHM', params: { unit: [unit], maxCv: cap } }, ev, false, true);
+    }
+  }
+}
+
+// NO POSITIVE VOCABULARY FLOOR BEYOND CONNECTIVES. Keyness against the model's drafts was tried on a
+// real 20-post corpus: the words it found ("verification", "loops", "quality") were the author's TOPIC,
+// not their voice, and a floor over them would push AI-engineering vocabulary into an article about
+// space. On a single-domain corpus positive vocabulary is confounded with topic; the connectives floor
+// above is the part of it that is topic-free. The rest belongs to the reading-based rules (a coined
+// label, a favoured verb), which a reader checks in context.
+
+const mean = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+const r1x = (x: number): number => Math.round(x * 100) / 100;
 
 /** Shares rounded to hundredths that still sum to exactly 1 (largest remainder), never negative. */
 export function toHundredths(xs: readonly number[]): number[] {
