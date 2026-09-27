@@ -219,8 +219,9 @@ lists what recurs, strongest first, each with its remedy.
 | broken draft | a measured rule the first draft breaks in at least half the runs on the current standard (with how often the loop repaired it) | the loop pays for it on every run; a different carrier may prevent it |
 | lost meaning | a rule whose repairs keep being refused for changing what the text claims, charged to the rule each refusal was for | the rule may conflict with how you qualify claims; look at it with `amend` |
 
-Complaints are grouped by the content words they share: average-link clustering on Jaccard similarity
-of at least 0.3, so a chain of loosely related complaints does not become one group. A gap takes the
+Complaints are grouped by the content words they share: at least two, covering at least 40% of the
+shorter complaint's words, with average-link clustering so a chain of loosely related complaints does
+not become one group. A gap takes the
 wording `fix` proposed for one of its own complaints, unless that wording was ever declined. A gap a
 rule was already added for is not offered again, and `--add` refuses a report made before the
 standard changed. Nothing here calls a model unless you pass
