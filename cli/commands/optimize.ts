@@ -39,7 +39,7 @@ import { renderAgentSkill, assertPortable } from '../../renderers/agent-skill/re
 import { genomeOf, mutationsOf, describeMutation, mutationKey, type Mutation } from '../../core/optimizer/genome.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure, type Attempt } from '../../core/optimizer/reflect.js';
 import { finalists, type Scores } from '../../core/optimizer/pareto.js';
-import { readTaste, tasteRules } from '../../core/taste/reader.js';
+import { readTaste, tasteRules, vetoMisses } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { readerModel } from './taste.js';
 import { floorDimensions, perFire } from '../../core/distinctiveness/measured.js';
@@ -99,7 +99,8 @@ export async function optimize(): Promise<void> {
   const keep = Math.max(1, Math.floor(numericFlag('--finalists', 2)));
   const T = floor.tasks.length;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 5),
-    maxCalls: 1 + (want + 1) * T + keep * (T * st.fires + 2 * 3 + 3 * 3 * 2) };
+    // per finalist: the floor's drafts, then the taste check's drafts (2 versions × TASTE_SAMPLE) and reads (3 calls each)
+    maxCalls: 1 + (want + 1) * T + keep * (T * st.fires + 2 * TASTE_SAMPLE + 2 * TASTE_SAMPLE * 3) };
 
   // ── 1. PROPOSE ─────────────────────────────────────────────────────────────────────────────────
   const carried = carriedFrom(L, active, v);
@@ -279,28 +280,33 @@ function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { ski
 /** The pairs the last build chose, where they still teach this standard: what "ship the contrast examples" would ship. */
 const contrastAvailable = (L: store.StoreLayout, v: StandardVersion): ContrastPair[] => contrastFor(store.getContrast(L).pairs, v);
 
+/** Tasks both versions are drafted on for the taste check, and how many more tasks the candidate must miss a rule on to be blocked. */
+const TASTE_SAMPLE = 4;
+const TASTE_BLOCK_MARGIN = 2;
+
 /**
  * Does the candidate miss the taste rules the reader holds VETO on more often than the current version?
- * Both are drafted once on a few of the floor's tasks and read; a rule the candidate misses on more tasks
- * than the champion is returned. Only passages the reader quotes count (an omission has no evidence to
+ * Both are drafted once on a few of the floor's tasks and read; a rule the candidate misses on at least
+ * TASTE_BLOCK_MARGIN more tasks than the champion is returned. The reader's VETO bounds its error per
+ * reading, not per comparison: with one draft per task, a single extra miss is within what noise does,
+ * so one is not enough to block. Only passages the reader quotes count (an omission has no evidence to
  * check). The reader blocks; it never clears.
  */
 async function tasteRegression(L: store.StoreLayout, v: StandardVersion, active: string, candidate: string, tasks: readonly string[],
   client: ReturnType<typeof clientAndBinding>['client'], budget: Budget, veto: ReadonlySet<string>): Promise<string[]> {
-  const sample = tasks.slice(0, 3);
+  const sample = tasks.slice(0, TASTE_SAMPLE);
   const [champ, cand] = [await fire(L, active, sample, 1, client, budget), await fire(L, candidate, sample, 1, client, budget)];
   const reader = clientFor(readerModel());
+  // Tasks on which each rule was read as missed (a task counts once per rule).
   const misses = async (runs: typeof champ.runs): Promise<Map<string, number>> => {
     const n = new Map<string, number>();
     for (const r of runs) {
-      for (const x of await readTaste(reader, budget, v, r.outputs[0], r.task)) {
-        if (x.verdict === 'MISSED' && x.kind === 'PRESENCE' && veto.has(x.key)) n.set(x.requirementId, (n.get(x.requirementId) ?? 0) + 1);
-      }
+      for (const x of vetoMisses(await readTaste(reader, budget, v, r.outputs[0], r.task), veto)) n.set(x.requirementId, (n.get(x.requirementId) ?? 0) + 1);
     }
     return n;
   };
   const [a, b] = [await misses(champ.runs), await misses(cand.runs)];
-  return [...b.entries()].filter(([id, k]) => k > (a.get(id) ?? 0)).map(([id]) => id);
+  return [...b.entries()].filter(([id, k]) => k - (a.get(id) ?? 0) >= TASTE_BLOCK_MARGIN).map(([id]) => id);
 }
 
 function settle(L: store.StoreLayout, c: Candidate, outcome: 'PROMOTED' | 'REJECTED', evaluationBasis: EvaluationBasis, note: string): void {

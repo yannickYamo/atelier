@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import type { Requirement } from '../state/canonical-state.js';
 import type { ObserverPermission } from '../measurement/permission.js';
 import { clopperPearsonUpper } from '../distinctiveness/measured.js';
-import type { TasteReading } from './reader.js';
+import { squash, actsAsMiss, type TasteReading } from './reader.js';
 
 export const FALSE_BLOCK_BAR = 0.15;
 /** A rule loses VETO on its own when more than this share of at least `OWN_MIN` labelled misses were wrong. */
@@ -35,8 +35,31 @@ export interface TasteReadingEvent {
   readonly standardVersionHash: string;
   readonly readerModel: string;
   readonly at: string;
+  /**
+   * Held back for calibration: none of this reading's verdicts was shown to anyone. Only these readings
+   * are put to the owner, so a label is never given by someone who has just seen the reader's verdict
+   * on the same passage (see `heldBack`).
+   */
+  readonly blind?: boolean;
   readonly readings: readonly (TasteReading & { readonly statementHash: string; readonly passage?: string })[];
 }
+
+/** The share of readings held back for calibration when nothing else is set (ATELIER_TASTE_HOLDBACK). */
+export const HOLDBACK = 1 / 3;
+
+/**
+ * Whether a reading is held back: its verdicts are acted on as usual but not displayed, and it joins the
+ * calibration queue. Deterministic in the reading's id, so it cannot be steered by what the reading says.
+ */
+export function heldBack(readingId: string, share = HOLDBACK): boolean {
+  if (share <= 0) return false;
+  if (share >= 1) return true;
+  return parseInt(createHash('sha256').update(`holdback|${readingId}`).digest('hex').slice(0, 8), 16) / 0x100000000 < share;
+}
+
+/** The label token a reading is listed and labelled by: stable while other readings are labelled. */
+export const labelToken = (readingId: string, key: string): string => `${readingId.slice(0, 8)}:${key}`;
+
 
 export type OwnerLabel = 'FOLLOWED' | 'MISSED' | 'UNSURE';
 
@@ -49,12 +72,23 @@ export interface TasteLabelEvent {
   readonly at: string;
 }
 
-/** The paragraph a quote sits in: what the owner reads when labelling, without the reader's verdict. */
+/**
+ * The passage the owner reads when labelling, without the reader's verdict: the paragraph holding the
+ * quote, or, when the paragraph is long or the quote spans paragraphs, a window of about `max`
+ * characters centred on it.
+ */
 export function passageAround(text: string, quote: string, max = 900): string | undefined {
-  const paras = text.split(/\n\s*\n/);
-  const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
-  const p = paras.find((x) => squash(x).includes(squash(quote)));
-  return p ? (p.length > max ? `${p.slice(0, max)}…` : p) : undefined;
+  const q = squash(quote);
+  if (!q) return undefined;
+  const p = text.split(/\n\s*\n/).find((x) => squash(x).includes(q));
+  if (p && p.length <= max) return p;
+  // Find the quote in the text with whitespace allowed to differ, then centre a window on it.
+  const at = new RegExp(q.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+')).exec(text);
+  if (!at) return undefined;
+  const pad = Math.max(0, Math.floor((max - at[0].length) / 2));
+  const start = Math.max(0, at.index - pad);
+  const end = Math.min(text.length, at.index + at[0].length + pad);
+  return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
 }
 
 export interface RulePermission {
@@ -104,7 +138,7 @@ export function tastePermissions(
     const r = readings.get(id);
     if (!r || label === 'UNSURE' || r.statementHash !== current.get(r.key)) continue;
     const t = per.get(r.key) ?? { confirmed: 0, falseBlocks: 0, missedClears: 0 };
-    if (r.verdict === 'MISSED' && r.kind === 'PRESENCE') { if (label === 'MISSED') t.confirmed += 1; else t.falseBlocks += 1; }
+    if (actsAsMiss(r)) { if (label === 'MISSED') t.confirmed += 1; else t.falseBlocks += 1; }
     if (r.verdict === 'FOLLOWED' && label === 'MISSED') t.missedClears += 1;
     per.set(r.key, t);
   }
@@ -130,22 +164,23 @@ export function tastePermissions(
 }
 
 /**
- * What to ask the owner next: recorded readings with a quoted passage, oldest first, not yet labelled.
- * Blind to outcome: FOLLOWED and MISSED alike, in the order they were taken, never chosen by verdict.
+ * What to ask the owner next: held-back readings with a quoted passage, oldest first, not yet labelled.
+ * Blind twice over: the owner never saw these verdicts (`heldBack`), and the queue takes FOLLOWED and
+ * MISSED alike, in the order they were taken, never chosen by verdict.
  */
 export function calibrationQueue(rules: readonly { rule: Requirement; key: string }[], events: readonly Record<string, unknown>[], readerModel: string) {
   const current = new Map(rules.map(({ rule, key }) => [key, { hash: statementHash(rule), rule }]));
   const labelled = new Set(events.filter((e) => e.kind === 'TASTE_LABEL').map((e) => `${String(e.readingId)}|${String(e.key)}`));
-  const out: { readingId: string; key: string; rule: Requirement; passage: string; statementHash: string }[] = [];
+  const out: { readingId: string; key: string; token: string; rule: Requirement; passage: string; statementHash: string }[] = [];
   for (const e of events) {
     if (e.kind !== 'TASTE_READING') continue;
     const ev = e as unknown as TasteReadingEvent;
-    if (ev.readerModel !== readerModel) continue;
+    if (ev.readerModel !== readerModel || !ev.blind) continue;
     for (const r of ev.readings) {
       const c = current.get(r.key);
-      if (c?.hash !== r.statementHash || !c || !r.passage || !(r.verdict === 'FOLLOWED' || (r.verdict === 'MISSED' && r.kind === 'PRESENCE'))) continue;
+      if (c?.hash !== r.statementHash || !c || !r.passage || !(r.verdict === 'FOLLOWED' || actsAsMiss(r))) continue;
       if (labelled.has(`${ev.readingId}|${r.key}`)) continue;
-      out.push({ readingId: ev.readingId, key: r.key, rule: c.rule, passage: r.passage, statementHash: r.statementHash });
+      out.push({ readingId: ev.readingId, key: r.key, token: labelToken(ev.readingId, r.key), rule: c.rule, passage: r.passage, statementHash: r.statementHash });
     }
   }
   return out;

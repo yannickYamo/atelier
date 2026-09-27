@@ -6,7 +6,7 @@
 
 import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
-import { readTaste, tasteRules, describeTaste, type TasteReading } from '../../core/taste/reader.js';
+import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { recordTaste, readerModel } from './taste.js';
@@ -169,12 +169,14 @@ export async function invoke(): Promise<void> {
   // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
   // cover is refused before anything is spent rather than failing halfway with nothing delivered.
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', 1)));
-  // The taste reader (below) reads every output twice, plus once more per draft and for a repair when
-  // it has earned the authority to act; its calls are in the ceiling from the start.
+  // The taste reader (below) reads every output twice (plus one applicability call when a rule has a
+  // condition). Once it has earned the authority to act it also reads each draft, the chosen one after
+  // the counted repair, and a taste rewrite again: 3 per draft plus 7 at most. Its calls are in the
+  // ceiling from the start, so a repair is never dropped for want of a call.
   const tasteOn = Boolean(std) && !argv.includes('--no-taste') && tasteRules(std!).length > 0;
-  const permissions = std ? tastePermissions(tasteRules(std), store.readEvents(L), readerModel()) : null;
+  const permissions = tasteOn ? tastePermissions(tasteRules(std!), store.readEvents(L), readerModel()) : null;
   const tasteActs = tasteOn && (permissions?.veto.size ?? 0) > 0;
-  const tasteCalls = tasteOn ? 3 + (tasteActs ? 5 + 2 * nDrafts : 0) : 0;
+  const tasteCalls = tasteOn ? (tasteActs ? 3 * nDrafts + 7 : 3) : 0;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4 + tasteCalls) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
 
@@ -213,14 +215,35 @@ export async function invoke(): Promise<void> {
   // The rules no count can check are read on every output, twice and with quotes, and the reading is
   // shown and recorded. Only rules where the reader has EARNED VETO from your labels let it act: rewrite
   // a passage it quotes, and prefer drafts that miss fewer of them. `--no-taste` turns it off.
+  //
+  // The reader never costs the user their output: if it fails (a rate limit, the call budget), the draft
+  // is delivered as the counted checks left it, and the failure is said.
   let tasteTaken: readonly TasteReading[] | null = null;
+  const tasteNotes: string[] = [];
+  const readerClient = tasteActs ? clientFor(readerModel()) : null;
+  // Applicability depends on the task alone: decided once for every draft and re-read.
+  let decided: Promise<boolean[]> | null = null;
+  const applies = (): Promise<boolean[]> => (decided ??= applicabilityFor(readerClient!, budget, std!, asked));
+  const readings = new Map<string, TasteReading[]>();
+  const readDraft = async (text: string): Promise<TasteReading[]> => {
+    const had = readings.get(text);
+    if (had) return had;
+    const r = await readTaste(readerClient!, budget, std!, text, asked, await applies());
+    readings.set(text, r);
+    return r;
+  };
   const refine = argv.includes('--no-repair') || !std ? null
     : async (draft: string) => {
       const r = await refineToStandard(client, budget, name, std, draft, 2, checks);
-      if (!tasteActs || !permissions) return { output: r.output, repair: r.repair };
-      const readerClient = clientFor(readerModel());
-      const readings = await readTaste(readerClient, budget, std, r.output, asked);
-      const t = await refineTaste(client, readerClient, budget, name, std, r.output, readings, permissions.veto, asked, checks);
+      if (!tasteActs || !permissions || !readerClient) return { output: r.output, repair: r.repair };
+      let t: Awaited<ReturnType<typeof refineTaste>>;
+      try {
+        const before = await readDraft(r.output);
+        t = await refineTaste(client, readerClient, budget, name, std, r.output, before, permissions.veto, asked, checks, await applies());
+      } catch (e) {
+        tasteNotes.push(`the taste reader could not run before delivery (${(e as Error).message.split('\n')[0]}); delivered as the counted checks left it`);
+        return { output: r.output, repair: r.repair };
+      }
       tasteTaken = t.readings;
       if (!t.targeted.length) return { output: r.output, repair: r.repair };
       const taste = { targeted: t.targeted, fixed: t.fixed, why: t.why };
@@ -237,10 +260,13 @@ export async function invoke(): Promise<void> {
   }
   const select = std && nDrafts > 1 ? { n: nDrafts, choose: async (drafts: readonly string[]) => {
     // Taste first, where the reader has earned it: the draft missing the fewest VETO-holding rules.
-    const tasteMissed = tasteActs && permissions
-      ? await Promise.all(drafts.map(async (d) => (await readTaste(clientFor(readerModel()), budget, std, d, asked))
-        .filter((r) => r.verdict === 'MISSED' && r.kind === 'PRESENCE' && permissions.veto.has(r.key)).length))
-      : drafts.map(() => 0);
+    // If the reader fails here, the drafts are ranked by count alone.
+    let tasteMissed = drafts.map(() => 0);
+    if (tasteActs && permissions) {
+      try { tasteMissed = await Promise.all(drafts.map(async (d) => vetoMisses(await readDraft(d), permissions.veto).length)); } catch (e) {
+        tasteNotes.push(`the taste reader could not rank the drafts (${(e as Error).message.split('\n')[0]}); ranked by count`);
+      }
+    }
     const scored = drafts.map((d, i) => {
       const r = checkDraft(name, std, d, checks);
       const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
@@ -283,10 +309,12 @@ export async function invoke(): Promise<void> {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
   }
   if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
+  for (const n of tasteNotes) console.log(`(${n}.)`);
   if (tasteOn && std) {
     try {
-      const { readings, permissions: p } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, tasteTaken);
-      console.log(describeTaste(readings, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto));
+      const taken = tasteTaken ?? readings.get(rec.output) ?? null;
+      const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
+      console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
       if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
     } catch (e) {
       console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);

@@ -4,8 +4,8 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { orientedScore, proposeMargins, evaluateTask, targetComparison, countAA, qualifyFromAA, clopperPearsonUpper,
-  floorDimensions, buildContract, compositeAcross, MIN_MARGIN } from '../core/distinctiveness/measured.js';
+import { orientedScore, proposeMargins, evaluateAcross, acrossTasks, pairsFor, targetComparison, countAA, qualifyFromAA, clopperPearsonUpper,
+  floorDimensions, buildContract, MIN_MARGIN, MIN_TASKS_FOR_VERDICT, MIN_AA_TRIALS, AA_BAR } from '../core/distinctiveness/measured.js';
 import { measure } from '../core/observers/registry.js';
 import { resolvePromotion } from '../core/convergence/promotion.js';
 import type { Measurement, StandardVersion } from '../core/state/canonical-state.js';
@@ -64,26 +64,28 @@ describe('margins come from the author\'s own spread', () => {
   });
 });
 
-describe('a task\'s verdict, and the verdict across tasks', () => {
+describe('the verdict is across tasks: one paired test per rule', () => {
   const contract: QualityFloorContract = { instrument: 'scoreDimensionByPolicy', dimensions: {
-    a: { nonInferiorityMargin: 0.5, gateRole: 'ENFORCE', rationale: '' }, b: { nonInferiorityMargin: 0.5, gateRole: 'OBSERVE', rationale: '' } } };
-  const frozen = (a: number[], b: number[]): FrozenBaselineEntry => ({ clusterId: 'c', fixtureContextId: 't', nGen: a.length, meanScores: {}, perFireScores: { a, b } });
-  it('held on the enforced dimension: NONINFERIOR', () => {
-    expect(evaluateTask({ a: [0, 0, 0], b: [0, 0, 0] }, frozen([0, 0, 0], [0, 0, 0]), contract).composite).toBe('NONINFERIOR');
+    a: { nonInferiorityMargin: 1, gateRole: 'ENFORCE', rationale: '' }, b: { nonInferiorityMargin: 1, gateRole: 'OBSERVE', rationale: '' } } };
+  const tasks = (a: number[], b: number[]): FrozenBaselineEntry[] => a.map((x, i) =>
+    ({ clusterId: 'c', fixtureContextId: `t${i}`, nGen: 1, meanScores: {}, perFireScores: { a: [x], b: [b[i]] } }));
+  const same = tasks([0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]);
+  it('held on the enforced rule across tasks: NONINFERIOR, from one draft per task', () => {
+    expect(evaluateAcross(same, same, contract).composite).toBe('NONINFERIOR');
   });
-  it('clearly worse on the enforced dimension: REGRESSION, whatever the observed one does', () => {
-    expect(evaluateTask({ a: [-3, -3, -3], b: [5, 5, 5] }, frozen([0, 0, 0], [0, 0, 0]), contract).composite).toBe('REGRESSION');
+  it('clearly worse on the enforced rule across tasks: REGRESSION, whatever the observed one does', () => {
+    expect(evaluateAcross(tasks([-3, -3, -3, -3, -3, -3], [9, 9, 9, 9, 9, 9]), same, contract).composite).toBe('REGRESSION');
   });
-  it('an enforced dimension that could not be scored holds the task at INCONCLUSIVE, never "held"', () => {
-    const r = evaluateTask({ b: [0, 0] }, frozen([0, 0, 0], [0, 0, 0]), contract);
-    expect(r.composite).toBe('INCONCLUSIVE');
-    expect(r.drivenBy).toEqual(['a']);
+  it('a change of about one margin from counts that never vary stays unresolved (the variance floor)', () => {
+    expect(acrossTasks(pairsFor('a', tasks([-1, -1, -1, -1, -1], [0, 0, 0, 0, 0]), tasks([0, 0, 0, 0, 0], [0, 0, 0, 0, 0])), 1).verdict).toBe('INCONCLUSIVE');
   });
-  it('one task regressing is a regression', () => {
-    const r = (c: QualityFloorResult['composite']): QualityFloorResult => ({ perDim: [], composite: c, drivenBy: [] });
-    expect(compositeAcross([r('NONINFERIOR'), r('REGRESSION'), r('INCONCLUSIVE')])).toBe('REGRESSION');
-    expect(compositeAcross([r('NONINFERIOR'), r('INCONCLUSIVE')])).toBe('INCONCLUSIVE');
-    expect(compositeAcross([])).toBe('INCONCLUSIVE');
+  it('fewer tasks than the minimum give no verdict, and an unresolved enforced rule is never "held"', () => {
+    const three = tasks([0, 0, 0], [0, 0, 0]);
+    expect(evaluateAcross(three, three, contract).composite).toBe('INCONCLUSIVE');
+    expect(MIN_TASKS_FOR_VERDICT).toBe(5);
+  });
+  it('the target is left out of the composite: guarding the target with the floor double-counts it', () => {
+    expect(evaluateAcross(tasks([-9, -9, -9, -9, -9, -9], [0, 0, 0, 0, 0, 0]), same, contract, new Set(['a'])).composite).toBe('INCONCLUSIVE');
   });
 });
 
@@ -106,30 +108,21 @@ describe('qualification is an exact bound on false alarms from A/A runs', () => 
     expect(clopperPearsonUpper(0, 58, 0.95)).toBeGreaterThan(0.05);
     expect(clopperPearsonUpper(3, 3, 0.95)).toBe(1);
   });
-  it('the task is the unit: a resolved task is a trial, a regressed one a false alarm, an unresolved one neither', () => {
-    const r = (c: QualityFloorResult['composite']): QualityFloorResult => ({ perDim: [], composite: c, drivenBy: [] });
-    expect(countAA([r('NONINFERIOR'), r('REGRESSION'), r('INCONCLUSIVE')])).toEqual({ trials: 2, falseAlarms: 1 });
+  it('an A/A run counts each enforced rule that resolved as a trial, and a REGRESSION as a false alarm', () => {
+    const r: QualityFloorResult = { composite: 'NONINFERIOR', drivenBy: [], perDim: [
+      { dim: 'a', verdict: 'NONINFERIOR', gateRole: 'ENFORCE', margin: 1, delta: 0, lowerBound: 0, upperBound: 0 },
+      { dim: 'b', verdict: 'REGRESSION', gateRole: 'OBSERVE', margin: 1, delta: -2, lowerBound: -2, upperBound: -2 },
+      { dim: 'c', verdict: 'INCONCLUSIVE', gateRole: 'ENFORCE', margin: 1, delta: 0, lowerBound: -9, upperBound: 9 } ] };
+    expect(countAA(r)).toEqual({ trials: 1, falseAlarms: 0 });
   });
-  it('the variance floor keeps a one-margin blip from zero-spread counts unresolved, and resolves a clear drop', () => {
-    const c: QualityFloorContract = { instrument: 'scoreDimensionByPolicy', dimensions: { a: { nonInferiorityMargin: 1, gateRole: 'ENFORCE', rationale: '' } } };
-    const f = (xs: number[]): FrozenBaselineEntry => ({ clusterId: 'c', fixtureContextId: 't', nGen: xs.length, meanScores: {}, perFireScores: { a: xs } });
-    expect(evaluateTask({ a: [-1, -1, -1] }, f([0, 0, 0]), c).composite).toBe('INCONCLUSIVE');
-    expect(evaluateTask({ a: [-3, -3, -3] }, f([0, 0, 0]), c).composite).toBe('REGRESSION');
-    expect(evaluateTask({ a: [0, 0, 0] }, f([0, 0, 0]), c).composite).toBe('NONINFERIOR');
-  });
-  it('the target is left out of the composite: guarding the target with the floor double-counts it', () => {
-    const c: QualityFloorContract = { instrument: 'scoreDimensionByPolicy', dimensions: { a: { nonInferiorityMargin: 1, gateRole: 'ENFORCE', rationale: '' } } };
-    const f: FrozenBaselineEntry = { clusterId: 'c', fixtureContextId: 't', nGen: 3, meanScores: {}, perFireScores: { a: [0, 0, 0] } };
-    expect(evaluateTask({ a: [-9, -9, -9] }, f, c, new Set(['a'])).composite).toBe('INCONCLUSIVE');
-  });
-  it('qualified only under the false-alarm bound, over at least three tasks, and sensitive to a planted regression', () => {
-    const sensitive = { plantedHits: 20, planted: 20 };
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, ...sensitive }, 3, 'e').qualification).not.toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, ...sensitive }, 2, 'e').qualification).toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 2, trials: 60, ...sensitive }, 10, 'e').qualification).toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, plantedHits: 10, planted: 20 }, 10, 'e').qualification, 'a floor that misses half of real regressions qualified').toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, plantedHits: 5, planted: 5 }, 10, 'e').qualification, 'sensitivity from five plantings').toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60 }, 10, 'e').qualification).toBeNull();
+  it('qualified only with enough tasks, sensitivity to a planted regression, and false alarms under the calibration bar', () => {
+    const ok = { falseAlarms: 0, trials: MIN_AA_TRIALS, plantedHits: 10, planted: 10 };
+    expect(qualifyFromAA(ok, 5, 'e').qualification).not.toBeNull();
+    expect(qualifyFromAA(ok, 4, 'e').qualification, 'four tasks').toBeNull();
+    expect(qualifyFromAA({ ...ok, trials: MIN_AA_TRIALS - 1 }, 5, 'e').qualification, 'too few A/A trials').toBeNull();
+    expect(qualifyFromAA({ ...ok, falseAlarms: 4 }, 5, 'e').qualification, 'miscalibrated').toBeNull();
+    expect(qualifyFromAA({ ...ok, plantedHits: 7 }, 5, 'e').qualification, 'misses real regressions').toBeNull();
+    expect(AA_BAR).toBe(0.25);
   });
 });
 
@@ -165,7 +158,9 @@ const run = (data: string, proj: string, ...args: string[]): string => {
   } catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`; }
 };
 
-/** A skill with two measured rules, one invocation recorded, a floor with 60 tasks, both rules enforced. */
+/** A skill with two measured rules, one invocation recorded, a floor with 10 tasks, both rules enforced. */
+/** Qualify until earned: each A/A run gives one trial per enforced rule, and the calibration check needs 11. */
+const qualify = (data: string, proj: string): string => { let out = ''; for (let i = 0; i < 6; i++) out = run(data, proj, 'floor', '--skill', 'focus', '--qualify'); return out; };
 const seedFloor = async (data: string, proj: string): Promise<void> => {
   run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'PREFERRED', '--measure', 'LEXICON:synergy');
   run(data, proj, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'PREFERRED', '--measure', 'LEXICON:leverage');
@@ -176,8 +171,8 @@ const seedFloor = async (data: string, proj: string): Promise<void> => {
   const corpus = join(proj, 'mine'); mkdirSync(corpus);
   for (const i of [1, 2, 3]) writeFileSync(join(corpus, `p${i}.md`), `Piece ${i}. Plain words, no jargon at all.`);
   const tasks = join(proj, 'tasks.txt');
-  writeFileSync(tasks, Array.from({ length: 60 }, (_, i) => `Write recommendation number ${i + 1}.`).join('\n\n'));
-  expect(run(data, proj, 'floor', '--skill', 'focus', '--corpus', corpus, '--tasks', tasks, '--enforce', '1', '--enforce', '2')).toContain('60 task(s) set');
+  writeFileSync(tasks, Array.from({ length: 10 }, (_, i) => `Write recommendation number ${i + 1}.`).join('\n\n'));
+  expect(run(data, proj, 'floor', '--skill', 'focus', '--corpus', corpus, '--tasks', tasks, '--enforce', '1', '--enforce', '2')).toContain('10 task(s) set');
 };
 
 describe('through the binary: propose, freeze, qualify, and a repair that installs itself', () => {
@@ -187,8 +182,8 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     await seedFloor(data, proj);
     expect(run(data, proj, 'floor', '--skill', 'focus', '--check', 'nope')).toMatch(/^EXIT:1[\s\S]*baseline/);
     expect(run(data, proj, 'floor', '--skill', 'focus', '--baseline')).toContain('Baseline frozen');
-    const q = run(data, proj, 'floor', '--skill', 'focus', '--qualify');
-    expect(q).toContain('0 false alarm(s) in 60 resolved task comparison(s)');
+    const q = qualify(data, proj);
+    expect(q).toContain('So far: 0 false alarm(s) in 12');
     expect(q).toContain('EARNED');
     expect(run(data, proj, 'floor', '--skill', 'focus')).toContain('state: EARNED');
 
@@ -210,7 +205,7 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     const data = mkdtempSync(join(tmpdir(), 'atelier-p7c-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-p7c-proj-'));
     await seedFloor(data, proj);
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
-    run(data, proj, 'floor', '--skill', 'focus', '--qualify');
+    qualify(data, proj);
     await setByTool({ emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
       emit_piece: { piece: 'the plain answer' } });
     const out = run(data, proj, 'fix', 'it said synergy', '--floor-cap', '0.0000001');
@@ -224,7 +219,9 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     await seedFloor(data, proj);
     run(data, proj, 'floor', '--skill', 'focus', '--observe', '2');
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
-    run(data, proj, 'floor', '--skill', 'focus', '--qualify');
+    // One enforced rule gives one A/A trial a run; the calibration check needs eleven.
+    qualify(data, proj); qualify(data, proj);
+    expect(run(data, proj, 'floor', '--skill', 'focus')).toContain('state: EARNED');
     const before = store.getActive(L);
     await setByTool({ emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
       emit_piece: { piece: 'the plain answer' } });
@@ -238,7 +235,7 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     const data = mkdtempSync(join(tmpdir(), 'atelier-p7b-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-p7b-proj-'));
     await seedFloor(data, proj);
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
-    expect(run(data, proj, 'floor', '--skill', 'focus', '--qualify')).toContain('EARNED');
+    expect(qualify(data, proj)).toContain('EARNED');
     expect(run(data, proj, 'floor', '--skill', 'focus', '--margin', '1=0.9')).toContain('state: UNQUALIFIED');
     expect(run(data, proj, 'floor', '--skill', 'focus', '--margin', '1=0')).toMatch(/^EXIT:1[\s\S]*positive number/);
   }, 300_000);
