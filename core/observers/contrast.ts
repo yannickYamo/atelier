@@ -29,13 +29,16 @@ const underUsed = (author: number, model: number): boolean => author >= 1 && aut
 const r1 = (x: number): number => Math.round(x * 10) / 10;
 
 /** Patterns with a proposal of their own below, not the generic author-against-model comparison. */
-const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING']);
+const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING', 'CONTRACTION', 'FULL_FORM']);
 
 /**
- * THE AUTHOR'S POSITIVE SIGNATURE, HELD IN A BAND. Ceilings on the model's tells alone produce a
- * de-AI'd generic writer: in a blind round the skill's output had the cleanest negative profile of four
- * and the weakest positive one (one-line paragraphs, questions and bold all well under the author's).
- * Where the author uses one of these, it is proposed as a two-sided band around their own rate.
+ * THE AUTHOR'S POSITIVE SIGNATURE, HELD IN A BAND, AND USED TO CHOOSE, NOT TO STEER. Ceilings on the
+ * model's tells alone produce a de-AI'd generic writer. But an author does not write at a rate: across
+ * one real corpus, one-line paragraphs ran 0.4 to 10.4 per 1,000 words by piece, first person 0.7 to
+ * 36. A rule instructing the average steers every piece toward a piece they never wrote. So these bands
+ * are wide (the author's own range) and proposed as WEAK: checked on every output, reported, and used
+ * to choose between drafts, never instructed and never rewritten toward. The voice itself is carried by
+ * the author's own pieces and a persona brief (core/compiler/).
  */
 const SIGNATURE: ReadonlySet<PatternId> = new Set<PatternId>(['BOLD_SPAN', 'ONE_LINE_PARAGRAPH', 'RHETORICAL_QUESTION', 'SEMICOLON']);
 
@@ -133,8 +136,8 @@ export function deriveContrastRules(
     } else if (SIGNATURE.has(p) && a >= 1) {
       const b = bandOf(p);
       if (b.lo > 0) {
-        propose(`Use ${PATTERN_LABEL[p]} as I do: between ${b.lo} and ${b.hi} per 1,000 words (I use about ${b.a}).`, 'GENERATIVE',
-          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: b.lo, maxPer1000: b.hi } }, ev);
+        propose(`Use ${PATTERN_LABEL[p]} within my range: between ${b.lo} and ${b.hi} per 1,000 words (I use about ${b.a}).`, 'GENERATIVE',
+          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: b.lo, maxPer1000: b.hi } }, ev, true);
       }
     } else if (underUsed(a, m)) {
       const floor = r1(perPiece(0.1) * 0.8);
@@ -382,6 +385,8 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
  *                   a VIEW in the first person ("I think", "I'd hold this loosely"), which needs no
  *                   source, from a first-hand STORY or figure, which does; an author who keeps out of
  *                   the text gets a cap where the model does not.
+ *   register        a cap on uncontracted forms for an author who contracts (at least 75% of the forms
+ *                   that can be), or on contractions for one who does not (at most 25%)
  *   dialect         an author who spells one way (at least ten marked words, the other way at most
  *                   15% of them) gets a cap on the other dialect's spellings.
  */
@@ -396,13 +401,27 @@ function proposeVoice(authorTexts: readonly string[], drafts: readonly string[],
     propose(`Write in the first person, as I do: between ${fp.lo} and ${fp.hi} "I", "my" or "me" per 1,000 words (I use about ${fp.a}). `
       + 'A view or a hedge in the first person ("I think", "I\'d hold this loosely", "I\'m skeptical") needs no source; a first-hand story or figure does.',
     'GENERATIVE', { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], minPer1000: fp.lo, maxPer1000: fp.hi } },
-    `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
+    `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`, true);
   } else if (fp.a < 1 && mfp >= 3) {
     const cap = r1(Math.max(fp.hi, 0.5));
     propose(`Keep myself out of the text, as I do: at most ${cap} "I", "my" or "me" per 1,000 words.`, 'BOUNDARY',
       { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], maxPer1000: cap } }, `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
   }
   const count = (p: PatternId): number => authorTexts.reduce((n, t) => n + findPattern(t, p).length, 0);
+  // REGISTER: a speaker who contracts almost everything gets a cap on the forms left whole, and one who
+  // writes formally a cap on contractions. A repair can fix either word by word, so these are boundaries.
+  const contracted = count('CONTRACTION'); const whole = count('FULL_FORM');
+  const share = contracted + whole >= 20 ? contracted / (contracted + whole) : null;
+  if (share !== null && (share >= 0.75 || share <= 0.25)) {
+    const other = share >= 0.75 ? 'FULL_FORM' as const : 'CONTRACTION' as const;
+    const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, other), 0.9) * 1.5, 1));
+    const m = meanRate(drafts, other);
+    propose(share >= 0.75
+      ? `Contract as I do ("don't", "it's", "you're"): at most ${cap} uncontracted forms ("do not", "it is") per 1,000 words.`
+      : `Write out what I write out ("do not", "it is"): at most ${cap} contractions per 1,000 words.`, 'BOUNDARY',
+    { observer: 'PATTERN_RATE', params: { pattern: [other], maxPer1000: cap } },
+    `you contract ${Math.round(share * 100)}% of the forms that can be contracted; the model's plain drafts: ${m} ${other === 'FULL_FORM' ? 'uncontracted forms' : 'contractions'} per 1,000 words`);
+  }
   const us = count('AMERICAN_SPELLING'); const uk = count('BRITISH_SPELLING');
   const dialect = us >= 10 && uk <= 0.15 * (us + uk) ? { other: 'BRITISH_SPELLING' as const, mine: 'American', eg: 'behavior, organize, center', not: 'behaviour, organise, centre' }
     : uk >= 10 && us <= 0.15 * (us + uk) ? { other: 'AMERICAN_SPELLING' as const, mine: 'British', eg: 'behaviour, organise, centre', not: 'behavior, organize, center' } : null;

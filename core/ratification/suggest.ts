@@ -122,7 +122,13 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
   // A rule that needs material only the person has would, as REQUIRED, refuse every task that does not
   // bind it — for new writing that is most of them. So when producing new work it is suggested as
   // shown and asks for the material in the host; when answering or guarding, the facts are the point.
-  const required = mode === 'GENERATE' ? held && !needs : (held || agreed);
+  // FOR NEW WRITING, REQUIRED MEANS "NEARLY ALWAYS". A move the author makes in three of five pieces,
+  // instructed as a rule, is made in every piece, and several such moves stacked became a template a
+  // blind reader recognised across five unrelated topics. So a reading-based rule instructs only when it
+  // held in at least four in five unread pieces where it applied (three or more); the rest are moves
+  // the author SOMETIMES makes, shown with their rate and a cap on how many one piece may carry.
+  const nearlyAlways = rate !== null && h !== null && h.applicable >= 3 && rate >= 0.8;
+  const required = mode === 'GENERATE' ? nearlyAlways && !needs : (held || agreed);
   // RESPOND with a condition: the measured weak spot. A conditional rule served as an instruction was
   // applied where its condition did not hold. Suggested as required only on strong evidence, and said.
   const conditionalRespond = mode === 'RESPOND' && !isGeneralScope(p.appliesWhen);

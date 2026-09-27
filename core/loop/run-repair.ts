@@ -9,6 +9,7 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
+import { displacedFamilies } from '../observers/style.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -24,7 +25,17 @@ export interface CheckOptions {
   readonly material?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
   readonly guardClaims?: boolean;
+  /**
+   * What happens to an invented story or figure. By default it is CUT: the span is rewritten without
+   * it, keeping the point it made, and the output lists where a story of the person's own would fit.
+   * A bracketed slot in the delivered text ("[your story: …]") was honest but read as a broken draft to
+   * every reader of a blind round; `placeholders: true` (`--placeholders`) asks for slots instead.
+   */
+  readonly placeholders?: boolean;
 }
+
+const CUT_STORY = 'a first-person story that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another';
+const CUT_FIGURE = 'a figure presented as a finding, not in your material or your request: say it without the number, or cut the claim';
 
 /**
  * Every check a draft is held to: the standard's measured rules, and — always, unless turned off — the
@@ -34,7 +45,8 @@ export interface CheckOptions {
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
   const report = verifyText(skill, v, text);
   if (opts.guardClaims === false) return report;
-  const claims = unsourcedClaims(text, opts.material ?? '');
+  const claims = unsourcedClaims(text, opts.material ?? '')
+    .map((c) => (opts.placeholders ? c : { ...c, why: c.kind === 'EXPERIENCE' ? CUT_STORY : CUT_FIGURE }));
   const line = { requirementId: 'UNSOURCED', statement: 'Never invent a first-person story or a figure presented as a finding.',
     materiality: 'REQUIRED', phase: 'ACCURACY' as const,
     result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: claims, value: claims.length,
@@ -49,7 +61,7 @@ export async function refineToStandard(
   const first = checkDraft(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
   let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
-  const kept: string[] = []; const revertedRules: string[] = [];
+  const kept: string[] = []; const revertedRules: string[] = []; const cut: string[] = [];
   // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
   // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
   // broken, accuracy gets ONE pass of its own, not charged to the `maxPasses` style passes. An accuracy
@@ -93,15 +105,20 @@ export async function refineToStandard(
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
     }
     const after = next === text ? report : checkDraft(skill, v, next, opts);
+    // A BANNED MOVE MAY NOT MOVE. A pass that lowers one tell while raising a sibling of the same family
+    // ("not X, it's Y" rewritten as "X rather than Y") has displaced the move, not removed it.
+    const moved = next === text ? [] : displacedFamilies(text, next);
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused because it changed what the text claims (${kept.length} span(s) kept as written)` : 'the rewrite returned nothing usable' }
-      : acceptRepair(report, after);
+      : moved.length ? { ok: false, why: `it moved a banned move onto a sibling (${moved.join('; ')})` }
+        : acceptRepair(report, after);
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
       if (accuracyPass) continue;   // style still gets its passes
       break;
     }
     text = next; report = after;
+    for (const a of applied) if (targets.find((x) => x.id === a.id)?.specifics && !opts.placeholders) cut.push(a.before.trim().slice(0, 160));
     // An accepted pass's style rewrites are examples of this standard in action. One rule per pair,
     // and never an invented claim turned placeholder: that teaches nothing about writing.
     for (const a of applied) {
@@ -114,5 +131,6 @@ export async function refineToStandard(
   }
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
-      ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, 12) } : {}), why } };
+      ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, 12) } : {}),
+      ...(cut.length ? { storiesCut: cut } : {}), why } };
 }

@@ -257,5 +257,5 @@ export async function skill(): Promise<void> {
   process.env.ATELIER_ORCHESTRATED = '1';
   if (!argv.includes('--work-type')) { argv.push('--work-type', workType); }
   ratifyClose();
-  build(flag('--name') ?? basename(process.cwd()));
+  await build(flag('--name') ?? basename(process.cwd()));
 }

@@ -1,0 +1,96 @@
+// atelier/core/compiler/persona.ts — HOW THE AUTHOR SOUNDS, DESCRIBED, WITH HOW OFTEN, AND PROVEN BY QUOTES.
+//
+// Four blind rounds on one author's corpus taught the same thing four ways: rules about a writer do not
+// make a model sound like them, and a description of the writer does. A model-written style guide came
+// second of five in the fourth round while a skill of 21 required rules came fourth: constraints do not
+// generate a voice, a persona to inhabit does. But that guide also invented anecdotes and asserted
+// habits the author does not have. So this is the guide, made accountable:
+//
+//   every point is about HOW the author writes (speaker, register, hedging, argument, devices, openings
+//   and closings, the kinds of pieces they write), never their topics, facts, names or life;
+//   every point says HOW OFTEN (always, often, sometimes, rarely), because an author writes in modes and
+//   a habit of two pieces in five, stated as a rule, becomes a template in every piece;
+//   every point carries a short quote from the author's own pieces, and a point whose quote is not
+//   verbatim in the corpus is dropped, so nothing here is the model's imagination of the author.
+//
+// It is an implementation carrier, like the exemplar: served with the skill, not part of the standard,
+// and chosen from pieces discovery was allowed to read (never a reserved one).
+
+import type { Budget, InferenceClient } from '../inference/client.js';
+import { spend } from '../inference/client.js';
+import { quoteIsReal } from '../taste/reader.js';
+
+export type Frequency = 'ALWAYS' | 'OFTEN' | 'SOMETIMES' | 'RARELY';
+export interface PersonaPoint {
+  readonly aspect: string;
+  readonly description: string;
+  readonly frequency: Frequency;
+  readonly quote: string;
+}
+export interface Persona {
+  readonly points: readonly PersonaPoint[];
+  /** points the model offered whose quote was not in the corpus: dropped, counted so the drop is visible */
+  readonly dropped: number;
+}
+
+export const PERSONA_SYSTEM = `You describe how a writer sounds, so another writer could sound like them on ANY topic.
+
+You are given pieces by one author. Describe their voice, not their subjects:
+- who is speaking: point of view, stance, how sure they sound, how they address the reader;
+- register: contractions, spoken looseness, asides, humour, how formal;
+- how they hedge, concede and qualify, and how they handle evidence and sources;
+- how they build an argument and structure a piece, and the kinds of pieces they write (their modes);
+- recurring devices and moves, openings and closings;
+- what they conspicuously do not do.
+
+For every point say how often it happens across the pieces: ALWAYS (every piece), OFTEN, SOMETIMES (a
+minority of pieces) or RARELY. Most habits are OFTEN or SOMETIMES; reserve ALWAYS for what truly holds in
+every piece. For every point give one short quote (a phrase or sentence, under 30 words) copied exactly
+from the pieces that shows it.
+
+Never describe the author's topics, facts, figures, names, employers, projects or life story, and never
+suggest reusing their sentences or coined terms. Twelve to twenty points.`;
+
+export const PERSONA_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: { points: { type: 'array', items: { type: 'object',
+    properties: {
+      aspect: { type: 'string' }, description: { type: 'string' },
+      frequency: { type: 'string', enum: ['ALWAYS', 'OFTEN', 'SOMETIMES', 'RARELY'] },
+      quote: { type: 'string' },
+    },
+    required: ['aspect', 'description', 'frequency', 'quote'], additionalProperties: false } } },
+  required: ['points'], additionalProperties: false,
+};
+
+/** Keep only points whose quote is in the corpus, verbatim (whitespace and emphasis aside). */
+export function groundPersona(raw: readonly Partial<PersonaPoint>[], corpus: readonly string[]): Persona {
+  const joined = corpus.join('\n\n');
+  const freq = new Set<Frequency>(['ALWAYS', 'OFTEN', 'SOMETIMES', 'RARELY']);
+  const points = raw.filter((p): p is PersonaPoint =>
+    typeof p.description === 'string' && p.description.trim().length > 0 && typeof p.quote === 'string'
+    && p.frequency !== undefined && freq.has(p.frequency) && quoteIsReal(p.quote, joined));
+  return { points: points.map((p) => ({ aspect: (typeof p.aspect === 'string' ? p.aspect : '').trim(), description: p.description.trim(), frequency: p.frequency, quote: p.quote.trim() })),
+    dropped: raw.length - points.length };
+}
+
+/** Derive the persona from the author's readable pieces: one call, metered on `budget`. */
+export async function derivePersona(client: InferenceClient, budget: Budget, corpus: readonly string[]): Promise<Persona> {
+  const res = await spend(budget, 0.6, async () => {
+    const x = await client.complete({
+      stableBlock: PERSONA_SYSTEM, variableBlock: '',
+      userMessage: corpus.map((t) => `<piece>\n${t}\n</piece>`).join('\n\n'),
+      toolName: 'emit_persona', toolDescription: 'How the author sounds, point by point, with how often and a verbatim quote.',
+      schema: PERSONA_SCHEMA, maxTokens: 5000,
+    });
+    return { value: x, cost: x.cost };
+  });
+  return groundPersona((res.json as { points?: Partial<PersonaPoint>[] } | null)?.points ?? [], corpus);
+}
+
+const WORD: Readonly<Record<Frequency, string>> = { ALWAYS: 'always', OFTEN: 'often', SOMETIMES: 'sometimes', RARELY: 'rarely' };
+
+/** The persona as the skill states it: one line per point, its frequency first, its quote as evidence. */
+export function describePersona(p: Persona): string {
+  return p.points.map((x) => `- (${WORD[x.frequency]}) ${x.description} e.g. "${x.quote}"`).join('\n');
+}

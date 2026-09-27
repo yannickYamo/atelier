@@ -18,7 +18,8 @@ export type PatternId =
   | 'EM_DASH' | 'SPACED_HYPHEN' | 'SEMICOLON' | 'NOT_X_ITS_Y' | 'THAT_OPENER' | 'HERES_OPENER'
   | 'SIGNPOST' | 'INTENSIFIER' | 'SHORT_VERDICT' | 'BOLD_SPAN' | 'ONE_LINE_PARAGRAPH'
   | 'RHETORICAL_QUESTION' | 'REPEATED_OPENER'
-  | 'DASH_ASIDE' | 'FIRST_PERSON' | 'BRITISH_SPELLING' | 'AMERICAN_SPELLING';
+  | 'DASH_ASIDE' | 'FIRST_PERSON' | 'BRITISH_SPELLING' | 'AMERICAN_SPELLING'
+  | 'CONTRACTION' | 'FULL_FORM' | 'RATHER_THAN' | 'REFRAME' | 'ORDINAL_CATALOGUE';
 
 /** How each pattern reads to a person, for statements and reports. */
 export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
@@ -42,7 +43,38 @@ export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
   FIRST_PERSON: 'first person ("I", "my", "me")',
   BRITISH_SPELLING: 'British spellings (behaviour, organise, centre, licence)',
   AMERICAN_SPELLING: 'American spellings (behavior, organize, center, license)',
+  // REGISTER. Pronouns are not register: a text can say "I" often and still read as a memo ("I do not",
+  // "it is", "you are"). How often the forms a speaker would contract are left whole is.
+  CONTRACTION: 'contractions ("don\'t", "it\'s", "you\'re")',
+  FULL_FORM: 'uncontracted forms ("do not", "it is", "you are")',
+  // THE CONTRAST MOVE'S OTHER SPELLINGS. A cap on "not X, it's Y" was met, in a blind round, by writing
+  // "X rather than Y" and "has little to do with…; what matters is" instead: the move survived the ban.
+  RATHER_THAN: '"X rather than Y" framings',
+  REFRAME: 'reframes ("has little to do with", "isn\'t about", "what matters is", "the real question is")',
+  // THE REPEATED OPENER'S OTHER SPELLING: a catalogue whose items each announce their place.
+  ORDINAL_CATALOGUE: 'catalogue announcements ("is the first one", "is the next one", "is the most familiar of them")',
 };
+
+/**
+ * FAMILIES: patterns that are spellings of one move. A repair that lowers one member while raising
+ * another has displaced the move, not removed it (see `displacedFamilies`). Dashes are not a family
+ * here: the em-dash rule names the author's own substitute, and the dash-aside cap limits the move.
+ */
+export const PATTERN_FAMILIES: Readonly<Record<string, readonly PatternId[]>> = {
+  contrast: ['NOT_X_ITS_Y', 'RATHER_THAN', 'REFRAME'],
+  opener: ['THAT_OPENER', 'HERES_OPENER', 'REPEATED_OPENER', 'ORDINAL_CATALOGUE'],
+};
+
+/** The families in which, from `before` to `after`, one member fell while another rose: a displaced move. */
+export function displacedFamilies(before: string, after: string): string[] {
+  const out: string[] = [];
+  for (const [family, members] of Object.entries(PATTERN_FAMILIES)) {
+    const d = members.map((p) => ({ p, delta: findPattern(after, p).length - findPattern(before, p).length }));
+    const fell = d.filter((x) => x.delta < 0); const rose = d.filter((x) => x.delta > 0);
+    if (fell.length && rose.length) out.push(`${family}: ${fell.map((x) => x.p).join(', ')} down, ${rose.map((x) => x.p).join(', ')} up`);
+  }
+  return out;
+}
 
 export const PATTERN_IDS = Object.keys(PATTERN_LABEL) as PatternId[];
 
@@ -54,6 +86,11 @@ const AMERICAN = new RegExp(`\\b(?:(?:${IZE})z(?:e|es|ed|ing|ation|ations|er|ers
 
 const REGEX: Partial<Record<PatternId, RegExp>> = {
   EM_DASH: /—/g,
+  CONTRACTION: /\b(?:\w+n['’]t|(?:it|that|there|here|what|who|he|she|let)['’]s|\w+['’](?:re|ve|ll|d|m))\b/gi,
+  FULL_FORM: /\b(?:(?:do|does|did|is|are|was|were|could|would|should|will|has|have|had|must|need) not|cannot|it is|that is|there is|here is|what is|I am|you are|we are|they are|I have|you have|we have|they have|I will|you will|we will|I would|you would|let us)\b/gi,
+  RATHER_THAN: /\brather than\b/gi,
+  REFRAME: /\b(?:has (?:little|nothing) to do with|(?:isn['’]t|is not|wasn['’]t|was not) (?:really |actually )?about|what (?:really |actually )?matters (?:here )?is|the real (?:question|problem|issue|point) (?:here )?is)\b/gi,
+  ORDINAL_CATALOGUE: /\b(?:is|are) the (?:first|second|third|fourth|next|last|final|newest|latest|oldest|quietest|one that \w+|most \w+ of (?:them|the set|these)|\w+est of (?:them|the set|these))(?: one)?\b/gi,
   DASH_ASIDE: /—|\s–\s|(?<!\d)\s-\s(?!\d)/g,
   FIRST_PERSON: /\b(?:I'm|I’m|I've|I’ve|I'd|I’d|I'll|I’ll|I|myself|mine|me|my)\b/g,
   BRITISH_SPELLING: BRITISH,
