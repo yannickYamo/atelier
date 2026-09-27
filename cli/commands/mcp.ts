@@ -90,7 +90,7 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     // A miss on a rule where the reader holds VETO fails the check, as on the command line. A reader that
     // cannot run costs nothing of the counted report: it is said, and the counted result stands.
     // A reading held back for calibration returns no verdicts, only whether it failed.
-    let taste: { verdicts: unknown[]; text: string; failed: boolean } | null = null;
+    let taste: { verdicts: unknown[]; text: string; failed: boolean; couldNotRun?: boolean } | null = null;
     if (args.taste === true) {
       try {
         const { readings, permissions, held } = await recordTaste(L, v, text, typeof args.task === 'string' ? args.task : null, null,
@@ -100,13 +100,13 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
           verdicts: held ? [] : readings.map((r) => ({ rule: r.requirementId, verdict: r.verdict, kind: r.kind ?? null, quote: r.quote ?? null, why: r.why,
             authority: actsAsMiss(r) && permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
       } catch (e) {
-        taste = { text: `(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`, failed: false, verdicts: [] };
+        taste = { text: `(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`, failed: false, verdicts: [], couldNotRun: true };
       }
     }
     return { isError: false, text: `${describeVerify(report)}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed || (taste?.failed ?? false),
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
         detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })),
-      ...(taste ? { taste: taste.verdicts } : {}) })}` };
+      ...(taste ? { taste: taste.verdicts, ...(taste.couldNotRun ? { tasteCouldNotRun: true } : {}) } : {}) })}` };
   }
   throw new Error(`unknown tool "${name}"`);
 };

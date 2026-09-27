@@ -195,15 +195,15 @@ export async function readTaste(client: InferenceClient, budget: Budget, v: Stan
 
 /**
  * One line per reading, for the terminal. A held-back reading (./calibration.ts `heldBack`) shows no
- * verdicts at all: it is kept blind so the owner can label it; `vetoMisses` still says whether it acted.
+ * verdicts and no count of them: it is kept blind so the owner can label it. What still shows is that a
+ * check failed (verify's exit code, MCP's `failed`), which a guard cannot hide; docs/TASTE.md says so.
  */
 export function describeTaste(readings: readonly TasteReading[], rules: ReadonlyMap<string, Requirement>, permitted: ReadonlySet<string> = new Set(),
   held = false): string {
   if (!readings.length) return 'No reading-based rules to read.';
   if (held) {
-    const acted = readings.filter((r) => actsAsMiss(r) && permitted.has(r.key)).length;
-    return `read against ${readings.length} reading-based rule(s); this reading is held back so that your labels stay blind`
-      + `${acted ? ` (${acted} rule(s) the reader holds VETO on were read as missed)` : ''}. Label it with: atelier taste --calibrate`;
+    return `read against ${readings.length} reading-based rule(s); this reading is held back so that your labels stay blind. `
+      + 'Label it with: atelier taste --calibrate';
   }
   const count = (v: TasteVerdict): number => readings.filter((r) => r.verdict === v).length;
   const head = `read against ${readings.length} reading-based rule(s): ${count('FOLLOWED')} followed, ${count('MISSED')} missed, `

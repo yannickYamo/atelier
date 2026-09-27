@@ -57,6 +57,28 @@ a run in progress may not be.
 - **The front door** (`atelier` with no command) lists the everyday verbs first: create, use,
   correct, status, calibrate, set up the floor, tend.
 
+### Fixed (gap audit of phase D)
+
+- A baseline frozen under another model, or before the tasks changed, killed `optimize` and `tend` halfway,
+  after the screen had spent, leaving candidates PENDING that blocked later rounds. It is now refused before
+  anything is spent, and the floor throws rather than exits mid-round.
+- After an automatic install, the round's other candidates (built on the replaced version) were left
+  waiting, and promoting one would have silently reverted the install. They are now set aside as never
+  judged. `tend` runs a round only on an EARNED floor, says why it did not, and says the floor must be
+  re-earned after an install.
+- The reader's fallback to the target model now uses the target runtime's provider and base URL.
+- Held-back readings no longer leak through the taste-repair line or a count of misses, and only labels on
+  held-back readings earn anything (labels given before hold-back existed no longer count).
+- The taste reader's VETO applied only in `optimize`; `fix` and `floor --check --promote` could install
+  past it. It now lives in the one check every automatic install goes through.
+- `floor --setup` refuses, before spending, when fewer than two rules can be enforced.
+- `verify --json --taste` printed text after the JSON; it is now one object, and `failed` includes a
+  VETO miss. MCP says when the reader could not run.
+- A baseline with a different number of drafts per task is refused rather than compared; how drafts are
+  scored is part of what a qualification is a rate of; a qualification for another draft count is kept.
+- `status --skill` and `floor` no longer die without a target model; `status --help` mentions `--skill`.
+- Docs say what the A/A and planted checks really measure, and the cron example keeps stderr.
+
 ### Fixed (gap audit of phases A to C)
 
 - `invoke` on a runtime with only a target model died resolving the reader model, even with

@@ -39,14 +39,14 @@ import { renderAgentSkill, assertPortable } from '../../renderers/agent-skill/re
 import { genomeOf, mutationsOf, describeMutation, mutationKey, type Mutation } from '../../core/optimizer/genome.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure, type Attempt } from '../../core/optimizer/reflect.js';
 import { finalists, type Scores } from '../../core/optimizer/pareto.js';
-import { readTaste, tasteRules, vetoMisses } from '../../core/taste/reader.js';
+import { tasteRules } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { readerModel } from './taste.js';
 import { floorDimensions, perFire } from '../../core/distinctiveness/measured.js';
 import { contrastFor, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
 import { spend, type Budget } from '../../core/inference/client.js';
-import { fire, checkCandidate, promoteChecked, floorStateFor, runtimeIdentity, MIN_TASKS } from './floor.js';
+import { fire, checkCandidate, promoteChecked, floorStateFor, runtimeIdentity, baselineProblem, MIN_TASKS, TASTE_GATE_CALLS } from './floor.js';
 import { sha, DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding, clientFor, diagnoserModel, modelFor, carriedFrom } from '../runtime.js';
 
 type Proposer = 'REFLECTIVE' | 'FIXED_ORDER';
@@ -84,6 +84,10 @@ export async function optimize(): Promise<void> {
     die(`optimize needs a regression floor with margins, at least ${MIN_TASKS} tasks and a baseline for the active version, so a search `
       + `cannot make what it does not target worse unnoticed. See where it stands: atelier floor --skill ${name}`);
   }
+  // A baseline that cannot be compared against (tasks changed, frozen under another model) is refused
+  // here, before the screen spends anything, not halfway through the round.
+  const stale = baselineProblem(L, name, active, floor.tasks, model);
+  if (stale) die(`optimize cannot compare against the baseline: ${stale}`);
   const st = floorStateFor(L, active, runtime);
   if (st.state !== 'EARNED') console.log(`The floor is ${st.state}, so nothing this round finds can install itself; finalists are left for you.`);
   const dims = floorDimensions(v);
@@ -99,8 +103,8 @@ export async function optimize(): Promise<void> {
   const keep = Math.max(1, Math.floor(numericFlag('--finalists', 2)));
   const T = floor.tasks.length;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 5),
-    // per finalist: the floor's drafts, then the taste check's drafts (2 versions × TASTE_SAMPLE) and reads (3 calls each)
-    maxCalls: 1 + (want + 1) * T + keep * (T * st.fires + 2 * TASTE_SAMPLE + 2 * TASTE_SAMPLE * 3) };
+    // per finalist: the floor's drafts, then the taste check (floor.ts TASTE_GATE_CALLS)
+    maxCalls: 1 + (want + 1) * T + keep * (T * st.fires + TASTE_GATE_CALLS) };
 
   // ── 1. PROPOSE ─────────────────────────────────────────────────────────────────────────────────
   const carried = carriedFrom(L, active, v);
@@ -189,12 +193,9 @@ export async function optimize(): Promise<void> {
   for (const c of best) {
     let authority: string; let why: string; let check: Awaited<ReturnType<typeof checkCandidate>>;
     try {
+      // The taste reader's VETO is applied inside checkCandidate, as on every path that can install.
       check = await checkCandidate(L, name, v, active, c.skillVersionHash, c.target, budget, client, binding.requestedModel, runtime);
       authority = check.decision.authority; why = check.decision.why;
-      if (authority === 'AUTO_PROMOTE' && taste.veto.size) {
-        const vetoed = await tasteRegression(L, v, active, c.skillVersionHash, floor.tasks, client, budget, taste.veto);
-        if (vetoed.length) { authority = 'AUTO_REJECT'; why = `the taste reader, which has earned VETO from your labels, reads it as missing ${vetoed.join(', ')} more often than the current version`; }
-      }
     } catch (e) {
       const stop = (e as Error).message.split('\n')[0];
       console.log(`  ${describeMutation(c.mutation, rules)}: the confirmation could not finish (${stop}); left for you.`);
@@ -213,6 +214,15 @@ export async function optimize(): Promise<void> {
     }
     // Waiting for a person: the gate could not act, or --promote was not given.
     console.log(`    to adopt it yourself: atelier promote --skill ${name} --candidate ${c.skillVersionHash} --why "<reason>"   (or atelier reject)`);
+  }
+  // SUPERSEDED. Every other candidate this round was built on the version just replaced: promoting one
+  // now would silently revert the change installed. They are settled as never judged (no generations),
+  // so repair memory holds nothing against the same move on the new version.
+  if (promoted) {
+    const unjudged: EvaluationBasis = { generations: 0, instrument: 'QUALIFIED_OBSERVER', orderInvariant: null };
+    const stale = candidates.filter((c) => c !== promoted && !c.settled);
+    for (const c of stale) settle(L, c, 'REJECTED', unjudged, `superseded: ${promoted.skillVersionHash} was installed this round`);
+    if (stale.length) console.log(`${stale.length} other candidate(s) were built on the version just replaced and are set aside; the next round proposes against ${promoted.skillVersionHash}.`);
   }
   finish(best, promoted, null);
 }
@@ -279,35 +289,6 @@ function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { ski
 
 /** The pairs the last build chose, where they still teach this standard: what "ship the contrast examples" would ship. */
 const contrastAvailable = (L: store.StoreLayout, v: StandardVersion): ContrastPair[] => contrastFor(store.getContrast(L).pairs, v);
-
-/** Tasks both versions are drafted on for the taste check, and how many more tasks the candidate must miss a rule on to be blocked. */
-const TASTE_SAMPLE = 4;
-const TASTE_BLOCK_MARGIN = 2;
-
-/**
- * Does the candidate miss the taste rules the reader holds VETO on more often than the current version?
- * Both are drafted once on a few of the floor's tasks and read; a rule the candidate misses on at least
- * TASTE_BLOCK_MARGIN more tasks than the champion is returned. The reader's VETO bounds its error per
- * reading, not per comparison: with one draft per task, a single extra miss is within what noise does,
- * so one is not enough to block. Only passages the reader quotes count (an omission has no evidence to
- * check). The reader blocks; it never clears.
- */
-async function tasteRegression(L: store.StoreLayout, v: StandardVersion, active: string, candidate: string, tasks: readonly string[],
-  client: ReturnType<typeof clientAndBinding>['client'], budget: Budget, veto: ReadonlySet<string>): Promise<string[]> {
-  const sample = tasks.slice(0, TASTE_SAMPLE);
-  const [champ, cand] = [await fire(L, active, sample, 1, client, budget), await fire(L, candidate, sample, 1, client, budget)];
-  const reader = clientFor(readerModel());
-  // Tasks on which each rule was read as missed (a task counts once per rule).
-  const misses = async (runs: typeof champ.runs): Promise<Map<string, number>> => {
-    const n = new Map<string, number>();
-    for (const r of runs) {
-      for (const x of vetoMisses(await readTaste(reader, budget, v, r.outputs[0], r.task), veto)) n.set(x.requirementId, (n.get(x.requirementId) ?? 0) + 1);
-    }
-    return n;
-  };
-  const [a, b] = [await misses(champ.runs), await misses(cand.runs)];
-  return [...b.entries()].filter(([id, k]) => k - (a.get(id) ?? 0) >= TASTE_BLOCK_MARGIN).map(([id]) => id);
-}
 
 function settle(L: store.StoreLayout, c: Candidate, outcome: 'PROMOTED' | 'REJECTED', evaluationBasis: EvaluationBasis, note: string): void {
   c.settled = true;
