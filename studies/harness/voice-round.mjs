@@ -89,7 +89,7 @@ const WRITER = 'You are a writer. Return only the finished piece, in markdown.';
 const corpusBlock = readable.map((p) => `<piece>\n${p.text}\n</piece>`).join('\n\n');
 const guide = String((await call(writer, 'You are an editor who writes precise, usable style guides.',
   `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\nWrite a style guide another writer could follow to write exactly like this author: voice, argument, structure, vocabulary, figures, pace, formatting, openings and closings, and what they never do. Be specific.`,
-  'emit_guide', { type: 'object', properties: { guide: { type: 'string' } }, required: ['guide'] }, 6000)).guide ?? '');
+  'emit_guide', { type: 'object', properties: { guide: { type: 'string' } }, required: ['guide'] }, 12000)).guide ?? '');
 writeFileSync(join(OUT, 'guide.md'), guide);
 
 const invoke = (env, skill, task) => {
