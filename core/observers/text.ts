@@ -33,6 +33,8 @@ function blocksOf(text: string): Block[] {
     if (fence) { if (f && t.startsWith(fence)) fence = null; return; }
     if (f) { flush(); fence = f[1]; return; }
     if (!t) { flush(); return; }
+    // A setext heading: one line of text underlined with === or ---. The line was a heading, not prose.
+    if (/^(=+|-+)$/.test(t) && cur?.kind === 'PARA' && cur.segs.length === 1) { cur = null; return; }
     if (/^#{1,6}\s/.test(t) || /^([-*_])(\s*\1){2,}$/.test(t) || t.startsWith('|') || /^<\/?[a-z][^>]*>$/i.test(t)) { flush(); return; }
     // Strip blockquote markers, then list markers, keeping the offset of what remains.
     const quote = /^(\s*>\s?)+/.exec(line)?.[0] ?? '';

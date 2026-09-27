@@ -17,18 +17,20 @@
 //   LOST_MEANING a rule whose repairs keep being refused for changing what the text claims
 //                → the rule may conflict with how the author qualifies claims; a question about the rule
 //
-// Deterministic: complaints are grouped by the content words they share (single-link, Jaccard), and
-// nothing here calls a model.
+// Deterministic: complaints are grouped by the content words they share (average-link Jaccard, 0.3),
+// and nothing here calls a model.
 
 import type { FeedbackRecord, InvocationRecord, Requirement } from '../state/canonical-state.js';
 import { wordsOf } from '../observers/text.js';
 
 const STOP = new Set(['the', 'and', 'that', 'this', 'with', 'from', 'have', 'has', 'was', 'were', 'are', 'for', 'not', 'but', 'too', 'very',
   'its', "it's", 'you', 'your', 'our', 'they', 'them', 'there', 'then', 'than', 'into', 'about', 'just', 'like', 'more', 'much', 'should',
-  'would', 'could', 'again', 'still', 'always', 'never', 'every', 'output', 'answer', 'draft', 'text', 'piece', 'wrote', 'write', 'writes']);
+  'would', 'could', 'again', 'still', 'always', 'never', 'every', 'output', 'answer', 'draft', 'text', 'piece', 'wrote', 'write', 'writes',
+  'in', 'on', 'of', 'to', 'a', 'an', 'is', 'it', 'at', 'as', 'by', 'or', 'be', 'so', 'if', 'we', 'me', 'my', 'no', 'do', 'up']);
 
+/** Content words, two letters and up ("em" in "em dashes" is the point), possessives folded. */
 export const contentWordsOf = (s: string): Set<string> =>
-  new Set(wordsOf(s).map((w) => w.toLowerCase().replace(/['’]s$/, '')).filter((w) => w.length >= 3 && !STOP.has(w)));
+  new Set(wordsOf(s).map((w) => w.toLowerCase().replace(/['’]s$/, '')).filter((w) => w.length >= 2 && !STOP.has(w)));
 
 export const jaccard = (a: ReadonlySet<string>, b: ReadonlySet<string>): number => {
   if (!a.size || !b.size) return 0;
@@ -36,44 +38,65 @@ export const jaccard = (a: ReadonlySet<string>, b: ReadonlySet<string>): number 
   return inter / (a.size + b.size - inter);
 };
 
-/** Single-link groups of complaints that share enough content words. Order: largest first, then most recent. */
+/**
+ * Groups of complaints that say the same thing, by AVERAGE link: two groups merge only while the
+ * average similarity between their members clears the threshold. (Single link chains: "tone too
+ * formal", "salesy tone", "salesy headings", "headings too long" become one group through their
+ * neighbours.) Largest first, then most recent.
+ */
 export function clusterComplaints(records: readonly FeedbackRecord[], threshold = 0.3): FeedbackRecord[][] {
   const words = records.map((r) => contentWordsOf(r.complaint));
-  const parent = records.map((_, i) => i);
-  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  for (let i = 0; i < records.length; i++) {
-    for (let j = i + 1; j < records.length; j++) if (jaccard(words[i], words[j]) >= threshold) parent[find(i)] = find(j);
+  let groups: number[][] = records.map((_, i) => [i]);
+  const link = (a: readonly number[], b: readonly number[]): number =>
+    a.reduce((s, i) => s + b.reduce((t, j) => t + jaccard(words[i], words[j]), 0), 0) / (a.length * b.length);
+  for (;;) {
+    let best = { a: -1, b: -1, v: threshold };
+    for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {
+      const v = link(groups[i], groups[j]);
+      if (v >= best.v) best = { a: i, b: j, v };
+    }
+    if (best.a < 0) break;
+    groups = [...groups.filter((_, k) => k !== best.a && k !== best.b), [...groups[best.a], ...groups[best.b]]];
   }
-  const groups = new Map<number, FeedbackRecord[]>();
-  records.forEach((r, i) => { const k = find(i); groups.set(k, [...(groups.get(k) ?? []), r]); });
   const latest = (g: readonly FeedbackRecord[]): string => g.map((r) => r.at).sort().at(-1) ?? '';
-  return [...groups.values()].sort((a, b) => b.length - a.length || latest(b).localeCompare(latest(a)));
+  return groups.map((g) => g.map((i) => records[i])).sort((a, b) => b.length - a.length || latest(b).localeCompare(latest(a)));
 }
 
 export type Recurrence =
-  | { readonly kind: 'GAP'; readonly complaints: readonly string[]; readonly count: number; readonly proposal: string | null }
+  | { readonly kind: 'GAP'; readonly complaints: readonly string[]; readonly feedbackIds: readonly string[]; readonly count: number; readonly proposal: string | null }
   | { readonly kind: 'MISSED_RULE'; readonly requirementId: string; readonly statement: string; readonly complaints: readonly string[]; readonly count: number }
-  | { readonly kind: 'BROKEN_DRAFT'; readonly requirementId: string; readonly statement: string; readonly broken: number; readonly runs: number }
+  | { readonly kind: 'BROKEN_DRAFT'; readonly requirementId: string; readonly statement: string; readonly broken: number; readonly repaired: number; readonly runs: number }
   | { readonly kind: 'LOST_MEANING'; readonly requirementId: string; readonly statement: string; readonly refused: number };
 
 /** The fewest occurrences that count as a recurrence rather than an anecdote. */
 export const MIN_RECURRENCE = 2;
 
+export interface ProposalEvent { readonly proposal: string; readonly at: string; readonly accepted: boolean | null; readonly feedbackIds?: readonly string[] }
+
 /**
- * Everything that recurs, strongest first. `proposals` are the rule wordings `fix` already proposed for
- * individual complaints (a GAP cluster takes the most recent one made for any of its complaints).
+ * Everything that recurs, strongest first.
+ *
+ * `proposals` are the PROPOSED_CHANGE events `fix` and `mine` wrote. A GAP takes the wording `fix`
+ * proposed for one of its own complaints (matched on the complaint's timestamp, which `fix` stamps on
+ * the proposal), unless that wording was ever declined; complaints a rule was already added for, and
+ * gaps whose wording was already accepted, are not offered again. Drafts are counted on the CURRENT
+ * standard only: rule ids are renumbered between versions.
  */
 export function findRecurrences(input: {
   readonly feedback: readonly FeedbackRecord[];
   readonly invocations: readonly InvocationRecord[];
   readonly requirements: readonly Requirement[];
-  readonly proposals: readonly { readonly proposal: string; readonly at: string; readonly accepted: boolean | null }[];
+  readonly standardVersionHash?: string;
+  readonly proposals: readonly ProposalEvent[];
 }): Recurrence[] {
   const byId = new Map(input.requirements.map((r) => [r.requirementId, r]));
   const out: Recurrence[] = [];
+  const declined = new Set(input.proposals.filter((p) => p.accepted === false).map((p) => p.proposal.trim()));
+  const accepted = new Set(input.proposals.filter((p) => p.accepted === true).map((p) => p.proposal.trim()));
+  const addressed = new Set(input.proposals.filter((p) => p.accepted === true).flatMap((p) => p.feedbackIds ?? []));
 
   // Complaints: grouped by what they say; each group either names a rule the standard has, or none.
-  for (const g of clusterComplaints(input.feedback)) {
+  for (const g of clusterComplaints(input.feedback.filter((f) => !addressed.has(f.feedbackId)))) {
     if (g.length < MIN_RECURRENCE) continue;
     const named = g.map((r) => r.requirementId).filter((id): id is string => Boolean(id && byId.has(id)));
     const top = [...new Set(named)].map((id) => ({ id, n: named.filter((x) => x === id).length })).sort((a, b) => b.n - a.n)[0];
@@ -81,30 +104,37 @@ export function findRecurrences(input: {
       out.push({ kind: 'MISSED_RULE', requirementId: top.id, statement: byId.get(top.id)!.statement,
         complaints: g.map((r) => r.complaint), count: top.n });
     } else if (!named.length) {
-      // The wording `fix` proposed nearest in time to one of these complaints, unless the owner declined it.
-      const times = new Set(g.map((r) => r.at.slice(0, 16)));
-      const proposal = [...input.proposals].reverse().find((p) => p.accepted !== false && times.has(p.at.slice(0, 16)))?.proposal ?? null;
-      out.push({ kind: 'GAP', complaints: g.map((r) => r.complaint), count: g.length, proposal });
+      const times = new Set(g.map((r) => r.at));
+      const wordings = input.proposals.filter((p) => times.has(p.at)).map((p) => p.proposal.trim());
+      if (wordings.some((w) => accepted.has(w))) continue;                     // already added
+      const proposal = [...wordings].reverse().find((w) => !declined.has(w)) ?? null;
+      out.push({ kind: 'GAP', complaints: g.map((r) => r.complaint), feedbackIds: g.map((r) => r.feedbackId), count: g.length, proposal });
     }
   }
 
-  // Drafts: measured rules the first draft breaks most of the time.
-  const drafts = input.invocations.filter((i) => i.repair);
-  const runs = input.invocations.length;
+  // Drafts on the current standard: measured rules the first draft breaks most of the time.
+  const current = input.invocations.filter((i) => !input.standardVersionHash || i.standardVersionHash === input.standardVersionHash);
+  const runs = current.length;
   if (runs >= 4) {
-    const broken = new Map<string, number>();
-    for (const i of drafts) for (const id of i.repair!.violatedBefore) broken.set(id, (broken.get(id) ?? 0) + 1);
-    for (const [id, n] of broken) {
+    const broken = new Map<string, { n: number; fixed: number }>();
+    for (const i of current) for (const id of i.repair?.violatedBefore ?? []) {
+      const b = broken.get(id) ?? { n: 0, fixed: 0 };
+      broken.set(id, { n: b.n + 1, fixed: b.fixed + (i.repair!.violatedAfter.includes(id) ? 0 : 1) });
+    }
+    for (const [id, b] of broken) {
       const r = byId.get(id);
-      if (r && n >= MIN_RECURRENCE && n / runs >= 0.5) out.push({ kind: 'BROKEN_DRAFT', requirementId: id, statement: r.statement, broken: n, runs });
+      if (r && b.n >= MIN_RECURRENCE && b.n / runs >= 0.5) out.push({ kind: 'BROKEN_DRAFT', requirementId: id, statement: r.statement, broken: b.n, repaired: b.fixed, runs });
     }
   }
 
-  // Repairs refused for changing what the text claims, by the rule they were for.
+  // Repairs refused for changing what the text claims, charged to the rule each refusal was for. A host
+  // repair records only that the whole answer lost something: charged only when one rule was in play.
   const refused = new Map<string, number>();
-  for (const i of drafts) {
-    if (!i.repair!.integrityReverted?.length && !i.repair!.meaningLost?.length) continue;
-    for (const id of i.repair!.violatedBefore) if (byId.has(id)) refused.set(id, (refused.get(id) ?? 0) + 1);
+  for (const i of current) {
+    const rep = i.repair; if (!rep) continue;
+    const ids = rep.revertedRules?.length ? rep.revertedRules
+      : rep.meaningLost?.length && rep.violatedBefore.length === 1 ? rep.violatedBefore : [];
+    for (const id of ids) if (byId.has(id)) refused.set(id, (refused.get(id) ?? 0) + 1);
   }
   for (const [id, n] of refused) {
     if (n >= MIN_RECURRENCE) out.push({ kind: 'LOST_MEANING', requirementId: id, statement: byId.get(id)!.statement, refused: n });

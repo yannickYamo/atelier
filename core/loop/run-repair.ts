@@ -49,7 +49,7 @@ export async function refineToStandard(
   const first = checkDraft(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
   let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
-  const kept: string[] = [];
+  const kept: string[] = []; const revertedRules: string[] = [];
   // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
   // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
   // broken, accuracy gets ONE pass of its own, not charged to the `maxPasses` style passes. An accuracy
@@ -87,7 +87,11 @@ export async function refineToStandard(
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const reverted: Reverted[] = []; const applied: Applied[] = [];
     const next = applyRepair(text, targets, reps, reverted, applied);
-    for (const r of reverted) kept.push(`"${targets.find((t) => t.id === r.id)?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite lost ${r.lost.join(', ')}`);
+    for (const r of reverted) {
+      const t = targets.find((x) => x.id === r.id);
+      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite lost ${r.lost.join(', ')}`);
+      for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
+    }
     const after = next === text ? report : checkDraft(skill, v, next, opts);
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused because it changed what the text claims (${kept.length} span(s) kept as written)` : 'the rewrite returned nothing usable' }
@@ -110,5 +114,5 @@ export async function refineToStandard(
   }
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
-      ...(kept.length ? { integrityReverted: kept } : {}), ...(pairs.length ? { pairs: pairs.slice(0, 12) } : {}), why } };
+      ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, 12) } : {}), why } };
 }
