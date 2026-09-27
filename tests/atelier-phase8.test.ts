@@ -105,11 +105,11 @@ describe('Phase 8 audit: what was closed', () => {
     expect(kept.map((p) => p.key)).toEqual([ruleKey(lex)]);
     expect(kept[0].check).toBeDefined();
   });
-  it('sensitivity: a regression of two margins is caught from three drafts a side; none is planted on OBSERVE rules', () => {
+  it('sensitivity: a regression of two margins is caught across tasks; none is planted on OBSERVE rules', () => {
     const c = { instrument: 'scoreDimensionByPolicy' as const, dimensions: { a: { nonInferiorityMargin: 1, gateRole: 'ENFORCE' as const, rationale: '' },
       b: { nonInferiorityMargin: 1, gateRole: 'OBSERVE' as const, rationale: '' } } };
-    const f = { clusterId: 'c', fixtureContextId: 't', nGen: 3, meanScores: {}, perFireScores: { a: [0, 0, 0], b: [0, 0, 0] } };
-    expect(plantedDetections({ a: [0, 0, 0], b: [0, 0, 0] }, f, c)).toEqual({ hits: 1, trials: 1 });
+    const tasks = Array.from({ length: 6 }, (_, i) => ({ clusterId: 'c', fixtureContextId: `t${i}`, nGen: 1, meanScores: {}, perFireScores: { a: [0], b: [0] } }));
+    expect(plantedDetections(tasks, tasks, c)).toEqual({ hits: 1, trials: 1 });
   });
 });
 
@@ -158,11 +158,12 @@ describe('through the binary: one round of optimize', () => {
   });
 
   it('proposes by reflection and by the fixed order, screens, confirms on the floor, installs only through the gate, and never moves the standard', async () => {
-    const { data, proj } = await seed(60);
+    const { data, proj } = await seed(10);
     const L = { root: data, skillName: 'focus' };
     await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [{ change: 1, why: 'the failures show the rule is skimmed while drafting' }] } } });
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
-    expect(run(data, proj, 'floor', '--skill', 'focus', '--qualify')).toContain('EARNED');
+    let q = ''; for (let i = 0; i < 6; i++) q = run(data, proj, 'floor', '--skill', 'focus', '--qualify');
+    expect(q).toContain('EARNED');
     const std = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     const before = store.getActive(L);
     // Any version whose SKILL.md checks the draft before finalizing writes the plain answer.
@@ -183,7 +184,7 @@ describe('through the binary: one round of optimize', () => {
   }, 300_000);
 
   it('a round that runs out of budget stops cleanly: recorded, and nothing it built is held against a retry', async () => {
-    const { data, proj } = await seed(3);
+    const { data, proj } = await seed(5);
     const L = { root: data, skillName: 'focus' };
     await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] } } });
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
@@ -195,12 +196,12 @@ describe('through the binary: one round of optimize', () => {
   }, 300_000);
 
   it('a candidate left waiting for a person does not break fix: fix says where to decide it', async () => {
-    const { data, proj } = await seed(60);
+    const { data, proj } = await seed(10);
     const L = { root: data, skillName: 'focus' };
     await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] } } });
     expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation')).not.toMatch(/^EXIT:/);
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');
-    run(data, proj, 'floor', '--skill', 'focus', '--qualify');
+    for (let i = 0; i < 6; i++) run(data, proj, 'floor', '--skill', 'focus', '--qualify');
     await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [] },
       emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' } },
     when: [{ contains: 'Before you finalize', answer: { piece: 'the plain answer' } }] });
@@ -228,7 +229,7 @@ describe('through the binary: one round of optimize', () => {
   }, 300_000);
 
   it('without --promote nothing is installed, and a candidate nothing beats is screened out', async () => {
-    const { data, proj } = await seed(3);
+    const { data, proj } = await seed(5);
     const L = { root: data, skillName: 'focus' };
     await post({ byTool: { emit_piece: { piece: 'the synergy answer' }, emit_proposals: { proposals: [] } } });
     run(data, proj, 'floor', '--skill', 'focus', '--baseline');

@@ -58,7 +58,7 @@ export function describeVerify(r: VerifyReport): string {
   }
   if (!r.checked.length) lines.push('No rule in this standard carries a measurement that applies everywhere, so nothing here can be checked mechanically.');
   if (r.conditional.length) lines.push(`\n${r.conditional.length} measured rule(s) apply only under a condition and were not checked: ${r.conditional.map((c) => `${c.requirementId} (when ${c.appliesWhen})`).join(', ')}`);
-  if (r.unchecked.length) lines.push(`\n${r.unchecked.length} rule(s) are about judgement, not measurement, and were not checked: ${r.unchecked.map((u) => u.requirementId).join(', ')}`);
+  if (r.unchecked.length) lines.push(`\n${r.unchecked.length} rule(s) are about judgement, not measurement, and no count checks them: ${r.unchecked.map((u) => u.requirementId).join(', ')} (the taste reader reads them: verify --taste)`);
   lines.push(r.failed ? '\nA REQUIRED rule is broken.' : '\nNo REQUIRED rule is broken.');
   return lines.join('\n');
 }

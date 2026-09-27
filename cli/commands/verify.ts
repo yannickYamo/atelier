@@ -14,7 +14,7 @@ import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag } from '../runtime.js';
-import { describeTaste } from '../../core/taste/reader.js';
+import { describeTaste, vetoMisses } from '../../core/taste/reader.js';
 import { recordTaste } from './taste.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
@@ -58,10 +58,10 @@ export async function verify(): Promise<void> {
   if (argv.includes('--taste')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: 3 };
     try {
-      const { readings, permissions } = await recordTaste(L, v, text, flag('--task') ?? null, null, budget);
-      console.log(`\n${describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto)}`);
+      const { readings, permissions, held } = await recordTaste(L, v, text, flag('--task') ?? null, null, budget);
+      console.log(`\n${describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto, held)}`);
       // A miss on a rule where the reader holds VETO fails the check, as a broken REQUIRED rule does.
-      if (readings.some((r) => r.verdict === 'MISSED' && r.kind === 'PRESENCE' && permissions.veto.has(r.key))) process.exitCode = 1;
+      if (vetoMisses(readings, permissions.veto).length) process.exitCode = 1;
     } catch (e) { fail(`the taste reader could not run: ${(e as Error).message.split('\n')[0]}`); }
   }
   if (report.failed) process.exitCode = 1;

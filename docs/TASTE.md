@@ -41,11 +41,20 @@ reproduce:
      text simply never does what the rule asks (**omission**).
 
    The second pass shows the same text with its markdown flattened and the rules in reverse order.
+   Flattening removes heading, list and quote markers, emphasis and link syntax. Code (fenced blocks
+   and inline spans) is left as it is.
 3. **Checked, not trusted.** A quote must appear verbatim in the text it was taken from, whitespace
-   aside; a verdict whose quote is not there becomes UNCLEAR. A rule whose two passes disagree is
+   and emphasis markers aside; a verdict whose quote is not there becomes UNCLEAR. A rule whose two passes disagree is
    UNSTABLE. Only FOLLOWED and MISSED that agree across both passes are readings.
 
-Cost: two calls per output, plus one when any rule has a condition.
+**Cost.** Reading one text takes two calls, plus one when any rule has a condition. Once the reader
+has earned VETO on some rule, `invoke` also reads each draft, the chosen draft after the counted
+repair, and a taste rewrite again: at most three calls per draft plus seven, all inside the call
+ceiling set before anything is spent. Applicability is decided once per task and reused. The reader
+runs on the discovery model unless `--reader-model` or `ATELIER_READER_MODEL` names another (a
+cheaper one is a reasonable choice), and on the target model when the discovery runtime has none.
+If the reader fails (a rate limit, the budget), the output is still delivered, as the counted checks
+left it, and the failure is said.
 
 ## How it earns authority (`core/taste/calibration.ts`)
 
@@ -53,8 +62,16 @@ The reader starts at OBSERVE: its readings are shown and recorded, and they chan
 
 **Labels come from the owner, blind.** `atelier taste --skill <name> --calibrate` shows a rule and the
 passage a reading quoted, *without the reader's verdict*, and asks: followed, broken, or can't tell.
-- **Sampled blind to outcome:** every recorded reading with a quote, oldest first.
-- **Readings labelled once:** each is labelled only once.
+- **Held back, so the owner has not already seen the verdict:** a label is worthless if the owner
+  saw the reader's opinion of the same passage a minute earlier. So about a third of readings
+  (`ATELIER_TASTE_HOLDBACK`, decided from the reading's id alone) are held back: acted on exactly as
+  usual, but no verdict is displayed; the output says the reading was held back. Only held-back
+  readings are put to the owner.
+- **Sampled blind to outcome:** every held-back reading with a quote, FOLLOWED and MISSED alike,
+  oldest first.
+- **Readings labelled once:** each is labelled only once. From a script, `--list` prints each reading
+  under a stable token (`<reading>:<rule key>`) and `--label <token>=followed|missed|unsure` records
+  it; a token is never reused, and one labelled twice in one command is refused.
 - **Labels on the record:** labels are stored as events.
 - **Author's work as a control, not ground truth:** an author's own pieces are *not* taken as
   ground truth for a rule, since a rule found in their work is followed in three of five pieces, not
@@ -76,9 +93,13 @@ reader at any bar: it can block, never approve.
 
 ## What counts toward VETO, and what never does
 
-Only readings that quote a passage can be labelled quickly, so only they earn or use VETO:
+Only readings that quote a passage can be labelled quickly, so only they are put to the owner:
 - a FOLLOWED with its evidence
 - a MISSED of kind PRESENCE, where a passage goes against the rule
+
+Only the second kind earns VETO: VETO bounds false blocks, and a false block is a PRESENCE miss the
+owner says was followed. A FOLLOWED the owner says was missed is counted and shown, never used, since
+the reader is never given authority to approve.
 
 A MISSED of kind OMISSION ("the text never does this") has no passage to show the owner and none to
 rewrite. It is always reported, and never acts.
@@ -89,15 +110,18 @@ rewrite. It is always reported, and never acts.
   the sentence or paragraph containing the quote. The rewrite goes through the same splice and the same
   meaning guard as every other repair, and it is kept only if all of these hold:
   - the counted rules do not get worse
-  - the reader, asked again, no longer reads that rule as missed
+  - the reader, asked again, reads that rule as FOLLOWED (a reader that can no longer tell has not
+    confirmed anything)
   - no rule the reader had read as followed now reads as missed
 
   The meaning guard applies in full. A rewrite may not add or drop a "not" even to build the antithesis
   a rule asks for, so some taste repairs are refused and reported rather than made.
 - **Draft selection.** With `--drafts N`, drafts are ranked first by how many VETO-holding rules they
   miss, then by the counts.
-- **The optimizer.** A finalist the reader reads as missing a VETO-holding rule more often than the
-  current version is rejected.
+- **The optimizer.** Both versions draft once on four of the floor's tasks, and a finalist that misses
+  a VETO-holding rule on at least two more tasks than the current version is rejected. VETO bounds the
+  reader's error per reading, not per comparison, and with one draft per task a single extra miss is
+  within chance.
 
 Without VETO it does none of these. Its readings are shown after every `invoke`, returned by
 `verify --taste` and the MCP tool, and recorded, and that is all.
@@ -106,11 +130,11 @@ Without VETO it does none of these. Its readings are shown after every `invoke`,
 
 | Surface | What happens |
 |---|---|
-| `atelier invoke` | every output is read; the reading is printed, recorded as an event and as a behavioural observation per rule (with the authority the reader held) |
-| `atelier verify --taste`, MCP `atelier_verify` with `taste: true` | the reading is returned; a quoted miss on a VETO rule fails `verify` |
+| `atelier invoke` | every output is read; the reading is printed (unless held back) and recorded as an event |
+| `atelier verify --taste`, MCP `atelier_verify` with `taste: true` | the reading is returned (unless held back); a quoted miss on a VETO rule fails `verify` and sets `failed` in the MCP reply. If the reader cannot run, the counted report still comes back. |
 | `atelier taste --skill <name>` | where each rule stands, the coverage map, and labelling (`--calibrate`, `--list`, `--label`) |
 | `atelier optimize` | a finalist that misses VETO rules more often than the current version is rejected |
-| `atelier improve` | the recorded MISSED readings are behavioural evidence for the convergence loop, at the authority they were taken with |
+| `atelier improve` | readings of the skill's own output (an invocation) on rules where the reader holds VETO become behavioural observations for the convergence loop. An OBSERVE-only verdict is a report, not evidence, and a reading of someone else's text (verify, `--read`, MCP) is never evidence about what this skill does. |
 
 `--no-taste` turns the reader off for one `invoke`. `--reader-model` or `ATELIER_READER_MODEL` chooses
 the reader model, and permissions are scoped to it.

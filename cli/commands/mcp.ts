@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
-import { describeTaste } from '../../core/taste/reader.js';
+import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste } from './taste.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { observerFor } from '../../core/observers/registry.js';
@@ -87,15 +87,23 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     const material = [...store.getMaterial(L).map((m) => m.text), typeof args.material === 'string' ? args.material : ''].join('\n\n');
     const report = checkDraft(skill, v, text, { material });
     // The reading-based rules, on request: this calls a model, and every other check here is free.
-    let taste: { verdicts: unknown[]; text: string } | null = null;
+    // A miss on a rule where the reader holds VETO fails the check, as on the command line. A reader that
+    // cannot run costs nothing of the counted report: it is said, and the counted result stands.
+    // A reading held back for calibration returns no verdicts, only whether it failed.
+    let taste: { verdicts: unknown[]; text: string; failed: boolean } | null = null;
     if (args.taste === true) {
-      const { readings, permissions } = await recordTaste(L, v, text, typeof args.task === 'string' ? args.task : null, null,
-        { spentUsd: 0, capUsd: 1, maxCalls: 3 });
-      taste = { text: describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto),
-        verdicts: readings.map((r) => ({ rule: r.requirementId, verdict: r.verdict, kind: r.kind ?? null, quote: r.quote ?? null, why: r.why,
-          authority: permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
+      try {
+        const { readings, permissions, held } = await recordTaste(L, v, text, typeof args.task === 'string' ? args.task : null, null,
+          { spentUsd: 0, capUsd: 1, maxCalls: 3 });
+        taste = { text: describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto, held),
+          failed: vetoMisses(readings, permissions.veto).length > 0,
+          verdicts: held ? [] : readings.map((r) => ({ rule: r.requirementId, verdict: r.verdict, kind: r.kind ?? null, quote: r.quote ?? null, why: r.why,
+            authority: actsAsMiss(r) && permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
+      } catch (e) {
+        taste = { text: `(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`, failed: false, verdicts: [] };
+      }
     }
-    return { isError: false, text: `${describeVerify(report)}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed,
+    return { isError: false, text: `${describeVerify(report)}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed || (taste?.failed ?? false),
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
         detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })),
       ...(taste ? { taste: taste.verdicts } : {}) })}` };
