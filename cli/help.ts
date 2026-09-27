@@ -34,7 +34,7 @@ export const USAGE: Readonly<Record<string, string>> = {
   reject: 'atelier reject --skill <name> --candidate <hash> [--why "<reason>"]\n  Reject a candidate implementation.',
   promote: 'atelier promote --skill <name> --candidate <hash> --why "<what made you pick it>"\n  Install a candidate implementation. The standard does not move.',
   judgements: 'atelier judgements --skill <name>\n  Every A/B pick recorded for a skill.',
-  invoke: 'atelier invoke --skill <name> "<task>" [--with <name>=<file>]... [--drafts <n>] [--class <kind>] [--no-repair] [--allow-unsourced]\n  Run the skill on a task. The draft is checked against every measured rule and only the spans that break a REQUIRED one are rewritten (at most twice); --no-repair delivers the raw draft.',
+  invoke: 'atelier invoke --skill <name> "<task>" [--with <name>=<file>]... [--drafts <n>] [--class <kind>] [--no-repair] [--allow-unsourced]\n  Run the skill on a task. The draft is checked against every measured rule and only the spans that break a REQUIRED one are rewritten (at most twice, plus one pass first for invented claims and ACCURACY rules); a rewrite that changes a figure, name, negation or qualifier is refused; --no-repair delivers the raw draft.',
   amend: 'atelier amend --skill <name> --rule <id> [--statement "<new wording>"] [--materiality REQUIRED|PREFERRED|…] [--measure <observer>:<params>|none] [--phase ACCURACY|STYLE] --reason "<why>"\n  Reword, reweigh, re-target or re-phase a rule, recorded as a supersession.',
   sharpen: 'atelier sharpen --rule <id>\n  Ask the questions that would make a rule\'s condition precise.',
   answer: 'atelier answer --rule <id> --pick <option>\n  Answer a boundary probe.',

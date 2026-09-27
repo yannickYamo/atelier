@@ -50,13 +50,14 @@ export async function refineToStandard(
   const kept: string[] = [];
   // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
   // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
-  // broken, accuracy gets its own pass, and the style passes are not charged for it.
-  const accuracyFirst = planRepair(text, report, { phase: 'ACCURACY' }).length > 0
-    && planRepair(text, report, { phase: 'STYLE' }).length > 0;
-  const limit = maxPasses + (accuracyFirst ? 1 : 0);
-  while (report.failed && passes < limit) {
-    const accuracy = planRepair(text, report, { phase: 'ACCURACY' });
-    const targets = accuracy.length ? accuracy : planRepair(text, report);
+  // broken, accuracy gets ONE pass of its own, not charged to the `maxPasses` style passes. An accuracy
+  // pass that makes no progress is dropped and the loop moves on to style: it never ends the loop.
+  let accuracyTried = false; let stylePasses = 0;
+  while (report.failed && stylePasses < maxPasses) {
+    const accuracy = accuracyTried ? [] : planRepair(text, report, { phase: 'ACCURACY' });
+    const accuracyPass = accuracy.length > 0 && planRepair(text, report, { phase: 'STYLE' }).length > 0;
+    const targets = accuracyPass ? accuracy : planRepair(text, report);
+    accuracyTried = true;
     if (!targets.length) { why = 'nothing the rules pointed at could be rewritten'; break; }
     // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for and already meets
     // every rule the repair was not about; a failed call (a refusal, a 500, an exhausted budget)
@@ -76,14 +77,20 @@ export async function refineToStandard(
       break;
     }
     passes += 1;
+    if (!accuracyPass) stylePasses += 1;
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const reverted: Reverted[] = [];
     const next = applyRepair(text, targets, reps, reverted);
     for (const r of reverted) kept.push(`"${targets.find((t) => t.id === r.id)?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite lost ${r.lost.join(', ')}`);
-    if (next === text && reverted.length) { why = `every rewrite was refused because it changed what the text claims (${kept.length} span(s) kept as written)`; break; }
-    const after = checkDraft(skill, v, next, opts);
-    const verdict = acceptRepair(report, after);
-    if (!verdict.ok) { why = `a rewrite was discarded: ${verdict.why}`; break; }
+    const after = next === text ? report : checkDraft(skill, v, next, opts);
+    const verdict = next === text
+      ? { ok: false, why: reverted.length ? `every rewrite was refused because it changed what the text claims (${kept.length} span(s) kept as written)` : 'the rewrite returned nothing usable' }
+      : acceptRepair(report, after);
+    if (!verdict.ok) {
+      why = `a rewrite was discarded: ${verdict.why}`;
+      if (accuracyPass) continue;   // style still gets its passes
+      break;
+    }
     text = next; report = after;
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }

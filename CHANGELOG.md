@@ -8,6 +8,20 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Changed (Phase 5)
+
+- **`fix` no longer installs on a count alone.** Its counted decision goes through `resolvePromotion`:
+  a count showing the candidate worse rejects it automatically (AUTO_REJECT); a count favouring it is
+  HUMAN_GATED (no qualified distinctiveness floor, one generation) and waits for the person's pick. The
+  gate's decision is recorded as a `PROMOTION_GATE` event.
+  A `--pick` of a candidate the count rejects is refused, and the count's preference is not shown
+  until after the blind pick.
+- **`verify` now fails invented stories and figures (UNSOURCED) by default.** A pipeline that checks
+  a person's own first-person drafts should add their stories and figures to the skill's material
+  (`atelier material --skill <name> <file>`) or pass `--allow-unsourced`.
+- **The repair loop keeps a pass that fixes a broken rule in fewer places**, not only one that clears
+  a rule, so fixing one of two invented figures is progress instead of a discarded pass.
+
 ### Added
 
 - **A rewrite may change how something is said, never what it claims** (`core/loop/integrity.ts`).
@@ -23,11 +37,6 @@ a run in progress may not be.
   kind and say what they assumed when nothing was declared.
 - **`verify` and `atelier_verify` run the UNSOURCED check** against the skill's material (plus `--with`,
   or the tool's `material` argument); `--allow-unsourced` turns it off.
-
-- **Changed: `fix` no longer installs on a count alone.** Its counted decision goes through `resolvePromotion`:
-  a count showing the candidate worse rejects it automatically (AUTO_REJECT); a count favouring it is
-  HUMAN_GATED (no qualified distinctiveness floor, one generation) and waits for the person's pick. The
-  gate's decision is recorded as a `PROMOTION_GATE` event.
 
 - **`atelier new <folder> "<what it is for>"` — the whole journey in one command.** Reserves part of
   the work before anything reads it, discovers, and puts every rule on ONE review screen, strongest

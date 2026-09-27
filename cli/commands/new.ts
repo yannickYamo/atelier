@@ -65,7 +65,7 @@ export async function newSkill(): Promise<void> {
   // The kind of document this work is, kept for the skill from the first call: the build that uses it
   // may be a later continuation that does not repeat the flag.
   const cls = flag('--class');
-  if (cls) store.setDocClass({ root: DATA, skillName: name }, normalizeClass(cls));
+  if (cls) store.setDocClass({ root: DATA, skillName: name }, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
 
   process.env.ATELIER_ORCHESTRATED = '1';
   // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.
