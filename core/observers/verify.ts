@@ -14,6 +14,10 @@ export interface RuleCheck {
   readonly statement: string;
   readonly materiality: string | null;
   readonly result: ObserverResult;
+  /** the observer that measured it; absent for the product's own floor lines */
+  readonly observer?: string;
+  /** ACCURACY rules are repaired before STYLE ones; unset reads as STYLE */
+  readonly phase?: 'ACCURACY' | 'STYLE';
 }
 
 export interface VerifyReport {
@@ -32,7 +36,8 @@ export function verifyText(skill: string, v: StandardVersion, text: string): Ver
   const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL');
   const measured = live.filter((r): r is Requirement & { measurement: NonNullable<Requirement['measurement']> } => Boolean(r.measurement));
   const checked: RuleCheck[] = measured.filter((r) => isGeneralScope(r.appliesWhen))
-    .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, result: measure(text, r.measurement) }));
+    .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, result: measure(text, r.measurement),
+      observer: r.measurement.observer, phase: r.phase ?? 'STYLE' }));
   return {
     skill, standardVersionHash: v.standardVersionHash, checked,
     unchecked: live.filter((r) => !r.measurement).map((r) => ({ requirementId: r.requirementId, statement: r.statement })),

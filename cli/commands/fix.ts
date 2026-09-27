@@ -23,6 +23,7 @@
 
 import { verifyText } from '../../core/observers/verify.js';
 import { regressions } from '../../core/loop/repair.js';
+import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -357,17 +358,37 @@ async function settleBlindPick(
     const breaks = regressions(champReport, candReport).length > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
     const candLetter = championFirst ? 'b' : 'a'; const champLetter = championFirst ? 'a' : 'b';
-    if (fixes && !breaks) counted = candLetter;
-    else if (worse || breaks) counted = champLetter;
-    if (counted) {
+    // THE COUNT IS EVIDENCE; THE GATE DECIDES WHAT IT AUTHORISES.
+    //
+    // A count that says the candidate is worse is an evidenced negative, and rejects on its own. A count
+    // that says it is better is one generation on one input, measured on the rules alone: it cannot
+    // speak to anything the rules do not count, so it is not an improvement the gate can act on, and
+    // no instrument here has earned the distinctiveness floor. Adopting it still takes a person.
+    const gate: PromotionDecision = resolvePromotion({
+      incumbentStandardHash: inv.standardVersionHash, candidateStandardHash: candidate.standardVersionHash,
+      evaluatedPackageHash: candRec.servedPackageHash, candidatePackageHash: pkg.packageHash,
+      deliveryValid: candRec.delivery.matched,
+      deterministicRegression: breaks,
+      fidelityAuthority: 'OBSERVE',
+      comparison: worse ? 'REGRESSED' : 'INCONCLUSIVE',
+      distinctiveness: 'MISSING', floor: null,
+    });
+    store.appendEvent(L, { kind: 'PROMOTION_GATE', candidateSkillVersionHash: candidate.skillVersionHash,
+      requirementId: move.requirementId, authority: gate.authority, unmet: gate.unmet, why: gate.why, at: new Date().toISOString() });
+    if (gate.authority === 'AUTO_REJECT') {
+      counted = champLetter;
       console.log(`${move.requirementId} is a measured rule, so this was decided by its count, not by eye: `
-        + (counted === candLetter ? 'the new implementation meets it and breaks nothing that held.' : 'the new implementation does worse on the measured rules.'));
+        + `the new implementation does worse on the measured rules (${gate.why.split('.')[0]}).`);
+    } else if (fixes && !breaks) {
+      console.log(`${move.requirementId} is a measured rule: the count favours ${candLetter.toUpperCase()}, which meets it and breaks nothing that held.`);
+      console.log(`That is one draft on one input and says nothing about what the rules do not count, so it is not installed on its own (${gate.unmet[0]}).`);
     }
   }
   const pick = flag('--pick')?.toLowerCase()
     ?? counted
     ?? await ask('Which is better?  (a / b / same)  ', ['a', 'b', 'same'])
     ?? null;
+  // Only a rejection is ever decided by the count. Every adoption is a person's pick.
   const decidedBy: 'HUMAN' | 'DETERMINISTIC' = counted && !flag('--pick') ? 'DETERMINISTIC' : 'HUMAN';
   if (!pick) {
     console.log('Decide when you have read them:');

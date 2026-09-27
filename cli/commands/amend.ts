@@ -45,8 +45,11 @@ export function amend(): void {
   const statement = flag('--statement');
   const materiality = flag('--materiality');
   const measureSpec = flag('--measure');
-  if (!statement && !materiality && measureSpec === undefined) {
-    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|… or --measure <observer>:<params>|none required');
+  const phaseFlag = flag('--phase')?.toUpperCase();
+  if (phaseFlag !== undefined && phaseFlag !== 'ACCURACY' && phaseFlag !== 'STYLE') die('--phase is ACCURACY or STYLE');
+  const phase = phaseFlag as 'ACCURACY' | 'STYLE' | undefined;
+  if (!statement && !materiality && measureSpec === undefined && !phase) {
+    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|…, --measure <observer>:<params>|none or --phase ACCURACY|STYLE required');
   }
   const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
   const appliesWhen = flag('--applies-when');
@@ -58,7 +61,7 @@ export function amend(): void {
   const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in ${prev.standardVersionHash}.`);
 
   let amended;
-  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, ...(measurement === undefined ? {} : { measurement }) }); }
+  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, phase, ...(measurement === undefined ? {} : { measurement }) }); }
   catch (e) { return void die((e as Error).message); }
   const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
@@ -107,6 +110,7 @@ export function amend(): void {
     console.log(`  now: ${statement}`);
     console.log(`  authority ${target.authority} -> EXPERT_AUTHORED   (you wrote these words)`);
   }
+  if (phase) console.log(`  phase ${target.phase ?? 'STYLE'} -> ${phase}   (ACCURACY rules are repaired before STYLE ones)`);
   if (appliesWhen) console.log(`  applies when: ${target.appliesWhen}  ->  ${appliesWhen}`);
   if (materiality) console.log(`  weight ${target.materiality ?? 'undeclared'} -> ${amended.requirement.materiality}`);
   if (measurement !== undefined || (statement && target.measurement && !amended.requirement.measurement)) {

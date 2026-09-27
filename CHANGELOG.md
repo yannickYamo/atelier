@@ -10,6 +10,25 @@ a run in progress may not be.
 
 ### Added
 
+- **A rewrite may change how something is said, never what it claims** (`core/loop/integrity.ts`).
+  Every rewritten span is compared with the one it replaces: figures, negations, qualifiers ("may",
+  "most", "roughly"), proper names and earlier `[placeholders]` must survive, except a word the broken
+  rule itself named, and the specifics of a flagged invented claim. A failing rewrite is reverted per
+  span and listed in the invocation's `repair.integrityReverted`; in Claude Code, where the host holds
+  the pen, what was lost is recorded as `repair.meaningLost`.
+- **Accuracy before style.** `Requirement.phase` (`add` / `amend --phase ACCURACY|STYLE`); the loop
+  repairs ACCURACY rules, and UNSOURCED claims, in their own pass before any STYLE rule.
+- **Document class.** `build --class <kind>` / `new --class <kind>` records the kind of document a
+  standard measures; `verify`, `invoke` and the MCP `atelier_verify` refuse text declared as another
+  kind and say what they assumed when nothing was declared.
+- **`verify` and `atelier_verify` run the UNSOURCED check** against the skill's material (plus `--with`,
+  or the tool's `material` argument); `--allow-unsourced` turns it off.
+
+- **Changed: `fix` no longer installs on a count alone.** Its counted decision goes through `resolvePromotion`:
+  a count showing the candidate worse rejects it automatically (AUTO_REJECT); a count favouring it is
+  HUMAN_GATED (no qualified distinctiveness floor, one generation) and waits for the person's pick. The
+  gate's decision is recorded as a `PROMOTION_GATE` event.
+
 - **`atelier new <folder> "<what it is for>"` — the whole journey in one command.** Reserves part of
   the work before anything reads it, discovers, and puts every rule on ONE review screen, strongest
   evidence first, each with a suggested ruling and the reason ("followed in 4 of 5 pieces it never

@@ -167,7 +167,10 @@ anything worse is thrown away. In Claude Code the plugin does the same at the en
 the host holds the pen for the whole answer, so "only these spans" is an instruction, and the record
 says whether anything outside them changed. A voice may not invent your life or your numbers: a first-person
 story or a cited figure that is not in the material you vouch for (`atelier material --skill <name>
-notes.md`) is replaced with a visible placeholder, `[your story: …]`, for you to fill or cut.
+notes.md`) is replaced with a visible placeholder, `[your story: …]`, for you to fill or cut. A rewrite
+may change how something is said, never what it claims: one that drops a figure, a negation, a name or
+a qualifier ("may", "most", "roughly") is refused and the original sentence kept, unless the broken rule
+named that very word. Rules marked `--phase ACCURACY` are repaired before any style rule.
 `--drafts 3` writes three drafts and keeps the one the counts favour. To give the model your whole
 voice rather than rule fragments, ship one of your own pieces with the skill: `atelier build --name <name> --exemplar
 ./my-best-piece.md`. A host does not always deliver everything the CLI does; `atelier carriers --skill
@@ -175,7 +178,10 @@ voice rather than rule fragments, ship one of your own pieces with the skill: `a
 
 **Check.** `atelier verify --skill <name> <file>` holds any text to the standard, with the span behind
 every violation, and exits 1 when a REQUIRED rule is broken (2 when it could not check), so it can
-gate a pipeline. Declare your own checkable rules, including substitutions, with `atelier add
+gate a pipeline. It runs the same UNSOURCED check as the loop, against the skill's material. A
+standard measures one kind of document: `build --class blog-post` records it, and `verify`, `invoke`
+and the MCP tool refuse a text declared (`--class`) as another kind rather than hold a support reply to
+thresholds read off essays. Declare your own checkable rules, including substitutions, with `atelier add
 --statement "…" --kind BOUNDARY --measure "LEXICON:leverage=>use|utilize=>use"`. The same check is an
 MCP tool (`atelier_verify`, `atelier_rules`, `atelier_list_skills`), so another agent writing your
 support replies or docs can hold its own output to your standard. Rules about when or why are listed
@@ -183,8 +189,10 @@ as not checked: those stay a person's call.
 
 **Correct.** `atelier fix "<what was wrong>"`. No ids. If your standard already covers the complaint,
 it is an implementation problem: Atelier tries a different way of carrying the rule, reruns your task,
-and keeps the better version, deciding by count when the rule is measured and asking you only when
-it is not. If your standard does not cover it, that is an authority question and it is yours alone:
+and shows you both, blind. When the rule is measured, a count that says the new version is worse
+rejects it on its own; a count that says it is better is shown to you as the count's view, and the new
+version is installed only when you pick it, because one draft on one input cannot speak for what the
+rules do not count. Every automatic decision goes through the same promotion gate. If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession.
 
@@ -232,7 +240,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 93 files and 1339 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 94 files and 1365 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

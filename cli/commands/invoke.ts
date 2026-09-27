@@ -5,6 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
+import { checkClass } from '../../core/observers/doc-class.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -126,6 +127,9 @@ export async function invoke(): Promise<void> {
   // What `--with` binds travels WITH the task, so the model has the material the rule needs, and the
   // record's input is what was actually served.
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
+  // A standard measures one kind of document; asking it for another is refused before anything is spent.
+  const cls = checkClass(store.getDocClass(L), flag('--class'));
+  if (!cls.ok) die(cls.why);
   // The person's standing material for this skill (`atelier material`) and anything bound for this
   // task (`--with`): the only places a first-person story or a cited figure in the output may come from.
   const material = [...store.getMaterial(L), ...boundMaterial()];
@@ -231,9 +235,14 @@ export async function invoke(): Promise<void> {
     console.log(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
     if (r.violatedAfter.length) console.log(`  ${r.why}`);
+    if (r.integrityReverted?.length) {
+      console.log(`  ${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
+      for (const k of r.integrityReverted) console.log(`    ${k}`);
+    }
   } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
   }
+  if (cls.ok && cls.note && std?.requirements.some((q) => q.measurement)) console.log(`(${cls.note})`);
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
   // passing them in would report a breach on every invocation.
   const breaches = findOwnershipBreaches(rec.output);
