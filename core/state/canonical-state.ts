@@ -223,6 +223,12 @@ export interface Requirement {
    * content; an amendment writes the old key onto the new wording so the lineage survives a reword.
    */
   readonly key?: string;
+  /**
+   * HOW OFTEN THE AUTHOR DOES IT: in how many of the unread pieces where the rule could apply they did.
+   * Set when a discovered rule is approved. A rule that is not required is compiled as a move the author
+   * sometimes makes, with this rate, rather than as something every piece must do.
+   */
+  readonly observedRate?: { readonly present: number; readonly applicable: number };
 }
 
 /**
@@ -541,6 +547,8 @@ export interface RepairRecord {
   readonly outsideSpansChanged?: boolean;
   /** rewrites refused because they lost a figure, a negation, a qualifier or a name, and what each lost */
   readonly integrityReverted?: readonly string[];
+  /** invented stories or figures the repair cut (generation's default): where a story of the person's own would fit */
+  readonly storiesCut?: readonly string[];
   /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
   readonly revertedRules?: readonly string[];
   /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */

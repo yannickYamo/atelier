@@ -213,7 +213,7 @@ export async function invoke(): Promise<void> {
   // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
   // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
-  const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced') };
+  const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') };
   // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
   //
   // The rules no count can check are read on every output, twice and with quotes, and the reading is
@@ -318,11 +318,21 @@ export async function invoke(): Promise<void> {
       const taken = tasteTaken ?? readings.get(rec.output) ?? null;
       const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
       // A held-back reading shows nothing that names a rule, the taste repair included.
-      if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
+      // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
+  if (rec.repair?.storiesCut?.length) {
+    console.log(`${rec.repair.storiesCut.length} invented stor(ies) or figure(s) cut. A story of your own would fit where these were (add it, or bind your notes with --with):`);
+    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
+  }
+  if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
       console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
       if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
     } catch (e) {
-      if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
+      // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
+  if (rec.repair?.storiesCut?.length) {
+    console.log(`${rec.repair.storiesCut.length} invented stor(ies) or figure(s) cut. A story of your own would fit where these were (add it, or bind your notes with --with):`);
+    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
+  }
+  if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
       console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
     }
   }
@@ -330,8 +340,9 @@ export async function invoke(): Promise<void> {
   // THE AUTHOR'S PASSAGES ARE FOR VOICE, NOT FOR COPYING. The skill serves a few of them
   // (core/compiler/voice.ts); an output that repeats a long run of one verbatim has lifted it.
   const voice = store.getVoice(L);
-  if (voice?.passages.length) {
-    const lifted = overlapIndex(voice.passages)(rec.output).longestShared;
+  const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  if (served.length) {
+    const lifted = overlapIndex(served)(rec.output).longestShared;
     if (lifted >= LIFTED_RUN) console.log(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
   }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and

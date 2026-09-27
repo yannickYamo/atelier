@@ -192,12 +192,19 @@ may change how something is said, never what it claims: one that drops a figure,
 a qualifier ("may", "most", "roughly") is refused and the original sentence kept, unless the broken rule
 named that very word. Rules marked `--phase ACCURACY` are repaired before any style rule.
 
-**It carries your writing, not just rules about it.** A build serves three passages of your own,
-chosen from the pieces discovery read (the most typical of your style, from different pieces and
-topics, never a reserved one), with your usual piece length. The model takes the voice from them and
-the rules and checks sit on top. We learned this the hard way: a skill that met every one of its rules
-but served no paragraph of the author's was ranked least like them of four versions in a blind round.
-`build --voice none` turns them off.
+**It carries how you sound, not just rules about you.** Four blind rounds on one author's corpus
+taught the same thing: rules about a writer never made a model sound like them. So a build now serves:
+
+- a **persona**: how you sound (who is speaking, register, how you hedge and argue, your devices), each
+  point with **how often** you do it and a quote from your own pieces. A point whose quote is not
+  verbatim in your work is dropped, so none of it is the model's imagination of you;
+- a few of your **whole pieces**, chosen to span the different ways you write, and your usual length;
+- the moves you only **sometimes** make, with their rate and a cap per piece, never as rules every
+  piece must follow (stacked, they became a template a blind reader recognised across five topics).
+
+The standard then **guards the edges**: what you nearly always do or never do is checked and repaired;
+your habits that vary piece to piece are held within your own range and used to choose between drafts,
+not to steer every piece toward your average. `build --voice none` or `--persona none` turns either off.
 
 Counts are half of a voice. The other half is how you argue, what you concede, which figure carries a
 piece, how a section closes, when a conversational aside stands: the rules discovery finds by reading,
@@ -304,7 +311,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 102 files and 1530 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 102 files and 1542 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

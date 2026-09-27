@@ -4,7 +4,9 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { selectVoicePassages } from '../../core/compiler/voice.js';
+import { selectVoicePassages, selectVoicePieces, type VoicePassages } from '../../core/compiler/voice.js';
+import { derivePersona } from '../../core/compiler/persona.js';
+import type { Budget } from '../../core/inference/client.js';
 import { readCorpus } from './floor.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
@@ -26,7 +28,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile } from '../runtime.js';
+  loadSession, saveSession, step, runFile, clientFor, proposerModel, numericFlag } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -54,7 +56,7 @@ export function revert(): void {
   console.log(`\nYour standard is untouched — this reverted the SKILL, not what you decided good means.`);
 }
 
-export function build(nameArg?: string): void {
+export async function build(nameArg?: string): Promise<void> {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
@@ -152,20 +154,36 @@ export function build(nameArg?: string): void {
   const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v, heldBack) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
-  // ── THE AUTHOR'S OWN PASSAGES (core/compiler/voice.ts) ─────────────────────────────────────────
+  // ── HOW THE AUTHOR SOUNDS (core/compiler/voice.ts, persona.ts) ──────────────────────────────────
   //
-  // Chosen from the pieces discovery read (never a reserved one), kept through every rebuild, and
-  // served inline. `--voice none` turns them off; `--voice auto` chooses again.
-  const voiceFlag = flag('--voice');
-  if (voiceFlag !== undefined && !['none', 'auto'].includes(voiceFlag.trim().toLowerCase())) die('--voice takes none (serve no passages of the author) or auto (choose them from the corpus, the default)');
-  let voice = voiceFlag?.trim().toLowerCase() === 'none' ? null : voiceFlag === undefined ? store.getVoice(L) : null;
-  if (!voice && voiceFlag?.trim().toLowerCase() !== 'none') {
-    const source = s.source && existsSync(s.source) ? s.source : null;
-    const pieces = source ? readCorpus(source) : [];
-    const chosen = selectVoicePassages(pieces);
-    if (chosen.passages.length) {
-      voice = chosen;
-      console.log(`Voice: ${chosen.passages.length} passage(s) of the author's own served with the skill, so the model hears them, not only rules about them${chosen.lengthWords ? `; usual length ${chosen.lengthWords[0]}-${chosen.lengthWords[1]} words` : ''}. Turn off with --voice none.`);
+  // Whole pieces of the author's, chosen to span how they write, their usual length, and a persona
+  // brief: how they sound, with how often, each point proven by a quote from their pieces. All from the
+  // pieces discovery read (never a reserved one), kept through every rebuild. `--voice none` serves none
+  // of it; `--persona none` keeps the pieces and drops the description; `auto` chooses again.
+  const choice = (name: string): 'none' | 'auto' | undefined => {
+    const x = flag(name)?.trim().toLowerCase();
+    if (x !== undefined && x !== 'none' && x !== 'auto') die(`${name} takes none or auto`);
+    return x as 'none' | 'auto' | undefined;
+  };
+  const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
+  let voice: VoicePassages | null = voiceFlag === 'none' ? null : voiceFlag === undefined ? store.getVoice(L) : null;
+  const source = s.source && existsSync(s.source) ? s.source : null;
+  const readable = voiceFlag !== 'none' && (!voice || personaFlag === 'auto') && source ? readCorpus(source) : [];
+  if (!voice && readable.length >= 3) {
+    const pieces = selectVoicePieces(readable);
+    voice = { passages: [], lengthWords: selectVoicePassages(readable, 0).lengthWords, pieces };
+    if (pieces.length) console.log(`Voice: ${pieces.length} whole piece(s) of the author's own served with the skill, chosen to span how they write. Turn off with --voice none.`);
+  }
+  if (voice && personaFlag === 'none') voice = { ...voice, persona: undefined };
+  else if (voice && readable.length >= 3 && (personaFlag === 'auto' || !voice.persona)) {
+    const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
+    try {
+      const persona = await derivePersona(clientFor(proposerModel()), budget, readable);
+      voice = { ...voice, persona };
+      console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
+        + `${persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
+    } catch (e) {
+      console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
     }
   }
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);

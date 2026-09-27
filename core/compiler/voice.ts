@@ -17,12 +17,18 @@
 // Pieces reserved for blind testing never reach this function: the caller passes readable pieces only.
 
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
-import { functionProfile, proseWords, FUNCTION_WORDS } from '../observers/style.js';
+import { functionProfile, proseWords, patternRate, FUNCTION_WORDS, type PatternId } from '../observers/style.js';
+import type { Persona } from './persona.js';
 
 export interface VoicePassages {
+  /** short passages served inline (the first design; kept so packages built with it still render) */
   readonly passages: readonly string[];
   /** the middle half of the author's piece lengths, in words, rounded to 100 */
   readonly lengthWords: readonly [number, number] | null;
+  /** WHOLE pieces chosen to span the author's modes (`selectVoicePieces`), served as reference files */
+  readonly pieces?: readonly string[];
+  /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
+  readonly persona?: Persona;
 }
 
 export const VOICE_PASSAGES = 3;
@@ -91,4 +97,47 @@ export function selectVoicePassages(pieces: readonly string[], count = VOICE_PAS
     chosen.push(left[0]);
   }
   return { passages: chosen.map((c) => c.text), lengthWords };
+}
+
+/** Words of whole pieces a skill serves at most: enough for two or three modes, small enough to serve. */
+export const PIECE_BUDGET_WORDS = 9000;
+
+/** What distinguishes one mode of an author's writing from another: point of view, layout, pace, length. */
+const MODE_FEATURES: readonly PatternId[] = ['FIRST_PERSON', 'ONE_LINE_PARAGRAPH', 'BOLD_SPAN', 'DASH_ASIDE', 'RHETORICAL_QUESTION', 'CONTRACTION'];
+function modeVector(t: string): number[] {
+  const lines = t.split('\n'); const n = Math.max(1, lines.filter((l) => l.trim()).length);
+  return [...MODE_FEATURES.map((p) => patternRate(t, p)),
+    lines.filter((l) => /^\s*([-*+]|\d+[.)])\s/.test(l)).length / n,     // how much of it is lists
+    lines.filter((l) => /^#{1,6}\s/.test(l)).length / n,                  // how sectioned
+    Math.log(Math.max(1, proseWords(t)))];
+}
+
+/**
+ * WHOLE PIECES THAT SPAN HOW THE AUTHOR WRITES. An author writes in modes (an essay, a list, a talk
+ * transcript), and a short passage shows one paragraph of one of them. So: the most typical piece
+ * first, then, while the word budget allows, the piece least like any already chosen (farthest-point
+ * sampling on standardised mode features). Pieces longer than half the budget are left out, so one
+ * long piece cannot use it all. Needs three pieces or more.
+ */
+export function selectVoicePieces(pieces: readonly string[], budgetWords = PIECE_BUDGET_WORDS): string[] {
+  if (pieces.length < 3) return [];
+  const words = pieces.map((t) => proseWords(t));
+  const fits = pieces.map((_, i) => i).filter((i) => words[i] > 0 && words[i] <= budgetWords / 2);
+  if (!fits.length) return [];
+  const vs = pieces.map(modeVector);
+  const k = vs[0].length;
+  const mean = Array.from({ length: k }, (_, j) => vs.reduce((a, v) => a + v[j], 0) / vs.length);
+  const sd = Array.from({ length: k }, (_, j) => Math.sqrt(vs.reduce((a, v) => a + (v[j] - mean[j]) ** 2, 0) / Math.max(1, vs.length - 1)) || 1);
+  const z = vs.map((v) => v.map((x, j) => (x - mean[j]) / sd[j]));
+  const dist = (a: number, b: number): number => Math.sqrt(z[a].reduce((s, x, j) => s + (x - z[b][j]) ** 2, 0));
+  const score = typicality(pieces);
+  const chosen = [fits.slice().sort((a, b) => score(pieces[a]) - score(pieces[b]))[0]];
+  let used = words[chosen[0]];
+  for (;;) {
+    const next = fits.filter((i) => !chosen.includes(i) && used + words[i] <= budgetWords)
+      .map((i) => ({ i, d: Math.min(...chosen.map((c) => dist(i, c))) })).sort((a, b) => b.d - a.d)[0];
+    if (!next) break;
+    chosen.push(next.i); used += words[next.i];
+  }
+  return chosen.map((i) => pieces[i]);
 }

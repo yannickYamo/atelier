@@ -157,12 +157,14 @@ describe('re-entry is the same run, or a refusal — never a silent switch', () 
     const data = mkdtempSync(join(tmpdir(), 'atelier-new4-data-'));
     const proj = mkdtempSync(join(tmpdir(), 'atelier-new4-proj-'));
     const dir = corpus(proj, 8);
-    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice', '--accept', '--set', 'p1=preferred');
+    // For new writing a rule is suggested as required only when the author nearly always does it, so the
+    // override here raises p1 rather than lowering it.
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice', '--accept', '--set', 'p1=required');
     const runs = join(data, 'runs', readdirSync(join(data, 'runs'))[0]);
     const ledger = JSON.parse(readFileSync(join(runs, 'ratification-ledger.json'), 'utf8')) as { records: { shown: { requirementId: string }; ruling?: { took: string; materiality: string } }[] };
     const p1 = ledger.records.find((r) => r.shown.requirementId === 'p1');
     expect(p1?.ruling?.took).toBe('OVERRIDE');
-    expect(p1?.ruling?.materiality).toBe('PREFERRED');
+    expect(p1?.ruling?.materiality).toBe('REQUIRED');
     expect(ledger.records.find((r) => r.shown.requirementId === 'p2')?.ruling?.took).toBe('SUGGESTION');
   });
 });
