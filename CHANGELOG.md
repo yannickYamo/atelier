@@ -59,6 +59,19 @@ a run in progress may not be.
   shipped loop against a model's own guide (`atelier reference --loop`), and a deterministic
   measured-rule table per arm, whole piece and first vs last third (`scripts/measured-conformance.mts`).
 
+- **What the model does that the author doesn't** (`core/observers/style.ts`, `contrast.ts`): discovery
+  has the serving model write plain drafts on the author's own topics and counts named constructions in
+  both — em dashes, spaced hyphens, "not X, it's Y", "That's"/"Here's" openers, signposting,
+  intensifiers, short verdicts, bold, one-line paragraphs, repeated openers, fragment share — proposing
+  caps and floors from wide gaps (and caps on model-typical constructions the author almost never uses),
+  each only if the author's held-out work passes it; plus a Burrows' Delta style distance. Found by the
+  owner reading a skill's output: the author uses no em dashes in 20 posts; the skill used 7.3 per 1,000.
+- **A voice may not invent the person's life or numbers** (`core/loop/claims.ts`): a first-person story
+  or a figure presented as a finding, not supported by the person's material, is repaired into a
+  placeholder. `atelier material` keeps what they vouch for per skill; `--allow-unsourced` opts out.
+- **`invoke --drafts N`**: several drafts, the one with the fewest REQUIRED breaks (then the best style
+  margin) delivered, recorded as a selection.
+
 ### Changed (product phases, 2026-09-26)
 
 - **The discovery split scales with the corpus**: about a third held out (capped at 8), everything

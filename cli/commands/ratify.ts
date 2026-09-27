@@ -362,17 +362,25 @@ export function parseMeasure(spec: string): Measurement {
   const rest = i === -1 ? '' : spec.slice(i + 1);
   // STRICT. `medianMax=` read as 0, `0x10` as 16 and `15=20` as 15; a target a person did not mean
   // is worse than a refusal, because it is enforced on every output from then on.
+  if (observer === 'STYLE_DISTANCE') die('--measure: STYLE_DISTANCE is computed from your corpus by discovery, not declared by hand.');
+  const KEYS: Readonly<Record<string, readonly string[]>> = {
+    SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
+    PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'] };
+  const TEXT_KEYS = new Set(['pattern', 'prefer']);
   const params: Record<string, number | string[]> = observer === 'LEXICON'
     ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
-    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv) => {
-      const parts = kv.split('=').map((x) => x.trim());
-      if (parts.length !== 2 || !parts[0] || !/^\d+(\.\d+)?$/.test(parts[1])) die(`--measure: "${kv}" is not name=number`);
-      const n = Number(parts[1]);
-      const KEYS: Readonly<Record<string, readonly string[]>> = {
-        SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'] };
-      if (KEYS[observer] && !KEYS[observer].includes(parts[0])) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${parts[0]}"`);
-      if (n <= 0 && !(observer === 'HEDGE_RATE' && n === 0)) die(`--measure: ${parts[0]} must be greater than zero`);
-      return [parts[0], n];
+    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv): [string, number | string[]] => {
+      const eq = kv.indexOf('=');
+      const k = kv.slice(0, eq).trim(); const v = kv.slice(eq + 1);
+      if (eq === -1 || !k) die(`--measure: "${kv}" is not name=value`);
+      if (KEYS[observer] && !KEYS[observer].includes(k)) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${k}"`);
+      // `prefer` keeps its spaces: " - " is the point of it.
+      if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
+      if (!/^\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
+      const n = Number(v);
+      const zeroOk = (observer === 'HEDGE_RATE' || observer === 'PATTERN_RATE') && n === 0;
+      if (n <= 0 && !zeroOk) die(`--measure: ${k} must be greater than zero`);
+      return [k, n];
     }));
   const m: Measurement = { observer, params };
   const problem = validateMeasurement(m);

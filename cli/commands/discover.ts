@@ -15,15 +15,17 @@ import { anchoredQuote } from '../../core/discovery/conformance.js';
 import { type ImportPlan } from '../../core/discovery/chain/corpus-import.js';
 import { runMethodExtraction, describeMethodRun } from '../../core/discovery/run-methods.js';
 import type { Budget } from '../../core/inference/client.js';
-import { BudgetExceeded } from '../../core/inference/client.js';
+import { BudgetExceeded, spend } from '../../core/inference/client.js';
 import { transition, type Run } from '../../core/state/run-state.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
+import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete } from '../../core/inference/client.js';
-import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
+import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -286,6 +288,27 @@ export async function discover(): Promise<void> {
     proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
       framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance } satisfies ProposalMeta])) };
   }
+  // ── WHAT THE MODEL DOES THAT THE AUTHOR DOESN'T ───────────────────────────────────────────────
+  //
+  // The model that will run the skill writes a few plain drafts on the author's own topics, and every
+  // named pattern (em dashes, fragments, "not X, it's Y", signposting…) is counted in both. Wide gaps
+  // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
+  if (!argv.includes('--no-contrast')) {
+    try {
+      const read = openItems.filter((i) => readIds.has(i.id));
+      const drafts = await contrastDrafts(read, ev.corpusHash);
+      const contrast = deriveContrastRules(read, openItems.filter((i) => heldIds.has(i.id)), drafts, sourceProvenance());
+      if (contrast.length) {
+        console.log(`${contrast.length} rule(s) from comparing your writing with ${drafts.length} plain drafts by the model: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
+        proposals = [...proposals, ...contrast.map((c) => c.requirement)];
+        proposalMeta = { ...proposalMeta, ...Object.fromEntries(contrast.map((c) => [c.requirement.requirementId, {
+          framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance } satisfies ProposalMeta])) };
+      }
+    } catch (e) {
+      // Optional, and never allowed to cost the discovery already paid for.
+      console.log(`(the comparison with the model's own drafts did not run: ${(e as Error).message.split('\n')[0]})`);
+    }
+  }
   saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
@@ -318,4 +341,34 @@ export async function discover(): Promise<void> {
     }
   }
   if (!process.env.ATELIER_ORCHESTRATED) console.log(`\nRun \`atelier ratify-close\` to mint the standard.`);
+}
+
+/**
+ * Plain drafts by the model that will serve the skill, on the author's own titles, no skill applied.
+ * Kept per corpus so continuing or re-running discovery does not pay for them twice.
+ */
+async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string): Promise<string[]> {
+  const path = runFile('contrast-drafts.json');
+  if (existsSync(path)) {
+    const cached = readJson<{ corpusHash: string; drafts: string[] }>(path, { what: 'the contrast drafts' });
+    if (cached.corpusHash === corpusHash && cached.drafts.length) return cached.drafts;
+  }
+  const { client } = clientAndBinding('target');
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', 1.0), maxCalls: 4 };
+  const topics = contrastTopics(read, 3);
+  console.log(`Asking the model for ${topics.length} plain drafts on your topics, to see its habits against yours…`);
+  const drafts = await mapLimit(topics, topics.length, async (topic) => {
+    const r = await spend(budget, 0.1, async () => {
+      const x = await client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
+        userMessage: `Write a blog post titled "${topic}". About 900 words. Output only the piece.`,
+        toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
+        schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens: 4000 });
+      return { value: x, cost: x.cost };
+    });
+    const piece: unknown = (r.json as { piece?: unknown } | null)?.piece;
+    return typeof piece === 'string' ? piece : '';
+  });
+  const kept = drafts.filter((d) => d.trim());
+  writeAtomic(path, JSON.stringify({ corpusHash, drafts: kept }, null, 1));
+  return kept;
 }
