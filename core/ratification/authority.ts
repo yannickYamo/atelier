@@ -57,6 +57,8 @@ export interface DecisionInput {
    * written for the old wording no longer states what the new wording asks. Null drops it.
    */
   readonly measurement?: Measurement | null;
+  /** ACCURACY or STYLE: which rules a rewrite serves first. Undefined keeps what the rule has. */
+  readonly phase?: 'ACCURACY' | 'STYLE';
   /** the id of the decision this rule realizes; excludes a materiality of its own */
   readonly realizes?: string | null;
   /** resolver for `realizes` targets, over whatever draft the caller holds */
@@ -182,8 +184,8 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
     // The owner may reword a rule, reweigh it, or both. Reweighing alone was impossible: a rule closed
     // as PREFERRED could never be made REQUIRED, because the one command that re-rules a closed standard
     // insisted on new words, and the ledger is append-only everywhere else.
-    if (!d.statement && !d.materiality && d.measurement === undefined) {
-      throw new Error(`${id}: AMEND changes the rule's words (--statement), its weight (--materiality) or its check (--measure); give at least one.`);
+    if (!d.statement && !d.materiality && d.measurement === undefined && !d.phase) {
+      throw new Error(`${id}: AMEND changes the rule's words (--statement), its weight (--materiality), its check (--measure) or its phase (--phase); give at least one.`);
     }
     const ob = d.materiality
       ? validateObligation(id, { ...d, form: d.form ?? shown.realizationTolerance, shape: d.shape ?? shown.outputShape })
@@ -194,6 +196,7 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
       // A weight declared by the owner is a ruling on the rule as it stands.
       ...(!d.statement && shown.authority === 'DERIVED_UNRATIFIED' ? { authority: 'EXPERT_RATIFIED' as const } : {}),
       ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}),
+      ...(d.phase ? { phase: d.phase } : {}),
       ...(ob ? { materiality: ob.materiality, realizationTolerance: ob.form, outputShape: ob.shape } : {}) };
     const measured = withMeasurement(requirement, measurementAfter(shown, d));
     assertAuthorityCeiling(measured);
@@ -221,6 +224,7 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
     materiality: ob.materiality, realizationTolerance: ob.form, outputShape: ob.shape,
     ...(ob.realizes !== null ? { realizes: ob.realizes } : {}),
     ...(d.statement ? { statement: d.statement } : {}),
+    ...(d.phase ? { phase: d.phase } : {}),
     ...(d.appliesWhen ? { appliesWhen: d.appliesWhen } : {}) };
   const measured = withMeasurement(requirement, measurementAfter(shown, d));
   assertAuthorityCeiling(measured);

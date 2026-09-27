@@ -408,10 +408,12 @@ export function addOne(): void {
       + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
   const measureSpec = flag('--measure');
   const measurement = measureSpec === undefined ? undefined : parseMeasure(measureSpec);
+  const phase = flag('--phase')?.toUpperCase();
+  if (phase !== undefined && phase !== 'ACCURACY' && phase !== 'STYLE') die('--phase is ACCURACY or STYLE');
   const base: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
     kind, authority: 'DERIVED_UNRATIFIED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null,
-    ...(measurement ? { measurement } : {}) };
+    ...(measurement ? { measurement } : {}), ...(phase ? { phase: phase as 'ACCURACY' | 'STYLE' } : {}) };
   let req: Requirement;
   try { req = decide(base, { verb: 'ADD', materiality: flag('--materiality') }).requirement; }
   catch (e) { return void die((e as Error).message); }

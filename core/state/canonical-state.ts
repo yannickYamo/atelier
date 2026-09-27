@@ -211,6 +211,12 @@ export interface Requirement {
   readonly prerequisites?: readonly Prerequisite[];
   /** a deterministic measurement of this rule, when it has one. See `Measurement`. */
   readonly measurement?: Measurement;
+  /**
+   * WHICH KIND OF RULE A REWRITE SERVES FIRST. An ACCURACY rule (a figure must be sourced, a
+   * disclaimer must appear) is repaired before any STYLE rule, so a pass spent shortening sentences
+   * never runs over a claim that is about to be corrected. Unset reads as STYLE.
+   */
+  readonly phase?: 'ACCURACY' | 'STYLE';
 }
 
 /**
@@ -517,6 +523,10 @@ export interface RepairRecord {
   readonly draft?: string;
   /** host repairs only: whether text outside the named spans changed (an instruction there, not a splice) */
   readonly outsideSpansChanged?: boolean;
+  /** rewrites refused because they lost a figure, a negation, a qualifier or a name, and what each lost */
+  readonly integrityReverted?: readonly string[];
+  /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */
+  readonly meaningLost?: readonly string[];
   readonly why: string;
 }
 

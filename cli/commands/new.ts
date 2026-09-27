@@ -19,6 +19,7 @@ import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
 import { measure } from '../../core/observers/registry.js';
+import { normalizeClass } from '../../core/observers/doc-class.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { review } from './review.js';
@@ -61,6 +62,10 @@ export async function newSkill(): Promise<void> {
     console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
   }
   const name = flag('--name') ?? s.skillName ?? basename(path);
+  // The kind of document this work is, kept for the skill from the first call: the build that uses it
+  // may be a later continuation that does not repeat the flag.
+  const cls = flag('--class');
+  if (cls) store.setDocClass({ root: DATA, skillName: name }, normalizeClass(cls));
 
   process.env.ATELIER_ORCHESTRATED = '1';
   // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.

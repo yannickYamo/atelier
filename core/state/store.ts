@@ -115,6 +115,22 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
 }
 
 /**
+ * The KIND OF DOCUMENT a skill's measured rules describe: "blog-post", "support-reply". Every
+ * threshold was read off pieces of one kind, and a fragment cap calibrated on essays says nothing true
+ * about a tweet. Declared by the owner; null when they never said.
+ */
+export function getDocClass(l: StoreLayout): string | null {
+  const p = join(dirs(l).base, 'class.txt');
+  return existsSync(p) ? readFileSync(p, 'utf8').trim() || null : null;
+}
+export function setDocClass(l: StoreLayout, cls: string | null): void {
+  const p = join(dirs(l).base, 'class.txt');
+  if (cls === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, cls);
+}
+
+/**
  * The person's MATERIAL for a skill: notes, anecdotes, figures and sources they vouch for. Served with
  * every task, and the only place a first-person story or a cited figure in the output may come from.
  */

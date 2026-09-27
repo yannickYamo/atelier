@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 export const USAGE: Readonly<Record<string, string>> = {
-  new: 'atelier new <folder-of-your-best-work> "<what the skill is for>" [--name <name>] [--mode generate|guard|respond] [--exemplar <file>] [--reserve <file>]... [--held-out <n>] [--accept] [--set <id>=<choice>]...\n  Read your work, show the rules it found with a suggested ruling for each, and build the skill once you accept. Run it again to continue.',
-  verify: 'atelier verify --skill <name> <file> [--json]   (or pipe the text in)\n  Check any text against every measured rule in the standard, with the exact spans that break one. Exits 1 when a REQUIRED rule is broken.',
+  new: 'atelier new <folder-of-your-best-work> "<what the skill is for>" [--name <name>] [--mode generate|guard|respond] [--exemplar <file>] [--reserve <file>]... [--held-out <n>] [--class <kind>] [--accept] [--set <id>=<choice>]...\n  Read your work, show the rules it found with a suggested ruling for each, and build the skill once you accept. Run it again to continue.',
+  verify: 'atelier verify --skill <name> <file> [--class <kind>] [--with <name>=<file>]... [--allow-unsourced] [--json]   (or pipe the text in)\n  Check any text against every measured rule in the standard, with the exact spans that break one, and for stories or figures not in the skill\'s material (UNSOURCED). Exits 1 when a REQUIRED rule is broken, 2 when it could not check (including a --class the standard does not measure).',
   mcp: 'atelier mcp\n  Serve the standard over the Model Context Protocol (stdio): atelier_list_skills, atelier_rules, atelier_verify. Read-only; no model is called. The plugin registers it for you.',
   material: 'atelier material --skill <name> <file>...   or: --list · --clear\n  Notes, stories and figures you vouch for. Served with every task; a story or figure in the output that is not here becomes a placeholder for you to fill.',
   review: 'atelier review [--accept] [--set <id>=<choice>]...\n  The rules waiting for your ruling, with suggestions. --accept records them as shown; --set changes one (reject, approve, required, preferred, exemplar, tolerated, incidental).',
@@ -22,9 +22,9 @@ export const USAGE: Readonly<Record<string, string>> = {
   pending: 'atelier pending [--json]\n  Show the proposals waiting for your decision.',
   ratify: 'atelier ratify --decisions <json>   or: atelier ratify --page <file.html>\n  Rule on every proposal at once, or write a page to rule on them in a browser.',
   'ratify-one': 'atelier ratify-one --id <id> --decision <decision>\n  Rule on one proposal.',
-  add: 'atelier add --statement "<rule>" --kind GENERATIVE|BOUNDARY [--applies-when "<condition>"] [--materiality <level>] [--measure <observer>:<params>]\n  Add a rule in your own words. --measure makes it checkable: LEXICON:leverage=>use|utilize · SENTENCE_LENGTH:medianMax=15,p90Max=28 · PARAGRAPH_LENGTH:maxSentences=4 · HEDGE_RATE:maxPer1000=3 · PATTERN_RATE:pattern=EM_DASH,maxPer1000=0,prefer= - · FRAGMENT_SHARE:maxWords=5,maxShare=0.2',
+  add: 'atelier add --statement "<rule>" --kind GENERATIVE|BOUNDARY [--applies-when "<condition>"] [--materiality <level>] [--measure <observer>:<params>] [--phase ACCURACY|STYLE]\n  Add a rule in your own words. --phase ACCURACY makes the repair loop fix it before any style rule. --measure makes it checkable: LEXICON:leverage=>use|utilize · SENTENCE_LENGTH:medianMax=15,p90Max=28 · PARAGRAPH_LENGTH:maxSentences=4 · HEDGE_RATE:maxPer1000=3 · PATTERN_RATE:pattern=EM_DASH,maxPer1000=0,prefer= - · FRAGMENT_SHARE:maxWords=5,maxShare=0.2',
   'ratify-close': 'atelier ratify-close [--work-type <kind>] [--reason "<why>"]\n  Close ratification and mint the standard. --work-type is required when you wrote every rule yourself.',
-  build: 'atelier build --name <name> [--description "<text>"] [--exemplar <file>|none]\n  Compile the ratified standard and install the skill. --exemplar ships one complete piece of your own for the model to take its voice from.',
+  build: 'atelier build --name <name> [--description "<text>"] [--exemplar <file>|none] [--class <kind>|none]\n  Compile the ratified standard and install the skill. --class names the kind of document the rules were measured on (blog-post, support-reply); verify and invoke refuse text declared as another kind. --exemplar ships one complete piece of your own for the model to take its voice from.',
   confirm: 'atelier confirm --rule <id> [--drop]\n  Confirm or drop a boundary on a rule.',
   inspect: 'atelier inspect --skill <name>\n  What is installed, and whether it matches what was built.',
   history: 'atelier history --skill <name>\n  Every version of a skill and what it superseded.',
@@ -34,8 +34,8 @@ export const USAGE: Readonly<Record<string, string>> = {
   reject: 'atelier reject --skill <name> --candidate <hash> [--why "<reason>"]\n  Reject a candidate implementation.',
   promote: 'atelier promote --skill <name> --candidate <hash> --why "<what made you pick it>"\n  Install a candidate implementation. The standard does not move.',
   judgements: 'atelier judgements --skill <name>\n  Every A/B pick recorded for a skill.',
-  invoke: 'atelier invoke --skill <name> "<task>" [--with <name>=<file>]... [--drafts <n>] [--no-repair] [--allow-unsourced]\n  Run the skill on a task. The draft is checked against every measured rule and only the spans that break a REQUIRED one are rewritten (at most twice); --no-repair delivers the raw draft.',
-  amend: 'atelier amend --skill <name> --rule <id> [--statement "<new wording>"] [--materiality REQUIRED|PREFERRED|…] [--measure <observer>:<params>|none] --reason "<why>"\n  Reword, reweigh or re-target a rule, recorded as a supersession.',
+  invoke: 'atelier invoke --skill <name> "<task>" [--with <name>=<file>]... [--drafts <n>] [--class <kind>] [--no-repair] [--allow-unsourced]\n  Run the skill on a task. The draft is checked against every measured rule and only the spans that break a REQUIRED one are rewritten (at most twice); --no-repair delivers the raw draft.',
+  amend: 'atelier amend --skill <name> --rule <id> [--statement "<new wording>"] [--materiality REQUIRED|PREFERRED|…] [--measure <observer>:<params>|none] [--phase ACCURACY|STYLE] --reason "<why>"\n  Reword, reweigh, re-target or re-phase a rule, recorded as a supersession.',
   sharpen: 'atelier sharpen --rule <id>\n  Ask the questions that would make a rule\'s condition precise.',
   answer: 'atelier answer --rule <id> --pick <option>\n  Answer a boundary probe.',
   improve: 'atelier improve --skill <name> [--invocation <id> --complaint "<what was wrong>"]\n  Propose one alternative implementation for a complaint.',

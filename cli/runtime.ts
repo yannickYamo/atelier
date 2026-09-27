@@ -52,7 +52,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
-  'results', 'sealed-at', 'seed', 'suite',
+  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
