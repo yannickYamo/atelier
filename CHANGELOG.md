@@ -44,6 +44,17 @@ a run in progress may not be.
   recurring gap into a rule on the owner's word, through the same path as `fix` (now shared in
   `cli/commands/addition.ts`). `--phrase` asks a model to propose a wording.
 
+### Added (plan phase C: more of the taste measured, honestly)
+
+- **`RHYTHM`**: pace as variation of sentence, paragraph or section length. It is proposed from the
+  author against the model only where most model drafts fail it.
+- **The em-dash rule's substitute is capped** at the author's own rate of spaced hyphens.
+- **Style distance must recognise the author's own pieces left out in turn**, not only the model's
+  drafts. Without this check the measure passed held-out work and then failed two of three reserved
+  pieces.
+- **A positive-vocabulary floor was tried and deliberately not shipped.** On a single-domain corpus it
+  learns the topic, not the voice (see docs/MEASURED-RULES.md).
+
 ### Fixed (real end-to-end run on the the author corpus)
 
 - **`new` lost `--name` on continuation**, and built a skill named after the folder. The class set on
