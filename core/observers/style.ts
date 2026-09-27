@@ -17,7 +17,8 @@ import { proseBlocks, sentencesOf, paragraphsOf, proseRegions, wordsOf, quantile
 export type PatternId =
   | 'EM_DASH' | 'SPACED_HYPHEN' | 'SEMICOLON' | 'NOT_X_ITS_Y' | 'THAT_OPENER' | 'HERES_OPENER'
   | 'SIGNPOST' | 'INTENSIFIER' | 'SHORT_VERDICT' | 'BOLD_SPAN' | 'ONE_LINE_PARAGRAPH'
-  | 'RHETORICAL_QUESTION' | 'REPEATED_OPENER';
+  | 'RHETORICAL_QUESTION' | 'REPEATED_OPENER'
+  | 'DASH_ASIDE' | 'FIRST_PERSON' | 'BRITISH_SPELLING' | 'AMERICAN_SPELLING';
 
 /** How each pattern reads to a person, for statements and reports. */
 export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
@@ -34,12 +35,29 @@ export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
   ONE_LINE_PARAGRAPH: 'one-sentence paragraphs',
   RHETORICAL_QUESTION: 'rhetorical questions',
   REPEATED_OPENER: 'repeated sentence openings (the same two words starting three or more sentences)',
+  // THE MOVE, NOT THE GLYPH. Banning the em dash rerouted every dramatic aside through " - " (8.9 per
+  // 1,000 words against the author's 2.9 in a blind round). Counting every dash that sets off an aside,
+  // whatever the character, measures the move a ban was meant to limit.
+  DASH_ASIDE: 'dash asides (—, – or " - ")',
+  FIRST_PERSON: 'first person ("I", "my", "me")',
+  BRITISH_SPELLING: 'British spellings (behaviour, organise, centre, licence)',
+  AMERICAN_SPELLING: 'American spellings (behavior, organize, center, license)',
 };
 
 export const PATTERN_IDS = Object.keys(PATTERN_LABEL) as PatternId[];
 
+// Spelling that marks a dialect. Only words whose spelling differs and is not ambiguous in the other
+// dialect: "program" (software in both) and "license" (a verb in both) are left out; "licence" is British.
+const IZE = 'organi|reali|recogni|prioriti|optimi|summari|standardi|minimi|maximi|authori|characteri|critici|apologi|categori|capitali|centrali|normali|utili|visuali|speciali|finali|formali|generali|legali|locali|moneti|operationali|personali|externali|internali|industriali|commerciali|moderni|synchroni|customi|monopoli|stabili|neutrali|scrutini|emphasi|memori|hypothesi|theori|jeopardi|mobili|incentivi|priori|democrati';
+const BRITISH = new RegExp(`\\b(?:(?:${IZE})s(?:e|es|ed|ing|ation|ations|er|ers)|(?:behavi|col|fav|hon|lab|neighb|harb|rum|hum|vap|endeav)our(?:s|ed|ing|ite|ites|able|al|ally)?|(?:cent|theat|lit|fib|sab)re(?:s|d)?|metres?|catalogue(?:s|d)?|licence(?:s)?|defence|offence|pretence|programmes?|(?:travel|label|model|cancel|signal|channel|fuel|level|counsel|marshal)l(?:ed|ing|er|ers)|judgement(?:s)?|analys(?:e|es|ed|ing)|paralys(?:e|ed|ing)|ageing|grey)\\b`, 'gi');
+const AMERICAN = new RegExp(`\\b(?:(?:${IZE})z(?:e|es|ed|ing|ation|ations|er|ers)|(?:behavi|col|fav|hon|lab|neighb|harb|rum|hum|vap|endeav)or(?:s|ed|ing|ite|ites|able|al|ally)?|(?:cent|theat|fib)er(?:s|ed)?|catalog(?:s|ed)?|defense|offense|pretense|(?:travel|label|model|cancel|signal|channel|fuel|level|counsel|marshal)(?:ed|ing|er|ers)|judgment(?:s)?|analyz(?:e|es|ed|ing)|paralyz(?:e|ed|ing)|aging|gray)\\b`, 'gi');
+
 const REGEX: Partial<Record<PatternId, RegExp>> = {
   EM_DASH: /—/g,
+  DASH_ASIDE: /—|\s–\s|(?<!\d)\s-\s(?!\d)/g,
+  FIRST_PERSON: /\b(?:I'm|I’m|I've|I’ve|I'd|I’d|I'll|I’ll|I|myself|mine|me|my)\b/g,
+  BRITISH_SPELLING: BRITISH,
+  AMERICAN_SPELLING: AMERICAN,
   SPACED_HYPHEN: /(?<!\d)\s-\s(?!\d)/g,
   SEMICOLON: /(?<!&[a-z]{1,8});/g,
   // "not X, it's Y", "isn't X. It's Y", "not X — it's Y". Not "not X, but Y": that is an ordinary concession.
@@ -74,7 +92,10 @@ export function findPattern(text: string, p: PatternId): Span[] {
     case 'RHETORICAL_QUESTION': return sentences.filter((s) => /\?["'”’)]*$/.test(s.text) && !/^["“'‘]/.test(s.text)).map(asSpan);
     case 'SHORT_VERDICT': return sentences.filter((s) => s.words <= 6
       && /\b(?:is|are|was) (?:dead|over|broken|gone|the point|everything|nothing|real|wrong)\b|\b(?:breaks|matters|moved|wins|changes everything)[.!]$/i.test(s.text)).map(asSpan);
-    case 'ONE_LINE_PARAGRAPH': return paragraphsOf(text).filter((x) => x.sentences === 1)
+    // A one-sentence paragraph is prose: it ends as a sentence ends and has a few words. An image
+    // caption, a link on its own line or a bold label is not one, and counting them read a Substack
+    // author's rate as 10 per 1,000 words where their prose had about 2.5.
+    case 'ONE_LINE_PARAGRAPH': return paragraphsOf(text).filter((x) => x.sentences === 1 && isProseLine(x.text))
       .map((x) => ({ start: x.start, end: x.end, text: x.text, why: PATTERN_LABEL[p] }));
     case 'REPEATED_OPENER': {
       const key = (s: string): string | null => {
@@ -88,6 +109,13 @@ export function findPattern(text: string, p: PatternId): Span[] {
     }
     default: return [];
   }
+}
+
+/** A line that is a sentence of prose: ends with terminal punctuation, is not only a link, image or bold label, and has three words or more. */
+export function isProseLine(line: string): boolean {
+  const t = line.trim();
+  if (/^!?\[[^\]]*\]\([^)]*\)$/.test(t) || /^\*\*[^*]+\*\*:?$/.test(t)) return false;
+  return /[.!?…]["'”’)*_]*$/.test(t) && wordsOf(t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')).length >= 3;
 }
 
 export const proseWords = (text: string): number => proseRegions(text).reduce((n, r) => n + wordsOf(r.text).length, 0);

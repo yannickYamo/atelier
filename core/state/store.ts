@@ -10,6 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
+import type { VoicePassages } from '../compiler/voice.js';
 import type { ContrastPair } from '../compiler/contrast-examples.js';
 import type { Recurrence } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
@@ -115,6 +116,18 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+}
+
+/** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
+export function getVoice(l: StoreLayout): VoicePassages | null {
+  const p = join(dirs(l).base, 'voice.json');
+  return existsSync(p) ? readJson<VoicePassages>(p, { what: "the voice passages" }) : null;
+}
+export function setVoice(l: StoreLayout, voice: VoicePassages | null): void {
+  const p = join(dirs(l).base, 'voice.json');
+  if (voice === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(voice, null, 1));
 }
 
 /** The last `atelier mine` report, so `--add <n>` names the item the owner read. */

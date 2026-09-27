@@ -1,3 +1,4 @@
+import type { VoicePassages } from '../core/compiler/voice.js';
 import { parseArgs } from 'node:util';
 // cli/runtime.ts — the shared ground every command stands on.
 //
@@ -56,7 +57,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
-  'finalists', 'screen-model', 'read', 'label', 'reader-model', 'runs',
+  'finalists', 'screen-model', 'voice', 'read', 'label', 'reader-model', 'runs',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -796,16 +797,19 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
  * where they still teach the standard being rendered.
  */
 export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
-  exemplar: { text: string } | null; contrast: ContrastPair[];
+  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: VoicePassages | null;
 } {
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
-  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [] };
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L) };
+  // The author's passages travel with the package that served them, like the contrast pairs.
+  const voiceRaw = pkg.assurance?.['voice.json'];
+  const voice = ((): VoicePassages | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as VoicePassages : null; } catch { return null; } })();
   const ex = pkg.files['examples/exemplar.md'];
   // Packages stored before pairs travelled with them served examples/contrast.md with no data beside
   // it: the build's own record of the pairs it chose is the closest thing to what they served.
   const raw = pkg.assurance?.['contrast-pairs.json']
     ?? ('examples/contrast.md' in pkg.files ? JSON.stringify(store.getContrast(L).pairs) : undefined);
   const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
-  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v) };
+  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice };
 }

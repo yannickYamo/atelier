@@ -197,7 +197,7 @@ export async function improve(): Promise<void> {
   // skill describes itself, and reconstructing the default here reverted a description set on build.
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
   const carried = carriedFrom(L, inv.skillVersionHash, ranStandard);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast, carried.voice);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,

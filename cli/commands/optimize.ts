@@ -266,7 +266,7 @@ function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { ski
   const exemplar = m.kind === 'EXEMPLAR' ? (m.on ? store.getExemplar(L) : null) : carried.exemplar;
   const contrast = m.kind === 'CONTRAST' ? (m.on ? contrastAvailable(L, v) : []) : carried.contrast;
   const desc = sv.description ?? `Applies a compiled standard (${v.workType})`;
-  const pkg = renderAgentSkill(v, nextArch, name, desc, exemplar, contrast);
+  const pkg = renderAgentSkill(v, nextArch, name, desc, exemplar, contrast, carried.voice);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: nextArch.architectureHash,

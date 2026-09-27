@@ -16,7 +16,7 @@
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { measure, findTerms } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
-import { PATTERN_IDS, PATTERN_LABEL, patternRate, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
+import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
 import type { MeasuredProposal } from './derive.js';
@@ -27,6 +27,17 @@ interface Piece { readonly id: string; readonly text: string }
 const overUsed = (author: number, model: number): boolean => model >= 1 && model >= Math.max(3 * author, author + 1.5);
 const underUsed = (author: number, model: number): boolean => author >= 1 && author >= Math.max(3 * model, model + 1.5);
 const r1 = (x: number): number => Math.round(x * 10) / 10;
+
+/** Patterns with a proposal of their own below, not the generic author-against-model comparison. */
+const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING']);
+
+/**
+ * THE AUTHOR'S POSITIVE SIGNATURE, HELD IN A BAND. Ceilings on the model's tells alone produce a
+ * de-AI'd generic writer: in a blind round the skill's output had the cleanest negative profile of four
+ * and the weakest positive one (one-line paragraphs, questions and bold all well under the author's).
+ * Where the author uses one of these, it is proposed as a two-sided band around their own rate.
+ */
+const SIGNATURE: ReadonlySet<PatternId> = new Set<PatternId>(['BOLD_SPAN', 'ONE_LINE_PARAGRAPH', 'RHETORICAL_QUESTION', 'SEMICOLON']);
 
 /** Constructions measured as model habits (see the Addy audit, 2026-09-27): capped at the author's rate when they rarely use them. */
 const MODEL_TYPICAL: ReadonlySet<PatternId> = new Set<PatternId>(['EM_DASH', 'NOT_X_ITS_Y', 'THAT_OPENER', 'HERES_OPENER', 'SIGNPOST', 'INTENSIFIER', 'SHORT_VERDICT', 'REPEATED_OPENER']);
@@ -73,7 +84,15 @@ export function deriveContrastRules(
   const meanRate = (texts: readonly string[], p: PatternId): number => r1(texts.reduce((s0, t) => s0 + patternRate(t, p), 0) / Math.max(1, texts.length));
   const authorRate = (p: PatternId): number => meanRate(authorTexts, p);
   const spacedHyphen = authorRate('SPACED_HYPHEN');
+  // The band around an author's own rate: most of their pieces sit inside it, and it neither pushes a
+  // habit up to their heaviest piece nor lets it vanish.
+  const bandOf = (p: PatternId): { lo: number; hi: number; a: number } => {
+    const a = authorRate(p);
+    const per = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
+    return { a, lo: r1(per(0.25) * 0.6), hi: r1(Math.max(per(0.9) * 1.5, a * 2)) };
+  };
   for (const p of PATTERN_IDS) {
+    if (VOICE_LAYER.has(p)) continue;
     const a = authorRate(p); const m = meanRate(drafts, p);
     const perPiece = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
     const ev = `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model on its own: ${m} per 1,000`;
@@ -85,19 +104,19 @@ export function deriveContrastRules(
         ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen (" - ") instead' : ''}.`
         : `Keep ${PATTERN_LABEL[p]} to at most ${cap} per 1,000 words.`;
       propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } }, ev);
-      // THE SUBSTITUTE GETS A CAP OF ITS OWN. Told to write " - " where it would have written "—", a model
-      // moves every dash it would have used onto the substitute: in a real run spaced hyphens went to
-      // 8.7 per 1,000 words against the author's 4.0. So the substitute is held near the author's own rate:
-      // half as much again as their typical piece (the median, not the 90th percentile, which with few
-      // pieces is simply the most dash-heavy one) or their overall rate. It is proposed only when the
-      // model's own dashes, moved over, would exceed it.
+      // THE MOVE GETS A CAP, NOT JUST THE GLYPH. Told to write " - " where it would have written "—", a
+      // model moves every aside onto the substitute: spaced hyphens went to 8.7 and then 8.9 per 1,000
+      // words against the author's 4.0 and 2.9. So every dash aside, whatever the character, is held
+      // near the author's own rate (half as much again as their typical piece, or their overall rate),
+      // proposed when the model's own asides would exceed it.
       if (prefer) {
-        const sh = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'SPACED_HYPHEN'), 0.5) * 1.5, spacedHyphen * 1.5, 0.3));
-        const moved = r1(m + meanRate(drafts, 'SPACED_HYPHEN'));
-        if (moved > sh) {
-          propose(`Use spaced hyphens (" - ") as I do, not in place of every dash: at most ${sh} per 1,000 words.`, 'BOUNDARY',
-            { observer: 'PATTERN_RATE', params: { pattern: ['SPACED_HYPHEN'], maxPer1000: sh, role: ['dash-substitute'] } },
-            `you: ${spacedHyphen} per 1,000 words; the model's dashes moved onto them would make ${moved}`);
+        const aside = authorRate('DASH_ASIDE');
+        const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'DASH_ASIDE'), 0.5) * 1.5, aside * 1.5, 0.3));
+        const moved = meanRate(drafts, 'DASH_ASIDE');
+        if (moved > cap) {
+          propose(`Keep dash asides (—, – or " - ") to my rate: at most ${cap} per 1,000 words. A banned em dash is not to be moved onto another mark.`, 'BOUNDARY',
+            { observer: 'PATTERN_RATE', params: { pattern: ['DASH_ASIDE'], maxPer1000: cap, role: ['dash-substitute'] } },
+            `you: ${aside} dash asides per 1,000 words; the model on its own: ${moved}`);
         }
       }
     } else if (MODEL_TYPICAL.has(p) && a <= 0.5 && m > a + 0.2) {
@@ -111,6 +130,12 @@ export function deriveContrastRules(
         { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap } },
         `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model's plain drafts here: ${m} per 1,000`,
         m <= cap);
+    } else if (SIGNATURE.has(p) && a >= 1) {
+      const b = bandOf(p);
+      if (b.lo > 0) {
+        propose(`Use ${PATTERN_LABEL[p]} as I do: between ${b.lo} and ${b.hi} per 1,000 words (I use about ${b.a}).`, 'GENERATIVE',
+          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: b.lo, maxPer1000: b.hi } }, ev);
+      }
     } else if (underUsed(a, m)) {
       const floor = r1(perPiece(0.1) * 0.8);
       if (floor > 0) {
@@ -119,6 +144,8 @@ export function deriveContrastRules(
       }
     }
   }
+
+  proposeVoice(authorTexts, drafts, propose, bandOf, meanRate);
 
   const aFrag = fragmentShare(authorAll, 5); const mFrag = fragmentShare(modelAll, 5);
   if (mFrag >= 1.5 * aFrag && mFrag - aFrag >= 0.05) {
@@ -342,6 +369,48 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
         { observer: 'HEADINGS', params: { case: [want] } },
         `you: ${want === 'SENTENCE' ? a.sentence : a.title} of ${aN} headings; the model: ${want === 'SENTENCE' ? m.sentence : m.title} of ${mN}`, false, true);
     }
+  }
+}
+
+/**
+ * THE VOICE LAYER: what is true of every piece the author writes, whatever the topic, and so easy to
+ * miss for a discovery that looks for distinctive moves. In a blind round the skill's output had no
+ * first person at all (the author writes about 13 "I"/"my" per 1,000 words) and British spelling
+ * throughout (the author's corpus: 93 American spellings to 6 British). Neither was a rule.
+ *
+ *   point of view   a first-person author gets a band on the first person, and the statement separates
+ *                   a VIEW in the first person ("I think", "I'd hold this loosely"), which needs no
+ *                   source, from a first-hand STORY or figure, which does; an author who keeps out of
+ *                   the text gets a cap where the model does not.
+ *   dialect         an author who spells one way (at least ten marked words, the other way at most
+ *                   15% of them) gets a cap on the other dialect's spellings.
+ */
+function proposeVoice(authorTexts: readonly string[], drafts: readonly string[], propose: Propose,
+  bandOf: (p: PatternId) => { lo: number; hi: number; a: number }, meanRate: (texts: readonly string[], p: PatternId) => number): void {
+  // How much a first-person author says "I" depends on the piece (a workflow diary against an analysis:
+  // 0.7 to 36 per 1,000 words in one real corpus), so the floor sits near their lightest pieces. What
+  // it must catch is a text with no first person at all, which is what a rules-only skill produced.
+  const b0 = bandOf('FIRST_PERSON'); const mfp = meanRate(drafts, 'FIRST_PERSON');
+  const fp = { ...b0, lo: r1(Math.max(0.5, perPieceP(authorTexts, (t) => patternRate(t, 'FIRST_PERSON'), 0.1) * 0.4)) };
+  if (fp.a >= 4) {
+    propose(`Write in the first person, as I do: between ${fp.lo} and ${fp.hi} "I", "my" or "me" per 1,000 words (I use about ${fp.a}). `
+      + 'A view or a hedge in the first person ("I think", "I\'d hold this loosely", "I\'m skeptical") needs no source; a first-hand story or figure does.',
+    'GENERATIVE', { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], minPer1000: fp.lo, maxPer1000: fp.hi } },
+    `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
+  } else if (fp.a < 1 && mfp >= 3) {
+    const cap = r1(Math.max(fp.hi, 0.5));
+    propose(`Keep myself out of the text, as I do: at most ${cap} "I", "my" or "me" per 1,000 words.`, 'BOUNDARY',
+      { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], maxPer1000: cap } }, `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
+  }
+  const count = (p: PatternId): number => authorTexts.reduce((n, t) => n + findPattern(t, p).length, 0);
+  const us = count('AMERICAN_SPELLING'); const uk = count('BRITISH_SPELLING');
+  const dialect = us >= 10 && uk <= 0.15 * (us + uk) ? { other: 'BRITISH_SPELLING' as const, mine: 'American', eg: 'behavior, organize, center', not: 'behaviour, organise, centre' }
+    : uk >= 10 && us <= 0.15 * (us + uk) ? { other: 'AMERICAN_SPELLING' as const, mine: 'British', eg: 'behaviour, organise, centre', not: 'behavior, organize, center' } : null;
+  if (dialect) {
+    const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, dialect.other), 0.9) * 1.5, 0.5));
+    propose(`Spell the ${dialect.mine} way, as I do (${dialect.eg}), not ${dialect.not}: at most ${cap} other spellings per 1,000 words.`, 'BOUNDARY',
+      { observer: 'PATTERN_RATE', params: { pattern: [dialect.other], maxPer1000: cap } },
+      `your pieces: ${dialect.mine === 'American' ? us : uk} ${dialect.mine} spellings to ${dialect.mine === 'American' ? uk : us} of the other`);
   }
 }
 

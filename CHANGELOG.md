@@ -57,6 +57,34 @@ a run in progress may not be.
 - **The front door** (`atelier` with no command) lists the everyday verbs first: create, use,
   correct, status, calibrate, set up the floor, tend.
 
+### Changed (after the third blind voice round: sound like the author, not just unlike a model)
+
+A skill that met every one of its rules was ranked least like the author of four versions. The causes,
+and what changed:
+
+- **The skill served no writing of the author's.** A build now serves three of the author's own passages
+  inline (`core/compiler/voice.ts`: the most stylistically typical window of each piece by Burrows'
+  Delta, from different pieces with the least topic overlap, never a reserved piece) and the author's
+  usual piece length. They travel through every rebuild. `build --voice none` turns them off.
+- **The negatives were enforced and the positives optional.** The author's own habits (bold, one-line
+  paragraphs, rhetorical questions, semicolons) are now proposed as two-sided bands around their rate,
+  which can be required, instead of lax floors shown as optional examples.
+- **Nothing held the first person or the dialect.** A voice layer proposes a first-person band (a view
+  needs no source; a story does) and a cap on the other dialect's spellings. New patterns:
+  `FIRST_PERSON`, `BRITISH_SPELLING`, `AMERICAN_SPELLING`.
+- **Banning the em dash moved the aside onto " - ".** The cap is now on `DASH_ASIDE`, every dash that sets
+  off an aside, whatever the mark.
+- **One-line paragraphs counted captions and link lines,** inflating an author's rate about fourfold;
+  only prose lines count now.
+- **A repair left a stutter** ("moral suasion: coupling: make market access"): a span that ended inside
+  the next sentence stopped mid-sentence. Spans now grow to whole sentences at both ends, and a
+  replacement that repeats or absorbs the words at its join is refused.
+- **Compiled rules read "When , I close…"** for conditions with no words in them, and "When A, when B"
+  where the statement had its own condition. Both fixed.
+- `studies/harness/voice-round.mjs` runs the comparison over several briefs, judged first by stylometry
+  against the reserved pieces, a copying measure and invented-claim counts, with a model ranking as a
+  second opinion only.
+
 ### Fixed (gap audit of phase D)
 
 - A baseline frozen under another model, or before the tasks changed, killed `optimize` and `tend` halfway,

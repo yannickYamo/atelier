@@ -1,141 +1,190 @@
 #!/usr/bin/env node
-// A VOICE ROUND: ONE BRIEF, FOUR WAYS OF ASKING, JUDGED THREE WAYS. RE-RUNNABLE, EXPLORATORY.
+// A VOICE ROUND: SEVERAL BRIEFS, SEVERAL WAYS OF ASKING, JUDGED MOSTLY BY THINGS A MODEL CANNOT SWAY.
 //
-// This is not the pre-registered proof study (../PROOF_STUDY_PREREGISTRATION.md), which waits on an
-// owner's own corpus and house standard. It is the smaller comparison that can be rerun on any skill
-// built from someone's pieces, and it decides nothing itself: every count comes from the built product.
+// Not the pre-registered proof study (../PROOF_STUDY_PREREGISTRATION.md), which waits on an owner's
+// own corpus and house standard: the smaller comparison that can be rerun on any skill built from
+// someone's pieces. It decides nothing itself; every count comes from the built product in dist/.
 //
-//   arms     RAW        "write in the voice of <author>", nothing else
-//            CONTEXT    the corpus pasted into the prompt (reserved pieces left out)
-//            GUIDE      the model reads the corpus, writes its own style guide, then writes from it
-//                       (a reflective, GEPA-like prompt, without the search)
-//            ATELIER    `atelier invoke` on the skill, the product as shipped
-//   judged   1. by you, blind: the outputs are written as letters, the key in a separate file
-//            2. by a model, pairwise, both orders, against the author's RESERVED pieces (never shown to
-//               any arm); a pair counts only when both orders agree
-//            3. deterministically: every measured rule of the skill's standard, plus the model tells,
-//               on every output
+// Arms (each brief, same model, same length target written into the brief):
+//   RAW             "write in the voice of <author>", nothing else
+//   CONTEXT         the author's readable pieces pasted into the prompt
+//   GUIDE           the model reads those pieces, writes its own style guide, then writes from it
+//   ATELIER         `atelier invoke` on the skill (--skill, in ATELIER_DATA)
+//   ATELIER_BEFORE  optional: the same, on an earlier build of the skill (--before-data, --before-skill)
 //
-// Usage (the skill must already be built; ATELIER_DATA and ATELIER_PROJECT_DIR point at its store):
+// Judged, per output, in this order of weight:
+//   1. STYLOMETRY   Burrows' Delta to the author's RESERVED pieces (never shown to any arm) against the
+//                   model's own plain voice (the RAW outputs of the other briefs). Topic-robust, and it
+//                   does not reward lifting phrases. Positive = closer to the author than to the model.
+//   2. COPYING      the longest run of words shared with the corpus, and the number of shared 6-grams:
+//                   imitation that lifts the author's lines is recall, not voice
+//   3. INVENTION    first-person stories and figures with no source (core/loop/claims.ts)
+//   4. VOICE        the author's own habits per 1,000 words (first person, dialect, one-line paragraphs,
+//                   dash asides, bold, questions) and the model's tells, beside the reserved pieces' rates
+//   5. RULES        the skill's REQUIRED measured rules, applied to every arm
+//   6. A MODEL      a ranking by a model other than the writer (--judge-model), both orders, as a
+//                   second opinion only: a model judge rewards what models write
+// And blind files per brief for the owner, whose ranking is the result that matters.
+//
+// Usage:
 //   node studies/harness/voice-round.mjs --skill <name> --corpus <folder> --author "<name>" \
-//        --task "<brief>" --out <folder> [--model claude-opus-5] [--judge-model claude-opus-5] [--seed 3]
-//
-// Spend: four generations (CONTEXT carries the whole corpus as input), one guide, and twelve judge
-// calls. It prints what it spent.
+//        --briefs <file: one brief per paragraph> --out <folder> \
+//        [--before-data <dir> --before-skill <name> --before-project <dir>] \
+//        [--model claude-opus-5] [--judge-model claude-fable-5] [--seed 3]
 
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { AnthropicInferenceClient } from '../../dist/providers/anthropic.js';
 import * as store from '../../dist/core/state/store.js';
 import { checkDraft } from '../../dist/core/loop/run-repair.js';
-import { patternRate, PATTERN_IDS } from '../../dist/core/observers/style.js';
+import { patternRate, proseWords, deltaReference, styleDistanceDocs } from '../../dist/core/observers/style.js';
+import { unsourcedClaims } from '../../dist/core/loop/claims.js';
+import { quantile } from '../../dist/core/observers/text.js';
+import { overlapIndex } from '../../dist/core/observers/overlap.js';
+import { seededShuffle } from '../../dist/core/contract/analysis.js';
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i === -1 ? d : process.argv[i + 1]; };
 const need = (n) => arg(n) ?? (console.error(`missing ${n}`), process.exit(2));
 const SKILL = need('--skill'); const CORPUS = need('--corpus'); const AUTHOR = need('--author');
-const TASK = need('--task'); const OUT = resolve(need('--out'));
-const MODEL = arg('--model', 'claude-opus-5'); const JUDGE = arg('--judge-model', MODEL);
+const BRIEFS = readFileSync(need('--briefs'), 'utf8').split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+const OUT = resolve(need('--out'));
+const MODEL = arg('--model', 'claude-opus-5'); const JUDGE = arg('--judge-model', 'claude-fable-5');
 const SEED = Number(arg('--seed', '3'));
 const DATA = process.env.ATELIER_DATA ?? (console.error('ATELIER_DATA must point at the skill\'s store'), process.exit(2));
+const BEFORE = arg('--before-data') ? { data: arg('--before-data'), skill: need('--before-skill'), project: need('--before-project') } : null;
 mkdirSync(OUT, { recursive: true });
 
 // ── The corpus, and the pieces reserved from every arm ────────────────────────────────────────────
-const sessionDir = join(DATA, 'sessions');
-const reservedTexts = readdirSync(sessionDir).flatMap((f) => {
-  const s = JSON.parse(readFileSync(join(sessionDir, f), 'utf8'));
-  return (s.reservation?.reserved ?? []).map((u) => u.artifact.trim());
-});
+const reservedIn = (data) => readdirSync(join(data, 'sessions')).flatMap((f) =>
+  (JSON.parse(readFileSync(join(data, 'sessions', f), 'utf8')).reservation?.reserved ?? []).map((u) => u.artifact.trim()));
+const reservedTexts = new Set(reservedIn(DATA));
 const pieces = readdirSync(CORPUS).filter((f) => f.endsWith('.md')).sort().map((f) => ({ f, text: readFileSync(join(CORPUS, f), 'utf8').trim() }));
-const reserved = pieces.filter((p) => reservedTexts.includes(p.text));
-const readable = pieces.filter((p) => !reservedTexts.includes(p.text));
-if (reserved.length < 2) { console.error(`the judge needs at least two reserved pieces; found ${reserved.length}.`); process.exit(2); }
-console.log(`corpus: ${readable.length} readable piece(s), ${reserved.length} reserved (the judge's reference only)`);
+const reserved = pieces.filter((p) => reservedTexts.has(p.text));
+const readable = pieces.filter((p) => !reservedTexts.has(p.text));
+if (reserved.length < 2) { console.error(`stylometry needs at least two reserved pieces; found ${reserved.length}.`); process.exit(2); }
+if (BEFORE && [...reservedIn(BEFORE.data)].some((t) => !reservedTexts.has(t))) { console.error('the earlier build reserved different pieces; the comparison would not be fair.'); process.exit(2); }
+const lengths = readable.map((p) => proseWords(p.text));
+const band = [Math.round(quantile(lengths, 0.25) / 100) * 100, Math.round(quantile(lengths, 0.75) / 100) * 100];
+console.log(`corpus: ${readable.length} readable, ${reserved.length} reserved; length target ${band[0]}-${band[1]} words; ${BRIEFS.length} brief(s)`);
 
-const client = new AnthropicInferenceClient(MODEL);
+const writer = new AnthropicInferenceClient(MODEL);
 const judge = new AnthropicInferenceClient(JUDGE);
 let spent = 0;
 const PIECE = { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'] };
-const write = async (c, system, user, maxTokens = 8000) => {
-  const r = await c.complete({ stableBlock: system, variableBlock: '', userMessage: user, toolName: 'emit_piece',
-    toolDescription: 'The finished piece, in markdown.', schema: PIECE, maxTokens });
+const call = async (c, system, user, tool, schema, maxTokens) => {
+  const r = await c.complete({ stableBlock: system, variableBlock: '', userMessage: user, toolName: tool, toolDescription: tool, schema, maxTokens });
   spent += r.cost?.billingUsd ?? 0;
-  return String(r.json?.piece ?? '').trim();
+  return r.json ?? {};
 };
+const write = async (system, user) => String((await call(writer, system, user, 'emit_piece', PIECE, 12000)).piece ?? '').trim();
 const WRITER = 'You are a writer. Return only the finished piece, in markdown.';
 const corpusBlock = readable.map((p) => `<piece>\n${p.text}\n</piece>`).join('\n\n');
+const guide = String((await call(writer, 'You are an editor who writes precise, usable style guides.',
+  `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\nWrite a style guide another writer could follow to write exactly like this author: voice, argument, structure, vocabulary, figures, pace, formatting, openings and closings, and what they never do. Be specific.`,
+  'emit_guide', { type: 'object', properties: { guide: { type: 'string' } }, required: ['guide'] }, 6000)).guide ?? '');
+writeFileSync(join(OUT, 'guide.md'), guide);
 
-// ── The four arms ─────────────────────────────────────────────────────────────────────────────────
-const arms = {};
-arms.RAW = await write(client, WRITER, `${TASK}\n\nWrite it in the voice and style of ${AUTHOR}.`);
-arms.CONTEXT = await write(client, WRITER, `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\n${TASK}\n\nWrite it in their voice and style.`);
-const GUIDE_SCHEMA = { type: 'object', properties: { guide: { type: 'string' } }, required: ['guide'] };
-const g = await client.complete({ stableBlock: 'You are an editor who writes precise, usable style guides.', variableBlock: '',
-  userMessage: `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\nWrite a style guide another writer could follow to write exactly like this author: voice, argument, structure, vocabulary, figures, pace, formatting, openings and closings, and what they never do. Be specific.`,
-  toolName: 'emit_guide', toolDescription: 'The style guide.', schema: GUIDE_SCHEMA, maxTokens: 6000 });
-spent += g.cost?.billingUsd ?? 0;
-writeFileSync(join(OUT, 'guide.md'), String(g.json?.guide ?? ''));
-arms.GUIDE = await write(client, `${WRITER}\n\nFollow this style guide:\n\n${String(g.json?.guide ?? '')}`, TASK);
-const inv = execFileSync('node', [resolve('dist/cli/atelier.mjs'), 'invoke', '--skill', SKILL, '--task', TASK, '--target-model', MODEL],
-  { encoding: 'utf8', env: process.env, maxBuffer: 1 << 24 });
-writeFileSync(join(OUT, 'atelier-invoke.log'), inv);
+const invoke = (env, skill, task) => {
+  const out = execFileSync('node', [resolve('dist/cli/atelier.mjs'), 'invoke', '--skill', skill, '--task', task, '--target-model', MODEL],
+    { encoding: 'utf8', env: { ...process.env, ...env }, maxBuffer: 1 << 24 });
+  const cost = /\$([0-9.]+)\s*$/m.exec(out.split('\n').find((l) => l.startsWith('invocation ')) ?? '');
+  spent += cost ? Number(cost[1]) : 0;
+  const L = { root: env.ATELIER_DATA, skillName: skill };
+  return { text: store.listInvocations(L).sort((a, b) => String(a.at).localeCompare(String(b.at))).at(-1).output.trim(), log: out };
+};
+
+// ── Generate ──────────────────────────────────────────────────────────────────────────────────────
+const rounds = [];
+for (const [bi, brief] of BRIEFS.entries()) {
+  const task = `${brief}\n\nAim for about ${band[0]} to ${band[1]} words.`;
+  const arms = {};
+  arms.RAW = await write(WRITER, `${task}\n\nWrite it in the voice and style of ${AUTHOR}.`);
+  arms.CONTEXT = await write(WRITER, `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\n${task}\n\nWrite it in their voice and style.`);
+  arms.GUIDE = await write(`${WRITER}\n\nFollow this style guide:\n\n${guide}`, task);
+  const now = invoke({ ATELIER_DATA: DATA, ATELIER_PROJECT_DIR: process.env.ATELIER_PROJECT_DIR }, SKILL, task);
+  arms.ATELIER = now.text;
+  if (BEFORE) arms.ATELIER_BEFORE = invoke({ ATELIER_DATA: BEFORE.data, ATELIER_PROJECT_DIR: BEFORE.project }, BEFORE.skill, task).text;
+  const dir = join(OUT, `brief-${bi + 1}`); mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'atelier-invoke.log'), now.log);
+  rounds.push({ brief, task, arms, dir });
+  console.log(`brief ${bi + 1}/${BRIEFS.length} written`);
+}
+
+// ── Measure ───────────────────────────────────────────────────────────────────────────────────────
+const overlap = overlapIndex(readable.map((p) => p.text));
+const FEATURES = ['FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING', 'ONE_LINE_PARAGRAPH', 'DASH_ASIDE', 'BOLD_SPAN', 'RHETORICAL_QUESTION', 'EM_DASH', 'NOT_X_ITS_Y', 'INTENSIFIER', 'SIGNPOST', 'THAT_OPENER'];
+const round1 = (x) => Math.round(x * 10) / 10;
+const authorFeatures = Object.fromEntries(FEATURES.map((p) => [p, round1(reserved.reduce((s, x) => s + patternRate(x.text, p), 0) / reserved.length)]));
 const L = { root: DATA, skillName: SKILL };
-const last = store.listInvocations(L).sort((a, b) => String(a.at).localeCompare(String(b.at))).at(-1);
-arms.ATELIER = last.output.trim();
-const cost = /\$([0-9.]+)\s*$/m.exec(inv.split('\n').find((l) => l.startsWith('invocation ')) ?? '');
-spent += cost ? Number(cost[1]) : 0;
+const v = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)).standardVersionHash);
+const names = Object.keys(rounds[0].arms);
+const rows = [];
+for (const [bi, r] of rounds.entries()) {
+  // The model's own voice: its RAW drafts on the OTHER briefs (never this one, which would be judged against itself).
+  const modelRef = rounds.filter((_, j) => j !== bi).map((x) => x.arms.RAW);
+  const ref = deltaReference(reserved.map((p) => p.text), modelRef.length >= 2 ? modelRef : rounds.map((x) => x.arms.RAW));
+  for (const a of names) {
+    const t = r.arms[a];
+    const d = styleDistanceDocs(t, ref);
+    const report = checkDraft(SKILL, v, t, { guardClaims: false });
+    const req = report.checked.filter((c) => c.materiality === 'REQUIRED');
+    const claims = unsourcedClaims(t, '');
+    rows.push({ brief: bi + 1, arm: a, words: proseWords(t), stylometry: Math.round((d.model - d.author) * 1000) / 1000,
+      ...overlap(t),
+      inventedStories: claims.filter((c) => c.kind === 'EXPERIENCE').length, unsourcedFigures: claims.filter((c) => c.kind === 'FIGURE').length,
+      requiredHeld: `${req.filter((c) => c.result.verdict !== 'VIOLATED').length}/${req.length}`,
+      features: Object.fromEntries(FEATURES.map((p) => [p, round1(patternRate(t, p))])) });
+  }
+}
+
+// ── A second opinion: a different model ranks the arms, twice in shuffled orders ─────────────────────
+let draw = SEED;
+const shuffle = (xs) => seededShuffle(xs, draw++);
+const RANK = { type: 'object', properties: { ranking: { type: 'array', items: { type: 'string' } }, why: { type: 'string' } }, required: ['ranking', 'why'] };
+const reference = reserved.map((p) => `<reference>\n${p.text}\n</reference>`).join('\n\n');
+const modelRanks = [];
+for (const [bi, r] of rounds.entries()) {
+  for (let pass = 0; pass < 2; pass++) {
+    const order = shuffle(names); const labels = order.map((_, i) => String.fromCharCode(65 + i));
+    const j = await call(judge, 'You compare texts with an author\'s own writing and rank them by how much they read like the author wrote them: voice, stance, word choice, pace, structure. Ignore topic, and do not reward a text for reusing the author\'s own phrases.',
+      `THE AUTHOR'S OWN PIECES\n${reference}\n\n${order.map((a, i) => `TEXT ${labels[i]}\n"""\n${r.arms[a]}\n"""`).join('\n\n')}\n\nRank every text, most like the author first, by letter.`,
+      'emit_ranking', RANK, 1500);
+    const ranking = (j.ranking ?? []).map((l) => order[labels.indexOf(String(l).trim().charAt(0).toUpperCase())]).filter(Boolean);
+    ranking.forEach((a, i) => modelRanks.push({ brief: bi + 1, pass, arm: a, rank: i + 1 }));
+  }
+}
 
 // ── Blind files for the owner ─────────────────────────────────────────────────────────────────────
-const names = Object.keys(arms);
-let s = SEED; const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648);
-const letters = ['K', 'L', 'M', 'N'];
-const order = [...names].sort(() => rnd() - 0.5);
-const key = Object.fromEntries(order.map((a, i) => [letters[i], a]));
-for (const [l, a] of Object.entries(key)) writeFileSync(join(OUT, `${l}.md`), arms[a]);
-writeFileSync(join(OUT, 'KEY-open-after-judging.json'), JSON.stringify(key, null, 1));
-writeFileSync(join(OUT, 'README.md'), `# Voice round\n\nBrief: ${TASK}\n\n${letters.join(', ')}: rank them for sounding like ${AUTHOR}, and mark every sentence that reads machine-written to you. Then open KEY-open-after-judging.json and REPORT.md.\n`);
-
-// ── The model judge: pairwise, both orders, against the reserved pieces ──────────────────────────
-const VERDICT = { type: 'object', properties: { closer: { type: 'string', enum: ['A', 'B', 'TIE'] }, why: { type: 'string' } }, required: ['closer', 'why'] };
-const reference = reserved.map((p) => `<reference>\n${p.text}\n</reference>`).join('\n\n');
-const pairs = [];
-for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) pairs.push([names[i], names[j]]);
-const judged = [];
-for (const [x, y] of pairs) {
-  const ask = async (a, b) => {
-    const r = await judge.complete({ stableBlock: `You compare two texts with an author's own writing. Which reads more like the author wrote it: voice, argument, word choice, pace, structure? Ignore topic and quality otherwise. Answer TIE only if you truly cannot tell.`,
-      variableBlock: '', userMessage: `THE AUTHOR'S OWN PIECES\n${reference}\n\nTEXT A\n"""\n${arms[a]}\n"""\n\nTEXT B\n"""\n${arms[b]}\n"""`,
-      toolName: 'emit_verdict', toolDescription: 'Which text reads more like the author.', schema: VERDICT, maxTokens: 800 });
-    spent += r.cost?.billingUsd ?? 0;
-    const c = r.json?.closer; return c === 'A' ? a : c === 'B' ? b : 'TIE';
-  };
-  const first = await ask(x, y); const second = await ask(y, x);
-  judged.push({ pair: `${x} vs ${y}`, first, second, winner: first === second ? first : 'SPLIT' });
+const LETTERS = 'KLMNPQRS';
+const key = {};
+for (const [bi, r] of rounds.entries()) {
+  const order = shuffle(names);
+  key[`brief-${bi + 1}`] = Object.fromEntries(order.map((a, i) => [LETTERS[i], a]));
+  order.forEach((a, i) => writeFileSync(join(r.dir, `${LETTERS[i]}.md`), r.arms[a]));
+  writeFileSync(join(r.dir, 'BRIEF.md'), `${r.task}\n`);
 }
-const wins = Object.fromEntries(names.map((a) => [a, judged.filter((j) => j.winner === a).length]));
+writeFileSync(join(OUT, 'KEY-open-after-judging.json'), JSON.stringify(key, null, 1));
+writeFileSync(join(OUT, 'README.md'), `# Voice round\n\n${rounds.length} brief(s), ${names.length} versions each, as letters in brief-N/. For each brief, rank the letters for sounding like ${AUTHOR}, and mark the sentences that read machine-written. Then open KEY-open-after-judging.json and REPORT.md.\n`);
 
-// ── Deterministic: every measured rule of the standard, and the model tells ───────────────────────
-const sv = store.getSkillVersion(L, store.getActive(L));
-const v = store.getStandard(L, sv.standardVersionHash);
-const author = PATTERN_IDS.map((p) => [p, readable.reduce((n, x) => n + patternRate(x.text, p), 0) / readable.length]);
-const table = names.map((a) => {
-  const r = checkDraft(SKILL, v, arms[a], { guardClaims: false });
-  const req = r.checked.filter((c) => c.materiality === 'REQUIRED');
-  return { arm: a, words: arms[a].split(/\s+/).length, requiredHeld: `${req.filter((c) => c.result.verdict !== 'VIOLATED').length} of ${req.length}`,
-    broken: r.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => c.requirementId),
-    tells: Object.fromEntries(PATTERN_IDS.map((p) => [p, Math.round(patternRate(arms[a], p) * 10) / 10])) };
-});
-const results = { task: TASK, model: MODEL, judgeModel: JUDGE, reserved: reserved.map((p) => p.f), key, judged, wins, table,
-  authorTells: Object.fromEntries(author.map(([p, x]) => [p, Math.round(x * 10) / 10])), spentUsd: Math.round(spent * 1000) / 1000 };
+// ── Report ────────────────────────────────────────────────────────────────────────────────────────
+const mean = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+const by = (a) => rows.filter((x) => x.arm === a);
+const fmt = (x) => (Math.round(x * 100) / 100).toString();
+const results = { briefs: BRIEFS, model: MODEL, judgeModel: JUDGE, lengthTarget: band, reserved: reserved.map((p) => p.f), key, rows, modelRanks, authorFeatures, spentUsd: Math.round(spent * 100) / 100 };
 writeFileSync(join(OUT, 'results.json'), JSON.stringify(results, null, 1));
-
-const lines = ['# Voice round: results (open after judging)', '', `Brief: ${TASK}`, `Model: ${MODEL}; judge: ${JUDGE}; spent about $${results.spentUsd}.`, '',
-  '## The model judge (pairwise, both orders; a pair counts only when both agree)', '', '| pair | first order | second order | counts as |', '|---|---|---|---|',
-  ...judged.map((j) => `| ${j.pair} | ${j.first} | ${j.second} | ${j.winner} |`), '', `Pairs won: ${names.map((a) => `${a} ${wins[a]}`).join(', ')}.`, '',
-  '## Deterministic (the skill\'s measured rules; model tells per 1,000 words)', '',
-  `| arm | words | REQUIRED held | broken | ${PATTERN_IDS.join(' | ')} |`, `|---|---|---|---|${PATTERN_IDS.map(() => '---').join('|')}|`,
-  `| ${AUTHOR} (mean of readable pieces) | | | | ${author.map(([, x]) => Math.round(x * 10) / 10).join(' | ')} |`,
-  ...table.map((t) => `| ${t.arm} | ${t.words} | ${t.requiredHeld} | ${t.broken.join(', ') || 'none'} | ${PATTERN_IDS.map((p) => t.tells[p]).join(' | ')} |`), '',
-  'A model judge is one reader, and a model like the one that wrote these. Your blind ranking is the result that matters.'];
+const lines = ['# Voice round: results (open after judging)', '',
+  `${rounds.length} brief(s); writer ${MODEL}; second-opinion judge ${JUDGE}; length target ${band[0]}-${band[1]} words; spent about $${results.spentUsd}.`, '',
+  '## Across briefs (means)', '',
+  '| arm | stylometry (+ = closer to the author\'s reserved pieces) | briefs closer to author | words | longest run shared with corpus | shared 6-grams | invented stories | unsourced figures | REQUIRED held | model judge mean rank |',
+  '|---|---|---|---|---|---|---|---|---|---|',
+  ...names.map((a) => { const r = by(a); return `| ${a} | ${fmt(mean(r.map((x) => x.stylometry)))} | ${r.filter((x) => x.stylometry > 0).length} of ${r.length} | ${Math.round(mean(r.map((x) => x.words)))} | ${Math.max(...r.map((x) => x.longestShared))} | ${fmt(mean(r.map((x) => x.shared6)))} | ${fmt(mean(r.map((x) => x.inventedStories)))} | ${fmt(mean(r.map((x) => x.unsourcedFigures)))} | ${r.map((x) => x.requiredHeld).join(' ')} | ${fmt(mean(modelRanks.filter((m) => m.arm === a).map((m) => m.rank)))} |`; }),
+  '', '## Voice features per 1,000 words (means across briefs)', '',
+  `| arm | ${FEATURES.join(' | ')} |`, `|---|${FEATURES.map(() => '---').join('|')}|`,
+  `| ${AUTHOR}, reserved pieces | ${FEATURES.map((p) => authorFeatures[p]).join(' | ')} |`,
+  ...names.map((a) => `| ${a} | ${FEATURES.map((p) => fmt(mean(by(a).map((x) => x.features[p])))).join(' | ')} |`),
+  '', '## Per brief: stylometry', '', `| brief | ${names.join(' | ')} |`, `|---|${names.map(() => '---').join('|')}|`,
+  ...rounds.map((_, bi) => `| ${bi + 1} | ${names.map((a) => fmt(rows.find((x) => x.brief === bi + 1 && x.arm === a).stylometry)).join(' | ')} |`),
+  '', 'Stylometry is computed against pieces no arm saw, and does not reward lifted phrases. A model judge is one reader, and a model like the one that wrote these. Your blind ranking is the result that matters.'];
 writeFileSync(join(OUT, 'REPORT.md'), lines.join('\n'));
-console.log(`wrote ${Object.keys(key).map((l) => `${l}.md`).join(', ')}, README.md, REPORT.md, results.json to ${OUT}; spent about $${results.spentUsd}`);
+console.log(`done: ${OUT}; spent about $${results.spentUsd}`);

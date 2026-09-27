@@ -658,8 +658,10 @@ export const discoveryRecall = (v: StandardVersion): number =>
  * smell, which is what `declaredGeneralShare` is for.
  */
 export const isGeneralScope = (appliesWhen: string): boolean => {
+  // A condition with no words in it (";", " , ", what joining empty predicates leaves) names nothing:
+  // rendered, it read "When , I close…".
   const v = appliesWhen.trim();
-  return v === '' || /^GENERAL\b/i.test(v);
+  return v.replace(/[\s;,.:]+/g, '') === '' || /^GENERAL\b/i.test(v);
 };
 
 /**
