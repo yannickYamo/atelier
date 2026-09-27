@@ -29,26 +29,51 @@ export interface Heading { readonly level: number; readonly text: string; readon
 export function headingsOf(text: string): Heading[] {
   const out: Heading[] = [];
   let offset = 0; let fence = false; let front = false;
+  let prev: { text: string; start: number } | null = null;
   text.split('\n').forEach((line, i) => {
     const start = offset; offset += line.length + 1;
     const t = line.trim();
     if (i === 0 && t === '---') { front = true; return; }
     if (front) { if (t === '---' || t === '...') front = false; return; }
-    if (/^(```|~~~)/.test(t)) { fence = !fence; return; }
+    if (/^(```|~~~)/.test(t)) { fence = !fence; prev = null; return; }
     if (fence) return;
-    const m = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(t);
-    if (m) out.push({ level: m[1].length, text: m[2].replace(/\*\*|__|`/g, '').trim(), start: start + line.indexOf(m[2]), end: start + line.length });
+    // A closing run of # counts only after whitespace, so "## Learn C#" keeps its #.
+    const m = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(t);
+    if (m) { out.push({ level: m[1].length, text: m[2].replace(/\*\*|__|`/g, '').trim(), start: start + line.indexOf(m[2]), end: start + line.length }); prev = null; return; }
+    // Setext: a single line of text underlined with === (level 1) or --- (level 2).
+    if (prev && /^(=+|-+)$/.test(t)) {
+      out.push({ level: t.startsWith('=') ? 1 : 2, text: prev.text.replace(/\*\*|__|`/g, '').trim(), start: prev.start, end: prev.start + prev.text.length });
+      prev = null; return;
+    }
+    prev = t && !/^([-*+>]|\d+[.)])\s/.test(t) ? { text: t, start: start + line.indexOf(t) } : null;
   });
   const titles = out.filter((h) => h.level === 1);
   return titles.length === 1 ? out.filter((h) => h.level > 1) : out;
 }
 
-/** Title Case when most words after the first, of four letters or more, start with a capital. */
+/** Short words a Title Case heading capitalises and a sentence-case heading does not. They decide the
+ *  case; names, acronyms ("APIs") and product words ("Kubernetes") are capitalised either way and
+ *  cannot. */
+const CASE_WORDS = new Set(['with', 'that', 'from', 'your', 'about', 'this', 'what', 'when', 'into', 'over', 'than', 'then', 'they',
+  'them', 'their', 'there', 'where', 'which', 'while', 'will', 'have', 'does', 'make', 'more', 'most', 'just', 'only', 'much', 'many',
+  'should', 'could', 'would', 'every', 'after', 'before', 'under', 'why', 'how', 'and', 'the', 'for', 'but', 'not', 'you', 'are', 'its', 'our']);
+
+/**
+ * TITLE when the common words after the first are capitalised, SENTENCE when they are not, null when
+ * the heading has none to tell by. A heading in ALL CAPS reads as TITLE: it is not sentence case.
+ */
 export function headingCase(h: string): 'TITLE' | 'SENTENCE' | null {
-  const ws = wordsOf(h).slice(1).filter((w) => w.length >= 4 && !/^[A-Z0-9]{2,}$/.test(w));
-  if (ws.length < 2) return null;
+  const all = wordsOf(h);
+  const letters = all.filter((w) => /[A-Za-z]{2,}/.test(w));
+  if (letters.length >= 2 && letters.every((w) => w === w.toUpperCase())) return 'TITLE';
+  const common = all.slice(1).filter((w) => CASE_WORDS.has(w.toLowerCase()));
+  if (common.length) return common.filter((w) => /^[A-Z]/.test(w)).length / common.length >= 0.5 ? 'TITLE' : 'SENTENCE';
+  // No common word to tell by: only an unambiguous heading decides. Three or more longer words, every
+  // one capitalised or none (acronyms and CamelCase set aside), else it cannot be told.
+  const ws = all.slice(1).filter((w) => w.length >= 4 && !/[A-Z].*[A-Z]/.test(w));
+  if (ws.length < 3) return null;
   const caps = ws.filter((w) => /^[A-Z]/.test(w)).length;
-  return caps / ws.length >= 0.5 ? 'TITLE' : 'SENTENCE';
+  return caps === ws.length ? 'TITLE' : caps === 0 ? 'SENTENCE' : null;
 }
 
 /** Phrases models put in openings, closes and headings far more than careful writers do. Proposed as a
@@ -63,7 +88,9 @@ export const HEADING_TROPES: readonly string[] = ['the thing', 'gets wrong', 'no
 
 /** The first and last prose paragraphs, when there are at least two. */
 const edges = (text: string): { first: ReturnType<typeof paragraphsOf>[number]; last: ReturnType<typeof paragraphsOf>[number] } | null => {
-  const ps = paragraphsOf(text);
+  // An image, a footnote definition or a link reference is not where a reader starts or ends reading.
+  const ps = paragraphsOf(text).filter((p) => !/^(!\[[^\]]*\]\([^)]*\)|\[\^[^\]]+\]:|\[[^\]]+\]:\s*\S+)/.test(p.text.trim())
+    || p.text.trim().length > 200);
   return ps.length >= 2 ? { first: ps[0], last: ps[ps.length - 1] } : null;
 };
 
@@ -93,11 +120,13 @@ function edgeObserver(id: 'OPENING' | 'CLOSING'): Observer {
       const lo = num(p, 'minWords'); const hi = num(p, 'maxWords');
       const long = hi !== null && words > hi; const short = lo !== null && words < lo;
       const problems = [...hits.map((h) => `"${h.text}"`), long ? `${words} words (at most ${hi})` : '', short ? `${words} words (at least ${lo})` : ''].filter(Boolean);
-      if (!problems.length) return { verdict: 'MET', spans: [], value: words, detail: `${where}: ${words} words` };
-      // Length is a property of the whole paragraph; a banned phrase is its own span.
-      const spans: Span[] = hits.length ? hits : [{ start: para.start, end: para.end, text: para.text,
-        why: `${where} is ${words} words; ${long ? `at most ${hi}` : `at least ${lo}`}` }];
-      return { verdict: 'VIOLATED', spans, value: words, detail: `${where}: ${problems.join(', ')}` };
+      // The value counts what is wrong, so less is better: each banned phrase, plus the words outside the band.
+      const off = hits.length + (long ? words - (hi ?? 0) : 0) + (short ? (lo ?? 0) - words : 0);
+      if (!problems.length) return { verdict: 'MET', spans: [], value: 0, detail: `${where}: ${words} words` };
+      // A banned phrase is its own span; a length problem is the whole paragraph's. Both, when both.
+      const spans: Span[] = [...hits, ...(long || short ? [{ start: para.start, end: para.end, text: para.text,
+        why: `${where} is ${words} words; ${long ? `at most ${hi}` : `at least ${lo}`}` }] : [])];
+      return { verdict: 'VIOLATED', spans, value: off, detail: `${where}: ${problems.join(', ')}` };
     },
   };
 }

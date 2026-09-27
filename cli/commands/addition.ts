@@ -26,7 +26,9 @@ export interface Addition {
 }
 
 export function addRuleToActive(L: store.StoreLayout, name: string, statement: string, materiality: 'REQUIRED' | 'PREFERRED',
-  reason: string, fallback: StandardVersion | null = null): Addition {
+  reason: string, fallback: StandardVersion | null = null,
+  /** the complaints this rule answers, so `mine` does not offer the same gap again */
+  feedbackIds: readonly string[] = []): Addition {
   const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
   const baseStandard = (activeSv && store.getStandard(L, activeSv.standardVersionHash)) ?? fallback
     ?? die(`no standard to add to for ${name}.`);
@@ -50,14 +52,16 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: next.mintedAt, description: desc };
-  store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch);
-  store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
+  store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg);
+  // Installed first, activated second: a failed install leaves the previous version active and serving.
   const inst = pickHost().install(pkg, projectDir());
   { const moved = describeBackup(inst); if (moved) console.log(moved); }
-  if (!inst.ok) die(`install failed: ${inst.reason}`);
+  if (!inst.ok) die(`install failed: ${inst.reason}\n  Nothing was added: the active version is unchanged.`);
+  store.setActive(L, skill.skillVersionHash);
   const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([base]), records: [] },
     base, outcome.ledgerDecision, { note: reason, decidedAt: next.mintedAt }), next.standardVersionHash);
   store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
-  store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: next.mintedAt, skillVersionHash: skill.skillVersionHash, proposal: statement, accepted: true });
+  store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: next.mintedAt, skillVersionHash: skill.skillVersionHash, proposal: statement, accepted: true,
+    ...(feedbackIds.length ? { feedbackIds } : {}) });
   return { requirement: outcome.requirement, standard: next, supersedes: baseStandard.standardVersionHash, skillVersionHash: skill.skillVersionHash };
 }

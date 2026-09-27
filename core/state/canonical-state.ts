@@ -541,6 +541,8 @@ export interface RepairRecord {
   readonly outsideSpansChanged?: boolean;
   /** rewrites refused because they lost a figure, a negation, a qualifier or a name, and what each lost */
   readonly integrityReverted?: readonly string[];
+  /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
+  readonly revertedRules?: readonly string[];
   /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */
   readonly meaningLost?: readonly string[];
   /**

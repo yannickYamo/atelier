@@ -284,11 +284,13 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
     if (!absent.length) return;
     const inDrafts = seenIn(drafts, part, absent);
     const m: Measurement = { observer: id, params: { avoid: absent, role: [`${id.toLowerCase()}-tropes`] } };
-    const failing = drafts.filter((t) => measure(t, m).verdict === 'VIOLATED').length;
+    // Firm only where at least three in five of the drafts it applies to break it.
+    const readings = drafts.map((t) => measure(t, m).verdict).filter((x) => x !== 'NOT_APPLICABLE');
+    const failing = readings.filter((x) => x === 'VIOLATED').length;
     propose(statement(absent), 'BOUNDARY', m,
       inDrafts.length ? `your pieces never use these there; the model's plain drafts used ${say(inDrafts)}`
         : 'your pieces never use these there; stock moves models reach for under a voice instruction',
-      failing / Math.max(1, drafts.length) < 0.6);
+      failing / Math.max(1, readings.length) < 0.6);
   };
   edgeRule('OPENING', first, OPENING_TROPES, (xs) => `Open the way I do, without the stock moves: never ${say(xs)}.`);
   edgeRule('CLOSING', last, CLOSING_TROPES, (xs) => `Close the way I do, without the stock moves: never ${say(xs)}.`);

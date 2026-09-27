@@ -216,13 +216,15 @@ rules do not count. The count goes through the same promotion gate whether you p
 pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong.
 To let a repair install itself, earn a regression floor: `atelier floor` proposes, from your own pieces,
 how much each measured rule may move, runs the current version on your tasks, and measures its own
-false-alarm rate. Once that rate is at most 5% for this exact version and setup, a repair whose rule
-improves across your tasks, while every other rule you enforce holds, is installed without asking. Each step is explained in
+false-alarm rate and its sensitivity. Once that rate is at most 5%, and the floor catches at least 80%
+of planted regressions, for this exact version, baseline and setup, a repair whose rule improves across
+your tasks while every other rule you enforce holds is installed without asking. Each step is explained in
 [docs/MEASURED-RULES.md](docs/MEASURED-RULES.md#the-regression-floor). If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession. `atelier mine` reads every complaint and repair on record and lists
 what keeps recurring: a gap no rule covers, a rule that keeps being missed, a rule the first draft keeps
-breaking. Each comes with its remedy, and nothing is added without you.
+breaking, a rule whose repairs keep being refused for changing meaning. Each comes with its remedy, and
+nothing is added without you.
 
 Every rule has a key (`R-3f9a1c`) that survives new versions and rewording, so `--rule` takes the id,
 the key or the rule's number, and `atelier history` shows which rules moved in each version. Repairs
@@ -273,7 +275,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 98 files and 1469 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 98 files and 1477 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

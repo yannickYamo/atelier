@@ -100,23 +100,24 @@ describe('recurrence', () => {
   it('a recurring gap, a rule that keeps being missed, a rule the draft keeps breaking, and repairs that lose meaning', () => {
     const rules = [aRequirement({ requirementId: 'x1', statement: 'Lead with the action.' }), aRequirement({ requirementId: 'x2', statement: 'Never say leverage.' })];
     const inv = (violated: string[], reverted = false): InvocationRecord => ({ repair: { passes: 1, violatedBefore: violated, violatedAfter: [], originalOutputHash: '', why: '',
-      ...(reverted ? { integrityReverted: ['kept'] } : {}) } } as unknown as InvocationRecord);
+      ...(reverted ? { integrityReverted: ['kept'], revertedRules: violated } : {}) } } as unknown as InvocationRecord);
     const out = findRecurrences({
       feedback: [fb('too many em dashes', '2026-01-01T10:00:00Z'), fb('em dashes everywhere again', '2026-01-02T10:00:00Z'),
         fb('it buried the action', '2026-01-03T10:00:00Z', 'x1'), fb('the action was buried at the end', '2026-01-04T10:00:00Z', 'x1')],
       invocations: [inv(['x2'], true), inv(['x2'], true), inv(['x2']), inv([])],
       requirements: rules,
-      proposals: [{ proposal: 'Never use em dashes.', at: '2026-01-02T10:00:30Z', accepted: null }],
+      proposals: [{ proposal: 'Never use em dashes.', at: '2026-01-02T10:00:00Z', accepted: null }],
     });
     const kinds = out.map((r) => r.kind);
     expect(kinds).toEqual(expect.arrayContaining(['GAP', 'MISSED_RULE', 'BROKEN_DRAFT', 'LOST_MEANING']));
     expect(out.find((r) => r.kind === 'GAP')).toMatchObject({ count: 2, proposal: 'Never use em dashes.' });
     expect(out.find((r) => r.kind === 'MISSED_RULE')).toMatchObject({ requirementId: 'x1', count: 2 });
-    expect(out.find((r) => r.kind === 'BROKEN_DRAFT')).toMatchObject({ requirementId: 'x2', broken: 3, runs: 4 });
+    expect(out.find((r) => r.kind === 'BROKEN_DRAFT')).toMatchObject({ requirementId: 'x2', broken: 3, repaired: 3, runs: 4 });
   });
   it('a declined proposal is not offered again, and one complaint is an anecdote', () => {
     const out = findRecurrences({ feedback: [fb('em dashes', '2026-01-01T10:00:00Z'), fb('em dashes again', '2026-01-02T10:00:00Z')],
-      invocations: [], requirements: [], proposals: [{ proposal: 'Never use em dashes.', at: '2026-01-02T10:00:10Z', accepted: false }] });
+      invocations: [], requirements: [], proposals: [{ proposal: 'Never use em dashes.', at: '2026-01-02T10:00:00Z', accepted: null },
+        { proposal: 'Never use em dashes.', at: '2026-01-02T10:00:00Z', accepted: false }] });
     expect(out[0]).toMatchObject({ kind: 'GAP', proposal: null });
     expect(findRecurrences({ feedback: [fb('em dashes', '1')], invocations: [], requirements: [], proposals: [] })).toEqual([]);
   });
@@ -167,5 +168,68 @@ describe('through the binary: mine', () => {
     const std = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
     expect(std.requirements.some((r) => r.statement.startsWith('Never use em dashes'))).toBe(true);
     expect(std.reason).toMatch(/recurring: 2 complaints/);
+    // The report was about the previous standard: adding from it again is refused, not duplicated.
+    expect(run(data, proj, 'mine', '--skill', 'focus', '--add', '1', '--materiality', 'required', '--statement', 'x')).toMatch(/^EXIT:1[\s\S]*changed since that report/);
+    // And the gap, now answered, is not offered again.
+    expect(run(data, proj, 'mine', '--skill', 'focus')).not.toContain('A gap: 2 complaints');
   }, 120_000);
+});
+
+describe('final audit: what was closed', () => {
+  it('the floor scores an opening trope as worse, not a shorter opening as better', async () => {
+    const { orientedScore } = await import('../core/distinctiveness/measured.js');
+    const m = { observer: 'OPENING' as const, params: { avoid: ['imagine'] } };
+    const bad = 'Imagine this.\n\nThe body.\n\nThe end.';
+    const good = 'We shipped the release on Monday and it held under load all week long.\n\nThe body.\n\nThe end.';
+    expect(orientedScore(m, measure(bad, m))!).toBeLessThan(orientedScore(m, measure(good, m))!);
+  });
+  it('a heading can be recased without its capitals counting as lost names', async () => {
+    const { spanIntegrity } = await import('../core/loop/integrity.js');
+    expect(spanIntegrity('The Real Cost Of LLM Adoption', 'The real cost of LLM adoption', new Set(), false, new Set(), true).ok).toBe(true);
+    expect(spanIntegrity('The rule comes from the Outer Space Treaty.', 'The rule comes from a treaty.', new Set(), false).ok).toBe(false);
+    const v = { requirements: [aRequirement({ requirementId: 'h1', statement: 'Sentence case.', materiality: 'REQUIRED', measurement: { observer: 'HEADINGS', params: { case: ['SENTENCE'] } } })] } as unknown as StandardVersion;
+    const text = '# T\n\nIntro here.\n\n## The Real Cost Of Adoption\n\nBody.\n';
+    expect(planRepair(text, checkDraft('d', v, text, { guardClaims: false }))[0].recase).toBe(true);
+  });
+  it('setext headings, images and footnotes are not where a reader starts or stops', () => {
+    expect(headingsOf('Title\n=====\n\nIntro.\n\nSection\n-------\n\nBody.').map((h) => h.text)).toEqual(['Section']);
+    expect(headingsOf('# Title\n\n## Learn C#\n').map((h) => h.text)).toEqual(['Learn C#']);
+    expect(measure('Title\n=====\n\nImagine this.\n\nEnd.', { observer: 'OPENING', params: { avoid: ['imagine'] } }).verdict).toBe('VIOLATED');
+    expect(measure('![diagram](x.png)\n\nImagine this.\n\nEnd.', { observer: 'OPENING', params: { avoid: ['imagine'] } }).verdict).toBe('VIOLATED');
+    expect(measure('Start.\n\nUltimately, it works.\n\n[^1]: A note.', { observer: 'CLOSING', params: { avoid: ['ultimately'] } }).verdict).toBe('VIOLATED');
+  });
+  it('heading case is read from common words, not names or acronyms', () => {
+    expect(headingCase('How we use APIs and SDKs')).toBe('SENTENCE');
+    expect(headingCase('Use the Kubernetes API with Terraform')).toBe('SENTENCE');
+    expect(headingCase('How We Use APIs And SDKs')).toBe('TITLE');
+    expect(headingCase('WHAT WE LEARNED')).toBe('TITLE');
+  });
+  it('a trope and a length problem are both sent to be fixed', () => {
+    const r = measure("In today's world it is so. " + para('More words here to run long.', 12) + '\n\nEnd.', { observer: 'OPENING', params: { avoid: ["in today's"], maxWords: 20 } });
+    expect(r.spans.length).toBe(2);
+  });
+  it('clusters do not chain unrelated complaints, and "em" counts', () => {
+    const fb = (complaint: string, i: number): FeedbackRecord => ({ feedbackId: `f${i}`, invocationId: 'i', complaint, at: `2026-01-0${i}` });
+    const chain = clusterComplaints(['tone too formal', 'salesy tone', 'salesy headings', 'headings too long'].map(fb));
+    expect(chain.every((g) => g.length <= 2)).toBe(true);
+    expect(clusterComplaints([fb('uses em dashes everywhere', 1), fb('em dashes again in the intro', 2)])[0]).toHaveLength(2);
+  });
+  it('complaints a rule was already added for are not offered again; refusals are charged to their own rule', () => {
+    const fb = (complaint: string, id: string): FeedbackRecord => ({ feedbackId: id, invocationId: 'i', complaint, at: id });
+    expect(findRecurrences({ feedback: [fb('em dashes', 'a'), fb('em dashes again', 'b')], invocations: [], requirements: [],
+      proposals: [{ proposal: 'No em dashes.', at: 'z', accepted: true, feedbackIds: ['a', 'b'] }] })).toEqual([]);
+    const rules = [aRequirement({ requirementId: 'x1' }), aRequirement({ requirementId: 'x2' })];
+    const inv = { repair: { passes: 1, violatedBefore: ['x1', 'x2'], violatedAfter: [], originalOutputHash: '', why: '', integrityReverted: ['k'], revertedRules: ['x2'] } } as unknown as InvocationRecord;
+    const lost = findRecurrences({ feedback: [], invocations: [inv, inv], requirements: rules, proposals: [] }).filter((r) => r.kind === 'LOST_MEANING');
+    expect(lost.map((r) => r.kind === 'LOST_MEANING' && r.requirementId)).toEqual(['x2']);
+  });
+  it('an untested candidate blocks nothing in repair memory', async () => {
+    const { mayPropose, foldRepairs } = await import('../core/architecture/repair-memory.js');
+    const at = '2026-01-01';
+    const events = [{ kind: 'REPAIR_PROPOSED', repairId: 'r', skillName: 's', requirementId: 'p1', from: 'PROSE', to: 'SELF_CHECK', sourceSkillVersionHash: 'a',
+      candidateSkillVersionHash: 'b', evidenceBasis: { missContexts: 20, invocationIds: [] }, at },
+    { kind: 'REPAIR_SETTLED', repairId: 'r', outcome: 'REJECTED', evaluationBasis: { generations: 0, instrument: 'UNQUALIFIED_COMPARATOR', orderInvariant: null }, at, note: null }];
+    expect(mayPropose(foldRepairs(events), [], 'p1', 'PROSE', 'SELF_CHECK', { evidence: { missContexts: 1, invocationIds: [] },
+      evaluation: { generations: 1, instrument: 'HUMAN_EYE', orderInvariant: null } }).allowed).toBe(true);
+  });
 });
