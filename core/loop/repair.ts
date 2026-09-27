@@ -20,8 +20,9 @@ import { sentencesOf, paragraphsOf } from '../observers/registry.js';
 import type { VerifyReport } from '../observers/verify.js';
 import { spanIntegrity } from './integrity.js';
 
-/** Observers whose spans ARE the thing to remove: a banned term, a flagged hedge, a counted habit. */
-const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE']);
+/** Observers whose spans ARE the thing to remove or swap: a banned term, a flagged hedge, a counted
+ *  habit, an occurrence over a word rate, the competing word in a ratio. */
+const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE', 'RATIO']);
 
 export interface RepairTarget {
   readonly id: number;
@@ -115,15 +116,18 @@ export function repairPrompt(text: string, targets: readonly RepairTarget[]): st
 }
 
 export interface Reverted { readonly id: number; readonly lost: readonly string[] }
+/** A span the splice replaced, and what replaced it. */
+export interface Applied { readonly id: number; readonly before: string; readonly after: string }
 
 /**
  * Put the replacements back, from the end so offsets stay valid. A span with no replacement is kept,
  * and so is a span whose replacement lost a figure, a negation, a qualifier or a name the original
  * carried (see ./integrity.ts): the rule stays broken there, which is visible, rather than the claim
- * quietly changing, which is not. `reverted` collects which spans were kept and why.
+ * quietly changing, which is not. `reverted` collects which spans were kept and why; `applied` collects
+ * the spans that were replaced, before and after.
  */
 export function applyRepair(text: string, targets: readonly RepairTarget[], replacements: readonly { readonly id: number | string; readonly text: string }[],
-  reverted: Reverted[] = []): string {
+  reverted: Reverted[] = [], applied: Applied[] = []): string {
   // First answer per id wins; an id given as "2" is the span numbered 2.
   const byId = new Map<number, string>();
   for (const r of replacements) {
@@ -137,6 +141,7 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false);
     if (!integrity.ok) { reverted.push({ id: t.id, lost: integrity.lost }); continue; }
     out = out.slice(0, t.start) + rep.trim() + out.slice(t.end);
+    applied.push({ id: t.id, before: t.text, after: rep.trim() });
   }
   return out;
 }

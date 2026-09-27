@@ -9,7 +9,9 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { ruleKey } from '../state/rule-key.js';
+import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -53,6 +55,8 @@ export async function refineToStandard(
   // broken, accuracy gets ONE pass of its own, not charged to the `maxPasses` style passes. An accuracy
   // pass that makes no progress is dropped and the loop moves on to style: it never ends the loop.
   let accuracyTried = false; let stylePasses = 0;
+  const pairs: RepairPair[] = [];
+  const keyOf = new Map(v.requirements.map((r) => [r.requirementId, ruleKey(r)]));
   while (report.failed && stylePasses < maxPasses) {
     const accuracy = accuracyTried ? [] : planRepair(text, report, { phase: 'ACCURACY' });
     const accuracyPass = accuracy.length > 0 && planRepair(text, report, { phase: 'STYLE' }).length > 0;
@@ -79,8 +83,8 @@ export async function refineToStandard(
     passes += 1;
     if (!accuracyPass) stylePasses += 1;
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
-    const reverted: Reverted[] = [];
-    const next = applyRepair(text, targets, reps, reverted);
+    const reverted: Reverted[] = []; const applied: Applied[] = [];
+    const next = applyRepair(text, targets, reps, reverted, applied);
     for (const r of reverted) kept.push(`"${targets.find((t) => t.id === r.id)?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite lost ${r.lost.join(', ')}`);
     const after = next === text ? report : checkDraft(skill, v, next, opts);
     const verdict = next === text
@@ -92,9 +96,16 @@ export async function refineToStandard(
       break;
     }
     text = next; report = after;
+    // An accepted pass's style rewrites are examples of this standard in action. One rule per pair,
+    // and never an invented claim turned placeholder: that teaches nothing about writing.
+    for (const a of applied) {
+      const t = targets.find((x) => x.id === a.id);
+      const key = t && !t.specifics && t.requirementIds.length === 1 ? keyOf.get(t.requirementIds[0]) : undefined;
+      if (key && a.before !== a.after) pairs.push({ key, before: a.before, after: a.after });
+    }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
-      ...(kept.length ? { integrityReverted: kept } : {}), why } };
+      ...(kept.length ? { integrityReverted: kept } : {}), ...(pairs.length ? { pairs: pairs.slice(0, 12) } : {}), why } };
 }

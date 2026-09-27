@@ -7,11 +7,17 @@
 // proposal carries both numbers, and each is checked on held-out pieces before it is proposed at all:
 // a "rule" the author's own unseen work breaks is a rule against the author, and is dropped.
 //
+// Beyond named patterns, it compares proportions (./balance.ts): which of two competing words the author
+// reaches for ("but" or "however", "it's" or "it is"), connectives they lean on far more than the model,
+// words the model leans on that they barely use, and the mix of short and long sentences.
+//
 // Like every discovered rule, these are proposals. The person rules on them on the same screen.
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
-import { measure } from './registry.js';
+import { measure, findTerms } from './registry.js';
+import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
+import { quantile, sentencesOf } from './text.js';
 import type { MeasuredProposal } from './derive.js';
 
 interface Piece { readonly id: string; readonly text: string }
@@ -118,7 +124,126 @@ export function deriveContrastRules(
         `Burrows' Delta over ${ref.words.length} function words, from ${read.length} of your pieces and ${drafts.length} plain drafts by the model; ${recognised} of ${drafts.length} drafts, each left out in turn, were recognised as the model's`);
     }
   }
+  proposeProportions(authorTexts, drafts, propose);
   return out;
+}
+
+type Propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean) => void;
+
+/**
+ * Competing ways to say the same thing. The first list is the plain register, the second the one a
+ * model drifts to. Which one an author picks, and how consistently, is voice; neither is wrong.
+ */
+export const COMPETING: readonly { readonly a: readonly string[]; readonly b: readonly string[] }[] = [
+  { a: ['but'], b: ['however', 'nevertheless', 'nonetheless'] },
+  { a: ['so'], b: ['therefore', 'thus', 'hence', 'consequently'] },
+  { a: ['also'], b: ['moreover', 'furthermore', 'additionally', 'in addition'] },
+  { a: ['use', 'uses', 'used', 'using'], b: ['utilize', 'utilizes', 'utilise', 'leverage', 'leverages', 'leveraging'] },
+  { a: ['help', 'helps', 'helped'], b: ['facilitate', 'facilitates', 'facilitated'] },
+  { a: ['show', 'shows', 'showed'], b: ['demonstrate', 'demonstrates', 'demonstrated', 'showcase', 'showcases'] },
+  { a: ['it\'s', 'don\'t', 'isn\'t', 'can\'t', 'won\'t', 'doesn\'t', 'aren\'t', 'that\'s', 'we\'re', 'you\'re'],
+    b: ['it is', 'do not', 'is not', 'cannot', 'will not', 'does not', 'are not', 'that is', 'we are', 'you are'] },
+];
+
+/** Connectives and discourse words whose rate is a habit rather than a topic. */
+export const CONNECTIVES: readonly string[] = ['but', 'so', 'and', 'because', 'which', 'though', 'still', 'yet', 'actually', 'just', 'really', 'even', 'then', 'now', 'here', 'instead', 'maybe'];
+
+/** Words a model reaches for in plain prose that careful writers rarely use. Proposed as a cap only
+ *  from the words the model's own drafts used here, never as a list imposed from outside. */
+export const MODEL_VOCABULARY: readonly string[] = ['crucial', 'pivotal', 'landscape', 'robust', 'seamless', 'seamlessly', 'navigate',
+  'navigating', 'delve', 'foster', 'fostering', 'harness', 'empower', 'unlock', 'tapestry', 'realm', 'ever-evolving', 'game-changer',
+  'cutting-edge', 'streamline', 'holistic', 'nuanced', 'vital', 'ensure', 'ensuring', 'elevate', 'paramount', 'intricate', 'underscore', 'underscores'];
+
+/** The sentence-length bands a mix is counted over. */
+export const LENGTH_EDGES: readonly number[] = [8, 18, 30];
+
+function proposeProportions(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  const words = (t: string): number => proseWords(t);
+  const rate = (t: string, terms: readonly string[]): number => { const w = words(t); return w ? (findTerms(t, terms).length / w) * 1000 : 0; };
+  const meanRate = (texts: readonly string[], terms: readonly string[]): number => r1(texts.reduce((x, t) => x + rate(t, terms), 0) / Math.max(1, texts.length));
+  const pct = (x: number): string => `${Math.round(x * 100)}%`;
+  const say = (xs: readonly string[]): string => xs.slice(0, 4).map((x) => `"${x}"`).join('/') + (xs.length > 4 ? '…' : '');
+
+  // ── Which of two competing words ─────────────────────────────────────────────────────────────────
+  for (const { a, b } of COMPETING) {
+    const count = (texts: readonly string[]): { a: number; b: number } =>
+      texts.reduce((c, t) => ({ a: c.a + findTerms(t, a).length, b: c.b + findTerms(t, b).length }), { a: 0, b: 0 });
+    const au = count(authorTexts); const mo = count(drafts);
+    // Enough uses on both sides for a share to mean something: two per piece is not a habit.
+    if (au.a + au.b < 2 * RATIO_MIN_EVENTS || mo.a + mo.b < RATIO_MIN_EVENTS) continue;
+    const sa = au.a / (au.a + au.b); const sm = mo.a / (mo.a + mo.b);
+    if (Math.abs(sa - sm) < 0.3) continue;
+    // Per-piece shares, over the pieces where either occurs often enough, set the bound: the author's
+    // own least typical piece, less a margin, so their normal variation is never a violation.
+    const perPiece = authorTexts.map((t) => ({ x: findTerms(t, a).length, y: findTerms(t, b).length }))
+      .filter((c) => c.x + c.y >= RATIO_MIN_EVENTS).map((c) => c.x / (c.x + c.y));
+    const ev = `you: ${say(a)} in ${pct(sa)} of ${au.a + au.b} uses; the model on its own: ${pct(sm)} of ${mo.a + mo.b}`;
+    if (sa > sm) {
+      const min = Math.max(0.05, Math.round((Math.min(perPiece.length ? quantile(perPiece, 0.1) : sa, sa) - 0.1) * 20) / 20);
+      if (min <= sm) continue;
+      propose(`Prefer ${say(a)} to ${say(b)}: at least ${pct(min)} of the uses of either.`, 'GENERATIVE',
+        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], minShare: min } }, ev);
+    } else {
+      const max = Math.min(0.95, Math.round((Math.max(perPiece.length ? quantile(perPiece, 0.9) : sa, sa) + 0.1) * 20) / 20);
+      if (max >= sm) continue;
+      propose(`Prefer ${say(b)} to ${say(a)}: at most ${pct(max)} of the uses of either are ${say(a)}.`, 'GENERATIVE',
+        { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], maxShare: max } }, ev);
+    }
+  }
+
+  // ── Connectives the author leans on: one floor over the group ───────────────────────────────────
+  //
+  // One connective's rate swings widely from piece to piece (0.7 to 9.2 per 1,000 for "so" across one
+  // author's twelve posts), so a floor on it either fails the author or passes everything. The group of
+  // connectives they lean on is steadier, and is what a reader hears. The floor is the author's own
+  // least typical piece, and it is proposed only if it separates: most of the model's drafts fall below.
+  const group = CONNECTIVES.filter((c) => { const a = meanRate(authorTexts, [c]); const m = meanRate(drafts, [c]); return a >= 1 && a >= 1.5 * m + 0.3; });
+  if (group.length >= 2) {
+    const floor = r1(perPieceP(authorTexts, (t) => rate(t, group), 0.1) * 0.9);
+    const below = drafts.filter((t) => rate(t, group) < floor).length;
+    if (floor > 0 && below / drafts.length >= 0.6) {
+      propose(`Lean on my connectives (${say(group)}): at least ${floor} per 1,000 words together.`, 'GENERATIVE',
+        { observer: 'TERM_RATE', params: { terms: group, minPer1000: floor } },
+        `you: ${meanRate(authorTexts, group)} per 1,000 words for these; the model on its own: ${meanRate(drafts, group)}; ${below} of ${drafts.length} of its drafts fall below ${floor}`);
+    }
+  }
+
+  // ── Words the model leans on that the author barely uses: one cap over the ones it used here ────
+  const used = MODEL_VOCABULARY.filter((w) => meanRate(drafts, [w]) > 0);
+  if (used.length) {
+    const a = meanRate(authorTexts, used); const m = meanRate(drafts, used);
+    if (m >= 1 && m >= Math.max(3 * a, a + 1)) {
+      const cap = r1(Math.max(perPieceP(authorTexts, (t) => rate(t, used), 0.9) * 1.5, 0.5));
+      if (cap < m) {
+        propose(`Keep the model's stock vocabulary rare (${say(used)}): at most ${cap} per 1,000 words together.`, 'BOUNDARY',
+          { observer: 'TERM_RATE', params: { terms: used, maxPer1000: cap } },
+          `you: ${a} per 1,000 words for these; the model on its own: ${m} per 1,000`);
+      }
+    }
+  }
+
+  // ── The mix of sentence lengths ───────────────────────────────────────────────────────────────
+  const mixable = authorTexts.filter((t) => sentencesOf(t).length >= DISTRIBUTION_MIN_SENTENCES);
+  const draftMixable = drafts.filter((t) => sentencesOf(t).length >= DISTRIBUTION_MIN_SENTENCES);
+  if (mixable.length >= 3 && draftMixable.length >= 2) {
+    const mean = (mixes: number[][]): number[] => mixes[0].map((_, i) => mixes.reduce((x, m) => x + m[i], 0) / mixes.length);
+    const author = mean(mixable.map((t) => lengthMix(t, LENGTH_EDGES).shares));
+    const model = mean(draftMixable.map((t) => lengthMix(t, LENGTH_EDGES).shares));
+    const gap = mixDistance(author, model);
+    // Tolerance from the author's own spread: their least typical piece must pass.
+    const spread = quantile(mixable.map((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author)), 0.9);
+    const tolerance = Math.ceil(Math.max(0.1, spread) * 100) / 100;
+    // Proposed only if it separates: most of the model's drafts, each on its own, fall outside it.
+    const outside = draftMixable.filter((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author) > tolerance).length;
+    if (gap >= 0.1 && outside / draftMixable.length >= 0.6) {
+      const shares = author.map((x) => Math.round(x * 100) / 100);
+      shares[shares.length - 1] = Math.round((1 - shares.slice(0, -1).reduce((x, y) => x + y, 0)) * 100) / 100;
+      const show = (m: readonly number[]): string => m.map((x, i) => `${pct(x)} ${bandLabel(LENGTH_EDGES, i)}`).join(', ');
+      propose(`Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
+        { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
+        `you: ${show(author)}; the model on its own: ${show(model)} (${pct(gap)} of its sentences in a different band)`);
+    }
+  }
 }
 
 /** Topics for the model's plain drafts: the author's own titles, so the comparison is like for like. */

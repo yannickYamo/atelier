@@ -87,8 +87,15 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
         why: `${seen}; the model's plain drafts did not show this habit clearly, so it is shown and used to choose between drafts until you make it required` };
     }
-    if (p.measurement.observer === 'PATTERN_RATE' && typeof p.measurement.params.minPer1000 === 'number') {
+    const floorOnly = (p.measurement.observer === 'PATTERN_RATE' || p.measurement.observer === 'TERM_RATE')
+      && typeof p.measurement.params.minPer1000 === 'number' && typeof p.measurement.params.maxPer1000 !== 'number';
+    if (floorOnly) {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: `${seen}; a floor, so it guides draft selection rather than a rewrite` };
+    }
+    // A mix of sentence lengths is a property of the whole piece: rewriting sentence by sentence toward
+    // it is possible but blunt, so it is shown and used to choose between drafts until made required.
+    if (p.measurement.observer === 'DISTRIBUTION') {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2, why: `${seen}; a whole-piece mix, used to choose between drafts until you make it required` };
     }
     const lexicon = p.measurement.observer === 'LEXICON';
     const strong = independent && r >= 0.8 && !lexicon;
