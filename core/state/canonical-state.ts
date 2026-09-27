@@ -99,10 +99,11 @@ export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
  * proposes the target) or declared it themselves. The obligation layer's refusal to read
  * checkability off prose stands; this is the assertion path it always named and never had.
  */
-export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE';
+export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE'
+  | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE';
 export interface Measurement {
   readonly observer: ObserverId;
-  readonly params: Readonly<Record<string, number | readonly string[]>>;
+  readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
 }
 
 /** 1. What the expert supplied. Frozen at seal time; its hash is the run's identity. */
@@ -503,6 +504,8 @@ export interface InvocationRecord {
    * is what was delivered. Absent when nothing was checked or nothing needed fixing.
    */
   readonly repair?: RepairRecord;
+  /** when several drafts were written and one delivered: how many, and why that one */
+  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string };
 }
 
 export interface RepairRecord {

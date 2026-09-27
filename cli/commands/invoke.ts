@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { refineToStandard } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -125,11 +125,14 @@ export async function invoke(): Promise<void> {
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
   // What `--with` binds travels WITH the task, so the model has the material the rule needs, and the
   // record's input is what was actually served.
-  const material = boundMaterial();
+  const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
+  // The person's standing material for this skill (`atelier material`) and anything bound for this
+  // task (`--with`): the only places a first-person story or a cited figure in the output may come from.
+  const material = [...store.getMaterial(L), ...boundMaterial()];
+  const materialText = material.map((m) => m.text).join('\n\n');
   const task = material.length
     ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
     : asked;
-  const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
   // ── CAN THIS STANDARD BE EXECUTED TRUTHFULLY ON THIS INVOCATION ───────────────────────────
   //
   // BEFORE the model, before the budget, before anything is spent. A REQUIRED rule whose evidence is
@@ -174,14 +177,33 @@ export async function invoke(): Promise<void> {
   // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
   // and only those — at most twice, each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
+  const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced') };
   const refine = argv.includes('--no-repair') || !std ? null
     : async (draft: string) => {
-      const r = await refineToStandard(client, budget, name, std, draft);
+      const r = await refineToStandard(client, budget, name, std, draft, 2, checks);
       return { output: r.output, repair: r.repair };
     };
+  // ── SEVERAL DRAFTS, THE BEST BY COUNT ─────────────────────────────────────────────────────────
+  //
+  // `--drafts N` writes N drafts side by side and delivers the one that breaks the fewest REQUIRED
+  // rules, then sits closest to the author's style (when the standard carries a style distance), then
+  // breaks the fewest rules of any weight. A count picks it, never a judge's taste.
+  const nDrafts = numericFlag('--drafts', 1);
+  const select = std && nDrafts > 1 ? { n: nDrafts, choose: (drafts: readonly string[]) => {
+    const scored = drafts.map((d, i) => {
+      const r = checkDraft(name, std, d, checks);
+      const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
+      const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED').length;
+      const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
+      return { i, req, all, style };
+    });
+    scored.sort((a, b) => a.req - b.req || b.style - a.style || a.all - b.all);
+    const best = scored[0];
+    return { index: best.i, why: `${best.req} REQUIRED rule(s) broken, ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+  } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
-    flag('--task') ? 'FLAG' : 'POSITIONAL', refine);
+    flag('--task') ? 'FLAG' : 'POSITIONAL', refine, select);
 
   // A PROVIDER-SIDE VERSION FLIP UNDER AN UNCHANGED CONFIGURATION. Reported, never fatal: the user
   // changed nothing, and refusing to run would punish them for someone else's release.
@@ -196,6 +218,7 @@ export async function invoke(): Promise<void> {
   }
 
   console.log(`\n${rec.output}\n`);
+  if (rec.selection) console.log(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);
   if (rec.repair) {
     const r = rec.repair;
     console.log(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
