@@ -10,6 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
+import type { ContrastPair } from '../compiler/contrast-examples.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
@@ -112,6 +113,21 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+}
+
+/**
+ * The write-this-not-that pairs a skill ships (see ../compiler/contrast-examples.ts), chosen at build
+ * and kept through every rebuild so the package is the same whichever command renders it. `off` is the
+ * owner's `--contrast none`.
+ */
+export interface StoredContrast { readonly off: boolean; readonly pairs: readonly ContrastPair[] }
+export function getContrast(l: StoreLayout): StoredContrast {
+  const p = join(dirs(l).base, 'contrast.json');
+  return existsSync(p) ? readJson<StoredContrast>(p, { what: 'the contrast examples' }) : { off: false, pairs: [] };
+}
+export function setContrast(l: StoreLayout, c: StoredContrast): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'contrast.json'), JSON.stringify(c, null, 1));
 }
 
 /**

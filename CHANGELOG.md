@@ -8,6 +8,32 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Added (Phase 6: more of the standard measured)
+
+- **Proportion observers** (`core/observers/balance.ts`): `TERM_RATE` (a word list per 1,000 words,
+  with floors as well as caps), `RATIO` (which of two competing word lists, as a share) and
+  `DISTRIBUTION` (the sentence-length mix, as a total-variation distance from a target). Each can be
+  declared with `--measure`, and each points a repair at the spans to change.
+- **The contrast pass proposes proportions**: competing-word ratios, one floor over the connectives
+  the author leans on, one cap over the model's stock vocabulary, and the sentence-length mix. Each
+  is proposed only if the author's held-out work meets it and most of the model's drafts fail it. On
+  a real 20-post corpus the connective floor passed 5 of 5 held-out posts and failed every AI draft;
+  the mix did not separate there, and was not proposed.
+- **Rule keys** (`core/state/rule-key.ts`): a rule's identity across versions, derived from what it
+  counts (never its threshold) or its statement, and carried through rewording by `amend`. `--rule`
+  accepts an id, a key or a number from `atelier plan`; `plan` shows keys; `history` lists which rules
+  were added, removed or changed in each version.
+- **Write this, not that** (`core/compiler/contrast-examples.ts`): accepted repairs are recorded as
+  before/after pairs; `build` ships up to six that still teach the current standard as
+  `examples/contrast.md` (`--contrast none` to turn off).
+- **docs/MEASURED-RULES.md**: the reference for every observer, its `--measure` syntax, how rules are
+  proposed and what the loop guarantees.
+
+### Fixed (Phase 6)
+
+- `build --review` wrote the exemplar (and, since Phase 5, the document class) before stopping. Every
+  build-time choice is now held in memory and written only when the build commits.
+
 ### Changed (Phase 5)
 
 - **`fix` no longer installs on a count alone.** Its counted decision goes through `resolvePromotion`:

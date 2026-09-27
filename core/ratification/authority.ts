@@ -19,6 +19,7 @@
 // `assertAuthorityCeiling` runs on every outcome before it is returned, so a sixth surface added
 // later inherits the invariant by construction rather than by review.
 
+import { ruleKey } from '../state/rule-key.js';
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { assertAuthorityCeiling } from '../state/canonical-state.js';
 import type { RatificationDecision as LedgerDecision } from './decision-record.js';
@@ -191,6 +192,8 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
       ? validateObligation(id, { ...d, form: d.form ?? shown.realizationTolerance, shape: d.shape ?? shown.outputShape })
       : null;
     const requirement: Requirement = { ...shown,
+      // The amended rule is the same rule: its key is carried onto the new wording and check.
+      key: ruleKey(shown),
       ...(d.statement ? { statement: d.statement, authority: 'EXPERT_AUTHORED' as const,
         provenance: fromPublicSource ? shown.provenance : 'SUBSTANTIVELY_REWRITTEN' as const } : {}),
       // A weight declared by the owner is a ruling on the rule as it stands.

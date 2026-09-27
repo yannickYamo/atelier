@@ -5,6 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { normalizeClass } from '../../core/observers/doc-class.js';
+import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -106,9 +107,12 @@ export function build(nameArg?: string): void {
   //
   // Never a reserved piece: that work is held back to test the skill blind, and a skill that ships it
   // has read the answer key.
+  // Everything this block decides is held in memory and written only when the build commits, below, so
+  // `--review` writes nothing.
   const ex = flag('--exemplar');
+  let exemplar = store.getExemplar(L);
   if (ex !== undefined) {
-    if (ex.trim().toLowerCase() === 'none') store.setExemplar(L, null);
+    if (ex.trim().toLowerCase() === 'none') exemplar = null;
     else {
       if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
       const text = readFileSync(ex, 'utf8');
@@ -124,19 +128,28 @@ export function build(nameArg?: string): void {
         console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
           + 'The model will imitate it as it is.');
       }
-      store.setExemplar(L, text);
+      exemplar = { text };
       console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
     }
   }
   // The kind of document the standard measures; `verify`, `invoke` and the MCP tool refuse a text
   // declared as another kind. `none` clears it.
   const cls = flag('--class');
+  const docClass = cls === undefined ? store.getDocClass(L) : cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls);
   if (cls !== undefined) {
-    store.setDocClass(L, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
-    const now = store.getDocClass(L);
-    console.log(now ? `Document class: ${now}. A text declared as another class is refused by verify and invoke.` : 'Document class cleared.');
+    console.log(docClass ? `Document class: ${docClass}. A text declared as another class is refused by verify and invoke.` : 'Document class cleared.');
   }
-  const pkg0 = renderAgentSkill(v, arch, name, desc, store.getExemplar(L));
+  // Write-this-not-that pairs from the loop's own accepted repairs, re-verified against this standard.
+  // Chosen here, at build, and kept through every rebuild; `--contrast none` turns them off.
+  const contrastFlag = flag('--contrast');
+  if (contrastFlag !== undefined && contrastFlag.trim().toLowerCase() !== 'none' && contrastFlag.trim().toLowerCase() !== 'auto') {
+    die('--contrast takes none (ship no contrast examples) or auto (choose them from past repairs, the default)');
+  }
+  const contrastOff = contrastFlag === undefined ? store.getContrast(L).off : contrastFlag.trim().toLowerCase() === 'none';
+  const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v) };
+  const shipped = contrast.pairs;
+  if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
+  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
@@ -173,6 +186,7 @@ export function build(nameArg?: string): void {
     store.putLedger(L, v.standardVersionHash, s.ledger);
   }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
+  store.setExemplar(L, exemplar?.text ?? null); store.setDocClass(L, docClass); store.setContrast(L, contrast);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //

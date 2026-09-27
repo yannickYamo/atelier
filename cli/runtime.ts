@@ -10,10 +10,12 @@ import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync } from 'no
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
-import type { ExpertEvidence, Requirement } from '../core/state/canonical-state.js';
+import type { ExpertEvidence, Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -52,7 +54,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
-  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class',
+  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -778,3 +780,13 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
   }
   return () => `x${++n}`;
 };
+
+/**
+ * The contrast examples a rebuild serves: the pairs chosen at the last build, kept only where they
+ * still teach the standard being rendered. Every command that renders a package uses this, so the
+ * package is the same whichever of them renders it.
+ */
+export function servedContrast(L: store.StoreLayout, v: StandardVersion): ContrastPair[] {
+  const c = store.getContrast(L);
+  return c.off ? [] : contrastFor(c.pairs, v);
+}

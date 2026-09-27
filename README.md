@@ -155,7 +155,9 @@ phrases you never use) is measured rather than read. Then the model writes a few
 own topics, and Atelier counts what it does that you don't: em dashes where you write a spaced hyphen,
 five-word fragments, "that's not X, it's Y", "here's the thing", "quietly". Each wide gap is proposed as
 a rule with both numbers ("you: none in 42,605 words; the model on its own: 8.4 per 1,000"), and only
-if your own held-out work passes it. This is the part of a voice no reader, human or model, thinks to
+if your own held-out work passes it. Proportions count too: which of two competing words you reach for
+("but" or "however"), the connectives you lean on, the stock vocabulary the model leans on, and the mix
+of short and long sentences. Each is proposed only if most of the model's drafts fail it. This is the part of a voice no reader, human or model, thinks to
 write down, and the part a reader recognises as machine-written. **Nothing compiles until you accept**, and the
 same command continues wherever you stopped. Prefer to state your rules? `atelier skill "lead with the
 action, number the steps when there are steps"`.
@@ -196,6 +198,11 @@ rules do not count. The count goes through the same promotion gate whether you p
 pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong. If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession.
+
+Every rule has a key (`R-3f9a1c`) that survives new versions and rewording, so `--rule` takes the id,
+the key or the rule's number, and `atelier history` shows which rules moved in each version. Repairs
+the loop has made become "write this, not that" examples the next build ships with the skill. The
+reference for every measured rule, and what the loop guarantees, is [docs/MEASURED-RULES.md](docs/MEASURED-RULES.md).
 
 `atelier plan --skill <name>` shows every rule and the mechanism carrying it. `atelier --help` lists
 everything; the design is in [docs/](docs/ARCHITECTURE.md).
@@ -241,7 +248,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 94 files and 1373 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 95 files and 1398 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

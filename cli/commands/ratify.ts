@@ -365,20 +365,33 @@ export function parseMeasure(spec: string): Measurement {
   if (observer === 'STYLE_DISTANCE') die('--measure: STYLE_DISTANCE is computed from your corpus by discovery, not declared by hand.');
   const KEYS: Readonly<Record<string, readonly string[]>> = {
     SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
-    PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'] };
+    PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'],
+    TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
+    DISTRIBUTION: ['edges', 'shares', 'tolerance'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer']);
-  const params: Record<string, number | string[]> = observer === 'LEXICON'
+  // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
+  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator']);
+  // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
+  const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
+  const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'
     ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
-    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv): [string, number | string[]] => {
+    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv): [string, number | string[] | number[]] => {
       const eq = kv.indexOf('=');
       const k = kv.slice(0, eq).trim(); const v = kv.slice(eq + 1);
       if (eq === -1 || !k) die(`--measure: "${kv}" is not name=value`);
       if (KEYS[observer] && !KEYS[observer].includes(k)) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${k}"`);
       // `prefer` keeps its spaces: " - " is the point of it.
       if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
+      if (LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim().toLowerCase()).filter(Boolean)];
+      if (NUMBER_LIST_KEYS.has(k)) {
+        const xs = v.split('/').map((t) => t.trim());
+        if (!xs.every((t) => /^\d+(\.\d+)?$/.test(t))) die(`--measure: "${kv}" is not name=number/number/...`);
+        return [k, xs.map(Number)];
+      }
       if (!/^\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
       const n = Number(v);
-      const zeroOk = (observer === 'HEDGE_RATE' || observer === 'PATTERN_RATE') && n === 0;
+      // Zero is a real target for a rate cap and for a share bound; for a length it describes no text.
+      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE'].includes(observer) || k === 'minShare' || k === 'maxShare');
       if (n <= 0 && !zeroOk) die(`--measure: ${k} must be greater than zero`);
       return [k, n];
     }));

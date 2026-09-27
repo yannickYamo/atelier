@@ -16,6 +16,7 @@
 // from what the installed skill actually is.
 
 import * as store from '../../core/state/store.js';
+import { ruleKey } from '../../core/state/rule-key.js';
 import { DATA, die, skillArg, argv } from '../runtime.js';
 import { applicabilityModeOf, sourceModeOf, type Requirement } from '../../core/state/canonical-state.js';
 import { obligationsForStandard, coverageOf } from '../../core/contract/obligation.js';
@@ -64,19 +65,20 @@ export function plan(): void {
   console.log(`plan for ${name}  ·  SkillVersion ${active}  ·  StandardVersion ${v.standardVersionHash}`);
   console.log(`${v.requirements.length} requirement(s), authored ${sourceModeOf(v).toLowerCase()}\n`);
 
-  const w = { id: 4, src: 24, app: 15, car: 16, gate: 10 };
-  console.log(`${'id'.padEnd(w.id)} ${'source'.padEnd(w.src)} ${'applies'.padEnd(w.app)} `
+  const w = { n: 3, id: 4, key: 8, src: 24, app: 15, car: 16, gate: 10 };
+  // The number and the key both name a rule for `--rule`; the key is the one that survives a new version.
+  console.log(`${'#'.padEnd(w.n)} ${'id'.padEnd(w.id)} ${'key'.padEnd(w.key)} ${'source'.padEnd(w.src)} ${'applies'.padEnd(w.app)} `
     + `${'carrier'.padEnd(w.car)} ${'watched'.padEnd(w.gate)} reaches the model`);
-  console.log('-'.repeat(96));
+  console.log('-'.repeat(110));
 
-  for (const r of v.requirements) {
+  for (const [i, r] of v.requirements.entries()) {
     const m = rows.get(r.requirementId);
     // A requirement with no manifest row is the defect the manifest exists to expose: the
     // architecture claims to carry it and the emitted bytes do not mention it.
     const carrier = m?.carrier ?? 'NO MANIFEST ROW';
     const gate = m?.gateRole === 'ENFORCE' ? 'instructs' : m?.gateRole === 'OBSERVE' ? 'watched' : '—';
     const reaches = m?.emitted ? (m.artifact ?? 'yes') : 'nothing is served for it';
-    console.log(`${r.requirementId.padEnd(w.id)} ${SOURCE[r.provenance].padEnd(w.src)} `
+    console.log(`${String(i + 1).padEnd(w.n)} ${r.requirementId.padEnd(w.id)} ${ruleKey(r).padEnd(w.key)} ${SOURCE[r.provenance].padEnd(w.src)} `
       + `${(APPLICABILITY[applicabilityModeOf(r.appliesWhen)] ?? '?').padEnd(w.app)} `
       + `${carrier.padEnd(w.car)} ${gate.padEnd(w.gate)} ${reaches}`);
   }
