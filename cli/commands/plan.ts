@@ -17,6 +17,7 @@
 
 import * as store from '../../core/state/store.js';
 import { keysOf } from '../../core/state/rule-key.js';
+import { coverageOf as tasteCoverage, describeCoverage } from '../../core/taste/dimensions.js';
 import { DATA, die, skillArg, argv } from '../runtime.js';
 import { applicabilityModeOf, sourceModeOf, type Requirement } from '../../core/state/canonical-state.js';
 import { obligationsForStandard, coverageOf } from '../../core/contract/obligation.js';
@@ -86,6 +87,9 @@ export function plan(): void {
 
   // The conditions and the reasons are the two things a table cannot hold without becoming
   // unreadable, and they are the two a person most often wants next.
+  // What the standard covers, and what checks each part: a count, or the taste reader (docs/TASTE.md).
+  console.log(`\nWhat the standard covers:\n${describeCoverage(tasteCoverage(v.requirements))}`);
+
   const conditional = v.requirements.filter((r) => applicabilityModeOf(r.appliesWhen) === 'CONDITION_PRESENT');
   if (conditional.length) {
     console.log('\nconditions:');

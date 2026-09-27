@@ -16,8 +16,9 @@
 //                change counting only when it exceeds that rule's margin; the champion-dominated dropped;
 //                the Pareto front ranked; a few finalists kept.
 //   4. CONFIRM   finalists whose change is to a MEASURED rule are fired on the real model against the
-//                regression floor, and the promotion gate reads the result. A reader that has earned VETO
-//                against your own rulings may block a finalist on an unmeasured rule; it never clears one.
+//                regression floor, and the promotion gate reads the result. The taste reader, where your
+//                labels have earned it VETO (docs/TASTE.md), may block a finalist that misses those rules
+//                more often than the current version; it never clears one.
 //                A change to an unmeasured rule, or to whether the exemplar or examples ship, cannot be
 //                shown better by a count, so it is left for you: it never installs itself.
 //   5. ADOPT     only with --promote, only on AUTO_PROMOTE, and only one change per round.
@@ -38,9 +39,9 @@ import { renderAgentSkill, assertPortable } from '../../renderers/agent-skill/re
 import { genomeOf, mutationsOf, describeMutation, mutationKey, type Mutation } from '../../core/optimizer/genome.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure, type Attempt } from '../../core/optimizer/reflect.js';
 import { finalists, type Scores } from '../../core/optimizer/pareto.js';
-import { readerPermission, vetoedRules, type Reading } from '../../core/optimizer/veto.js';
-import { foldJudgements } from '../../core/fidelity/judgement.js';
-import { compareOnRule } from '../../core/fidelity/run-observer.js';
+import { readTaste, tasteRules } from '../../core/taste/reader.js';
+import { tastePermissions } from '../../core/taste/calibration.js';
+import { readerModel } from './taste.js';
 import { floorDimensions, perFire } from '../../core/distinctiveness/measured.js';
 import { contrastFor, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
@@ -178,9 +179,10 @@ export async function optimize(): Promise<void> {
 
   // ── 4. CONFIRM ─────────────────────────────────────────────────────────────────────────────────
   const { client, binding } = clientAndBinding('target');
-  const unmeasured = v.requirements.filter((r) => !r.measurement && r.authority !== 'EXPERT_REJECTED' && r.materiality === 'REQUIRED');
-  const reader = readerPermission(foldJudgements(events), new Set(unmeasured.map((r) => r.requirementId)));
-  console.log(`Reader: ${reader.permission} (${reader.why}).`);
+  // The taste reader (docs/TASTE.md), on the rules where your labels have earned it VETO: it may block a
+  // finalist that misses those rules more often than the current version. It can never clear one.
+  const taste = tastePermissions(tasteRules(v), events, readerModel());
+  console.log(`Taste reader: ${taste.veto.size ? `holds VETO on ${taste.veto.size} rule(s)` : 'holds no authority yet (atelier taste --calibrate)'}.`);
   let promoted: Candidate | null = null;
   const basis: EvaluationBasis = { generations: st.fires, instrument: 'QUALIFIED_OBSERVER', orderInvariant: null };
   for (const c of best) {
@@ -188,9 +190,9 @@ export async function optimize(): Promise<void> {
     try {
       check = await checkCandidate(L, name, v, active, c.skillVersionHash, c.target, budget, client, binding.requestedModel, runtime);
       authority = check.decision.authority; why = check.decision.why;
-      if (authority === 'AUTO_PROMOTE' && reader.permission === 'VETO') {
-        const vetoed = await readUnmeasured(L, unmeasured.slice(0, 3).map((r) => r.requirementId), v, active, c.skillVersionHash, floor.tasks, client, budget);
-        if (vetoed.length) { authority = 'AUTO_REJECT'; why = `the reader, which has earned VETO against your rulings, read it as worse on ${vetoed.join(', ')}`; }
+      if (authority === 'AUTO_PROMOTE' && taste.veto.size) {
+        const vetoed = await tasteRegression(L, v, active, c.skillVersionHash, floor.tasks, client, budget, taste.veto);
+        if (vetoed.length) { authority = 'AUTO_REJECT'; why = `the taste reader, which has earned VETO from your labels, reads it as missing ${vetoed.join(', ')} more often than the current version`; }
       }
     } catch (e) {
       const stop = (e as Error).message.split('\n')[0];
@@ -278,26 +280,27 @@ function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { ski
 const contrastAvailable = (L: store.StoreLayout, v: StandardVersion): ContrastPair[] => contrastFor(store.getContrast(L).pairs, v);
 
 /**
- * The veto-only reader on rules nothing measures: the candidate against the champion on a few of the
- * floor's tasks, swap-tested. Its readings are recorded; whether they block was decided before this ran,
- * by the permission it has earned.
+ * Does the candidate miss the taste rules the reader holds VETO on more often than the current version?
+ * Both are drafted once on a few of the floor's tasks and read; a rule the candidate misses on more tasks
+ * than the champion is returned. Only passages the reader quotes count (an omission has no evidence to
+ * check). The reader blocks; it never clears.
  */
-async function readUnmeasured(L: store.StoreLayout, ruleIds: readonly string[], v: StandardVersion, active: string, candidate: string,
-  tasks: readonly string[], client: ReturnType<typeof clientAndBinding>['client'], budget: Budget): Promise<string[]> {
-  const rules = v.requirements.filter((r) => ruleIds.includes(r.requirementId));
-  if (!rules.length) return [];
+async function tasteRegression(L: store.StoreLayout, v: StandardVersion, active: string, candidate: string, tasks: readonly string[],
+  client: ReturnType<typeof clientAndBinding>['client'], budget: Budget, veto: ReadonlySet<string>): Promise<string[]> {
   const sample = tasks.slice(0, 3);
   const [champ, cand] = [await fire(L, active, sample, 1, client, budget), await fire(L, candidate, sample, 1, client, budget)];
-  const readings: Reading[] = [];
-  for (const r of rules) {
-    for (const [i, task] of sample.entries()) {
-      const c = await compareOnRule(client, budget, sha(task), task, r.statement, champ.runs[i].outputs[0], cand.runs[i].outputs[0]);
-      readings.push({ requirementId: r.requirementId, result: c.result, orderInvariant: c.orderInvariant });
-      store.appendEvent(L, { kind: 'COMPARISON_OBSERVED', requirementId: r.requirementId, championSkillVersionHash: active,
-        candidateSkillVersionHash: candidate, result: c.result, orderInvariant: c.orderInvariant, lengthRatio: c.lengthRatio, at: new Date().toISOString() });
+  const reader = clientFor(readerModel());
+  const misses = async (runs: typeof champ.runs): Promise<Map<string, number>> => {
+    const n = new Map<string, number>();
+    for (const r of runs) {
+      for (const x of await readTaste(reader, budget, v, r.outputs[0], r.task)) {
+        if (x.verdict === 'MISSED' && x.kind === 'PRESENCE' && veto.has(x.key)) n.set(x.requirementId, (n.get(x.requirementId) ?? 0) + 1);
+      }
     }
-  }
-  return vetoedRules(readings);
+    return n;
+  };
+  const [a, b] = [await misses(champ.runs), await misses(cand.runs)];
+  return [...b.entries()].filter(([id, k]) => k > (a.get(id) ?? 0)).map(([id]) => id);
 }
 
 function settle(L: store.StoreLayout, c: Candidate, outcome: 'PROMOTED' | 'REJECTED', evaluationBasis: EvaluationBasis, note: string): void {

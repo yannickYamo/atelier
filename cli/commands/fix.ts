@@ -467,9 +467,14 @@ async function settleBlindPick(
     verdict: pick === 'same' ? 'EQUAL' : choseCandidate ? 'CANDIDATE_PREFERRED' : 'CHAMPION_PREFERRED',
     producer: decidedBy === 'HUMAN' ? 'expert-blind-ab' : 'ratified-measurement', producerVersion: '1', authority: decidedBy,
     evidence: { order: championFirst ? 'champion-first' : 'candidate-first', complaint, champion: inv.invocationId }, at });
-  store.appendEvent(L, { kind: 'JUDGEMENT_RECORDED', requirementId: move.requirementId,
-    championSkillVersionHash: inv.skillVersionHash, candidateSkillVersionHash: candidate.skillVersionHash,
-    choice: choseCandidate ? 'CANDIDATE' : 'CHAMPION', rationale: complaint, at });
+  // THE JUDGEMENT LEDGER HOLDS A PERSON'S PREFERENCES ONLY. A pick the count made is not a person's, and
+  // "same" is not a preference for the current version: recording either would teach any instrument
+  // calibrated against this ledger that you said something you did not.
+  if (decidedBy === 'HUMAN' && pick !== 'same') {
+    store.appendEvent(L, { kind: 'JUDGEMENT_RECORDED', requirementId: move.requirementId,
+      championSkillVersionHash: inv.skillVersionHash, candidateSkillVersionHash: candidate.skillVersionHash,
+      choice: choseCandidate ? 'CANDIDATE' : 'CHAMPION', rationale: complaint, at });
+  }
 
   if (!choseCandidate) {
     store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'REJECTED',
