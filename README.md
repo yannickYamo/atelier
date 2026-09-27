@@ -192,7 +192,8 @@ it is an implementation problem: Atelier tries a different way of carrying the r
 and shows you both, blind. When the rule is measured, a count that says the new version is worse
 rejects it on its own; a count that says it is better is shown to you as the count's view, and the new
 version is installed only when you pick it, because one draft on one input cannot speak for what the
-rules do not count. Every automatic decision goes through the same promotion gate. If your standard does not cover it, that is an authority question and it is yours alone:
+rules do not count. The count goes through the same promotion gate whether you pick or it does: a
+pick of a version the count says is worse is refused, and the rule is amended instead if it is wrong. If your standard does not cover it, that is an authority question and it is yours alone:
 add as required, add as preferred, or do not add. `atelier amend` rewords, reweighs or re-targets a
 rule as a recorded supersession.
 
@@ -240,7 +241,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 94 files and 1365 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 94 files and 1373 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing
