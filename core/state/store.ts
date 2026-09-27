@@ -11,6 +11,7 @@
 // standards and events.
 
 import type { ContrastPair } from '../compiler/contrast-examples.js';
+import type { Recurrence } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
@@ -116,6 +117,16 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   writeAtomic(p, text);
 }
 
+/** The last `atelier mine` report, so `--add <n>` names the item the owner read. */
+export function getMining(l: StoreLayout): { readonly at: string; readonly items: readonly Recurrence[] } | null {
+  const p = join(dirs(l).base, 'mine.json');
+  return existsSync(p) ? readJson<{ at: string; items: Recurrence[] }>(p, { what: 'the last mining report' }) : null;
+}
+export function setMining(l: StoreLayout, report: { readonly at: string; readonly items: readonly Recurrence[] }): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'mine.json'), JSON.stringify(report, null, 1));
+}
+
 /**
  * THE REGRESSION FLOOR's state for a skill (see ../distinctiveness/measured.ts): the contract (which
  * rules it watches, the margin on each, ENFORCE or OBSERVE), the tasks it is measured on, and the
@@ -128,7 +139,9 @@ export interface FloorState {
   /** `contractHash` names everything the rate is a rate of (see qualificationKey in cli/commands/floor.ts) */
   readonly qualification: (FloorQualification & { readonly contractHash: string; readonly fires: number }) | null;
   /** A/A evidence so far, on the contract, tasks and model it was gathered under; runs accumulate */
-  readonly aa?: { readonly contractHash: string; readonly falseAlarms: number; readonly trials: number };
+  readonly aa?: { readonly contractHash: string; readonly falseAlarms: number; readonly trials: number;
+    /** planted regressions of PLANTED_MARGINS × the margin, and how many the floor caught */
+    readonly plantedHits?: number; readonly planted?: number };
 }
 const floorDir = (l: StoreLayout): string => join(dirs(l).base, 'floor');
 export function getFloor(l: StoreLayout): FloorState {

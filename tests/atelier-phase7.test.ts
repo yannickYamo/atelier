@@ -114,10 +114,14 @@ describe('qualification is an exact bound on false alarms from A/A runs', () => 
     const f: FrozenBaselineEntry = { clusterId: 'c', fixtureContextId: 't', nGen: 3, meanScores: {}, perFireScores: { a: [0, 0, 0] } };
     expect(evaluateTask({ a: [-9, -9, -9] }, f, c, new Set(['a'])).composite).toBe('INCONCLUSIVE');
   });
-  it('qualified only under the bound and over at least three tasks', () => {
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60 }, 3, 'e').qualification).not.toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 0, trials: 60 }, 2, 'e').qualification).toBeNull();
-    expect(qualifyFromAA({ falseAlarms: 2, trials: 60 }, 10, 'e').qualification).toBeNull();
+  it('qualified only under the false-alarm bound, over at least three tasks, and sensitive to a planted regression', () => {
+    const sensitive = { plantedHits: 20, planted: 20 };
+    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, ...sensitive }, 3, 'e').qualification).not.toBeNull();
+    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, ...sensitive }, 2, 'e').qualification).toBeNull();
+    expect(qualifyFromAA({ falseAlarms: 2, trials: 60, ...sensitive }, 10, 'e').qualification).toBeNull();
+    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, plantedHits: 10, planted: 20 }, 10, 'e').qualification, 'a floor that misses half of real regressions qualified').toBeNull();
+    expect(qualifyFromAA({ falseAlarms: 0, trials: 60, plantedHits: 5, planted: 5 }, 10, 'e').qualification, 'sensitivity from five plantings').toBeNull();
+    expect(qualifyFromAA({ falseAlarms: 0, trials: 60 }, 10, 'e').qualification).toBeNull();
   });
 });
 

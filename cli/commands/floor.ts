@@ -27,7 +27,7 @@ import * as store from '../../core/state/store.js';
 import { resolveRule } from '../../core/state/rule-key.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { floorDimensions, perFire, proposeMargins, buildContract, evaluateTask, compositeAcross, targetComparison,
-  qualifyFromAA, countAA, type FloorDimension } from '../../core/distinctiveness/measured.js';
+  qualifyFromAA, countAA, plantedDetections, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, type FloorDimension } from '../../core/distinctiveness/measured.js';
 import { gateState, type FrozenBaselineEntry, type QualityFloorResult, type FloorVerdict,
   type DistinctivenessState } from '../../core/distinctiveness/floor.js';
 import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
@@ -59,8 +59,10 @@ export const runtimeIdentity = (): string =>
  * only while it still matches, so a new version, standard, contract, task set, runtime or draft count
  * voids it.
  */
-const qualificationKey = (f: store.FloorState, active: string, standardVersionHash: string, runtime: string, fires: number): string =>
-  sha(JSON.stringify({ contract: f.contract, tasks: f.tasks, active, standardVersionHash, runtime, fires }));
+const qualificationKey = (L: store.StoreLayout, f: store.FloorState, active: string, standardVersionHash: string, runtime: string, fires: number): string =>
+  sha(JSON.stringify({ contract: f.contract, tasks: f.tasks, active, standardVersionHash, runtime, fires,
+    // The frozen baseline a check compares against is part of what a verdict means: re-freeze, re-earn.
+    baseline: sha(JSON.stringify(store.getBaseline(L, active) ?? null)) }));
 
 interface Ctx { readonly L: store.StoreLayout; readonly name: string; readonly v: StandardVersion; readonly active: string; readonly dims: FloorDimension[] }
 
@@ -78,7 +80,7 @@ export function floorStateFor(L: store.StoreLayout, active: string, runtime: str
   const f = store.getFloor(L);
   const sv = store.getSkillVersion(L, active);
   const fires = f.qualification?.fires ?? DEFAULT_FIRES;
-  const valid = Boolean(f.qualification && sv && f.qualification.contractHash === qualificationKey(f, active, sv.standardVersionHash, runtime, fires));
+  const valid = Boolean(f.qualification && sv && f.qualification.contractHash === qualificationKey(L, f, active, sv.standardVersionHash, runtime, fires));
   const g = gateState(f.contract, store.getBaseline(L, active) !== null, valid ? f.qualification : null);
   const why = f.qualification && !valid
     ? `${g.why}; the last qualification was earned on a different version, standard, contract, task set, runtime or draft count`
@@ -282,22 +284,27 @@ export async function floor(): Promise<void> {
     console.log(`A/A: firing the same version ${2 * fires} time(s) on each task and comparing one half with the other…`);
     const { runs } = await fire(L, active, f.tasks, 2 * fires, client, budgetFor(f.tasks.length * 2 * fires));
     // Both halves are fresh in every run, so runs are independent of each other; the unit is the task.
-    const results = runs.map((r) => {
-      const [a] = freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(0, fires) }]);
-      const [b] = freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(fires) }]);
-      return evaluateTask(b.perFireScores ?? {}, a, f.contract!);
-    });
+    const halves = runs.map((r) => ({
+      a: freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(0, fires) }])[0],
+      b: freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(fires) }])[0] }));
+    const results = halves.map(({ a, b }) => evaluateTask(b.perFireScores ?? {}, a, f.contract!));
+    const planted = halves.reduce((t, { a, b }) => { const x = plantedDetections(b.perFireScores ?? {}, a, f.contract!); return { hits: t.hits + x.hits, trials: t.trials + x.trials }; }, { hits: 0, trials: 0 });
     // Runs on the same situation accumulate; change anything the rate is a rate of and the count restarts.
-    const key = qualificationKey(f, active, v.standardVersionHash, runtime, fires);
+    const key = qualificationKey(L, f, active, v.standardVersionHash, runtime, fires);
     const now = countAA(results);
-    const prior = f.aa?.contractHash === key ? f.aa : { falseAlarms: 0, trials: 0 };
-    const tally = { falseAlarms: prior.falseAlarms + now.falseAlarms, trials: prior.trials + now.trials };
+    const prior = f.aa?.contractHash === key ? f.aa : { falseAlarms: 0, trials: 0, plantedHits: 0, planted: 0 };
+    const tally = { falseAlarms: prior.falseAlarms + now.falseAlarms, trials: prior.trials + now.trials,
+      plantedHits: (prior.plantedHits ?? 0) + planted.hits, planted: (prior.planted ?? 0) + planted.trials };
     const q = qualifyFromAA(tally, f.tasks.length, `${name}: ${Object.keys(f.contract!.dimensions).length} measured dimension(s), ${f.tasks.length} task(s), ${fires} draft(s) per side, under ${runtime}`);
-    console.log(`This run: ${now.falseAlarms} false alarm(s) in ${now.trials} resolved task comparison(s) (${results.length - now.trials} unresolved). So far: ${tally.falseAlarms} in ${tally.trials}; upper 95% bound ${(q.upper95 * 100).toFixed(1)}%.`);
+    console.log(`This run: ${now.falseAlarms} false alarm(s) in ${now.trials} resolved task comparison(s) (${results.length - now.trials} unresolved); `
+      + `caught ${planted.hits} of ${planted.trials} planted regression(s) of ${PLANTED_MARGINS} margins.`);
+    console.log(`So far: ${tally.falseAlarms} false alarm(s) in ${tally.trials} (upper 95% bound ${(q.upper95 * 100).toFixed(1)}%); `
+      + `sensitivity ${q.sensitivity === null ? 'unmeasured' : `${Math.round(q.sensitivity * 100)}% of ${tally.planted}`}.`);
     f = { ...f, aa: { contractHash: key, ...tally }, qualification: q.qualification ? { ...q.qualification, contractHash: key, fires } : null };
     store.setFloor(L, f);
-    console.log(q.qualification ? 'The floor is EARNED for this version, standard, contract, task set, runtime and draft count.'
-      : `Not qualified yet: the bound must be at most 5% over at least ${MIN_TASKS} tasks. Run --qualify again to add evidence, or add tasks.`);
+    console.log(q.qualification ? 'The floor is EARNED for this version, standard, contract, baseline, task set, runtime and draft count.'
+      : `Not qualified yet: false alarms at most 5% (upper bound) over at least ${MIN_TASKS} tasks, and at least ${Math.round(MIN_SENSITIVITY * 100)}% of ${MIN_PLANTED}+ planted regressions caught. `
+        + 'Run --qualify again to add evidence, add tasks or drafts (--fires), or widen margins that are tighter than your writing varies.');
   }
 
   // ── Check a candidate ───────────────────────────────────────────────────────────────────────
@@ -334,7 +341,7 @@ function describeFloor(L: store.StoreLayout, name: string, active: string, dims:
   console.log(`  state: ${st.state} — ${st.why}`);
   console.log(`  tasks: ${f.tasks.length}${f.tasks.length < MIN_TASKS ? ` (needs ${MIN_TASKS})` : ''}`);
   console.log(`  baseline: ${store.getBaseline(L, active) ? `frozen for ${active}` : 'none for the active version'}`);
-  if (f.aa) console.log(`  A/A so far: ${f.aa.falseAlarms} false alarm(s) in ${f.aa.trials} resolved task comparison(s)`);
+  if (f.aa) console.log(`  A/A so far: ${f.aa.falseAlarms} false alarm(s) in ${f.aa.trials} resolved task comparison(s); caught ${f.aa.plantedHits ?? 0} of ${f.aa.planted ?? 0} planted regressions`);
   const statement = new Map(dims.map((d) => [d.key, d.rule.statement]));
   const rows = Object.entries(f.contract?.dimensions ?? {});
   console.log(`  dimensions: ${rows.length} of ${dims.length} measured rule(s)`);

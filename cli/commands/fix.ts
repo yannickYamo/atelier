@@ -29,7 +29,6 @@ import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import * as store from '../../core/state/store.js';
 import { readJson } from '../../core/state/read-json.js';
-import { compileArchitecture } from '../../core/architecture/compile.js';
 import { applyEscalation, type ServedMissEvidence } from '../../core/architecture/escalate.js';
 import { proposeReplacement, assertStandardUnchanged, eligibleCarriers } from '../../core/architecture/replace-carrier.js';
 import { foldRepairs, foldProhibitions, mayPropose, repairKey, WEAKEST_EVALUATION,
@@ -37,13 +36,12 @@ import { foldRepairs, foldProhibitions, mayPropose, repairKey, WEAKEST_EVALUATIO
 import type { Carrier } from '../../core/architecture/compile.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
-import { decide } from '../../core/ratification/authority.js';
-import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
-import { authorityStateOf, assertSupersessionRecorded, type Requirement, type StandardVersion, type InvocationRecord } from '../../core/state/canonical-state.js';
+import type { StandardVersion, InvocationRecord } from '../../core/state/canonical-state.js';
 import type { InstallablePackage } from '../../adapters/host-adapter.js';
 import { bindingHash } from '../../core/runtime/binding.js';
 import { spend, type Budget } from '../../core/inference/client.js';
 import { runOnce } from './improve.js';
+import { addRuleToActive } from './addition.js';
 import { resolveServedVersion } from './invoke.js';
 import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, type CandidateCheck } from './floor.js';
 import { keysOf } from '../../core/state/rule-key.js';
@@ -154,53 +152,14 @@ export async function fix(): Promise<void> {
     }
     if (answer !== 'required' && answer !== 'preferred') die(`--add takes required|preferred; got "${answer}".`);
 
-    // AN ADDITION LANDS ON THE ACTIVE STANDARD, NOT ON THE ONE THE COMPLAINT RAN AGAINST.
-    //
-    // A repair must be about the version that actually ran, so that branch is bound to
-    // `ranStandard` and dies if the active pointer has moved. An addition is the opposite case: two
-    // complaints about the same run are two rules, and minting each from the run's standard meant the
-    // second one silently dropped the first — a user added "never use em dashes", then added a grammar
-    // rule from the same invocation, and the installed skill no longer mentioned em dashes. The
-    // complaint's provenance is preserved in `reason`; the base is whatever the owner holds now.
+    // AN ADDITION LANDS ON THE ACTIVE STANDARD, NOT ON THE ONE THE COMPLAINT RAN AGAINST (see addition.ts).
     const activeNow = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
-    const baseStandard = (activeNow && store.getStandard(L, activeNow.standardVersionHash)) ?? ranStandard;
-    if (baseStandard.standardVersionHash !== ranStandard.standardVersionHash) {
-      console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${baseStandard.standardVersionHash}); the addition goes on the current one.`);
+    if (activeNow && activeNow.standardVersionHash !== ranStandard.standardVersionHash) {
+      console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${activeNow.standardVersionHash}); the addition goes on the current one.`);
     }
-    // The machine proposed the words; the person just made them binding — that is ratification of a
-    // discovered rule, never authorship, and `decide` records it exactly that way.
-    let n = 0; for (const r of baseStandard.requirements) { const m = /^x(\d+)$/.exec(r.requirementId); if (m) n = Math.max(n, Number(m[1])); }
-    const base: Requirement = { requirementId: `x${n + 1}`, statement: proposal, appliesWhen: 'GENERAL',
-      kind: /\bnever\b|\bnot\b|\bavoid\b/i.test(proposal) ? 'BOUNDARY' : 'GENERATIVE',
-      authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED', evidence: null, evidenceItemId: null,
-      wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null };
-    const outcome = decide(base, { verb: 'APPROVE', materiality: answer.toUpperCase() });
-    const requirements = [...baseStandard.requirements, outcome.requirement];
-    const body = { evidenceId: baseStandard.evidenceId, workType: baseStandard.workType, requirements };
-    const next: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
-      authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
-      supersedes: baseStandard.standardVersionHash, reason: complaint };
-    assertSupersessionRecorded(next);
-    const arch = compileArchitecture(next);
-    const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
-    const desc = activeSv?.description ?? defaultDescription(next.workType);
-    const carried = carriedFrom(L, activeSv?.skillVersionHash ?? null, next);
-    const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast);
-    assertPortable(pkg);
-    const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
-      standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
-      materializedHash: pkg.packageHash, builtAt: next.mintedAt, description: desc };
-    store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch);
-    store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
-    const inst = pickHost().install(pkg, projectDir());
-    { const moved = describeBackup(inst); if (moved) console.log(moved); }
-    if (!inst.ok) return void die(`install failed: ${inst.reason}`);
-    const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([base]), records: [] },
-      base, outcome.ledgerDecision, { note: complaint, decidedAt: next.mintedAt }), next.standardVersionHash);
-    store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
-    store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: next.mintedAt, skillVersionHash: skill.skillVersionHash, proposal, accepted: true });
-    console.log(`Added as ${answer.toUpperCase()} — ${outcome.requirement.requirementId} ${answer === 'required' ? 'instructs' : 'is shown'}.`);
-    console.log(`StandardVersion ${next.standardVersionHash} supersedes ${baseStandard.standardVersionHash}  (reason: your complaint, on file)`);
+    const added = addRuleToActive(L, name, proposal, answer === 'required' ? 'REQUIRED' : 'PREFERRED', complaint, ranStandard);
+    console.log(`Added as ${answer.toUpperCase()} — ${added.requirement.requirementId} ${answer === 'required' ? 'instructs' : 'is shown'}.`);
+    console.log(`StandardVersion ${added.standard.standardVersionHash} supersedes ${added.supersedes}  (reason: your complaint, on file)`);
     console.log(`Rebuilt and installed: ${pickHost().invocationHint(name).trim()} now serves it.`);
     return;
   }
@@ -266,8 +225,16 @@ export async function fix(): Promise<void> {
   if (pendingRepair) {
     const cand = store.getSkillVersion(L, pendingRepair.candidateSkillVersionHash)
       ?? die(`pending candidate ${pendingRepair.candidateSkillVersionHash} missing from the store.`);
-    const candInv = store.listInvocations(L).find((r) => r.skillVersionHash === cand.skillVersionHash)
-      ?? die(`pending candidate ${cand.skillVersionHash} has no recorded run — reject it and start over:\n  atelier reject --skill ${name} --candidate ${cand.skillVersionHash} --why "stale"`);
+    const candInv = store.listInvocations(L).find((r) => r.skillVersionHash === cand.skillVersionHash);
+    // A candidate `atelier optimize` built and left for a person has no run of this task to show beside
+    // yours: it was measured on the floor's tasks. It is decided where it was made.
+    if (!candInv) {
+      console.log(`A candidate for ${pendingRepair.requirementId} (${pendingRepair.from} → ${pendingRepair.to}) is already waiting for your decision, `
+        + `built by ${(pendingRepair as { origin?: string }).origin === 'OPTIMIZE' ? 'atelier optimize' : 'an earlier run'}. Decide it first:`);
+      console.log(`  atelier promote --skill ${name} --candidate ${cand.skillVersionHash} --why "<reason>"`);
+      console.log(`  atelier reject  --skill ${name} --candidate ${cand.skillVersionHash} --why "<reason>"`);
+      return;
+    }
     const candPkg = store.getPackage(L, cand.materializedHash) ?? die(`package ${cand.materializedHash} missing.`);
     await settleBlindPick(L, name, inv, cand, candInv, candPkg,
       { requirementId: pendingRepair.requirementId, from: pendingRepair.from, to: pendingRepair.to },
@@ -300,8 +267,14 @@ export async function fix(): Promise<void> {
   const evidence: EvidenceBasis = {
     missContexts: new Set([inv.inputHash, ...misses.map((r) => r.inputHash)]).size,
     invocationIds: [...new Set([inv.invocationId, ...misses.map((r) => r.invocationId)])] };
-  const may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to,
-    { evidence, evaluation: WEAKEST_EVALUATION }, scope);
+  let may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to, { evidence, evaluation: WEAKEST_EVALUATION }, scope);
+  // Reflection chose a move repair memory refuses: the fixed ordering's choice, which was checked for
+  // legality the same way, stands instead.
+  if (!may.allowed && proposer === 'REFLECTIVE') {
+    console.log(`Reflection's choice is not available (${may.reason.split('.')[0]}); the fixed ordering chooses.`);
+    op = fixed; proposer = 'FIXED_ORDER';
+    may = mayPropose(repairs, prohibitions, op.requirementId, op.from, op.to, { evidence, evaluation: WEAKEST_EVALUATION }, scope);
+  }
   if (!may.allowed) { console.log(`No repair proposed — ${may.reason}`); return; }
 
   const nextArch = applyEscalation(ranArch, op, sha(JSON.stringify(op) + ranArch.architectureHash));

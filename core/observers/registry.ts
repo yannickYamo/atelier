@@ -12,11 +12,12 @@
 //
 // What these buy is the part of a house style that is measurable — banned words, substitution
 // tables, sentence and paragraph length, hedging, the rates and proportions in ./balance.ts, the
-// model's habits in ./style.ts — checked on every output, with the exact span that
+// model's habits in ./style.ts, the opening, close and headings in ./structure.ts — checked on every output, with the exact span that
 // broke the rule, so a repair can rewrite that span and nothing else.
 
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION } from './balance.js';
+import { OPENING, CLOSING, HEADINGS } from './structure.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
 
 export interface Span { readonly start: number; readonly end: number; readonly text: string; readonly why: string }
@@ -197,6 +198,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   },
   // ── Proportions: rates with floors, ratios between word lists, the mix of sentence lengths ────
   TERM_RATE, RATIO, DISTRIBUTION,
+  // ── Position: the opening, the close, the headings (see ./structure.ts) ────────────────────────
+  OPENING, CLOSING, HEADINGS,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];

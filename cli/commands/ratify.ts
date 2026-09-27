@@ -367,10 +367,12 @@ export function parseMeasure(spec: string): Measurement {
     SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
     PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'],
     TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
-    DISTRIBUTION: ['edges', 'shares', 'tolerance'] };
-  const TEXT_KEYS = new Set(['pattern', 'prefer']);
+    DISTRIBUTION: ['edges', 'shares', 'tolerance'],
+    OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
+    HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'] };
+  const TEXT_KEYS = new Set(['pattern', 'prefer', 'case']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
-  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator']);
+  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid']);
   // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
   const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
   const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'
@@ -391,7 +393,7 @@ export function parseMeasure(spec: string): Measurement {
       if (!/^\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
       const n = Number(v);
       // Zero is a real target for a rate cap and for a share bound; for a length it describes no text.
-      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE'].includes(observer) || k === 'minShare' || k === 'maxShare');
+      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE'].includes(observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k));
       if (n <= 0 && !zeroOk) die(`--measure: ${k} must be greater than zero`);
       return [k, n];
     }));
