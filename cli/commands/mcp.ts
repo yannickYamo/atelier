@@ -18,7 +18,9 @@ import { createInterface } from 'node:readline';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
-import { verifyText, describeVerify } from '../../core/observers/verify.js';
+import { describeVerify } from '../../core/observers/verify.js';
+import { checkDraft } from '../../core/loop/run-repair.js';
+import { checkClass } from '../../core/observers/doc-class.js';
 import { observerFor } from '../../core/observers/registry.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
@@ -32,8 +34,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'atelier_rules', description: "A skill's ratified standard: every rule, its weight (REQUIRED instructs), and how it is checked.",
     inputSchema: { type: 'object', properties: { skill: { type: 'string' } }, required: ['skill'], additionalProperties: false } },
-  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill. Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names.',
-    inputSchema: { type: 'object', properties: { skill: { type: 'string' }, text: { type: 'string' } }, required: ['skill', 'text'], additionalProperties: false } },
+  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for first-person stories or figures presented as findings that are not in the skill\'s material (UNSOURCED). Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; replace an UNSOURCED claim with a placeholder, never another invented one.',
+    inputSchema: { type: 'object', properties: { skill: { type: 'string' }, text: { type: 'string' },
+      class: { type: 'string', description: 'the kind of document the text is ("blog-post", "support-reply"); refused when the skill measures another kind' },
+      material: { type: 'string', description: 'notes, figures or sources the text may draw on, beyond the skill\'s own material' } },
+    required: ['skill', 'text'], additionalProperties: false } },
 ] as const;
 
 const standardOf = (skill: string): StandardVersion => {
@@ -71,8 +76,13 @@ const call = (name: string, args: Record<string, unknown>): { text: string; isEr
   if (name === 'atelier_verify') {
     const text = typeof args.text === 'string' ? args.text : '';
     if (!text.trim()) return { isError: true, text: 'there is no text to check. An empty input passing would read as a clean result.' };
-    const report = verifyText(skill, standardOf(skill), text);
-    return { isError: false, text: `${describeVerify(report)}\n\n${JSON.stringify({ failed: report.failed,
+    const v = standardOf(skill);
+    const L: store.StoreLayout = { root: DATA, skillName: skill };
+    const cls = checkClass(store.getDocClass(L), typeof args.class === 'string' ? args.class : null);
+    if (!cls.ok) return { isError: true, text: cls.why };
+    const material = [...store.getMaterial(L).map((m) => m.text), typeof args.material === 'string' ? args.material : ''].join('\n\n');
+    const report = checkDraft(skill, v, text, { material });
+    return { isError: false, text: `${describeVerify(report)}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed,
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
         detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })) })}` };
   }

@@ -9,7 +9,7 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted } from './repair.js';
 import { createHash } from 'node:crypto';
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -34,7 +34,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   if (opts.guardClaims === false) return report;
   const claims = unsourcedClaims(text, opts.material ?? '');
   const line = { requirementId: 'UNSOURCED', statement: 'Never invent a first-person story or a figure presented as a finding.',
-    materiality: 'REQUIRED',
+    materiality: 'REQUIRED', phase: 'ACCURACY' as const,
     result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: claims, value: claims.length,
       detail: claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories or findings' } };
   return { ...report, checked: [...report.checked, line], failed: report.failed || claims.length > 0 };
@@ -47,8 +47,16 @@ export async function refineToStandard(
   const first = checkDraft(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
   let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
-  while (report.failed && passes < maxPasses) {
-    const targets = planRepair(text, report);
+  const kept: string[] = [];
+  // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
+  // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
+  // broken, accuracy gets its own pass, and the style passes are not charged for it.
+  const accuracyFirst = planRepair(text, report, { phase: 'ACCURACY' }).length > 0
+    && planRepair(text, report, { phase: 'STYLE' }).length > 0;
+  const limit = maxPasses + (accuracyFirst ? 1 : 0);
+  while (report.failed && passes < limit) {
+    const accuracy = planRepair(text, report, { phase: 'ACCURACY' });
+    const targets = accuracy.length ? accuracy : planRepair(text, report);
     if (!targets.length) { why = 'nothing the rules pointed at could be rewritten'; break; }
     // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for and already meets
     // every rule the repair was not about; a failed call (a refusal, a 500, an exhausted budget)
@@ -69,7 +77,10 @@ export async function refineToStandard(
     }
     passes += 1;
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
-    const next = applyRepair(text, targets, reps);
+    const reverted: Reverted[] = [];
+    const next = applyRepair(text, targets, reps, reverted);
+    for (const r of reverted) kept.push(`"${targets.find((t) => t.id === r.id)?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite lost ${r.lost.join(', ')}`);
+    if (next === text && reverted.length) { why = `every rewrite was refused because it changed what the text claims (${kept.length} span(s) kept as written)`; break; }
     const after = checkDraft(skill, v, next, opts);
     const verdict = acceptRepair(report, after);
     if (!verdict.ok) { why = `a rewrite was discarded: ${verdict.why}`; break; }
@@ -77,5 +88,6 @@ export async function refineToStandard(
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }
   return { output: text, report,
-    repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft, why } };
+    repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
+      ...(kept.length ? { integrityReverted: kept } : {}), why } };
 }

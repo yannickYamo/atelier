@@ -128,6 +128,49 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
   }, 120_000);
 });
 
+describe('a counted decision goes through the promotion gate: it may reject on its own, never adopt', () => {
+  const seededMeasured = async (original: string): Promise<{ data: string; proj: string }> => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-fix-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-fix-proj-'));
+    run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', 'PREFERRED', '--measure', 'LEXICON:synergy');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await setByTool({ emit_piece: { piece: original } });
+    const out = run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation');
+    expect(out, 'seeding invoke failed').not.toMatch(/^EXIT:/);
+    return { data, proj };
+  };
+
+  it('a count favouring the candidate does NOT install it: the gate asks for a person', async () => {
+    const { data, proj } = await seededMeasured('the synergy answer');
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const activeBefore = store.getActive(L)!;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the plain answer' } });
+    const out = run(data, proj, 'fix', 'it said synergy');
+    expect(out).toContain('the count favours');
+    expect(out).toContain('not installed on its own');
+    expect(out).toContain('--pick a|b|same');
+    expect(store.getActive(L), 'a counted win installed itself').toBe(activeBefore);
+    const gate = store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined;
+    expect(gate?.authority).toBe('HUMAN_GATED');
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED')).toBe(false);
+  }, 120_000);
+
+  it('a count showing the candidate worse rejects it with no person, through the gate', async () => {
+    const { data, proj } = await seededMeasured('the plain answer');
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const activeBefore = store.getActive(L)!;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the synergy answer' } });
+    const out = run(data, proj, 'fix', 'it was vague');
+    expect(out).toContain('decided by its count');
+    expect(store.getActive(L)).toBe(activeBefore);
+    const gate = store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined;
+    expect(gate?.authority).toBe('AUTO_REJECT');
+    expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'REJECTED')).toBe(true);
+  }, 120_000);
+});
+
 describe('STANDARD_GAP: one approval mints, compiles and installs — or one refusal is remembered', () => {
   it('--add required supersedes with the complaint as the reason, and the rule instructs', async () => {
     const { data, proj } = await seeded();
