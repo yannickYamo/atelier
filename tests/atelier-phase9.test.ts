@@ -208,6 +208,10 @@ describe('final audit: what was closed', () => {
     const r = measure("In today's world it is so. " + para('More words here to run long.', 12) + '\n\nEnd.', { observer: 'OPENING', params: { avoid: ["in today's"], maxWords: 20 } });
     expect(r.spans.length).toBe(2);
   });
+  it('a longer paraphrase of the same complaint groups with it (a real run\'s pair)', () => {
+    const fb = (complaint: string, i: number): FeedbackRecord => ({ feedbackId: `f${i}`, invocationId: 'i', complaint, at: `2026-01-0${i}` });
+    expect(clusterComplaints([fb('too many spaced hyphens, it reads like dashes everywhere', 1), fb('the spaced hyphens again, far more than Addy uses', 2)])[0]).toHaveLength(2);
+  });
   it('clusters do not chain unrelated complaints, and "em" counts', () => {
     const fb = (complaint: string, i: number): FeedbackRecord => ({ feedbackId: `f${i}`, invocationId: 'i', complaint, at: `2026-01-0${i}` });
     const chain = clusterComplaints(['tone too formal', 'salesy tone', 'salesy headings', 'headings too long'].map(fb));

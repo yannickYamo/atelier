@@ -17,8 +17,8 @@
 //   LOST_MEANING a rule whose repairs keep being refused for changing what the text claims
 //                → the rule may conflict with how the author qualifies claims; a question about the rule
 //
-// Deterministic: complaints are grouped by the content words they share (average-link Jaccard, 0.3),
-// and nothing here calls a model.
+// Deterministic: complaints are grouped by the content words they share (average link over the share
+// of the shorter complaint's words, at least two shared, threshold 0.4), and nothing here calls a model.
 
 import type { FeedbackRecord, InvocationRecord, Requirement } from '../state/canonical-state.js';
 import { wordsOf } from '../observers/text.js';
@@ -39,16 +39,29 @@ export const jaccard = (a: ReadonlySet<string>, b: ReadonlySet<string>): number 
 };
 
 /**
- * Groups of complaints that say the same thing, by AVERAGE link: two groups merge only while the
- * average similarity between their members clears the threshold. (Single link chains: "tone too
+ * How much two complaints say the same thing: the shared content words over the shorter complaint's,
+ * and nothing unless at least two are shared. Jaccard punishes a longer paraphrase for its extra words
+ * (found in a real run: "too many spaced hyphens, it reads like dashes everywhere" and "the spaced
+ * hyphens again, far more than Addy uses" scored 0.22 and never grouped); one shared word ("tone",
+ * "salesy") is a topic, not the same complaint.
+ */
+export const similarity = (a: ReadonlySet<string>, b: ReadonlySet<string>): number => {
+  if (!a.size || !b.size) return 0;
+  let inter = 0; for (const x of a) if (b.has(x)) inter += 1;
+  return inter < 2 ? 0 : inter / Math.min(a.size, b.size);
+};
+
+/**
+ * Groups of complaints that say the same thing (see `similarity`), by AVERAGE link: two groups merge
+ * only while the average similarity between their members clears the threshold. (Single link chains: "tone too
  * formal", "salesy tone", "salesy headings", "headings too long" become one group through their
  * neighbours.) Largest first, then most recent.
  */
-export function clusterComplaints(records: readonly FeedbackRecord[], threshold = 0.3): FeedbackRecord[][] {
+export function clusterComplaints(records: readonly FeedbackRecord[], threshold = 0.4): FeedbackRecord[][] {
   const words = records.map((r) => contentWordsOf(r.complaint));
   let groups: number[][] = records.map((_, i) => [i]);
   const link = (a: readonly number[], b: readonly number[]): number =>
-    a.reduce((s, i) => s + b.reduce((t, j) => t + jaccard(words[i], words[j]), 0), 0) / (a.length * b.length);
+    a.reduce((s, i) => s + b.reduce((t, j) => t + similarity(words[i], words[j]), 0), 0) / (a.length * b.length);
   for (;;) {
     let best = { a: -1, b: -1, v: threshold };
     for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {

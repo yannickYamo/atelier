@@ -38,12 +38,20 @@ describe('margins come from the author\'s own spread', () => {
     measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } });
   const v = { requirements: [rule] } as unknown as StandardVersion;
   const dims = floorDimensions(v);
-  it('half the interquartile range, never below the minimum', () => {
-    const pieces = ['synergy', 'synergy synergy', 'synergy synergy synergy', 'synergy synergy synergy synergy'];
+  it('half the interquartile range, never finer than one occurrence', () => {
+    const pieces = ['synergy', 'synergy synergy synergy', 'synergy synergy synergy synergy synergy', 'synergy synergy synergy synergy synergy synergy synergy'];
     const [p] = proposeMargins(dims, pieces);
-    expect(p.spread).toBeGreaterThan(0);
+    expect(p.spread).toBeGreaterThan(2);
     expect(p.margin).toBeCloseTo(p.spread / 2, 3);
-    expect(proposeMargins(dims, ['clean', 'clean', 'clean'])[0].margin).toBe(MIN_MARGIN);
+    // An author who never uses the word has no spread: the margin is one use, not 0.05 of one.
+    expect(proposeMargins(dims, ['clean', 'clean', 'clean'])[0].margin).toBe(1);
+    expect(MIN_MARGIN).toBeLessThan(1);
+  });
+  it('a rate rule\'s margin is at least one occurrence at the author\'s length', () => {
+    const rate = aRequirement({ requirementId: 'c1', kind: 'BOUNDARY', statement: 'Rare.', measurement: { observer: 'PATTERN_RATE', params: { pattern: ['NOT_X_ITS_Y'], maxPer1000: 0.3 } } });
+    const long = Array.from({ length: 500 }, () => 'word').join(' ');
+    const [p] = proposeMargins(floorDimensions({ requirements: [rate] } as unknown as StandardVersion), [long, long, long]);
+    expect(p.margin).toBe(2);   // one occurrence in 500 words is 2 per 1,000
   });
   it('fewer than three pieces the rule applies to: no proposal, not a guess', () => {
     expect(proposeMargins(dims, ['a', 'b'])).toEqual([]);
@@ -51,7 +59,7 @@ describe('margins come from the author\'s own spread', () => {
   it('every dimension starts OBSERVE, and an owner\'s setting survives a new proposal', () => {
     const c = buildContract(proposeMargins(dims, ['a', 'b', 'c']), dims, null);
     expect(Object.values(c.dimensions).every((d) => d.gateRole === 'OBSERVE')).toBe(true);
-    const owned: QualityFloorContract = { instrument: 'scoreDimensionByPolicy', dimensions: { [dims[0].key]: { nonInferiorityMargin: 2, gateRole: 'ENFORCE', rationale: 'mine' } } };
+    const owned: QualityFloorContract = { instrument: 'scoreDimensionByPolicy', dimensions: { [dims[0].key]: { nonInferiorityMargin: 2, gateRole: 'ENFORCE', rationale: 'set by the owner' } } };
     expect(buildContract(proposeMargins(dims, ['a', 'b', 'c']), dims, owned).dimensions[dims[0].key].nonInferiorityMargin).toBe(2);
   });
 });

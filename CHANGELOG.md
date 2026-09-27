@@ -44,6 +44,19 @@ a run in progress may not be.
   recurring gap into a rule on the owner's word, through the same path as `fix` (now shared in
   `cli/commands/addition.ts`). `--phrase` asks a model to propose a wording.
 
+### Fixed (real end-to-end run on the Addy corpus)
+
+- **`new` lost `--name` on continuation**, and built a skill named after the folder. The class set on
+  the first call went to a skill that was never built. The name is now the run's from the first call.
+- **Floor margins are never finer than one occurrence** at the author's length. An author who never
+  uses a pattern has no spread, and a margin of 0.05 per 1,000 words sat far below the ~0.4 that one
+  occurrence is, so no difference could resolve. Re-proposing margins no longer overwrites a role or a
+  margin the owner set.
+- **Complaints that say the same thing in different words now group.** Mining compares shared content
+  words against the shorter complaint (at least two shared) instead of Jaccard, which scored a real
+  paraphrase pair 0.22.
+- `atelier floor` and `atelier optimize` report the calls and dollars they spent.
+
 ### Fixed (final audit)
 
 - **The floor now scores an OPENING or CLOSING rule by what is wrong.** It counts banned phrases plus
