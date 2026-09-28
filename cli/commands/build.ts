@@ -7,7 +7,7 @@
 import { selectVoicePassages, selectVoicePieces, type VoicePassages } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona } from '../../core/compiler/persona.js';
 import { measure } from '../../core/observers/registry.js';
-import { findPattern, type PatternId } from '../../core/observers/style.js';
+import { findPattern, PATTERN_FAMILIES, type PatternId } from '../../core/observers/style.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 
 /** Whether a text contains the very pattern a PATTERN_RATE rule caps (a short text rarely reaches a rate). */
@@ -193,9 +193,12 @@ export async function build(nameArg?: string): Promise<void> {
     const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
     try {
       // A point that describes or quotes a move a REQUIRED boundary forbids is dropped: the standard wins.
-      const boundaries = v.requirements.filter((r) => r.materiality === 'REQUIRED' && r.kind === 'BOUNDARY' && r.measurement);
-      const forbids = (text: string): boolean => boundaries.some((r) => (r.measurement!.observer === 'LEXICON'
-        ? measure(text, r.measurement!).verdict === 'VIOLATED' : findPatternOf(text, r)));
+      // Every cap the standard holds, required or shown, and a contrast of any spelling where any one
+      // spelling is capped: a persona point describing "not X, but Y" survived a cap on "not X, it's Y".
+      const boundaries = v.requirements.filter((r) => r.kind === 'BOUNDARY' && r.measurement && r.authority !== 'EXPERT_REJECTED');
+      const capsContrast = boundaries.some((r) => PATTERN_FAMILIES.contrast.includes((r.measurement!.params.pattern as string[] | undefined)?.[0] as PatternId));
+      const forbids = (text: string): boolean => (capsContrast && findPattern(text, 'CONTRAST_VERDICT').length > 0)
+        || boundaries.some((r) => (r.measurement!.observer === 'LEXICON' ? measure(text, r.measurement!).verdict === 'VIOLATED' : findPatternOf(text, r)));
       const persona = reconcilePersona(await derivePersona(clientFor(proposerModel()), budget, readable), forbids);
       voice = { ...voice, persona };
       console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`

@@ -12,6 +12,7 @@
 // named, deterministic construction; none of them judges whether a sentence is good.
 
 import type { Span } from './registry.js';
+import { findTells, CONTRAST_VERDICT } from './tells.js';
 import { proseBlocks, sentencesOf, paragraphsOf, proseRegions, wordsOf, quantile } from './text.js';
 
 export type PatternId =
@@ -19,7 +20,8 @@ export type PatternId =
   | 'SIGNPOST' | 'INTENSIFIER' | 'SHORT_VERDICT' | 'BOLD_SPAN' | 'ONE_LINE_PARAGRAPH'
   | 'RHETORICAL_QUESTION' | 'REPEATED_OPENER'
   | 'DASH_ASIDE' | 'FIRST_PERSON' | 'BRITISH_SPELLING' | 'AMERICAN_SPELLING'
-  | 'CONTRACTION' | 'FULL_FORM' | 'RATHER_THAN' | 'REFRAME' | 'ORDINAL_CATALOGUE';
+  | 'CONTRACTION' | 'FULL_FORM' | 'RATHER_THAN' | 'REFRAME' | 'ORDINAL_CATALOGUE'
+  | 'MACHINE_TELL' | 'CONTRAST_VERDICT';
 
 /** How each pattern reads to a person, for statements and reports. */
 export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
@@ -53,6 +55,10 @@ export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
   REFRAME: 'reframes ("has little to do with", "isn\'t about", "what matters is", "the real question is")',
   // THE REPEATED OPENER'S OTHER SPELLING: a catalogue whose items each announce their place.
   ORDINAL_CATALOGUE: 'catalogue announcements ("is the first one", "is the next one", "is the most familiar of them")',
+  // THE MOVES, COUNTED AS MOVES (./tells.ts): the model's machine-writing families together, and the
+  // contrastive verdict in every spelling. One rule each, held to the author's own rate.
+  MACHINE_TELL: 'machine-writing moves (announced insights, self-graded lists, stacked superlatives, announced candour, totalisers, mind-reading, costumes)',
+  CONTRAST_VERDICT: 'contrastive verdicts in any spelling ("isn\'t X, it\'s Y", "not X but Y", "has little to do with", "X rather than Y")',
 };
 
 /**
@@ -61,7 +67,7 @@ export const PATTERN_LABEL: Readonly<Record<PatternId, string>> = {
  * here: the em-dash rule names the author's own substitute, and the dash-aside cap limits the move.
  */
 export const PATTERN_FAMILIES: Readonly<Record<string, readonly PatternId[]>> = {
-  contrast: ['NOT_X_ITS_Y', 'RATHER_THAN', 'REFRAME'],
+  contrast: ['NOT_X_ITS_Y', 'RATHER_THAN', 'REFRAME', 'CONTRAST_VERDICT'],
   opener: ['THAT_OPENER', 'HERES_OPENER', 'REPEATED_OPENER', 'ORDINAL_CATALOGUE'],
 };
 
@@ -86,8 +92,11 @@ const AMERICAN = new RegExp(`\\b(?:(?:${IZE})z(?:e|es|ed|ing|ation|ations|er|ers
 
 const REGEX: Partial<Record<PatternId, RegExp>> = {
   EM_DASH: /—/g,
+  CONTRAST_VERDICT,
   CONTRACTION: /\b(?:\w+n['’]t|(?:it|that|there|here|what|who|he|she|let)['’]s|\w+['’](?:re|ve|ll|d|m))\b/gi,
-  FULL_FORM: /\b(?:(?:do|does|did|is|are|was|were|could|would|should|will|has|have|had|must|need) not|cannot|it is|that is|there is|here is|what is|I am|you are|we are|they are|I have|you have|we have|they have|I will|you will|we will|I would|you would|let us)\b/gi,
+  // Only forms a speaker who contracts WOULD contract: "that is" in "the code that is failing" and
+  // "what is" opening a question are left out, and "I have" counts only as an auxiliary.
+  FULL_FORM: /\b(?:(?:do|does|did|is|are|was|were|could|would|should|will|has|have|had|must) not|cannot|it is|there is|here is|I am|you are|we are|they are|(?:I|you|we|they) have (?=been|got|seen|done|made|had|never|always|just|already|written|built|tried|found|learned|spent|shipped|\w+ed\b)|I will|you will|we will|I would|you would|let us)\b/gi,
   RATHER_THAN: /\brather than\b/gi,
   REFRAME: /\b(?:has (?:little|nothing) to do with|(?:isn['’]t|is not|wasn['’]t|was not) (?:really |actually )?about|what (?:really |actually )?matters (?:here )?is|the real (?:question|problem|issue|point) (?:here )?is)\b/gi,
   ORDINAL_CATALOGUE: /\b(?:is|are) the (?:first|second|third|fourth|next|last|final|newest|latest|oldest|quietest|one that \w+|most \w+ of (?:them|the set|these)|\w+est of (?:them|the set|these))(?: one)?\b/gi,
@@ -123,6 +132,13 @@ export function findPattern(text: string, p: PatternId): Span[] {
   }
   const sentences = sentencesOf(text);
   const asSpan = (s: { start: number; end: number; text: string }): Span => ({ start: s.start, end: s.end, text: s.text, why: PATTERN_LABEL[p] });
+  if (p === 'MACHINE_TELL') {
+    // Each instance names its family, so a repair knows which move it is removing.
+    return proseBlocks(text).flatMap((b) => findTells(b.text).map((m) => {
+      const start = b.at[m.index]; const end = b.at[m.index + m.length - 1] + 1;
+      return { start, end, text: text.slice(start, end), why: m.family.label };
+    }));
+  }
   switch (p) {
     case 'THAT_OPENER': return sentences.filter((s) => /^(?:That'?s|That is|This is)\b/.test(s.text)).map(asSpan);
     case 'HERES_OPENER': return sentences.filter((s) => /^Here(?:'?s| is| are)\b/.test(s.text)).map(asSpan);

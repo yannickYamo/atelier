@@ -57,6 +57,28 @@ a run in progress may not be.
 - **The front door** (`atelier` with no command) lists the everyday verbs first: create, use,
   correct, status, calibrate, set up the floor, tend.
 
+### Changed (after the fifth blind voice round: catch machine-written sentences as moves, from data)
+
+Every version in round five, including the product's, carried sentences that read as machine-written.
+An audit found why each fix had been a whack-a-mole: tells were hand-written strings added after each
+round; they were learned from plain drafts although they appear under the skill; the rules that could
+catch them were routed to "shown, never checked"; and repair could not remove a move. The changes:
+
+- **`MACHINE_TELL`**: a catalogue of ten families of the model's moves (`core/observers/tells.ts`), proposed
+  for every corpus as a cap at the author's own rate. **`CONTRAST_VERDICT`**: the contrast move in every
+  spelling, capped only where the model overuses it against this author.
+- **A learned lexicon** (`core/observers/tell-lexicon.ts`, `atelier tells`): 4-5-word phrases the skill's own
+  drafts repeat across three or more topics, absent from the corpus beyond chance (Poisson). Learned by
+  `atelier tend` from the skill's uses; owner can add or strike. Checked under the ratified machine-tell rule.
+- **Repair removes the move**: a sentence that recasts a move as its sibling, or leaves a bracketed slot, is
+  refused alone (not the whole pass); the loop retries with the forbidden forms named; the negation in a
+  contrast may go.
+- **Draft selection is live**: a corpus skill writes two drafts by default and keeps the one with fewer
+  machine moves.
+- **Register** counts only contractible forms, and applies both ways (a cap on contractions for a formal author).
+- **The persona is checked against every cap**, shown or required, and the whole contrast family.
+- Fixed: the "stories cut" note printed only when the taste reader ran.
+
 ### Changed (after the fourth blind voice round: describe the voice, guard the edges)
 
 The fourth round (five briefs, five versions) ranked the rebuilt skill fourth of five: 21 required rules

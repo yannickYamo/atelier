@@ -57,7 +57,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
   'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
-  'finalists', 'screen-model', 'voice', 'persona', 'read', 'label', 'reader-model', 'runs',
+  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -72,7 +72,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'repair', 'taste', 'no-taste', 'setup', 'auto',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'repair', 'learn', 'taste', 'no-taste', 'setup', 'auto',
 ];
 
 export const argv = process.argv.slice(2);
@@ -95,7 +95,7 @@ const parsed = ((): Parsed => {
 export const cmd = argv[0] ?? '';
 
 /** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
-export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe', 'label'];
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe', 'label', 'add', 'strike'];
 
 /** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
  *  spell `--name` (a statement, a task) is never counted as the option itself. */

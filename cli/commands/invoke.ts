@@ -172,7 +172,11 @@ export async function invoke(): Promise<void> {
 
   // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
   // cover is refused before anything is spent rather than failing halfway with nothing delivered.
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', 1)));
+  // A skill built from someone's corpus writes TWO drafts by default and keeps the better one: the
+  // author's habits held within their range, and the machine-writing count, choose between drafts and
+  // nothing else can use them (they are never rewritten toward). With one draft they did nothing at all.
+  // `--drafts 1` turns this off.
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', store.getVoice(L)?.pieces?.length ? 2 : 1)));
   // The taste reader (below) reads every output twice (plus one applicability call when a rule has a
   // condition). Once it has earned the authority to act it also reads each draft, the chosen one after
   // the counted repair, and a taste rewrite again: 3 per draft plus 7 at most. Its calls are in the
@@ -213,7 +217,8 @@ export async function invoke(): Promise<void> {
   // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
   // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
-  const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') };
+  const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'),
+    learnedTells: store.activeTells(store.getTells(L)) };
   // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
   //
   // The rules no count can check are read on every output, twice and with quotes, and the reading is
@@ -276,11 +281,13 @@ export async function invoke(): Promise<void> {
       const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
       const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED').length;
       const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
-      return { i, req, all, style, taste: tasteMissed[i] };
+      // Machine-writing moves, catalogued and learned, counted instance by instance.
+      const tells = r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0);
+      return { i, req, all, style, tells, taste: tasteMissed[i] };
     });
-    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || b.style - a.style || a.all - b.all);
+    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || a.tells - b.tells || a.all - b.all || b.style - a.style);
     const best = scored[0];
-    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
@@ -312,26 +319,22 @@ export async function invoke(): Promise<void> {
   } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
   }
+  // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
+  if (rec.repair?.storiesCut?.length) {
+    console.log(`${rec.repair.storiesCut.length} invented stor(ies) or figure(s) cut. A story of your own would fit where these were (add it, or bind your notes with --with):`);
+    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
+  }
   for (const n of tasteNotes) console.log(`(${n}.)`);
+  if (!tasteOn && rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
   if (tasteOn && std) {
     try {
       const taken = tasteTaken ?? readings.get(rec.output) ?? null;
       const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
       // A held-back reading shows nothing that names a rule, the taste repair included.
-      // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
-  if (rec.repair?.storiesCut?.length) {
-    console.log(`${rec.repair.storiesCut.length} invented stor(ies) or figure(s) cut. A story of your own would fit where these were (add it, or bind your notes with --with):`);
-    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
-  }
   if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
       console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
       if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
     } catch (e) {
-      // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
-  if (rec.repair?.storiesCut?.length) {
-    console.log(`${rec.repair.storiesCut.length} invented stor(ies) or figure(s) cut. A story of your own would fit where these were (add it, or bind your notes with --with):`);
-    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
-  }
   if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
       console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
     }

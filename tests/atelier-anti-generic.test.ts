@@ -142,7 +142,7 @@ describe('through the binary: material, and several drafts chosen by count', () 
     run('ratify-close', '--work-type', 'writing');
     run('build', '--name', 'inc');
     const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
-    const out = run('invoke', '--skill', 'inc', 'write it', '--drafts', '2', ...be);
+    const out = run('invoke', '--skill', 'inc', 'write it', '--drafts', '2', '--placeholders', ...be);
     expect(out).toContain('[your story: a time a loop broke production]');
     expect(out).toMatch(/wrote 2 drafts and kept one/);
     const [rec] = store.listInvocations({ root: data, skillName: 'inc' });
@@ -181,7 +181,9 @@ describe('contrast proposes nothing the evidence does not support', () => {
   const read = [0, 1, 2, 3].map(author); const held = [4, 5].map(author);
   it('when the "model drafts" write like the author, nothing is proposed from the gap', () => {
     const same = deriveContrastRules(read, held, [6, 7, 8].map((i) => author(i).text), 'MACHINE_DISCOVERED');
-    expect(same.filter((r) => r.requirement.measurement?.observer === 'PATTERN_RATE')).toEqual([]);
+    // The machine-tell rule is the one exception: it is the model's catalogue, proposed for every author.
+    expect(same.filter((r) => r.requirement.measurement?.observer === 'PATTERN_RATE'
+      && (r.requirement.measurement.params.role as string[] | undefined)?.[0] !== 'machine-tell')).toEqual([]);
   });
 });
 

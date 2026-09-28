@@ -29,7 +29,10 @@ const underUsed = (author: number, model: number): boolean => author >= 1 && aut
 const r1 = (x: number): number => Math.round(x * 10) / 10;
 
 /** Patterns with a proposal of their own below, not the generic author-against-model comparison. */
-const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING', 'CONTRACTION', 'FULL_FORM']);
+const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING', 'CONTRACTION', 'FULL_FORM',
+  // The contrast move is judged once, as the whole family (CONTRAST_VERDICT), never by one spelling; and
+  // the machine-writing moves have a rule of their own (proposeVoice).
+  'NOT_X_ITS_Y', 'RATHER_THAN', 'REFRAME', 'MACHINE_TELL']);
 
 /**
  * THE AUTHOR'S POSITIVE SIGNATURE, HELD IN A BAND, AND USED TO CHOOSE, NOT TO STEER. Ceilings on the
@@ -43,7 +46,7 @@ const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'F
 const SIGNATURE: ReadonlySet<PatternId> = new Set<PatternId>(['BOLD_SPAN', 'ONE_LINE_PARAGRAPH', 'RHETORICAL_QUESTION', 'SEMICOLON']);
 
 /** Constructions measured as model habits (see the the author audit, 2026-09-27): capped at the author's rate when they rarely use them. */
-const MODEL_TYPICAL: ReadonlySet<PatternId> = new Set<PatternId>(['EM_DASH', 'NOT_X_ITS_Y', 'THAT_OPENER', 'HERES_OPENER', 'SIGNPOST', 'INTENSIFIER', 'SHORT_VERDICT', 'REPEATED_OPENER']);
+const MODEL_TYPICAL: ReadonlySet<PatternId> = new Set<PatternId>(['EM_DASH', 'CONTRAST_VERDICT', 'THAT_OPENER', 'HERES_OPENER', 'SIGNPOST', 'INTENSIFIER', 'SHORT_VERDICT', 'REPEATED_OPENER']);
 
 export function deriveContrastRules(
   read: readonly Piece[], held: readonly Piece[], drafts: readonly string[], provenance: Requirement['provenance'],
@@ -385,8 +388,9 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
  *                   a VIEW in the first person ("I think", "I'd hold this loosely"), which needs no
  *                   source, from a first-hand STORY or figure, which does; an author who keeps out of
  *                   the text gets a cap where the model does not.
- *   register        a cap on uncontracted forms for an author who contracts (at least 75% of the forms
- *                   that can be), or on contractions for one who does not (at most 25%)
+ *   machine tells   the model's machine-writing moves (./tells.ts), held to the author's own rate
+ *   register        a cap on uncontracted forms for an author who mostly contracts (60% or more of the
+ *                   forms that can be), or on contractions for one who mostly does not (40% or less)
  *   dialect         an author who spells one way (at least ten marked words, the other way at most
  *                   15% of them) gets a cap on the other dialect's spellings.
  */
@@ -408,15 +412,24 @@ function proposeVoice(authorTexts: readonly string[], drafts: readonly string[],
       { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], maxPer1000: cap } }, `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
   }
   const count = (p: PatternId): number => authorTexts.reduce((n, t) => n + findPattern(t, p).length, 0);
-  // REGISTER: a speaker who contracts almost everything gets a cap on the forms left whole, and one who
-  // writes formally a cap on contractions. A repair can fix either word by word, so these are boundaries.
+  // MACHINE-WRITING MOVES (./tells.ts): a family catalogue of the model's habits, the same for every
+  // author, held to THIS author's own rate. Always proposed: the catalogue is known to be the model's,
+  // so it needs no plain drafts to show it (the tells appear most under a skill's own instructions,
+  // which plain drafts never see). The held-out guard still applies: an author whose unread pieces use
+  // these moves more than the cap gets no rule, rather than a rule against them.
+  const tellCap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
+  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes"): at most ${tellCap} per 1,000 words, my own rate.`,
+    'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, role: ['machine-tell'] } },
+    `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`);
+  // REGISTER: a speaker who mostly contracts gets a cap on the forms left whole, and one who mostly
+  // writes them out a cap on contractions, at their own rate. A repair fixes either word by word.
   const contracted = count('CONTRACTION'); const whole = count('FULL_FORM');
   const share = contracted + whole >= 20 ? contracted / (contracted + whole) : null;
-  if (share !== null && (share >= 0.75 || share <= 0.25)) {
-    const other = share >= 0.75 ? 'FULL_FORM' as const : 'CONTRACTION' as const;
+  if (share !== null && (share >= 0.6 || share <= 0.4)) {
+    const other = share >= 0.6 ? 'FULL_FORM' as const : 'CONTRACTION' as const;
     const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, other), 0.9) * 1.5, 1));
     const m = meanRate(drafts, other);
-    propose(share >= 0.75
+    propose(share >= 0.6
       ? `Contract as I do ("don't", "it's", "you're"): at most ${cap} uncontracted forms ("do not", "it is") per 1,000 words.`
       : `Write out what I write out ("do not", "it is"): at most ${cap} contractions per 1,000 words.`, 'BOUNDARY',
     { observer: 'PATTERN_RATE', params: { pattern: [other], maxPer1000: cap } },

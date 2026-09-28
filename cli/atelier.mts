@@ -27,6 +27,7 @@ import { floor } from './commands/floor.js';
 import { optimize } from './commands/optimize.js';
 import { mine } from './commands/mine.js';
 import { taste } from './commands/taste.js';
+import { tells } from './commands/tells.js';
 import { tend, skillDashboard } from './commands/tend.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
@@ -93,6 +94,7 @@ export const COMMANDS: readonly string[] = [
   'mine',
   'taste',
   'tend',
+  'tells',
   'optimize',
   'judgements',
   'pending',
@@ -139,6 +141,7 @@ const main = async (): Promise<void> => {
     case 'optimize': { await optimize(); return; }
     case 'mine': { await mine(); return; }
     case 'taste': { await taste(); return; }
+    case 'tells': { await tells(); return; }
     case 'tend': { await tend(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
