@@ -39,7 +39,7 @@ const NUMBER_WORDS: Readonly<Record<string, string>> = { zero: '0', two: '2', th
   six: '6', seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12', twenty: '20', hundred: '100' };
 /** Every figure, digits or a spelled-out small number, so "3" → "three" is the same figure. Not "one":
  *  far more often a pronoun ("one of them") than a count. */
-const numbersIn = (s: string): string[] => [
+export const numbersIn = (s: string): string[] => [
   ...(s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, '').replace(/,/g, '')),
   ...(s.match(/\b[a-z]+\b/gi) ?? []).map((w) => NUMBER_WORDS[w.toLowerCase()]).filter((n): n is string => Boolean(n)),
 ];
@@ -52,7 +52,7 @@ const count = (s: string, re: RegExp): number => (s.match(re) ?? []).length;
 const hasTerm = (s: string, t: string): boolean => new RegExp(`(?<![A-Za-z])${t.replace(/\s+/g, '\\s+')}(?![A-Za-z])`, 'i').test(s);
 
 /** Proper names, acronyms and quoted phrases: capitalised words not opening a sentence, and "…" spans. */
-function namesIn(s: string): string[] {
+export function namesIn(s: string): string[] {
   const out = new Set<string>();
   // Headings are title-cased by convention, so their capitals say nothing about names.
   const tokens = s.split('\n').filter((l) => !/^\s*#{1,6}\s/.test(l)).join('\n').split(/\s+/);
