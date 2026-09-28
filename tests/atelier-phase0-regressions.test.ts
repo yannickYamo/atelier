@@ -2,7 +2,7 @@
 // through the shipped binary, because every one of them was invisible to a source-level guard.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -26,8 +26,12 @@ const run = (data: string, proj: string, ...args: string[]): string => {
     return `EXIT:${err.status}\n${err.stderr ?? ''}${err.stdout ?? ''}`;
   }
 };
-const fresh = (): { data: string; proj: string } =>
-  ({ data: mkdtempSync(join(tmpdir(), 'atelier-p0-data-')), proj: mkdtempSync(join(tmpdir(), 'atelier-p0-proj-')) });
+// realpath, because on macOS tmpdir() is /var/... and the CLI's process.cwd() reports the resolved
+// /private/var/...: a test comparing the two failed on the path spelling, not on the behaviour.
+const fresh = (): { data: string; proj: string } => ({
+  data: realpathSync(mkdtempSync(join(tmpdir(), 'atelier-p0-data-'))),
+  proj: realpathSync(mkdtempSync(join(tmpdir(), 'atelier-p0-proj-'))),
+});
 
 describe('--help never runs the command', () => {
   it('abort --help prints usage and leaves the run in place', () => {
