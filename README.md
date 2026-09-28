@@ -95,7 +95,9 @@ tested on one author so far. The design and every pre-registration are in
 need a score someone else wrote, or let their own judge decide. Atelier's loop runs below a standard you
 approved rule by rule, and it can't change that standard: the code asserts its hash on every automated
 change. It borrows their search (`atelier optimize` uses reflective proposals and a Pareto screen), and
-installs a change only when your measured rules say it's better and nothing else got worse.
+installs a change only when your measured rules say it's better and nothing else got worse. Atelier has
+not been benchmarked against these systems on a shared task yet: the difference is in the architecture,
+and you can check it in the code.
 
 **Against fine-tuning:** you can't diff weights against what you meant. You can diff a standard.
 
