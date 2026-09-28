@@ -24,14 +24,14 @@
 import { readCorpus, sessionCorpus } from '../corpus.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
-import { resolveRule } from '../../core/state/rule-key.js';
+import { resolveRule, keysOf } from '../../core/state/rule-key.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { floorDimensions, perFire, proposeMargins, buildContract, evaluateAcross, pairsFor, targetComparison,
   qualifyFromAA, countAA, plantedDetections, FLOOR_SCORING_VERSION, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, MIN_TASKS_FOR_VERDICT, AA_BAR, MIN_AA_TRIALS,
   type FloorDimension } from '../../core/distinctiveness/measured.js';
 import { gateState, type FrozenBaselineEntry, type QualityFloorResult, type FloorVerdict,
   type DistinctivenessState } from '../../core/distinctiveness/floor.js';
-import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
+import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { readTaste, tasteRules, vetoMisses } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { readerModel } from './taste.js';
@@ -205,21 +205,28 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   const result = evaluateAcross(frozen, baseline, contract, exclude);
   const composite: FloorVerdict = guarded ? result.composite : 'INCONCLUSIVE';
   const comparison = targetKey ? targetComparison(pairsFor(targetKey, frozen, baseline)) : 'INCONCLUSIVE';
+  // A REQUIRED RULE MARKED OBSERVE STILL MAY NOT GET WORSE. The owner can take a rule off the floor's
+  // composite (`--observe`), which is a statement about what should BLOCK on a noisy measure, not a
+  // licence for an automatic change to break a rule they made REQUIRED. Any REQUIRED rule the floor
+  // measured regressing on the candidate is a deterministic regression, whatever its gate role.
+  const requiredKeys = new Set(dims.filter((d) => d.rule.materiality === 'REQUIRED').map((d) => d.key));
+  const requiredRegressed = result.perDim.filter((d) => requiredKeys.has(d.dim) && !exclude.has(d.dim) && d.verdict === 'REGRESSION').map((d) => d.dim);
   const activeSv = store.getSkillVersion(L, active); const candSv = store.getSkillVersion(L, candidate);
   const decision = resolvePromotion({
     incumbentStandardHash: activeSv?.standardVersionHash ?? '', candidateStandardHash: candSv?.standardVersionHash ?? '?',
     // What was fired (the stored package's bytes) against what would be installed (the version's record).
     evaluatedPackageHash: servedHash, candidatePackageHash: candSv?.materializedHash ?? '',
     // `fire` refuses a package that does not hash to its record, so delivery is valid by construction here.
-    deliveryValid: true, deterministicRegression: false,
+    deliveryValid: true, deterministicRegression: requiredRegressed.length > 0,
     fidelityAuthority: targetKey ? 'CERTIFY' : 'OBSERVE', comparison, distinctiveness: st.state, floor: composite,
   });
   const unguarded = guarded ? '' : '; no enforced rule other than the target is watching, so nothing guards what the change did not aim at (--enforce another rule)';
-  let final: PromotionDecision = { ...decision, why: `${decision.why}${unguarded}` };
+  const regressedNote = requiredRegressed.length ? ` (REQUIRED rule(s) ${requiredRegressed.join(', ')} regressed)` : '';
+  let final: PromotionDecision = { ...decision, why: `${decision.why}${regressedNote}${unguarded}` };
   // THE TASTE READER, WHEREVER A CANDIDATE COULD INSTALL ITSELF (fix, floor --check, optimize, tend). On
   // the rules where your labels have earned it VETO, it may turn an automatic promotion into a
   // rejection; it can never make one. If it cannot run, the automatic promotion is withheld.
-  if (final.authority === 'AUTO_PROMOTE') {
+  if (shipsAutonomously(final)) {
     const veto = tastePermissions(tasteRules(v), store.readEvents(L), readerModel()).veto;
     if (veto.size) {
       try {
@@ -231,6 +238,16 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
           why: `the counts allow it, but the taste reader could not check it (${(e as Error).message.split('\n')[0]}), so it is yours to decide` };
       }
     }
+  }
+  // WHAT NOTHING READ. An automatic promotion is authorised by what the instruments measured; a change to
+  // the skill can move behaviour on rules none of them read. Say which, by id, wherever it installs itself,
+  // so "every instrument holding its authority" is never read as "every rule checked".
+  if (final.authority === 'AUTO_PROMOTE') {
+    const veto = tastePermissions(tasteRules(v), store.readEvents(L), readerModel()).veto;
+    const keys = keysOf(v.requirements);
+    const unread = v.requirements.filter((r, i) => !r.measurement && r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL'
+      && r.materiality !== null && !veto.has(keys[i])).map((r) => r.requirementId);
+    if (unread.length) final = { ...final, why: `${final.why}. Not read by any instrument: ${unread.length} ratified rule(s) (${unread.join(', ')})` };
   }
   return { composite, result, comparison, state: st.state, decision: final };
 }
@@ -438,7 +455,7 @@ export async function floor(): Promise<void> {
     store.appendEvent(L, { kind: 'FLOOR_CHECK', candidateSkillVersionHash: cand, floor: check.composite, comparison: check.comparison,
       authority: check.decision.authority, at: new Date().toISOString() });
     if (argv.includes('--promote')) {
-      if (check.decision.authority !== 'AUTO_PROMOTE') die(`not promoted: the gate said ${check.decision.authority}. A person can still promote: atelier promote --skill ${name} --candidate ${cand} --why "<reason>"`);
+      if (!shipsAutonomously(check.decision)) die(`not promoted: the gate said ${check.decision.authority}. A person can still promote: atelier promote --skill ${name} --candidate ${cand} --why "<reason>"`);
       promoteChecked(L, name, cand, check, 'atelier floor --check --promote');
       console.log(`Promoted ${cand}.`);
     }

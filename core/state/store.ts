@@ -62,24 +62,37 @@ export const getEvidence = (l: StoreLayout): ExpertEvidence | null => {
   return existsSync(p) ? readJson<ExpertEvidence>(p, { what: 'sealed evidence', requireKeys: ['evidenceId'] }) : null;
 };
 
+/** What the hash covers, in the order every minting site hashes it. */
+const hashedContent = (v: StandardVersion): string =>
+  JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements });
+
 /**
- * Write a standard. REFUSES to overwrite an existing hash.
+ * Write a standard. REFUSES to overwrite an existing hash with different content. Returns the standard
+ * now on disk, which on a re-mint is the one written first.
  *
  * Two different standards cannot share a hash, so a collision means the same standard is being written
  * twice — harmless — while a DIFFERENT body under an existing hash would mean the hash is not an
  * identity. Refusing is cheap; discovering later that a version's content changed is not.
+ *
+ * THE COMPARISON IS OVER WHAT THE HASH COVERS. It compared the whole file, and `mintedAt`, `reason` and
+ * `supersedes` sit outside the hash, so the same standard minted a second time (confirm after a
+ * rollback, the same rule added again) differed by its timestamp and was refused as a conflicting
+ * identity. Under content addressing it is the same version: the stored file stays canonical and the
+ * caller renders from it. What remains open (B11): two different authority events over identical
+ * requirements collapse to one identity, so the supersession chain records only the first.
  */
-export function putStandard(l: StoreLayout, v: StandardVersion): void {
+export function putStandard(l: StoreLayout, v: StandardVersion): StandardVersion {
   assertSupersessionRecorded(v);
   const p = join(dirs(l).standards, `${v.standardVersionHash}.json`);
   if (existsSync(p)) {
-    const existing = readFileSync(p, 'utf8');
-    if (existing !== JSON.stringify(v, null, 1)) {
+    const existing = readJson<StandardVersion>(p, { what: `standard ${v.standardVersionHash}`, requireKeys: ['standardVersionHash', 'requirements'] });
+    if (hashedContent(existing) !== hashedContent(v)) {
       throw new Error(`STORE: standard ${v.standardVersionHash} already exists with different content. A version hash is an identity; two bodies cannot share one.`);
     }
-    return;
+    return existing;
   }
   writeAtomic(p, JSON.stringify(v, null, 1));
+  return v;
 }
 
 /**
@@ -511,9 +524,18 @@ export function listBindings(l: StoreLayout, skillVersionHash: string): BindingL
  *
  * Not "the most recent". Most-recent would silently redefine the baseline every time someone tried a
  * different model, so the guard would never fire twice and the whole point would be lost after one use.
+ *
+ * ONE BASELINE PER SURFACE, when the caller names the binding about to serve. The Claude Code Stop hook
+ * records the host's own binding (`claude-code`), so after one `/skill` use the first-ever binding was
+ * the host's and every `atelier invoke` was refused as a mismatch: two surfaces that will always
+ * differ, compared as if one had drifted. Given `candidate`, the baseline is the first binding recorded
+ * on the candidate's surface (providerAdapter), and null when that surface has none. A different
+ * model on the same surface is still a mismatch, which is what the guard exists to catch.
  */
-export function expectedBinding(l: StoreLayout, skillVersionHash: string): RuntimeBinding | null {
-  return listBindings(l, skillVersionHash)[0]?.binding ?? null;
+export function expectedBinding(l: StoreLayout, skillVersionHash: string, candidate?: RuntimeBinding): RuntimeBinding | null {
+  const log = listBindings(l, skillVersionHash);
+  const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
+  return onSurface[0]?.binding ?? null;
 }
 
 /** Append-only, and a no-op for a binding already on the log. */

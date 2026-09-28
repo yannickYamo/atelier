@@ -105,6 +105,13 @@ export function skillDashboard(name: string): void {
   const lastTend = events.filter((e) => e.kind === 'TENDED').at(-1);
   console.log(`${name}  ·  version ${active}  ·  standard ${v.standardVersionHash}`);
   console.log(`  rules          ${live.length}: ${live.filter((r) => r.measurement).length} counted, ${rules.length} read by the taste reader`);
+  // WHAT THE ONE HUMAN ACT WAS. Pressing Enter accepts every suggested ruling, so "you approved every rule"
+  // and "you took the machine's suggestions" can be the same act. The ledger records which; say it.
+  const took = (store.getLedger(L, v.standardVersionHash)?.records ?? []).map((r) => r.ruling?.took).filter((t) => t !== undefined);
+  if (took.length) {
+    const n = (k: string): number => took.filter((t) => t === k).length;
+    console.log(`  your rulings   ${n('SUGGESTION')} took the suggestion, ${n('OVERRIDE')} overrode it, ${n('NO_SUGGESTION')} had none`);
+  }
   console.log(`  covers         ${[...Object.keys(DIMENSION_LABEL)].filter((d) => d !== 'UNSORTED' && !cov.gaps.includes(d as never)).length} of ${DIMENSIONS.length} dimensions${cov.gaps.length ? `; nothing about ${cov.gaps.map((d) => DIMENSION_LABEL[d]).join(', ')}` : ''}`);
   console.log(`  taste reader   ${perms.veto.size ? `acts on ${perms.veto.size} rule(s)` : 'reports only'}; ${calibrationQueue(rules, events, readerModel()).length} reading(s) to label`);
   console.log(`  floor          ${st.state}`);

@@ -19,7 +19,7 @@ import { checksFor } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
-import { checkDraft, refineToStandard } from '../../core/loop/run-repair.js';
+import { checkDraftAsync, refineToStandard } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding } from '../runtime.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
@@ -53,7 +53,7 @@ export async function verify(): Promise<void> {
   // skill's material nor anything bound with --with, fails as UNSOURCED. A person checking their own
   // draft whose stories are theirs adds them to the material, or passes --allow-unsourced.
   const material = [...store.getMaterial(L), ...boundMaterial()].map((m) => m.text).join('\n\n');
-  const checks = checksFor(L, { material, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  const checks = checksFor(L, { material, task: flag('--task') ?? '', guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);
@@ -67,7 +67,8 @@ export async function verify(): Promise<void> {
     if (r.report.failed) process.exitCode = 1;
     return;
   }
-  const report = checkDraft(name, v, text, checks);
+  const report = await checkDraftAsync(name, v, text, checks);
+  for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
   // The reading-based rules, on request (`--taste`): this calls a model, and every count here is free.
   // Read first, so `--json` prints one object holding both.
   let taste: { text: string; failed: boolean; verdicts: unknown[] } | null = null;

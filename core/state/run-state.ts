@@ -82,6 +82,11 @@ export interface Run {
   readonly standardVersionHash: string | null;
   readonly preference: 'A' | 'B' | 'TIE' | 'NONE' | null;
   readonly terminal: TerminalState | null;
+  /**
+   * false when discovery fell back to a single pass and no rule was tested against unread work. The
+   * ratify page's caveat reads it; absent on runs that predate it, which read as checked.
+   */
+  readonly heldOutChecked?: boolean;
 }
 
 export const isEnrolled = (r: Run, s: StudyKind): boolean => r.enrolments.some((e) => e.study === s);

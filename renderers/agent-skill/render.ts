@@ -286,11 +286,42 @@ export function renderAgentSkill(
   // otherwise. Two defects in how it was FILLED are fixed without touching the frame: an author's "I"
   // (or an acronym) is no longer lowercased into "i", and the "; " Atelier itself uses to join a
   // condition's predicates reads as " and ".
+  //
+  // ONE CONDITION SHAPE IS NOT A CLAUSE, AND ONLY THAT ONE GETS A DIFFERENT FRAME. "any statement about
+  // size, frequency, or duration" is a noun phrase: after "When" it rendered as a sentence with no verb.
+  // A quantified noun phrase names the cases the rule covers, so it reads "For <condition>, <statement>.
+  // Elsewhere, do not." — the same two branches in the only English that holds them. The test is narrow
+  // on purpose: it opens with a quantifier AND no finite verb was found. "the post reports an outcome
+  // metric" opens with "the" and is a clause; keying on articles would move every such rule off the
+  // measured frame, which is the one change this block refuses to make without a study. The For frame
+  // itself is unmeasured; it earns its place only because the When frame was not a sentence here.
+  const QUANTIFIER = /^(any|every|each|no|all)\s+/i;
+  // Closed-class finite verbs, plus an -s/-ed word before the NP's first preposition or relative (so
+  // "every piece ends with a question" is a clause). A verb inside "that …"/"which …" belongs to the
+  // noun phrase. Doubt falls back to the measured frame, never to the new one.
+  const FINITE = /^(is|are|was|were|isn't|aren't|wasn't|weren't|has|have|had|does|do|did|doesn't|don't|can|could|will|would|shall|should|may|might|must|can't|won't)$/i;
+  const NP_BREAK = /^(about|of|on|in|for|with|from|to|at|by|over|under|into|involving|concerning|regarding|like|that|which|who|whose|where)$/i;
+  const isQuantifiedNounPhrase = (w: string): boolean => {
+    const q = QUANTIFIER.exec(w);
+    if (!q) return false;
+    const words = w.slice(q[0].length).split(/[\s,]+/).filter(Boolean);
+    const rel = words.findIndex((x) => /^(that|which|who|whose|where)$/i.test(x));
+    const main = rel === -1 ? words : words.slice(0, rel);
+    if (main.some((x) => FINITE.test(x))) return false;
+    const brk = main.findIndex((x) => NP_BREAK.test(x));
+    const head = brk === -1 ? main : main.slice(0, brk);
+    return !head.slice(1).some((x) => /[a-z](s|ed)$/i.test(x) && !/(ss|us|is)$/i.test(x));
+  };
   const conditionalLine = (statement: string, appliesWhen: string): string => {
     // The author's condition, verbatim, with a leading "when" only if they did not write one.
     const w = appliesWhen.trim().replace(/[.\s]+$/, '').split(/\s*;\s*/).filter(Boolean).join(' and ');
-    const clause = /^when\b/i.test(w) ? w : `when ${w}`;
     let body = statement.trim().replace(/[.\s]+$/, '');
+    if (isQuantifiedNounPhrase(w)) {
+      // A statement's own "when" stays its own: "For any figure, when it is an estimate, I say so."
+      const keep = /^(I\b|I'|[A-Z]{2,})/.test(body);
+      return `For ${w.charAt(0).toLowerCase() + w.slice(1)}, ${keep ? body : body.charAt(0).toLowerCase() + body.slice(1)}. Elsewhere, do not.`;
+    }
+    const clause = /^when\b/i.test(w) ? w : `when ${w}`;
     // A statement with a "when" of its own joins the condition rather than following it: "When A, when
     // B, I do C" read as two conditions with a comma splice. It becomes "When A and B, I do C".
     let joined = clause;

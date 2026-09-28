@@ -55,10 +55,13 @@ export function confirmBoundary(): void {
     : prev.requirements.map((r) => r.requirementId === ruleId ? confirmedReq : r);
 
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
-  const next: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
+  const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(), supersedes: prev.standardVersionHash,
     reason: drop ? `author ruled "${target.statement}" is not a rule they hold` : `author confirmed "${target.statement}"` };
-  assertSupersessionRecorded(next);
+  assertSupersessionRecorded(minted);
+  // The same ruling made again (confirm, rollback, confirm) mints the same content: the first mint is
+  // the version, and the skill is rendered from it.
+  const next = store.putStandard(L, minted);
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
@@ -69,16 +72,18 @@ export function confirmBoundary(): void {
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
 
-  store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
-  const host = pickHost();
-  const inst = host.install(pkg, projectDir());
+  store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg);
+  // Installed first, activated second, as `addition` does. The pointer moved first here, so a failed
+  // install left `active` naming a version the host did not serve — and every later command read it.
+  const inst = pickHost().install(pkg, projectDir());
   { const moved = describeBackup(inst); if (moved) console.log(moved); }
-  if (!inst.ok) return void die(`install failed: ${inst.reason}`);
+  if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was confirmed: the active version is unchanged.`);
+  store.setActive(L, skill.skillVersionHash);
 
   // Ledgered like every other ruling. A drop is a REJECT of the inferred rule; a confirm is its APPROVE.
   const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },
-    target, confirmedLedger, { ...(next.reason ? { note: next.reason } : {}), decidedAt: next.mintedAt }), next.standardVersionHash);
-  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
+    target, confirmedLedger, { ...(minted.reason ? { note: minted.reason } : {}), decidedAt: minted.mintedAt }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: minted.mintedAt });
 
   console.log(drop
     ? `Dropped. "${target.statement}" is no longer part of your standard.`

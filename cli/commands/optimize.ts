@@ -46,6 +46,7 @@ import { floorDimensions, perFire } from '../../core/distinctiveness/measured.js
 import { contrastFor, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
 import { spend, type Budget } from '../../core/inference/client.js';
+import { shipsAutonomously } from '../../core/convergence/promotion.js';
 import { fire, checkCandidate, promoteChecked, floorStateFor, runtimeIdentity, baselineProblem, MIN_TASKS, TASTE_GATE_CALLS } from './floor.js';
 import { sha, DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding, clientFor, diagnoserModel, modelFor, carriedFrom } from '../runtime.js';
 
@@ -207,7 +208,7 @@ export async function optimize(opts: { readonly promote?: boolean } = {}): Promi
     console.log(`  ${describeMutation(c.mutation, rules)}: floor ${check.composite}, target ${check.comparison}, gate ${authority}. ${why}`);
     store.appendEvent(L, { kind: 'FLOOR_CHECK', candidateSkillVersionHash: c.skillVersionHash, floor: check.composite, comparison: check.comparison, authority, at: new Date().toISOString() });
     if (authority === 'AUTO_REJECT') { settle(L, c, 'REJECTED', basis, why); continue; }
-    if (authority === 'AUTO_PROMOTE' && promoteAllowed && !promoted) {
+    if (shipsAutonomously(check.decision) && promoteAllowed && !promoted) {
       promoteChecked(L, name, c.skillVersionHash, check, `optimize: ${describeMutation(c.mutation)}`);
       settle(L, c, 'PROMOTED', basis, 'installed by the gate');
       promoted = c;
