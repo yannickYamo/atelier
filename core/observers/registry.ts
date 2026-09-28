@@ -144,8 +144,16 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
     observe(text, p) {
       const id = (list(p, 'pattern') ?? [])[0] as PatternId;
       const words = proseWords(text);
-      if (words < 150) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 150 words' };
       const prefer = (list(p, 'prefer') ?? [])[0];
+      // A move the author never makes is banned outright, so it is checked at any length: a two-line
+      // support reply that opens "Let me be blunt" has made it. A RATE needs 150 words to mean anything.
+      if (words < 150) {
+        const neverShort = new Set(list(p, 'never') ?? []);
+        const bannedShort = neverShort.size ? findPattern(text, id).filter((s) => s.family !== undefined && neverShort.has(s.family)) : [];
+        return bannedShort.length
+          ? { verdict: 'VIOLATED', spans: bannedShort, value: null, detail: `${bannedShort.length} move(s) you never make` }
+          : { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 150 words' };
+      }
       const all = findPattern(text, id).map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
       // A MOVE THE AUTHOR NEVER MAKES IS NEVER ALLOWED. `never` names families (./tells.ts) absent from
       // every piece of the author's: each instance breaks the rule whatever the rate. A pooled rate let a
