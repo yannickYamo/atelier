@@ -204,7 +204,7 @@ export function ratifyBatch(): void {
       itemCount: s.evidence?.items?.length ?? 0,
       // Said on the page rather than assumed: a run that fell back to a single pass has checked
       // nothing against unread work, and the reader is entitled to know that while reading.
-      heldOutChecked: (s.run as { heldOutChecked?: boolean } | undefined)?.heldOutChecked !== false,
+      heldOutChecked: s.run.heldOutChecked !== false,
       // The same suggestions the terminal screen shows, pre-selected: one review, two surfaces.
       suggestions: Object.fromEntries(pending.map((p) => {
         const x = suggest(p, s.proposalMeta?.[p.requirementId], s.intent?.mode ?? 'GENERATE');
@@ -297,8 +297,17 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     // as something the author sometimes does, with that rate, not as an obligation on every piece.
     const held = d.id ? s.proposalMeta?.[d.id]?.heldOut : undefined;
     if (held && held.applicable > 0) outcome = { ...outcome, requirement: { ...outcome.requirement, observedRate: { present: held.present, applicable: held.applicable } } };
-    if (d.needs?.trim()) {
-      const why = d.needs.trim();
+    // A RULING SILENT ON `needs` KEEPS WHAT DISCOVERY FOUND. Only the ruling was read, so a hand-typed
+    // `--decisions` that approved "quantify with the real figure" without restating its need approved a
+    // rule with no prerequisite, and the anti-fabrication guard had nothing to check. `"needs":"none"`
+    // is how a person says the rule needs nothing; either outcome is printed, never assumed.
+    const said = d.needs?.trim() ?? '';
+    const found = d.id ? s.proposalMeta?.[d.id]?.needs?.trim() ?? '' : '';
+    const waived = said.toLowerCase() === 'none';
+    const why = waived ? '' : said || found;
+    if (!said && found) console.log(`  ${d.id}: needs from you: ${found}  (found by discovery; your ruling did not say, so it is kept — "needs":"none" waives it)`);
+    if (waived && found) console.log(`  ${d.id}: needs nothing from you, as you ruled — discovery had found: ${found}`);
+    if (why) {
       outcome = { ...outcome, requirement: { ...outcome.requirement,
         prerequisites: [{ kind: 'CONTEXT' as const, name: prerequisiteName(why), why }] } };
     }
@@ -307,7 +316,7 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     // would answer a question the standard already answers.
     ledger = appendDecision(ledger, p!, outcome.ledgerDecision,
       { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt,
-        ruling: rulingOf(d, outcome.requirement.materiality) });
+        ruling: rulingOf({ ...d, needs: why || undefined }, outcome.requirement.materiality) });
   }
   saveSession({ ...s, decided, ledger });
   const kept = decided.filter((d) => d.authority !== 'EXPERT_REJECTED');
