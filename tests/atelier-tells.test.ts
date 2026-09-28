@@ -155,14 +155,33 @@ describe('round 6 findings: a move the author never makes is never allowed, and 
   });
 });
 
-describe('the unread pieces may loosen the machine-tell rule, never drop it', () => {
-  it('a family the author uses only in an unread piece is not banned, and the rule survives', () => {
+describe('held to the author\'s typical piece; their occasional move does not disqualify the rule', () => {
+  it('a family used in fewer than half the author\'s pieces is banned in ours, and one occasional use in their unread work is tolerated', () => {
     const plain = (i: number) => ({ id: `a${i}`, text: Array.from({ length: 16 }, (_, k) => `We ran check ${k + i} twice and kept the result.`).join('\n\n') });
     const held = [{ id: 'h1', text: `${plain(9).text}\n\nIt is the single most useful habit I have.` }, plain(10)];
     const rules = deriveContrastRules([0, 1, 2, 3].map(plain), held, ['Plain text. '.repeat(300), 'Plain text. '.repeat(300)], 'MACHINE_DISCOVERED');
     const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
-    expect(r).toBeDefined();
-    expect(r?.requirement.measurement?.params.never).not.toContain('SUPERLATIVE');
-    expect(r?.requirement.measurement?.params.never).toContain('CANDOUR');
+    expect(r).toBeDefined();                                                          // the rule survives
+    expect(r?.requirement.measurement?.params.never).toContain('SUPERLATIVE');        // used in 1 of 6 pieces
+    expect(r?.requirement.measurement?.params.never).toContain('VERDICT_OPENER');
+  });
+  it('a contrastive verdict as the opening line is found by position', () => {
+    const t = "Ownership isn't about authorship. It's about who answers the pager.\n\nThe rest of the piece argues it at length, and says nothing of the kind again.";
+    expect(findPattern(t, 'MACHINE_TELL').map((x) => x.why)).toContain('a contrastive verdict as the opening line');
+    expect(findPattern(`A plain opening line about pagers. A second plain line.\n\nIt isn't speed, it's review.`, 'MACHINE_TELL').map((x) => x.why)).not.toContain('a contrastive verdict as the opening line');
+  });
+});
+
+describe('invented material, in the shapes readers caught', () => {
+  it('an anecdote without a date, a second-hand story and an unnamed authority are claims; an opinion is not', async () => {
+    const { unsourcedClaims } = await import('../core/loop/claims.js');
+    const kinds = (t: string) => unsourcedClaims(t, '').map((c) => c.kind);
+    expect(kinds('I had an agent consolidate three date helpers into one.')).toEqual(['EXPERIENCE']);
+    expect(kinds('A team I worked with shipped a retry wrapper that hid outages.')).toEqual(['EXPERIENCE']);
+    expect(kinds('Teams I have talked to flipped CODEOWNERS overnight.')).toEqual(['EXPERIENCE']);
+    expect(kinds('A legal scholar put it well: the treaty is a spec for a different runtime.')).toEqual(['SOURCE']);
+    expect(kinds('I think review matters more now.')).toEqual([]);
+    expect(kinds('Teams that ship weekly need this.')).toEqual([]);
+    expect(unsourcedClaims('I had an agent consolidate three date helpers into one.', 'Last spring I had an agent consolidate three date helpers into one utility.')).toEqual([]);
   });
 });

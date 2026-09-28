@@ -42,6 +42,7 @@ export interface CheckOptions {
 
 const CUT_STORY = 'a first-person story that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another';
 const CUT_FIGURE = 'a figure presented as a finding, not in your material or your request: say it without the number, or cut the claim';
+const CUT_SOURCE = 'a quotation from someone unnamed, not in your material or your request: make the point in your own words without the attribution, or cut it';
 
 /**
  * Every check a draft is held to: the standard's measured rules, and — always, unless turned off — the
@@ -61,7 +62,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || (tellRule?.materiality === 'REQUIRED' && learned.length > 0) };
   if (opts.guardClaims === false) return report;
   const claims = unsourcedClaims(text, opts.material ?? '')
-    .map((c) => (opts.placeholders ? c : { ...c, why: c.kind === 'EXPERIENCE' ? CUT_STORY : CUT_FIGURE }));
+    .map((c) => (opts.placeholders ? c : { ...c, why: c.kind === 'EXPERIENCE' ? CUT_STORY : c.kind === 'SOURCE' ? CUT_SOURCE : CUT_FIGURE }));
   const line = { requirementId: 'UNSOURCED', statement: 'Never invent a first-person story or a figure presented as a finding.',
     materiality: 'REQUIRED', phase: 'ACCURACY' as const,
     result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: claims, value: claims.length,
