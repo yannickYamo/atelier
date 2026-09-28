@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { decideSpecifics, supportIsIn, modelSensor, patternSensor, numbered, READER_VERSION, type ExtractedSpecific } from '../core/loop/claim-extract.js';
 import { checkDraftAsync } from '../core/loop/run-repair.js';
+import { unsourcedClaims } from '../core/loop/claims.js';
 import { stringLeaves, runOnce } from '../cli/commands/improve.js';
 import * as store from '../core/state/store.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -152,6 +153,12 @@ describe('the reader behind the seam', () => {
     const r = await checkDraftAsync('d', v, 'According to a survey, 43% of operators agree.', { claimSensor: patternSensor('', false, 'pattern check (--claims pattern)') });
     expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.detail).toContain('[pattern check (--claims pattern)]');
   });
+});
+
+describe('the pattern fallback: a link excuses a figure only when the person supplied the link', () => {
+  const t = 'According to our report, conversion rose 94% [source](https://example.invalid/report).';
+  it('an invented link supports nothing', () => { expect(unsourcedClaims(t, '')).toHaveLength(1); });
+  it('a link from the material does', () => { expect(unsourcedClaims(t, 'Report: https://example.invalid/report')).toHaveLength(0); });
 });
 
 describe('a structured output is read as the text it carries', () => {

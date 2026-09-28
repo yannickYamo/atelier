@@ -61,6 +61,10 @@ a run in progress may not be.
 - **A quantified noun-phrase condition rendered as a non-sentence** ("When any statement about…, I…").
   It now reads "For …, … Elsewhere, do not." Clauses keep the "When" frame.
 - **The suite failed on macOS** (temp paths through `/private`). CI now runs macOS as well.
+- **The pattern fallback let any link excuse a figure.** A link now supports a figure only when the person
+  supplied that link.
+- **`atelier status --skill` now says what the one human act was**: how many suggested rulings were
+  taken, how many overridden, and how many had none. The ledger already recorded it; nothing reported it.
 - `--help` opens with the common workflow (`new`, `invoke`, `verify`, `material`, `fix`, `status`), then
   lists every command.
 

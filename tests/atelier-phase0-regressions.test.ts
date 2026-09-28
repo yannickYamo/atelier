@@ -395,6 +395,16 @@ describe('a staged ruling silent on `needs` keeps what discovery found', () => {
     expect(pending(data).requirements.find((r) => r.requirementId === 'p2')?.prerequisites).toBeUndefined();
   });
 
+  it('the dashboard says what the one human act was: suggestions taken, and overridden', () => {
+    const { data, proj, ids } = discovered();
+    const decisions = ids.map((id) => ({ id, decision: 'APPROVE', materiality: 'REQUIRED',
+      suggested: { decision: 'APPROVE', materiality: id === ids[0] ? 'PREFERRED' : 'REQUIRED', why: 'held-out' } }));
+    runM(data, proj, 'ratify', '--decisions', JSON.stringify(decisions));
+    runM(data, proj, 'ratify-close', '--work-type', 'writing');
+    runM(data, proj, 'build', '--name', 'ruled');
+    expect(runM(data, proj, 'status', '--skill', 'ruled')).toMatch(new RegExp(`your rulings\\s+${ids.length - 1} took the suggestion, 1 overrode it, 0 had none`));
+  });
+
   it('a `needs` the person wrote wins over the discovered one, silently', () => {
     const { data, proj, ids } = discovered();
     const out = runM(data, proj, 'ratify', '--decisions', approveAll(ids, { needs: 'the Q3 revenue table' }));
