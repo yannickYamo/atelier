@@ -199,10 +199,10 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
 export const numbered = (text: string): string => sentencesOf(text).map((s, i) => `[${i + 1}] ${s.text}`).join('\n');
 
 /** The pattern check, behind the same seam: what runs when no reader model is configured. */
-export function patternSensor(material: string, placeholders: boolean, why = 'pattern check'): ClaimSensor {
+export function patternSensor(material: string, placeholders: boolean, why = 'pattern check'): Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } {
   const cache = new Map<string, ClaimReading>();
   const instrument = why;
-  const sensor: ClaimSensor = {
+  const sensor: Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } = {
     instrument, notes: [],
     read: (text) => { sensor.reading(text); return Promise.resolve(); },
     reading: (text) => {
@@ -251,7 +251,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
       } catch (e) {
         const why = (e as Error).message.split('\n')[0];
         if (!sensor.notes.some((n) => n.includes(why))) sensor.notes.push(`the claim reader could not run (${why}); the pattern check was used instead`);
-        cache.set(k, fallback.reading(text)!);
+        cache.set(k, fallback.reading(text));
       }
     },
     reading: (text) => cache.get(sha(text)),

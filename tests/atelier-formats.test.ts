@@ -63,7 +63,7 @@ describe('through the binary: a skill built for X holds its posts to 280 charact
     run('ratify-close', '--work-type', 'writing');
     run('build', '--name', 'posts', '--class', 'x-post');
     const file = join(proj, 'p.md');
-    writeFileSync(file, `${'This post runs on and on. '.repeat(14)}`);
+    writeFileSync(file, 'This post runs on and on. '.repeat(14));
     const r = run('verify', '--skill', 'posts', file);
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/FORMAT/);

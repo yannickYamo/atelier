@@ -43,6 +43,26 @@ a run in progress may not be.
   rule neither a count nor a reader with VETO checked.
 - **An under-used pattern was proposed as a floor with no ceiling**, which a model overshoots. It is now
   a band.
+- **Using a skill in Claude Code blocked `atelier invoke` afterwards.** The first runtime binding ever
+  recorded was the baseline for every surface, and the Stop hook records `claude-code`. The baseline is
+  now the first binding on the same surface: another model on that surface is still flagged.
+- **Re-minting an identical standard threw** (after `abort`, or a confirm → rollback → confirm), because
+  the store compared the mint time. It now compares what the hash covers, and keeps the stored file.
+- **`confirm` and `amend` moved the active pointer before installing**, so a failed install left the
+  store naming a version the host was not serving. Both now install first.
+- **A resumed `fix` could show a run of a different task** beside the current one. It now pairs only a
+  run of the same task, or sends the person to `promote` / `reject`.
+- **The "not checked against unseen work" caveat never rendered**: the flag was set on a copy that was
+  not saved.
+- **The staged `ratify --decisions` path dropped a discovered need** when the ruling said nothing about
+  it. It now keeps it (`"needs":"none"` waives), and says which.
+- **A scope change alone was refused by `amend`**, and a skipped conditional rule gave no remedy. Both
+  fixed: `verify` prints the exact `amend` command.
+- **A quantified noun-phrase condition rendered as a non-sentence** ("When any statement about…, I…").
+  It now reads "For …, … Elsewhere, do not." Clauses keep the "When" frame.
+- **The suite failed on macOS** (temp paths through `/private`). CI now runs macOS as well.
+- `--help` opens with the common workflow (`new`, `invoke`, `verify`, `material`, `fix`, `status`), then
+  lists every command.
 
 ### Added
 
