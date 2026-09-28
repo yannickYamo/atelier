@@ -117,3 +117,40 @@ describe('repair removes the move, one sentence at a time', () => {
     expect(applyRepair(text, [t], [{ id: 1, text: '[your story: a migration that broke]' }], [], [], true)).toContain('[your story');
   });
 });
+
+describe('round 6 findings: a move the author never makes is never allowed, and nothing invented survives a failed rewrite', () => {
+  const filler = 'We shipped the change on a Tuesday and watched the dashboards through the afternoon. '.repeat(250);
+  const rule = (never: string[]) => aRequirement({ requirementId: 'c6', statement: 'No machine moves.', kind: 'BOUNDARY', materiality: 'REQUIRED',
+    measurement: { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: 0.5, never } } });
+  it('one instance of a family the author never uses breaks the rule, however long the piece', () => {
+    const text = `${filler}That last one matters more than it looks.`;
+    const std = (never: string[]) => ({ standardVersionHash: 's', requirements: [rule(never)] } as unknown as StandardVersion);
+    expect(checkDraft('x', std(['RETRO_EMPHASIS']), text, { guardClaims: false }).failed).toBe(true);
+    expect(checkDraft('x', std([]), text, { guardClaims: false }).failed).toBe(false);   // pooled, it slipped under the rate
+  });
+  it('the proposal bans every family absent from the author\'s pieces', () => {
+    const author = (i: number) => ({ id: `a${i}`, text: Array.from({ length: 16 }, (_, k) => `It is the single most useful check ${k + i}. We ran it twice.`).join('\n\n') });
+    const rules = deriveContrastRules([0, 1, 2, 3].map(author), [4, 5].map(author), ['Plain text. '.repeat(300), 'Plain text. '.repeat(300)], 'MACHINE_DISCOVERED');
+    const never = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL')?.requirement.measurement?.params.never as string[];
+    expect(never).toContain('RETRO_EMPHASIS');
+    expect(never).not.toContain('SUPERLATIVE');   // this author does write "the single most"
+  });
+  it('a sentence that is only a move may be cut, even with a "not" in it; one with a name or figure may not', () => {
+    const text = 'Review matters. I want to be careful not to be cynical about this. Ship it.';
+    const t = { id: 1, start: 16, end: 66, text: text.slice(16, 66), reasons: ['x'], requirementIds: ['c6'], drops: [], swaps: [], specifics: false, recase: false, cuttable: true };
+    expect(applyRepair(text, [t], [{ id: 1, text: '' }])).toBe('Review matters. Ship it.');
+    const named = 'Review matters. Let me be blunt about Kubernetes in 2024. Ship it.';
+    const t2 = { ...t, start: 16, end: 57, text: named.slice(16, 57) };
+    const reverted: { id: number; lost: readonly string[] }[] = [];
+    expect(applyRepair(named, [t2], [{ id: 1, text: '' }], reverted)).toBe(named);
+    expect(reverted[0].lost[0]).toMatch(/no figure or name/);
+  });
+  it('when every rewrite of an invented story fails, the story is cut outright and listed', async () => {
+    const std = { standardVersionHash: 's', requirements: [] } as unknown as StandardVersion;
+    const draft = 'Review matters. Two years ago I shipped a migration that broke billing for a week. Tests would have caught it.';
+    const slots = { complete: async () => ({ json: { replacements: [{ id: 1, text: '[your story: a migration]' }] }, cost: { basis: 'API_METERED', billingUsd: 0 } }) } as never;
+    const r = await refineToStandard(slots, { spentUsd: 0, capUsd: 1 }, 'x', std, draft, 2, {});
+    expect(r.output).toBe('Review matters. Tests would have caught it.');
+    expect(r.repair?.storiesCut?.[0]).toMatch(/Two years ago/);
+  });
+});
