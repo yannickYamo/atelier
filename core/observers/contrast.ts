@@ -432,10 +432,15 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   const all = [...authorTexts, ...heldTexts];
   const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.why === f)).length;
   const never = TELL_FAMILIES.filter((f) => usedIn(f.label) * 2 < all.length).map((f) => f.id);
-  // Output is held to the typical piece. The author's own pieces are checked with one occasional move
-  // tolerated: the rule targets the model's habit, and a writer who once wrote "let me be clear" has not
-  // shown that the rule is against them. (Across one author's twenty pieces, about a third held one.)
-  const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= 1;
+  // Output is held to the typical piece. The author's own pieces are checked with their occasional moves
+  // tolerated: the rule targets the model's habit, and a writer who sometimes writes "let me be clear"
+  // has not shown that the rule is against them.
+  // How many such moves the author's own 90th-percentile piece carries (at least one): their own pieces
+  // are tolerated up to that when the rule is checked on them. One real corpus had moves like these in 8
+  // of 20 pieces, and in one piece four; tolerating a single move still dropped the rule.
+  const ownCounts = all.map((t) => findPattern(t, 'MACHINE_TELL').length).sort((a, b) => a - b);
+  const ownTolerance = Math.max(1, ownCounts[Math.min(ownCounts.length - 1, Math.ceil(ownCounts.length * 0.9) - 1)] ?? 1);
+  const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= ownTolerance;
   propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
     'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
     `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words, in ${all.filter((t) => findPattern(t, 'MACHINE_TELL').length).length} of ${all.length} pieces; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`,

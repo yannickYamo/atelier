@@ -123,8 +123,13 @@ as it stood at the time:
   banned in ours (round 7 allowed one per piece from families the author used in at most 4 of 20). The
   author's own occasional move is tolerated when the rule is qualified on their unread work.
 - **Four more families, each measured first**: announced reframes, "I keep coming back to", "the awkward
-  middle", and a contrastive verdict as the opening line (found by position). Each ran at 0 in three authors'
-  corpora and 0.05-0.5 per 1,000 words in model drafts; three other candidates separated nothing and stay out.
+  middle", and a contrastive verdict as the opening line (found by position). Measured with the product's own
+  sensor: 0 to 0.07 per 1,000 words in three authors' corpora, 0.03 to 0.33 in model drafts (roughly 3 to 10
+  times); three other candidates separated nothing and stay out. (A first count read 0 for the authors: it
+  matched only straight apostrophes, and one author writes curly ones.)
+- **An author's own occasional moves**: one corpus held such moves in 8 of 20 pieces, one piece with four. When
+  the rule is checked on the author's unread work, their pieces are tolerated up to what their own
+  90th-percentile piece carries; output is still held to their typical piece.
 
 ### Changed (after the fifth blind voice round: catch machine-written sentences as moves, from data)
 
