@@ -70,7 +70,12 @@ export function installTree(dir: string, pkg: InstallablePackage): InstallResult
     }
     let backedUpTo: string | null = null;
     if (movedAside && foreign.length) {
-      backedUpTo = join(hostDir, '.atelier-backups', `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+      // Named by time, and made unique: two installs in the same millisecond (a quick rebuild, a test)
+      // chose the same name, the move onto it failed, and an install that had succeeded reported failure.
+      const stamp = `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+      let n = 0;
+      backedUpTo = join(hostDir, '.atelier-backups', stamp);
+      while (existsSync(backedUpTo)) backedUpTo = join(hostDir, '.atelier-backups', `${stamp}-${++n}`);
       mkdirSync(dirname(backedUpTo), { recursive: true });
       renameSync(aside, backedUpTo);
     } else if (movedAside) {
