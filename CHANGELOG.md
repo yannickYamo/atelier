@@ -61,6 +61,11 @@ as it stood at the time:
   - Readers' remaining gaps: announcing and signposting sentences beyond the catalogue; a contrastive verdict
     as the opening line; invented incidents without a time marker (the claim check keys on one); one-line
     paragraphs well under the author's typical rate; no references to the author's own earlier pieces.
+- **Offline, round 7's own drafts through the sensor pass** (post hoc, $2.26): machine moves 0.64 -> 0 per
+  1,000 words; the widened claim check found 6 invented stories, quotations or figures the old one missed, and
+  all 6 were cut (none left, no slots); shared 6-grams 2.8; every REQUIRED rule held in 5 of 5. Still open:
+  one piece keeps one-line paragraphs under the author's range (criterion 5). Stylometry, tracked: Atelier
+  -0.305, raw -0.345, corpus-in-context -0.294.
 
 ### Added (Phase 8: search the implementation, never the standard)
 
@@ -169,7 +174,8 @@ second with almost no copying. The changes, all derived from the corpus, none tu
 - **Signature and first-person bands are weak**: checked and used to choose drafts, never instructed.
 - **Register**: `CONTRACTION` / `FULL_FORM` patterns and a contraction rule for authors who contract.
 - **Displacement**: pattern families (contrast, opener) with `RATHER_THAN`, `REFRAME`, `ORDINAL_CATALOGUE`;
-  a repair pass that lowers one member and raises another is refused.
+  a rewrite that lowers one member and raises another is refused (per sentence since the round-5 fixes
+  below; at first the whole pass was refused).
 - **Invented stories are cut by default**, and listed after the output; `--placeholders` restores slots.
 - **`verify --repair`**: the guard for text written anywhere else.
 - `build` is async (it may call the model for the persona); `--voice` and `--persona` take none|auto.
@@ -302,7 +308,7 @@ and what changed:
 - **A positive-vocabulary floor was tried and deliberately not shipped.** On a single-domain corpus it
   learns the topic, not the voice (see docs/MEASURED-RULES.md).
 
-### Fixed (real end-to-end run on the the author corpus)
+### Fixed (real end-to-end run on a public author's corpus)
 
 - **`new` lost `--name` on continuation**, and built a skill named after the folder. The class set on
   the first call went to a skill that was never built. The name is now the run's from the first call.

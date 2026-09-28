@@ -4,19 +4,10 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { selectVoicePassages, selectVoicePieces, type VoicePassages } from '../../core/compiler/voice.js';
-import { derivePersona, reconcilePersona } from '../../core/compiler/persona.js';
-import { measure } from '../../core/observers/registry.js';
-import { findPattern, PATTERN_FAMILIES, type PatternId } from '../../core/observers/style.js';
-import type { Requirement } from '../../core/state/canonical-state.js';
-
-/** Whether a text contains the very pattern a PATTERN_RATE rule caps (a short text rarely reaches a rate). */
-const findPatternOf = (text: string, r: Requirement): boolean => {
-  const p = r.measurement?.observer === 'PATTERN_RATE' ? (r.measurement.params.pattern as string[] | undefined)?.[0] : undefined;
-  return p !== undefined && findPattern(text, p as PatternId).length > 0;
-};
+import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/voice.js';
+import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
-import { readCorpus } from './floor.js';
+import { sessionCorpus } from '../corpus.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
@@ -63,6 +54,45 @@ export function revert(): void {
   console.log(`Put ${paths.length} file(s) back as they were, in ${undo.packageRoot}:`);
   for (const rel of paths) console.log(`  ${rel}`);
   console.log(`\nYour standard is untouched — this reverted the SKILL, not what you decided good means.`);
+}
+
+/**
+ * HOW THE AUTHOR SOUNDS (core/compiler/voice.ts, persona.ts): whole pieces of the author's, chosen to
+ * span how they write, their usual length, and a persona brief (how they sound, with how often, each
+ * point proven by a quote from their pieces, none describing a move the standard rules out). From the
+ * pieces this run read (never a reserved one), kept through every rebuild. `--voice none` serves none of
+ * it; `--persona none` keeps the pieces and drops the description; `auto` chooses again.
+ */
+async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Voice | null> {
+  const choice = (name: string): 'none' | 'auto' | undefined => {
+    const x = flag(name)?.trim().toLowerCase();
+    if (x !== undefined && x !== 'none' && x !== 'auto') die(`${name} takes none or auto`);
+    return x as 'none' | 'auto' | undefined;
+  };
+  const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
+  if (voiceFlag === 'none') return null;
+  let voice: Voice | null = voiceFlag === undefined ? store.getVoice(L) : null;
+  // This run's pieces: the run being built is this skill's, whatever name it is built under.
+  const readable = !voice || personaFlag === 'auto' ? sessionCorpus() : [];
+  if (!voice && readable.length >= 3) {
+    const pieces = selectVoicePieces(readable);
+    voice = { passages: [], lengthWords: usualLength(readable), pieces };
+    if (pieces.length) console.log(`Voice: ${pieces.length} whole piece(s) of the author's own served with the skill, chosen to span how they write. Turn off with --voice none.`);
+  }
+  if (!voice) return null;
+  if (personaFlag === 'none') return { ...voice, persona: undefined };
+  if (readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
+  try {
+    const persona = reconcilePersona(await derivePersona(clientFor(proposerModel()), budget, readable), standardForbids(v));
+    console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
+      + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
+      + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
+    return { ...voice, persona };
+  } catch (e) {
+    console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
+    return voice;
+  }
 }
 
 export async function build(nameArg?: string): Promise<void> {
@@ -168,46 +198,7 @@ export async function build(nameArg?: string): Promise<void> {
   const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v, heldBack) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
-  // ── HOW THE AUTHOR SOUNDS (core/compiler/voice.ts, persona.ts) ──────────────────────────────────
-  //
-  // Whole pieces of the author's, chosen to span how they write, their usual length, and a persona
-  // brief: how they sound, with how often, each point proven by a quote from their pieces. All from the
-  // pieces discovery read (never a reserved one), kept through every rebuild. `--voice none` serves none
-  // of it; `--persona none` keeps the pieces and drops the description; `auto` chooses again.
-  const choice = (name: string): 'none' | 'auto' | undefined => {
-    const x = flag(name)?.trim().toLowerCase();
-    if (x !== undefined && x !== 'none' && x !== 'auto') die(`${name} takes none or auto`);
-    return x as 'none' | 'auto' | undefined;
-  };
-  const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
-  let voice: VoicePassages | null = voiceFlag === 'none' ? null : voiceFlag === undefined ? store.getVoice(L) : null;
-  const source = s.source && existsSync(s.source) ? s.source : null;
-  const readable = voiceFlag !== 'none' && (!voice || personaFlag === 'auto') && source ? readCorpus(source) : [];
-  if (!voice && readable.length >= 3) {
-    const pieces = selectVoicePieces(readable);
-    voice = { passages: [], lengthWords: selectVoicePassages(readable, 0).lengthWords, pieces };
-    if (pieces.length) console.log(`Voice: ${pieces.length} whole piece(s) of the author's own served with the skill, chosen to span how they write. Turn off with --voice none.`);
-  }
-  if (voice && personaFlag === 'none') voice = { ...voice, persona: undefined };
-  else if (voice && readable.length >= 3 && (personaFlag === 'auto' || !voice.persona)) {
-    const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
-    try {
-      // A point that describes or quotes a move a REQUIRED boundary forbids is dropped: the standard wins.
-      // Every cap the standard holds, required or shown, and a contrast of any spelling where any one
-      // spelling is capped: a persona point describing "not X, but Y" survived a cap on "not X, it's Y".
-      const boundaries = v.requirements.filter((r) => r.kind === 'BOUNDARY' && r.measurement && r.authority !== 'EXPERT_REJECTED');
-      const capsContrast = boundaries.some((r) => PATTERN_FAMILIES.contrast.includes((r.measurement!.params.pattern as string[] | undefined)?.[0] as PatternId));
-      const forbids = (text: string): boolean => (capsContrast && findPattern(text, 'CONTRAST_VERDICT').length > 0)
-        || boundaries.some((r) => (r.measurement!.observer === 'LEXICON' ? measure(text, r.measurement!).verdict === 'VIOLATED' : findPatternOf(text, r)));
-      const persona = reconcilePersona(await derivePersona(clientFor(proposerModel()), budget, readable), forbids);
-      voice = { ...voice, persona };
-      console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
-        + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
-        + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
-    } catch (e) {
-      console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
-    }
-  }
+  const voice = await chooseVoice(L, v);
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };

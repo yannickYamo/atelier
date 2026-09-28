@@ -27,13 +27,15 @@
 
 import { proseRegions } from './text.js';
 
+/** One draft the skill wrote, and the task it was written for (the task decides its topic). */
 export interface TellDraft { readonly task: string; readonly text: string }
+/** The learned phrases, and how much evidence they rest on: how many drafts, on how many distinct topics. */
 export interface TellLexicon { readonly terms: readonly string[]; readonly drafts: number; readonly topics: number; readonly at: string }
 
 /** How many distinct topics a phrase must recur across before it is a habit. */
 export const TELL_MIN_TOPICS = 3;
 /** How many times the corpus should hold a phrase, at the drafts' rate, before its absence counts. */
-export const TELL_MIN_EXPECTED = 3;
+const TELL_MIN_EXPECTED = 3;
 const MIN_WORDS = 4; const MAX_WORDS = 5;
 const MAX_TERMS = 60;
 

@@ -17,8 +17,10 @@
 // A claim is supported when the person supplied it: their material, or the task they typed. A figure
 // is supported when that exact number appears there as a whole number, or when the sentence carries its
 // own link. A story is supported when most of its content words appear in one passage of the material.
-// Unsupported claims are not deleted silently and not rewritten into other claims: the repair replaces
-// each with a bracketed placeholder saying what belongs there, so the person fills it or cuts it.
+// Unsupported claims are never rewritten into other claims. By default the repair cuts each one, keeping
+// the point it made, and the output lists where the person's own story would fit; with `placeholders`
+// the repair leaves a bracketed slot saying what belongs there instead. Each claim's `why` says which,
+// because it is the instruction the repair model reads.
 
 import { sentencesOf, wordsOf } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
@@ -47,12 +49,28 @@ const FINDING = /\b(?:according to|(?:a|the|this|their|our|its) (?:\w+ ){0,3}(?:
 const LINKED = /\]\(https?:|https?:\/\//;
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because', 'years', 'ago', 'last', 'later', 'months', 'weeks']);
 
+/** An unsupported claim: a first-person or second-hand story, a figure presented as a finding, or an anonymous quotation. */
 export interface Claim extends Span { readonly kind: 'EXPERIENCE' | 'FIGURE' | 'SOURCE' }
 
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
 const numbersIn = (s: string): string[] => (s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, ''));
 
-export function unsourcedClaims(text: string, material: string): Claim[] {
+/** What the repair is told to do with each kind of claim: cut it (the default), or leave a slot. */
+const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot: string }>> = {
+  EXPERIENCE: { cut: 'a first-person story that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another',
+    slot: 'a first-person story that is not in your material or your request; replace it with a placeholder like [your story: a time you ...]' },
+  SOURCE: { cut: 'a quotation from someone unnamed, not in your material or your request: make the point in your own words without the attribution, or cut it',
+    slot: 'a quotation from someone unnamed, not in your material or your request; replace it with a placeholder like [source: who said this]' },
+  FIGURE: { cut: 'a figure presented as a finding, not in your material or your request: say it without the number, or cut the claim',
+    slot: 'a figure presented as a finding, not in your material or your request; replace the number with a placeholder like [figure: what it measures, and its source]' },
+};
+
+/**
+ * Every story, anonymous quotation and figure in `text` that `material` does not support. `placeholders`
+ * picks the repair instruction each claim carries: cut it (the default) or leave a slot for the person.
+ */
+export function unsourcedClaims(text: string, material: string, placeholders = false): Claim[] {
+  const why = (k: Claim['kind']): string => (placeholders ? WHY[k].slot : WHY[k].cut);
   // Whole numbers only: "40" is not supported by "400", nor "4%" by "2024".
   const matNumbers = new Set(numbersIn(material));
   // A story is supported by ONE passage that tells it, not by topic words scattered across the notes.
@@ -67,13 +85,13 @@ export function unsourcedClaims(text: string, material: string): Claim[] {
   for (const s of ss) {
     const opens = (FIRST_PERSON_PAST.test(s.text) && PARTICULAR_TIME.test(s.text)) || ANECDOTE.test(s.text) || SECOND_HAND.test(s.text);
     if (ANONYMOUS_SOURCE.test(s.text) && !storySupported(s.text)) {
-      out.push({ ...s, kind: 'SOURCE', why: 'a quotation from someone unnamed, not in your material or your request; name a real source from your material, or cut it' });
+      out.push({ ...s, kind: 'SOURCE', why: why('SOURCE') });
       inStory = false;
       continue;
     }
     const continues = inStory && CONTINUES.test(s.text) && (FIRST_PERSON_PAST.test(s.text) || /\b(?:later|then|nobody|everyone)\b/i.test(s.text));
     if ((opens || continues) && !storySupported(s.text)) {
-      out.push({ ...s, kind: 'EXPERIENCE', why: 'a first-person story that is not in your material or your request; replace it with a placeholder like [your story: a time you ...], or cut it' });
+      out.push({ ...s, kind: 'EXPERIENCE', why: why('EXPERIENCE') });
       inStory = true;
       continue;
     }
@@ -81,7 +99,7 @@ export function unsourcedClaims(text: string, material: string): Claim[] {
     if (STATISTIC.test(s.text) && FINDING.test(s.text) && !LINKED.test(s.text)) {
       const numbers = numbersIn(s.text).filter((n) => !/^(?:19|20)\d\d$/.test(n));
       if (numbers.length && !numbers.every((n) => matNumbers.has(n))) {
-        out.push({ ...s, kind: 'FIGURE', why: 'a figure presented as a finding, not in your material or your request; replace the number with a placeholder like [figure: what it measures, and its source], or cut the claim' });
+        out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
       }
     }
   }

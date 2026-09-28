@@ -19,8 +19,8 @@
 // may go, a competing word a ratio flagged may be swapped (but "is not" → "is" is still a lost
 // negation: only "is not" → "isn't" is a swap), and a span flagged as an invented story or figure is
 // expected to lose its specifics.
-// Paraphrase that keeps all four is not checked further: this guards the strength of a claim, not its
-// wording, and it certifies nothing beyond the four.
+// Paraphrase that keeps all five is not checked further: this guards the strength of a claim, not its
+// wording, and it certifies nothing beyond the five.
 
 import { wordsOf } from '../observers/text.js';
 
@@ -69,6 +69,7 @@ export function namesIn(s: string): string[] {
   return [...out];
 }
 
+/** Whether a rewrite kept what its span claimed; `lost` names each figure, negation, qualifier, name or slot it dropped. */
 export interface Integrity { readonly ok: boolean; readonly lost: readonly string[] }
 
 /**

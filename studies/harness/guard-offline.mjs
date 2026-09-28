@@ -22,10 +22,11 @@ import { overlapIndex } from '../../dist/core/observers/overlap.js';
 import { unsourcedClaims } from '../../dist/core/loop/claims.js';
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i === -1 ? d : process.argv[i + 1]; };
-const ROUND = arg('--round'); const CORPUS = arg('--corpus'); const SKILL = arg('--skill'); const OUT = arg('--out');
+const need = (n) => arg(n) ?? (console.error(`missing ${n} (see the usage at the top of this file)`), process.exit(2));
+const ROUND = need('--round'); const CORPUS = need('--corpus'); const SKILL = need('--skill'); const OUT = need('--out');
 const ARMS = (arg('--arms', 'ATELIER,ATELIER_NO_PERSONA,CONTEXT,GUIDE,RAW')).split(',');
 const MODEL = arg('--model', 'claude-opus-5');
-const DATA = process.env.ATELIER_DATA;
+const DATA = process.env.ATELIER_DATA ?? (console.error('ATELIER_DATA must point at the store of the skill whose standard guards'), process.exit(2));
 
 const L = { root: DATA, skillName: SKILL };
 const v = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)).standardVersionHash);

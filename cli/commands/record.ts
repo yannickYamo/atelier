@@ -17,6 +17,7 @@
 // `persistInvocation` the CLI path uses. What cannot be known is recorded as unknown: a transcript
 // with no model line yields an UNREPORTED observation, never a guess.
 
+import { checksFor } from '../checks.js';
 import { checkDraft } from '../../core/loop/run-repair.js';
 import { planRepair, regressions } from '../../core/loop/repair.js';
 import { spanIntegrity } from '../../core/loop/integrity.js';
@@ -135,7 +136,7 @@ export async function record(): Promise<void> {
   // the host holds the pen for the whole answer, so "only these spans" is an instruction there, not a
   // splice — and the record says whether anything outside them changed, and whether anything got worse.
   const std = store.getStandard(L, pending.standardVersionHash);
-  const checks = { material: [pending.input, ...store.getMaterial(L).map((m) => m.text)].join('\n\n') };
+  const checks = checksFor(L, { material: [pending.input, ...store.getMaterial(L).map((m) => m.text)].join('\n\n') });
   const report = std ? checkDraft(pending.skillName, std, output, checks) : null;
   const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
   const targets = report?.failed ? planRepair(output, report) : [];

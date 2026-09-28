@@ -15,13 +15,16 @@
 // model's habits in ./style.ts, the opening, close and headings in ./structure.ts — checked on every output, with the exact span that
 // broke the rule, so a repair can rewrite that span and nothing else.
 
-import { TELL_FAMILIES } from './tells.js';
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS } from './structure.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
 
-export interface Span { readonly start: number; readonly end: number; readonly text: string; readonly why: string }
+export interface Span {
+  readonly start: number; readonly end: number; readonly text: string; readonly why: string;
+  /** for a machine-writing move, the family it belongs to (./tells.ts): what a per-family rule keys on, never the wording of `why` */
+  readonly family?: string;
+}
 
 export interface ObserverResult {
   readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE';
@@ -147,9 +150,9 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       // A MOVE THE AUTHOR NEVER MAKES IS NEVER ALLOWED. `never` names families (./tells.ts) absent from
       // every piece of the author's: each instance breaks the rule whatever the rate. A pooled rate let a
       // 4,000-word piece spend the author's small budget on moves they never make.
-      const never = new Set((list(p, 'never') ?? []).map((f) => TELL_FAMILIES.find((x) => x.id === f)?.label).filter(Boolean));
-      const banned = all.filter((s) => never.has(s.why));
-      const hits = all.filter((s) => !never.has(s.why));
+      const never = new Set(list(p, 'never') ?? []);
+      const banned = all.filter((s) => s.family !== undefined && never.has(s.family));
+      const hits = all.filter((s) => !(s.family !== undefined && never.has(s.family)));
       const rate = Math.round((hits.length / words) * 10000) / 10;
       const lo = num(p, 'minPer1000'); const hi = num(p, 'maxPer1000');
       if (banned.length) {
