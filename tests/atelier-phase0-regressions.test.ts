@@ -262,7 +262,7 @@ const seedInferred = (): { data: string; proj: string; L: store.StoreLayout; fir
   const pkg = renderAgentSkill(sv0, arch, 'demo', 'd');
   store.putStandard(L, sv0); store.putArchitecture(L, arch); store.putPackage(L, pkg);
   store.putSkillVersion(L, { skillVersionHash: 'k0', skillName: 'demo', standardVersionHash: 'std0', architectureHash: arch.architectureHash,
-    materializedHash: pkg.packageHash, builtAt: '2026-09-01T00:00:00Z', description: 'd' } as never);
+    materializedHash: pkg.packageHash, builtAt: '2026-09-01T00:00:00Z', description: 'd' });
   store.setActive(L, 'k0');
   return { data, proj, L, first: 'k0' };
 };
