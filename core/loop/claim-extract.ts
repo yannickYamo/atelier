@@ -153,7 +153,9 @@ const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot:
  * strongest kind first) and the public facts to list.
  */
 export function decideSpecifics(text: string, specifics: readonly ExtractedSpecific[], material: string, task: string, placeholders: boolean,
-  instrument: string): ClaimReading {
+  instrument: string,
+  /** a format where every specific must trace to the person (a white paper, a report, a contract): nothing passes as public */
+  strict = false): ClaimReading {
   const ss = sentencesOf(text);
   const known = `${material}\n\n${task}`;
   const knownNumbers = new Set(numbersIn(known));
@@ -176,7 +178,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
       const sup = new Set(contentWords(sp.support));
       const overlapOk = !lived || cw.length === 0 || cw.filter((w) => sup.has(w)).length / cw.length >= 0.4;
       supported = inSource && numbersOk && overlapOk;
-    } else if (sp.source === 'PUBLIC' && !lived) {
+    } else if (sp.source === 'PUBLIC' && !lived && !strict) {
       publicFacts.push({ start: s.start, end: s.end, text: s.text, why: `"${sp.text}": stated as general knowledge; check it before you publish` });
       continue;
     } else {
@@ -218,7 +220,8 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
  * never spends the writer's calls and a runaway loop cannot run it without bound. A call that fails
  * leaves that text to the pattern check, and the failure is noted: the draft is still checked.
  */
-export function modelSensor(client: InferenceClient, budget: Budget, model: string, ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean }): ClaimSensor {
+export function modelSensor(client: InferenceClient, budget: Budget, model: string,
+  ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean; readonly strict?: boolean }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
   const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
   // The prompt's hash is part of the instrument's name: a reading from a changed prompt is a reading
@@ -244,7 +247,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
         if (!Array.isArray(raw)) throw new Error('the reader returned no list of specifics');
         const specifics = raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
           && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string');
-        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, instrument));
+        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, instrument, ctx.strict ?? false));
       } catch (e) {
         const why = (e as Error).message.split('\n')[0];
         if (!sensor.notes.some((n) => n.includes(why))) sensor.notes.push(`the claim reader could not run (${why}); the pattern check was used instead`);

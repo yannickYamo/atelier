@@ -147,10 +147,14 @@ export function deriveContrastRules(
           { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: b.lo, maxPer1000: b.hi } }, ev, true);
       }
     } else if (underUsed(a, m)) {
+      // A BAND, NOT A FLOOR. Told only "at least", a model overshoots: a first-person floor with no ceiling
+      // produced 14.1 per 1,000 words against an author's 6.5. The ceiling is the band's usual one (half
+      // again the author's heavier pieces, or twice their rate), so their own range always passes.
       const floor = r1(perPiece(0.1) * 0.8);
+      const ceiling = r1(Math.max(perPiece(0.9) * 1.5, a * 2));
       if (floor > 0) {
-        propose(`Use ${PATTERN_LABEL[p]}: at least ${floor} per 1,000 words (I use about ${a}).`, 'GENERATIVE',
-          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: floor } }, ev);
+        propose(`Use ${PATTERN_LABEL[p]} within my range: between ${floor} and ${ceiling} per 1,000 words (I use about ${a}).`, 'GENERATIVE',
+          { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: floor, maxPer1000: ceiling } }, ev);
       }
     }
   }
