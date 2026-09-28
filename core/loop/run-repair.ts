@@ -10,7 +10,7 @@ import type { StandardVersion, RepairRecord } from '../state/canonical-state.js'
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
 import { findTerms } from '../observers/text.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
@@ -99,7 +99,7 @@ export async function refineToStandard(
     try {
       res = await spend(budget, 0.05, async () => {
         const x = await client.complete({
-          stableBlock: REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
+          stableBlock: opts.placeholders ? REPAIR_SYSTEM_WITH_PLACEHOLDERS : REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
           toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.',
           schema: REPAIR_SCHEMA, maxTokens: 4000,
         });
@@ -142,6 +142,23 @@ export async function refineToStandard(
       if (rid && key && a.before !== a.after) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
+  }
+  // THE LAST RESORT FOR AN INVENTED STORY: CUT IT. When every rewrite failed (a model kept offering a
+  // slot where it was told to cut), the sentences the claim check flagged are removed outright, and the
+  // output lists them. An invented story does not ship because a rewrite could not be agreed.
+  if (!opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
+    const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
+    let next = text;
+    for (const sp of spans) {
+      const before = next.slice(0, sp.start).replace(/[ \t]+$/, ''); const after = next.slice(sp.end).replace(/^[ \t]+/, '');
+      next = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
+    }
+    const after = checkDraft(skill, v, next, opts);
+    if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
+      for (const sp of spans) cut.push(sp.text.trim().slice(0, 160));
+      text = next; report = after;
+      why = report.failed ? `invented stories cut outright; ${why}` : 'every REQUIRED measured rule now holds (invented stories cut outright)';
+    }
   }
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
