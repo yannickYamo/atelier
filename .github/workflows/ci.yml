@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   verify:
+    # Linux keeps the names branch protection requires ("verify (22)", "verify (24)"); macOS reports
+    # beside them as "verify-macos (N)", so adding it did not leave the required checks unreported.
+    name: ${{ matrix.os == 'ubuntu-latest' && 'verify' || 'verify-macos' }} (${{ matrix.node }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
