@@ -103,6 +103,9 @@ and you can check it in the code.
 
 ## Install
 
+Using Claude Code or Codex? Point it at this repository: [AGENTS.md](AGENTS.md) tells the agent how to set
+it up and use it, and what to leave to you.
+
 ```bash
 git clone https://github.com/yannickYamo/atelier
 cd atelier && npm install && npm run build && npm link
