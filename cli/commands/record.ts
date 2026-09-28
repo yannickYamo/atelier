@@ -18,7 +18,7 @@
 // with no model line yields an UNREPORTED observation, never a guess.
 
 import { checksFor } from '../checks.js';
-import { checkDraft } from '../../core/loop/run-repair.js';
+import { checkDraftAsync } from '../../core/loop/run-repair.js';
 import { planRepair, regressions } from '../../core/loop/repair.js';
 import { spanIntegrity } from '../../core/loop/integrity.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -136,8 +136,8 @@ export async function record(): Promise<void> {
   // the host holds the pen for the whole answer, so "only these spans" is an instruction there, not a
   // splice — and the record says whether anything outside them changed, and whether anything got worse.
   const std = store.getStandard(L, pending.standardVersionHash);
-  const checks = checksFor(L, { material: [pending.input, ...store.getMaterial(L).map((m) => m.text)].join('\n\n') });
-  const report = std ? checkDraft(pending.skillName, std, output, checks) : null;
+  const checks = checksFor(L, { material: [pending.input, ...store.getMaterial(L).map((m) => m.text)].join('\n\n'), task: pending.input });
+  const report = std ? await checkDraftAsync(pending.skillName, std, output, checks) : null;
   const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
   const targets = report?.failed ? planRepair(output, report) : [];
   if (report?.failed && targets.length && !payload.stop_hook_active && !pending.repairOf) {
@@ -154,7 +154,7 @@ export async function record(): Promise<void> {
   let repair: RepairRecord | undefined;
   if (continuation && pending.repairOf && std) {
     const draft = pending.repairOf.draft;
-    const before = checkDraft(pending.skillName, std, draft, checks);
+    const before = await checkDraftAsync(pending.skillName, std, draft, checks);
     const worse = report ? regressions(before, report) : [];
     // Outside the spans: the draft's text between and around them, compared with the answer's.
     const keep = (t: string, spans: { start: number; end: number }[]): string[] => {

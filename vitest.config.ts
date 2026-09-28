@@ -10,6 +10,9 @@ export default defineConfig({
     // The bound is kept (a hung child must still fail rather than hang the run), just set to a
     // figure that measures the code instead of the scheduler.
     testTimeout: 30_000,
+    // THE SUITE IS OFFLINE. A developer's ANTHROPIC_API_KEY would otherwise let every spawned command
+    // call the claim reader for real. Tests of the reader set ATELIER_CLAIMS=model and script it.
+    env: { ATELIER_CLAIMS: 'pattern' },
     // Source imports use .js specifiers (NodeNext), which is what `tsc` emits and what Node runs.
     // Vitest resolves them back to the .ts on disk, so the tests exercise the same module graph the
     // build produces rather than a parallel one.
