@@ -23,7 +23,7 @@
 
 import { verifyText } from '../../core/observers/verify.js';
 import { regressions } from '../../core/loop/repair.js';
-import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
+import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -423,7 +423,7 @@ async function settleBlindPick(
         store.appendEvent(L, { kind: 'PROMOTION_GATE', candidateSkillVersionHash: candidate.skillVersionHash, requirementId: move.requirementId,
           authority: check.decision.authority, unmet: check.decision.unmet, why: check.decision.why, floor: check.composite, comparison: check.comparison, at });
         const basis = { generations: st.fires, instrument: 'QUALIFIED_OBSERVER' as const, orderInvariant: null };
-        if (check.decision.authority === 'AUTO_PROMOTE') {
+        if (shipsAutonomously(check.decision)) {
           promoteChecked(L, name, candidate.skillVersionHash, check, complaint);
           store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED', evaluationBasis: basis, at, note: complaint });
           console.log(`\nKept, by the gate: ${move.requirementId} improved across your floor's tasks and every other enforced rule held.`);

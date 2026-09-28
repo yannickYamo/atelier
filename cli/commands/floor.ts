@@ -31,7 +31,7 @@ import { floorDimensions, perFire, proposeMargins, buildContract, evaluateAcross
   type FloorDimension } from '../../core/distinctiveness/measured.js';
 import { gateState, type FrozenBaselineEntry, type QualityFloorResult, type FloorVerdict,
   type DistinctivenessState } from '../../core/distinctiveness/floor.js';
-import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
+import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { readTaste, tasteRules, vetoMisses } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { readerModel } from './taste.js';
@@ -219,7 +219,7 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   // THE TASTE READER, WHEREVER A CANDIDATE COULD INSTALL ITSELF (fix, floor --check, optimize, tend). On
   // the rules where your labels have earned it VETO, it may turn an automatic promotion into a
   // rejection; it can never make one. If it cannot run, the automatic promotion is withheld.
-  if (final.authority === 'AUTO_PROMOTE') {
+  if (shipsAutonomously(final)) {
     const veto = tastePermissions(tasteRules(v), store.readEvents(L), readerModel()).veto;
     if (veto.size) {
       try {
@@ -438,7 +438,7 @@ export async function floor(): Promise<void> {
     store.appendEvent(L, { kind: 'FLOOR_CHECK', candidateSkillVersionHash: cand, floor: check.composite, comparison: check.comparison,
       authority: check.decision.authority, at: new Date().toISOString() });
     if (argv.includes('--promote')) {
-      if (check.decision.authority !== 'AUTO_PROMOTE') die(`not promoted: the gate said ${check.decision.authority}. A person can still promote: atelier promote --skill ${name} --candidate ${cand} --why "<reason>"`);
+      if (!shipsAutonomously(check.decision)) die(`not promoted: the gate said ${check.decision.authority}. A person can still promote: atelier promote --skill ${name} --candidate ${cand} --why "<reason>"`);
       promoteChecked(L, name, cand, check, 'atelier floor --check --promote');
       console.log(`Promoted ${cand}.`);
     }
