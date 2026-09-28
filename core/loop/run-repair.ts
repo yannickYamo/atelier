@@ -9,6 +9,8 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
+import type { ClaimSensor } from './claim-extract.js';
+import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
@@ -40,6 +42,14 @@ export interface CheckOptions {
    * the owner decided that such moves go; this list is the sensor that finds them.
    */
   readonly learnedTells?: readonly string[];
+  /**
+   * WHO READS THE DRAFT FOR INVENTED CLAIMS (./claim-extract.ts): a small model typing every specific,
+   * verified in code against the material, or the pattern check when no reader is configured. Absent,
+   * the pattern check runs. Read through `checkDraftAsync`, which gives the reader its turn first.
+   */
+  readonly claimSensor?: ClaimSensor;
+  /** the format this text is (../observers/formats.ts): its hard limits checked as the product's floor */
+  readonly format?: FormatProfile | null;
 }
 
 
@@ -63,20 +73,47 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
       spans: learned.map((sp) => ({ ...sp, why: `"${sp.text}", a phrase this skill's drafts repeat and your pieces never use` })),
       detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
   const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || (tellRule?.materiality === 'REQUIRED' && learned.length > 0) };
-  if (opts.guardClaims === false) return report;
-  const claims = unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
-  const line = { requirementId: 'UNSOURCED', statement: 'Never invent a first-person story or a figure presented as a finding.',
+  const fmt = opts.format ? checkFormat(text, opts.format) : null;
+  const fmtLines = opts.format && fmt ? [
+    { requirementId: 'FORMAT', statement: `What ${opts.format.label} holds.`, materiality: 'REQUIRED', phase: 'STYLE' as const,
+      result: { verdict: fmt.hard.length ? 'VIOLATED' as const : 'MET' as const, spans: fmt.hard, value: fmt.hard.length,
+        detail: fmt.hard.length ? fmt.hard.map((h) => h.why).join('; ') : `within what ${opts.format.label} holds` } },
+    ...(fmt.soft.length ? [{ requirementId: 'FORMAT·usual', statement: `Where ${opts.format.label} usually sits.`, materiality: 'PREFERRED', phase: 'STYLE' as const,
+      result: { verdict: 'VIOLATED' as const, spans: fmt.soft, value: fmt.soft.length, detail: fmt.soft.map((h) => h.why).join('; ') } }] : []),
+  ] : [];
+  if (opts.guardClaims === false) return { ...report, checked: [...report.checked, ...fmtLines], failed: report.failed || (fmt?.hard.length ?? 0) > 0 };
+  const reading = opts.claimSensor?.reading(text);
+  const claims = reading ? reading.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
+  // Which instrument ran is part of the verdict: a line that says "no invented claims" means something
+  // different from a model reader than from a pattern, and the record keeps the difference.
+  const by = reading?.instrument ?? 'pattern check';
+  const line = { requirementId: 'UNSOURCED', statement: 'Never invent a story, a quotation, an attribution or a specific the person did not supply.',
     materiality: 'REQUIRED', phase: 'ACCURACY' as const,
-    result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: claims, value: claims.length,
-      detail: claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories or findings' } };
-  return { ...report, checked: [...report.checked, line], failed: report.failed || claims.length > 0 };
+    result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: [...claims], value: claims.length,
+      detail: `${claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
+  // PUBLIC FACTS ARE LISTED, NOT CUT. Unattributed general knowledge needs no source of the person's, but
+  // it is still a specific someone should check before publishing. PREFERRED, so it warns and never fails.
+  const pub = reading?.publicFacts ?? [];
+  const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
+    materiality: 'PREFERRED', phase: 'ACCURACY' as const,
+    result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${by}]` } }] : [];
+  return { ...report, checked: [...report.checked, line, ...pubLine, ...fmtLines], failed: report.failed || claims.length > 0 || (fmt?.hard.length ?? 0) > 0 };
+}
+
+/** The line listing public facts to check: informational, never a rule the draft broke. */
+export const PUBLIC_FACTS = 'UNSOURCED·public';
+
+/** `checkDraft`, after the claim reader (when there is one) has read the text. Every async path uses this. */
+export async function checkDraftAsync(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): Promise<VerifyReport> {
+  if (opts.guardClaims !== false && opts.claimSensor) await opts.claimSensor.read(text);
+  return checkDraft(skill, v, text, opts);
 }
 
 export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
   opts: CheckOptions = {},
 ): Promise<Refined> {
-  const first = checkDraft(skill, v, draft, opts);
+  const first = await checkDraftAsync(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
   let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
   const kept: string[] = []; const revertedRules: string[] = []; const cut: string[] = [];
@@ -122,7 +159,7 @@ export async function refineToStandard(
       kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
     }
-    const after = next === text ? report : checkDraft(skill, v, next, opts);
+    const after = next === text ? report : await checkDraftAsync(skill, v, next, opts);
     // A span that moved a banned move onto a sibling, or left a slot, was refused inside applyRepair, that
     // span only: one bad sentence no longer throws away every good rewrite in the pass.
     const verdict = next === text
@@ -153,7 +190,7 @@ export async function refineToStandard(
     const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
     let next = text;
     for (const sp of spans) next = cutSpan(next, sp.start, sp.end);
-    const after = checkDraft(skill, v, next, opts);
+    const after = await checkDraftAsync(skill, v, next, opts);
     if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
       for (const sp of spans) cut.push(sp.text.trim().slice(0, 160));
       text = next; report = after;
