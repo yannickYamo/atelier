@@ -6,7 +6,54 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
-## [Unreleased] — targeting 0.2.0
+## [Unreleased] — targeting 0.3.0
+
+### Changed (the invented-claim check: read by a small model, decided in code)
+
+- **UNSOURCED is read by a claim reader** (`core/loop/claim-extract.ts`). A small model (`claude-haiku-4-5`
+  on Anthropic, or `ATELIER_CLAIMS_MODEL` on any backend, including the person's own API) lists every
+  specific in the draft (figure, date, quotation, attribution, link, story told as lived) with its kind,
+  whether it is attributed, and where it claims it came from, quoting the support. Code verifies the
+  quote is in the material and the numbers are there. Attributed claims, quotations, links and lived
+  events can never pass as "public". Unattributed general knowledge is listed to check, not cut.
+- Why: the pattern check missed ordinary invented specifics ("94 minutes", "nine people", "went from 22%
+  to 91%": 0 of 6 caught on the audit's probe), let any link excuse a figure, and let a named quotation
+  through. Widening the patterns was ruled out: the positions paper records an unsourced-figure pattern
+  that fired on 28 of 30 expert-perfect pieces, and a gate on the model's typed provenance that did
+  discriminate. This follows the second design.
+- With no reader configured (no key, or a non-Anthropic backend without `ATELIER_CLAIMS_MODEL`), the
+  pattern check runs and the report says so. A reader that fails falls back to it and says so; a failed
+  read is never reported as clean. Every UNSOURCED line names its instrument and the reader's prompt
+  version. `--claims pattern` keeps a run offline; the test suite runs that way.
+- **Not yet qualified.** The reader's sensitivity (planted inventions in real pieces) and specificity
+  (true pieces checked with their own material) have not been measured. Until they are, it is a strong
+  filter, not a proof, and the README says so.
+
+### Fixed (Phase A: the audit's findings)
+
+- **A skill with an output contract was never checked for invented claims.** A structured answer is now
+  read field by field; on a finding it is generated once more with the findings named, and refused if it
+  still invents (`--allow-unsourced` to override).
+- **The meaning check accepted added strength.** A rewrite may no longer add a universal ("any",
+  "every") or certainty verb ("eliminates", "ensures"), or drop an intention ("we expect to"). Causality
+  and dropped scope clauses remain uncaught, and the docs say so.
+- **A REQUIRED rule marked OBSERVE could regress under an automatic promotion** (the regression flag was
+  hard-wired false). Any REQUIRED rule the floor measures regressing is now a deterministic regression.
+- **An automatic promotion did not say what no instrument read.** It now names, by id, every ratified
+  rule neither a count nor a reader with VETO checked.
+- **An under-used pattern was proposed as a floor with no ceiling**, which a model overshoots. It is now
+  a band.
+
+### Added
+
+- **Format profiles** (`core/observers/formats.ts`, docs/FORMATS.md). A skill whose class names a known
+  format (`x-post`, `linkedin-post`, `blog-post`, `book-chapter`, `one-pager`, `white-paper`,
+  `financial-report`, `contract`) holds each draft to that format's fixed facts: a hard limit fails the
+  check (FORMAT); the usual length and LinkedIn's fold warn; in white papers, one-pagers, reports and
+  contracts nothing passes as general knowledge. A profile never adds a rule to the standard.
+- **docs/FORMATS.md**: the eleven layers of taste mapped to what is measured today and what is not, and
+  for each format what would need evidence before it is built.
+
 
 ### Fixed (install)
 
