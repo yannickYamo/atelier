@@ -42,7 +42,7 @@ export const jaccard = (a: ReadonlySet<string>, b: ReadonlySet<string>): number 
  * How much two complaints say the same thing: the shared content words over the shorter complaint's,
  * and nothing unless at least two are shared. Jaccard punishes a longer paraphrase for its extra words
  * (found in a real run: "too many spaced hyphens, it reads like dashes everywhere" and "the spaced
- * hyphens again, far more than Addy uses" scored 0.22 and never grouped); one shared word ("tone",
+ * hyphens again, far more than the author uses" scored 0.22 and never grouped); one shared word ("tone",
  * "salesy") is a topic, not the same complaint.
  */
 export const similarity = (a: ReadonlySet<string>, b: ReadonlySet<string>): number => {

@@ -12,7 +12,7 @@
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
-import type { VoicePassages } from '../../core/compiler/voice.js';
+import type { Voice } from '../../core/compiler/voice.js';
 import { describePersona } from '../../core/compiler/persona.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
@@ -218,7 +218,7 @@ export function renderAgentSkill(
    * A FEW PASSAGES OF THE AUTHOR'S OWN (core/compiler/voice.ts), inline in SKILL.md, with their usual
    * piece length. Rules describe a writer; these are how the writer sounds. Implementation, not standard.
    */
-  voice: VoicePassages | null = null,
+  voice: Voice | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.

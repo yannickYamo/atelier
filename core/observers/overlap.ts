@@ -13,6 +13,7 @@
 const wordsOf = (t: string): string[] => t.toLowerCase().match(/[a-z0-9'’]+/g) ?? [];
 const N = 6;
 
+/** How much of one text is lifted from the corpus: six-word runs it shares, and its longest shared run in words. */
 export interface CorpusOverlap { readonly shared6: number; readonly longestShared: number }
 
 /** An index of a corpus's six-word sequences, built once and reused for every text compared with it. */

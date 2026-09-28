@@ -3,13 +3,13 @@
 // A reader who has read a lot of model output recognises a small number of MOVES, whatever words carry
 // them: announcing an insight others supposedly miss, grading your own list after writing it, stacking
 // superlatives, prefacing candour, summing up with a totaliser, reading the reader's mind, dressing one
-// problem up in another's clothes. Five blind rounds found them in every version written by a model, at
-// three to seven times the rate of the human author, whatever the prompt.
+// problem up in another's clothes. Seven blind rounds found them in every version written by a model, at
+// three to ten times the rate of the human authors measured, whatever the prompt.
 //
-// These are families of the MODEL's habits, not of any author's, so the catalogue is the same for every
-// skill. What differs per author is the cap: each skill holds the family to the rate its own author uses
-// it (usually close to none), measured on their pieces and checked on pieces discovery never read
-// (./contrast.ts). An author who does write "let me be blunt" is not forbidden to.
+// These are families of the MODEL's habits, so the catalogue is the same for every skill. What differs
+// per author is how each family is held (./contrast.ts): a family the author uses in fewer than half of
+// their pieces is banned in ours, because their typical piece has none; one they use in most pieces is
+// held to their rate. An author who writes "let me be blunt" in most pieces is not forbidden to.
 //
 // The catalogue is a PRIOR, deliberately small and general. It is extended per skill from data (the
 // phrases a skill's own drafts repeat across unrelated topics and its author never uses:

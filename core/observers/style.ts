@@ -136,7 +136,7 @@ export function findPattern(text: string, p: PatternId): Span[] {
     // Each instance names its family, so a repair knows which move it is removing.
     const found = proseBlocks(text).flatMap((b) => findTells(b.text).map((m) => {
       const start = b.at[m.index]; const end = b.at[m.index + m.length - 1] + 1;
-      return { start, end, text: text.slice(start, end), why: m.family.label };
+      return { start, end, text: text.slice(start, end), why: m.family.label, family: m.family.id };
     }));
     // The opening line, by position: the first two sentences of prose, which is where a lead or a TL;DR sits.
     const opener = TELL_FAMILIES.find((f) => f.id === 'VERDICT_OPENER')!;
@@ -144,7 +144,7 @@ export function findPattern(text: string, p: PatternId): Span[] {
     const lead = sentences.slice(0, 2);
     if (lead.length && findPattern(lead.map((x) => x.text).join(' '), 'CONTRAST_VERDICT').length) {
       const start = lead[0].start; const end = lead[lead.length - 1].end;
-      found.push({ start, end, text: text.slice(start, end), why: opener.label });
+      found.push({ start, end, text: text.slice(start, end), why: opener.label, family: opener.id });
     }
     return found.sort((a, b) => a.start - b.start);
   }

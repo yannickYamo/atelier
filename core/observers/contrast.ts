@@ -46,7 +46,7 @@ const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'F
  */
 const SIGNATURE: ReadonlySet<PatternId> = new Set<PatternId>(['BOLD_SPAN', 'ONE_LINE_PARAGRAPH', 'RHETORICAL_QUESTION', 'SEMICOLON']);
 
-/** Constructions measured as model habits (see the Addy audit, 2026-09-27): capped at the author's rate when they rarely use them. */
+/** Constructions measured as model habits (an audit of one author's corpus against model drafts, 2026-09-27): capped at the author's rate when they rarely use them. */
 const MODEL_TYPICAL: ReadonlySet<PatternId> = new Set<PatternId>(['EM_DASH', 'CONTRAST_VERDICT', 'THAT_OPENER', 'HERES_OPENER', 'SIGNPOST', 'INTENSIFIER', 'SHORT_VERDICT', 'REPEATED_OPENER']);
 
 export function deriveContrastRules(
@@ -221,16 +221,16 @@ export const COMPETING: readonly { readonly a: readonly string[]; readonly b: re
 ];
 
 /** Connectives and discourse words whose rate is a habit rather than a topic. */
-export const CONNECTIVES: readonly string[] = ['but', 'so', 'and', 'because', 'which', 'though', 'still', 'yet', 'actually', 'just', 'really', 'even', 'then', 'now', 'here', 'instead', 'maybe'];
+const CONNECTIVES: readonly string[] = ['but', 'so', 'and', 'because', 'which', 'though', 'still', 'yet', 'actually', 'just', 'really', 'even', 'then', 'now', 'here', 'instead', 'maybe'];
 
 /** Words a model reaches for in plain prose that careful writers rarely use. Proposed as a cap only
  *  from the words the model's own drafts used here, never as a list imposed from outside. */
-export const MODEL_VOCABULARY: readonly string[] = ['crucial', 'pivotal', 'landscape', 'robust', 'seamless', 'seamlessly', 'navigate',
+const MODEL_VOCABULARY: readonly string[] = ['crucial', 'pivotal', 'landscape', 'robust', 'seamless', 'seamlessly', 'navigate',
   'navigating', 'delve', 'foster', 'fostering', 'harness', 'empower', 'unlock', 'tapestry', 'realm', 'ever-evolving', 'game-changer',
   'cutting-edge', 'streamline', 'holistic', 'nuanced', 'vital', 'ensure', 'ensuring', 'elevate', 'paramount', 'intricate', 'underscore', 'underscores'];
 
 /** The sentence-length bands a mix is counted over. */
-export const LENGTH_EDGES: readonly number[] = [8, 18, 30];
+const LENGTH_EDGES: readonly number[] = [8, 18, 30];
 
 function proposeProportions(authorTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
   const words = (t: string): number => proseWords(t);
@@ -430,8 +430,8 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   // family the author used in at most four of twenty). The unread pieces count too, and may only loosen
   // this: a family they show in half the pieces is allowed, never one they lack.
   const all = [...authorTexts, ...heldTexts];
-  const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.why === f)).length;
-  const never = TELL_FAMILIES.filter((f) => usedIn(f.label) * 2 < all.length).map((f) => f.id);
+  const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.family === f)).length;
+  const never = TELL_FAMILIES.filter((f) => usedIn(f.id) * 2 < all.length).map((f) => f.id);
   // Output is held to the typical piece. The author's own pieces are checked with their occasional moves
   // tolerated: the rule targets the model's habit, and a writer who sometimes writes "let me be clear"
   // has not shown that the rule is against them.

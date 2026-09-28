@@ -210,7 +210,7 @@ describe('final audit: what was closed', () => {
   });
   it('a longer paraphrase of the same complaint groups with it (a real run\'s pair)', () => {
     const fb = (complaint: string, i: number): FeedbackRecord => ({ feedbackId: `f${i}`, invocationId: 'i', complaint, at: `2026-01-0${i}` });
-    expect(clusterComplaints([fb('too many spaced hyphens, it reads like dashes everywhere', 1), fb('the spaced hyphens again, far more than Addy uses', 2)])[0]).toHaveLength(2);
+    expect(clusterComplaints([fb('too many spaced hyphens, it reads like dashes everywhere', 1), fb('the spaced hyphens again, far more than the author uses', 2)])[0]).toHaveLength(2);
   });
   it('clusters do not chain unrelated complaints, and "em" counts', () => {
     const fb = (complaint: string, i: number): FeedbackRecord => ({ feedbackId: `f${i}`, invocationId: 'i', complaint, at: `2026-01-0${i}` });

@@ -64,7 +64,9 @@ const SCREEN: EvaluationBasis = { generations: 1, instrument: 'UNQUALIFIED_COMPA
 /** A candidate a round built but never got to evaluate: weaker than any test, so it is not held against a retry. */
 const UNTESTED: EvaluationBasis = { generations: 0, instrument: 'UNQUALIFIED_COMPARATOR', orderInvariant: null };
 
-export async function optimize(): Promise<void> {
+/** `promote`: install a winner the promotion gate allows (`--promote`, or `tend --auto`). */
+export async function optimize(opts: { readonly promote?: boolean } = {}): Promise<void> {
+  const promoteAllowed = opts.promote ?? argv.includes('--promote');
   const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   if (argv.includes('--report')) { report(L); return; }
@@ -205,7 +207,7 @@ export async function optimize(): Promise<void> {
     console.log(`  ${describeMutation(c.mutation, rules)}: floor ${check.composite}, target ${check.comparison}, gate ${authority}. ${why}`);
     store.appendEvent(L, { kind: 'FLOOR_CHECK', candidateSkillVersionHash: c.skillVersionHash, floor: check.composite, comparison: check.comparison, authority, at: new Date().toISOString() });
     if (authority === 'AUTO_REJECT') { settle(L, c, 'REJECTED', basis, why); continue; }
-    if (authority === 'AUTO_PROMOTE' && argv.includes('--promote') && !promoted) {
+    if (authority === 'AUTO_PROMOTE' && promoteAllowed && !promoted) {
       promoteChecked(L, name, c.skillVersionHash, check, `optimize: ${describeMutation(c.mutation)}`);
       settle(L, c, 'PROMOTED', basis, 'installed by the gate');
       promoted = c;
