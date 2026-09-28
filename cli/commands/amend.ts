@@ -49,11 +49,13 @@ export function amend(): void {
   const phaseFlag = flag('--phase')?.toUpperCase();
   if (phaseFlag !== undefined && phaseFlag !== 'ACCURACY' && phaseFlag !== 'STYLE') die('--phase is ACCURACY or STYLE');
   const phase = phaseFlag as 'ACCURACY' | 'STYLE' | undefined;
-  if (!statement && !materiality && measureSpec === undefined && !phase) {
-    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|…, --measure <observer>:<params>|none or --phase ACCURACY|STYLE required');
+  const appliesWhen = flag('--applies-when');
+  // Scope alone is an amendment. `verify` tells the owner of a conditional measured rule to widen it to
+  // GENERAL, and this guard used to refuse exactly that command unless something else changed with it.
+  if (!statement && !materiality && measureSpec === undefined && !phase && !appliesWhen) {
+    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|…, --measure <observer>:<params>|none, --phase ACCURACY|STYLE or --applies-when <condition>|GENERAL required');
   }
   const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
-  const appliesWhen = flag('--applies-when');
   const reason = flag('--reason') ?? die('--reason required — a version history without reasons can be counted, not audited.');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
