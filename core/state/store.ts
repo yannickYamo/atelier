@@ -524,9 +524,18 @@ export function listBindings(l: StoreLayout, skillVersionHash: string): BindingL
  *
  * Not "the most recent". Most-recent would silently redefine the baseline every time someone tried a
  * different model, so the guard would never fire twice and the whole point would be lost after one use.
+ *
+ * ONE BASELINE PER SURFACE, when the caller names the binding about to serve. The Claude Code Stop hook
+ * records the host's own binding (`claude-code`), so after one `/skill` use the first-ever binding was
+ * the host's and every `atelier invoke` was refused as a mismatch: two surfaces that will always
+ * differ, compared as if one had drifted. Given `candidate`, the baseline is the first binding recorded
+ * on the candidate's surface (providerAdapter), and null when that surface has none. A different
+ * model on the same surface is still a mismatch, which is what the guard exists to catch.
  */
-export function expectedBinding(l: StoreLayout, skillVersionHash: string): RuntimeBinding | null {
-  return listBindings(l, skillVersionHash)[0]?.binding ?? null;
+export function expectedBinding(l: StoreLayout, skillVersionHash: string, candidate?: RuntimeBinding): RuntimeBinding | null {
+  const log = listBindings(l, skillVersionHash);
+  const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
+  return onSurface[0]?.binding ?? null;
 }
 
 /** Append-only, and a no-op for a binding already on the log. */
