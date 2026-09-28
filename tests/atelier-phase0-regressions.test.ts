@@ -322,8 +322,12 @@ const CHAIN = { byTool: {
   emit_rules: { rules: [{ statement: 'Lead with the decision.', appliesWhen: 'GENERAL', evidence: '', evidenceItemId: 'post-0.md',
     kind: 'GENERATIVE', wouldBeAbsentIf: 'the reasoning comes first' }] },
 } };
+// Once more on a dropped socket: the backend can close a kept-alive connection as the request lands
+// (the same retry as tests/atelier-phase8.test.ts), and a failed reset leaves the next test on the
+// previous test's script.
 const script = async (body: unknown): Promise<void> => {
-  await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify(body) });
+  const send = (): Promise<Response> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify(body) });
+  try { await send(); } catch { await send(); }
 };
 
 beforeAll(async () => {
