@@ -59,7 +59,9 @@ export function deriveContrastRules(
   const checkOn = held.length ? held.map((p) => p.text) : authorTexts;
   const out: MeasuredProposal[] = [];
   let n = 0;
-  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak = false, separate = false): void => {
+  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak = false, separate = false,
+    /** a piece of the author's that breaks the rule but should still count as meeting it (see the machine-tell rule) */
+    tolerated: (text: string) => boolean = () => false): void => {
     // MUST SEPARATE. A proportion the model's own drafts already meet measures nothing about the voice:
     // at least three in five drafts, each measured on its own, must fail it.
     if (separate) {
@@ -73,10 +75,11 @@ export function deriveContrastRules(
     // several uses), the pieces it was counted from are the check, and the proposal says so; where none
     // of those applies either, there is no evidence the author meets it, and it is not proposed.
     let independent = held.length > 0;
-    let rs = checkOn.map((t) => measure(t, measurement));
-    if (!rs.some((x) => x.verdict !== 'NOT_APPLICABLE')) { rs = authorTexts.map((t) => measure(t, measurement)); independent = false; }
+    let on = checkOn;
+    let rs = on.map((t) => measure(t, measurement));
+    if (!rs.some((x) => x.verdict !== 'NOT_APPLICABLE')) { on = authorTexts; rs = on.map((t) => measure(t, measurement)); independent = false; }
     const applicable = rs.filter((x) => x.verdict !== 'NOT_APPLICABLE').length;
-    const present = rs.filter((x) => x.verdict === 'MET').length;
+    const present = rs.filter((x, i) => x.verdict === 'MET' || (x.verdict === 'VIOLATED' && tolerated(on[i]))).length;
     if (!applicable || present / applicable < 0.8) return;
     n += 1;
     out.push({
@@ -200,7 +203,7 @@ export function deriveContrastRules(
   return out;
 }
 
-type Propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean, separate?: boolean) => void;
+type Propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean, separate?: boolean, tolerated?: (text: string) => boolean) => void;
 
 /**
  * Competing ways to say the same thing. The first list is the plain register, the second the one a
@@ -421,14 +424,22 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   // Per family: one the author never makes, in any piece, is never allowed; the rest are held to their
   // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
   const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
-  // A family found in ANY of the author's pieces, the unread ones included, is theirs to use at their
-  // rate, never banned. The unread pieces may only loosen this rule, never tighten it: used to tighten,
-  // they would stop being an independent check; ignored, one rare use there dropped the whole rule.
-  const used = new Set([...authorTexts, ...heldTexts].flatMap((t) => findPattern(t, 'MACHINE_TELL').map((x) => x.why)));
-  const never = TELL_FAMILIES.filter((f) => !used.has(f.label)).map((f) => f.id);
-  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes"): never one I never make${never.length < TELL_FAMILIES.length ? `, and the ones I do make at most ${tellCap} per 1,000 words` : ''}.`,
+  // HELD TO THE AUTHOR'S TYPICAL PIECE, NOT THEIR AVERAGE. A family is the author's to use only if at
+  // least half their pieces use it; otherwise one of ours may not either. Held to an average, a move the
+  // author made once in twenty pieces was allowed once in every piece (round 7: one per piece, each from a
+  // family the author used in at most four of twenty). The unread pieces count too, and may only loosen
+  // this: a family they show in half the pieces is allowed, never one they lack.
+  const all = [...authorTexts, ...heldTexts];
+  const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.why === f)).length;
+  const never = TELL_FAMILIES.filter((f) => usedIn(f.label) * 2 < all.length).map((f) => f.id);
+  // Output is held to the typical piece. The author's own pieces are checked with one occasional move
+  // tolerated: the rule targets the model's habit, and a writer who once wrote "let me be clear" has not
+  // shown that the rule is against them. (Across one author's twenty pieces, about a third held one.)
+  const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= 1;
+  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
     'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
-    `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`);
+    `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words, in ${all.filter((t) => findPattern(t, 'MACHINE_TELL').length).length} of ${all.length} pieces; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`,
+    false, false, occasional);
   // REGISTER: a speaker who mostly contracts gets a cap on the forms left whole, and one who mostly
   // writes them out a cap on contractions, at their own rate. A repair fixes either word by word.
   const contracted = count('CONTRACTION'); const whole = count('FULL_FORM');

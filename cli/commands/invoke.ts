@@ -217,6 +217,11 @@ export async function invoke(): Promise<void> {
   // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
   // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
+  // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from the
+  // output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
+  if (!material.length && !argv.includes('--allow-unsourced')) {
+    console.log(`(No material of yours is bound, so any story, named source or figure the draft invents will be cut. To let it tell your real ones: atelier material --skill ${name} <notes.md>, or --with notes=<file>.)`);
+  }
   const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'),
     learnedTells: store.activeTells(store.getTells(L)) };
   // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
