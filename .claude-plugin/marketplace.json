@@ -8,7 +8,7 @@
     {
       "name": "atelier",
       "source": "./plugins/hosts/claude-code",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Turn your own work into a reusable skill you own. Portable across hosts."
     }
   ]
