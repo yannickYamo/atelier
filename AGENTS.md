@@ -20,7 +20,9 @@ npm link            # optional: puts `atelier` on PATH; otherwise use `node dist
 Node 22 or later. Anything that calls a model needs `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`, or an
 OpenAI-compatible backend: `--provider openai-compatible --base-url <url> --model <id>`). Run
 `atelier check` first: it tests the backend before anything is spent. Checking text with an existing
-skill (`atelier verify`) needs no key.
+skill (`atelier verify`) needs no key. With a key, `verify` and `invoke` also have a small model read the
+draft for invented specifics: `claude-haiku-4-5` by default, or `ATELIER_CLAIMS_MODEL` on the person's own
+backend. Pass `--claims pattern` to stay offline.
 
 Run commands from the **user's project directory**, not from this repository: skills are installed
 relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_DATA`).

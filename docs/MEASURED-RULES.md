@@ -187,9 +187,24 @@ that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
   Every rewritten span must keep its figures, negations, qualifiers ("may", "most", "roughly"), proper
   names and `[placeholders]`, unless the broken rule named that very word. A ratio's competing word may
   be swapped, but the swap must keep what it asserted: "is not" may become "isn't", never "is". A
-  rewrite that loses one is refused, and the original sentence is kept.
-- **Accuracy comes before style.** Rules marked `--phase ACCURACY` and invented claims (UNSOURCED, see
-  `core/loop/claims.ts`) get their own first pass.
+  rewrite that loses one is refused, and the original sentence is kept. Nor may a rewrite make a claim
+  stronger by adding a word: a universal ("any", "every") or a certainty verb ("eliminates", "ensures")
+  the original did not carry, or an intention ("we expect to") turned into a fact. Causality and a
+  dropped scope clause are not caught; the list is kept short so ordinary rewrites still pass.
+- **Accuracy comes before style.** Rules marked `--phase ACCURACY` and invented claims get their own
+  first pass.
+- **Invented claims are read by a small model and decided in code** (UNSOURCED,
+  `core/loop/claim-extract.ts`). The reader lists every specific in the draft: a figure, a date, a
+  quotation, an attribution, a link, a story told as lived. For each one it says what kind it is, whether
+  it is attributed, and where it came from (your material, your task, general knowledge, or nowhere),
+  quoting the passage that supports it. Code then checks the quote is really in your material and the
+  numbers are really there. Nothing the reader says counts on its own. Something attributed, quoted,
+  linked or lived can never pass as general knowledge. Unattributed general knowledge is listed for you
+  to check, not cut, except in a strict format (see [FORMATS.md](FORMATS.md)). The reader is
+  `claude-haiku-4-5` on Anthropic, or `ATELIER_CLAIMS_MODEL` on any backend. With no reader available,
+  the older pattern check (`core/loop/claims.ts`) runs instead. A reader that fails also falls back to
+  the pattern check and says so, so a failed read is never reported as clean. Every UNSOURCED line names
+  the instrument that produced it, including the reader's prompt version.
 - **It changes the output, never the standard.** The loop has no authority to relax a target.
 
 ### What is deliberately not proposed
