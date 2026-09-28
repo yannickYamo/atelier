@@ -17,11 +17,14 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       # `engines` claims >=22. Testing only 22 would make that claim about a version nobody ran.
+      # macOS because its tmpdir() is a symlink (/var -> /private/var): a path compared unresolved
+      # passed here and failed there, and only a mac runner would have said so.
       matrix:
+        os: [ubuntu-latest, macos-latest]
         node: [22, 24]
     steps:
       - uses: actions/checkout@v7
