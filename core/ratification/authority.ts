@@ -185,8 +185,8 @@ export function decide(shown: Requirement, d: DecisionInput): DecisionOutcome {
     // The owner may reword a rule, reweigh it, or both. Reweighing alone was impossible: a rule closed
     // as PREFERRED could never be made REQUIRED, because the one command that re-rules a closed standard
     // insisted on new words, and the ledger is append-only everywhere else.
-    if (!d.statement && !d.materiality && d.measurement === undefined && !d.phase) {
-      throw new Error(`${id}: AMEND changes the rule's words (--statement), its weight (--materiality), its check (--measure) or its phase (--phase); give at least one.`);
+    if (!d.statement && !d.materiality && d.measurement === undefined && !d.phase && !d.appliesWhen) {
+      throw new Error(`${id}: AMEND changes the rule's words (--statement), its weight (--materiality), its check (--measure), its phase (--phase) or its scope (--applies-when); give at least one.`);
     }
     const ob = d.materiality
       ? validateObligation(id, { ...d, form: d.form ?? shown.realizationTolerance, shape: d.shape ?? shown.outputShape })
