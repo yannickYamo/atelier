@@ -253,6 +253,8 @@ const FREE_TEXT_SCHEMA: Record<string, unknown> = {
 export async function spendOneWithResult(
   client: InferenceClient, budget: Budget, stable: string, brief: string,
   contract: { readonly schema: Record<string, unknown>; readonly artifact: string } | null = null,
+  /** a correction appended to the instruction, never to the task: the task the record binds stays the task asked */
+  note = '',
 ): Promise<{ piece: string; reportedModel: string | null; schemaSent: Record<string, unknown>; servedTask: string }> {
   const schema = contract?.schema ?? FREE_TEXT_SCHEMA;
   // CAPTURED FROM THE REQUEST OBJECT, not copied from the argument. A proof built from the same
@@ -261,7 +263,7 @@ export async function spendOneWithResult(
   const r = await spend(budget, 0.2, async () => {
     const req = {
       stableBlock: stable, variableBlock: brief,
-      userMessage: contract ? 'Produce it now, in the required shape.' : 'Write it now. Output only the piece itself.',
+      userMessage: `${contract ? 'Produce it now, in the required shape.' : 'Write it now. Output only the piece itself.'}${note ? `\n\n${note}` : ''}`,
       toolName: contract ? 'emit_output' : 'emit_piece',
       toolDescription: contract ? 'Emit the output in the shape the standard requires.' : 'Emit the finished piece.',
       // NOT A CONSTANT — reviewer finding F1, the instrument's own lesson applied to the product.
@@ -289,6 +291,17 @@ export async function spendOneWithResult(
  * second execution path is how a measurement ends up describing an artefact the product never
  * installs — the trap `study test` already fell into by re-rendering rules out of the standard.
  */
+/** Every string inside a structured output, one per paragraph: what a claim check reads of a contract-shaped answer. */
+export function stringLeaves(json: string): string {
+  const out: string[] = [];
+  const walk = (x: unknown): void => {
+    if (typeof x === 'string') { if (x.trim()) out.push(x.trim()); } else if (Array.isArray(x)) x.forEach(walk);
+    else if (x && typeof x === 'object') Object.values(x).forEach(walk);
+  };
+  try { walk(JSON.parse(json)); } catch { out.push(json); }
+  return out.join('\n\n');
+}
+
 export async function runOnce(
   L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string; architectureHash: string },
   servedText: string, servedHash: string, delivery: { expectedPackageHash: string; servedPackageHash: string; matched: boolean; servedFiles: string[] },
@@ -305,6 +318,14 @@ export async function runOnce(
   refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
   /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
   select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } | Promise<{ index: number; why: string }> } | null = null,
+  /**
+   * THE INVENTED-CLAIM CHECK FOR A STRUCTURED OUTPUT. A contract-shaped answer is never span-rewritten,
+   * which used to mean it was never checked for invented claims at all: a report or a contract, the
+   * outputs where an invented figure does the most harm, went out unread. Its string fields are read
+   * together; on a finding the whole artifact is generated once more with the findings named, and if
+   * it still invents, nothing is delivered. Returns the unsupported claims' sentences.
+   */
+  claimGuard: ((text: string) => Promise<readonly string[]>) | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -320,7 +341,21 @@ export async function runOnce(
   const n = select && contract === null ? Math.max(1, Math.floor(select.n)) : 1;
   const written = await mapLimit(Array.from({ length: n }, (_, i) => i), n, () => spendOneWithResult(client, budget, servedText, task, contract));
   const picked = n > 1 && select ? await select.choose(written.map((w) => w.piece)) : { index: 0, why: '' };
-  const { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
+  let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
+  if (contract !== null && claimGuard) {
+    const found = await claimGuard(stringLeaves(draft));
+    if (found.length) {
+      const note = 'Your previous answer asserted specifics that are not in anything you were given. Leave them out; '
+        + 'say the point without them, or leave the field general:\n' + found.map((f) => `- "${f.slice(0, 200)}"`).join('\n');
+      ({ piece: draft, reportedModel, schemaSent, servedTask } = await spendOneWithResult(client, budget, servedText, task, contract, note));
+      const still = await claimGuard(stringLeaves(draft));
+      if (still.length) {
+        die(`the output still asserts ${still.length} specific(s) that are not in your material or your request, after one retry:\n`
+          + still.map((f) => `  - "${f.slice(0, 200)}"`).join('\n')
+          + `\nNothing was delivered or recorded. If they are yours, bind them (atelier material --skill ${L.skillName} <file>), or pass --allow-unsourced.`);
+      }
+    }
+  }
   // A structured output is held by its contract, not by prose rules; it is never span-rewritten.
   const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: null };
   const output = refined.output;

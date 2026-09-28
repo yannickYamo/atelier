@@ -23,7 +23,7 @@
 
 import { verifyText } from '../../core/observers/verify.js';
 import { regressions } from '../../core/loop/repair.js';
-import { resolvePromotion, type PromotionDecision } from '../../core/convergence/promotion.js';
+import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -228,9 +228,14 @@ export async function fix(): Promise<void> {
   if (pendingRepair) {
     const cand = store.getSkillVersion(L, pendingRepair.candidateSkillVersionHash)
       ?? die(`pending candidate ${pendingRepair.candidateSkillVersionHash} missing from the store.`);
-    const candInv = store.listInvocations(L).find((r) => r.skillVersionHash === cand.skillVersionHash);
+    // THE SAME TASK, OR NO PAIR. Any run of the candidate was taken, so a complaint about one task was
+    // settled by a blind pick between its output and the candidate's answer to a different request —
+    // two outputs that differ by task, read as two implementations. `inputHash` is the task's hash on
+    // every record (the request binding's resolvedTaskHash is the same value, and newer).
+    const candInv = store.listInvocations(L).find((r) => r.skillVersionHash === cand.skillVersionHash && r.inputHash === inv.inputHash);
     // A candidate `atelier optimize` built and left for a person has no run of this task to show beside
-    // yours: it was measured on the floor's tasks. It is decided where it was made.
+    // yours: it was measured on the floor's tasks. Nor does one built for a complaint about another
+    // task. Either is decided where it was made.
     if (!candInv) {
       console.log(`A candidate for ${pendingRepair.requirementId} (${pendingRepair.from} → ${pendingRepair.to}) is already waiting for your decision, `
         + `built by ${(pendingRepair as { origin?: string }).origin === 'OPTIMIZE' ? 'atelier optimize' : 'an earlier run'}. Decide it first:`);
@@ -423,7 +428,7 @@ async function settleBlindPick(
         store.appendEvent(L, { kind: 'PROMOTION_GATE', candidateSkillVersionHash: candidate.skillVersionHash, requirementId: move.requirementId,
           authority: check.decision.authority, unmet: check.decision.unmet, why: check.decision.why, floor: check.composite, comparison: check.comparison, at });
         const basis = { generations: st.fires, instrument: 'QUALIFIED_OBSERVER' as const, orderInvariant: null };
-        if (check.decision.authority === 'AUTO_PROMOTE') {
+        if (shipsAutonomously(check.decision)) {
           promoteChecked(L, name, candidate.skillVersionHash, check, complaint);
           store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId, outcome: 'PROMOTED', evaluationBasis: basis, at, note: complaint });
           console.log(`\nKept, by the gate: ${move.requirementId} improved across your floor's tasks and every other enforced rule held.`);

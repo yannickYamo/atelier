@@ -45,8 +45,11 @@ export interface CorpusItem { readonly id: string; readonly text: string }
 /** The chain's own fields — richer than the fallback path's. Only the preamble above is shared. */
 const CHAIN_FIELDS = `For each rule give:
   DESCRIPTION      one sentence the author could recognise as their own
-  APPLIES_WHEN     the conditions it holds under, as one or more short predicates. A rule with no
-                   condition claims to hold everywhere, which is almost never true of taste.
+  APPLIES_WHEN     the conditions it holds under, as one or more short predicates. Each predicate is
+                   a clause that completes "when ...", with its own verb: "the post reports an outcome
+                   metric", not "outcome metrics" or "any statement about size". The skill prints it
+                   after "When", so a noun phrase there is a sentence with no verb.
+                   A rule with no condition claims to hold everywhere, which is almost never true of taste.
   READ_FROM        which of the pieces above you read it off
   WOULD_BE_ABSENT_IF  what you would see in a piece if this rule were NOT operating
   NEEDS_FROM_USER  what a writer must be GIVEN to follow this rule truthfully rather than invent it —

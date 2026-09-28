@@ -1,6 +1,6 @@
 # Atelier
 
-**Your taste, learned from your best work and kept in every draft you ship, on any model.**
+**Your taste, learned from your best work and kept in every draft you ship.**
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -53,9 +53,9 @@ Four things make it more than a style prompt:
 
 - **It learns from the gap between you and the model.** Atelier has the model write plain drafts on your own
   topics, then counts what the model does that you don't. Each gap becomes a proposed rule carrying both
-  numbers ("you: none in 42,605 words; the model on its own: 8.4 per 1,000").
-- **It proves each rule on work it never read.** Some of your pieces are held back before anything reads
-  them. A rule your own unseen writing breaks is a rule against you, and it's dropped.
+  numbers, for example "you: none in 42,605 words; the model on its own: 8.4 per 1,000".
+- **It checks each rule on work it never read.** Some of your pieces are held back before anything reads
+  them. A rule your own unseen writing breaks is a rule against you, and it's proposed for rejection.
 - **It knows how often you do something.** Writers work in modes. A move you make in two pieces out of five
   is served as something you *sometimes* do, with a cap per piece, so the model doesn't stamp it on every
   draft.
@@ -67,8 +67,14 @@ Four things make it more than a style prompt:
 It also catches what marks text as machine-written: families of moves (announced insights, self-graded
 lists, stacked superlatives, "let me be blunt", "that's the whole game", one problem "wearing another's
 clothes") held to your own rate, plus the phrases each skill's own drafts keep repeating that you never
-write. And it keeps your life yours: a story, a quote from an unnamed source, or a figure you didn't supply
-gets cut and listed, so you can add the real one.
+write. And it keeps your life yours. A small model reads every draft for specifics: figures, dates,
+quotations, attributions, links, and stories told as lived. It says where each one came from, and code
+checks that against what you actually supplied. Anything that doesn't trace to your material or your
+request is cut and listed, so you can add the real one. A figure credited to a study, a quote from a
+named person, or a link offered as a source counts as yours to supply, never as "general knowledge".
+In a white paper, a report or a contract, nothing passes as general knowledge. How often this reader
+misses a specific, and how often it cuts a true one, is being measured on real corpora; until that's
+published, treat it as a strong filter, not a proof.
 
 ## What it builds: the whole harness
 
@@ -105,7 +111,9 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 ## When it asks you
 
 - **Once, when you create a skill.** It shows the rules it found, strongest evidence first, each with a
-  suggested ruling. Press Enter to accept them all, or change any.
+  suggested ruling. Press Enter to accept them all, or change any. Accepting a suggestion is a ruling like any
+  other, and the record keeps which you took and which you changed: `atelier status --skill <name>` shows
+  both counts, so "you approved it" never hides "you pressed Enter".
 - **Whenever you want to.** `atelier fix "the close was a summary, not a turn"` in your own words. Label a few
   of the reader's verdicts (`atelier taste --calibrate`) to let it act. Change what "good" means with
   `atelier amend`, which only you can do.
@@ -121,7 +129,7 @@ Everything else runs without you, from `atelier invoke` to `atelier tend --auto`
 | where "good" is defined | re-guessed from examples every run | a standard you approved, versioned and diffable |
 | which habits matter | can't tell a decision from an accident | each rule weighed, with when it applies, proven on work it never read |
 | machine tells | its own habits come back | caught as moves, held to your own rate |
-| your stories, sources and figures | invented when missing | cut and listed; you supply the real ones |
+| your stories, sources and figures | invented when missing | read for, traced to what you supplied; the rest cut and listed |
 | your sentences | lifted when pasted | shown for voice; copying flagged |
 | after the draft | nothing checks it | every rule checked; only what broke is rewritten |
 | next month | no memory of what went wrong | `fix` and `tend` learn from it, through a gate |
@@ -142,6 +150,10 @@ Atelier borrows their search (`atelier optimize` uses reflective proposals and a
 under a standard you approved: its judge can block a change and never approve one, and a change installs
 only when your measured rules improve and nothing else gets worse. Atelier hasn't been benchmarked against
 these systems on a shared task yet; the difference is in the architecture, and you can check it in the code.
+
+**Against style checkers:** Vale, proselint, Acrolinx and Writer hold copy to rules someone wrote down.
+Atelier reads the rules off your own work, checks them on pieces it never read, and has you approve them.
+Its checker is the last step, not the first.
 
 **Against fine-tuning:** weights can't be diffed against what you meant. A standard can, and it moves to
 another model tomorrow without retraining.
@@ -181,7 +193,9 @@ atelier fix "the close was a summary, not a turn"        # correct it in your wo
 atelier tend --skill posts --auto                        # look after it, from cron
 ```
 
-The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
+One standard describes one format, read off your pieces of that format: build a LinkedIn skill from your
+LinkedIn posts, with `--class linkedin-post`, and it also holds each post to what LinkedIn fixes
+([docs/FORMATS.md](docs/FORMATS.md)). The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always
 deliver everything the CLI does; `atelier carriers --skill posts --host codex` says what it drops.
@@ -194,16 +208,19 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 | `ATELIER_DISCOVERY_MODEL`, `ATELIER_TARGET_MODEL` | the model for reading your work, and for running the skill |
 | `ATELIER_PROVIDER` | `anthropic` (default) or `openai-compatible`, with `ATELIER_BASE_URL` |
 | `ATELIER_HOST` | `claude-code` (default) or `codex`: where a built skill is installed |
+| `ATELIER_CLAIMS_MODEL` | the small model that reads drafts for invented specifics (default `claude-haiku-4-5` on Anthropic; on your own backend, name one of yours) |
+| `ATELIER_CLAIMS` | `pattern` for the offline pattern check instead of the reader |
 
 ## Learn more
 
 - [docs/MEASURED-RULES.md](docs/MEASURED-RULES.md): every counted rule, machine tells, repair, the regression floor
 - [docs/TASTE.md](docs/TASTE.md): the reader for rules no count can check, and how your labels give it authority
+- [docs/FORMATS.md](docs/FORMATS.md): the layers of taste, what is measured today, and what each format fixes
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how a standard becomes a skill
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 103 files and 1566 tests, runs offline, and drives the shipped binary end to end.
+The suite is 107 files and 1622 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 

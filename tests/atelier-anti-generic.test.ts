@@ -166,9 +166,11 @@ describe('the guard is precise, and never defeats itself', () => {
     expect(unsourcedClaims(story, '').map((c) => c.text)).toEqual([
       'Years ago I worked on a ground-segment integration.', 'We shipped it.', 'Six months later I was reviewing an incident.', 'Nobody was malicious.']);
   });
-  it('numbers match whole, a linked sentence is sourced, and a version number or a year is not a finding', () => {
+  it('numbers match whole, a sentence linking a source the person supplied is sourced, and a version number or a year is not a finding', () => {
     expect(unsourcedClaims('According to the survey, 40% of teams agree.', 'the survey said 400 teams')).toHaveLength(1);
-    expect(unsourcedClaims('According to [the survey](https://x.org/s), 40% of teams agree.', '')).toEqual([]);
+    // A link the draft made up is not a source (the audit's G1): only one from the person's material is.
+    expect(unsourcedClaims('According to [the survey](https://x.org/s), 40% of teams agree.', '')).toHaveLength(1);
+    expect(unsourcedClaims('According to [the survey](https://x.org/s), 40% of teams agree.', 'our survey: https://x.org/s')).toEqual([]);
     expect(unsourcedClaims('As of 2025, the API supports streaming. Python 3.12 reports errors better.', '')).toEqual([]);
   });
   it('no placeholder or repair instruction contains an em dash, so it cannot break an em-dash cap', () => {
