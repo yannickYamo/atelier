@@ -15,6 +15,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
+import { checksFor } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
@@ -52,8 +53,7 @@ export async function verify(): Promise<void> {
   // skill's material nor anything bound with --with, fails as UNSOURCED. A person checking their own
   // draft whose stories are theirs adds them to the material, or passes --allow-unsourced.
   const material = [...store.getMaterial(L), ...boundMaterial()].map((m) => m.text).join('\n\n');
-  const checks = { material, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'),
-    learnedTells: store.activeTells(store.getTells(L)) };
+  const checks = checksFor(L, { material, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);

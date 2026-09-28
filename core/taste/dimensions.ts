@@ -8,6 +8,7 @@
 // its observer counts, and a reading-based rule by the words its statement uses. It can be wrong about
 // an unusual rule, and where no keyword matches it says "unsorted" rather than guessing.
 
+import type { PatternId } from '../observers/style.js';
 import type { Requirement } from '../state/canonical-state.js';
 
 export type Dimension = 'ARGUMENT' | 'EVIDENCE' | 'VOCABULARY' | 'FIGURE' | 'PACE' | 'STRUCTURE' | 'REGISTER' | 'CADENCE' | 'UNSORTED';
@@ -33,11 +34,14 @@ const BY_OBSERVER: Readonly<Record<string, Dimension>> = {
   HEADINGS: 'STRUCTURE', OPENING: 'CADENCE', CLOSING: 'CADENCE',
 };
 
-/** PATTERN_RATE counts constructions of different kinds; sorted by the pattern. */
-const BY_PATTERN: Readonly<Record<string, Dimension>> = {
+/** PATTERN_RATE counts constructions of different kinds; sorted by the pattern. Typed over every pattern, so a new one cannot go unsorted. */
+const BY_PATTERN: Readonly<Record<PatternId, Dimension>> = {
   EM_DASH: 'VOCABULARY', SPACED_HYPHEN: 'VOCABULARY', SEMICOLON: 'VOCABULARY', INTENSIFIER: 'VOCABULARY',
+  BRITISH_SPELLING: 'VOCABULARY', AMERICAN_SPELLING: 'VOCABULARY',
   NOT_X_ITS_Y: 'CADENCE', SHORT_VERDICT: 'CADENCE', THAT_OPENER: 'CADENCE', HERES_OPENER: 'CADENCE', REPEATED_OPENER: 'CADENCE',
-  SIGNPOST: 'REGISTER', RHETORICAL_QUESTION: 'REGISTER', BOLD_SPAN: 'STRUCTURE', ONE_LINE_PARAGRAPH: 'PACE',
+  RATHER_THAN: 'ARGUMENT', REFRAME: 'ARGUMENT', CONTRAST_VERDICT: 'ARGUMENT', ORDINAL_CATALOGUE: 'STRUCTURE',
+  SIGNPOST: 'REGISTER', RHETORICAL_QUESTION: 'REGISTER', FIRST_PERSON: 'REGISTER', CONTRACTION: 'REGISTER', FULL_FORM: 'REGISTER',
+  MACHINE_TELL: 'REGISTER', DASH_ASIDE: 'PACE', BOLD_SPAN: 'STRUCTURE', ONE_LINE_PARAGRAPH: 'PACE',
 };
 
 /** Checked in order; the first match wins, so the more specific kinds come first. */
@@ -54,7 +58,7 @@ const BY_WORDS: readonly [Dimension, RegExp][] = [
 
 export function dimensionOf(r: Requirement): Dimension {
   if (r.measurement) {
-    if (r.measurement.observer === 'PATTERN_RATE') return BY_PATTERN[((r.measurement.params.pattern as readonly string[] | undefined) ?? [])[0] ?? ''] ?? 'VOCABULARY';
+    if (r.measurement.observer === 'PATTERN_RATE') return BY_PATTERN[((r.measurement.params.pattern as readonly string[] | undefined) ?? [])[0] as PatternId] ?? 'VOCABULARY';
     return BY_OBSERVER[r.measurement.observer] ?? 'UNSORTED';
   }
   return BY_WORDS.find(([, re]) => re.test(r.statement))?.[0] ?? 'UNSORTED';

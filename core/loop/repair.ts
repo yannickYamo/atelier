@@ -157,7 +157,12 @@ export function repairPrompt(text: string, targets: readonly RepairTarget[]): st
   return `THE DRAFT\n"""\n${text}\n"""\n\nTHE SPANS TO REVISE\n\n${list}\n\nReturn one replacement per span.`;
 }
 
-export interface Reverted { readonly id: number; readonly lost: readonly string[] }
+/**
+ * A span whose replacement was refused, and why. `kind` says which guard refused it: the meaning guard
+ * (a figure, negation, qualifier, name or slot lost), a move recast as its sibling, a slot left for the
+ * person, a stutter at the join, or a cut that was not allowed.
+ */
+export interface Reverted { readonly id: number; readonly lost: readonly string[]; readonly kind?: 'MEANING' | 'MOVE' | 'SLOT' | 'SEAM' | 'CUT' }
 /** A span the splice replaced, and what replaced it. */
 export interface Applied { readonly id: number; readonly before: string; readonly after: string }
 
@@ -187,25 +192,24 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
       // CUTTING A SENTENCE THAT IS ONLY A MOVE. "I want to be careful not to be cynical about this" has a
       // "not" the meaning guard protects, but no claim a reader loses when it goes. A cut is allowed for a
       // machine-writing move whose sentence carries no figure and no name; anything else keeps its words.
-      if (!t.cuttable || numbersIn(t.text).length || namesIn(t.text).length) { reverted.push({ id: t.id, lost: ['the sentence: only a sentence that is nothing but the move, with no figure or name in it, may be cut'] }); continue; }
-      const before = out.slice(0, t.start).replace(/[ \t]+$/, ''); const after = out.slice(t.end).replace(/^[ \t]+/, '');
-      out = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
+      if (!t.cuttable || numbersIn(t.text).length || namesIn(t.text).length) { reverted.push({ id: t.id, kind: 'CUT', lost: ['the sentence: only a sentence that is nothing but the move, with no figure or name in it, may be cut'] }); continue; }
+      out = cutSpan(out, t.start, t.end);
       applied.push({ id: t.id, before: t.text, after: '' });
       continue;
     }
     const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false, new Set(t.swaps ?? []), t.recase ?? false);
-    if (!integrity.ok) { reverted.push({ id: t.id, lost: integrity.lost }); continue; }
+    if (!integrity.ok) { reverted.push({ id: t.id, kind: 'MEANING', lost: integrity.lost }); continue; }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another
     // ("not X, it's Y" rewritten as "X rather than Y") is refused, this span only; the rest of the pass
     // stands. Counted inside the span, so nothing elsewhere in the text can veto it.
     const moved = displacedFamilies(t.text, rep);
-    if (moved.length) { reverted.push({ id: t.id, lost: [`the move, recast as its sibling (${moved.join('; ')})`] }); continue; }
+    if (moved.length) { reverted.push({ id: t.id, kind: 'MOVE', lost: [`the move, recast as its sibling (${moved.join('; ')})`] }); continue; }
     // No slot the person has to fill ships unless they asked for slots.
     const slots = (x: string): number => (x.match(/\[[^\]\n]{3,200}\](?!\()/g) ?? []).length;
-    if (!placeholders && slots(rep) > slots(t.text)) { reverted.push({ id: t.id, lost: ['the text: it left a bracketed slot for the person to fill'] }); continue; }
+    if (!placeholders && slots(rep) > slots(t.text)) { reverted.push({ id: t.id, kind: 'SLOT', lost: ['the text: it left a bracketed slot for the person to fill'] }); continue; }
     // The seams: a replacement that repeats the words just after it (or just before it) left a stutter.
     const seam = seamRepeat(out.slice(0, t.start), rep.trim(), out.slice(t.end), t.text);
-    if (seam) { reverted.push({ id: t.id, lost: [`a repeated "${seam}" at the join`] }); continue; }
+    if (seam) { reverted.push({ id: t.id, kind: 'SEAM', lost: [`a repeated "${seam}" at the join`] }); continue; }
     out = out.slice(0, t.start) + rep.trim() + out.slice(t.end);
     applied.push({ id: t.id, before: t.text, after: rep.trim() });
   }
@@ -238,6 +242,12 @@ export function seamRepeat(before: string, replacement: string, after: string, o
     if (next && next.length >= 4 && r.includes(next) && !had.has(next)) return next;
   }
   return null;
+}
+
+/** Remove `text[start, end)` and close the gap: one space between the two sides, or none across a line break. */
+export function cutSpan(text: string, start: number, end: number): string {
+  const before = text.slice(0, start).replace(/[ \t]+$/, ''); const after = text.slice(end).replace(/^[ \t]+/, '');
+  return `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
 }
 
 export interface RegressionVerdict { readonly ok: boolean; readonly why: string }

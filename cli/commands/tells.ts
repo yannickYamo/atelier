@@ -13,23 +13,16 @@
 import * as store from '../../core/state/store.js';
 import { deriveTellLexicon, TELL_MIN_TOPICS, type TellDraft } from '../../core/observers/tell-lexicon.js';
 import type { Budget } from '../../core/inference/client.js';
-import { DATA, die, argv, flagAll, numericFlag, skillArg, clientAndBinding, loadSession } from '../runtime.js';
+import { DATA, die, argv, flagAll, numericFlag, skillArg, clientAndBinding } from '../runtime.js';
 import { resolveServedVersion } from './invoke.js';
 import { spendOneWithResult } from './improve.js';
-import { readCorpus } from './floor.js';
-import { existsSync } from 'node:fs';
+import { sessionCorpus } from '../corpus.js';
 
-/** The author's pieces this skill was built from, when they can still be read. */
-function corpusOf(name: string): string[] {
-  const s = loadSession();
-  const source = s.source && existsSync(s.source) && (s.skillName === null || s.skillName === name) ? s.source : null;
-  // Reserved pieces count too: a phrase the author used anywhere is theirs.
-  return source ? [...readCorpus(source), ...(s.reservation?.reserved ?? []).map((u) => u.artifact)] : [];
-}
 
 /** Learn the lexicon from the skill's recorded uses and, optionally, probe drafts. Returns what changed. */
 export async function learnTells(L: store.StoreLayout, name: string, probe = 0, budget?: Budget): Promise<{ before: number; after: number; drafts: number; topics: number } | null> {
-  const corpus = corpusOf(name);
+  // Reserved pieces count too: a phrase the author used anywhere is theirs.
+  const corpus = sessionCorpus(name, { includeReserved: true });
   if (!corpus.length) return null;
   const drafts: TellDraft[] = store.listInvocations(L).map((i) => ({ task: i.input, text: i.repair?.draft ?? i.output }));
   if (probe > 0) {

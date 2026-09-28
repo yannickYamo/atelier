@@ -1,4 +1,4 @@
-import type { VoicePassages } from '../core/compiler/voice.js';
+import type { Voice } from '../core/compiler/voice.js';
 import { parseArgs } from 'node:util';
 // cli/runtime.ts — the shared ground every command stands on.
 //
@@ -72,7 +72,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'repair', 'learn', 'taste', 'no-taste', 'setup', 'auto',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'taste', 'no-taste', 'setup', 'auto',
 ];
 
 export const argv = process.argv.slice(2);
@@ -797,14 +797,14 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
  * where they still teach the standard being rendered.
  */
 export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
-  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: VoicePassages | null;
+  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: Voice | null;
 } {
   const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
   const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
   if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L) };
   // The author's passages travel with the package that served them, like the contrast pairs.
   const voiceRaw = pkg.assurance?.['voice.json'];
-  const voice = ((): VoicePassages | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as VoicePassages : null; } catch { return null; } })();
+  const voice = ((): Voice | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as Voice : null; } catch { return null; } })();
   const ex = pkg.files['examples/exemplar.md'];
   // Packages stored before pairs travelled with them served examples/contrast.md with no data beside
   // it: the build's own record of the pairs it chose is the closest thing to what they served.

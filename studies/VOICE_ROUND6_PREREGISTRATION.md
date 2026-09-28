@@ -19,7 +19,7 @@ tells on every arm, raised REQUIRED rules held from 118/200 to 181/200, and left
 ## Materials
 
 - The same corpus, briefs, six reserved pieces, length target and writer (`claude-opus-5`) as round 5.
-- The skill: re-derived with the current code (store `voice6`), its tell lexicon learned before the run
+- The skill: re-derived with the current code (the round-6 store), its tell lexicon learned before the run
   from six probe drafts on the author's own titles (`atelier tells --learn --probe 6`).
 
 ## Arms

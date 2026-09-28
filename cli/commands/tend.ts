@@ -25,7 +25,7 @@ import * as store from '../../core/state/store.js';
 import { findRecurrences } from '../../core/mining/recurrence.js';
 import { tasteRules } from '../../core/taste/reader.js';
 import { tastePermissions, calibrationQueue } from '../../core/taste/calibration.js';
-import { coverageOf, DIMENSION_LABEL } from '../../core/taste/dimensions.js';
+import { coverageOf, DIMENSION_LABEL, DIMENSIONS } from '../../core/taste/dimensions.js';
 import { foldRepairs } from '../../core/architecture/repair-memory.js';
 import { floorStateFor, runtimeIdentity, MIN_TASKS } from './floor.js';
 import { readerModel } from './taste.js';
@@ -49,7 +49,7 @@ export async function tend(): Promise<void> {
   const items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listInvocations(L), requirements: v.requirements,
     standardVersionHash: v.standardVersionHash, proposals });
   store.setMining(L, { at: new Date().toISOString(), standardVersionHash: v.standardVersionHash, items });
-  digest.push(items.length ? `${items.length} recurring problem(s); the strongest: ${items[0].kind.toLowerCase().replace('_', ' ')}. See: atelier mine --skill ${name}`
+  digest.push(items.length ? `${items.length} recurring problem(s); the strongest: ${items[0].kind.toLowerCase().replace(/_/g, ' ')}. See: atelier mine --skill ${name}`
     : 'nothing recurs in what has been recorded');
 
   // 1b. What this skill's own drafts keep saying that its author never does (core/observers/tell-lexicon.ts):
@@ -71,10 +71,10 @@ export async function tend(): Promise<void> {
   digest.push(`regression floor: ${st.state}${st.state === 'EARNED' ? '' : ` (${st.why})`}`
     + (st.state === 'EARNED' ? '' : setUp ? `; re-earn it for this version: atelier floor --skill ${name} --setup` : `; set it up once: atelier floor --skill ${name} --setup`));
   if (st.state === 'EARNED') {
-    if (argv.includes('--auto') && !argv.includes('--promote')) argv.push('--promote');
+    const promote = argv.includes('--auto') || argv.includes('--promote');
     console.log('── optimize ──');
     const started = new Date().toISOString();
-    await optimize();
+    await optimize({ promote });
     const round = store.readEvents(L).filter((e) => e.kind === 'OPTIMIZE_ROUND' && String(e.at) >= started).at(-1);
     const promoted = typeof round?.promoted === 'string' ? round.promoted : null;
     digest.push(!round ? 'optimize found nothing to try this round'
@@ -105,7 +105,7 @@ export function skillDashboard(name: string): void {
   const lastTend = events.filter((e) => e.kind === 'TENDED').at(-1);
   console.log(`${name}  ·  version ${active}  ·  standard ${v.standardVersionHash}`);
   console.log(`  rules          ${live.length}: ${live.filter((r) => r.measurement).length} counted, ${rules.length} read by the taste reader`);
-  console.log(`  covers         ${[...Object.keys(DIMENSION_LABEL)].filter((d) => d !== 'UNSORTED' && !cov.gaps.includes(d as never)).length} of 8 dimensions${cov.gaps.length ? `; nothing about ${cov.gaps.map((d) => DIMENSION_LABEL[d]).join(', ')}` : ''}`);
+  console.log(`  covers         ${[...Object.keys(DIMENSION_LABEL)].filter((d) => d !== 'UNSORTED' && !cov.gaps.includes(d as never)).length} of ${DIMENSIONS.length} dimensions${cov.gaps.length ? `; nothing about ${cov.gaps.map((d) => DIMENSION_LABEL[d]).join(', ')}` : ''}`);
   console.log(`  taste reader   ${perms.veto.size ? `acts on ${perms.veto.size} rule(s)` : 'reports only'}; ${calibrationQueue(rules, events, readerModel()).length} reading(s) to label`);
   console.log(`  floor          ${st.state}`);
   console.log(`  uses           ${store.listInvocations(L).length} recorded`);

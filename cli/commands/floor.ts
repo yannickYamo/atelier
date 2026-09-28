@@ -21,8 +21,8 @@
 // across tasks, and the taste reader, where it holds VETO, did not read the candidate as worse. Change any of those and the qualification no longer applies; an automatic
 // promotion changes the version, so the floor must be re-frozen and re-earned before the next one.
 
-import { readFileSync, existsSync, statSync } from 'node:fs';
-import { join, extname, basename } from 'node:path';
+import { readCorpus, sessionCorpus } from '../corpus.js';
+import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { resolveRule } from '../../core/state/rule-key.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
@@ -38,13 +38,10 @@ import { readerModel } from './taste.js';
 import type { ComparisonVerdict } from '../../core/comparison/compare.js';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
-import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
-import { walk } from './intake.js';
 import { resolveServedVersion } from './invoke.js';
 import { spendOneWithResult } from './improve.js';
 import { describeBackup } from '../../adapters/install-tree.js';
-import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientAndBinding, modelFor, providerFor, hasModelFor, pickHost, projectDir,
-  loadSession } from '../runtime.js';
+import { sha, DATA, die, argv, flag, flagAll, numericFlag, skillArg, clientAndBinding, modelFor, providerFor, hasModelFor, pickHost, projectDir } from '../runtime.js';
 import { readerClient } from './taste.js';
 
 /** The fewest tasks a floor verdict or a qualification can rest on: tasks are the unit of the test. */
@@ -96,17 +93,6 @@ export function floorStateFor(L: store.StoreLayout, active: string, runtime: str
   return { state: g.state, why, fires };
 }
 
-/** Read every piece of writing in a folder, as intake would, skipping files about the work and pieces held back. */
-export function readCorpus(path: string): string[] {
-  if (!existsSync(path)) die(`--corpus: there is nothing at ${path}.`);
-  const files = statSync(path).isDirectory() ? walk(path).map((r) => join(path, r)) : [path];
-  // Pieces reserved for the blind comparison stay unread here too, matched by content.
-  const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.artifact.trim()));
-  return files
-    .filter((f) => (READABLE as readonly string[]).includes(extname(f).toLowerCase()) && !META_NAME.test(basename(f)))
-    .flatMap((f) => { const r = extract(f); return r.ok ? [(r as { text: string }).text] : []; })
-    .filter((t) => !reserved.has(t.trim()));
-}
 
 /** Tasks from a file: separated by blank lines, so a task can run over several lines. */
 const readTasks = (file: string): string[] => {
@@ -156,8 +142,8 @@ function baselineFor(L: store.StoreLayout, name: string, active: string, tasks: 
 }
 
 /** Tasks both versions are drafted on for the taste check, and how many more tasks the candidate must miss a rule on to be blocked. */
-export const TASTE_SAMPLE = 4;
-export const TASTE_BLOCK_MARGIN = 2;
+const TASTE_SAMPLE = 4;
+const TASTE_BLOCK_MARGIN = 2;
 /** The calls the taste check can need: both versions drafted on the sample, and each draft read (at most 3 calls). */
 export const TASTE_GATE_CALLS = 2 * TASTE_SAMPLE + 2 * TASTE_SAMPLE * 3;
 
@@ -169,7 +155,7 @@ export const TASTE_GATE_CALLS = 2 * TASTE_SAMPLE + 2 * TASTE_SAMPLE * 3;
  * so one is not enough to block. Only passages the reader quotes count (an omission has no evidence to
  * check). The reader blocks; it never clears.
  */
-export async function tasteRegression(L: store.StoreLayout, v: StandardVersion, active: string, candidate: string, tasks: readonly string[],
+async function tasteRegression(L: store.StoreLayout, v: StandardVersion, active: string, candidate: string, tasks: readonly string[],
   client: InferenceClient, budget: Budget, veto: ReadonlySet<string>): Promise<string[]> {
   const sample = tasks.slice(0, TASTE_SAMPLE);
   const [champ, cand] = [await fire(L, active, sample, 1, client, budget), await fire(L, candidate, sample, 1, client, budget)];
@@ -394,9 +380,8 @@ export async function floor(): Promise<void> {
   //   qualify     A/A runs, up to --runs (default 6)
   if (argv.includes('--setup')) {
     // Your pieces: --corpus, else the folder `new` read for this skill (only when the session is this skill's).
-    const session = loadSession();
-    const source = flag('--corpus') ?? (session.skillName === null || session.skillName === name ? session.source ?? null : null);
-    const texts = source && existsSync(source) ? readCorpus(source) : [];
+    const corpusFlag = flag('--corpus');
+    const texts = corpusFlag ? readCorpus(corpusFlag) : sessionCorpus(name);
     if (!f.contract) {
       if (!texts.length) die(`--setup needs your pieces to propose margins: atelier floor --skill ${name} --corpus <folder>`);
       f = { ...f, contract: buildContract(proposeMargins(dims, texts), dims, null) };

@@ -10,11 +10,13 @@ import type { StandardVersion, RepairRecord } from '../state/canonical-state.js'
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
 import { findTerms } from '../observers/text.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
+/** Repair pairs kept per invocation: the raw material for "write this, not that" examples, bounded. */
+const MAX_PAIRS_KEPT = 12;
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const broken = (r: VerifyReport): string[] => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').map((c) => c.requirementId);
 
@@ -40,11 +42,12 @@ export interface CheckOptions {
   readonly learnedTells?: readonly string[];
 }
 
-const CUT_STORY = 'a first-person story that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another';
-const CUT_FIGURE = 'a figure presented as a finding, not in your material or your request: say it without the number, or cut the claim';
-const CUT_SOURCE = 'a quotation from someone unnamed, not in your material or your request: make the point in your own words without the attribution, or cut it';
 
 /**
+ * Every check a draft is held to. Where the standard holds the machine-tell rule and `learnedTells` are
+ * given, the report carries one extra line, `<rule id>·learned`, for the learned phrases found, with the
+ * rule's materiality; it fails the check like the rule itself.
+ *
  * Every check a draft is held to: the standard's measured rules, and — always, unless turned off — the
  * rule that a voice may not invent the person's experiences or their numbers. The second is not the
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
@@ -61,8 +64,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
       detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
   const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || (tellRule?.materiality === 'REQUIRED' && learned.length > 0) };
   if (opts.guardClaims === false) return report;
-  const claims = unsourcedClaims(text, opts.material ?? '')
-    .map((c) => (opts.placeholders ? c : { ...c, why: c.kind === 'EXPERIENCE' ? CUT_STORY : c.kind === 'SOURCE' ? CUT_SOURCE : CUT_FIGURE }));
+  const claims = unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
   const line = { requirementId: 'UNSOURCED', statement: 'Never invent a first-person story or a figure presented as a finding.',
     materiality: 'REQUIRED', phase: 'ACCURACY' as const,
     result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: claims, value: claims.length,
@@ -117,7 +119,7 @@ export async function refineToStandard(
     const next = applyRepair(text, targets, reps, reverted, applied, opts.placeholders ?? false);
     for (const r of reverted) {
       const t = targets.find((x) => x.id === r.id);
-      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.lost[0]?.startsWith('the move') || r.lost[0]?.startsWith('the text') ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
+      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
     }
     const after = next === text ? report : checkDraft(skill, v, next, opts);
@@ -150,10 +152,7 @@ export async function refineToStandard(
   if (!opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
     const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
     let next = text;
-    for (const sp of spans) {
-      const before = next.slice(0, sp.start).replace(/[ \t]+$/, ''); const after = next.slice(sp.end).replace(/^[ \t]+/, '');
-      next = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
-    }
+    for (const sp of spans) next = cutSpan(next, sp.start, sp.end);
     const after = checkDraft(skill, v, next, opts);
     if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
       for (const sp of spans) cut.push(sp.text.trim().slice(0, 160));
@@ -163,6 +162,6 @@ export async function refineToStandard(
   }
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
-      ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, 12) } : {}),
+      ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
       ...(cut.length ? { storiesCut: cut } : {}), why } };
 }

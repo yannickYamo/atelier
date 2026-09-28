@@ -1,26 +1,26 @@
-// atelier/core/compiler/voice.ts — A FEW PASSAGES OF THE AUTHOR'S OWN, SERVED WITH THE SKILL.
+// atelier/core/compiler/voice.ts — HOW THE AUTHOR SOUNDS, SERVED WITH THE SKILL: THEIR OWN PIECES AND LENGTH.
 //
-// Rules describe a writer; they do not sound like one. In a blind round on one author's corpus, the
-// model given the author's pieces in its prompt sounded more like them than the compiled skill did,
-// although the skill met every one of its rules: the served skill held about 2,500 words of rules and
-// statistics and not one paragraph the author wrote. So a skill now carries a handful of the author's
-// own passages, chosen here, deterministically, and the rules and checks sit on top of them.
+// Rules describe a writer; they do not sound like one. In blind rounds on one author's corpus, a skill
+// that met every rule it held, and served not one paragraph the author wrote, was ranked least like the
+// author. So a skill now carries the author's own writing, chosen here, deterministically, and the rules
+// and checks sit on top of it (a persona of how they sound comes from ./persona.ts):
 //
-//   typical     each candidate passage (a run of consecutive prose paragraphs, no headings, lists,
-//               code or links) is scored by Burrows' Delta against the author's own pieces: the
-//               passage that sounds most like the author overall, not their most striking one
-//   spread      passages come from different pieces, chosen greedily to share as few content words as
-//               possible, so the model takes the voice rather than one piece's topic
-//   length      the author's usual piece length (the middle half of their pieces), which a
+//   pieces      WHOLE pieces spanning the author's modes (an essay, a list, a talk transcript): the most
+//               typical piece by Burrows' Delta first, then the piece least like any chosen, within a word
+//               budget (`selectVoicePieces`)
+//   length      the author's usual piece length, the middle half of their pieces (`usualLength`), which a
 //               rules-only skill lost: its output ran 1,500 words where the author's run 2,000 or more
+//   passages    the first design, a few short passages served inline (`selectVoicePassages`); kept so
+//               packages built with it still render, and no longer chosen by `build`
 //
-// Pieces reserved for blind testing never reach this function: the caller passes readable pieces only.
+// Pieces reserved for blind testing never reach this module: callers pass readable pieces only.
 
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
 import { functionProfile, proseWords, patternRate, FUNCTION_WORDS, type PatternId } from '../observers/style.js';
 import type { Persona } from './persona.js';
 
-export interface VoicePassages {
+/** What a skill serves of the author's own writing. */
+export interface Voice {
   /** short passages served inline (the first design; kept so packages built with it still render) */
   readonly passages: readonly string[];
   /** the middle half of the author's piece lengths, in words, rounded to 100 */
@@ -29,6 +29,13 @@ export interface VoicePassages {
   readonly pieces?: readonly string[];
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
   readonly persona?: Persona;
+}
+
+/** The middle half of the author's piece lengths in prose words, rounded to 100; null under three pieces. */
+export function usualLength(pieces: readonly string[]): readonly [number, number] | null {
+  const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
+  const round = (n: number): number => Math.max(100, Math.round(n / 100) * 100);
+  return lengths.length >= 3 ? [round(quantile(lengths, 0.25)), round(quantile(lengths, 0.75))] as const : null;
 }
 
 export const VOICE_PASSAGES = 3;
@@ -71,13 +78,12 @@ function typicality(pieces: readonly string[]): (t: string) => number {
 }
 
 /**
- * Choose up to VOICE_PASSAGES passages from the author's readable pieces. Needs at least three pieces;
+ * LEGACY (the first design; `build` now serves whole pieces). Choose up to VOICE_PASSAGES passages from
+ * the author's readable pieces. Needs at least three pieces;
  * fewer, and there is no telling a typical passage from an unusual one, so nothing is chosen.
  */
-export function selectVoicePassages(pieces: readonly string[], count = VOICE_PASSAGES): VoicePassages {
-  const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
-  const round = (n: number): number => Math.max(100, Math.round(n / 100) * 100);
-  const lengthWords = lengths.length >= 3 ? [round(quantile(lengths, 0.25)), round(quantile(lengths, 0.75))] as const : null;
+export function selectVoicePassages(pieces: readonly string[], count = VOICE_PASSAGES): Voice {
+  const lengthWords = usualLength(pieces);
   if (pieces.length < 3) return { passages: [], lengthWords };
   const score = typicality(pieces);
   // The most typical window of each piece.
@@ -100,7 +106,7 @@ export function selectVoicePassages(pieces: readonly string[], count = VOICE_PAS
 }
 
 /** Words of whole pieces a skill serves at most: enough for two or three modes, small enough to serve. */
-export const PIECE_BUDGET_WORDS = 9000;
+const PIECE_BUDGET_WORDS = 9000;
 
 /** What distinguishes one mode of an author's writing from another: point of view, layout, pace, length. */
 const MODE_FEATURES: readonly PatternId[] = ['FIRST_PERSON', 'ONE_LINE_PARAGRAPH', 'BOLD_SPAN', 'DASH_ASIDE', 'RHETORICAL_QUESTION', 'CONTRACTION'];

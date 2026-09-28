@@ -29,7 +29,7 @@ model judge are reported, not gating.
 ## Materials and arms
 
 Same corpus, six reserved pieces, five briefs, length target and writer as rounds 5 and 6. The skill is
-store `voice7` (the current code), its tell lexicon learned before the run from six probe drafts on the
+the round-7 store (the current code), its tell lexicon learned before the run from six probe drafts on the
 author's own titles.
 
 | arm | what |
