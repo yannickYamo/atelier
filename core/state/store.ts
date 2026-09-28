@@ -118,6 +118,22 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   writeAtomic(p, text);
 }
 
+/**
+ * The machine-writing phrases this skill's own drafts repeat and its author never uses
+ * (core/observers/tell-lexicon.ts), plus what the owner added or struck. Implementation, not standard.
+ */
+export interface StoredTells { readonly learned: readonly string[]; readonly added: readonly string[]; readonly struck: readonly string[]; readonly at: string | null; readonly drafts: number; readonly topics: number }
+export function getTells(l: StoreLayout): StoredTells {
+  const p = join(dirs(l).base, 'tells.json');
+  return existsSync(p) ? readJson<StoredTells>(p, { what: 'the learned machine tells' }) : { learned: [], added: [], struck: [], at: null, drafts: 0, topics: 0 };
+}
+export function setTells(l: StoreLayout, t: StoredTells): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'tells.json'), JSON.stringify(t, null, 1));
+}
+/** The phrases every draft is checked against: learned and added, less what the owner struck. */
+export const activeTells = (t: StoredTells): string[] => [...new Set([...t.learned, ...t.added])].filter((x) => !t.struck.includes(x));
+
 /** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
 export function getVoice(l: StoreLayout): VoicePassages | null {
   const p = join(dirs(l).base, 'voice.json');
