@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "README.md",
+    "AGENTS.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "MEASUREMENTS.md",
