@@ -15,8 +15,8 @@
 //               presented as a finding or measured by "I"/"we"
 //
 // A claim is supported when the person supplied it: their material, or the task they typed. A figure
-// is supported when that exact number appears there as a whole number, or when the sentence carries its
-// own link. A story is supported when most of its content words appear in one passage of the material.
+// is supported when that exact number appears there as a whole number, or when the sentence links a
+// source the person supplied (a link the draft made up supports nothing). A story is supported when most of its content words appear in one passage of the material.
 // Unsupported claims are never rewritten into other claims. By default the repair cuts each one, keeping
 // the point it made, and the output lists where the person's own story would fit; with `placeholders`
 // the repair leaves a bracketed slot saying what belongs there instead. Each claim's `why` says which,
@@ -96,7 +96,10 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
       continue;
     }
     inStory = false;
-    if (STATISTIC.test(s.text) && FINDING.test(s.text) && !LINKED.test(s.text)) {
+    // A link is support only when the person supplied it: a model invents URLs as readily as figures.
+    const urls = s.text.match(/https?:\/\/[^\s)\]]+/g) ?? [];
+    const linkedByPerson = LINKED.test(s.text) && urls.length > 0 && urls.every((u) => material.includes(u));
+    if (STATISTIC.test(s.text) && FINDING.test(s.text) && !linkedByPerson) {
       const numbers = numbersIn(s.text).filter((n) => !/^(?:19|20)\d\d$/.test(n));
       if (numbers.length && !numbers.every((n) => matNumbers.has(n))) {
         out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
