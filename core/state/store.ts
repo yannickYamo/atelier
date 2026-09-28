@@ -10,7 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
-import type { VoicePassages } from '../compiler/voice.js';
+import type { Voice } from '../compiler/voice.js';
 import type { ContrastPair } from '../compiler/contrast-examples.js';
 import type { Recurrence } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
@@ -135,11 +135,11 @@ export function setTells(l: StoreLayout, t: StoredTells): void {
 export const activeTells = (t: StoredTells): string[] => [...new Set([...t.learned, ...t.added])].filter((x) => !t.struck.includes(x));
 
 /** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
-export function getVoice(l: StoreLayout): VoicePassages | null {
+export function getVoice(l: StoreLayout): Voice | null {
   const p = join(dirs(l).base, 'voice.json');
-  return existsSync(p) ? readJson<VoicePassages>(p, { what: "the voice passages" }) : null;
+  return existsSync(p) ? readJson<Voice>(p, { what: "the voice passages" }) : null;
 }
-export function setVoice(l: StoreLayout, voice: VoicePassages | null): void {
+export function setVoice(l: StoreLayout, voice: Voice | null): void {
   const p = join(dirs(l).base, 'voice.json');
   if (voice === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });

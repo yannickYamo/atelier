@@ -69,9 +69,12 @@ from every version). Each round was pre-registered, and every failure is recorde
 | the model with the posts pasted in | ranked below Atelier | 97 | 2 | about half |
 | the model on its own | ranked last | 0.6 | 0 | about half |
 
-A second reader, blind, put Atelier first on four of five briefs and a model judge agreed. What's still
-open: the gate asked for fewer machine moves than the one per piece round 7 left, and that has since been
-tightened. It has been tested on one author so far. The design and every pre-registration are in
+A second reader, blind, put Atelier first on four of five briefs and a model judge agreed. Round 7 still
+failed its pre-registered gate on two counts: it left about one machine move per piece where the gate
+asked for fewer, and one piece strayed outside the author's range on two habits. The first is fixed:
+run back through the current guard, round 7's drafts carry no machine moves and no invented material.
+The second is still open (that piece writes fewer one-line paragraphs than the author does). It has been
+tested on one author so far. The design and every pre-registration are in
 [studies/](studies/README.md).
 
 ## How it compares

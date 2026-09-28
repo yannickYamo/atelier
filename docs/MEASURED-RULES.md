@@ -126,10 +126,14 @@ miss, grading your own list ("that last one deserves emphasis"), "the single mos
 one thing "wearing another's clothes". In five blind rounds every model-written version carried them at
 three to seven times the human author's rate. Three things catch them, none of them tuned to one author:
 
-- **A catalogue of the model's moves** (`core/observers/tells.ts`, `MACHINE_TELL`): ten families, the same
-  for every skill. Every standard built from a corpus is proposed a cap at the author's own rate
-  (usually near zero), checked on pieces discovery never read. Across three corpora the families ran
-  0 to 0.11 per 1,000 words in the authors' work and 0.4 to 1.0 in the model's.
+- **A catalogue of the model's moves** (`core/observers/tells.ts`, `MACHINE_TELL`): fourteen families, the
+  same for every skill, including a contrastive verdict as the opening line (found by position). Every
+  standard built from a corpus is proposed one rule over them, held to the author's **typical piece**: a
+  family the author uses in fewer than half their pieces is banned outright; one they use in most is capped
+  at 1.5 times their 90th-percentile piece. When the rule is checked on the author's unread work, their own
+  pieces are tolerated up to the moves their 90th-percentile piece carries (one corpus had such moves in 8
+  of 20 pieces). Measured with this sensor, the families ran 0 to 0.11 per 1,000 words in three authors'
+  work and 0.4 to 1.0 in the model's.
 - **A lexicon learned from the skill's own drafts** (`core/observers/tell-lexicon.ts`, `atelier tells`): a
   run of four or five words the skill's drafts repeat across three or more unrelated topics, that no
   piece of the author's contains, and whose absence cannot be chance (at the drafts' rate the corpus

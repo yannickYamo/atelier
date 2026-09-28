@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { checksFor } from '../checks.js';
 import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -24,26 +25,6 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
 import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
-// ── invoke ──────────────────────────────────────────────────────────────────────────────────
-/**
- * RUN THE SKILL, FOR REAL, AND RECORD WHAT RAN.
- *
- * This is the first execution surface Atelier has ever owned, and it exists because nothing else
- * can answer the question a repair depends on: *what exact implementation produced the output the
- * person disliked?* Until now a skill was built, installed, and then left; whatever happened next
- * happened inside a host Atelier never saw.
- *
- * ─── IT SERVES THE STORED PACKAGE. IT DOES NOT RE-DERIVE ONE. ───────────────────────────────────
- *
- * `study test` builds its arm by re-rendering rule statements out of the standard — no architecture,
- * no carriers, no sections. That is a second, quieter renderer, and anything measured through it is
- * measured on an artefact the product never installs. Doing the same here would make every carrier
- * escalation invisible to the very loop built to exercise it. So the bytes come from the package on
- * record, and the hash of what we serve is checked against the hash the SkillVersion claims.
- *
- * That check IS `deliveryEvidence`. It is also the whole of the DELIVERY_FAILURE route: a tampered
- * or stale artefact is caught here, deterministically, before any model is asked anything.
- */
 /**
  * What a skill serves, resolved once and shared.
  *
@@ -74,15 +55,15 @@ export function resolveServedSkill(name: string): ServedSkill {
   return resolveServedVersion(L, wanted, flag('--context') ?? '');
 }
 
+/** A run of this many words repeated from a served piece of the author's is copying, not an echo of a phrase. */
+const LIFTED_RUN = 12;
+
 /**
  * What a SkillVersion serves a model, exactly as `invoke` serves it: SKILL.md and every example file
  * whose condition holds, fenced as reference material. `fix`'s candidate run and the regression floor's
  * runs serve through this too, so a comparison between two versions is never a comparison between two
  * ways of serving them.
  */
-/** A run of this many words repeated from a served passage is copying, not an echo of a phrase. */
-export const LIFTED_RUN = 12;
-
 export function resolveServedVersion(L: store.StoreLayout, wanted: string, context: string): ServedSkill {
   const sv = store.getSkillVersion(L, wanted) ?? die(`SkillVersion ${wanted} is missing from the store.`);
   const pkg = store.getPackage(L, sv.materializedHash)
@@ -139,6 +120,26 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
   return { L, sv, servedText, servedHash, contractFile, delivery };
 }
 
+// ── invoke ──────────────────────────────────────────────────────────────────────────────────
+/**
+ * RUN THE SKILL, FOR REAL, AND RECORD WHAT RAN.
+ *
+ * This is the first execution surface Atelier has ever owned, and it exists because nothing else
+ * can answer the question a repair depends on: *what exact implementation produced the output the
+ * person disliked?* Until now a skill was built, installed, and then left; whatever happened next
+ * happened inside a host Atelier never saw.
+ *
+ * ─── IT SERVES THE STORED PACKAGE. IT DOES NOT RE-DERIVE ONE. ───────────────────────────────────
+ *
+ * `study test` builds its arm by re-rendering rule statements out of the standard — no architecture,
+ * no carriers, no sections. That is a second, quieter renderer, and anything measured through it is
+ * measured on an artefact the product never installs. Doing the same here would make every carrier
+ * escalation invisible to the very loop built to exercise it. So the bytes come from the package on
+ * record, and the hash of what we serve is checked against the hash the SkillVersion claims.
+ *
+ * That check IS `deliveryEvidence`. It is also the whole of the DELIVERY_FAILURE route: a tampered
+ * or stale artefact is caught here, deterministically, before any model is asked anything.
+ */
 export async function invoke(): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const asked = flag('--task') ?? positional([name])
@@ -222,8 +223,7 @@ export async function invoke(): Promise<void> {
   if (!material.length && !argv.includes('--allow-unsourced')) {
     console.log(`(No material of yours is bound, so any story, named source or figure the draft invents will be cut. To let it tell your real ones: atelier material --skill ${name} <notes.md>, or --with notes=<file>.)`);
   }
-  const checks = { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'),
-    learnedTells: store.activeTells(store.getTells(L)) };
+  const checks = checksFor(L, { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
   //
   // The rules no count can check are read on every output, twice and with quotes, and the reading is
@@ -266,9 +266,10 @@ export async function invoke(): Promise<void> {
     };
   // ── SEVERAL DRAFTS, THE BEST BY COUNT ─────────────────────────────────────────────────────────
   //
-  // `--drafts N` writes N drafts side by side and delivers the one that breaks the fewest REQUIRED
-  // rules, then sits closest to the author's style (when the standard carries a style distance), then
-  // breaks the fewest rules of any weight. A count picks it, never a judge's taste.
+  // `--drafts N` writes N drafts side by side and delivers, in this order: the one the taste reader reads
+  // as missing the fewest rules it holds VETO on (when it has earned any), then the fewest REQUIRED rules
+  // broken, the fewest machine-writing moves, the fewest rules of any weight, and last the closest to the
+  // author's style. A count picks it, never a judge's taste.
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
@@ -326,27 +327,26 @@ export async function invoke(): Promise<void> {
   }
   // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
   if (rec.repair?.storiesCut?.length) {
-    console.log(`${rec.repair.storiesCut.length} invented stor(ies) or figure(s) cut. A story of your own would fit where these were (add it, or bind your notes with --with):`);
+    console.log(`${rec.repair.storiesCut.length} invented stor(ies), unnamed quotation(s) or figure(s) cut. Your own would fit where these were (add it, or bind your notes with --with):`);
     for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
   }
   for (const n of tasteNotes) console.log(`(${n}.)`);
-  if (!tasteOn && rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
   if (tasteOn && std) {
     try {
       const taken = tasteTaken ?? readings.get(rec.output) ?? null;
       const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
       // A held-back reading shows nothing that names a rule, the taste repair included.
-  if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
+      if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
       console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
       if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
     } catch (e) {
-  if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
+      if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
       console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
     }
   }
   if (cls.ok && cls.note && std?.requirements.some((q) => q.measurement)) console.log(`(${cls.note})`);
-  // THE AUTHOR'S PASSAGES ARE FOR VOICE, NOT FOR COPYING. The skill serves a few of them
-  // (core/compiler/voice.ts); an output that repeats a long run of one verbatim has lifted it.
+  // THE AUTHOR'S PIECES ARE FOR VOICE, NOT FOR COPYING. The skill serves some of the author's own
+  // writing (core/compiler/voice.ts); an output that repeats a long run of it verbatim has lifted it.
   const voice = store.getVoice(L);
   const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
   if (served.length) {

@@ -14,6 +14,7 @@
 //
 // Nothing here can change a standard. The calling agent does the rewriting; this says what to rewrite.
 
+import { checksFor } from '../checks.js';
 import { createInterface } from 'node:readline';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,7 +37,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'atelier_rules', description: "A skill's ratified standard: every rule, its weight (REQUIRED instructs), and how it is checked.",
     inputSchema: { type: 'object', properties: { skill: { type: 'string' } }, required: ['skill'], additionalProperties: false } },
-  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for first-person stories or figures presented as findings that are not in the skill\'s material (UNSOURCED). Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; replace an UNSOURCED claim with a placeholder, never another invented one.',
+  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for first-person stories or figures presented as findings that are not in the skill\'s material (UNSOURCED). Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; cut an UNSOURCED story, quotation or figure (keep the point it made), never replace it with another invented one.',
     inputSchema: { type: 'object', properties: { skill: { type: 'string' }, text: { type: 'string' },
       class: { type: 'string', description: 'the kind of document the text is ("blog-post", "support-reply"); refused when the skill measures another kind' },
       material: { type: 'string', description: 'notes, figures or sources the text may draw on, beyond the skill\'s own material' },
@@ -85,7 +86,7 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     const cls = checkClass(store.getDocClass(L), typeof args.class === 'string' ? args.class : null);
     if (!cls.ok) return { isError: true, text: cls.why };
     const material = [...store.getMaterial(L).map((m) => m.text), typeof args.material === 'string' ? args.material : ''].join('\n\n');
-    const report = checkDraft(skill, v, text, { material });
+    const report = checkDraft(skill, v, text, checksFor(L, { material }));
     // The reading-based rules, on request: this calls a model, and every other check here is free.
     // A miss on a rule where the reader holds VETO fails the check, as on the command line. A reader that
     // cannot run costs nothing of the counted report: it is said, and the counted result stands.

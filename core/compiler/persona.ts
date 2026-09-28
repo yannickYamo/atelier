@@ -19,6 +19,9 @@
 import type { Budget, InferenceClient } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { quoteIsReal } from '../taste/reader.js';
+import type { Requirement, StandardVersion } from '../state/canonical-state.js';
+import { measure } from '../observers/registry.js';
+import { findPattern, PATTERN_FAMILIES, type PatternId } from '../observers/style.js';
 
 export type Frequency = 'ALWAYS' | 'OFTEN' | 'SOMETIMES' | 'RARELY';
 export interface PersonaPoint {
@@ -31,7 +34,7 @@ export interface Persona {
   readonly points: readonly PersonaPoint[];
   /** points the model offered whose quote was not in the corpus: dropped, counted so the drop is visible */
   readonly dropped: number;
-  /** points dropped because they describe a move a REQUIRED boundary of the standard forbids */
+  /** points dropped because they describe a move a boundary the standard holds (required or shown) forbids */
   readonly conflicting?: number;
 }
 
@@ -98,12 +101,30 @@ export function describePersona(p: Persona): string {
 }
 
 /**
- * THE STANDARD WINS. A persona point that describes, or quotes, a move a REQUIRED boundary of the
- * standard caps or bans is dropped: the persona is how the author sounds, but the owner's ratified
+ * THE STANDARD WINS. A persona point that describes, or quotes, a move any boundary the standard holds
+ * (required or shown, not rejected) caps or bans is dropped: the persona is how the author sounds, but the owner's ratified
  * rules say what the output may not do. (A persona once said the author "always" writes "not X, it's
  * Y" while the standard capped exactly that.)
  */
 export function reconcilePersona(p: Persona, forbids: (text: string) => boolean): Persona {
   const points = p.points.filter((x) => !forbids(`${x.description} ${x.quote}`));
   return { points, dropped: p.dropped, ...(p.points.length - points.length ? { conflicting: p.points.length - points.length } : {}) };
+}
+
+/**
+ * What the standard rules out, as a test on a persona point: any boundary it holds (required or shown,
+ * not rejected) whose pattern or listed words the text contains, and a contrast in any spelling where the
+ * standard caps any one spelling (a point describing "not X, but Y" survived a cap on "not X, it's Y").
+ */
+export function standardForbids(v: StandardVersion): (text: string) => boolean {
+  const boundaries = v.requirements.filter((r) => r.kind === 'BOUNDARY' && r.measurement && r.authority !== 'EXPERT_REJECTED');
+  const patternOf = (r: Requirement): PatternId | null => (r.measurement?.observer === 'PATTERN_RATE'
+    ? ((r.measurement.params.pattern as readonly string[] | undefined)?.[0] as PatternId | undefined) ?? null : null);
+  const capsContrast = boundaries.some((r) => { const p = patternOf(r); return p !== null && PATTERN_FAMILIES.contrast.includes(p); });
+  return (text) => (capsContrast && findPattern(text, 'CONTRAST_VERDICT').length > 0)
+    || boundaries.some((r) => {
+      if (r.measurement?.observer === 'LEXICON') return measure(text, r.measurement).verdict === 'VIOLATED';
+      const p = patternOf(r);
+      return p !== null && findPattern(text, p).length > 0;
+    });
 }
