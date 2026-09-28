@@ -4,7 +4,14 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { refineToStandard } from '../../core/loop/run-repair.js';
+import { checksFor } from '../checks.js';
+import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
+import { checkClass } from '../../core/observers/doc-class.js';
+import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
+import { tastePermissions } from '../../core/taste/calibration.js';
+import { refineTaste } from '../../core/taste/repair.js';
+import { overlapIndex } from '../../core/observers/overlap.js';
+import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import type { Budget } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -18,26 +25,6 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
 import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
-// ── invoke ──────────────────────────────────────────────────────────────────────────────────
-/**
- * RUN THE SKILL, FOR REAL, AND RECORD WHAT RAN.
- *
- * This is the first execution surface Atelier has ever owned, and it exists because nothing else
- * can answer the question a repair depends on: *what exact implementation produced the output the
- * person disliked?* Until now a skill was built, installed, and then left; whatever happened next
- * happened inside a host Atelier never saw.
- *
- * ─── IT SERVES THE STORED PACKAGE. IT DOES NOT RE-DERIVE ONE. ───────────────────────────────────
- *
- * `study test` builds its arm by re-rendering rule statements out of the standard — no architecture,
- * no carriers, no sections. That is a second, quieter renderer, and anything measured through it is
- * measured on an artefact the product never installs. Doing the same here would make every carrier
- * escalation invisible to the very loop built to exercise it. So the bytes come from the package on
- * record, and the hash of what we serve is checked against the hash the SkillVersion claims.
- *
- * That check IS `deliveryEvidence`. It is also the whole of the DELIVERY_FAILURE route: a tampered
- * or stale artefact is caught here, deterministically, before any model is asked anything.
- */
 /**
  * What a skill serves, resolved once and shared.
  *
@@ -65,12 +52,25 @@ export function resolveServedSkill(name: string): ServedSkill {
   // A CANDIDATE is served by explicit id and is NOT active. That asymmetry is the product: a person
   // must be able to run the thing being proposed WITHOUT it having been adopted first.
   const wanted = flag('--candidate') ?? store.getActive(L) ?? die(`no active version for ${name}. Build it first.`);
+  return resolveServedVersion(L, wanted, flag('--context') ?? '');
+}
+
+/** A run of this many words repeated from a served piece of the author's is copying, not an echo of a phrase. */
+const LIFTED_RUN = 12;
+
+/**
+ * What a SkillVersion serves a model, exactly as `invoke` serves it: SKILL.md and every example file
+ * whose condition holds, fenced as reference material. `fix`'s candidate run and the regression floor's
+ * runs serve through this too, so a comparison between two versions is never a comparison between two
+ * ways of serving them.
+ */
+export function resolveServedVersion(L: store.StoreLayout, wanted: string, context: string): ServedSkill {
   const sv = store.getSkillVersion(L, wanted) ?? die(`SkillVersion ${wanted} is missing from the store.`);
   const pkg = store.getPackage(L, sv.materializedHash)
     ?? die(`package ${sv.materializedHash} is not in the store — this SkillVersion was built before packages were persisted, so what it served cannot be reconstructed. Rebuild it.`);
   const skillMd = pkg.files['SKILL.md'] ?? die('the stored package has no SKILL.md.');
 
-  const ctxFlag = (flag('--context') ?? '').toLowerCase();
+  const ctxFlag = context.toLowerCase();
   const cmap = pkg.files['context-map.json']
     ? (JSON.parse(pkg.files['context-map.json']) as { components: { requirementId: string; appliesWhen: string }[] })
     : { components: [] };
@@ -96,7 +96,8 @@ export function resolveServedSkill(name: string): ServedSkill {
   // NOT. No heading to continue, and an explicit statement that the deliverable starts after it.
   const exampleBlock = servedExamples.length
     ? `\n\n=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===\n\n`
-      + `Everything up to the end marker shows how the author works. It is context for you, never\n`
+      + `Everything up to the end marker shows how the author works, or how this skill's rules apply\n`
+      + `(a "write this, not that" file is model-written, never the author's). It is context for you, never\n`
       + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
       + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
       + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
@@ -119,17 +120,44 @@ export function resolveServedSkill(name: string): ServedSkill {
   return { L, sv, servedText, servedHash, contractFile, delivery };
 }
 
+// ── invoke ──────────────────────────────────────────────────────────────────────────────────
+/**
+ * RUN THE SKILL, FOR REAL, AND RECORD WHAT RAN.
+ *
+ * This is the first execution surface Atelier has ever owned, and it exists because nothing else
+ * can answer the question a repair depends on: *what exact implementation produced the output the
+ * person disliked?* Until now a skill was built, installed, and then left; whatever happened next
+ * happened inside a host Atelier never saw.
+ *
+ * ─── IT SERVES THE STORED PACKAGE. IT DOES NOT RE-DERIVE ONE. ───────────────────────────────────
+ *
+ * `study test` builds its arm by re-rendering rule statements out of the standard — no architecture,
+ * no carriers, no sections. That is a second, quieter renderer, and anything measured through it is
+ * measured on an artefact the product never installs. Doing the same here would make every carrier
+ * escalation invisible to the very loop built to exercise it. So the bytes come from the package on
+ * record, and the hash of what we serve is checked against the hash the SkillVersion claims.
+ *
+ * That check IS `deliveryEvidence`. It is also the whole of the DELIVERY_FAILURE route: a tampered
+ * or stale artefact is caught here, deterministically, before any model is asked anything.
+ */
 export async function invoke(): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const asked = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
   // What `--with` binds travels WITH the task, so the model has the material the rule needs, and the
   // record's input is what was actually served.
-  const material = boundMaterial();
+  const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
+  // A standard measures one kind of document; asking it for another is refused before anything is spent.
+  const cls = checkClass(store.getDocClass(L), flag('--class'));
+  if (!cls.ok) die(cls.why);
+  // The person's standing material for this skill (`atelier material`) and anything bound for this
+  // task (`--with`): the only places a first-person story or a cited figure in the output may come from.
+  const material = [...store.getMaterial(L), ...boundMaterial()];
+  // The request itself is material too: a story the person typed into the task is theirs to tell.
+  const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
   const task = material.length
     ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
     : asked;
-  const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
   // ── CAN THIS STANDARD BE EXECUTED TRUTHFULLY ON THIS INVOCATION ───────────────────────────
   //
   // BEFORE the model, before the budget, before anything is spent. A REQUIRED rule whose evidence is
@@ -143,7 +171,23 @@ export async function invoke(): Promise<void> {
   if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall!);
   if (shortfall) console.log(shortfall);
 
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 8) };
+  // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
+  // cover is refused before anything is spent rather than failing halfway with nothing delivered.
+  // A skill built from someone's corpus writes TWO drafts by default and keeps the better one: the
+  // author's habits held within their range, and the machine-writing count, choose between drafts and
+  // nothing else can use them (they are never rewritten toward). With one draft they did nothing at all.
+  // `--drafts 1` turns this off.
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', store.getVoice(L)?.pieces?.length ? 2 : 1)));
+  // The taste reader (below) reads every output twice (plus one applicability call when a rule has a
+  // condition). Once it has earned the authority to act it also reads each draft, the chosen one after
+  // the counted repair, and a taste rewrite again: 3 per draft plus 7 at most. Its calls are in the
+  // ceiling from the start, so a repair is never dropped for want of a call.
+  const tasteOn = Boolean(std) && !argv.includes('--no-taste') && tasteRules(std!).length > 0;
+  const permissions = tasteOn ? tastePermissions(tasteRules(std!), store.readEvents(L), readerModel()) : null;
+  const tasteActs = tasteOn && (permissions?.veto.size ?? 0) > 0;
+  const tasteCalls = tasteOn ? (tasteActs ? 3 * nDrafts + 7 : 3) : 0;
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4 + tasteCalls) };
+  if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
 
   // ── WHICH RUNTIME, AND IS IT THE ONE THIS VERSION'S EVIDENCE CAME FROM ────────────────────
   //
@@ -172,16 +216,88 @@ export async function invoke(): Promise<void> {
   // ── CHECKED BEFORE IT IS DELIVERED ──────────────────────────────────────────────────────────
   //
   // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
-  // and only those — at most twice, each rewrite kept only if it breaks nothing that held. The rules
+  // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
+  // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from the
+  // output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
+  if (!material.length && !argv.includes('--allow-unsourced')) {
+    console.log(`(No material of yours is bound, so any story, named source or figure the draft invents will be cut. To let it tell your real ones: atelier material --skill ${name} <notes.md>, or --with notes=<file>.)`);
+  }
+  const checks = checksFor(L, { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
+  //
+  // The rules no count can check are read on every output, twice and with quotes, and the reading is
+  // shown and recorded. Only rules where the reader has EARNED VETO from your labels let it act: rewrite
+  // a passage it quotes, and prefer drafts that miss fewer of them. `--no-taste` turns it off.
+  //
+  // The reader never costs the user their output: if it fails (a rate limit, the call budget), the draft
+  // is delivered as the counted checks left it, and the failure is said.
+  let tasteTaken: readonly TasteReading[] | null = null;
+  const tasteNotes: string[] = [];
+  const readerClient = tasteActs ? readerClientFor() : null;
+  // Applicability depends on the task alone: decided once for every draft and re-read.
+  let decided: Promise<boolean[]> | null = null;
+  const applies = (): Promise<boolean[]> => (decided ??= applicabilityFor(readerClient!, budget, std!, asked));
+  const readings = new Map<string, TasteReading[]>();
+  const readDraft = async (text: string): Promise<TasteReading[]> => {
+    const had = readings.get(text);
+    if (had) return had;
+    const r = await readTaste(readerClient!, budget, std!, text, asked, await applies());
+    readings.set(text, r);
+    return r;
+  };
   const refine = argv.includes('--no-repair') || !std ? null
     : async (draft: string) => {
-      const r = await refineToStandard(client, budget, name, std, draft);
-      return { output: r.output, repair: r.repair };
+      const r = await refineToStandard(client, budget, name, std, draft, 2, checks);
+      if (!tasteActs || !permissions || !readerClient) return { output: r.output, repair: r.repair };
+      let t: Awaited<ReturnType<typeof refineTaste>>;
+      try {
+        const before = await readDraft(r.output);
+        t = await refineTaste(client, readerClient, budget, name, std, r.output, before, permissions.veto, asked, checks, await applies());
+      } catch (e) {
+        tasteNotes.push(`the taste reader could not run before delivery (${(e as Error).message.split('\n')[0]}); delivered as the counted checks left it`);
+        return { output: r.output, repair: r.repair };
+      }
+      tasteTaken = t.readings;
+      if (!t.targeted.length) return { output: r.output, repair: r.repair };
+      const taste = { targeted: t.targeted, fixed: t.fixed, why: t.why };
+      return { output: t.output, repair: r.repair ? { ...r.repair, taste }
+        : { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, taste, why: t.why } };
     };
+  // ── SEVERAL DRAFTS, THE BEST BY COUNT ─────────────────────────────────────────────────────────
+  //
+  // `--drafts N` writes N drafts side by side and delivers, in this order: the one the taste reader reads
+  // as missing the fewest rules it holds VETO on (when it has earned any), then the fewest REQUIRED rules
+  // broken, the fewest machine-writing moves, the fewest rules of any weight, and last the closest to the
+  // author's style. A count picks it, never a judge's taste.
+  if (nDrafts > 1 && (!std || contractFile !== null)) {
+    console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
+  }
+  const select = std && nDrafts > 1 ? { n: nDrafts, choose: async (drafts: readonly string[]) => {
+    // Taste first, where the reader has earned it: the draft missing the fewest VETO-holding rules.
+    // If the reader fails here, the drafts are ranked by count alone.
+    let tasteMissed = drafts.map(() => 0);
+    if (tasteActs && permissions) {
+      try { tasteMissed = await Promise.all(drafts.map(async (d) => vetoMisses(await readDraft(d), permissions.veto).length)); } catch (e) {
+        tasteNotes.push(`the taste reader could not rank the drafts (${(e as Error).message.split('\n')[0]}); ranked by count`);
+      }
+    }
+    const scored = drafts.map((d, i) => {
+      const r = checkDraft(name, std, d, checks);
+      const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
+      const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED').length;
+      const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
+      // Machine-writing moves, catalogued and learned, counted instance by instance.
+      const tells = r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0);
+      return { i, req, all, style, tells, taste: tasteMissed[i] };
+    });
+    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || a.tells - b.tells || a.all - b.all || b.style - a.style);
+    const best = scored[0];
+    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+  } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
-    flag('--task') ? 'FLAG' : 'POSITIONAL', refine);
+    flag('--task') ? 'FLAG' : 'POSITIONAL', refine, select);
 
   // A PROVIDER-SIDE VERSION FLIP UNDER AN UNCHANGED CONFIGURATION. Reported, never fatal: the user
   // changed nothing, and refusing to run would punish them for someone else's release.
@@ -196,13 +312,46 @@ export async function invoke(): Promise<void> {
   }
 
   console.log(`\n${rec.output}\n`);
+  if (rec.selection) console.log(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);
   if (rec.repair) {
     const r = rec.repair;
     console.log(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
     if (r.violatedAfter.length) console.log(`  ${r.why}`);
+    if (r.integrityReverted?.length) {
+      console.log(`  ${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
+      for (const k of r.integrityReverted) console.log(`    ${k}`);
+    }
   } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
+  }
+  // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
+  if (rec.repair?.storiesCut?.length) {
+    console.log(`${rec.repair.storiesCut.length} invented stor(ies), unnamed quotation(s) or figure(s) cut. Your own would fit where these were (add it, or bind your notes with --with):`);
+    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
+  }
+  for (const n of tasteNotes) console.log(`(${n}.)`);
+  if (tasteOn && std) {
+    try {
+      const taken = tasteTaken ?? readings.get(rec.output) ?? null;
+      const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
+      // A held-back reading shows nothing that names a rule, the taste repair included.
+      if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
+      console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
+      if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
+    } catch (e) {
+      if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
+      console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
+    }
+  }
+  if (cls.ok && cls.note && std?.requirements.some((q) => q.measurement)) console.log(`(${cls.note})`);
+  // THE AUTHOR'S PIECES ARE FOR VOICE, NOT FOR COPYING. The skill serves some of the author's own
+  // writing (core/compiler/voice.ts); an output that repeats a long run of it verbatim has lifted it.
+  const voice = store.getVoice(L);
+  const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  if (served.length) {
+    const lifted = overlapIndex(served)(rec.output).longestShared;
+    if (lifted >= LIFTED_RUN) console.log(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
   }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
   // passing them in would report a breach on every invocation.

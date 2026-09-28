@@ -99,10 +99,12 @@ export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
  * proposes the target) or declared it themselves. The obligation layer's refusal to read
  * checkability off prose stands; this is the assertion path it always named and never had.
  */
-export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE';
+export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE'
+  | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
+  | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM';
 export interface Measurement {
   readonly observer: ObserverId;
-  readonly params: Readonly<Record<string, number | readonly string[]>>;
+  readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
 }
 
 /** 1. What the expert supplied. Frozen at seal time; its hash is the run's identity. */
@@ -210,6 +212,23 @@ export interface Requirement {
   readonly prerequisites?: readonly Prerequisite[];
   /** a deterministic measurement of this rule, when it has one. See `Measurement`. */
   readonly measurement?: Measurement;
+  /**
+   * WHICH KIND OF RULE A REWRITE SERVES FIRST. An ACCURACY rule (a figure must be sourced, a
+   * disclaimer must appear) is repaired before any STYLE rule, so a pass spent shortening sentences
+   * never runs over a claim that is about to be corrected. Unset reads as STYLE.
+   */
+  readonly phase?: 'ACCURACY' | 'STYLE';
+  /**
+   * THE RULE'S NAME ACROSS VERSIONS (see ../state/rule-key.ts). Unset, it is derived from the rule's
+   * content; an amendment writes the old key onto the new wording so the lineage survives a reword.
+   */
+  readonly key?: string;
+  /**
+   * HOW OFTEN THE AUTHOR DOES IT: in how many of the unread pieces where the rule could apply they did.
+   * Set when a discovered rule is approved. A rule that is not required is compiled as a move the author
+   * sometimes makes, with this rate, rather than as something every piece must do.
+   */
+  readonly observedRate?: { readonly present: number; readonly applicable: number };
 }
 
 /**
@@ -503,6 +522,18 @@ export interface InvocationRecord {
    * is what was delivered. Absent when nothing was checked or nothing needed fixing.
    */
   readonly repair?: RepairRecord;
+  /** when several drafts were written and one delivered: how many, and why that one */
+  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string };
+}
+
+export interface RepairPair {
+  /** the broken rule's key (see ../state/rule-key.ts), so the pair follows the rule across versions */
+  readonly key: string;
+  /** the exact check the rule had when the pair was recorded, thresholds included; a pair recorded
+   *  under one check is not an example of another (see measurementId in ../state/rule-key.ts) */
+  readonly check?: string;
+  readonly before: string;
+  readonly after: string;
 }
 
 export interface RepairRecord {
@@ -514,6 +545,21 @@ export interface RepairRecord {
   readonly draft?: string;
   /** host repairs only: whether text outside the named spans changed (an instruction there, not a splice) */
   readonly outsideSpansChanged?: boolean;
+  /** rewrites refused because they lost a figure, a negation, a qualifier or a name, and what each lost */
+  readonly integrityReverted?: readonly string[];
+  /** invented stories or figures the repair cut (generation's default): where a story of the person's own would fit */
+  readonly storiesCut?: readonly string[];
+  /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
+  readonly revertedRules?: readonly string[];
+  /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */
+  readonly meaningLost?: readonly string[];
+  /**
+   * The spans an accepted pass rewrote, before and after, with the rule they broke (by key). A verified
+   * "write this, not that" from this author's own standard: the source of the skill's contrast examples.
+   */
+  readonly pairs?: readonly RepairPair[];
+  /** the taste pass (core/taste/repair.ts): rules the reader, holding VETO, read as missed, and which it no longer does */
+  readonly taste?: { readonly targeted: readonly string[]; readonly fixed: readonly string[]; readonly why: string };
   readonly why: string;
 }
 
@@ -620,8 +666,10 @@ export const discoveryRecall = (v: StandardVersion): number =>
  * smell, which is what `declaredGeneralShare` is for.
  */
 export const isGeneralScope = (appliesWhen: string): boolean => {
+  // A condition with no words in it (";", " , ", what joining empty predicates leaves) names nothing:
+  // rendered, it read "When , I close…".
   const v = appliesWhen.trim();
-  return v === '' || /^GENERAL\b/i.test(v);
+  return v.replace(/[\s;,.:]+/g, '') === '' || /^GENERAL\b/i.test(v);
 };
 
 /**

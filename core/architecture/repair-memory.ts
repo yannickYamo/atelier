@@ -242,7 +242,8 @@ export function mayPropose(
       + `  atelier compare --skill ${pending.skillName} --candidate ${pending.candidateSkillVersionHash} --rule ${requirementId}` };
   }
 
-  const rejections = prior.filter((r) => r.outcome === 'REJECTED');
+  // A candidate built and never evaluated (a round that stopped) was not judged, and blocks nothing.
+  const rejections = prior.filter((r) => r.outcome === 'REJECTED' && (r.evaluationBasis?.generations ?? 1) > 0);
   const notOutgrown = rejections.filter((r) => !strictlyStronger(proposed, {
     evidence: r.evidenceBasis, evaluation: r.evaluationBasis ?? WEAKEST_EVALUATION,
   }));
@@ -251,7 +252,7 @@ export function mayPropose(
     const r = notOutgrown[0];
     const b = r.evidenceBasis, e = r.evaluationBasis ?? WEAKEST_EVALUATION;
     return { allowed: false, reason:
-      `this move was already tried on ${requirementId} and you rejected it`
+      `this move was already tried on ${requirementId} and rejected${(r as { origin?: string }).origin === 'OPTIMIZE' ? ' by atelier optimize\'s measurements' : ''}`
       + `${r.note ? `, saying: "${r.note}"` : ''}. `
       + `That attempt rested on ${b.missContexts} observed miss(es) and ${e.generations} generation(s) judged by `
       + `${e.instrument.toLowerCase().replace(/_/g, ' ')}, and this one is no stronger — so it is the same question, `

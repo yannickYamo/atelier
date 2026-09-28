@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { mapLimit } from '../../core/inference/concurrency.js';
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
@@ -16,6 +17,8 @@ import { foldRepairs, foldProhibitions, mayPropose, describeHistory, WEAKEST_EVA
   type EvidenceBasis } from '../../core/architecture/repair-memory.js';
 import { runSpine, explainSpine } from '../../core/convergence/controller.js';
 import { proposeFloor } from '../../core/distinctiveness/contract.js';
+import { NOTHING_EARNED } from '../../core/convergence/state-machine.js';
+import { floorStateFor, runtimeIdentity } from './floor.js';
 import { nextLevel } from '../../core/architecture/escalate.js';
 import { diagnose } from '../../core/diagnosis/diagnose.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -28,7 +31,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel } from '../runtime.js';
+import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, carriedFrom } from '../runtime.js';
 import type { RepairRecord, InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
@@ -73,13 +76,16 @@ export async function improve(): Promise<void> {
     const repairs = foldRepairs(events);
     const prohibitions = foldProhibitions(events);
 
+    const distinctiveness = floorStateFor(L, activeHash, runtimeIdentity());
     console.log(`\nWhat the evidence says:\n`);
     const spines = [];
     for (const r of prev.requirements) {
       const carrying = arch.components.find((c) => c.carries.includes(r.requirementId));
       const cur = carrying?.carrier;
       const spine = runSpine({ requirementId: r.requirementId, invocations, observations, repairs,
-        prohibitions, currentCarrier: cur, nextCarrier: cur ? nextLevel(cur) : null });
+        prohibitions, currentCarrier: cur, nextCarrier: cur ? nextLevel(cur) : null,
+        // The regression floor's real state (atelier floor), not the default of "nothing earned".
+        gates: { ...NOTHING_EARNED, distinctiveness: distinctiveness.state } });
       spines.push(spine);
       console.log(explainSpine(spine).split('\n').map((l) => `  ${l}`).join('\n'));
     }
@@ -93,8 +99,9 @@ export async function improve(): Promise<void> {
       const floor = proposeFloor(prev, new Set(), []);
       console.log(`\nProtecting your standard would mean holding these still while the skill improves:\n`);
       for (const d of floor.dimensions) console.log(`  ${d.sourceRequirementIds.join(',')}  ${d.protectedBehavior.slice(0, 88)}...`);
-      console.log(`\nNone of them is protected yet: how much of each you would accept losing is yours to decide,`);
-      console.log(`and it cannot be computed from anything measured.\n`);
+      console.log(`\nNone of them is protected yet (${distinctiveness.why}). How much of each you would accept losing is`);
+      console.log(`yours to decide. For the measured ones, margins can be proposed from your own pieces and set by you:`);
+      console.log(`  atelier floor --skill ${name}\n`);
     }
 
     const recent = invocations.slice(0, 3);
@@ -189,7 +196,8 @@ export async function improve(): Promise<void> {
   // INHERITED from the version being repaired. A repair changes the arrangement, never how the
   // skill describes itself, and reconstructing the default here reverted a description set on build.
   const desc = flag('--description') ?? store.getSkillVersion(L, inv.skillVersionHash)?.description ?? defaultDescription(ranStandard.workType);
-  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, store.getExemplar(L));
+  const carried = carriedFrom(L, inv.skillVersionHash, ranStandard);
+  const pkg = renderAgentSkill(ranStandard, nextArch, name, desc, carried.exemplar, carried.contrast, carried.voice);
   assertPortable(pkg);
   const candidate = { skillVersionHash: sha(`${nextArch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
@@ -295,6 +303,8 @@ export async function runOnce(
    * measurement arms never do: a study's arm must be what the model wrote, not what a loop fixed.
    */
   refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
+  /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
+  select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } | Promise<{ index: number; why: string }> } | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -307,7 +317,10 @@ export async function runOnce(
         + 'generating without it would produce an output the ratified shape never constrained.');
     }
   }
-  const { piece: draft, reportedModel, schemaSent, servedTask } = await spendOneWithResult(client, budget, servedText, task, contract);
+  const n = select && contract === null ? Math.max(1, Math.floor(select.n)) : 1;
+  const written = await mapLimit(Array.from({ length: n }, (_, i) => i), n, () => spendOneWithResult(client, budget, servedText, task, contract));
+  const picked = n > 1 && select ? await select.choose(written.map((w) => w.piece)) : { index: 0, why: '' };
+  const { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   // A structured output is held by its contract, not by prose rules; it is never span-rewritten.
   const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: null };
   const output = refined.output;
@@ -334,7 +347,8 @@ export async function runOnce(
     request: { resolvedTaskHash: sha(task), servedTaskHash: sha(servedTask), source: taskSource },
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
-    ...(refined.repair ? { repair: refined.repair } : {}) };
+    ...(refined.repair ? { repair: refined.repair } : {}),
+    ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why } } : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.
@@ -356,7 +370,7 @@ export async function create(path: string): Promise<void> {
   if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') adoptAllFromPublicSource();
   ratifyClose();
   // Default the name from the folder, so the minimum a person types is a path.
-  build(flag('--name') ?? basename(resolve(path)));
+  await build(flag('--name') ?? basename(resolve(path)));
 }
 
 /**
@@ -386,7 +400,7 @@ export function adoptAllFromPublicSource(): void {
     ledger = appendDecision(ledger, p, outcome.ledgerDecision, { decidedAt });
   }
   saveSession({ ...s, decided, ledger });
-  console.log(`\nAdopted all ${decided.length} as observed technique from ${flag('--source-author') ?? 'a public source'}: `
+  console.log(`\nAdopted all ${decided.length} as observed technique from ${flag('--source-author') ?? loadSession().publicSource ?? 'a public source'}: `
     + 'shown to the model, enforced by none of them. That is the ceiling a stranger\'s work can carry.'
     + '\nJudge the output, then say what is wrong:  atelier fix "<what was wrong>"');
 }

@@ -19,12 +19,15 @@ import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
 import { measure } from '../../core/observers/registry.js';
+import { normalizeClass } from '../../core/observers/doc-class.js';
+import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
+import { extract } from '../../core/intake/extract.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { review } from './review.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
-import { adoptAllFromPublicSource } from './improve.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 
 const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 
@@ -32,7 +35,7 @@ const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 const sealedFrom = (): string | null => {
   const f = runFile('corpus-paths.json');
   if (!existsSync(f)) return null;
-  const files = readJson<{ id: string; path: string }[]>(f, { what: 'the sealed corpus paths' });
+  const files = readJson<{ id: string; path: string }[]>(f, { kind: 'array', what: 'the sealed corpus paths' });
   const first = files[0] as { id: string; path: string } | undefined;
   return first ? first.path.slice(0, first.path.length - first.id.length).replace(/\/$/, '') : null;
 };
@@ -62,6 +65,10 @@ export async function newSkill(): Promise<void> {
     console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
   }
   const name = flag('--name') ?? s.skillName ?? basename(path);
+  // The kind of document this work is, kept for the skill from the first call: the build that uses it
+  // may be a later continuation that does not repeat the flag.
+  const cls = flag('--class');
+  if (cls) store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
 
   process.env.ATELIER_ORCHESTRATED = '1';
   // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.
@@ -79,11 +86,16 @@ export async function newSkill(): Promise<void> {
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
     intake(path, flag('--work-type') ?? 'writing');
     s = loadSession();
-    saveSession({ ...s, source: path, ...(cap ? { cap } : {}), ...(intent ? { intent: { text: intent, mode } } : {}) });
+    // The name is the run's from the first call: a continuation that does not repeat --name must build
+    // the same skill (it once built one named after the folder, and the class set on the first call
+    // went to a skill that was never built).
+    saveSession({ ...s, source: path, ...(cap ? { cap } : {}), ...(intent ? { intent: { text: intent, mode } } : {}),
+      ...(flag('--name') ? { skillName: skillNameFrom(name) } : {}) });
     s = loadSession();
   } else {
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
     if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
+    if (flag('--name') && s.skillName !== skillNameFrom(name)) { saveSession({ ...s, skillName: skillNameFrom(name) }); s = loadSession(); }
   }
 
   if (s.run.state === 'CORPUS_SEALED' || s.run.state === 'LIST_SEALED') {
@@ -98,8 +110,14 @@ export async function newSkill(): Promise<void> {
         + '\n  atelier add --statement "<the rule>" --kind GENERATIVE|BOUNDARY    then run this again');
       return;
     }
-    if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') adoptAllFromPublicSource();
-    else if (!(await review())) return;
+    // Someone else's public work goes through the same screen. Accepting there ADOPTS a rule for the
+    // person's own skill — recorded as USER_ADOPTED, never as that author's ratified standard (the
+    // ceiling in `decide` enforces it) — and the person decides which adopted rules instruct.
+    if (sourceProvenance() === 'PUBLIC_BEHAVIOUR_INFERRED') {
+      console.log(`These rules were read from ${s.publicSource ?? 'someone else\'s public work'}. Accepting ADOPTS them for your skill;`
+        + ' it does not make them that author\'s standard, and the record will always say where they came from.\n');
+    }
+    if (!(await review())) return;
     s = loadSession();
     if (!s.decided.some((d) => d.authority !== 'EXPERT_REJECTED')) {
       console.log('\nEvery rule was rejected, so there is nothing to build.'
@@ -115,13 +133,14 @@ export async function newSkill(): Promise<void> {
   }
 
   if (s.run.state === 'RATIFIED') {
-    build(name);
+    await build(name);
     s = loadSession();
   }
 
   if (s.run.state !== 'BUILT') return;
   const built = s.skillName ?? name;
   heldOutCheck(built);
+  proposeFloor(built);
   console.log(`\nUse it:   /${built} <your task>          (in Claude Code)`);
   console.log(`          atelier invoke --skill ${built} "<your task>"`);
   console.log(`Check any text against it:  atelier verify --skill ${built} <file>`);
@@ -155,4 +174,33 @@ function heldOutCheck(skill: string): void {
     const met = applicable.filter((x) => x.verdict === 'MET').length;
     console.log(`  ${r.requirementId}  ${applicable.length ? `${met} of ${applicable.length} meet it` : 'not measurable on these pieces'}   ${r.statement.slice(0, 70)}`);
   }
+}
+
+/**
+ * THE FLOOR'S MARGINS, PROPOSED WHILE THE CORPUS IS AT HAND. Each measured rule's margin is half the
+ * spread of the author's own pieces on it (core/distinctiveness/measured.ts); every dimension starts
+ * OBSERVE, so nothing blocks until the owner says so. Costs nothing: no model is called. Only the author's
+ * own pieces count; reserved ones are left out, held back for the blind comparison.
+ */
+function proposeFloor(skill: string): void {
+  const L: store.StoreLayout = { root: DATA, skillName: skill };
+  if (store.getFloor(L).contract) return;
+  const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  if (!v) return;
+  const dims = floorDimensions(v);
+  const pathsFile = runFile('corpus-paths.json');
+  if (!dims.length || !existsSync(pathsFile)) return;
+  const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
+  const files = readJson<{ id: string; path: string; kind?: string }[]>(pathsFile, { kind: 'array', what: 'the sealed corpus path list' });
+  // The author's own work only: not a "before"/rejected example, a methodology note or an existing skill,
+  // each of which would widen the spread the margins are read from. (An older list has no kinds: all count.)
+  const texts = files.filter((f) => !reserved.has(f.id) && (f.kind ?? 'GOLDEN') === 'GOLDEN')
+    .flatMap((f) => { const r = extract(f.path); return r.ok ? [(r as { text: string }).text] : []; });
+  const proposals = proposeMargins(dims, texts);
+  if (!proposals.length) return;
+  store.setFloor(L, { ...store.getFloor(L), contract: buildContract(proposals, dims, null) });
+  console.log(`\nRegression floor: margins proposed for ${proposals.length} measured rule(s) from your own spread, all watched, none blocking yet.`);
+  console.log(`  See and set it:  atelier floor --skill ${skill}`);
 }
