@@ -254,9 +254,6 @@ describe('the census: nothing is dark by accident', () => {
 // cannot be dark in the way a function can.
 
 const PARKED_VALUES: Readonly<Record<string, string>> = {
-  'core/convergence/promotion.ts:shipsAutonomously':
-    'The predicate for the AUTO_PROMOTE branch. No run reaches that branch yet, by design: every real '
-    + 'run pins at least one gate unqualified, so the reader that would use this has nothing to read.',
   'core/convergence/state-machine.ts:PHASES':
     'The ordered phase list. The machine branches on phases individually; this is the enumeration a '
     + 'caller would iterate, and no caller iterates them yet.',
