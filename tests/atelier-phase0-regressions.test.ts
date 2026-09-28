@@ -102,6 +102,28 @@ describe('a conditional rule reads as English', () => {
     expect(md).toContain('When final paragraph and the story invites a generic best-practice moral, I close by refusing the obvious takeaway. When that does not hold, do not.');
     expect(md).not.toMatch(/\bi close\b/);
   });
+
+  // Phase A: a quantified noun phrase after "When" was not a sentence. Only that shape moves frame.
+  const render = (appliesWhen: string, statement: string): string => {
+    const one = { ...v, requirements: [{ ...v.requirements[0], appliesWhen, statement }] } as StandardVersion;
+    return renderAgentSkill(one, compileArchitecture(one), 'voice', 'd').files['SKILL.md'];
+  };
+
+  it('a quantified noun-phrase condition reads "For …, … Elsewhere, do not."', () => {
+    const out = render('any statement about size, frequency, or duration', 'I give the number, not an adjective.');
+    expect(out).toContain('For any statement about size, frequency, or duration, I give the number, not an adjective. Elsewhere, do not.');
+    expect(out).not.toContain('When any statement');
+    expect(render('each section header', 'Keep it under six words.')).toContain('For each section header, keep it under six words. Elsewhere, do not.');
+  });
+
+  it('a clause keeps the measured When frame verbatim, articles and quantified clauses alike', () => {
+    expect(render('the post reports an outcome metric', 'I name the baseline.'))
+      .toContain('When the post reports an outcome metric, I name the baseline. When that does not hold, do not.');
+    expect(render('every piece ends with a question', 'I answer it first.'))
+      .toContain('When every piece ends with a question, I answer it first. When that does not hold, do not.');
+    expect(render('any figure is an estimate', 'I say so.'))
+      .toContain('When any figure is an estimate, I say so. When that does not hold, do not.');
+  });
 });
 
 // ── Found by the Phase 0 gap audit ─────────────────────────────────────────────────────────────
