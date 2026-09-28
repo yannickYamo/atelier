@@ -103,7 +103,8 @@ describe('the loop: accuracy first, and refused rewrites are recorded', () => {
       // The placeholder has no full stop, so the next pass's sentence starts at it; the model keeps it.
       return anInferenceResult({ json: { replacements: [{ id: 1, text: first ? '[figure: what failed, and its source]' : '[figure: what failed, and its source] We value working together here.' }] } });
     } };
-    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    // Slots are asked for here (--placeholders); by default an invented claim is cut instead.
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '', placeholders: true });
     expect(seen[0]).toContain('UNSOURCED');
     expect(seen[0]).not.toContain('synergy (');
     expect(seen[1]).toContain('synergy');
@@ -121,7 +122,8 @@ describe('the loop: accuracy first, and refused rewrites are recorded', () => {
       return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.includes('2021')
         ? '[your story: a launch that slipped]' : x.text.replace('synergy', 'working together') })) } });
     } };
-    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    // Slots are asked for here (--placeholders); by default an invented claim is cut instead.
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '', placeholders: true });
     expect(out.output).toContain('[figure: what failed, and its source]');
     expect(out.output).toContain('working together');
     expect(out.repair?.violatedAfter).toEqual([]);
@@ -133,7 +135,7 @@ describe('the loop: accuracy first, and refused rewrites are recorded', () => {
     const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { guardClaims: false });
     expect(out.output).toBe(draft);
     expect(out.repair?.integrityReverted?.[0]).toMatch(/the figure 40/);
-    expect(out.repair?.why).toMatch(/changed what the text claims/);
+    expect(out.repair?.why).toMatch(/every rewrite was refused \(the figure 40\)/);
   });
 });
 
