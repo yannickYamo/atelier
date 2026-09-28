@@ -17,7 +17,7 @@ import type { Budget, InferenceClient } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { sentencesOf, paragraphsOf } from '../observers/text.js';
 import { applyRepair, regressions, repairPrompt, REPAIR_SYSTEM, REPAIR_SCHEMA, type RepairTarget, type Reverted } from '../loop/repair.js';
-import { checkDraft, type CheckOptions } from '../loop/run-repair.js';
+import { checkDraftAsync, type CheckOptions } from '../loop/run-repair.js';
 import { readTaste, squash, vetoMisses, type TasteReading } from './reader.js';
 
 export interface TasteRepair {
@@ -87,7 +87,7 @@ export async function refineTaste(
   const next = applyRepair(text, targets, (res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? [], reverted);
   if (next === text) return { output: text, targeted, fixed: [], readings, why: reverted.length ? 'every rewrite changed what the text claims, so none was kept' : 'the rewrite returned nothing usable' };
   // No counted rule that held may break.
-  const worse = regressions(checkDraft(skill, v, text, checks), checkDraft(skill, v, next, checks));
+  const worse = regressions(await checkDraftAsync(skill, v, text, checks), await checkDraftAsync(skill, v, next, checks));
   if (worse.length) return { output: text, targeted, fixed: [], readings, why: `the rewrite broke counted rule(s) ${worse.join(', ')}` };
   // And the reader must confirm it: read again, and keep the rewrite only if a targeted rule is fixed
   // and no rule the reader had read as followed is now read as missed.

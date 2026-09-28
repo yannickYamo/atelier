@@ -7,6 +7,41 @@
 
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
+import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { flag, providerFor, clientAndBinding } from './runtime.js';
+
+/** The claim reader's default on Anthropic: small, fast, and it only has to type and quote. */
+export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
+
+/**
+ * WHO READS A DRAFT FOR INVENTED CLAIMS, resolved once per command.
+ *
+ *   --claims pattern (ATELIER_CLAIMS=pattern)   the pattern check: offline, free, and narrow
+ *   --claims-model <id> (ATELIER_CLAIMS_MODEL)  that model reads, on the provider and backend the
+ *                                               discovery settings name: your own API included
+ *   otherwise, on Anthropic with a key          ${CLAIMS_MODEL_DEFAULT}
+ *   otherwise                                   the pattern check, and the report says why
+ *
+ * A backend that is not Anthropic never gets a model it did not name: an Anthropic id sent to someone's
+ * own server is a 404 at best. The reader has its own small budget (ATELIER_CLAIMS_CAP, default $0.50),
+ * so checking never spends the writer's calls.
+ */
+export function claimSensorFor(material: string, task: string, placeholders: boolean): ClaimSensor {
+  const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
+  if (mode === 'pattern') return patternSensor(material, placeholders, 'pattern check (--claims pattern)');
+  const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
+  const provider = providerFor('discovery');
+  if (!named && provider !== 'anthropic') {
+    return patternSensor(material, placeholders, 'pattern check (no claim reader configured: set ATELIER_CLAIMS_MODEL to a model on your backend)');
+  }
+  if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+    return patternSensor(material, placeholders, 'pattern check (no API key for the claim reader)');
+  }
+  const model = named ?? CLAIMS_MODEL_DEFAULT;
+  const cap = Number(process.env.ATELIER_CLAIMS_CAP ?? 0.5);
+  const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 24 };
+  return modelSensor(clientAndBinding('discovery', model).client, budget, model, { material, task, placeholders });
+}
 
 /**
  * The checks for one skill: the person's material (theirs to cite), the invented-claim guard, whether
@@ -19,7 +54,12 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly guardClaims?: boolean;
   /** true with `--placeholders` */
   readonly placeholders?: boolean;
+  /** the task the person typed, when there is one: the claim reader's context, beside the material */
+  readonly task?: string;
 }): CheckOptions {
-  return { material: opts.material, guardClaims: opts.guardClaims ?? true, placeholders: opts.placeholders ?? false,
-    learnedTells: store.activeTells(store.getTells(L)) };
+  const guardClaims = opts.guardClaims ?? true;
+  const placeholders = opts.placeholders ?? false;
+  return { material: opts.material, guardClaims, placeholders,
+    learnedTells: store.activeTells(store.getTells(L)),
+    ...(guardClaims ? { claimSensor: claimSensorFor(opts.material, opts.task ?? '', placeholders) } : {}) };
 }

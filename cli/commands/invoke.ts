@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor } from '../checks.js';
-import { refineToStandard, checkDraft } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraftAsync, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -223,7 +223,7 @@ export async function invoke(): Promise<void> {
   if (!material.length && !argv.includes('--allow-unsourced')) {
     console.log(`(No material of yours is bound, so any story, named source or figure the draft invents will be cut. To let it tell your real ones: atelier material --skill ${name} <notes.md>, or --with notes=<file>.)`);
   }
-  const checks = checksFor(L, { material: materialText, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  const checks = checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
   //
   // The rules no count can check are read on every output, twice and with quotes, and the reading is
@@ -282,10 +282,11 @@ export async function invoke(): Promise<void> {
         tasteNotes.push(`the taste reader could not rank the drafts (${(e as Error).message.split('\n')[0]}); ranked by count`);
       }
     }
-    const scored = drafts.map((d, i) => {
-      const r = checkDraft(name, std, d, checks);
+    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(name, std, d, checks)));
+    const scored = drafts.map((_d, i) => {
+      const r = reports[i];
       const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
-      const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED').length;
+      const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED' && c.requirementId !== PUBLIC_FACTS).length;
       const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
       // Machine-writing moves, catalogued and learned, counted instance by instance.
       const tells = r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0);
@@ -297,7 +298,11 @@ export async function invoke(): Promise<void> {
   } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
-    flag('--task') ? 'FLAG' : 'POSITIONAL', refine, select);
+    flag('--task') ? 'FLAG' : 'POSITIONAL', refine, select,
+    std && checks.guardClaims !== false ? async (text: string) => {
+      const r = await checkDraftAsync(name, std, text, checks);
+      return (r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
+    } : null);
 
   // A PROVIDER-SIDE VERSION FLIP UNDER AN UNCHANGED CONFIGURATION. Reported, never fatal: the user
   // changed nothing, and refusing to run would punish them for someone else's release.
@@ -324,6 +329,11 @@ export async function invoke(): Promise<void> {
     }
   } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
     console.log('checked against the standard: every REQUIRED measured rule holds.');
+  }
+  // Which instrument read the draft for invented claims, and anything that went wrong with it.
+  if (checks.claimSensor && !argv.includes('--no-repair')) {
+    console.log(`invented-claim check: ${checks.claimSensor.instrument}.`);
+    for (const n of checks.claimSensor.notes) console.log(`  (${n})`);
   }
   // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
   if (rec.repair?.storiesCut?.length) {
