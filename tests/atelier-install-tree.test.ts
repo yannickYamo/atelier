@@ -80,3 +80,20 @@ describe.each(hosts)('%s: install replaces, verify enumerates', (_id, host, rel)
     expect(ver.detail).toContain('examples/p13.md');
   });
 });
+
+describe.each(hosts)('%s: backups never collide', (_id, host, rel) => {
+  it('two installs over hand-edited files in the same millisecond both succeed, each with its own backup', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-tree-'));
+    const now = Date.prototype.toISOString;
+    Date.prototype.toISOString = () => '2026-01-01T00:00:00.000Z';   // freeze the clock: the same stamp twice
+    try {
+      mkdirSync(join(dir, rel), { recursive: true });
+      writeFileSync(join(dir, rel, 'SKILL.md'), '# mine');
+      const a = host.install(v2, dir);
+      writeFileSync(join(dir, rel, 'SKILL.md'), '# edited again');
+      const b = host.install(v1, dir);
+      expect(a.ok && b.ok).toBe(true);
+      expect(a.ok && b.ok && a.backedUp?.to !== b.backedUp?.to).toBe(true);
+    } finally { Date.prototype.toISOString = now; }
+  });
+});
