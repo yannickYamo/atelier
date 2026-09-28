@@ -152,7 +152,7 @@ export function deriveContrastRules(
     }
   }
 
-  proposeVoice(authorTexts, drafts, propose, bandOf, meanRate);
+  proposeVoice(authorTexts, held.map((p) => p.text), drafts, propose, bandOf, meanRate);
 
   const aFrag = fragmentShare(authorAll, 5); const mFrag = fragmentShare(modelAll, 5);
   if (mFrag >= 1.5 * aFrag && mFrag - aFrag >= 0.05) {
@@ -395,7 +395,7 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
  *   dialect         an author who spells one way (at least ten marked words, the other way at most
  *                   15% of them) gets a cap on the other dialect's spellings.
  */
-function proposeVoice(authorTexts: readonly string[], drafts: readonly string[], propose: Propose,
+function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string[], drafts: readonly string[], propose: Propose,
   bandOf: (p: PatternId) => { lo: number; hi: number; a: number }, meanRate: (texts: readonly string[], p: PatternId) => number): void {
   // How much a first-person author says "I" depends on the piece (a workflow diary against an analysis:
   // 0.7 to 36 per 1,000 words in one real corpus), so the floor sits near their lightest pieces. What
@@ -420,8 +420,11 @@ function proposeVoice(authorTexts: readonly string[], drafts: readonly string[],
   // these moves more than the cap gets no rule, rather than a rule against them.
   // Per family: one the author never makes, in any piece, is never allowed; the rest are held to their
   // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
-  const tellCap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
-  const used = new Set(authorTexts.flatMap((t) => findPattern(t, 'MACHINE_TELL').map((x) => x.why)));
+  const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
+  // A family found in ANY of the author's pieces, the unread ones included, is theirs to use at their
+  // rate, never banned. The unread pieces may only loosen this rule, never tighten it: used to tighten,
+  // they would stop being an independent check; ignored, one rare use there dropped the whole rule.
+  const used = new Set([...authorTexts, ...heldTexts].flatMap((t) => findPattern(t, 'MACHINE_TELL').map((x) => x.why)));
   const never = TELL_FAMILIES.filter((f) => !used.has(f.label)).map((f) => f.id);
   propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes"): never one I never make${never.length < TELL_FAMILIES.length ? `, and the ones I do make at most ${tellCap} per 1,000 words` : ''}.`,
     'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },

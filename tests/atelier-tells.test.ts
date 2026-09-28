@@ -154,3 +154,15 @@ describe('round 6 findings: a move the author never makes is never allowed, and 
     expect(r.repair?.storiesCut?.[0]).toMatch(/Two years ago/);
   });
 });
+
+describe('the unread pieces may loosen the machine-tell rule, never drop it', () => {
+  it('a family the author uses only in an unread piece is not banned, and the rule survives', () => {
+    const plain = (i: number) => ({ id: `a${i}`, text: Array.from({ length: 16 }, (_, k) => `We ran check ${k + i} twice and kept the result.`).join('\n\n') });
+    const held = [{ id: 'h1', text: `${plain(9).text}\n\nIt is the single most useful habit I have.` }, plain(10)];
+    const rules = deriveContrastRules([0, 1, 2, 3].map(plain), held, ['Plain text. '.repeat(300), 'Plain text. '.repeat(300)], 'MACHINE_DISCOVERED');
+    const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
+    expect(r).toBeDefined();
+    expect(r?.requirement.measurement?.params.never).not.toContain('SUPERLATIVE');
+    expect(r?.requirement.measurement?.params.never).toContain('CANDOUR');
+  });
+});
