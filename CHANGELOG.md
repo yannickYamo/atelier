@@ -44,8 +44,23 @@ as it stood at the time:
   through the fixed guard met criteria 1–5 (tells 0.21, no invented stories or slots, 2.4 shared 6-grams,
   every REQUIRED rule held, habits in the author's range). Stylometry could not separate any arm (within
   0.012), so it cannot serve as the voice criterion.
-- **Round 7** (pre-registered: VOICE_ROUND7_PREREGISTRATION.md): the confirmation, with the owner's blind read
-  as the voice criterion. Result recorded here when scored.
+- **Round 7** (pre-registered: VOICE_ROUND7_PREREGISTRATION.md; RAW, CONTEXT, ATELIER; $13.88). **The voice
+  criterion passed; the sealed gate as a whole did not.**
+  - Criterion 6, the owner's blind read: Atelier ranked first on both briefs read (1, on the author's topic,
+    and 5, off-topic), above the corpus-in-context arm both times. A same-family reader, blind, ranked it
+    first on 4 of 5 briefs (mean 1.2 of 3) and above RAW on all 5; the model judge agreed (1.4, against
+    CONTEXT 1.8 and RAW 2.8). Stylometry, tracked: Atelier -0.29, between RAW -0.33 and CONTEXT -0.25. First
+    round in which the product beat the arm with the author's pieces in its prompt, without lifting lines
+    (3.6 shared 6-grams per piece against CONTEXT's 97) or inventing a story (0 against 2).
+  - Criteria 2-4 passed: no invented stories or slots, 3.6 shared 6-grams, every REQUIRED rule held in all
+    five pieces (CONTEXT held 3-4 of 6, RAW 2-4 of 6).
+  - Criterion 1 failed: machine-writing moves 0.27 per 1,000 words against 0.22, one per piece, each from a
+    family the author uses in at most 4 of 20 pieces, which the rule held to his rate instead of banning.
+  - Criterion 5 failed in one piece: one-line paragraphs and contractions just outside the author's range
+    (5 of 7 features in band; the gate asked 6).
+  - Readers' remaining gaps: announcing and signposting sentences beyond the catalogue; a contrastive verdict
+    as the opening line; invented incidents without a time marker (the claim check keys on one); one-line
+    paragraphs well under the author's typical rate; no references to the author's own earlier pieces.
 
 ### Added (Phase 8: search the implementation, never the standard)
 
