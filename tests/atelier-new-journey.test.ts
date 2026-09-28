@@ -3,6 +3,7 @@
 // `atelier new <folder> "<purpose>"` against a scripted backend: the corpus is split and some of it
 // reserved before anything reads it, discovery proposes, the review screen suggests a ruling for each
 // rule, nothing is compiled until the person accepts, and accepting builds a skill that instructs.
+import * as store from '../core/state/store.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
@@ -140,16 +141,30 @@ describe('re-entry is the same run, or a refusal — never a silent switch', () 
     expect(readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8')).toMatch(/Use when asked to: write me a blog post like these/);
   });
 
+  it('the name and class given on the first call hold on a continuation that does not repeat them', () => {
+    // Found in a real run: the second call built a skill named after the folder, and the class set on
+    // the first call went to a skill that was never built.
+    const data = mkdtempSync(join(tmpdir(), 'atelier-new5-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-new5-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'my-voice', '--class', 'blog-post');
+    run(data, proj, 'new', dir, '--accept');
+    expect(existsSync(join(proj, '.claude', 'skills', 'my-voice', 'SKILL.md'))).toBe(true);
+    expect(store.getDocClass({ root: data, skillName: 'my-voice' })).toBe('blog-post');
+  });
+
   it('the ledger records the weight chosen, the suggestion beside it, and whether it was taken', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-new4-data-'));
     const proj = mkdtempSync(join(tmpdir(), 'atelier-new4-proj-'));
     const dir = corpus(proj, 8);
-    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice', '--accept', '--set', 'p1=preferred');
+    // For new writing a rule is suggested as required only when the author nearly always does it, so the
+    // override here raises p1 rather than lowering it.
+    run(data, proj, 'new', dir, 'write me a blog post like these', '--name', 'voice', '--accept', '--set', 'p1=required');
     const runs = join(data, 'runs', readdirSync(join(data, 'runs'))[0]);
     const ledger = JSON.parse(readFileSync(join(runs, 'ratification-ledger.json'), 'utf8')) as { records: { shown: { requirementId: string }; ruling?: { took: string; materiality: string } }[] };
     const p1 = ledger.records.find((r) => r.shown.requirementId === 'p1');
     expect(p1?.ruling?.took).toBe('OVERRIDE');
-    expect(p1?.ruling?.materiality).toBe('PREFERRED');
+    expect(p1?.ruling?.materiality).toBe('REQUIRED');
     expect(ledger.records.find((r) => r.shown.requirementId === 'p2')?.ruling?.took).toBe('SUGGESTION');
   });
 });
@@ -188,4 +203,18 @@ describe('the purpose is read from what the skill is asked to DO', () => {
     ['write a support article', 'GENERATE'],
     ['draft replies to customer emails', 'RESPOND'],
   ])('%s → %s', (intent, mode) => { expect(modeFromIntent(intent).mode).toBe(mode); });
+});
+
+describe('whose work it is is decided once, at intake, and kept', () => {
+  it('a continuation without --source-author still records the rules as someone else\'s public work, and review adopts them', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-pub-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-pub-proj-'));
+    const dir = corpus(proj, 8);
+    run(data, proj, 'intake', dir, '--source-author', 'A Public Writer');
+    const out = run(data, proj, 'new', dir, 'write like these', '--name', 'pub', '--accept');
+    expect(out).toMatch(/Accepting ADOPTS them for your skill/);
+    const std = JSON.parse(readFileSync(join(data, 'runs', readdirSync(join(data, 'runs'))[0], 'pending-standard.json'), 'utf8')) as { requirements: { provenance: string; authority: string }[] };
+    expect(std.requirements.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')).toBe(true);
+    expect(std.requirements.every((r) => r.authority === 'USER_ADOPTED')).toBe(true);
+  });
 });

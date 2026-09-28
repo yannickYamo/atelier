@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { resolveRule } from '../../core/state/rule-key.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
 import { authorityStateOf, assertSupersessionRecorded } from '../../core/state/canonical-state.js';
@@ -11,7 +12,7 @@ import { compileArchitecture, observedBoundaries } from '../../core/architecture
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, projectDir, pickHost, skillArg } from '../runtime.js';
+import { sha, DATA, die, argv, flag, projectDir, pickHost, skillArg, carriedFrom } from '../runtime.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
@@ -28,15 +29,16 @@ import { draftHash, appendDecision, stampVersion } from '../../core/ratification
  */
 export function confirmBoundary(): void {
   const name = skillArg();
-  const ruleId = flag('--rule') ?? die('--rule required — confirm one at a time; a bulk yes is not a judgement.');
+  const ruleRef = flag('--rule') ?? die('--rule required — confirm one at a time; a bulk yes is not a judgement.');
   const drop = argv.includes('--drop');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
   const sv = store.getSkillVersion(L, activeHash)!;
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
 
-  const target = prev.requirements.find((r) => r.requirementId === ruleId)
-    ?? die(`${ruleId} is not in standard ${prev.standardVersionHash}.`);
+  const found = resolveRule(prev.requirements, ruleRef);
+  if ('error' in found) return void die(found.error);
+  const target = found.rule; const ruleId = target.requirementId;
   if (target.authority !== 'DERIVED_UNRATIFIED') die(`${ruleId} is already ${target.authority} — nothing to confirm.`);
 
   let confirmedReq = target;
@@ -60,7 +62,8 @@ export function confirmBoundary(): void {
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
-  const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L));
+  const carried = carriedFrom(L, sv.skillVersionHash, next);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,

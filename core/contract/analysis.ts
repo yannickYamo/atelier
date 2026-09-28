@@ -53,6 +53,16 @@ const lcg = (seed: number): (() => number) => {
   return () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return (s & 0x7fffffff) / 0x7fffffff; };
 };
 
+/**
+ * A seeded permutation (Fisher–Yates), for blinding: which letter a version gets must not depend on the
+ * version, and must be re-derivable from the recorded seed.
+ */
+export function seededShuffle<T>(xs: readonly T[], seed: number): T[] {
+  const rnd = lcg(seed); const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
 export const DEFAULT_RESAMPLES = 10_000;
 
 /**

@@ -4,6 +4,12 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/voice.js';
+import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
+import type { Budget } from '../../core/inference/client.js';
+import { sessionCorpus } from '../corpus.js';
+import { normalizeClass } from '../../core/observers/doc-class.js';
+import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -22,7 +28,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile } from '../runtime.js';
+  loadSession, saveSession, step, runFile, clientFor, proposerModel, numericFlag } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -50,7 +56,46 @@ export function revert(): void {
   console.log(`\nYour standard is untouched — this reverted the SKILL, not what you decided good means.`);
 }
 
-export function build(nameArg?: string): void {
+/**
+ * HOW THE AUTHOR SOUNDS (core/compiler/voice.ts, persona.ts): whole pieces of the author's, chosen to
+ * span how they write, their usual length, and a persona brief (how they sound, with how often, each
+ * point proven by a quote from their pieces, none describing a move the standard rules out). From the
+ * pieces this run read (never a reserved one), kept through every rebuild. `--voice none` serves none of
+ * it; `--persona none` keeps the pieces and drops the description; `auto` chooses again.
+ */
+async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Voice | null> {
+  const choice = (name: string): 'none' | 'auto' | undefined => {
+    const x = flag(name)?.trim().toLowerCase();
+    if (x !== undefined && x !== 'none' && x !== 'auto') die(`${name} takes none or auto`);
+    return x as 'none' | 'auto' | undefined;
+  };
+  const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
+  if (voiceFlag === 'none') return null;
+  let voice: Voice | null = voiceFlag === undefined ? store.getVoice(L) : null;
+  // This run's pieces: the run being built is this skill's, whatever name it is built under.
+  const readable = !voice || personaFlag === 'auto' ? sessionCorpus() : [];
+  if (!voice && readable.length >= 3) {
+    const pieces = selectVoicePieces(readable);
+    voice = { passages: [], lengthWords: usualLength(readable), pieces };
+    if (pieces.length) console.log(`Voice: ${pieces.length} whole piece(s) of the author's own served with the skill, chosen to span how they write. Turn off with --voice none.`);
+  }
+  if (!voice) return null;
+  if (personaFlag === 'none') return { ...voice, persona: undefined };
+  if (readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
+  try {
+    const persona = reconcilePersona(await derivePersona(clientFor(proposerModel()), budget, readable), standardForbids(v));
+    console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
+      + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
+      + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
+    return { ...voice, persona };
+  } catch (e) {
+    console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
+    return voice;
+  }
+}
+
+export async function build(nameArg?: string): Promise<void> {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
@@ -64,6 +109,17 @@ export function build(nameArg?: string): void {
       + '  From what you can state:  atelier skill "<the rules, in your words>"');
   }
   const pending = readJson<StandardVersion>(pendingPath, { what: 'the pending standard' });
+  // The document class is not part of the package, so changing it on a skill already built needs no
+  // rebuild — and a rebuild of a BUILT run is refused by the run's state machine.
+  const clsOnly = flag('--class');
+  if (clsOnly !== undefined && s.run.state === 'BUILT') {
+    const L0: store.StoreLayout = { root: DATA, skillName: name };
+    if (!store.getActive(L0)) die(`no built skill called "${name}".`);
+    store.setDocClass(L0, clsOnly.trim().toLowerCase() === 'none' ? null : normalizeClass(clsOnly));
+    const now = store.getDocClass(L0);
+    console.log(now ? `Document class for ${name}: ${now}. A text declared as another class is refused by verify and invoke.` : `Document class for ${name} cleared.`);
+    return;
+  }
   // ── THE STANDARD MUST BE THIS RUN'S ──────────────────────────────────────────────────────────
   //
   // The run records the hash it ratified; the file on disk is what will be compiled. Before this
@@ -80,7 +136,12 @@ export function build(nameArg?: string): void {
   // This transition used to be checked LAST: the store was written, the active pointer moved and
   // the skill installed, and then the run refused to advance — so a refused build looked exactly
   // like a successful one on disk and reported failure on the terminal.
-  s = step(s, 'BUILT');
+  //
+  // A BUILT run may be built again: the same ratified standard, compiled into a new implementation (the
+  // voice turned on or off, the persona derived again, another skill name). The standard's hash was
+  // checked above, so nothing about what "good" means can change here; the new SkillVersion becomes
+  // active and the previous one stays in history (`atelier rollback`).
+  if (s.run.state !== 'BUILT') s = step(s, 'BUILT');
   // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS. `mintedAt` sits outside the hash; re-closing
   // identical content in another project would otherwise make the store refuse a body that differs
   // only by timestamp. Same rule as `amend`.
@@ -94,9 +155,12 @@ export function build(nameArg?: string): void {
   //
   // Never a reserved piece: that work is held back to test the skill blind, and a skill that ships it
   // has read the answer key.
+  // Everything this block decides is held in memory and written only when the build commits, below, so
+  // `--review` writes nothing.
   const ex = flag('--exemplar');
+  let exemplar = store.getExemplar(L);
   if (ex !== undefined) {
-    if (ex.trim().toLowerCase() === 'none') store.setExemplar(L, null);
+    if (ex.trim().toLowerCase() === 'none') exemplar = null;
     else {
       if (!existsSync(ex)) die(`--exemplar: there is no file at ${ex}.`);
       const text = readFileSync(ex, 'utf8');
@@ -112,11 +176,30 @@ export function build(nameArg?: string): void {
         console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
           + 'The model will imitate it as it is.');
       }
-      store.setExemplar(L, text);
+      exemplar = { text };
       console.log('The exemplar is installed with the skill (examples/exemplar.md). If the skill directory is committed, so is the piece.');
     }
   }
-  const pkg0 = renderAgentSkill(v, arch, name, desc, store.getExemplar(L));
+  // The kind of document the standard measures; `verify`, `invoke` and the MCP tool refuse a text
+  // declared as another kind. `none` clears it.
+  const cls = flag('--class');
+  const docClass = cls === undefined ? store.getDocClass(L) : cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls);
+  if (cls !== undefined) {
+    console.log(docClass ? `Document class: ${docClass}. A text declared as another class is refused by verify and invoke.` : 'Document class cleared.');
+  }
+  // Write-this-not-that pairs from the loop's own accepted repairs, re-verified against this standard.
+  // Chosen here, at build, and kept through every rebuild; `--contrast none` turns them off.
+  const contrastFlag = flag('--contrast');
+  if (contrastFlag !== undefined && contrastFlag.trim().toLowerCase() !== 'none' && contrastFlag.trim().toLowerCase() !== 'auto') {
+    die('--contrast takes none (ship no contrast examples) or auto (choose them from past repairs, the default)');
+  }
+  const contrastOff = contrastFlag === undefined ? store.getContrast(L).off : contrastFlag.trim().toLowerCase() === 'none';
+  const heldBack = { tasks: (s.reservation?.reserved ?? []).map((u) => u.task), texts: (s.reservation?.reserved ?? []).map((u) => u.artifact) };
+  const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v, heldBack) };
+  const shipped = contrast.pairs;
+  if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
+  const voice = await chooseVoice(L, v);
+  const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
 
@@ -153,6 +236,7 @@ export function build(nameArg?: string): void {
     store.putLedger(L, v.standardVersionHash, s.ledger);
   }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
+  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, voice); store.setDocClass(L, docClass); store.setContrast(L, contrast);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //
