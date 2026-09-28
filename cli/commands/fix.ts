@@ -228,9 +228,14 @@ export async function fix(): Promise<void> {
   if (pendingRepair) {
     const cand = store.getSkillVersion(L, pendingRepair.candidateSkillVersionHash)
       ?? die(`pending candidate ${pendingRepair.candidateSkillVersionHash} missing from the store.`);
-    const candInv = store.listInvocations(L).find((r) => r.skillVersionHash === cand.skillVersionHash);
+    // THE SAME TASK, OR NO PAIR. Any run of the candidate was taken, so a complaint about one task was
+    // settled by a blind pick between its output and the candidate's answer to a different request —
+    // two outputs that differ by task, read as two implementations. `inputHash` is the task's hash on
+    // every record (the request binding's resolvedTaskHash is the same value, and newer).
+    const candInv = store.listInvocations(L).find((r) => r.skillVersionHash === cand.skillVersionHash && r.inputHash === inv.inputHash);
     // A candidate `atelier optimize` built and left for a person has no run of this task to show beside
-    // yours: it was measured on the floor's tasks. It is decided where it was made.
+    // yours: it was measured on the floor's tasks. Nor does one built for a complaint about another
+    // task. Either is decided where it was made.
     if (!candInv) {
       console.log(`A candidate for ${pendingRepair.requirementId} (${pendingRepair.from} → ${pendingRepair.to}) is already waiting for your decision, `
         + `built by ${(pendingRepair as { origin?: string }).origin === 'OPTIMIZE' ? 'atelier optimize' : 'an earlier run'}. Decide it first:`);
