@@ -111,7 +111,9 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 ## When it asks you
 
 - **Once, when you create a skill.** It shows the rules it found, strongest evidence first, each with a
-  suggested ruling. Press Enter to accept them all, or change any.
+  suggested ruling. Press Enter to accept them all, or change any. Accepting a suggestion is a ruling like any
+  other, and the record keeps which you took and which you changed: `atelier status --skill <name>` shows
+  both counts, so "you approved it" never hides "you pressed Enter".
 - **Whenever you want to.** `atelier fix "the close was a summary, not a turn"` in your own words. Label a few
   of the reader's verdicts (`atelier taste --calibrate`) to let it act. Change what "good" means with
   `atelier amend`, which only you can do.
@@ -218,7 +220,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 107 files and 1619 tests, runs offline, and drives the shipped binary end to end.
+The suite is 107 files and 1622 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 
