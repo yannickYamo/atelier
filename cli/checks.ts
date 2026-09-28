@@ -9,6 +9,7 @@ import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { flag, providerFor, clientAndBinding } from './runtime.js';
+import { formatOf } from '../core/observers/formats.js';
 
 /** The claim reader's default on Anthropic: small, fast, and it only has to type and quote. */
 export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
@@ -26,7 +27,7 @@ export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
  * own server is a 404 at best. The reader has its own small budget (ATELIER_CLAIMS_CAP, default $0.50),
  * so checking never spends the writer's calls.
  */
-export function claimSensorFor(material: string, task: string, placeholders: boolean): ClaimSensor {
+export function claimSensorFor(material: string, task: string, placeholders: boolean, strict = false): ClaimSensor {
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
   if (mode === 'pattern') return patternSensor(material, placeholders, 'pattern check (--claims pattern)');
   const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
@@ -40,7 +41,7 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
   const model = named ?? CLAIMS_MODEL_DEFAULT;
   const cap = Number(process.env.ATELIER_CLAIMS_CAP ?? 0.5);
   const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 24 };
-  return modelSensor(clientAndBinding('discovery', model).client, budget, model, { material, task, placeholders });
+  return modelSensor(clientAndBinding('discovery', model).client, budget, model, { material, task, placeholders, strict });
 }
 
 /**
@@ -59,7 +60,9 @@ export function checksFor(L: store.StoreLayout, opts: {
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
-  return { material: opts.material, guardClaims, placeholders,
+  // The format the text is: the one declared for it, or the class the standard was built from.
+  const format = formatOf(flag('--class') ?? store.getDocClass(L));
+  return { material: opts.material, guardClaims, placeholders, format,
     learnedTells: store.activeTells(store.getTells(L)),
-    ...(guardClaims ? { claimSensor: claimSensorFor(opts.material, opts.task ?? '', placeholders) } : {}) };
+    ...(guardClaims ? { claimSensor: claimSensorFor(opts.material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
 }

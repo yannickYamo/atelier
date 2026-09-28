@@ -10,6 +10,7 @@ import type { StandardVersion, RepairRecord } from '../state/canonical-state.js'
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
 import type { ClaimSensor } from './claim-extract.js';
+import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
@@ -47,6 +48,8 @@ export interface CheckOptions {
    * the pattern check runs. Read through `checkDraftAsync`, which gives the reader its turn first.
    */
   readonly claimSensor?: ClaimSensor;
+  /** the format this text is (../observers/formats.ts): its hard limits checked as the product's floor */
+  readonly format?: FormatProfile | null;
 }
 
 
@@ -70,7 +73,15 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
       spans: learned.map((sp) => ({ ...sp, why: `"${sp.text}", a phrase this skill's drafts repeat and your pieces never use` })),
       detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
   const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || (tellRule?.materiality === 'REQUIRED' && learned.length > 0) };
-  if (opts.guardClaims === false) return report;
+  const fmt = opts.format ? checkFormat(text, opts.format) : null;
+  const fmtLines = opts.format && fmt ? [
+    { requirementId: 'FORMAT', statement: `What ${opts.format.label} holds.`, materiality: 'REQUIRED', phase: 'STYLE' as const,
+      result: { verdict: fmt.hard.length ? 'VIOLATED' as const : 'MET' as const, spans: fmt.hard, value: fmt.hard.length,
+        detail: fmt.hard.length ? fmt.hard.map((h) => h.why).join('; ') : `within what ${opts.format.label} holds` } },
+    ...(fmt.soft.length ? [{ requirementId: 'FORMAT·usual', statement: `Where ${opts.format.label} usually sits.`, materiality: 'PREFERRED', phase: 'STYLE' as const,
+      result: { verdict: 'VIOLATED' as const, spans: fmt.soft, value: fmt.soft.length, detail: fmt.soft.map((h) => h.why).join('; ') } }] : []),
+  ] : [];
+  if (opts.guardClaims === false) return { ...report, checked: [...report.checked, ...fmtLines], failed: report.failed || (fmt?.hard.length ?? 0) > 0 };
   const reading = opts.claimSensor?.reading(text);
   const claims = reading ? reading.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
   // Which instrument ran is part of the verdict: a line that says "no invented claims" means something
@@ -86,7 +97,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${by}]` } }] : [];
-  return { ...report, checked: [...report.checked, line, ...pubLine], failed: report.failed || claims.length > 0 };
+  return { ...report, checked: [...report.checked, line, ...pubLine, ...fmtLines], failed: report.failed || claims.length > 0 || (fmt?.hard.length ?? 0) > 0 };
 }
 
 /** The line listing public facts to check: informational, never a rule the draft broke. */
