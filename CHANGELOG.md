@@ -8,6 +8,13 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Changed (README)
+
+- Rewritten around what Atelier does that a model or an optimizer doesn't: how it reads taste along eight
+  dimensions (counted, or read by a calibrated reader), the harness it builds around the model (standard,
+  compiled skill, runtime, guard, record, loop), exactly when it asks the person (once, at creation), and
+  the comparison with a plain model and with GEPA, SkillOpt, SSO and EvoSkill.
+
 ### Added (for coding agents)
 
 - **`AGENTS.md`** (and `CLAUDE.md`, which imports it): what an agent pointed at this repository should do to
