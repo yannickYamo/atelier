@@ -1,7 +1,6 @@
 # Atelier
 
-**Your taste, compiled. Point it at your best work and it builds a harness that writes, checks and fixes
-new work the way you would, on any model.**
+**Your taste, learned from your best work and kept in every draft you ship, on any model.**
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -19,14 +18,21 @@ atelier new ./my-best-posts "write me a blog post in the voice and style of thes
 
 ## Why I built it
 
-Hand your writing to a model and the draft comes back fluent and sounding like nobody. It announces
-insights ("the part people miss"), grades its own lists ("that last one deserves emphasis"), and reaches for
-em dashes. Paste in your examples and it gets closer, then copies your sentences, makes up anecdotes you
-never lived, and slides back to its defaults by the third section.
+If you've asked a model to write like you, you know how it goes.
 
-Underneath, your taste lives nowhere. The model re-guesses it from examples every run. You can't read it,
-version it, move it to another model, or tell the model which of your habits matter. Prompt optimizers
-need a score to climb, and nobody can write `reward(essay)` for *sounds like me*.
+- **It sounds like AI.** Em dashes, "here's the thing", "that last one deserves emphasis". A reader clocks it
+  inside a paragraph.
+- **Pasting in your examples helps, and it costs you.** The model lifts your actual sentences, invents
+  anecdotes you never lived, and drifts back to its own habits a few paragraphs in.
+- **"Good" lives nowhere you can see.** It gets re-guessed from your examples on every run, so there's nothing
+  to review, nothing to version, and nothing to carry to another model.
+- **Prompt optimizers need a score.** GEPA, SkillOpt and the rest improve a prompt against a metric, and
+  nobody can write `reward(essay)` for *sounds like me*.
+
+What I wanted was my taste written down once, in rules I can read and argue with. Every draft checked
+against it, so a miss shows up as something I can point to. And an implementation that gets better from its
+own runs, under a standard only I can change. Your voice stops being something you re-explain every session,
+and becomes something the tool answers to.
 
 ## How Atelier reads taste
 
@@ -197,7 +203,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 103 files and 1564 tests, runs offline, and drives the shipped binary end to end.
+The suite is 103 files and 1566 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 
