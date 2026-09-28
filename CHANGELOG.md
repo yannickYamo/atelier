@@ -8,6 +8,12 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Fixed (install)
+
+- Two installs over hand-edited files in the same millisecond chose the same backup folder name; the move onto
+  it failed, and an install that had already put the new skill in place reported failure, leaving the old copy
+  in staging. Backup names are now made unique. Found by a CI run on Node 24.
+
 ### Changed (README)
 
 - Rewritten around what Atelier does that a model or an optimizer doesn't: how it reads taste along eight
