@@ -40,10 +40,13 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   const outcome = decide(base, { verb: 'APPROVE', materiality });
   const requirements = [...baseStandard.requirements, outcome.requirement];
   const body = { evidenceId: baseStandard.evidenceId, workType: baseStandard.workType, requirements };
-  const next: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
+  const minted: StandardVersion = { standardVersionHash: sha(JSON.stringify(body)), ...body,
     authorityState: authorityStateOf(requirements), mintedAt: new Date().toISOString(),
     supersedes: baseStandard.standardVersionHash, reason };
-  assertSupersessionRecorded(next);
+  assertSupersessionRecorded(minted);
+  // The same rule added again after a rollback is the same standard: the first mint is the version.
+  const next = store.putStandard(L, minted);
+  const at = minted.mintedAt;
   const arch = compileArchitecture(next);
   const desc = activeSv?.description ?? defaultDescription(next.workType);
   const carried = carriedFrom(L, activeSv?.skillVersionHash ?? null, next);
@@ -51,17 +54,17 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
-    materializedHash: pkg.packageHash, builtAt: next.mintedAt, description: desc };
-  store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg);
+    materializedHash: pkg.packageHash, builtAt: at, description: desc };
+  store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg);
   // Installed first, activated second: a failed install leaves the previous version active and serving.
   const inst = pickHost().install(pkg, projectDir());
   { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) die(`install failed: ${inst.reason}\n  Nothing was added: the active version is unchanged.`);
   store.setActive(L, skill.skillVersionHash);
   const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([base]), records: [] },
-    base, outcome.ledgerDecision, { note: reason, decidedAt: next.mintedAt }), next.standardVersionHash);
-  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
-  store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at: next.mintedAt, skillVersionHash: skill.skillVersionHash, proposal: statement, accepted: true,
+    base, outcome.ledgerDecision, { note: reason, decidedAt: at }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at });
+  store.appendEvent(L, { kind: 'PROPOSED_CHANGE', at, skillVersionHash: skill.skillVersionHash, proposal: statement, accepted: true,
     ...(feedbackIds.length ? { feedbackIds } : {}) });
   return { requirement: outcome.requirement, standard: next, supersedes: baseStandard.standardVersionHash, skillVersionHash: skill.skillVersionHash };
 }
