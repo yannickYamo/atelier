@@ -59,6 +59,7 @@ const DATA = process.env.ATELIER_DATA ?? (console.error('ATELIER_DATA must point
 const argAll = (n) => process.argv.flatMap((x, i) => (x === n ? [process.argv[i + 1]] : []));
 const ATELIER_ARMS = argAll('--atelier').length ? argAll('--atelier').map((x) => { const [arm, skill] = x.split('='); return { arm, skill }; }) : [{ arm: 'ATELIER', skill: SKILL }];
 const GUARD = arg('--guard-skill');
+const NO_GUIDE = process.argv.includes('--no-guide');
 const BEFORE = arg('--before-data') ? { data: arg('--before-data'), skill: need('--before-skill'), project: need('--before-project') } : null;
 mkdirSync(OUT, { recursive: true });
 
@@ -87,7 +88,7 @@ const call = async (c, system, user, tool, schema, maxTokens) => {
 const write = async (system, user) => String((await call(writer, system, user, 'emit_piece', PIECE, 12000)).piece ?? '').trim();
 const WRITER = 'You are a writer. Return only the finished piece, in markdown.';
 const corpusBlock = readable.map((p) => `<piece>\n${p.text}\n</piece>`).join('\n\n');
-const guide = String((await call(writer, 'You are an editor who writes precise, usable style guides.',
+const guide = NO_GUIDE ? '' : String((await call(writer, 'You are an editor who writes precise, usable style guides.',
   `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\nWrite a style guide another writer could follow to write exactly like this author: voice, argument, structure, vocabulary, figures, pace, formatting, openings and closings, and what they never do. Be specific.`,
   'emit_guide', { type: 'object', properties: { guide: { type: 'string' } }, required: ['guide'] }, 12000)).guide ?? '');
 writeFileSync(join(OUT, 'guide.md'), guide);
@@ -124,13 +125,13 @@ for (const [bi, brief] of BRIEFS.entries()) {
   const arms = {};
   arms.RAW = await write(WRITER, `${task}\n\nWrite it in the voice and style of ${AUTHOR}.`);
   arms.CONTEXT = await write(WRITER, `Here are pieces by ${AUTHOR}:\n\n${corpusBlock}\n\n${task}\n\nWrite it in their voice and style.`);
-  arms.GUIDE = await write(`${WRITER}\n\nFollow this style guide:\n\n${guide}`, task);
+  if (!NO_GUIDE) arms.GUIDE = await write(`${WRITER}\n\nFollow this style guide:\n\n${guide}`, task);
   const logs = [];
   for (const { arm, skill } of ATELIER_ARMS) {
     const r = invoke({ ATELIER_DATA: DATA, ATELIER_PROJECT_DIR: process.env.ATELIER_PROJECT_DIR }, skill, task);
     arms[arm] = r.text; logs.push(`── ${arm} (${skill}) ──\n${r.log}`);
   }
-  if (GUARD) for (const base of ['CONTEXT', 'GUIDE']) arms[`${base}_GUARD`] = guard(GUARD, arms[base], bi, base);
+  if (GUARD) for (const base of NO_GUIDE ? ['CONTEXT'] : ['CONTEXT', 'GUIDE']) arms[`${base}_GUARD`] = guard(GUARD, arms[base], bi, base);
   if (BEFORE) arms.ATELIER_BEFORE = invoke({ ATELIER_DATA: BEFORE.data, ATELIER_PROJECT_DIR: BEFORE.project }, BEFORE.skill, task).text;
   const dir = join(OUT, `brief-${bi + 1}`); mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'atelier-invoke.log'), logs.join('\n\n'));
