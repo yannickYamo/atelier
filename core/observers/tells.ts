@@ -16,7 +16,11 @@
 // ./tell-lexicon.ts) and by the owner, never by adding a string after each round.
 
 /** A family of machine-writing moves, and how to find one instance. */
-export interface TellFamily { readonly id: string; readonly label: string; readonly re: RegExp }
+export interface TellFamily {
+  readonly id: string; readonly label: string; readonly re: RegExp;
+  /** found by position, not by pattern (see ./style.ts): the regex is unused */
+  readonly positional?: true;
+}
 
 export const TELL_FAMILIES: readonly TellFamily[] = [
   { id: 'INSIGHT_CLAIM', label: 'an insight others supposedly miss ("the part people miss", "nobody talks about")',
@@ -26,9 +30,9 @@ export const TELL_FAMILIES: readonly TellFamily[] = [
   { id: 'SUPERLATIVE', label: 'a stacked superlative ("the single most important")',
     re: /\bthe single (?:most|biggest|highest|best|largest|greatest|clearest)\b/gi },
   { id: 'EPOCH', label: 'epoch framing ("in this particular year", "more important in 2026 than")',
-    re: /\bin this particular (?:year|moment)\b|\bmore (?:interesting|important|urgent|relevant) (?:\w+ )?(?:in|now than in) (?:19|20)\d\d\b/gi },
+    re: /\b(?:there['’]s|there has) never been a (?:better|more \w+) time\b|\bin this particular (?:year|moment)\b|\bmore (?:interesting|important|urgent|relevant) (?:\w+ )?(?:in|now than in) (?:19|20)\d\d\b/gi },
   { id: 'CANDOUR', label: 'announced candour ("let me be blunt", "I want to be careful about")',
-    re: /\b(?:let me be (?:blunt|honest|clear|direct|frank)|I want to be (?:careful|honest|clear|precise) (?:about|here)|I'?ll (?:be honest|implicate myself|be blunt|be direct|be frank)|to be (?:blunt|brutally honest|perfectly honest)|confession time)\b/gi },
+    re: /\b(?:let me (?:be concrete|make (?:this|it) concrete|get concrete)|let me be (?:blunt|honest|clear|direct|frank)|I want to be (?:careful|honest|clear|precise) (?:about|here)|I'?ll (?:be honest|implicate myself|be blunt|be direct|be frank)|to be (?:blunt|brutally honest|perfectly honest)|confession time)\b/gi },
   { id: 'TOTALISER', label: 'a totaliser ("that\'s the whole game")',
     re: /\bthat'?s (?:the|really the) whole (?:game|trade|point|practice|thing|argument|essay|story|job|discipline|trick)\b|\bthat'?s it\. that'?s the\b/gi },
   { id: 'MIND_READING', label: 'reading the reader\'s mind ("you know the one")',
@@ -37,6 +41,17 @@ export const TELL_FAMILIES: readonly TellFamily[] = [
     re: /\b(?:wearing|dressed (?:up )?(?:as|in)) (?:an? |the )?[\w'’ -]{0,40}?(?:costume|clothes|trench ?coat|disguise|mask)\b/gi },
   { id: 'GOES_TO_DIE', label: '"where X goes to die"', re: /\bwhere [\w ]{1,24} go(?:es)? to die\b/gi },
   { id: 'STACCATO_NOT', label: 'staccato negation ("Not a process. Not a tool.")', re: /\bNot [^.!?\n]{1,40}\. Not [^.!?\n]{1,40}\./g },
+  // Measured on three authors' corpora (0 per 1,000 words in every one) against model drafts in three
+  // blind rounds (0.1 to 0.5): the announced reframe, the recurring thought, the awkward size.
+  { id: 'REFRAME_ANNOUNCE', label: 'an announced reframe ("here\'s the part…", "the honest version is")',
+    re: /\b(?:here['’]s (?:the|a) (?:reframe|part|thing|catch|twist|kicker|problem|shape|trick|uncomfortable|honest)|the honest (?:version|answer|truth) (?:is|of)|here['’]s where (?:it|this|things) gets?|the (?:real|actual) (?:reframe|lesson|takeaway) is)\b/gi },
+  { id: 'RECURRING_THOUGHT', label: 'a recurring thought announced ("I keep coming back to")',
+    re: /\bI keep (?:coming back to|bumping into|running into|returning to|circling back to)\b/gi },
+  { id: 'AWKWARD_SIZE', label: '"the awkward middle"', re: /\bthe awkward (?:middle|size|stage|zone)\b/gi },
+  // THE OPENING VERDICT. A contrastive verdict as the piece's first line ("X isn't a meeting. It's a
+  // written decision process.") is a model's opening, not a writer's; readers flagged it in four of five
+  // pieces of one round. Found by position in ./style.ts, and held to how often the author opens that way.
+  { id: 'VERDICT_OPENER', label: 'a contrastive verdict as the opening line', re: /(?!)/g, positional: true },
 ];
 
 /**
@@ -56,6 +71,7 @@ export const CONTRAST_VERDICT = new RegExp([
 export function findTells(prose: string): { index: number; length: number; family: TellFamily }[] {
   const out: { index: number; length: number; family: TellFamily }[] = [];
   for (const f of TELL_FAMILIES) {
+    if (f.positional) continue;
     f.re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = f.re.exec(prose)) !== null) out.push({ index: m.index, length: m[0].length, family: f });

@@ -12,7 +12,7 @@
 // named, deterministic construction; none of them judges whether a sentence is good.
 
 import type { Span } from './registry.js';
-import { findTells, CONTRAST_VERDICT } from './tells.js';
+import { findTells, CONTRAST_VERDICT, TELL_FAMILIES } from './tells.js';
 import { proseBlocks, sentencesOf, paragraphsOf, proseRegions, wordsOf, quantile } from './text.js';
 
 export type PatternId =
@@ -134,10 +134,19 @@ export function findPattern(text: string, p: PatternId): Span[] {
   const asSpan = (s: { start: number; end: number; text: string }): Span => ({ start: s.start, end: s.end, text: s.text, why: PATTERN_LABEL[p] });
   if (p === 'MACHINE_TELL') {
     // Each instance names its family, so a repair knows which move it is removing.
-    return proseBlocks(text).flatMap((b) => findTells(b.text).map((m) => {
+    const found = proseBlocks(text).flatMap((b) => findTells(b.text).map((m) => {
       const start = b.at[m.index]; const end = b.at[m.index + m.length - 1] + 1;
       return { start, end, text: text.slice(start, end), why: m.family.label };
     }));
+    // The opening line, by position: the first two sentences of prose, which is where a lead or a TL;DR sits.
+    const opener = TELL_FAMILIES.find((f) => f.id === 'VERDICT_OPENER')!;
+    // The move usually spans two sentences ("X isn't A. It's B."), so the two are read together.
+    const lead = sentences.slice(0, 2);
+    if (lead.length && findPattern(lead.map((x) => x.text).join(' '), 'CONTRAST_VERDICT').length) {
+      const start = lead[0].start; const end = lead[lead.length - 1].end;
+      found.push({ start, end, text: text.slice(start, end), why: opener.label });
+    }
+    return found.sort((a, b) => a.start - b.start);
   }
   switch (p) {
     case 'THAT_OPENER': return sentences.filter((s) => /^(?:That'?s|That is|This is)\b/.test(s.text)).map(asSpan);

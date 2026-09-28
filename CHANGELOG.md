@@ -111,6 +111,21 @@ as it stood at the time:
 - **The front door** (`atelier` with no command) lists the everyday verbs first: create, use,
   correct, status, calibrate, set up the floor, tend.
 
+### Changed (sensor pass after round 7: truthfulness first, then the last machine moves)
+
+- **Invented material, in the shapes readers caught** (`core/loop/claims.ts`): an anecdote without a date
+  ("I had an agent consolidate…"), a second-hand story ("a team I worked with shipped…", "teams I've talked
+  to…"), and an unnamed authority ("a legal scholar put it…", kind `SOURCE`). The claim check used to key on a
+  time marker, so these passed as clean. A view in the first person is never flagged.
+- **Asked for, not invented**: `invoke` says before writing when no material of the person's is bound, and how
+  to bind it; what the draft invents is cut and listed.
+- **Held to the author's typical piece**: a machine-move family used in fewer than half the author's pieces is
+  banned in ours (round 7 allowed one per piece from families the author used in at most 4 of 20). The
+  author's own occasional move is tolerated when the rule is qualified on their unread work.
+- **Four more families, each measured first**: announced reframes, "I keep coming back to", "the awkward
+  middle", and a contrastive verdict as the opening line (found by position). Each ran at 0 in three authors'
+  corpora and 0.05-0.5 per 1,000 words in model drafts; three other candidates separated nothing and stay out.
+
 ### Changed (after the fifth blind voice round: catch machine-written sentences as moves, from data)
 
 Every version in round five, including the product's, carried sentences that read as machine-written.
