@@ -10,6 +10,10 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
+import type { Voice } from '../compiler/voice.js';
+import type { ContrastPair } from '../compiler/contrast-examples.js';
+import type { Recurrence } from '../mining/recurrence.js';
+import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
@@ -112,6 +116,130 @@ export function setExemplar(l: StoreLayout, text: string | null): void {
   if (text === null) { if (existsSync(p)) rmSync(p); return; }
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(p, text);
+}
+
+/**
+ * The machine-writing phrases this skill's own drafts repeat and its author never uses
+ * (core/observers/tell-lexicon.ts), plus what the owner added or struck. Implementation, not standard.
+ */
+export interface StoredTells { readonly learned: readonly string[]; readonly added: readonly string[]; readonly struck: readonly string[]; readonly at: string | null; readonly drafts: number; readonly topics: number }
+export function getTells(l: StoreLayout): StoredTells {
+  const p = join(dirs(l).base, 'tells.json');
+  return existsSync(p) ? readJson<StoredTells>(p, { what: 'the learned machine tells' }) : { learned: [], added: [], struck: [], at: null, drafts: 0, topics: 0 };
+}
+export function setTells(l: StoreLayout, t: StoredTells): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'tells.json'), JSON.stringify(t, null, 1));
+}
+/** The phrases every draft is checked against: learned and added, less what the owner struck. */
+export const activeTells = (t: StoredTells): string[] => [...new Set([...t.learned, ...t.added])].filter((x) => !t.struck.includes(x));
+
+/** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
+export function getVoice(l: StoreLayout): Voice | null {
+  const p = join(dirs(l).base, 'voice.json');
+  return existsSync(p) ? readJson<Voice>(p, { what: "the voice passages" }) : null;
+}
+export function setVoice(l: StoreLayout, voice: Voice | null): void {
+  const p = join(dirs(l).base, 'voice.json');
+  if (voice === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(voice, null, 1));
+}
+
+/** The last `atelier mine` report, so `--add <n>` names the item the owner read. */
+export interface MiningReport { readonly at: string; readonly standardVersionHash?: string; readonly items: readonly Recurrence[] }
+export function getMining(l: StoreLayout): MiningReport | null {
+  const p = join(dirs(l).base, 'mine.json');
+  return existsSync(p) ? readJson<MiningReport>(p, { what: 'the last mining report' }) : null;
+}
+export function setMining(l: StoreLayout, report: MiningReport): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'mine.json'), JSON.stringify(report, null, 1));
+}
+
+/**
+ * THE REGRESSION FLOOR's state for a skill (see ../distinctiveness/measured.ts): the contract (which
+ * rules it watches, the margin on each, ENFORCE or OBSERVE), the tasks it is measured on, and the
+ * qualification an A/A run earned. The qualification names the contract and tasks it was earned on;
+ * change either and it no longer applies.
+ */
+export interface FloorState {
+  readonly contract: QualityFloorContract | null;
+  readonly tasks: readonly string[];
+  /** `contractHash` names everything the rate is a rate of (see qualificationKey in cli/commands/floor.ts) */
+  readonly qualification: (FloorQualification & { readonly contractHash: string; readonly fires: number }) | null;
+  /** A/A evidence so far, on the contract, tasks and model it was gathered under; runs accumulate */
+  readonly aa?: { readonly contractHash: string; readonly falseAlarms: number; readonly trials: number;
+    /** planted regressions of PLANTED_MARGINS × the margin, and how many the floor caught */
+    readonly plantedHits?: number; readonly planted?: number };
+}
+const floorDir = (l: StoreLayout): string => join(dirs(l).base, 'floor');
+export function getFloor(l: StoreLayout): FloorState {
+  const p = join(floorDir(l), 'state.json');
+  return existsSync(p) ? readJson<FloorState>(p, { what: 'the regression floor' }) : { contract: null, tasks: [], qualification: null };
+}
+export function setFloor(l: StoreLayout, f: FloorState): void {
+  mkdirSync(floorDir(l), { recursive: true });
+  writeAtomic(join(floorDir(l), 'state.json'), JSON.stringify(f, null, 1));
+}
+/** The frozen per-task scores of one SkillVersion: what a candidate is compared against. */
+export function getBaseline(l: StoreLayout, skillVersionHash: string): readonly FrozenBaselineEntry[] | null {
+  const p = join(floorDir(l), `baseline-${skillVersionHash}.json`);
+  return existsSync(p) ? readJson<FrozenBaselineEntry[]>(p, { kind: 'array', what: 'a frozen floor baseline' }) : null;
+}
+export function setBaseline(l: StoreLayout, skillVersionHash: string, entries: readonly FrozenBaselineEntry[]): void {
+  mkdirSync(floorDir(l), { recursive: true });
+  writeAtomic(join(floorDir(l), `baseline-${skillVersionHash}.json`), JSON.stringify(entries, null, 1));
+}
+
+/**
+ * The write-this-not-that pairs a skill ships (see ../compiler/contrast-examples.ts), chosen at build
+ * and kept through every rebuild so the package is the same whichever command renders it. `off` is the
+ * owner's `--contrast none`.
+ */
+export interface StoredContrast { readonly off: boolean; readonly pairs: readonly ContrastPair[] }
+export function getContrast(l: StoreLayout): StoredContrast {
+  const p = join(dirs(l).base, 'contrast.json');
+  return existsSync(p) ? readJson<StoredContrast>(p, { what: 'the contrast examples' }) : { off: false, pairs: [] };
+}
+export function setContrast(l: StoreLayout, c: StoredContrast): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'contrast.json'), JSON.stringify(c, null, 1));
+}
+
+/**
+ * The KIND OF DOCUMENT a skill's measured rules describe: "blog-post", "support-reply". Every
+ * threshold was read off pieces of one kind, and a fragment cap calibrated on essays says nothing true
+ * about a tweet. Declared by the owner; null when they never said.
+ */
+export function getDocClass(l: StoreLayout): string | null {
+  const p = join(dirs(l).base, 'class.txt');
+  return existsSync(p) ? readFileSync(p, 'utf8').trim() || null : null;
+}
+export function setDocClass(l: StoreLayout, cls: string | null): void {
+  const p = join(dirs(l).base, 'class.txt');
+  if (cls === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, cls);
+}
+
+/**
+ * The person's MATERIAL for a skill: notes, anecdotes, figures and sources they vouch for. Served with
+ * every task, and the only place a first-person story or a cited figure in the output may come from.
+ */
+export function getMaterial(l: StoreLayout): { name: string; text: string }[] {
+  const d = join(dirs(l).base, 'material');
+  if (!existsSync(d)) return [];
+  return readdirSync(d).filter((f) => !f.startsWith('.')).sort().map((f) => ({ name: f, text: readFileSync(join(d, f), 'utf8') }));
+}
+export function addMaterial(l: StoreLayout, name: string, text: string): void {
+  const d = join(dirs(l).base, 'material');
+  mkdirSync(d, { recursive: true });
+  writeAtomic(join(d, name.replace(/[^A-Za-z0-9._-]/g, '-')), text);
+}
+export function clearMaterial(l: StoreLayout): void {
+  const d = join(dirs(l).base, 'material');
+  if (existsSync(d)) rmSync(d, { recursive: true, force: true });
 }
 
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {

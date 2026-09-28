@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { resolveRule, ruleKey } from '../../core/state/rule-key.js';
 import { parseMeasure } from './ratify.js';
 import { describeMeasurement } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
@@ -19,7 +20,7 @@ import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
 import * as store from '../../core/state/store.js';
 
-import { sha, DATA, die, argv, flag, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel } from '../runtime.js';
+import { sha, DATA, die, argv, flag, projectDir, pickHost, clientFor, numericFlag, skillArg, diagnoserModel, carriedFrom } from '../runtime.js';
 import { decide } from '../../core/ratification/authority.js';
 import { draftHash, appendDecision, stampVersion } from '../../core/ratification/decision-record.js';
 
@@ -41,12 +42,15 @@ import { draftHash, appendDecision, stampVersion } from '../../core/ratification
  */
 export function amend(): void {
   const name = skillArg();
-  const ruleId = flag('--rule') ?? die('--rule required');
+  const ruleRef = flag('--rule') ?? die('--rule required: the rule\'s id, its key (R-…) or its number in atelier plan');
   const statement = flag('--statement');
   const materiality = flag('--materiality');
   const measureSpec = flag('--measure');
-  if (!statement && !materiality && measureSpec === undefined) {
-    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|… or --measure <observer>:<params>|none required');
+  const phaseFlag = flag('--phase')?.toUpperCase();
+  if (phaseFlag !== undefined && phaseFlag !== 'ACCURACY' && phaseFlag !== 'STYLE') die('--phase is ACCURACY or STYLE');
+  const phase = phaseFlag as 'ACCURACY' | 'STYLE' | undefined;
+  if (!statement && !materiality && measureSpec === undefined && !phase) {
+    die('--statement "<the rule in your words>", --materiality REQUIRED|PREFERRED|…, --measure <observer>:<params>|none or --phase ACCURACY|STYLE required');
   }
   const measurement = measureSpec === undefined ? undefined : measureSpec.trim().toLowerCase() === 'none' ? null : parseMeasure(measureSpec);
   const appliesWhen = flag('--applies-when');
@@ -55,10 +59,12 @@ export function amend(): void {
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
   const sv = store.getSkillVersion(L, activeHash)!;
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
-  const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in ${prev.standardVersionHash}.`);
+  const found = resolveRule(prev.requirements, ruleRef);
+  if ('error' in found) return void die(found.error);
+  const target = found.rule; const ruleId = target.requirementId;
 
   let amended;
-  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, ...(measurement === undefined ? {} : { measurement }) }); }
+  try { amended = decide(target, { verb: 'AMEND', statement, appliesWhen, materiality, phase, ...(measurement === undefined ? {} : { measurement }) }); }
   catch (e) { return void die((e as Error).message); }
   const requirements = prev.requirements.map((r) => r.requirementId === ruleId ? amended.requirement : r);
   const body = { evidenceId: prev.evidenceId, workType: prev.workType, requirements };
@@ -84,7 +90,8 @@ export function amend(): void {
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
-  const pkg = renderAgentSkill(next, arch, name, desc, store.getExemplar(L));
+  const carried = carriedFrom(L, sv.skillVersionHash, next);
+  const pkg = renderAgentSkill(next, arch, name, desc, carried.exemplar, carried.contrast, carried.voice);
   assertPortable(pkg);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
@@ -101,12 +108,13 @@ export function amend(): void {
     target, amended.ledgerDecision, { humanRevision: amended.requirement, note: reason, decidedAt: next.mintedAt }), next.standardVersionHash);
   store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
 
-  console.log(`\nAmended ${ruleId}.`);
+  console.log(`\nAmended ${ruleId} (${ruleKey(amended.requirement)}).`);
   if (statement) {
     console.log(`  was: ${target.statement}`);
     console.log(`  now: ${statement}`);
     console.log(`  authority ${target.authority} -> EXPERT_AUTHORED   (you wrote these words)`);
   }
+  if (phase) console.log(`  phase ${target.phase ?? 'STYLE'} -> ${phase}   (ACCURACY rules are repaired before STYLE ones)`);
   if (appliesWhen) console.log(`  applies when: ${target.appliesWhen}  ->  ${appliesWhen}`);
   if (materiality) console.log(`  weight ${target.materiality ?? 'undeclared'} -> ${amended.requirement.materiality}`);
   if (measurement !== undefined || (statement && target.measurement && !amended.requirement.measurement)) {

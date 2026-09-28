@@ -8,9 +8,10 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import * as store from '../core/state/store.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 
@@ -180,7 +181,9 @@ describe('P0-4: a project is never a dead end', () => {
     expect(readFileSync(skillFile(proj, 'grow'), 'utf8')).toContain('second rule');
 
     const history = run(data, proj, 'history', '--skill', 'grow');
-    expect(history.trim().split('\n')).toHaveLength(2);
+    // Two versions; the lines under a version are the rules that moved in it.
+    expect(history.trim().split('\n').filter((l) => /^[* ] [0-9a-f]/.test(l))).toHaveLength(2);
+    expect(history).toMatch(/\+ R-[0-9a-f]{6} \w+ {2}second rule/);
     const stored = JSON.parse(readFileSync(join(data, 'skills', 'grow', 'standards', `${v2}.json`), 'utf8')) as { supersedes: string | null; reason: string | null };
     expect(stored.supersedes).toBe(v1);
     expect(stored.reason).toBe('forgot one');
@@ -237,10 +240,23 @@ describe('P0-4: a project is never a dead end', () => {
     add(data, proj, 'one');
     run(data, proj, 'ratify-close', '--work-type', 'writing');
     run(data, proj, 'build', '--name', 'first');
+    // Refused: the working standard on disk is not the one this run ratified.
+    const pending = join(data, 'runs', readdirSync(join(data, 'runs'))[0], 'pending-standard.json');
+    writeFileSync(pending, readFileSync(pending, 'utf8').replace(/"standardVersionHash": ?"[0-9a-f]+"/, '"standardVersionHash":"0000000000000000"'));
     const second = run(data, proj, 'build', '--name', 'second');
     expect(second).toMatch(/^EXIT:1/);
     expect(existsSync(join(data, 'skills', 'second')), 'a refused build reached the store').toBe(false);
     expect(existsSync(join(proj, '.claude', 'skills', 'second')), 'a refused build was installed').toBe(false);
+  });
+
+  it('a BUILT run can be built again: the same ratified standard, a new implementation', () => {
+    const { data, proj } = fresh();
+    add(data, proj, 'one');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'first');
+    expect(run(data, proj, 'build', '--name', 'second')).toContain('Your skill is ready');
+    const std = (n: string) => store.getSkillVersion({ root: data, skillName: n }, store.getActive({ root: data, skillName: n })!)!.standardVersionHash;
+    expect(std('second')).toBe(std('first'));
   });
 
   it('`--review` really writes nothing', () => {

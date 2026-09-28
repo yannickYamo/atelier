@@ -1,3 +1,4 @@
+import type { Voice } from '../core/compiler/voice.js';
 import { parseArgs } from 'node:util';
 // cli/runtime.ts — the shared ground every command stands on.
 //
@@ -10,10 +11,12 @@ import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync } from 'no
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
 import { createHash } from 'node:crypto';
 import { newRun, transition, type Run } from '../core/state/run-state.js';
-import type { ExpertEvidence, Requirement } from '../core/state/canonical-state.js';
+import type { ExpertEvidence, Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -45,14 +48,16 @@ export const VALUED_OPTIONS: readonly string[] = [
   'with',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',
-  'declare-viewed', 'decisions', 'description', 'discovery-backend', 'discovery-base-url', 'discovery-model',
+  'declare-viewed', 'decisions', 'description', 'drafts', 'discovery-backend', 'discovery-base-url', 'discovery-model',
   'discovery-price-in', 'discovery-price-out', 'discovery-provider', 'discovery-strict-schema', 'discovery-structured-output',
   'exclude', 'exemplar', 'from', 'from-hook', 'held-out', 'host', 'id', 'intent', 'invocation', 'kind', 'mode',
   'add', 'labels', 'materiality', 'measure', 'form', 'max-calls', 'model', 'name', 'note', 'pick',
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider',
-  'candidates', 'compiled', 'contexts', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
+  'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
-  'results', 'sealed-at', 'seed', 'suite',
+  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
+  'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
+  'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs',
   'questions', 'reason', 'required-n', 'reserve', 'role',
   'rule', 'set', 'skill', 'source-author', 'statement', 'strict-schema',
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
@@ -63,10 +68,11 @@ export const VALUED_OPTIONS: readonly string[] = [
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
   'accept', 'accept-new-binding', 'auto-reserve', 'cluster-per-file', 'drop', 'dry-run', 'indifferent',
-  'bare', 'holdout', 'json', 'loop', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
+  'allow-unsourced', 'bare', 'clear', 'holdout', 'json', 'list', 'loop', 'no-contrast', 'no-repair', 'repair', 'never-this-transition', 'no-negative-probe', 'none', 'public-source',
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
-  'review', 'score', 'skip', 'skip-methods', 'yes',
+  'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'taste', 'no-taste', 'setup', 'auto',
 ];
 
 export const argv = process.argv.slice(2);
@@ -89,7 +95,7 @@ const parsed = ((): Parsed => {
 export const cmd = argv[0] ?? '';
 
 /** Options that may be given more than once. Every value is kept, and a comma list counts the same. */
-export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set'];
+export const REPEATABLE_OPTIONS: readonly string[] = ['reserve', 'exclude', 'set', 'margin', 'enforce', 'observe', 'label', 'add', 'strike'];
 
 /** Values of an option, read as the parser reads: a value is consumed, so a value that happens to
  *  spell `--name` (a statement, a task) is never counted as the option itself. */
@@ -266,6 +272,10 @@ export const modelFor = (role: Role, fallback = MODEL): string => {
  */
 export const proposerModel = (): string =>
   roleFlag('discovery', 'model') ?? flag('--model') ?? process.env.ATELIER_PROPOSER_MODEL ?? modelFor('discovery', PROPOSER);
+
+/** Whether a role has a model without dying for one: set explicitly, or an Anthropic default applies. */
+export const hasModelFor = (role: Role): boolean =>
+  Boolean(roleFlag(role, 'model') ?? flag('--model') ?? process.env.ATELIER_MODEL) || providerFor(role) === 'anthropic';
 
 /** The model that diagnoses and proposes repairs. Every such command resolves it here, so `check` verifies it. */
 export const diagnoserModel = (): string => modelFor('discovery');
@@ -570,6 +580,8 @@ export interface Session {
   source?: string | null;
   /** the spending cap the person gave `atelier new`, kept so continuing the run keeps their limit */
   cap?: string | null;
+  /** when the corpus is someone else's public work: whose. Decided at intake, kept for the run. */
+  publicSource?: string | null;
 }
 
 export interface ProposalMeta {
@@ -579,7 +591,7 @@ export interface ProposalMeta {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
-  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
 }
 
 /**
@@ -714,7 +726,9 @@ export const listSessions = (): { file: string; projectDir: string | null; here:
  * a system that inferred authorship would be wrong in the direction that matters.
  */
 export const sourceProvenance = (): 'MACHINE_DISCOVERED' | 'PUBLIC_BEHAVIOUR_INFERRED' =>
-  (argv.includes('--public-source') || Boolean(flag('--source-author'))) ? 'PUBLIC_BEHAVIOUR_INFERRED' : 'MACHINE_DISCOVERED';
+  (argv.includes('--public-source') || Boolean(flag('--source-author')) || Boolean(loadSession().publicSource))
+    ? 'PUBLIC_BEHAVIOUR_INFERRED' : 'MACHINE_DISCOVERED';
+
 
 export const step = (s: Session, to: Run['state'], ctx: Parameters<typeof transition>[2] = {}): Session => {
   // A REFUSAL IS STILL A REFUSAL. Re-sealing a corpus and closing ratification twice are distinct
@@ -774,3 +788,28 @@ export const authoredIdAllocator = (s: Session): (() => string) => {
   }
   return () => `x${++n}`;
 };
+
+/**
+ * WHAT A REBUILD CARRIES FROM THE VERSION IT IS DERIVED FROM: the exemplar and the contrast pairs that
+ * version's package served. A candidate built to be compared with that version must differ from it in
+ * what the change is about and nothing else; reading the store's current exemplar or pairs instead
+ * would mix in whatever changed since, after a later build or a rollback. The pairs are then kept only
+ * where they still teach the standard being rendered.
+ */
+export function carriedFrom(L: store.StoreLayout, fromVersion: string | null, v: StandardVersion): {
+  exemplar: { text: string } | null; contrast: ContrastPair[]; voice: Voice | null;
+} {
+  const sv = fromVersion ? store.getSkillVersion(L, fromVersion) : null;
+  const pkg = sv ? store.getPackage(L, sv.materializedHash) : null;
+  if (!pkg) return { exemplar: store.getExemplar(L), contrast: [], voice: store.getVoice(L) };
+  // The author's passages travel with the package that served them, like the contrast pairs.
+  const voiceRaw = pkg.assurance?.['voice.json'];
+  const voice = ((): Voice | null => { try { return voiceRaw ? JSON.parse(voiceRaw) as Voice : null; } catch { return null; } })();
+  const ex = pkg.files['examples/exemplar.md'];
+  // Packages stored before pairs travelled with them served examples/contrast.md with no data beside
+  // it: the build's own record of the pairs it chose is the closest thing to what they served.
+  const raw = pkg.assurance?.['contrast-pairs.json']
+    ?? ('examples/contrast.md' in pkg.files ? JSON.stringify(store.getContrast(L).pairs) : undefined);
+  const pairs = ((): ContrastPair[] => { try { return raw ? JSON.parse(raw) as ContrastPair[] : []; } catch { return []; } })();
+  return { exemplar: ex === undefined ? null : { text: ex }, contrast: store.getContrast(L).off ? [] : contrastFor(pairs, v), voice };
+}

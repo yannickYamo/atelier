@@ -49,7 +49,7 @@ export interface ProposalEvidence {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** a measured rule's conformance on the pieces it was counted from */
-  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
 }
 
 export interface Suggestion {
@@ -77,6 +77,26 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
     const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
     if (r < 0.5) return { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` };
+    // A style distance is a measure to pick drafts by, not a span anything can rewrite; a floor ("at
+    // least so many bold phrases") has nothing to point a repair at either. Both are shown by default.
+    if (p.measurement.observer === 'STYLE_DISTANCE') {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2,
+        why: `${present} of ${applicable} ${where} are closer to you than to the model; used to choose between drafts` };
+    }
+    if (e.inSample.weak) {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
+        why: `${seen}; the model's plain drafts did not show this habit clearly, so it is shown and used to choose between drafts until you make it required` };
+    }
+    const floorOnly = (p.measurement.observer === 'PATTERN_RATE' || p.measurement.observer === 'TERM_RATE')
+      && typeof p.measurement.params.minPer1000 === 'number' && typeof p.measurement.params.maxPer1000 !== 'number';
+    if (floorOnly) {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1, why: `${seen}; a floor, so it guides draft selection rather than a rewrite` };
+    }
+    // A mix of sentence lengths is a property of the whole piece: rewriting sentence by sentence toward
+    // it is possible but blunt, so it is shown and used to choose between drafts until made required.
+    if (p.measurement.observer === 'DISTRIBUTION') {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2, why: `${seen}; a whole-piece mix, used to choose between drafts until you make it required` };
+    }
     const lexicon = p.measurement.observer === 'LEXICON';
     const strong = independent && r >= 0.8 && !lexicon;
     return { decision: 'APPROVE', materiality: strong ? 'REQUIRED' : 'PREFERRED', needs, strength: strong ? 3 : 1,
@@ -102,7 +122,13 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
   // A rule that needs material only the person has would, as REQUIRED, refuse every task that does not
   // bind it — for new writing that is most of them. So when producing new work it is suggested as
   // shown and asks for the material in the host; when answering or guarding, the facts are the point.
-  const required = mode === 'GENERATE' ? held && !needs : (held || agreed);
+  // FOR NEW WRITING, REQUIRED MEANS "NEARLY ALWAYS". A move the author makes in three of five pieces,
+  // instructed as a rule, is made in every piece, and several such moves stacked became a template a
+  // blind reader recognised across five unrelated topics. So a reading-based rule instructs only when it
+  // held in at least four in five unread pieces where it applied (three or more); the rest are moves
+  // the author SOMETIMES makes, shown with their rate and a cap on how many one piece may carry.
+  const nearlyAlways = rate !== null && h !== null && h.applicable >= 3 && rate >= 0.8;
+  const required = mode === 'GENERATE' ? nearlyAlways && !needs : (held || agreed);
   // RESPOND with a condition: the measured weak spot. A conditional rule served as an instruction was
   // applied where its condition did not hold. Suggested as required only on strong evidence, and said.
   const conditionalRespond = mode === 'RESPOND' && !isGeneralScope(p.appliesWhen);

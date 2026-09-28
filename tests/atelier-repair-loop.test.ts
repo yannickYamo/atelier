@@ -182,6 +182,19 @@ describe('a stale host repair never records an unrelated turn', () => {
   });
 });
 
+describe('the host rewrite is held to the meaning check, and what it lost is recorded', () => {
+  it('a continuation that drops a qualifier and a figure records meaningLost', () => {
+    const { data, proj, env } = seedSkill();
+    const t = join(proj, 't.jsonl'); writeFileSync(t, '');
+    hook(env, proj, 'prompt', { cwd: proj, prompt_id: 'p1', transcript_path: t, prompt: '/nodrink say it' });
+    hook(env, proj, 'stop', { cwd: proj, prompt_id: 'p1', transcript_path: t, stop_hook_active: false, last_assistant_message: 'Most days I may drink tea 3 times.' });
+    hook(env, proj, 'stop', { cwd: proj, prompt_id: 'p1', transcript_path: t, stop_hook_active: true, last_assistant_message: 'I drink the drink daily.' });
+    const [rec] = store.listInvocations({ root: data, skillName: 'nodrink' });
+    expect(rec.repair?.meaningLost).toEqual(expect.arrayContaining(['the figure 3', 'the qualifier "may"', 'the qualifier "most"']));
+    expect(rec.repair?.why).toMatch(/the rewrite lost/);
+  });
+});
+
 describe('the loop never makes anything worse, and always has somewhere to act', () => {
   it('a rule that was not measurable and is now broken counts as worse', () => {
     const std = { standardVersionHash: 's', requirements: [
