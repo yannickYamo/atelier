@@ -19,7 +19,7 @@ const read = (f: string): string => readFileSync(f, 'utf8');
 // The README was split into a front door plus six design documents under docs/. Every one of them
 // is shipped in the package and linked from the README, so a command or a number stated in any of
 // them is stated to a user. Reading only the README would let a claim escape review by moving.
-const DOCS: readonly string[] = ['README.md', 'CONTRIBUTING.md', 'ACCEPTANCE.md', 'MEASUREMENTS.md',
+const DOCS: readonly string[] = ['README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'ACCEPTANCE.md', 'MEASUREMENTS.md',
   ...readdirSync('docs').filter((f) => f.endsWith('.md')).map((f) => join('docs', f))];
 const allDocs = DOCS.map(read).join('\n');
 
