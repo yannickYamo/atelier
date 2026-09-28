@@ -8,6 +8,45 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Studies: blind voice rounds on one public author's corpus (what each found, and what changed)
+
+One public author's Substack (20 posts, reserved pieces never read by any arm), one writer model
+(`claude-opus-5`), the product against baselines. The rankings in rounds 1–5 came from readers of the same
+model family as the writer; the owner's blind read is round 7's voice criterion. Each round's conclusion,
+as it stood at the time:
+
+- **Round 1** (one brief; raw model, the model's own style guide, Atelier). The measured table favoured
+  Atelier (the only arm meeting every REQUIRED rule after one repaired paragraph); the style-guide arm read
+  as most like the author. Showed: meeting the rules is not sounding like the author.
+- **Round 2** (the same brief; the anti-generic skill against rounds 1's arms). Contrast rules removed the
+  model's tells (em dashes, fragments, "not X, it's Y"), but the output still read machine-written in places.
+- **Round 3** (four arms). Atelier ranked last by the reader and by a model judge while holding 5 of 5 rules.
+  Root cause: the skill served no writing of the author's, enforced negatives and left positives optional,
+  had no first person, spelled British, and a repair left a splice ("coupling: coupling:"). Led to: served
+  author passages, signature bands, a voice layer (first person, dialect), whole-sentence repair spans.
+- **Round 4** (five briefs, five arms). The rebuilt skill (21 required rules) ranked fourth of five and read
+  as a template; a corpus-in-context arm won partly by lifting lines (68 shared 6-grams per piece).
+  Led to: a grounded persona with frequencies, whole pieces spanning the author's modes, reading rules
+  required only when nearly always followed, weak (selection-only) bands, register and displacement rules.
+- **Round 5** (pre-registered: VOICE_ROUND5_PREREGISTRATION.md; seven arms). Atelier won 3 of 5 briefs for
+  the reader (mean rank 2.4 of 7) but failed the sealed rule: stylometry level with raw. The guard was
+  close to a no-op (one full style pass in ten). Every arm carried machine-written sentences at 3–7× the
+  author's rate. An audit found the cause of the whack-a-mole: tells were hand-written strings learned from
+  plain drafts although they appear under the skill; the rules that could catch them were never enforced;
+  repair could not remove a move. Led to: the machine-tell catalogue, the learned lexicon, move-aware repair,
+  two drafts by default.
+- **Offline, on round 5's drafts** (studies/harness/guard-offline.mjs, $3.49): the new guard halved machine
+  tells on every arm and raised REQUIRED rules held from 118/200 to 181/200.
+- **Round 6** (pre-registered: VOICE_ROUND6_PREREGISTRATION.md). Failed its gate narrowly: machine tells 0.26
+  per 1,000 words against 0.22, one invented story, stylometry 0.005 below raw. Criteria 3–5 passed. Each miss
+  traced to an enforcement defect (a pooled cap; a model offering slots where told to cut; a "not" blocking
+  the cut of a pure machine sentence), fixed without changing the design. Post hoc, round 6's own drafts
+  through the fixed guard met criteria 1–5 (tells 0.21, no invented stories or slots, 2.4 shared 6-grams,
+  every REQUIRED rule held, habits in the author's range). Stylometry could not separate any arm (within
+  0.012), so it cannot serve as the voice criterion.
+- **Round 7** (pre-registered: VOICE_ROUND7_PREREGISTRATION.md): the confirmation, with the owner's blind read
+  as the voice criterion. Result recorded here when scored.
+
 ### Added (Phase 8: search the implementation, never the standard)
 
 - **The genome** (`core/optimizer/genome.ts`): everything the compiler derives from a ratified
