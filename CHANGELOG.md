@@ -127,6 +127,8 @@ as it stood at the time:
 - **Held to the author's typical piece**: a machine-move family used in fewer than half the author's pieces is
   banned in ours (round 7 allowed one per piece from families the author used in at most 4 of 20). The
   author's own occasional move is tolerated when the rule is qualified on their unread work.
+- **A move the author never makes is banned at any length**: a rate needs 150 words, but a two-line support
+  reply that opens "Let me be blunt" has made the move.
 - **Four more families, each measured first**: announced reframes, "I keep coming back to", "the awkward
   middle", and a contrastive verdict as the opening line (found by position). Measured with the product's own
   sensor: 0 to 0.07 per 1,000 words in three authors' corpora, 0.03 to 0.33 in model drafts (roughly 3 to 10

@@ -185,3 +185,13 @@ describe('invented material, in the shapes readers caught', () => {
     expect(unsourcedClaims('I had an agent consolidate three date helpers into one.', 'Last spring I had an agent consolidate three date helpers into one utility.')).toEqual([]);
   });
 });
+
+describe('a move the author never makes is banned at any length', () => {
+  it('a short reply that makes one breaks the rule; a short plain one is not measured', () => {
+    const rule = aRequirement({ requirementId: 'c6', statement: 'No machine moves.', kind: 'BOUNDARY', materiality: 'REQUIRED',
+      measurement: { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: 0.5, never: ['CANDOUR'] } } });
+    const std = { standardVersionHash: 's', requirements: [rule] } as unknown as StandardVersion;
+    expect(checkDraft('x', std, 'Let me be blunt: the refund is on its way.', { guardClaims: false }).failed).toBe(true);
+    expect(checkDraft('x', std, 'The refund is on its way.', { guardClaims: false }).checked[0].result.verdict).toBe('NOT_APPLICABLE');
+  });
+});
