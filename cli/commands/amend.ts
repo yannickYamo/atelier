@@ -75,20 +75,12 @@ export function amend(): void {
     supersedes: prev.standardVersionHash, reason };
   assertSupersessionRecorded(minted);
 
-  // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS.
-  //
-  // `mintedAt`, `supersedes` and `reason` sit OUTSIDE the hash, so re-minting identical content
-  // produces a body that differs only by timestamp — and the store correctly refuses to let one
-  // replace the other. Under content addressing they are the same version, so the stored one is
-  // canonical. This also makes `amend` safely re-runnable after a partial write, which is how the
-  // defect surfaced: an earlier attempt wrote the standard and then failed at the architecture step.
-  //
-  // The underlying issue is real and remains open: two DIFFERENT authority events over identical
-  // requirements collapse to one identity, so a supersession chain cannot distinguish them. Recorded
-  // as B11. This is the narrow, honest workaround, not the fix.
-  const existing = store.getStandard(L, minted.standardVersionHash);
-  const next: StandardVersion = existing ?? minted;
-  if (existing) console.log(`(this exact standard already exists as ${existing.standardVersionHash}, minted ${existing.mintedAt} — reusing it rather than minting a duplicate identity)`);
+  // THE HASH IS THE IDENTITY, SO THE FIRST MINT WINS. `mintedAt`, `supersedes` and `reason` sit outside
+  // the hash, so re-minting identical content (a re-run after a partial write, an amend that restores
+  // an earlier wording) is the same version: the store keeps the body it has and hands it back, and the
+  // skill is rendered from that one. Written before the render so a re-run always finds it.
+  const next = store.putStandard(L, minted);
+  if (next !== minted) console.log(`(this exact standard already exists as ${next.standardVersionHash}, minted ${next.mintedAt} — reusing it rather than minting a duplicate identity)`);
 
   const arch = compileArchitecture(next);
   const desc = flag('--description') ?? sv.description ?? defaultDescription(next.workType);
@@ -98,17 +90,19 @@ export function amend(): void {
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg.packageHash}`), skillName: name,
     standardVersionHash: next.standardVersionHash, architectureHash: arch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
-  store.putStandard(L, next); store.putSkillVersion(L, skill); store.putArchitecture(L, arch);
-  store.putPackage(L, pkg); store.setActive(L, skill.skillVersionHash);
+  store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg);
+  // Installed first, activated second, as `addition` does: a failed install leaves the previous version
+  // active and serving, rather than a pointer naming a version the host does not hold.
   const inst = pickHost().install(pkg, projectDir());
   { const moved = describeBackup(inst); if (moved) console.log(moved); }
-  if (!inst.ok) return void die(`install failed: ${inst.reason}`);
+  if (!inst.ok) return void die(`install failed: ${inst.reason}\n  Nothing was amended: the active version is unchanged.`);
+  store.setActive(L, skill.skillVersionHash);
 
   // The act is a ratification decision like any other, and until now it left no ledger record —
   // docs/AUTHORITY.md promised one for "every one of these decisions" and only the session flow kept it.
   const ledger = stampVersion(appendDecision({ standardDraftHash: draftHash([target]), records: [] },
-    target, amended.ledgerDecision, { humanRevision: amended.requirement, note: reason, decidedAt: next.mintedAt }), next.standardVersionHash);
-  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: next.mintedAt });
+    target, amended.ledgerDecision, { humanRevision: amended.requirement, note: reason, decidedAt: minted.mintedAt }), next.standardVersionHash);
+  store.appendEvent(L, { kind: 'LEDGER_DECISION', record: ledger.records[0], at: minted.mintedAt });
 
   console.log(`\nAmended ${ruleId} (${ruleKey(amended.requirement)}).`);
   if (statement) {

@@ -229,3 +229,63 @@ describe('a conditional measured rule can be widened, and verify says how', () =
     expect(run(data, proj, 'amend', '--skill', 'demo', '--rule', 'x1', '--reason', 'r')).toMatch(/^EXIT:1[\s\S]*--applies-when <condition>\|GENERAL required/);
   });
 });
+
+/** A built skill holding one inferred, unconfirmed prohibition: what `confirm` rules on. */
+const seedInferred = (): { data: string; proj: string; L: store.StoreLayout; first: string } => {
+  const { data, proj } = fresh();
+  const L: store.StoreLayout = { root: data, skillName: 'demo' };
+  store.initStore(L);
+  const base = { appliesWhen: 'GENERAL', evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
+    realizationTolerance: 'FLEXIBLE', outputShape: null } as const;
+  const sv0 = {
+    standardVersionHash: 'std0', evidenceId: null, workType: 'writing', authorityState: 'PARTIAL',
+    mintedAt: '2026-09-01T00:00:00Z', reason: null, supersedes: null,
+    requirements: [
+      { ...base, requirementId: 'x1', statement: 'Lead with the action.', kind: 'GENERATIVE', authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_ADDED', materiality: 'REQUIRED' },
+      { ...base, requirementId: 'p2', statement: 'Never open with a question.', kind: 'BOUNDARY', authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED', materiality: null },
+    ],
+  } as unknown as StandardVersion;
+  const arch = compileArchitecture(sv0);
+  const pkg = renderAgentSkill(sv0, arch, 'demo', 'd');
+  store.putStandard(L, sv0); store.putArchitecture(L, arch); store.putPackage(L, pkg);
+  store.putSkillVersion(L, { skillVersionHash: 'k0', skillName: 'demo', standardVersionHash: 'std0', architectureHash: arch.architectureHash,
+    materializedHash: pkg.packageHash, builtAt: '2026-09-01T00:00:00Z', description: 'd' } as never);
+  store.setActive(L, 'k0');
+  return { data, proj, L, first: 'k0' };
+};
+
+describe('the same standard minted twice is one version, not a conflict', () => {
+  it('confirm, rollback, confirm again: the second confirm installs, reusing the first mint', () => {
+    const { data, proj, L, first } = seedInferred();
+    expect(run(data, proj, 'confirm', '--skill', 'demo', '--rule', 'p2')).toMatch(/Confirmed\./);
+    const confirmed = store.getActive(L)!;
+    const stdHash = store.getSkillVersion(L, confirmed)!.standardVersionHash;
+    const mintedAt = store.getStandard(L, stdHash)!.mintedAt;
+    expect(run(data, proj, 'rollback', '--skill', 'demo', '--to', first)).toMatch(/rolled back/);
+    const again = run(data, proj, 'confirm', '--skill', 'demo', '--rule', 'p2');
+    expect(again).not.toMatch(/^EXIT:/);
+    expect(again).toMatch(/Confirmed\./);
+    expect(store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash).toBe(stdHash);
+    expect(store.getStandard(L, stdHash)!.mintedAt, 'the stored file is kept, not replaced').toBe(mintedAt);
+  });
+
+  it('the store still refuses a different body under an existing hash (the polarity)', () => {
+    const { L } = seedInferred();
+    const v = store.getStandard(L, 'std0')!;
+    expect(() => store.putStandard(L, { ...v, mintedAt: '2030-01-01T00:00:00Z', reason: 'again' })).not.toThrow();
+    expect(store.putStandard(L, { ...v, mintedAt: '2030-01-01T00:00:00Z' }).mintedAt).toBe('2026-09-01T00:00:00Z');
+    expect(() => store.putStandard(L, { ...v, workType: 'journal' })).toThrow(/two bodies cannot share one/);
+  });
+});
+
+describe('confirm installs before it activates', () => {
+  it('a failed install leaves the active pointer where it was', () => {
+    const { data, proj, L, first } = seedInferred();
+    // A regular file where the skills DIRECTORY must go makes every install fail.
+    mkdirSync(join(proj, '.claude'), { recursive: true });
+    writeFileSync(join(proj, '.claude', 'skills'), 'not a directory');
+    const out = run(data, proj, 'confirm', '--skill', 'demo', '--rule', 'p2');
+    expect(out).toMatch(/^EXIT:1[\s\S]*install failed/);
+    expect(store.getActive(L), 'a failed install must not move the active pointer').toBe(first);
+  });
+});
