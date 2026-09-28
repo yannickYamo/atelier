@@ -293,6 +293,10 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     // writer in the tree was a test fixture: a rule like "quantify with the awkward real figure" was
     // approved, served, and satisfied with invented figures. The name is what `--with <name>=<file>`
     // binds at invocation.
+    // HOW OFTEN THE AUTHOR DOES IT, carried onto the rule: a move made in three of five pieces is compiled
+    // as something the author sometimes does, with that rate, not as an obligation on every piece.
+    const held = d.id ? s.proposalMeta?.[d.id]?.heldOut : undefined;
+    if (held && held.applicable > 0) outcome = { ...outcome, requirement: { ...outcome.requirement, observedRate: { present: held.present, applicable: held.applicable } } };
     if (d.needs?.trim()) {
       const why = d.needs.trim();
       outcome = { ...outcome, requirement: { ...outcome.requirement,
@@ -362,17 +366,40 @@ export function parseMeasure(spec: string): Measurement {
   const rest = i === -1 ? '' : spec.slice(i + 1);
   // STRICT. `medianMax=` read as 0, `0x10` as 16 and `15=20` as 15; a target a person did not mean
   // is worse than a refusal, because it is enforced on every output from then on.
-  const params: Record<string, number | string[]> = observer === 'LEXICON'
+  if (observer === 'STYLE_DISTANCE') die('--measure: STYLE_DISTANCE is computed from your corpus by discovery, not declared by hand.');
+  const KEYS: Readonly<Record<string, readonly string[]>> = {
+    SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
+    PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'],
+    TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
+    DISTRIBUTION: ['edges', 'shares', 'tolerance'],
+    OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
+    HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'] };
+  const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit']);
+  // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
+  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid']);
+  // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
+  const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
+  const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'
     ? { terms: rest.split('|').map((t) => t.trim()).filter(Boolean) }
-    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv) => {
-      const parts = kv.split('=').map((x) => x.trim());
-      if (parts.length !== 2 || !parts[0] || !/^\d+(\.\d+)?$/.test(parts[1])) die(`--measure: "${kv}" is not name=number`);
-      const n = Number(parts[1]);
-      const KEYS: Readonly<Record<string, readonly string[]>> = {
-        SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'] };
-      if (KEYS[observer] && !KEYS[observer].includes(parts[0])) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${parts[0]}"`);
-      if (n <= 0 && !(observer === 'HEDGE_RATE' && n === 0)) die(`--measure: ${parts[0]} must be greater than zero`);
-      return [parts[0], n];
+    : Object.fromEntries(rest.split(',').filter((kv) => kv.trim()).map((kv): [string, number | string[] | number[]] => {
+      const eq = kv.indexOf('=');
+      const k = kv.slice(0, eq).trim(); const v = kv.slice(eq + 1);
+      if (eq === -1 || !k) die(`--measure: "${kv}" is not name=value`);
+      if (KEYS[observer] && !KEYS[observer].includes(k)) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${k}"`);
+      // `prefer` keeps its spaces: " - " is the point of it.
+      if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
+      if (LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim().toLowerCase()).filter(Boolean)];
+      if (NUMBER_LIST_KEYS.has(k)) {
+        const xs = v.split('/').map((t) => t.trim());
+        if (!xs.every((t) => /^\d+(\.\d+)?$/.test(t))) die(`--measure: "${kv}" is not name=number/number/...`);
+        return [k, xs.map(Number)];
+      }
+      if (!/^\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
+      const n = Number(v);
+      // Zero is a real target for a rate cap and for a share bound; for a length it describes no text.
+      const zeroOk = n === 0 && (['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE'].includes(observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k));
+      if (n <= 0 && !zeroOk) die(`--measure: ${k} must be greater than zero`);
+      return [k, n];
     }));
   const m: Measurement = { observer, params };
   const problem = validateMeasurement(m);
@@ -400,10 +427,12 @@ export function addOne(): void {
       + 'There is no safe default: guessing wrong serves the model the opposite of what you meant.');
   const measureSpec = flag('--measure');
   const measurement = measureSpec === undefined ? undefined : parseMeasure(measureSpec);
+  const phase = flag('--phase')?.toUpperCase();
+  if (phase !== undefined && phase !== 'ACCURACY' && phase !== 'STYLE') die('--phase is ACCURACY or STYLE');
   const base: Requirement = { requirementId: authoredIdAllocator(s)(), statement, appliesWhen: flag('--applies-when') ?? 'GENERAL',
     kind, authority: 'DERIVED_UNRATIFIED', provenance: 'EXPERT_ADDED', evidence: null, evidenceItemId: null,
     wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null,
-    ...(measurement ? { measurement } : {}) };
+    ...(measurement ? { measurement } : {}), ...(phase ? { phase: phase as 'ACCURACY' | 'STYLE' } : {}) };
   let req: Requirement;
   try { req = decide(base, { verb: 'ADD', materiality: flag('--materiality') }).requirement; }
   catch (e) { return void die((e as Error).message); }

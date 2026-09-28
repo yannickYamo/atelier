@@ -5,13 +5,25 @@
 //
 // Runs every rule that carries a measurement against the text and prints each violation with the span
 // that caused it. Exits 1 when a REQUIRED rule is broken, so it can sit in a pipeline, a pre-commit
-// hook or a host hook as a gate. Rules without a measurement are listed as not checked: a rule about
-// when or why is a person's to judge, and this command does not pretend otherwise.
+// hook or a host hook as a gate. Rules without a measurement are not counted; `--taste` has the taste
+// reader read them (docs/TASTE.md).
+//
+//   atelier verify --skill house-style draft.md --repair
+//
+// `--repair` is the guard for text written anywhere else: the same check-and-repair loop `invoke` runs
+// on its own drafts (only the spans that break a REQUIRED rule are rewritten, a rewrite that changes a
+// claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
+// in the text is touched: it keeps its own voice.
 
+import { checksFor } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
-import { verifyText, describeVerify } from '../../core/observers/verify.js';
-import { DATA, argv, flag, positional, assertSkillName } from '../runtime.js';
+import { describeVerify } from '../../core/observers/verify.js';
+import { checkDraft, refineToStandard } from '../../core/loop/run-repair.js';
+import { checkClass } from '../../core/observers/doc-class.js';
+import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding } from '../runtime.js';
+import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
+import { recordTaste } from './taste.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
 
@@ -21,6 +33,10 @@ export async function verify(): Promise<void> {
   const active = store.getActive(L) ?? fail(`no built skill called "${name}".`);
   const sv = store.getSkillVersion(L, active) ?? fail(`skill version ${active} is missing.`);
   const v = store.getStandard(L, sv.standardVersionHash) ?? fail(`standard ${sv.standardVersionHash} is missing.`);
+  // The class check runs before anything is read: a text of the wrong kind has nothing to check against.
+  const cls = checkClass(store.getDocClass(L), flag('--class'));
+  if (!cls.ok) fail(cls.why);
+  const classNote = cls.ok ? cls.note : null;
   const file = positional([name]);
   let text: string;
   if (file && file !== '-') {
@@ -33,8 +49,51 @@ export async function verify(): Promise<void> {
     text = data;
   }
   if (!text.trim()) fail('there is no text to check. An empty input passing would read as a clean result.');
-  const report = verifyText(name, v, text);
-  console.log(argv.includes('--json') ? JSON.stringify(report, null, 1) : describeVerify(report));
+  // THE SAME CHECKS AS THE LOOP. A story or a figure the text presents as fact, found in neither the
+  // skill's material nor anything bound with --with, fails as UNSOURCED. A person checking their own
+  // draft whose stories are theirs adds them to the material, or passes --allow-unsourced.
+  const material = [...store.getMaterial(L), ...boundMaterial()].map((m) => m.text).join('\n\n');
+  const checks = checksFor(L, { material, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  if (argv.includes('--repair')) {
+    const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
+    const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);
+    if (argv.includes('--json')) {
+      console.log(JSON.stringify({ output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd }, null, 1));
+    } else {
+      console.log(r.output);
+      console.error(r.repair ? `(repaired: ${r.repair.violatedBefore.length} REQUIRED rule(s) broken before, ${r.repair.violatedAfter.length} after; ${r.repair.why}; $${budget.spentUsd.toFixed(4)})`
+        : '(nothing to repair: every REQUIRED measured rule holds)');
+    }
+    if (r.report.failed) process.exitCode = 1;
+    return;
+  }
+  const report = checkDraft(name, v, text, checks);
+  // The reading-based rules, on request (`--taste`): this calls a model, and every count here is free.
+  // Read first, so `--json` prints one object holding both.
+  let taste: { text: string; failed: boolean; verdicts: unknown[] } | null = null;
+  if (argv.includes('--taste')) {
+    const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: 3 };
+    try {
+      const { readings, permissions, held } = await recordTaste(L, v, text, flag('--task') ?? null, null, budget);
+      taste = { text: describeTaste(readings, new Map(v.requirements.map((r) => [r.requirementId, r])), permissions.veto, held),
+        // A miss on a rule where the reader holds VETO fails the check, as a broken REQUIRED rule does.
+        failed: vetoMisses(readings, permissions.veto).length > 0,
+        verdicts: held ? [] : readings.map((r) => ({ rule: r.requirementId, verdict: r.verdict, kind: r.kind ?? null, quote: r.quote ?? null, why: r.why,
+          authority: actsAsMiss(r) && permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
+    } catch (e) { fail(`the taste reader could not run: ${(e as Error).message.split('\n')[0]}`); }
+  }
+  if (argv.includes('--json')) {
+    console.log(JSON.stringify({ ...report, failed: report.failed || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+      ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
+  } else {
+    console.log(describeVerify(report));
+    if (report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
+      console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
+    }
+    if (classNote) console.log(`\n(${classNote})`);
+    if (taste) console.log(`\n${taste.text}`);
+  }
+  if (taste?.failed) process.exitCode = 1;
   if (report.failed) process.exitCode = 1;
 }
 

@@ -37,7 +37,9 @@ export interface MeasuredProposal {
    * Scoring the target on the pieces it was computed from, with slack added, passes by construction
    * and made every measured rule look like a finding. `independent` says which this is.
    */
-  readonly conformance: { readonly applicable: number; readonly present: number; readonly independent: boolean };
+  readonly conformance: { readonly applicable: number; readonly present: number; readonly independent: boolean;
+    /** proposed on indirect evidence: shown and used for draft selection, never instructed by default */
+    readonly weak?: boolean };
 }
 
 export const MIN_WORDS = 1000;

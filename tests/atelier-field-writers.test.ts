@@ -19,7 +19,7 @@ const walk = (d: string): string[] => readdirSync(d).flatMap((f) => {
 });
 
 const strip = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const FIELDS = ['prerequisites', 'measurement', 'realizes'];
+const FIELDS = ['prerequisites', 'measurement', 'realizes', 'phase', 'key', 'observedRate'];
 
 describe('every optional Requirement field has a writer on a path a person can reach', () => {
   const src = readFileSync('core/state/canonical-state.ts', 'utf8');

@@ -13,6 +13,7 @@
 // does not reveal; `score` unblinds. One command that did both would let the person scoring see which
 // side was theirs, and a result obtained that way is a different result.
 
+import { checksFor } from '../checks.js';
 import { refineToStandard } from '../../core/loop/run-repair.js';
 import { BudgetExceeded, CallBudgetExceeded } from '../../core/inference/client.js';
 import { mapLimit, DEFAULT_CONCURRENCY } from '../../core/inference/concurrency.js';
@@ -243,7 +244,12 @@ async function preparePhase(): Promise<void> {
       // `--loop` serves the skill as it ships — checked and span-repaired — in the skill's own arm only.
       // Every baseline stays what the model wrote. See studies/PROOF_STUDY_PREREGISTRATION.md §3.
       const refine = a === 'T_ATELIER' && loop && standard
-        ? async (draft: string) => { const r = await refineToStandard(client, budget, L.skillName, standard, draft); return { output: r.output, repair: r.repair }; }
+        // Written for a HELD-OUT task: its repairs must never become the skill's contrast examples, or the
+        // next blind read would compare against sentences the skill has already been shown.
+        ? async (draft: string) => {
+          const r = await refineToStandard(client, budget, L.skillName, standard, draft, 2, checksFor(L, { material: store.getMaterial(L).map((m) => m.text).join('\n\n') }));
+          return { output: r.output, repair: r.repair ? { ...r.repair, pairs: undefined } : null };
+        }
         : null;
       const recs = await mapLimit(reserved, DEFAULT_CONCURRENCY, (u) => runOnce(L, sv, servedTextFor(a, inputs), servedHash, delivery,
         u.task, client, budget, binding, provenance, a === 'T_ATELIER' ? contractFile : null, 'POSITIONAL', refine));
