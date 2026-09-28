@@ -55,6 +55,7 @@ export async function discover(): Promise<void> {
   const client = clientFor(proposerModel());
   let proposals: Requirement[];
   let proposalMeta: Record<string, ProposalMeta>;
+  let heldOutChecked = true;
 
   // ─── THE SPLIT IS USED WHENEVER THE CORPUS ALLOWS IT ────────────────────────────────────────
   //
@@ -174,8 +175,10 @@ export async function discover(): Promise<void> {
 
     console.log(`\nNot enough to validate against: ${chain.detail}`);
     // The page's "not checked against unseen work" caveat reads this flag, and nothing ever wrote
-    // it — the one warning built for exactly this downgrade could never render.
-    (s as { run: { heldOutChecked?: boolean } }).run.heldOutChecked = false;
+    // it — the one warning built for exactly this downgrade could never render. The first fix wrote it
+    // onto `s.run`, but the run saved below is `t.run`, the transition taken before this branch, so
+    // the flag was set on an object nobody persisted. It is carried to the save instead.
+    heldOutChecked = false;
     console.log(`Falling back to a single pass over ${forProposal.length} piece(s). Every rule below is a`);
     console.log(`PROPOSAL nothing has checked — no rule was tested against work the proposer had not read.`);
     if (skillIds.size) console.log(`Your existing skill is NOT among them — a standard read off the skill we are improving would only restate it.`);
@@ -294,7 +297,7 @@ export async function discover(): Promise<void> {
   // named pattern (em dashes, fragments, "not X, it's Y", signposting…) is counted in both. Wide gaps
   // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
   // Saved BEFORE the optional comparison: whatever happens to it, the discovery already paid for is kept.
-  saveSession({ ...s, run: (t as { run: Run }).run, proposals, proposalMeta });
+  saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked }, proposals, proposalMeta });
   if (!argv.includes('--no-contrast')) {
     try {
       const read = openItems.filter((i) => readIds.has(i.id));

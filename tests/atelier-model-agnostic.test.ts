@@ -111,6 +111,23 @@ describe('the recorded binding is the FIRST one, not the most recent', () => {
     expect(listBindings(L, 'k1')).toHaveLength(2);
   });
 
+  // Phase A: the Claude Code Stop hook records `claude-code` first, and every `atelier invoke` after one
+  // /skill use was then refused. The baseline is per surface; the guard within a surface is unchanged.
+  it('given the binding about to serve, the baseline is the first on that SURFACE, and null if it has none', () => {
+    const L = store();
+    const host = B({ providerAdapter: 'claude-code', backend: 'claude-code', requestedModel: 'claude-code-session' });
+    recordBinding(L, 'k1', host);
+    expect(expectedBinding(L, 'k1', B()), 'a host-hook binding is not the CLI surface\'s baseline').toBeNull();
+    expect(compareBindings(expectedBinding(L, 'k1', B()), B()).kind).toBe('BINDING_UNRECORDED');
+    recordBinding(L, 'k1', B());
+    expect(compareBindings(expectedBinding(L, 'k1', B()), B()).kind).toBe('BINDING_MATCHED');
+    // The point of the guard survives: another model on the same surface is still flagged.
+    expect(compareBindings(expectedBinding(L, 'k1', B({ requestedModel: 'm2' })), B({ requestedModel: 'm2' })).kind).toBe('TARGET_BINDING_MISMATCH');
+    expect(expectedBinding(L, 'k1', host)?.requestedModel).toBe('claude-code-session');
+    // Without a candidate, the first-ever binding, as before.
+    expect(expectedBinding(L, 'k1')?.providerAdapter).toBe('claude-code');
+  });
+
   it('is a no-op for a binding already on the log', () => {
     const L = store();
     recordBinding(L, 'k1', B());

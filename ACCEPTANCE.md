@@ -39,6 +39,9 @@ npm run acceptance:carriers -- --host codex
 | C19 | the install command names the published package | checked against `package.json` name, in both host plugin trees |
 | C16 | a held-out unit the builder has read is refused | `BUILDER_VIEWED` is recordable against the reserve, where every other consumption is refused, and `reference` audits from the record before spending |
 | C15 | the baseline is an object, not a flag | the arm set is an enum, an arm needing human input refuses rather than substituting, and the set's identity is sealed with the pairs so labels cannot be scored across two runs |
+| C22 | a failed install never moves the active pointer | `promote`, `confirm`, `amend` and `addition` install first and activate second; a file where the skills directory must go leaves `active` where it was |
+| C23 | a blind pick compares two implementations of one task | a resumed `fix` pairs the candidate only with its run of the same task (`inputHash`), and otherwise sends the person to `promote`/`reject` |
+| C24 | a standard's identity is what its hash covers | the same content minted twice is one version and the first mint is kept; a different body under an existing hash is refused |
 
 ## CLAUDE CODE, live session, human
 
