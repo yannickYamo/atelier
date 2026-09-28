@@ -8,6 +8,12 @@ a run in progress may not be.
 
 ## [Unreleased] — targeting 0.2.0
 
+### Added (for coding agents)
+
+- **`AGENTS.md`** (and `CLAUDE.md`, which imports it): what an agent pointed at this repository should do to
+  set Atelier up and use it for someone, and what it must leave to the person (approving the standard,
+  editing compiled skills, supplying real material). Its commands are checked against the CLI by the tests.
+
 ### Studies: blind voice rounds on one public author's corpus (what each found, and what changed)
 
 One public author's Substack (20 posts, reserved pieces never read by any arm), one writer model
