@@ -113,23 +113,54 @@ and the first-person band span the author's own range and are **weak**: checked 
 reported, used to choose between drafts, never instructed and never rewritten toward. The voice itself
 is carried by the persona and the author's pieces (README, "It carries how you sound").
 
-Also in the voice layer, **register**: an author who contracts at least 75% of the forms that can be
-contracted gets a cap on forms left whole ("do not", "it is"), and a formal author a cap on
-contractions. Pronouns are not register; this is.
+Also in the voice layer, **register**: an author who contracts at least 60% of the forms that can be
+contracted gets a cap on forms left whole ("do not", "it is"), and one who contracts at most 40% a cap
+on contractions. Only forms a speaker would contract are counted ("the code that is failing" is not).
+Pronouns are not register; this is.
+
+### Machine-written sentences
+
+Some sentences mark text as machine-written whatever its topic: announcing an insight others supposedly
+miss, grading your own list ("that last one deserves emphasis"), "the single most", announced candour
+("let me be blunt"), totalisers ("that's the whole game"), reading the reader's mind ("you know the one"),
+one thing "wearing another's clothes". In five blind rounds every model-written version carried them at
+three to seven times the human author's rate. Three things catch them, none of them tuned to one author:
+
+- **A catalogue of the model's moves** (`core/observers/tells.ts`, `MACHINE_TELL`): ten families, the same
+  for every skill. Every standard built from a corpus is proposed a cap at the author's own rate
+  (usually near zero), checked on pieces discovery never read. Across three corpora the families ran
+  0 to 0.11 per 1,000 words in the authors' work and 0.4 to 1.0 in the model's.
+- **A lexicon learned from the skill's own drafts** (`core/observers/tell-lexicon.ts`, `atelier tells`): a
+  run of four or five words the skill's drafts repeat across three or more unrelated topics, that no
+  piece of the author's contains, and whose absence cannot be chance (at the drafts' rate the corpus
+  would hold it three times or more). Learned from the skill's own uses by `atelier tend`, or from probe
+  drafts with `atelier tells --learn --probe <n>`; the owner can add or strike a phrase. Out of sample it
+  flagged the author's withheld pieces 0.09 times per 1,000 words and the model's 0.5 to 1.1. It is
+  implementation: the sensor behind the ratified machine-tell rule, never a rule of its own.
+- **The contrastive verdict in every spelling** (`CONTRAST_VERDICT`): capped only where the model overuses
+  it against this author. It is not a universal tell: one author wrote 2.3 per 1,000 words, more than
+  most model drafts.
+
+Required machine-tell rules are repaired like any other, and a skill built from a corpus writes two
+drafts by default and keeps the one with fewer machine moves (`--drafts 1` turns this off).
 
 ### A banned move may not move
 
 Some tells are one move with several spellings. The **contrast** family is "not X, it's Y", "X rather
 than Y" and the reframes ("has little to do with", "what matters is"); the **opener** family is
 "That's…", "Here's…", repeated openings and catalogue announcements ("is the first one", "is the next
-one"). A repair pass that lowers one member of a family while raising another is refused: in a blind
-round, capping "not X, it's Y" produced "X rather than Y" in its place, and the reader saw through it.
+one"). A rewrite that lowers one member of a family while raising another is refused, for that sentence
+only; the rest of the pass stands, and the loop tries again with a reason that names the forms the move
+may not take. The negation inside a contrast is the move itself, so it may go. (An earlier version
+refused the whole pass, and in one round the guard kept only one style pass in ten.)
 
 ### Invented stories are cut, not left as slots
 
 A first-person story or a figure that is not in your material is rewritten out of the text, keeping the
-point it made, and the output lists where a story of your own would fit. `--placeholders` asks for
-bracketed slots instead. A slot in the delivered text was honest, but every blind reader took it for a
+point it made, and the output lists where a story of your own would fit. A rewrite that leaves a
+bracketed slot anyway is refused. `--placeholders` asks for slots instead. The better answer is real
+material: `atelier material --skill <name> <file>` binds your own incidents, and a story found there is
+yours to tell. A slot in the delivered text was honest, but every blind reader took it for a
 broken draft.
 
 ### Required means nearly always

@@ -8,6 +8,7 @@
 // budget, and ends with a digest of what happened and what is waiting for you:
 //
 //   1. mine        what keeps going wrong (core/mining/recurrence.ts); recorded for `mine --add`
+//      tells       the machine-writing phrases this skill's own uses repeat (cli/commands/tells.ts)
 //   2. taste       what the reader has earned, and how many readings wait for your label
 //   3. floor       whether a change could install itself (cli/commands/floor.ts)
 //   4. optimize    one round, only when the floor is EARNED (a round that could install nothing is
@@ -29,6 +30,7 @@ import { foldRepairs } from '../../core/architecture/repair-memory.js';
 import { floorStateFor, runtimeIdentity, MIN_TASKS } from './floor.js';
 import { readerModel } from './taste.js';
 import { optimize } from './optimize.js';
+import { learnTells } from './tells.js';
 import { DATA, die, argv, skillArg } from '../runtime.js';
 
 export async function tend(): Promise<void> {
@@ -49,6 +51,11 @@ export async function tend(): Promise<void> {
   store.setMining(L, { at: new Date().toISOString(), standardVersionHash: v.standardVersionHash, items });
   digest.push(items.length ? `${items.length} recurring problem(s); the strongest: ${items[0].kind.toLowerCase().replace('_', ' ')}. See: atelier mine --skill ${name}`
     : 'nothing recurs in what has been recorded');
+
+  // 1b. What this skill's own drafts keep saying that its author never does (core/observers/tell-lexicon.ts):
+  // learned again from every recorded use, free, so the check grows with the skill instead of a list.
+  const learned = await learnTells(L, name);
+  if (learned) digest.push(`machine-writing phrases: ${learned.after} learned from ${learned.drafts} use(s) on ${learned.topics} topic(s)${learned.after !== learned.before ? ` (was ${learned.before})` : ''}`);
 
   // 2. The taste reader.
   const rules = tasteRules(v);

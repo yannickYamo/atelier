@@ -34,7 +34,7 @@ describe('P0: a repair leaves no seam', () => {
     const target = { id: 1, start: 5, end: 33, text: text.slice(5, 33), reasons: ['x'], requirementIds: ['c2'], drops: ['the fix is not suasion. it\'s'], swaps: [], specifics: false, recase: false };
     const reverted: { id: number; lost: readonly string[] }[] = [];
     expect(text.slice(5, 33)).toBe('The fix is not suasion. It\'s');
-    expect(applyRepair(text, [target], [{ id: 1, text: 'The fix here is coupling rather than suasion:' }], reverted)).toBe(text);
+    expect(applyRepair(text, [target], [{ id: 1, text: 'Coupling is the fix, which suasion never was:' }], reverted)).toBe(text);
     expect(reverted[0].lost[0]).toMatch(/repeated "coupling"/);
   });
 });
@@ -184,7 +184,7 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     const client = { complete: async () => ({ json: { replacements: [{ id: 1, text: 'The fix is coupling rather than moral suasion.' }] }, cost: { basis: 'API_METERED', billingUsd: 0 } }) } as never;
     const r = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'x', std, draft, 2, { guardClaims: false });
     expect(r.output).toBe(draft);
-    expect(r.repair?.why).toMatch(/moved a banned move onto a sibling \(contrast/);
+    expect(r.repair?.why).toMatch(/every rewrite was refused \(the move, recast as its sibling \(contrast/);
   });
   it('an invented story is cut by default, not left as a slot, and what was cut is recorded', async () => {
     const { refineToStandard, checkDraft: check } = await import('../core/loop/run-repair.js');

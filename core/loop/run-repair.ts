@@ -9,7 +9,7 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims } from './claims.js';
-import { displacedFamilies } from '../observers/style.js';
+import { findTerms } from '../observers/text.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, REPAIR_SYSTEM, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -32,6 +32,12 @@ export interface CheckOptions {
    * every reader of a blind round; `placeholders: true` (`--placeholders`) asks for slots instead.
    */
   readonly placeholders?: boolean;
+  /**
+   * Phrases this skill's own drafts repeat across unrelated topics and its author never uses
+   * (core/observers/tell-lexicon.ts). Checked only where the standard holds the ratified machine-tell rule:
+   * the owner decided that such moves go; this list is the sensor that finds them.
+   */
+  readonly learnedTells?: readonly string[];
 }
 
 const CUT_STORY = 'a first-person story that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another';
@@ -43,7 +49,16 @@ const CUT_FIGURE = 'a figure presented as a finding, not in your material or you
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const report = verifyText(skill, v, text);
+  const base = verifyText(skill, v, text);
+  const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
+    && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
+  const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
+  const tellLine = tellRule && opts.learnedTells?.length ? [{ requirementId: `${tellRule.requirementId}·learned`, statement: 'Phrases this skill\'s drafts keep repeating across unrelated topics, which your pieces never use.',
+    materiality: tellRule.materiality, phase: 'STYLE' as const, observer: 'LEXICON', pattern: 'MACHINE_TELL',
+    result: { verdict: learned.length ? 'VIOLATED' as const : 'MET' as const, value: learned.length,
+      spans: learned.map((sp) => ({ ...sp, why: `"${sp.text}", a phrase this skill's drafts repeat and your pieces never use` })),
+      detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
+  const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || (tellRule?.materiality === 'REQUIRED' && learned.length > 0) };
   if (opts.guardClaims === false) return report;
   const claims = unsourcedClaims(text, opts.material ?? '')
     .map((c) => (opts.placeholders ? c : { ...c, why: c.kind === 'EXPERIENCE' ? CUT_STORY : CUT_FIGURE }));
@@ -98,24 +113,23 @@ export async function refineToStandard(
     if (!accuracyPass) stylePasses += 1;
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const reverted: Reverted[] = []; const applied: Applied[] = [];
-    const next = applyRepair(text, targets, reps, reverted, applied);
+    const next = applyRepair(text, targets, reps, reverted, applied, opts.placeholders ?? false);
     for (const r of reverted) {
       const t = targets.find((x) => x.id === r.id);
-      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite lost ${r.lost.join(', ')}`);
+      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.lost[0]?.startsWith('the move') || r.lost[0]?.startsWith('the text') ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
     }
     const after = next === text ? report : checkDraft(skill, v, next, opts);
-    // A BANNED MOVE MAY NOT MOVE. A pass that lowers one tell while raising a sibling of the same family
-    // ("not X, it's Y" rewritten as "X rather than Y") has displaced the move, not removed it.
-    const moved = next === text ? [] : displacedFamilies(text, next);
+    // A span that moved a banned move onto a sibling, or left a slot, was refused inside applyRepair, that
+    // span only: one bad sentence no longer throws away every good rewrite in the pass.
     const verdict = next === text
-      ? { ok: false, why: reverted.length ? `every rewrite was refused because it changed what the text claims (${kept.length} span(s) kept as written)` : 'the rewrite returned nothing usable' }
-      : moved.length ? { ok: false, why: `it moved a banned move onto a sibling (${moved.join('; ')})` }
-        : acceptRepair(report, after);
+      ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
+      : acceptRepair(report, after);
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
-      if (accuracyPass) continue;   // style still gets its passes
-      break;
+      // Another attempt, while passes remain: the spans are planned again from the same draft, and the
+      // reasons name the forms a move may not take. Stopping at the first refusal left the guard idle.
+      continue;
     }
     text = next; report = after;
     for (const a of applied) if (targets.find((x) => x.id === a.id)?.specifics && !opts.placeholders) cut.push(a.before.trim().slice(0, 160));

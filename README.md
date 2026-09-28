@@ -202,6 +202,12 @@ taught the same thing: rules about a writer never made a model sound like them. 
 - the moves you only **sometimes** make, with their rate and a cap per piece, never as rules every
   piece must follow (stacked, they became a template a blind reader recognised across five topics).
 
+**No sentence that marks the text as machine-written.** Every skill catches the model's own moves
+(announcing an insight others "miss", grading its own list, "the single most", "let me be blunt",
+"that's the whole game", one problem "wearing another's clothes") at your rate, which is usually never,
+and learns more from its own drafts: a phrase it repeats across unrelated topics that you never write
+(`atelier tells`). Repair removes the move rather than re-spelling it.
+
 The standard then **guards the edges**: what you nearly always do or never do is checked and repaired;
 your habits that vary piece to piece are held within your own range and used to choose between drafts,
 not to steer every piece toward your average. `build --voice none` or `--persona none` turns either off.
@@ -311,7 +317,7 @@ to claim yet.
 
 Thirty-six preregistrations and results, sealed before generation and published as sealed, and one
 draft awaiting its seal, are in [studies/](studies/README.md). Every figure quoted in a source comment is listed in
-[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 102 files and 1544 tests, runs
+[MEASUREMENTS.md](MEASUREMENTS.md) with what it rests on. The suite is 103 files and 1556 tests, runs
 offline, and drives the shipped binary through the whole loop.
 
 ## Contributing

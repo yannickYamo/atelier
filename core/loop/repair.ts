@@ -18,6 +18,7 @@
 
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
 import type { VerifyReport } from '../observers/verify.js';
+import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity } from './integrity.js';
 
 /** Observers whose spans ARE the thing to remove: a banned term, a flagged hedge, a counted habit, an
@@ -28,6 +29,21 @@ const REMOVES_SPAN = new Set(['LEXICON', 'HEDGE_RATE', 'PATTERN_RATE', 'TERM_RAT
 /** Observers whose spans are to be SWAPPED for a competing form ("is not" for "isn't"): the word may go,
  *  but what it asserted may not, so a swap never licenses dropping a negation. */
 const SWAPS_SPAN = new Set(['RATIO']);
+
+/**
+ * WHAT A MOVE MAY NOT TURN INTO. A rewrite told only "avoid 'not X, it's Y'" wrote "X rather than Y";
+ * one told to drop an announced insight announced it differently. So the reason names the move's other
+ * spellings, and asks for the point to be stated plainly instead.
+ */
+const MOVE_HINT: Readonly<Record<string, string>> = {
+  NOT_X_ITS_Y: 'State the point directly; do not recast it as another contrast ("X rather than Y", "not X but Y", "has little to do with", "what matters is")',
+  CONTRAST_VERDICT: 'State the point directly; do not recast it as another contrast ("X rather than Y", "not X but Y", "has little to do with", "what matters is")',
+  RATHER_THAN: 'State the point directly, without setting it against what it is not',
+  REFRAME: 'State the point directly, without setting it against what it is not',
+  MACHINE_TELL: 'Delete the move itself (the announcement, the self-grading, the superlative, the costume) and keep only the claim, said plainly; if nothing is left, cut the sentence',
+  THAT_OPENER: 'Open the sentence on its subject; do not replace one stock opener with another',
+  HERES_OPENER: 'Open the sentence on its subject; do not replace one stock opener with another',
+};
 
 export interface RepairTarget {
   readonly id: number;
@@ -71,10 +87,13 @@ export function planRepair(text: string, report: VerifyReport,
       const last = sentences.find((s) => sp.end > s.start && sp.end <= s.end);
       const start = para ? para.start : sent ? Math.min(sent.start, sp.start) : sp.start;
       const end = para ? para.end : Math.max(sent?.end ?? sp.end, last?.end ?? sp.end, sp.end);
-      raw.push({ start, end, reason: `${c.requirementId}: ${c.statement} (${sp.why})`, rid: c.requirementId,
+      const move = c.pattern ? MOVE_HINT[c.pattern] : undefined;
+      raw.push({ start, end, reason: `${c.requirementId}: ${c.statement} (${sp.why})${move ? `. ${move}` : ''}`, rid: c.requirementId,
         // Only a PART of a sentence is licensed to go. A span that is the whole sentence ("sentences
-        // opening That's") asks for the sentence to be recast, not for its claims to be dropped.
-        drop: c.observer && REMOVES_SPAN.has(c.observer) && !(sent && sp.start <= sent.start && sp.end >= sent.end)
+        // opening That's") asks for the sentence to be recast, not for its claims to be dropped. A MOVE
+        // is the exception: the negation in "not X. It's Y" is the move itself, and a guard that kept
+        // it forced the rewrite into "X rather than Y" every time.
+        drop: c.observer && REMOVES_SPAN.has(c.observer) && (move !== undefined || !(sent && sp.start <= sent.start && sp.end >= sent.end))
           ? sp.text.trim().toLowerCase() : null,
         swap: c.observer && SWAPS_SPAN.has(c.observer) ? sp.text.trim().toLowerCase() : null,
         specifics: c.requirementId === 'UNSOURCED', recase: c.observer === 'HEADINGS' && sp.why.includes('Case') });
@@ -141,7 +160,9 @@ export interface Applied { readonly id: number; readonly before: string; readonl
  * the spans that were replaced, before and after.
  */
 export function applyRepair(text: string, targets: readonly RepairTarget[], replacements: readonly { readonly id: number | string; readonly text: string }[],
-  reverted: Reverted[] = [], applied: Applied[] = []): string {
+  reverted: Reverted[] = [], applied: Applied[] = [],
+  /** true lets a replacement carry a bracketed slot ("[your story: …]"); off, one that adds a slot is refused */
+  placeholders = false): string {
   // First answer per id wins; an id given as "2" is the span numbered 2.
   const byId = new Map<number, string>();
   for (const r of replacements) {
@@ -154,6 +175,14 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
     if (rep === undefined) continue;
     const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false, new Set(t.swaps ?? []), t.recase ?? false);
     if (!integrity.ok) { reverted.push({ id: t.id, lost: integrity.lost }); continue; }
+    // A banned move may not move: a replacement that lowers one spelling of a move and raises another
+    // ("not X, it's Y" rewritten as "X rather than Y") is refused, this span only; the rest of the pass
+    // stands. Counted inside the span, so nothing elsewhere in the text can veto it.
+    const moved = displacedFamilies(t.text, rep);
+    if (moved.length) { reverted.push({ id: t.id, lost: [`the move, recast as its sibling (${moved.join('; ')})`] }); continue; }
+    // No slot the person has to fill ships unless they asked for slots.
+    const slots = (x: string): number => (x.match(/\[[^\]\n]{3,200}\](?!\()/g) ?? []).length;
+    if (!placeholders && slots(rep) > slots(t.text)) { reverted.push({ id: t.id, lost: ['the text: it left a bracketed slot for the person to fill'] }); continue; }
     // The seams: a replacement that repeats the words just after it (or just before it) left a stutter.
     const seam = seamRepeat(out.slice(0, t.start), rep.trim(), out.slice(t.end), t.text);
     if (seam) { reverted.push({ id: t.id, lost: [`a repeated "${seam}" at the join`] }); continue; }
