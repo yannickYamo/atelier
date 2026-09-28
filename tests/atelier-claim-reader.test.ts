@@ -209,9 +209,11 @@ describe('through the binary: the reader runs on the person\'s own backend when 
     if (!existsSync(CLI)) throw new Error('build first');
     backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
     port = await new Promise<number>((ok) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); }); });
-    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+    const body = JSON.stringify({ byTool: {
       emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] },
-    } }) });
+    } });
+    const send = (): Promise<Response> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body });
+    try { await send(); } catch { await send(); }
   });
   afterAll(() => { backend.kill(); });
 

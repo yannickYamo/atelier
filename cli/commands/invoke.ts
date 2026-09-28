@@ -199,7 +199,7 @@ export async function invoke(): Promise<void> {
   // that is the point of owning the standard rather than renting it — but they should do it knowingly,
   // on a fresh record, rather than inheriting conclusions drawn somewhere else.
   const { client, binding } = clientAndBinding('target');
-  const verdict = compareBindings(store.expectedBinding(L, sv.skillVersionHash), binding);
+  const verdict = compareBindings(store.expectedBinding(L, sv.skillVersionHash, binding), binding);
   if (verdict.kind === 'TARGET_BINDING_MISMATCH' && !argv.includes('--accept-new-binding')) {
     die(describeMismatch(verdict, sv.skillVersionHash));
   }

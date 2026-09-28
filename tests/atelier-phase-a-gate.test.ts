@@ -74,3 +74,21 @@ describe('through the binary: the gate says what nothing read, and a REQUIRED ru
     expect(store.getActive(L)).toBe(before);
   }, 300_000);
 });
+
+describe('through the binary: a /skill use in Claude Code does not lock the CLI out', () => {
+  it('a claude-code binding recorded first does not make invoke refuse on another surface', async () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-pa-bind-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-pa-bindp-'));
+    run(data, proj, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--materiality', 'REQUIRED', '--measure', 'LEXICON:leverage');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'house');
+    const L = { root: data, skillName: 'house' };
+    // What the Stop hook records after a /house use in Claude Code.
+    store.recordBinding(L, store.getActive(L) ?? '', { providerAdapter: 'claude-code', backend: 'claude-code', requestedModel: 'host',
+      structuredOutput: 'NATIVE_TOOL_USE', parameters: {}, runtimeProfile: null } as never);
+    await post({ byTool: { emit_piece: { piece: 'A plain note.' } } });
+    const out = run(data, proj, 'invoke', '--skill', 'house', 'write a note');
+    expect(out).not.toMatch(/TARGET_BINDING_MISMATCH|EXIT:1/);
+    expect(out).toContain('A plain note.');
+  }, 120_000);
+});
+
