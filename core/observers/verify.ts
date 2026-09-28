@@ -60,7 +60,12 @@ export function describeVerify(r: VerifyReport): string {
     if (c.result.spans.length > 5) lines.push(`        › …and ${c.result.spans.length - 5} more`);
   }
   if (!r.checked.length) lines.push('No rule in this standard carries a measurement that applies everywhere, so nothing here can be checked mechanically.');
-  if (r.conditional.length) lines.push(`\n${r.conditional.length} measured rule(s) apply only under a condition and were not checked: ${r.conditional.map((c) => `${c.requirementId} (when ${c.appliesWhen})`).join(', ')}`);
+  if (r.conditional.length) {
+    lines.push(`\n${r.conditional.length} measured rule(s) apply only under a condition and were not checked: ${r.conditional.map((c) => `${c.requirementId} (when ${c.appliesWhen})`).join(', ')}`);
+    // The remedy, verbatim. "Not checked" with no way out read as a bug in verify; the way out is a scope
+    // ruling only the owner can make, so it is printed as the exact command rather than described.
+    for (const c of r.conditional) lines.push(`  to check ${c.requirementId} on every text: atelier amend --skill ${r.skill} --rule ${c.requirementId} --applies-when GENERAL --reason "<why>"`);
+  }
   if (r.unchecked.length) lines.push(`\n${r.unchecked.length} rule(s) are about judgement, not measurement, and no count checks them: ${r.unchecked.map((u) => u.requirementId).join(', ')} (the taste reader reads them: verify --taste)`);
   lines.push(r.failed ? '\nA REQUIRED rule is broken.' : '\nNo REQUIRED rule is broken.');
   return lines.join('\n');
