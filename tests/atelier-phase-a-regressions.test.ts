@@ -128,3 +128,42 @@ describe('a discovery that fell back to a single pass says so on the ratify page
     expect(readFileSync(page, 'utf8')).not.toMatch(/Read these as proposals, not findings/);
   });
 });
+
+describe('a resumed fix pairs the candidate with a run of the same task, or not at all', () => {
+  const COVERED = { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1 covers it' };
+  const seeded = async (): Promise<{ data: string; proj: string }> => {
+    const { data, proj } = fresh();
+    run(data, proj, 'add', '--statement', 'Lead with the action.', '--kind', 'GENERATIVE', '--applies-when', 'GENERAL');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await script({ byTool: { emit_piece: { piece: 'the original answer' } } });
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', ...MODEL())).not.toMatch(/^EXIT:/);
+    await script({ byTool: { emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } } });
+    expect(run(data, proj, 'fix', 'the answer buried the recommendation', ...MODEL())).toContain('--pick a|b|same');
+    return { data, proj };
+  };
+
+  it('a complaint about a DIFFERENT task is not shown beside the pending candidate\'s run; it is sent to promote/reject', async () => {
+    const { data, proj } = await seeded();
+    await script({ byTool: { emit_piece: { piece: 'the summary answer' } } });
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the summary', ...MODEL())).not.toMatch(/^EXIT:/);
+    await script({ byTool: { emit_coverage: COVERED, emit_piece: { piece: 'unused' } } });
+    const out = run(data, proj, 'fix', 'the summary buried the point', ...MODEL());
+    expect(out, 'a run of another task was paired with this one').not.toContain('──── A ────');
+    expect(out).not.toContain('the improved answer');
+    expect(out).toMatch(/already waiting for your decision/);
+    expect(out).toMatch(/atelier promote --skill focus --candidate \S+ --why/);
+    expect(out).toMatch(/atelier reject {2}--skill focus --candidate \S+ --why/);
+    await script(CHAIN);
+  }, 120_000);
+
+  it('the same task resumes the pair as before (the polarity)', async () => {
+    const { data, proj } = await seeded();
+    await script({ byTool: { emit_coverage: COVERED, emit_piece: { piece: 'unused' } } });
+    const out = run(data, proj, 'fix', 'the answer buried the recommendation', ...MODEL());
+    expect(out).toContain('──── A ────');
+    expect(out).toContain('the improved answer');
+    expect(out).toContain('the original answer');
+    await script(CHAIN);
+  }, 120_000);
+});
