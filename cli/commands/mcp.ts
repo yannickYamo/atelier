@@ -20,7 +20,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
-import { checkDraft } from '../../core/loop/run-repair.js';
+import { checkDraftAsync } from '../../core/loop/run-repair.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste } from './taste.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -86,7 +86,7 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     const cls = checkClass(store.getDocClass(L), typeof args.class === 'string' ? args.class : null);
     if (!cls.ok) return { isError: true, text: cls.why };
     const material = [...store.getMaterial(L).map((m) => m.text), typeof args.material === 'string' ? args.material : ''].join('\n\n');
-    const report = checkDraft(skill, v, text, checksFor(L, { material }));
+    const report = await checkDraftAsync(skill, v, text, checksFor(L, { material, task: typeof args.task === 'string' ? args.task : '' }));
     // The reading-based rules, on request: this calls a model, and every other check here is free.
     // A miss on a rule where the reader holds VETO fails the check, as on the command line. A reader that
     // cannot run costs nothing of the counted report: it is said, and the counted result stands.

@@ -13,13 +13,15 @@
 //   qualifiers   every modal and hedge the original used ("may", "likely", "roughly", "most", "often")
 //   names        every proper name, acronym and quoted phrase
 //   placeholders every [bracketed placeholder] an earlier pass left for the person to fill
+//   strength     no universal ("any", "every") or certainty verb ("eliminates", "ensures") the original
+//                did not carry, and no intention ("we expect to") turned into a fact
 //
 // A rewrite that loses one is refused and the original span kept. The exceptions are exact and come
 // from the rule being repaired: a banned term may go (that is the repair), a hedge a hedge cap flagged
 // may go, a competing word a ratio flagged may be swapped (but "is not" → "is" is still a lost
 // negation: only "is not" → "isn't" is a swap), and a span flagged as an invented story or figure is
 // expected to lose its specifics.
-// Paraphrase that keeps all five is not checked further: this guards the strength of a claim, not its
+// Paraphrase that keeps all six is not checked further: this guards the strength of a claim, not its
 // wording, and it certifies nothing beyond the five.
 
 import { wordsOf } from '../observers/text.js';
@@ -31,6 +33,21 @@ const QUALIFIERS: readonly string[] = [
   'approximately', 'nearly', 'almost', 'most', 'many', 'some', 'often', 'usually', 'typically',
   'generally', 'sometimes', 'rarely', 'seldom', 'few', 'estimated', 'suggests', 'appears', 'seems',
   'arguably', 'partly', 'partially', 'largely', 'mostly', 'somewhat', 'up to', 'at least', 'at most',
+  // An intention is weaker than a fact: "we expect to ship in March" is not "we ship in March".
+  'expect', 'expects', 'plan to', 'plans to', 'aim to', 'aims to', 'intend to', 'intends to', 'hope to', 'hopes to',
+];
+/**
+ * WORDS THAT MAKE A CLAIM STRONGER BY APPEARING. A qualifier lost weakens nothing on the page and
+ * strengthens the claim; so does a universal or a certainty verb gained. "Reduces the risk" tightened to
+ * "eliminates the risk", "lower than on the old link" to "lower than on any link": every figure, name and
+ * negation survives, and the claim is not the one the author made. A rewrite may not ADD one of these.
+ * Kept short on purpose, for the reason below: causality ("fell after" → "cut") and a dropped scope clause
+ * are real inflations this list does not catch, and the file claims only what it checks.
+ */
+const INFLATORS: readonly string[] = [
+  'any', 'all', 'every', 'always', 'everyone', 'everything', 'entirely', 'completely', 'fully',
+  'eliminate', 'eliminates', 'eliminated', 'guarantee', 'guarantees', 'guaranteed', 'ensure', 'ensures',
+  'prove', 'proves', 'proved', 'certainly', 'definitely',
 ];
 // Not "about", "around" or "can": each is far more often a preposition or a plain ability than a hedge,
 // and a check that refuses ordinary rewrites teaches nobody anything.
@@ -108,6 +125,10 @@ export function spanIntegrity(original: string, replacement: string, allowedDrop
     const allAfter = QUALIFIERS.filter((q) => !dropped(q)).reduce((n, q) => n + termCount(replacement, q), 0);
     const allBefore = QUALIFIERS.filter((q) => !dropped(q)).reduce((n, q) => n + termCount(original, q), 0);
     if (allAfter < allBefore) lost.push('a qualifier the rule asked to swap, not remove');
+  }
+  for (const w of INFLATORS) {
+    if (swapped(w)) continue;
+    if (termCount(replacement, w) > termCount(original, w)) lost.push(`strength: "${w}" claims more than the original did`);
   }
   for (const m of original.matchAll(/\[[^\]\n]{3,200}\](?!\()/g)) {   // a [link](url) is not a placeholder
     if (!replacement.includes(m[0])) lost.push(`the placeholder ${m[0].slice(0, 40)}`);
