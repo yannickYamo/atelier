@@ -63,6 +63,7 @@ as it stood at the time:
   through the fixed guard met criteria 1–5 (tells 0.21, no invented stories or slots, 2.4 shared 6-grams,
   every REQUIRED rule held, habits in the author's range). Stylometry could not separate any arm (within
   0.012), so it cannot serve as the voice criterion.
+- **The record of all seven rounds, what is established and what is not:** studies/VOICE_ROUNDS_RESULT.md.
 - **Round 7** (pre-registered: VOICE_ROUND7_PREREGISTRATION.md; RAW, CONTEXT, ATELIER; $13.88). **The voice
   criterion passed; the sealed gate as a whole did not.**
   - Criterion 6, the owner's blind read: Atelier ranked first on both briefs read (1, on the author's topic,
