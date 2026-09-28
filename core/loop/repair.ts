@@ -19,7 +19,7 @@
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
 import type { VerifyReport } from '../observers/verify.js';
 import { displacedFamilies } from '../observers/style.js';
-import { spanIntegrity } from './integrity.js';
+import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
 
 /** Observers whose spans ARE the thing to remove: a banned term, a flagged hedge, a counted habit, an
  *  occurrence over a word rate. */
@@ -40,7 +40,7 @@ const MOVE_HINT: Readonly<Record<string, string>> = {
   CONTRAST_VERDICT: 'State the point directly; do not recast it as another contrast ("X rather than Y", "not X but Y", "has little to do with", "what matters is")',
   RATHER_THAN: 'State the point directly, without setting it against what it is not',
   REFRAME: 'State the point directly, without setting it against what it is not',
-  MACHINE_TELL: 'Delete the move itself (the announcement, the self-grading, the superlative, the costume) and keep only the claim, said plainly; if nothing is left, cut the sentence',
+  MACHINE_TELL: 'Delete the move itself (the announcement, the self-grading, the superlative, the costume) and keep only the claim, said plainly; if the sentence is only the move, return an empty replacement to cut it',
   THAT_OPENER: 'Open the sentence on its subject; do not replace one stock opener with another',
   HERES_OPENER: 'Open the sentence on its subject; do not replace one stock opener with another',
 };
@@ -60,6 +60,8 @@ export interface RepairTarget {
   readonly recase?: boolean;
   /** an invented story or figure: its specifics are meant to be replaced by a placeholder */
   readonly specifics: boolean;
+  /** a machine-writing move: the sentence may be cut outright when it carries no figure and no name */
+  readonly cuttable?: boolean;
 }
 
 /**
@@ -72,7 +74,7 @@ export function planRepair(text: string, report: VerifyReport,
   const requiredOnly = opts.requiredOnly ?? true;
   const sentences = sentencesOf(text);
   const paragraphs = paragraphsOf(text);
-  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; recase: boolean }[] = [];
+  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; recase: boolean; cuttable: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
     if (requiredOnly && c.materiality !== 'REQUIRED') continue;
@@ -96,11 +98,11 @@ export function planRepair(text: string, report: VerifyReport,
         drop: c.observer && REMOVES_SPAN.has(c.observer) && (move !== undefined || !(sent && sp.start <= sent.start && sp.end >= sent.end))
           ? sp.text.trim().toLowerCase() : null,
         swap: c.observer && SWAPS_SPAN.has(c.observer) ? sp.text.trim().toLowerCase() : null,
-        specifics: c.requirementId === 'UNSOURCED', recase: c.observer === 'HEADINGS' && sp.why.includes('Case') });
+        specifics: c.requirementId === 'UNSOURCED', recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
     }
   }
   raw.sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; recase: boolean }[] = [];
+  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; recase: boolean; cuttable: boolean }[] = [];
   for (const r of raw) {
     const last = merged[merged.length - 1];
     if (last && r.start < last.end) {
@@ -109,11 +111,11 @@ export function planRepair(text: string, report: VerifyReport,
       if (!last.rids.includes(r.rid)) last.rids.push(r.rid);
       if (r.drop && !last.drops.includes(r.drop)) last.drops.push(r.drop);
       if (r.swap && !last.swaps.includes(r.swap)) last.swaps.push(r.swap);
-      last.specifics ||= r.specifics; last.recase ||= r.recase;
-    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [], specifics: r.specifics, recase: r.recase });
+      last.specifics ||= r.specifics; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
+    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [], specifics: r.specifics, recase: r.recase, cuttable: r.cuttable });
   }
   return merged.map((m, i) => ({ id: i + 1, start: m.start, end: m.end, text: text.slice(m.start, m.end),
-    reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase }));
+    reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase, cuttable: m.cuttable }));
 }
 
 export const REPAIR_SYSTEM = `You revise marked spans of a draft so that each one meets the rules it broke.
@@ -124,15 +126,22 @@ replacement that:
   - keeps the meaning, facts, names and figures of the original span, and every negation and qualifier
     ("not", "may", "most", "roughly"), unless a reason names that very word as the problem: a rewrite
     that drops one is refused and the original kept;
-  - where a reason says a story or figure is not in the author's material, does exactly what that
-    reason says: either rewrites the span without it, keeping the point it made, or replaces just that
-    story or figure with a short bracketed placeholder saying what belongs there, e.g. [your story: a time
-    a control got routed around]. Never substitute another invented one;
+  - where a reason says a story or figure is not in the author's material, rewrites the span without it,
+    keeping the point it made. Never substitute another invented one, and never leave a bracketed slot;
   - keeps every [bracketed placeholder] already in the span, word for word;
   - reads naturally in place: the text immediately before and after it will not change;
   - uses no em dash (—) anywhere, placeholders included; write a comma, a colon or " - " instead.
 
 Return a replacement for every numbered span. Do not return the rest of the draft.`;
+
+/**
+ * The same instructions for a person who asked for slots (`--placeholders`): an invented story or figure
+ * becomes a short bracketed placeholder saying what belongs there. Without that request the prompt does
+ * not mention slots at all: told "cut it, or leave a slot", a model left slots three times running.
+ */
+export const REPAIR_SYSTEM_WITH_PLACEHOLDERS = REPAIR_SYSTEM.replace(
+  'rewrites the span without it,\n    keeping the point it made. Never substitute another invented one, and never leave a bracketed slot;',
+  'replaces just that story or\n    figure with a short bracketed placeholder saying what belongs there, e.g. [your story: a time a control\n    got routed around]. Never substitute another invented one;');
 
 export const REPAIR_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -167,12 +176,23 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
   const byId = new Map<number, string>();
   for (const r of replacements) {
     const id = Number(r.id);   // a model may send "2"; the schema asks for a number
-    if (typeof r.text === 'string' && r.text.trim() && Number.isInteger(id) && !byId.has(id)) byId.set(id, r.text);
+    // An empty replacement is a cut: kept here, and allowed below only for a machine-writing move.
+    if (typeof r.text === 'string' && Number.isInteger(id) && !byId.has(id)) byId.set(id, r.text);
   }
   let out = text;
   for (const t of [...targets].sort((a, b) => b.start - a.start)) {
     const rep = byId.get(t.id);
     if (rep === undefined) continue;
+    if (!rep.trim()) {
+      // CUTTING A SENTENCE THAT IS ONLY A MOVE. "I want to be careful not to be cynical about this" has a
+      // "not" the meaning guard protects, but no claim a reader loses when it goes. A cut is allowed for a
+      // machine-writing move whose sentence carries no figure and no name; anything else keeps its words.
+      if (!t.cuttable || numbersIn(t.text).length || namesIn(t.text).length) { reverted.push({ id: t.id, lost: ['the sentence: only a sentence that is nothing but the move, with no figure or name in it, may be cut'] }); continue; }
+      const before = out.slice(0, t.start).replace(/[ \t]+$/, ''); const after = out.slice(t.end).replace(/^[ \t]+/, '');
+      out = `${before}${before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : ''}${after}`;
+      applied.push({ id: t.id, before: t.text, after: '' });
+      continue;
+    }
     const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false, new Set(t.swaps ?? []), t.recase ?? false);
     if (!integrity.ok) { reverted.push({ id: t.id, lost: integrity.lost }); continue; }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another

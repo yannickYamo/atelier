@@ -15,6 +15,7 @@
 // model's habits in ./style.ts, the opening, close and headings in ./structure.ts — checked on every output, with the exact span that
 // broke the rule, so a repair can rewrite that span and nothing else.
 
+import { TELL_FAMILIES } from './tells.js';
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS } from './structure.js';
@@ -127,6 +128,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const what = id ? PATTERN_LABEL[id] : 'a pattern';
       const prefer = (list(p, 'prefer') ?? [])[0];
       if (hi === 0) return `no ${what}${prefer ? `; write "${prefer}" instead` : ''}`;
+      const never = list(p, 'never');
+      if (never?.length) return `${what}: none of ${never.length} kind(s) you never use, and at most ${hi} per 1,000 words of the rest`;
       return `${what}: ${lo !== null ? `at least ${lo}` : ''}${lo !== null && hi !== null ? ' and ' : ''}${hi !== null ? `at most ${hi}` : ''} per 1,000 words`;
     },
     validate: (p) => {
@@ -140,9 +143,20 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const words = proseWords(text);
       if (words < 150) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 150 words' };
       const prefer = (list(p, 'prefer') ?? [])[0];
-      const hits = findPattern(text, id).map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
+      const all = findPattern(text, id).map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
+      // A MOVE THE AUTHOR NEVER MAKES IS NEVER ALLOWED. `never` names families (./tells.ts) absent from
+      // every piece of the author's: each instance breaks the rule whatever the rate. A pooled rate let a
+      // 4,000-word piece spend the author's small budget on moves they never make.
+      const never = new Set((list(p, 'never') ?? []).map((f) => TELL_FAMILIES.find((x) => x.id === f)?.label).filter(Boolean));
+      const banned = all.filter((s) => never.has(s.why));
+      const hits = all.filter((s) => !never.has(s.why));
       const rate = Math.round((hits.length / words) * 10000) / 10;
       const lo = num(p, 'minPer1000'); const hi = num(p, 'maxPer1000');
+      if (banned.length) {
+        const over = hi !== null && rate > hi ? hits.slice(Math.floor((hi * words) / 1000)) : [];
+        return { verdict: 'VIOLATED', spans: [...banned, ...over].sort((a, b) => a.start - b.start), value: Math.round((all.length / words) * 10000) / 10,
+          detail: `${banned.length} move(s) you never make${over.length ? `, and ${rate} per 1,000 words of the rest (at most ${hi})` : ''}` };
+      }
       // Only the EXCESS is sent to be rewritten: at a cap of 1 per 1,000 words, a 1,500-word piece keeps
       // one; the later occurrences are the ones over the line.
       if (hi !== null && rate > hi) {

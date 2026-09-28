@@ -18,6 +18,7 @@ import { measure, findTerms } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
+import { TELL_FAMILIES } from './tells.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
 import type { MeasuredProposal } from './derive.js';
 
@@ -417,9 +418,13 @@ function proposeVoice(authorTexts: readonly string[], drafts: readonly string[],
   // so it needs no plain drafts to show it (the tells appear most under a skill's own instructions,
   // which plain drafts never see). The held-out guard still applies: an author whose unread pieces use
   // these moves more than the cap gets no rule, rather than a rule against them.
+  // Per family: one the author never makes, in any piece, is never allowed; the rest are held to their
+  // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
   const tellCap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
-  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes"): at most ${tellCap} per 1,000 words, my own rate.`,
-    'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, role: ['machine-tell'] } },
+  const used = new Set(authorTexts.flatMap((t) => findPattern(t, 'MACHINE_TELL').map((x) => x.why)));
+  const never = TELL_FAMILIES.filter((f) => !used.has(f.label)).map((f) => f.id);
+  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes"): never one I never make${never.length < TELL_FAMILIES.length ? `, and the ones I do make at most ${tellCap} per 1,000 words` : ''}.`,
+    'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
     `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`);
   // REGISTER: a speaker who mostly contracts gets a cap on the forms left whole, and one who mostly
   // writes them out a cap on contractions, at their own rate. A repair fixes either word by word.
