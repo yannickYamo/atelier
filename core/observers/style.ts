@@ -139,7 +139,8 @@ export function findPattern(text: string, p: PatternId): Span[] {
       return { start, end, text: text.slice(start, end), why: m.family.label, family: m.family.id };
     }));
     // The opening line, by position: the first two sentences of prose, which is where a lead or a TL;DR sits.
-    const opener = TELL_FAMILIES.find((f) => f.id === 'VERDICT_OPENER')!;
+    const opener = TELL_FAMILIES.find((f) => f.id === 'VERDICT_OPENER');
+    if (!opener) throw new Error('the VERDICT_OPENER tell family is missing.');
     // The move usually spans two sentences ("X isn't A. It's B."), so the two are read together.
     const lead = sentences.slice(0, 2);
     if (lead.length && findPattern(lead.map((x) => x.text).join(' '), 'CONTRAST_VERDICT').length) {
@@ -220,7 +221,10 @@ export const functionProfile = (text: string, words: readonly string[] = FUNCTIO
   const had = PROFILES.get(text);
   if (had) return had;
   const p = profileOf(text, words);
-  if (PROFILES.size >= PROFILE_CACHE) PROFILES.delete(PROFILES.keys().next().value!);
+  if (PROFILES.size >= PROFILE_CACHE) {
+    const oldest = PROFILES.keys().next();
+    if (!oldest.done) PROFILES.delete(oldest.value);
+  }
   PROFILES.set(text, p);
   return p;
 };

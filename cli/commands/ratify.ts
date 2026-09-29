@@ -244,7 +244,7 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
   const s = loadSession();
   const decidedIds = new Set(s.decided.map((d) => d.requirementId));
   const outstanding = s.proposals.filter((p) => !decidedIds.has(p.requirementId)).map((p) => p.requirementId);
-  const given = new Set(list.filter((d) => d.id !== 'new' && d.decision).map((d) => d.id!));
+  const given = new Set(list.flatMap((d) => d.id !== undefined && d.id !== 'new' && d.decision ? [d.id] : []));
   const missing = outstanding.filter((id) => !given.has(id));
   if (missing.length) {
     die(`no decision for ${missing.length} rule(s): ${missing.join(', ')}. Every proposal needs its own answer — `
@@ -267,11 +267,10 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
       catch (e) { return void die((e as Error).message); }
       continue;
     }
-    const p = s.proposals.find((x) => x.requirementId === d.id);
-    if (!p) die(`no proposal ${d.id}`);
+    const p = s.proposals.find((x) => x.requirementId === d.id) ?? die(`no proposal ${d.id}`);
     if (dec === 'REJECT') {
-      decided.push({ ...p!, authority: 'EXPERT_REJECTED' });
-      ledger = appendDecision(ledger, p!, 'REJECT', { note: d.statement, decidedAt, ruling: rulingOf(d, null) });
+      decided.push({ ...p, authority: 'EXPERT_REJECTED' });
+      ledger = appendDecision(ledger, p, 'REJECT', { note: d.statement, decidedAt, ruling: rulingOf(d, null) });
       continue;
     }
     if (!['APPROVE', 'REWRITE', 'CONTEXTUAL'].includes(dec)) die(`${d.id}: unknown decision "${dec}"`);
@@ -283,7 +282,7 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     // how `ratify-one` drifted into accepting anything and skipping the ceiling.
     let outcome;
     try {
-      outcome = decide(p!, { verb: dec as DecisionVerb, statement: d.statement, appliesWhen: d.appliesWhen,
+      outcome = decide(p, { verb: dec as DecisionVerb, statement: d.statement, appliesWhen: d.appliesWhen,
         ...(d.measure === undefined ? {} : { measurement: d.measure.trim().toLowerCase() === 'none' ? null : parseMeasure(d.measure) }),
         materiality: d.materiality, form: d.form, shape: d.shape, realizes: typeof d.realizes === 'string' ? d.realizes : null,
         findRule: (rid) => s.proposals.find((x) => x.requirementId === rid) ?? decided.find((x) => x.requirementId === rid) });
@@ -314,7 +313,7 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
     decided.push(outcome.requirement);
     // The record stores what was SHOWN and, on an edit, what replaced it. Storing only the survivor
     // would answer a question the standard already answers.
-    ledger = appendDecision(ledger, p!, outcome.ledgerDecision,
+    ledger = appendDecision(ledger, p, outcome.ledgerDecision,
       { ...(outcome.rewritten ? { humanRevision: outcome.requirement } : {}), decidedAt,
         ruling: rulingOf({ ...d, needs: why || undefined }, outcome.requirement.materiality) });
   }

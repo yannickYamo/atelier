@@ -245,7 +245,9 @@ export async function refineToStandard(
   // Tried at most twice: if the reader fails on the cut text, the spans came from an instrument no longer
   // in use, so the cut is planned again from the current text as the pattern check reads it.
   for (let attempt = 0; attempt < 2 && !opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED'); attempt++) {
-    const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
+    const unsourced = report.checked.find((c) => c.requirementId === 'UNSOURCED');
+    if (!unsourced) throw new Error('UNSOURCED was violated but is not in the report.');
+    const spans = unsourced.result.spans.slice().sort((a, b) => b.start - a.start);
     let next = text;
     for (const sp of spans) next = cutClaim(next, sp.start, sp.end);
     const after = await checkDraftAsync(skill, v, next, opts);

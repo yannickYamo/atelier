@@ -15,3 +15,6 @@ dist/
 /PAPER_HANDOFF.md
 /ADAPTIVE_IMPLEMENTATION_PLAN_v1.md
 /STUDY_INFRASTRUCTURE_AUDIT_*.md
+
+# browser-automation logs from tooling
+.playwright-mcp/

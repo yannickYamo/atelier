@@ -13,7 +13,7 @@ import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
-import { processSpentUsd, type Budget } from '../../core/inference/client.js';
+import { processSpentUsd, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
@@ -161,69 +161,92 @@ export async function invoke(): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const asked = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
-  // What `--with` binds travels WITH the task, so the model has the material the rule needs, and the
-  // record's input is what was actually served.
   const { L, sv, servedText, servedHash, contractFile, delivery } = resolveServedSkill(name);
   // A standard measures one kind of document; asking it for another is refused before anything is spent.
   const cls = checkClass(store.getDocClass(L), flag('--class'));
   if (!cls.ok) die(cls.why);
-  // The person's standing material for this skill (`atelier material`) and anything bound for this
-  // task (`--with`): the only places a first-person story or a cited figure in the output may come from.
-  const material = [...store.getMaterial(L), ...boundMaterial()];
-  // The request itself is material too: a story the person typed into the task is theirs to tell.
-  const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
-  const task = material.length
-    ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
-    : asked;
+  const { material, materialText, task } = taskWithMaterial(L, asked);
+
   // ── CAN THIS STANDARD BE EXECUTED TRUTHFULLY ON THIS INVOCATION ───────────────────────────
   //
   // BEFORE the model, before the budget, before anything is spent. A REQUIRED rule whose evidence is
   // not bound cannot be satisfied honestly, and the model will satisfy it anyway by inventing the
-  // evidence — measured, not feared: a standard requiring "one counted observation from our own
-  // records" produced "I pulled our last 200 tickets. 63% of them are…" from a runtime holding no
-  // tickets. Deterministic, so it is decided here rather than observed afterwards.
+  // evidence: a standard requiring "one counted observation from our own records" produced "I pulled
+  // our last 200 tickets. 63% of them are…" from a runtime holding no tickets.
   const std = store.getStandard(L, sv.standardVersionHash);
   const satisfiable = checkSatisfiable(std?.requirements ?? [], boundResources());
   const shortfall = describeSatisfiability(satisfiable);
-  if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall!);
+  if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall ?? 'a REQUIRED rule needs material this invocation does not bind');
   const report = new RunReport();
   if (shortfall) report.detail(shortfall);
   // Rules that cannot fire without material the person has not bound: said once, near the top, and read
-  // by the taste reader as waiting rather than missed (a rule with nothing to fire on was never missed).
+  // by the taste reader as waiting rather than missed.
   const waiting = waitingForMaterial(satisfiable);
 
-  // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
-  // cover is refused before anything is spent rather than failing halfway with nothing delivered.
   // A skill built from someone's corpus writes TWO drafts by default and keeps the better one: the
-  // author's habits held within their range, and the machine-writing count, choose between drafts and
-  // nothing else can use them (they are never rewritten toward). With one draft they did nothing at all.
+  // author's habits and the machine-writing count choose between drafts and nothing else can use them.
   // `--drafts 1` turns this off.
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', store.getVoice(L)?.pieces?.length ? 2 : 1)));
-  // The taste reader (below) reads every output twice (plus one applicability call when a rule has a
-  // condition). Once it has earned the authority to act it also reads each draft, the chosen one after
-  // the counted repair, and a taste rewrite again: 3 per draft plus 7 at most. Its calls are in the
-  // ceiling from the start, so a repair is never dropped for want of a call.
-  const tasteOn = Boolean(std) && !argv.includes('--no-taste') && tasteRules(std!).length > 0;
-  const readRules = tasteOn ? tasteRules(std!) : [];
-  const earned = tasteOn ? tastePermissions(readRules, store.readEvents(L), readerModel()) : null;
-  // A rule waiting for material must not be repaired toward either: a rewrite asked to satisfy "give the
-  // real figure" with no figure bound can only invent one.
-  const permissions = earned && { ...earned, veto: withoutWaiting(earned.veto, readRules, waiting) };
-  const tasteActs = tasteOn && (permissions?.veto.size ?? 0) > 0;
-  const tasteCalls = tasteOn ? (tasteActs ? 3 * nDrafts + 7 : 3) : 0;
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4 + tasteCalls) };
+  const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
+  // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
+  // refused before anything is spent rather than failing halfway with nothing delivered.
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)),
+    maxCalls: numericFlag('--max-calls', nDrafts + 4 + (taste?.callsFor(nDrafts) ?? 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
+  taste?.bind(budget);
+  const { client, binding } = checkedBinding(L, sv);
 
-  // ── WHICH RUNTIME, AND IS IT THE ONE THIS VERSION'S EVIDENCE CAME FROM ────────────────────
-  //
-  // The delivery check above proves the BYTES are the ones on record. It has nothing to say about who
-  // is reading them, and for a while nothing did: the same package served by a frontier model and by a
-  // 7B model on a laptop produced two records that differed only in a string nobody compared.
-  //
-  // Deterministic, and before the call. A person may absolutely run their skill on a different model —
-  // that is the point of owning the standard rather than renting it — but they should do it knowingly,
-  // on a fresh record, rather than inheriting conclusions drawn somewhere else.
-  const { client, binding } = clientAndBinding('target');
+  // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from
+  // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
+  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name);
+  if (needsLine) report.say(needsLine);
+  const checks = checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  if (nDrafts > 1 && (!std || contractFile !== null)) {
+    console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
+  }
+  const spentBefore = processSpentUsd();
+  const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
+    resolveProvenance(flag('--provenance'), process.env), contractFile,
+    flag('--task') ? 'FLAG' : 'POSITIONAL',
+    std && !argv.includes('--no-repair') ? refineDraft({ client, budget, name, std, checks, taste }) : null,
+    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L) }) : null,
+    std && checks.guardClaims !== false ? async (text: string) => {
+      const r = await checkDraftAsync(name, std, text, checks);
+      return (r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
+    } : null, settingsFor(checks, taste, nDrafts));
+
+  reportDrift(report, L, sv, rec);
+  console.log(`\n${rec.output}\n`);
+  reportChecks(report, rec, std, checks);
+  if (taste) await taste.report(report, rec, name);
+  reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
+  finish(report, { rec, sv, name, task, budget, spentBefore });
+}
+
+/**
+ * The task as served: what was asked, plus the person's standing material for this skill (`atelier
+ * material`) and anything bound for this task (`--with`), the only places a first-person story or a cited
+ * figure in the output may come from. The request itself is material too: a story typed into the task
+ * is theirs to tell.
+ */
+function taskWithMaterial(L: store.StoreLayout, asked: string): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
+  const material = [...store.getMaterial(L), ...boundMaterial()];
+  const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
+  const task = material.length
+    ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
+    : asked;
+  return { material, materialText, task };
+}
+
+/**
+ * WHICH RUNTIME, AND IS IT THE ONE THIS VERSION'S EVIDENCE CAME FROM. The delivery check proves the bytes
+ * are the ones on record; this proves who reads them. A person may run their skill on another model (that
+ * is the point of owning the standard), but knowingly, on a fresh record, never inheriting conclusions
+ * drawn on another binding. Deterministic, and before the call.
+ */
+function checkedBinding(L: store.StoreLayout, sv: SkillVersion): ReturnType<typeof clientAndBinding> {
+  const found = clientAndBinding('target');
+  const { binding } = found;
   const verdict = compareBindings(store.expectedBinding(L, sv.skillVersionHash, binding), binding);
   if (verdict.kind === 'TARGET_BINDING_MISMATCH' && !argv.includes('--accept-new-binding')) {
     die(describeMismatch(verdict, sv.skillVersionHash));
@@ -231,8 +254,8 @@ export async function invoke(): Promise<void> {
   if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
     console.log(`\nRunning on a new runtime binding — ${describeBinding(binding)}.`);
     console.log(`Observations from here are recorded against this binding and are not evidence about the other one.\n`);
-    // Accepted is recorded now, not only when the run completes: the next invoke on this binding is the
-    // same configuration a person already said yes to, and must not be refused again.
+    // Recorded now, not when the run completes: the next invoke on this binding is a configuration the
+    // person already said yes to, and must not be refused again.
     store.recordBinding(L, sv.skillVersionHash, binding);
     store.appendEvent(L, { kind: 'BINDING_ACCEPTED', at: new Date().toISOString(), skillVersionHash: sv.skillVersionHash, bindingHash: bindingHash(binding) });
   }
@@ -240,134 +263,171 @@ export async function invoke(): Promise<void> {
     const note = describeNewSurface(binding, store.bindingsElsewhere(L, sv.skillVersionHash, binding));
     if (note) console.log(`(${note})`);
   }
+  return found;
+}
 
-  // ORGANIC USE IS THE DEFAULT AND IS CAPTURED WITHOUT ANYONE REMEMBERING. A harness declares
-  // itself via ATELIER_PROVENANCE; a person doing real work types nothing extra.
-  // THE CONTRACT GOES IN. It used to be listed in the delivery metadata and then ignored by the very
-  // call the metadata described, which is how a carrier can be installed, hashed, verified and dark all
-  // at once. `runOnce` hands it to the provider as the schema and hashes what was actually sent.
-  // ── CHECKED BEFORE IT IS DELIVERED ──────────────────────────────────────────────────────────
-  //
-  // Every measured rule is counted on the draft, and the spans that break a REQUIRED one are rewritten —
-  // and only those — at most twice (plus one ACCURACY pass first), each rewrite kept only if it breaks nothing that held. The rules
-  // that are about judgement are not touched: nothing here has the standing to rewrite for them.
-  // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from the
-  // output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
-  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name);
-  if (needsLine) report.say(needsLine);
-  const checks = checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
-  // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
-  //
-  // The rules no count can check are read on every output, twice and with quotes, and the reading is
-  // shown and recorded. Only rules where the reader has EARNED VETO from your labels let it act: rewrite
-  // a passage it quotes, and prefer drafts that miss fewer of them. `--no-taste` turns it off.
-  //
-  // The reader never costs the user their output: if it fails (a rate limit, the call budget), the draft
-  // is delivered as the counted checks left it, and the failure is said.
-  let tasteTaken: readonly TasteReading[] | null = null;
-  const tasteNotes: string[] = [];
-  const readerClient = tasteActs ? readerClientFor() : null;
-  // Applicability depends on the task alone: decided once for every draft and re-read.
-  let decided: Promise<boolean[]> | null = null;
-  const applies = (): Promise<boolean[]> => (decided ??= applicabilityFor(readerClient!, budget, std!, asked));
-  const readings = new Map<string, TasteReading[]>();
-  const readDraft = async (text: string): Promise<TasteReading[]> => {
-    const had = readings.get(text);
-    if (had) return had;
-    const r = await readTaste(readerClient!, budget, std!, text, asked, await applies());
-    readings.set(text, r);
-    return r;
-  };
-  const refine = argv.includes('--no-repair') || !std ? null
-    : async (draft: string) => {
-      const r = await refineToStandard(client, budget, name, std, draft, 2, checks);
-      if (!tasteActs || !permissions || !readerClient) return { output: r.output, repair: r.repair };
-      let t: Awaited<ReturnType<typeof refineTaste>>;
-      try {
-        const before = await readDraft(r.output);
-        t = await refineTaste(client, readerClient, budget, name, std, r.output, before, permissions.veto, asked, checks, await applies());
-      } catch (e) {
-        tasteNotes.push(`the taste reader could not run before delivery (${(e as Error).message.split('\n')[0]}); delivered as the counted checks left it`);
-        return { output: r.output, repair: r.repair };
-      }
-      tasteTaken = t.readings;
-      if (!t.targeted.length) return { output: r.output, repair: r.repair };
-      const taste = { targeted: t.targeted, fixed: t.fixed, why: t.why };
-      return { output: t.output, repair: r.repair ? { ...r.repair, taste }
-        : { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, taste, why: t.why } };
-    };
-  // ── SEVERAL DRAFTS, THE BEST BY COUNT ─────────────────────────────────────────────────────────
-  //
-  // `--drafts N` writes N drafts side by side and delivers, in this order (draftOrder, below): the fewest
-  // REQUIRED rules broken, then the fewest rules the taste reader holds VETO on read as missed (when it
-  // has earned any), the fewest machine-writing moves, the fewest rules of any weight, the closest to
-  // the author's signals, and last the closest to the author's style. A count picks it, never a judge's
-  // taste: the reader breaks ties between drafts that break the same REQUIRED rules, never outranks one.
-  if (nDrafts > 1 && (!std || contractFile !== null)) {
-    console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
+// ── THE TASTE READER (docs/TASTE.md) ────────────────────────────────────────────────────────────
+//
+// The rules no count can check are read on every output, twice and with quotes, and the reading is
+// recorded. Only rules where the reader has EARNED VETO from the owner's labels let it act: rewrite a
+// passage it quotes, and prefer drafts that miss fewer of them. A rule waiting for material is never
+// acted on: with nothing bound, a rewrite toward "give the real figure" could only invent one.
+//
+// The reader never costs the person their output: if it fails, the draft is delivered as the counted
+// checks left it, and the failure is said.
+
+class TasteSession {
+  /** readings by text, so a draft read to rank it is not read again to repair or record it */
+  private readonly readings = new Map<string, TasteReading[]>();
+  /** what went wrong with the reader, said after the output */
+  readonly notes: string[] = [];
+  /** the reading of the delivered text, when the repair already made it */
+  taken: readonly TasteReading[] | null = null;
+  private budget: Budget | null = null;
+  private decided: Promise<boolean[]> | null = null;
+  private reader: InferenceClient | null = null;
+
+  private constructor(
+    private readonly L: store.StoreLayout, private readonly std: Standard, readonly asked: string,
+    private readonly waiting: ReadonlySet<string>, readonly veto: ReadonlySet<string>,
+  ) {}
+
+  /** A session when the standard has reading-based rules; null when there is nothing to read. */
+  static open(L: store.StoreLayout, std: Standard, asked: string, waiting: ReadonlySet<string>): TasteSession | null {
+    const rules = tasteRules(std);
+    if (!rules.length) return null;
+    const earned = tastePermissions(rules, store.readEvents(L), readerModel());
+    return new TasteSession(L, std, asked, waiting, withoutWaiting(earned.veto, rules, waiting));
   }
-  const signals = store.getSignals(L);
-  const select = std && nDrafts > 1 ? { n: nDrafts, choose: async (drafts: readonly string[]) => {
-    // Taste first, where the reader has earned it: the draft missing the fewest VETO-holding rules.
-    // If the reader fails here, the drafts are ranked by count alone.
-    let tasteMissed = drafts.map(() => 0);
-    if (tasteActs && permissions) {
-      try { tasteMissed = await Promise.all(drafts.map(async (d) => vetoMisses(await readDraft(d), permissions.veto).length)); } catch (e) {
-        tasteNotes.push(`the taste reader could not rank the drafts (${(e as Error).message.split('\n')[0]}); ranked by count`);
-      }
+
+  /** Whether the reader has earned the right to act on any rule this run. */
+  get acts(): boolean { return this.veto.size > 0; }
+
+  /**
+   * Calls reserved in the ceiling from the start, so a repair is never dropped for want of one: every
+   * output is read twice; once it acts, each draft, the repaired one and a rewrite too (3 per draft, 7 more).
+   */
+  callsFor(nDrafts: number): number { return this.acts ? 3 * nDrafts + 7 : 3; }
+
+  bind(budget: Budget): void { this.budget = budget; }
+
+  /** The reader's client, made once for the run. */
+  client(): InferenceClient { return (this.reader ??= readerClientFor()); }
+
+  private get meter(): Budget { return this.budget ?? die('the taste reader was used before its budget was set'); }
+
+  /** Applicability depends on the task alone: decided once for every draft and re-read. */
+  applies(): Promise<boolean[]> { return (this.decided ??= applicabilityFor(this.client(), this.meter, this.std, this.asked)); }
+
+  async read(text: string): Promise<TasteReading[]> {
+    const had = this.readings.get(text);
+    if (had) return had;
+    const r = await readTaste(this.client(), this.meter, this.std, text, this.asked, await this.applies());
+    this.readings.set(text, r);
+    return r;
+  }
+
+  /**
+   * How many VETO-holding rules each draft misses, for ranking. If the reader fails, every draft counts
+   * zero, so they are ranked by count alone, and that is said.
+   */
+  async misses(drafts: readonly string[]): Promise<number[]> {
+    try { return await Promise.all(drafts.map(async (d) => vetoMisses(await this.read(d), this.veto).length)); } catch (e) {
+      this.notes.push(`the taste reader could not rank the drafts (${(e as Error).message.split('\n')[0]}); ranked by count`);
+      return drafts.map(() => 0);
     }
-    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(name, std, d, checks)));
-    const scored = drafts.map((_d, i) => {
-      const r = reports[i];
-      const req = r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length;
-      const all = r.checked.filter((c) => c.result.verdict === 'VIOLATED' && c.requirementId !== PUBLIC_FACTS).length;
-      const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
-      // Machine-writing moves, catalogued and learned, counted instance by instance.
-      const tells = r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0);
-      // The author's signals: closest to their typical value, when the counts above tie.
-      // null when no signal could be read: unknown is not "on target", so it ranks last, not as 0
-      const signal = signalDistance(drafts[i], signals);
-      return { i, req, all, style, tells, signal, taste: tasteMissed[i] };
-    });
+  }
+
+  /** Recorded on every output, said in one line. */
+  async report(report: RunReport, rec: Invocation, name: string): Promise<void> {
+    await reportTaste(report, { L: this.L, std: this.std, rec, asked: this.asked, budget: this.meter, tasteOn: true,
+      tasteTaken: this.taken, readings: this.readings, tasteNotes: this.notes, permissions: { veto: this.veto }, waiting: this.waiting, name });
+  }
+}
+
+interface DraftContext { readonly name: string; readonly std: Standard; readonly checks: Checks; readonly taste: TasteSession | null }
+
+/**
+ * CHECKED BEFORE IT IS DELIVERED. Every measured rule is counted on the draft, and only the spans that
+ * break a REQUIRED one are rewritten, at most twice (plus one ACCURACY pass first), each rewrite kept only
+ * if it breaks nothing that held. Then, where the taste reader has earned it, the passages it quotes as
+ * missing a VETO rule are rewritten and kept only if the reader confirms them.
+ */
+function refineDraft(c: DraftContext & { readonly client: InferenceClient; readonly budget: Budget }) {
+  return async (draft: string) => {
+    const r = await refineToStandard(c.client, c.budget, c.name, c.std, draft, 2, c.checks);
+    const taste = c.taste;
+    if (!taste?.acts) return { output: r.output, repair: r.repair };
+    let t: Awaited<ReturnType<typeof refineTaste>>;
+    try {
+      t = await refineTaste(c.client, taste.client(), c.budget, c.name, c.std, r.output, await taste.read(r.output), taste.veto, taste.asked, c.checks, await taste.applies());
+    } catch (e) {
+      taste.notes.push(`the taste reader could not run before delivery (${(e as Error).message.split('\n')[0]}); delivered as the counted checks left it`);
+      return { output: r.output, repair: r.repair };
+    }
+    taste.taken = t.readings;
+    if (!t.targeted.length) return { output: r.output, repair: r.repair };
+    const fixed = { targeted: t.targeted, fixed: t.fixed, why: t.why };
+    return { output: t.output, repair: r.repair ? { ...r.repair, taste: fixed }
+      : { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, taste: fixed, why: t.why } };
+  };
+}
+
+/**
+ * SEVERAL DRAFTS, THE BEST BY COUNT (`draftOrder`): the fewest REQUIRED rules broken, then the fewest
+ * VETO rules read as missed (when the reader has earned any), machine-writing moves, rules of any weight,
+ * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
+ * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
+ */
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals> }) {
+  return { n: c.n, choose: async (drafts: readonly string[]) => {
+    const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
+    const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
+    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals), taste: tasteMissed[i] }));
     scored.sort(draftOrder);
     const best = scored[0];
-    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${signals.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
-  } } : null;
-  // WHAT THIS RUN WAS CONFIGURED WITH, beyond the binding and the package: enough to re-run a study arm
-  // from its record (see InvocationSettings).
+    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${c.signals.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+  } };
+}
+
+/** One draft's counts. An unread signal distance is null: unknown is not "on target", so it ranks last. */
+function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standard, draft: string, signals: ReturnType<typeof store.getSignals>): Omit<DraftScore, 'taste'> {
+  const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
+  return {
+    req: r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length,
+    all: r.checked.filter((c) => c.result.verdict === 'VIOLATED' && c.requirementId !== PUBLIC_FACTS).length,
+    tells: r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0),
+    signal: signalDistance(draft, signals),
+    style,
+  };
+}
+
+/** What this run was configured with, beyond the binding and the package: enough to re-run a study arm from its record. */
+function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number): InvocationSettings {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
-  const settings: InvocationSettings = {
+  return {
     atelierVersion: version(),
     claimInstrument: checks.claimSensor?.instrument ?? null,
     // Read when the record is written, after the run: a reader that degraded mid-run says so here.
     get claim() { return claimInstrumentOf(checks); },
-    tasteVeto: [...(permissions?.veto ?? [])].sort(),
+    tasteVeto: [...(taste?.veto ?? [])].sort(),
     learnedTellsHash: sha(JSON.stringify(checks.learnedTells ?? [])),
     formatProfile: checks.format?.id ?? null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
     flags: { drafts: nDrafts, noTaste: argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') },
   };
-  const spentBefore = processSpentUsd();
-  const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
-    resolveProvenance(flag('--provenance'), process.env), contractFile,
-    flag('--task') ? 'FLAG' : 'POSITIONAL', refine, select,
-    std && checks.guardClaims !== false ? async (text: string) => {
-      const r = await checkDraftAsync(name, std, text, checks);
-      return (r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
-    } : null, settings);
+}
 
-  reportDrift(report, L, sv, rec);
-  console.log(`\n${rec.output}\n`);
-  reportChecks(report, rec, std, checks);
-  await reportTaste(report, { L, std, rec, asked, budget, tasteOn, tasteTaken, readings, tasteNotes, permissions, waiting, name });
-  reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
-  // THE WHOLE COST. The writer's budget and the claim reader's are separate meters; what this run spent
-  // on any of them is the process total since generation began (plus the taste record, above).
-  const spent = Math.max(budget.spentUsd, processSpentUsd() - spentBefore);
-  const reader = spent - budget.spentUsd;
-  report.detail(`invocation ${rec.invocationId}  ·  SkillVersion ${sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
-  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: name, input: task, at: rec.at }, null, 1));
+/**
+ * THE WHOLE COST, and the record. The writer's budget and the claim reader's are separate meters; what
+ * this run spent on either is the process total since generation began.
+ */
+function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name: string; task: string; budget: Budget; spentBefore: number }): void {
+  const spent = Math.max(r.budget.spentUsd, processSpentUsd() - r.spentBefore);
+  const reader = spent - r.budget.spentUsd;
+  report.detail(`invocation ${r.rec.invocationId}  ·  SkillVersion ${r.sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
+  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: r.rec.invocationId, skillName: r.name, input: r.task, at: r.rec.at }, null, 1));
   const details = runFile('last-invocation.txt');
   report.write(details);
   console.log(`$${spent.toFixed(2)} · everything this run checked: ${details} · not right? atelier fix "<what was wrong>"`);
