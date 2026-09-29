@@ -43,6 +43,18 @@ export function mcnemarExactP(wins: number, losses: number): number {
 }
 
 /**
+ * Exact ONE-sided sign test: P(X ≥ wins | n, ½), the upper binomial tail. For a design that
+ * preregistered its direction (the Phase C studies: the skill's output preferred over the model's
+ * own); a two-sided design uses `mcnemarExactP`. `n` counts the discordant pairs, ties excluded.
+ */
+export function signTestOneSidedP(wins: number, n: number): number {
+  if (!Number.isInteger(wins) || !Number.isInteger(n) || n < 0 || wins < 0 || wins > n) {
+    throw new RangeError(`signTestOneSidedP needs whole numbers 0 ≤ wins ≤ n (got ${wins} of ${n})`);
+  }
+  return n === 0 ? 1 : binomTail(n, 0.5, wins);
+}
+
+/**
  * Exact (Clopper–Pearson) two-sided confidence interval for a binomial proportion, by bisection on
  * the exact tails — no approximation, which is the point of reporting it beside the p-value.
  */
