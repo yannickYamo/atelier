@@ -128,6 +128,11 @@ describe('the suggestion is computed from evidence, never decided', () => {
       expect(s.why).toMatch(/too few pieces to suggest rejecting it/);
     }
   });
+  it("the author's sentence mix instructs when their unread work bears it out: rhythm is enforced, not only used to choose", () => {
+    const mix = { ...p, measurement: { observer: 'DISTRIBUTION', params: { edges: [8, 18, 30], shares: [0.2, 0.5, 0.25, 0.05], tolerance: 0.2 } } } as unknown as Requirement;
+    const s = suggest(mix, { framings: [], heldOut: null, needs: null, inSample: { applicable: 4, present: 4, independent: true } }, 'GENERATE');
+    expect(s.materiality).toBe('REQUIRED');
+  });
   it('a count the unread pieces miss follows the same floor', () => {
     const counted = { ...p, measurement: { observer: 'PATTERN_RATE', params: {} } } as unknown as Requirement;
     const on = (applicable: number) => suggest(counted, { framings: [], heldOut: null, needs: null, inSample: { applicable, present: 0, independent: true } }, 'GENERATE');
