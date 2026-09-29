@@ -47,7 +47,7 @@ Five rules the code is not allowed to break, each enforced by a test:
 ## By the numbers
 
 19 merged pull requests, 227 commits on `main` since 2026-08-24, over 1,700 offline tests, and 22
-pre-registrations, two of them drafts and one waiting to run. The suite drives the shipped binary end to end, against a scripted model.
+pre-registrations, two of them drafts. The suite drives the shipped binary end to end, against a scripted model.
 
 ## What I would do differently
 
