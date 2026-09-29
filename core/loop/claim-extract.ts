@@ -72,6 +72,8 @@ export interface ClaimSensor {
   readonly gate: 'reader' | 'pattern';
   /** true once any read failed: from then on every reading is the pattern check's (see modelSensor) */
   readonly degraded: boolean;
+  /** what the reader spent, from its own budget; 0 for the pattern check */
+  readonly spentUsd: number;
 }
 
 export const KINDS = ['FIGURE', 'DATE', 'QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT', 'NAMED_FACT'] as const;
@@ -414,7 +416,7 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
   const cache = new Map<string, ClaimReading>();
   const instrument = why;
   const sensor: Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } = {
-    instrument, notes: [], version: null, qualified: false, gate: 'pattern', degraded: false,
+    instrument, notes: [], version: null, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0,
     read: (text) => { sensor.reading(text); return Promise.resolve(); },
     reading: (text) => {
       const k = sha(text);
@@ -476,6 +478,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
     notes, version: READER_VERSION, qualified,
     get gate() { return readerGates && !degraded ? 'reader' as const : 'pattern' as const; },
     get degraded() { return degraded; },
+    get spentUsd() { return budget.spentUsd; },
     read: async (text) => {
       const k = sha(text);
       if (degraded || cache.has(k)) return;
