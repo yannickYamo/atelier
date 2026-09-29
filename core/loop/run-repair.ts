@@ -22,6 +22,28 @@ const MAX_PAIRS_KEPT = 12;
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const broken = (r: VerifyReport): string[] => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').map((c) => c.requirementId);
 
+/**
+ * Cut one flagged claim. A sentence goes the way `cutSpan` cuts it. A heading or a table row is a line
+ * of its own (./claims.ts, claimUnitsOf), and cutting only its words left a bare `#` or an empty row
+ * behind, so the whole line goes: the heading's markers, a setext heading's underline, the row's pipes.
+ */
+function cutClaim(text: string, start: number, end: number): string {
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  const nl = text.indexOf('\n', end); const lineEnd = nl === -1 ? text.length : nl;
+  const pre = text.slice(lineStart, start); const post = text.slice(end, lineEnd);
+  const span = text.slice(start, end).trim();
+  const heading = /^\s*#{1,6}\s*$/.test(pre) && /^\s*#*\s*$/.test(post);
+  const row = !pre.trim() && !post.trim() && span.startsWith('|');
+  const under = nl === -1 ? null : /^[ \t]*(=+|-+)[ \t]*(?:\n|$)/.exec(text.slice(nl + 1));
+  const setext = !pre.trim() && !post.trim() && under !== null;
+  if (!heading && !row && !setext) return cutSpan(text, start, end);
+  const stop = setext && under ? nl + 1 + under[0].length : nl === -1 ? text.length : nl + 1;
+  // The blank line that set the heading off goes with it, unless it is all that separates two blocks.
+  const head = text.slice(0, lineStart); let rest = text.slice(stop);
+  if (/^[ \t]*\n/.test(rest) && (!head || /\n[ \t]*\n$/.test(head))) rest = rest.replace(/^[ \t]*\n/, '');
+  return `${head}${rest}`;
+}
+
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
 export interface CheckOptions {
@@ -189,7 +211,7 @@ export async function refineToStandard(
   if (!opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
     const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
     let next = text;
-    for (const sp of spans) next = cutSpan(next, sp.start, sp.end);
+    for (const sp of spans) next = cutClaim(next, sp.start, sp.end);
     const after = await checkDraftAsync(skill, v, next, opts);
     if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
       for (const sp of spans) cut.push(sp.text.trim().slice(0, 160));
