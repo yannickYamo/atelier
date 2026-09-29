@@ -71,6 +71,11 @@ function oriented(m: Measurement, v: number): number {
       if (lo !== null && hi !== null) return -(Math.max(0, lo - v) + Math.max(0, v - hi));
       return lo !== null ? v : -v;
     }
+    case 'FEATURE': {
+      const lo = num(m, 'minValue'); const hi = num(m, 'maxValue');
+      if (lo !== null && hi !== null) return -(Math.max(0, lo - v) + Math.max(0, v - hi));
+      return lo !== null ? v : -v;
+    }
     case 'RATIO': {
       const lo = num(m, 'minShare'); const hi = num(m, 'maxShare');
       if (lo !== null && hi !== null) return -(Math.max(0, lo - v) + Math.max(0, v - hi));
@@ -128,6 +133,9 @@ export function resolution(m: Measurement, authorTexts: readonly string[]): numb
     case 'RATIO': return 0.1;
     case 'RHYTHM': return 0.05;
     case 'STYLE_DISTANCE': return MIN_MARGIN;
+    // A tenth of the band the author's pieces span: finer than that, a difference is rounding.
+    case 'FEATURE': { const lo = typeof m.params.minValue === 'number' ? m.params.minValue : null; const hi = typeof m.params.maxValue === 'number' ? m.params.maxValue : null;
+      return lo !== null && hi !== null && hi > lo ? Math.max(0.001, Math.round(((hi - lo) / 10) * 1000) / 1000) : MIN_MARGIN; }
     default: return 1;                                                                                            // one use, one word, one sentence, one heading
   }
 }

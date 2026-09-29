@@ -10,6 +10,7 @@
 // No telemetry. No network. Corpus and outputs stay where the user put them; this stores metadata,
 // standards and events.
 
+import type { StoredSignal } from '../observers/selection.js';
 import type { Voice } from '../compiler/voice.js';
 import type { ContrastPair } from '../compiler/contrast-examples.js';
 import type { Recurrence } from '../mining/recurrence.js';
@@ -211,6 +212,20 @@ export function setBaseline(l: StoreLayout, skillVersionHash: string, entries: r
  * owner's `--contrast none`.
  */
 export interface StoredContrast { readonly off: boolean; readonly pairs: readonly ContrastPair[] }
+/**
+ * THE AUTHOR'S SIGNALS (core/observers/selection.ts): counted features that separate their work from the
+ * model's over many drafts but not draft by draft. Used to choose between drafts and to profile one;
+ * never a rule, never a gate.
+ */
+export function getSignals(l: StoreLayout): StoredSignal[] {
+  const p = join(dirs(l).base, 'signals.json');
+  return existsSync(p) ? readJson<StoredSignal[]>(p, { what: 'the author\'s signals', kind: 'array' }) : [];
+}
+export function setSignals(l: StoreLayout, s: readonly StoredSignal[]): void {
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(join(dirs(l).base, 'signals.json'), JSON.stringify(s, null, 1));
+}
+
 export function getContrast(l: StoreLayout): StoredContrast {
   const p = join(dirs(l).base, 'contrast.json');
   return existsSync(p) ? readJson<StoredContrast>(p, { what: 'the contrast examples' }) : { off: false, pairs: [] };

@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import type { StoredSignal } from '../../core/observers/selection.js';
 import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
@@ -237,6 +238,8 @@ export async function build(nameArg?: string): Promise<void> {
   }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, voice); store.setDocClass(L, docClass); store.setContrast(L, contrast);
+  // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
+  if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //
