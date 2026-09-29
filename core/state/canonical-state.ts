@@ -486,6 +486,11 @@ export interface InvocationSettings {
   readonly atelierVersion: string;
   /** the invented-claim instrument, as it names itself; null when the check was off */
   readonly claimInstrument: string | null;
+  /**
+   * The claim instrument as it stood when the record was WRITTEN, after the run: which reader and version,
+   * whether it was qualified to gate, whether it degraded mid-run, and what it spent. Null when off.
+   */
+  readonly claim: { readonly instrument: string; readonly version: string | null; readonly qualified: boolean; readonly gate: string; readonly degraded: boolean; readonly spentUsd: number } | null;
   /** rule keys the taste reader held VETO on for this run (empty: it acted on nothing) */
   readonly tasteVeto: readonly string[];
   /** hash of the learned machine-writing phrases served to the checks */
