@@ -428,7 +428,8 @@ export function assertArchitectureServesStandard(a: SkillArchitecture, v: Standa
   const byId = new Map(v.requirements.map((r) => [r.requirementId, r]));
   for (const c of a.components) {
     for (const id of c.carries) {
-      const r = byId.get(id)!;
+      const r = byId.get(id);
+      if (!r) throw new Error(`ARCHITECTURE: component ${c.id} carries ${id}, which is not in the standard.`);
       const allowed = roleFor(r);
       if (c.gateRole !== allowed) {
         throw new Error(

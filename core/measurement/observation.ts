@@ -161,7 +161,11 @@ export function normalisedWeights(obs: readonly Observation[]): ReadonlyMap<stri
   const perContext = new Map<string, number>();
   for (const o of obs) perContext.set(o.contextId, (perContext.get(o.contextId) ?? 0) + 1);
   const w = new Map<string, number>();
-  for (const o of obs) w.set(`${o.contextId}|${o.invocationId}|${o.generationIndex}`, 1 / perContext.get(o.contextId)!);
+  for (const o of obs) {
+    const n = perContext.get(o.contextId);
+    if (n === undefined) throw new Error(`context ${o.contextId} was not counted.`);
+    w.set(`${o.contextId}|${o.invocationId}|${o.generationIndex}`, 1 / n);
+  }
   return w;
 }
 

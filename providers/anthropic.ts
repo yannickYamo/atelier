@@ -20,7 +20,7 @@ export type { Pricing } from './pricing.js';
  * Exported because a mapping that can only be exercised through a paid API call is a mapping nobody
  * checks. `null` happens on a streaming-shaped response and is not a completion.
  *
- * `tool_use` is COMPLETE: every request here forces a tool call, so ending in one is the success
+ * `tool_use` is COMPLETE: every request here asks for a tool call, so ending in one is the success
  * path. See `isReadableTermination`.
  */
 export const anthropicTermination = (stopReason: string | null): InferenceTermination => {
@@ -51,6 +51,25 @@ export function accountRefusal(status: number | undefined, body: string, request
   if (status === 429) return `the backend is limiting this key (HTTP 429: a rate or budget limit). Nothing more was spent; try again when the limit resets${tail}.`;
   return null;
 }
+
+// ── FORCED TOOL CHOICE, WHERE THE MODEL STILL ACCEPTS IT ─────────────────────────────────────────
+//
+// Every call here asks for one tool call whose input is the answer. Forcing it (`tool_choice: tool`) is
+// what the qualified instruments were measured with, so it stays wherever a model accepts it. Claude Opus
+// 5.5, Sonnet 5.5 and Fable 5.1 answer it with a 400; for those the call is made with `auto` and an
+// explicit instruction to use the tool, and a reply without the tool call still fails closed below.
+// Structured outputs (`output_config.format`) were not used: they do not support the number bounds and
+// some array constraints these schemas carry, and moving every instrument to them would change what was
+// measured (docs/decisions/0005-forced-tool-choice.md).
+
+/** Models this process has seen refuse forced tool choice. Learned from the API's own 400, not listed. */
+const noForcedChoice = new Set<string>();
+
+/** Whether an error is the API refusing forced tool choice for this model. */
+export const refusesForcedChoice = (e: unknown): boolean => {
+  const f = statusAndBody(e);
+  return f?.status === 400 && /tool_choice[^.\n]{0,80}not supported/i.test(f.body);
+};
 
 /** An SDK error's status and body, as `accountRefusal` and `isUnknownModel` read them. */
 const statusAndBody = (e: unknown): { status: number | undefined; body: string; requestId: string | null } | null => {
@@ -90,7 +109,20 @@ export class AnthropicInferenceClient implements InferenceClient {
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
-    const res = await this.client.messages.create({
+    let res: Anthropic.Message;
+    try {
+      res = await this.create(req, !noForcedChoice.has(this.modelId));
+    } catch (e) {
+      if (!refusesForcedChoice(e)) throw plainFailure(e, this.modelId) ?? e;
+      noForcedChoice.add(this.modelId);
+      res = await this.create(req, false).catch((x: unknown) => { throw plainFailure(x, this.modelId) ?? x; });
+    }
+    return this.read(req, res);
+  }
+
+  /** One request. `forced`: the tool call is required; otherwise it is asked for in words. */
+  private create(req: InferenceRequest, forced: boolean): Promise<Anthropic.Message> {
+    return this.client.messages.create({
       model: this.modelId,
       max_tokens: req.maxTokens,
       // STABLE first and cached; VARIABLE second and not. Reversing these still works and costs ~9x.
@@ -109,19 +141,19 @@ export class AnthropicInferenceClient implements InferenceClient {
           : []),
         ...(req.variableBlock ? [{ type: 'text' as const, text: req.variableBlock }] : []),
       ],
-      messages: [{ role: 'user', content: req.userMessage }],
+      messages: [{ role: 'user', content: forced ? req.userMessage : `${req.userMessage}\n\nAnswer by calling the ${req.toolName} tool, once.` }],
       tools: [{ name: req.toolName, description: req.toolDescription, input_schema: req.schema as Anthropic.Tool.InputSchema }],
-      tool_choice: { type: 'tool', name: req.toolName },
+      tool_choice: forced ? { type: 'tool', name: req.toolName } : { type: 'auto' },
     }, {
       // Per-request, because the bound depends on how much was asked for. Without it this inherits
       // the SDK's ten-minute default on every call regardless of size, and a stalled discovery run
       // spends twenty minutes over two retries before saying anything.
       timeout: inferenceTimeoutMs(req.maxTokens),
-    }).catch((e: unknown) => {
-      // An account refusal or an unknown model is said plainly, never as the provider's raw error JSON.
-      throw plainFailure(e, this.modelId) ?? e;
     });
+  }
 
+  /** The response, read: termination first, then the tool call. An account refusal or unknown model was said plainly above. */
+  private read(req: InferenceRequest, res: Anthropic.Message): InferenceResult {
     const u = res.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
     const termination = anthropicTermination(res.stop_reason);
 
