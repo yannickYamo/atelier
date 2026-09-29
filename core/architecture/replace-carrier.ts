@@ -23,6 +23,7 @@
 //   NONE             never proposed — silence is not an implementation of a rule that missed
 
 import type { Carrier, SkillArchitecture } from './compile.js';
+import { roleFor } from './compile.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { assertFeedbackDidNotMutate, standardHashOf } from '../state/canonical-state.js';
 import type { ServedMissEvidence, EscalateCarrier, EscalationRefusal } from './escalate.js';
@@ -30,10 +31,19 @@ import type { ServedMissEvidence, EscalateCarrier, EscalationRefusal } from './e
 /** The fixed ordering candidates are tried in. Position is precedence, nothing else. */
 export const REPLACEMENT_ORDER: readonly Carrier[] = ['SELF_CHECK', 'PROSE', 'EXAMPLE', 'OUTPUT_CONTRACT'];
 
-/** Which carriers this requirement's own typed properties make legal. */
+/**
+ * Which carriers this requirement's own typed properties make legal.
+ *
+ * AN OUTPUT CONTRACT IS ENFORCEMENT, SO ONLY AN ENFORCED RULE MAY BE MOVED TO ONE. A contract is a
+ * schema the provider must satisfy: the one carrier that cannot be read as guidance. Legality read
+ * `outputShape` alone, so a PREFERRED rule with a shape — one the owner said an excellent output may
+ * break — was a legal OUTPUT_CONTRACT move for `fix` and `optimize`, and a search could promote guidance
+ * into a hard constraint while `gateRole` still said OBSERVE. `roleFor` is the one derivation of that
+ * (REQUIRED, or authored, and confirmed); materiality still picks no carrier, it only bounds this one.
+ */
 export const eligibleCarriers = (r: Requirement): readonly Carrier[] =>
   REPLACEMENT_ORDER.filter((c) =>
-    c === 'OUTPUT_CONTRACT' ? r.outputShape !== null
+    c === 'OUTPUT_CONTRACT' ? r.outputShape !== null && roleFor(r) === 'ENFORCE'
       : c === 'EXAMPLE' ? Boolean(r.evidence)
         : true);
 
