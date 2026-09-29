@@ -24,15 +24,15 @@
 // The model types; code verifies the type against the source. The model cannot approve a claim, only
 // point at the passage that would. That is the typed-signal design, and it is why this reader may gate
 // where the pattern should not have. It remains a model instrument: its sensitivity and specificity are
-// measured before any claim about it is made (studies/, the qualification battery), and the report says
-// which instrument ran on every line.
+// measured before any claim about it is made (studies/, the qualification battery), only a measured
+// (model, version) pair gates (QUALIFIED_READERS), and the report says which instrument ran on every line.
 //
 // Runs on whatever backend the person configures (their own API included): `ATELIER_CLAIMS_MODEL`.
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
-import { sentencesOf, wordsOf } from '../observers/text.js';
-import { unsourcedClaims, type Claim } from './claims.js';
+import { wordsOf } from '../observers/text.js';
+import { unsourcedClaims, claimUnitsOf, type Claim } from './claims.js';
 import { createHash } from 'node:crypto';
 
 /** What a claim reader returns for one text: the unsupported claims, and the public specifics to check. */
@@ -44,6 +44,12 @@ export interface ClaimReading {
   readonly instrument: string;
   /** what the reader typed, verbatim, for audit: the decision above is made from these */
   readonly specifics?: readonly ExtractedSpecific[];
+  /**
+   * Present when this reading is REPORT-ONLY (an unqualified reader, QUALIFIED_READERS): the reading
+   * that gates instead, from the pattern check. The check reports this reading as `UNSOURCED·reader`,
+   * PREFERRED, and `gate` as `UNSOURCED`, REQUIRED. Absent, this reading gates.
+   */
+  readonly gate?: ClaimReading;
 }
 
 /**
@@ -52,11 +58,22 @@ export interface ClaimReading {
  * and says so, rather than going unchecked.
  */
 export interface ClaimSensor {
+  /** the instrument as it stands NOW: a reader that degraded says so here, not only in `notes` */
   readonly instrument: string;
   read(text: string): Promise<void>;
   reading(text: string): ClaimReading | undefined;
   /** things the person should know about how the check ran (a failed call, a fallback) */
   readonly notes: string[];
+  /** the reader's version (READER_VERSION) when a model reads; null for the pattern check */
+  readonly version: string | null;
+  /** a model reader whose (model, version) pair a qualification result stands behind */
+  readonly qualified: boolean;
+  /** whose findings fail the check: the reader's, or the pattern check's */
+  readonly gate: 'reader' | 'pattern';
+  /** true once any read failed: from then on every reading is the pattern check's (see modelSensor) */
+  readonly degraded: boolean;
+  /** what the reader spent, from its own budget; 0 for the pattern check */
+  readonly spentUsd: number;
 }
 
 export const KINDS = ['FIGURE', 'DATE', 'QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT', 'NAMED_FACT'] as const;
@@ -119,36 +136,184 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  *   1  the first, measured in studies/CLAIM_READER_QUALIFICATION_RESULT.md (specificity 0.744: failed)
  *   2  the location is checked too, a specific found in the material verbatim is supported whatever the
  *      reader said, and spelled-out numbers count as the same figure
+ *   3  the reader sees headings and table rows as numbered units, not only sentences; support is matched
+ *      with markdown stripped and across adjacent sentences of one paragraph; a number is a phrase
+ *      ("twenty-five", "two hundred", "3 million", "a dozen"), and a lone "one" counts only where it
+ *      quantifies. Not qualified: see QUALIFIED_READERS
  */
-export const DECISION_VERSION = 2;
+export const DECISION_VERSION = 3;
 /** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
 export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
+
+/** A reader, named the way a qualification result names it: the model, and the READER_VERSION it measured. */
+export interface QualifiedReader { readonly model: string; readonly version: string }
+/**
+ * ONLY A MEASURED INSTRUMENT MAY CUT. A reader in this list met the qualification battery's bar
+ * (studies/): its sensitivity and specificity were measured on technical and marketing writing, for that
+ * model AND that READER_VERSION. Any other pair (a changed prompt, a changed decision, another model on
+ * someone's own backend) is an instrument nobody has measured, and an unmeasured instrument that cuts
+ * sentences is how a true story disappears from a person's draft. Such a reader still reads, and what it
+ * finds is reported as `UNSOURCED·reader`, PREFERRED: a warning, never a failure, never repaired. The
+ * pattern check, which held specificity 43/43 and 38/38 in both studies, stays the gate.
+ *
+ * '0279163b' is decision version 2 with claude-haiku-4-5. Decision version 3 hashes differently, so
+ * until a requalification adds its pair here, no reader gates by default. The list is updated by the
+ * study that measures the pair, never to make a reader gate.
+ */
+export const QUALIFIED_READERS: readonly QualifiedReader[] = [{ model: 'claude-haiku-4-5', version: '0279163b' }];
+/** Is this model, at this reader version, one a qualification result stands behind? */
+export const isQualified = (model: string, version = READER_VERSION, list: readonly QualifiedReader[] = QUALIFIED_READERS): boolean =>
+  list.some((q) => q.model === model && q.version === version);
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
-/** "ten hours" and "10 hours" state the same figure: spelled-out numbers are read as digits. */
-const NUMBER_WORDS: Readonly<Record<string, string>> = { two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9',
-  ten: '10', eleven: '11', twelve: '12', fifteen: '15', twenty: '20', thirty: '30', forty: '40', fifty: '50', sixty: '60', seventy: '70',
-  eighty: '80', ninety: '90', hundred: '100', thousand: '1000' };
-const numbersIn = (s: string): string[] => [
-  ...(s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, '').replace(/,/g, '')),
-  ...(s.match(/\b[a-z]+\b/gi) ?? []).map((w) => NUMBER_WORDS[w.toLowerCase()]).filter((n): n is string => Boolean(n)),
-];
-/** Compared as the same text: case, quote style, spacing and a spelled-out number ("ten" is "10") aside. */
-const norm = (s: string): string => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
-  .replace(/\b[a-z]+\b/g, (w) => NUMBER_WORDS[w] ?? w).replace(/\s+/g, ' ').trim();
+
+// ── Numbers, however they are spelled ──────────────────────────────────────────────────────────
+//
+// "ten hours" and "10 hours" state the same figure, so a spelled-out number is read as its value. Version
+// 2 read ONE word at a time from a short list, and the audit found both directions of the failure it
+// allows. A word it did not list was no number at all, so "fourteen engineers" against material saying
+// "four engineers" had no figure to disagree with and passed; "one million users" against "3 million"
+// likewise. And "twenty-five" became "20-5", so a true "25 customers" was cut. Now a number is a PHRASE:
+// units, teens, tens, "twenty-five", "two hundred and fifty", "a dozen", and a multiplier on words or on
+// digits ("3 million" ≡ "three million" ≡ 3000000). A figure is its value, never a piece of it: "3
+// million" in the notes does not support "3 users".
+const UNITS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+const TEENS: Readonly<Record<string, number>> = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19 };
+const TENS: Readonly<Record<string, number>> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const SCALES: Readonly<Record<string, number>> = { thousand: 1e3, million: 1e6, billion: 1e9 };
+/**
+ * "ONE" IS USUALLY NOT A FIGURE. "One of the reasons", "no one", "the one that", "one day": read as 1,
+ * each would demand a 1 in the material, and a true story would be cut for a pronoun. So a lone "one"
+ * counts only where it quantifies: followed by a word that is not a function word or one of these idioms,
+ * and not preceded by a determiner. Inside a number phrase ("one million", "twenty-one") it always counts.
+ */
+const ONE_BEFORE_NOT_A_FIGURE = new Set(['of', 'and', 'or', 'but', 'the', 'a', 'an', 'to', 'that', 'who', 'which', 'is', 'was', 'can', 'could',
+  'would', 'should', 'might', 'must', 'will', 'may', 'another', 'other', 'day', 'time', 'thing', 'way', 'point', 'side', 'hand', 'more', 'by',
+  'in', 'on', 'at', 'for', 'from', 'with', 'as', 'i', 'we', 'you', 'they', 'it', 'he', 'she', 'has', 'had', 'does', 'did', 'if', 'so']);
+const ONE_AFTER_NOT_A_FIGURE = new Set(['the', 'this', 'that', 'no', 'any', 'each', 'every', 'some', 'which', 'last', 'next', 'only', 'same', 'right', 'wrong']);
+
+interface NumberPhrase { readonly index: number; readonly length: number; readonly value: string }
+/** Every number in `s` written as words, or as digits with a scale word after them, with where it sits. */
+function numberPhrases(s: string): NumberPhrase[] {
+  const tokens = [...s.matchAll(/\d[\d,]*(?:\.\d+)?|[A-Za-z]+/g)].map((m) => ({ at: m.index, raw: m[0], w: m[0].toLowerCase() }));
+  const out: NumberPhrase[] = [];
+  const kind = (w: string): 'UNIT' | 'TEEN' | 'TENS' | 'HUNDRED' | 'SCALE' | 'DOZEN' | null =>
+    w in UNITS ? 'UNIT' : w in TEENS ? 'TEEN' : w in TENS ? 'TENS' : w === 'hundred' ? 'HUNDRED' : w in SCALES ? 'SCALE' : w === 'dozen' ? 'DOZEN' : null;
+  // Two tokens belong to one phrase only across a space or a hyphen: "five, six" is two numbers.
+  const joined = (a: { at: number; raw: string }, b: { at: number }): boolean => /^[\s-]+$/.test(s.slice(a.at + a.raw.length, b.at));
+  let i = 0;
+  while (i < tokens.length) {
+    const t0 = tokens[i];
+    const digits = /^\d/.test(t0.raw);
+    const leadA = t0.w === 'a' && tokens[i + 1] && joined(t0, tokens[i + 1]) && ['HUNDRED', 'SCALE', 'DOZEN'].includes(kind(tokens[i + 1].w) ?? '');
+    if (!digits && !leadA && !kind(t0.w)) { i += 1; continue; }
+    // A digit counts here only when a scale word follows it ("3 million"); plain digits are read elsewhere.
+    if (digits && !(tokens[i + 1] && joined(t0, tokens[i + 1]) && ['HUNDRED', 'SCALE', 'DOZEN'].includes(kind(tokens[i + 1].w) ?? ''))) { i += 1; continue; }
+    let total = 0; let current = digits ? Number(t0.raw.replace(/,/g, '')) : 0;
+    let last: string = digits ? 'DIGITS' : leadA ? 'A' : '';
+    let j = digits || leadA ? i + 1 : i; let end = j - 1;
+    for (; j < tokens.length; j++) {
+      const t = tokens[j];
+      if (j > i && !joined(tokens[j - 1], t)) break;
+      // "two hundred and fifty": "and" joins two parts of one number after a hundred or a scale, nothing else.
+      if (t.w === 'and' && (last === 'HUNDRED' || last === 'SCALE') && tokens[j + 1] && joined(t, tokens[j + 1]) && kind(tokens[j + 1].w)) { last = 'SCALED'; continue; }
+      const k = kind(t.w);
+      if (!k) break;
+      // After a unit or a teen only a multiplier may follow: "five six" is two numbers, not eleven.
+      if ((last === 'UNIT' || last === 'TEEN') && (k === 'UNIT' || k === 'TEEN' || k === 'TENS')) break;
+      if (last === 'TENS' && (k === 'TEEN' || k === 'TENS')) break;
+      if (k === 'UNIT') current += UNITS[t.w];
+      else if (k === 'TEEN') current += TEENS[t.w];
+      else if (k === 'TENS') current += TENS[t.w];
+      else if (k === 'HUNDRED') current = (current || 1) * 100;
+      else if (k === 'DOZEN') current = (current || 1) * 12;
+      else { total += (current || 1) * SCALES[t.w]; current = 0; }
+      last = k === 'SCALE' ? 'SCALE' : k; end = j;
+      if (k === 'DOZEN') break;
+    }
+    if (end < i || (leadA && end === i)) { i += 1; continue; }
+    const first = tokens[i]; const lastTok = tokens[end];
+    // The lone "one": a figure only where it quantifies (see ONE_BEFORE_NOT_A_FIGURE).
+    if (end === i && first.w === 'one') {
+      const next = tokens[i + 1]; const prev = tokens[i - 1];
+      const quantifies = next !== undefined && joined(first, next) && !ONE_BEFORE_NOT_A_FIGURE.has(next.w) && !/^\d/.test(next.raw)
+        && !(prev && joined(prev, first) && ONE_AFTER_NOT_A_FIGURE.has(prev.w));
+      if (!quantifies) { i += 1; continue; }
+    }
+    const value = total + current;
+    out.push({ index: first.at, length: lastTok.at + lastTok.raw.length - first.at, value: String(Math.round(value * 1000) / 1000) });
+    i = end + 1;
+  }
+  return out;
+}
+
+/** Every figure `s` states, as its value: digits ("1,000" is "1000"), and every number phrase. */
+export const numbersIn = (s: string): string[] => {
+  const phrases = numberPhrases(s);
+  // Digits that head a phrase ("3" of "3 million") are the phrase's, not a figure of their own.
+  const heads = new Set(phrases.map((p) => p.index));
+  const digits = [...s.matchAll(/\d[\d,]*(?:\.\d+)?/g)].filter((m) => !heads.has(m.index))
+    .map((m) => m[0].replace(/[.,]$/, '').replace(/,/g, ''));
+  return [...digits, ...phrases.map((p) => p.value)];
+};
+/** Compared as the same text: case, quote style, spacing, thousands separators and how a number is spelled aside. */
+const norm = (s: string): string => {
+  let t = s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/(\d),(?=\d{3}\b)/g, '$1');
+  for (const p of numberPhrases(t).reverse()) t = `${t.slice(0, p.index)}${p.value}${t.slice(p.index + p.length)}`;
+  return t.replace(/\s+/g, ' ').trim();
+};
 
 /**
- * Is `support` really in `source`? Exactly (whitespace and quote style aside), or, because a model
- * re-quoting a passage drops a word or two, when at least 80% of its content words fall in ONE passage
- * of the source. A passage scattered across the notes supports nothing.
+ * MARKDOWN IS NOT WORDS. A person's notes say "our **checkout** broke" and link "[a stale cache](…)"; a
+ * reader quoting them writes the words, and version 2 compared the two with the asterisks and the URL in
+ * between, so a true story failed its own quotation and was cut. Emphasis, links (their text), images
+ * (their alt text), inline code and heading, quote and table markers are dropped on both sides before
+ * matching. The raw text is tried too, so a link's URL, which only the raw text carries, can still
+ * support a URL the draft cites.
+ */
+const plain = (s: string): string => s
+  .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/`([^`]*)`/g, '$1')
+  .replace(/\*+|~~|(^|[^\w])_+|_+(?=[^\w]|$)/g, '$1')
+  .replace(/^\s*(?:#{1,6}\s+|>\s?)+/gm, '')
+  .replace(/\|/g, ' ');
+
+/**
+ * THE PASSAGES A SUPPORT MAY FALL IN: runs of adjacent sentences inside ONE paragraph. A quoted story
+ * often runs over two sentences ("In March our checkout broke. We traced it to a stale cache."), and
+ * version 2 matched each sentence alone, so a two-sentence quotation had at most half its words in any
+ * one passage and a true story was cut. The run is as long as the quotation has sentences, plus one for
+ * a sentence the reader skipped, and it never crosses a paragraph, a list item, a heading or a table row:
+ * a support assembled from words scattered across the notes still supports nothing.
+ */
+const sentenceSplit = (s: string): string[] => s.split(/(?<=[.!?])\s+/).filter((x) => x.trim());
+function passagesOf(source: string, span: number): Set<string>[] {
+  const paragraphs = source.split(/\n\s*\n|\n(?=\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|\|))/);
+  const out: Set<string>[] = [];
+  for (const p of paragraphs) {
+    const ss = sentenceSplit(p);
+    for (let i = 0; i < ss.length; i++) {
+      const words = new Set(contentWords(plain(ss.slice(i, i + span).join(' '))));
+      if (words.size) out.push(words);
+    }
+  }
+  return out;
+}
+
+/**
+ * Is `support` really in `source`? Exactly (whitespace, quote style, markdown and number spelling
+ * aside), or, because a model re-quoting a passage drops a word or two, when at least 80% of its content
+ * words fall in ONE passage of the source: adjacent sentences of one paragraph. A passage scattered
+ * across the notes supports nothing.
  */
 export function supportIsIn(support: string, source: string): boolean {
   if (!support.trim()) return false;
   if (norm(source).includes(norm(support))) return true;
-  const cw = contentWords(support);
+  if (norm(plain(source)).includes(norm(plain(support)))) return true;
+  const cw = contentWords(plain(support));
   if (cw.length < 3) return false;
-  const passages = source.split(/\n\s*\n|(?<=[.!?])\s+/).map((p) => new Set(contentWords(p))).filter((p) => p.size);
-  return passages.some((p) => cw.filter((w) => p.has(w)).length / cw.length >= 0.8);
+  return passagesOf(source, sentenceSplit(support).length + 1).some((p) => cw.filter((w) => p.has(w)).length / cw.length >= 0.8);
 }
 
 const LIVED: ReadonlySet<Kind> = new Set(['QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT']);
@@ -175,7 +340,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   instrument: string,
   /** a format where every specific must trace to the person (a white paper, a report, a contract): nothing passes as public */
   strict = false): ClaimReading {
-  const ss = sentencesOf(text);
+  const ss = claimUnitsOf(text);
   const known = `${material}\n\n${task}`;
   const knownNumbers = new Set(numbersIn(known));
   const bySentence = new Map<number, Claim>();
@@ -239,15 +404,19 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   return { claims, publicFacts, instrument, specifics };
 }
 
-/** The draft as the reader sees it: numbered sentences, so every specific is anchored to one. */
-export const numbered = (text: string): string => sentencesOf(text).map((s, i) => `[${i + 1}] ${s.text}`).join('\n');
+/**
+ * The draft as the reader sees it: numbered units, so every specific is anchored to one. A unit is a
+ * sentence, a heading or a table row (`claimUnitsOf`): the numbers here and in `decideSpecifics` are
+ * the same list, or a specific would be located in the wrong place.
+ */
+export const numbered = (text: string): string => claimUnitsOf(text).map((s, i) => `[${i + 1}] ${s.text}`).join('\n');
 
 /** The pattern check, behind the same seam: what runs when no reader model is configured. */
 export function patternSensor(material: string, placeholders: boolean, why = 'pattern check'): Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } {
   const cache = new Map<string, ClaimReading>();
   const instrument = why;
   const sensor: Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } = {
-    instrument, notes: [],
+    instrument, notes: [], version: null, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0,
     read: (text) => { sensor.reading(text); return Promise.resolve(); },
     reading: (text) => {
       const k = sha(text);
@@ -261,22 +430,58 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
 
 /**
  * The model reader. One call per distinct text, cached by content; its own small budget, so the check
- * never spends the writer's calls and a runaway loop cannot run it without bound. A call that fails
- * leaves that text to the pattern check, and the failure is noted: the draft is still checked.
+ * never spends the writer's calls and a runaway loop cannot run it without bound.
+ *
+ * WHO GATES. A reader whose (model, READER_VERSION) pair is in QUALIFIED_READERS gates: its findings
+ * fail the check and are cut. Any other reader reports: each reading carries the pattern check's
+ * reading as its `gate`, and the check shows the reader's findings as a warning beside it.
+ * `gateAnyway` (ATELIER_CLAIMS_GATE=reader) lets an unqualified reader gate, and says so loudly.
+ *
+ * A FAILED READ DEGRADES THE WHOLE SENSOR, FOR GOOD. Version 2 fell back to the pattern check for the
+ * one text whose read failed and kept the model's readings of the others, so the repair loop compared a
+ * draft read by the model with a rewrite read by the pattern: the model flagged "94 minutes", the
+ * rewrite said "95 minutes", the pattern saw nothing, and the loop reported "all now hold" over a figure
+ * still invented. A comparison is only as good as its one instrument. So the first failure (an error, a
+ * reply with no list, the reader's own budget spent) turns the sensor DEGRADED: from then on every
+ * `reading`, of texts the model already read included, is the pattern check's, `instrument` names the
+ * degraded state, and `notes` says why. A caller holding a report made before the failure re-reads it
+ * (refineToStandard does).
  */
 export function modelSensor(client: InferenceClient, budget: Budget, model: string,
-  ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean; readonly strict?: boolean }): ClaimSensor {
+  ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean; readonly strict?: boolean
+    /** the pairs a qualification stands behind: QUALIFIED_READERS, unless a test passes its own */
+    readonly qualifiedReaders?: readonly QualifiedReader[];
+    /** ATELIER_CLAIMS_GATE=reader: an unqualified reader gates anyway */
+    readonly gateAnyway?: boolean }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
   const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
+  const gatePattern = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
+  const qualified = isQualified(model, READER_VERSION, ctx.qualifiedReaders ?? QUALIFIED_READERS);
+  const readerGates = qualified || (ctx.gateAnyway ?? false);
   // The prompt's hash is part of the instrument's name: a reading from a changed prompt is a reading
   // from a different instrument, and a qualification result holds for the version it measured.
-  const instrument = `claim reader (${model}, prompt ${READER_VERSION})`;
+  const named = `claim reader (${model}, prompt ${READER_VERSION})`;
+  const live = qualified ? named
+    : readerGates ? `${named}: NOT QUALIFIED, gating anyway (ATELIER_CLAIMS_GATE=reader)`
+      : `pattern check, with ${named} reporting only: not qualified`;
+  let degraded = false; let failure = '';
+  const notes: string[] = [];
+  if (!qualified && readerGates) {
+    notes.push(`ATELIER_CLAIMS_GATE=reader: ${named} is NOT QUALIFIED and is failing drafts and cutting sentences anyway. `
+      + 'Nobody has measured how often it cuts a true story or figure of yours; unset ATELIER_CLAIMS_GATE to let the pattern check gate');
+  } else if (!qualified) {
+    notes.push(`${named} is not qualified: what it finds is reported as a warning (UNSOURCED·reader), and the pattern check decides what fails`);
+  }
   const context = `THE AUTHOR'S MATERIAL (what they supplied; anything here is theirs to use):\n<material>\n${ctx.material.trim() || '(none)'}\n</material>\n\nTHE TASK THEY GAVE:\n<task>\n${ctx.task.trim() || '(none)'}\n</task>`;
   const sensor: ClaimSensor = {
-    instrument, notes: [],
+    get instrument() { return degraded ? `pattern check (${named} degraded after it failed: ${failure}; every text is read by the pattern check since)` : live; },
+    notes, version: READER_VERSION, qualified,
+    get gate() { return readerGates && !degraded ? 'reader' as const : 'pattern' as const; },
+    get degraded() { return degraded; },
+    get spentUsd() { return budget.spentUsd; },
     read: async (text) => {
       const k = sha(text);
-      if (cache.has(k)) return;
+      if (degraded || cache.has(k)) return;
       try {
         const res = await spend(budget, 0.02, async () => {
           const x = await client.complete({
@@ -291,14 +496,19 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
         if (!Array.isArray(raw)) throw new Error('the reader returned no list of specifics');
         const specifics = raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
           && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string');
-        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, instrument, ctx.strict ?? false));
+        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false));
       } catch (e) {
-        const why = (e as Error).message.split('\n')[0];
-        if (!sensor.notes.some((n) => n.includes(why))) sensor.notes.push(`the claim reader could not run (${why}); the pattern check was used instead`);
-        cache.set(k, fallback.reading(text));
+        failure = (e as Error).message.split('\n')[0];
+        degraded = true;
+        notes.push(`the claim reader could not run (${failure}); the pattern check was used instead, for this text and every one after it, `
+          + 'the texts the reader had already read included, so a draft and its rewrite are always compared by one instrument');
       }
     },
-    reading: (text) => cache.get(sha(text)),
+    reading: (text) => {
+      if (degraded) return fallback.reading(text);
+      const r = cache.get(sha(text));
+      return r && !readerGates ? { ...r, gate: gatePattern.reading(text) } : r;
+    },
   };
   return sensor;
 }

@@ -22,8 +22,58 @@
 // the repair leaves a bracketed slot saying what belongs there instead. Each claim's `why` says which,
 // because it is the instruction the repair model reads.
 
-import { sentencesOf, wordsOf } from '../observers/text.js';
+import { sentencesOf, wordsOf, type Sentence } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
+
+/**
+ * WHAT THE CLAIM CHECK READS: every sentence of prose, AND every heading and table row. `sentencesOf`
+ * is right for the style observers, which count how a writer writes prose: a heading is not a sentence
+ * and a table row is not pace. It was wrong here, and the audit showed how: "# How we cut latency 73% at
+ * Stripe" over "| p99 | 900ms | 120ms |" reached the reader as one sentence ("We changed the cache.")
+ * and neither check saw a figure, so the most prominent claim on the page was the one never checked. An
+ * invented specific is as invented in a title as in a paragraph. Only code fences and front matter are
+ * left out: code is not a claim in the writer's voice, and front matter is metadata.
+ *
+ * Offsets point at the real text (a heading's words, not its `#`; a row from its first `|` to its
+ * last), because a span is what the repair rewrites and what the last resort cuts. A table's rule row
+ * (`|---|:--:|`) carries no words and is not a unit.
+ */
+export function claimUnitsOf(text: string): Sentence[] {
+  const extra: Sentence[] = [];
+  const lines = text.split('\n');
+  let offset = 0; let fence: string | null = null; let front = false;
+  const unit = (start: number, body: string): void => {
+    const w = wordsOf(body).length;
+    if (w) extra.push({ start, end: start + body.length, text: body, words: w });
+  };
+  lines.forEach((line, i) => {
+    const lineStart = offset;
+    offset += line.length + 1;
+    const t = line.trim();
+    // Front matter and fences, exactly as the prose reader skips them (core/observers/text.ts).
+    if (i === 0 && t === '---') { front = true; return; }
+    if (front) { if (t === '---' || t === '...') front = false; return; }
+    const f = /^(```|~~~)/.exec(t);
+    if (fence) { if (f && t.startsWith(fence)) fence = null; return; }
+    if (f) { fence = f[1]; return; }
+    const lead = line.length - line.trimStart().length;
+    const atx = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(t);
+    if (atx) { unit(lineStart + lead + t.indexOf(atx[2], atx[1].length), atx[2]); return; }
+    if (t.startsWith('|')) {
+      if (/^\|[\s:|-]*$/.test(t)) return;
+      unit(lineStart + lead, t);
+      return;
+    }
+    // A setext heading: one line of text alone in its block, underlined with === (or --- after text,
+    // which the prose reader also takes as an underline). The prose reader drops the line; it is read here.
+    const next = lines[i + 1]?.trim() ?? '';
+    const prev = i > 0 ? lines[i - 1].trim() : '';
+    const alone = !prev || /^(```|~~~|#{1,6}\s|\||([-*_])(\s*\2){2,}$)/.test(prev);
+    if (t && /^(=+|-+)$/.test(next) && alone && !/^([-*+]|\d+[.)])\s/.test(t) && !t.startsWith('>')) unit(lineStart + lead, t);
+  });
+  if (!extra.length) return sentencesOf(text);
+  return [...sentencesOf(text), ...extra].sort((a, b) => a.start - b.start);
+}
 
 const FIRST_PERSON_PAST = /\b(?:I|we|my team|our team)\b[^.!?]{0,40}?\b(?:worked|spent|shipped|built|wrote|ran|saw|found|learned|led|joined|reviewed|tried|watched|had|was|were|did|made|lost|broke|asked|told|sat|remember|discovered|realized|realised|measured|benchmarked|counted)\b/i;
 const PARTICULAR_TIME = /\b(?:years? ago|months? ago|weeks? ago|days? ago|last (?:week|month|year|quarter|summer|winter|spring|fall)|in (?:19|20)\d\d|at (?:my|our) (?:last|previous|old|first)|back when|early in my|a few years back|the first time I|once|recently|the other day|a while back|earlier this year|at one point|one time)\b/i;
@@ -80,7 +130,7 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
     return cw.length > 0 && passages.some((p) => cw.filter((w) => p.has(w)).length / cw.length >= 0.6);
   };
   const out: Claim[] = [];
-  const ss = sentencesOf(text);
+  const ss = claimUnitsOf(text);
   let inStory = false;
   for (const s of ss) {
     const opens = (FIRST_PERSON_PAST.test(s.text) && PARTICULAR_TIME.test(s.text)) || ANECDOTE.test(s.text) || SECOND_HAND.test(s.text);
