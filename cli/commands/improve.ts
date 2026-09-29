@@ -32,7 +32,7 @@ import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, carriedFrom } from '../runtime.js';
-import type { RepairRecord, InvocationRecord, TaskSource } from '../../core/state/canonical-state.js';
+import type { RepairRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
 
@@ -250,6 +250,24 @@ const FREE_TEXT_SCHEMA: Record<string, unknown> = {
  * it is a typed object, and it is serialized for the record rather than reduced to one field — reading
  * `.piece` off a contract-shaped object would return undefined and record an empty output as a success.
  */
+/** The token ceiling every draft is written under: --max-tokens, or ~1.8x the measured median piece. */
+export const draftMaxTokens = (): number => numericFlag('--max-tokens', 12_000);
+
+/** The most characters of unchosen drafts one record keeps, across all of them. */
+export const UNCHOSEN_CAP_CHARS = 60_000;
+
+/** Every draft but the chosen one, in order, cut to fit `cap` characters in total. */
+export function unchosenDrafts(pieces: readonly string[], chosen: number, cap = UNCHOSEN_CAP_CHARS): { texts: string[]; truncated: boolean } {
+  const texts: string[] = []; let left = cap; let truncated = false;
+  pieces.forEach((p, i) => {
+    if (i === chosen) return;
+    if (p.length > left) truncated = true;
+    texts.push(p.slice(0, Math.max(0, left)));
+    left = Math.max(0, left - p.length);
+  });
+  return { texts, truncated };
+}
+
 export async function spendOneWithResult(
   client: InferenceClient, budget: Budget, stable: string, brief: string,
   contract: { readonly schema: Record<string, unknown>; readonly artifact: string } | null = null,
@@ -271,7 +289,7 @@ export async function spendOneWithResult(
       // a study over the truncation tail; this path carried 4000, ~60% of that median, serving
       // invoke, every reference arm, and fix's rerun. Default is ~1.8x the measured median;
       // --max-tokens overrides, and a cut-off still surfaces as GenerationIncomplete, never as data.
-      schema, maxTokens: numericFlag('--max-tokens', 12_000) };
+      schema, maxTokens: draftMaxTokens() };
     servedTask = req.variableBlock;
     const res = await client.complete(req);
     return { value: res, cost: res.cost };
@@ -302,6 +320,11 @@ export function stringLeaves(json: string): string {
   return out.join('\n\n');
 }
 
+const unchosenFields = (pieces: readonly string[], chosen: number): { unchosen?: string[]; unchosenTruncated?: boolean } => {
+  const u = unchosenDrafts(pieces, chosen);
+  return u.texts.length ? { unchosen: u.texts, ...(u.truncated ? { unchosenTruncated: true } : {}) } : {};
+};
+
 export async function runOnce(
   L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string; architectureHash: string },
   servedText: string, servedHash: string, delivery: { expectedPackageHash: string; servedPackageHash: string; matched: boolean; servedFiles: string[] },
@@ -326,6 +349,8 @@ export async function runOnce(
    * it still invents, nothing is delivered. Returns the unsupported claims' sentences.
    */
   claimGuard: ((text: string) => Promise<readonly string[]>) | null = null,
+  /** what `invoke` was configured with beyond the binding (see InvocationSettings); null elsewhere */
+  settings: InvocationSettings | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -395,7 +420,9 @@ export async function runOnce(
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
     ...(refined.repair ? { repair: refined.repair } : {}),
     ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
-      ...(failures.length ? { written: written.length, failed: failures } : {}) } } : {}) };
+      ...(failures.length ? { written: written.length, failed: failures } : {}),
+      ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),
+    ...(settings ? { settings } : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.
