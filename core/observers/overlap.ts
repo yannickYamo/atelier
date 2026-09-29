@@ -10,6 +10,8 @@
 //
 // Words are lowercased letters, digits and apostrophes; punctuation and markdown do not break a run.
 
+import { sentencesOf } from './text.js';
+
 const wordsOf = (t: string): string[] => t.toLowerCase().match(/[a-z0-9'’]+/g) ?? [];
 const N = 6;
 
@@ -33,4 +35,23 @@ export function overlapIndex(corpus: readonly string[]): (text: string) => Corpu
     }
     return { shared6, longestShared };
   };
+}
+
+/**
+ * HOW MUCH OF A SOURCE A REWRITE KEPT: the share of the output's sentences (six words or longer) whose
+ * words are at least 80% those of one sentence of the source. A rewrite toward another author's voice kept
+ * 72 to 93% of its source's sentences in every version tried, so a draft that keeps most of what it was
+ * given is a restyle, and saying so is how a person learns that new pieces, not rewrites, carry a voice.
+ */
+export function sentencesKept(output: string, source: string): number {
+  const key = (s: string): Set<string> => new Set(wordsOf(s).map((w) => w.toLowerCase()));
+  const src = sentencesOf(source).map((s) => key(s.text)).filter((k) => k.size >= 6);
+  const out = sentencesOf(output).map((s) => key(s.text)).filter((k) => k.size >= 6);
+  if (!out.length || !src.length) return 0;
+  const near = (a: Set<string>, b: Set<string>): boolean => {
+    let common = 0;
+    for (const w of a) if (b.has(w)) common += 1;
+    return common / Math.max(a.size, b.size) >= 0.8;
+  };
+  return out.filter((o) => src.some((s) => near(o, s))).length / out.length;
 }

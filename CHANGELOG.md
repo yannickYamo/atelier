@@ -6,6 +6,27 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## [Unreleased] — voice defaults
+
+### Changed: the voice defaults (Phase 1 of closing Atelier as a voice engine)
+
+- **Rhythm instructs.** The author's sentence-length mix is suggested as required when their unread work
+  bears it out, like any count; before, it only chose between drafts, so no draft's rhythm moved.
+- **Contrastive verdicts held for every author** ("isn't X, it's Y", "not X but Y"), at their own rate,
+  not only where a plain model overuses them: a rewrite inherits them from its source.
+- **A restyle is said as one.** When a draft keeps most of a bound text's sentences, `invoke` says so
+  and points to writing a new piece from notes. `atelier new` ends by asking for real stories and figures.
+
+### Studies: the Phase 1 check (exploratory, $0.85)
+
+Two new pieces (not rewrites) with the Linear skill, its sentence mix made required, each from a fact
+pack. **Rhythm did not move.** Median sentence 10.5 and 11 words against Linear's 15; 29% and 36% of
+sentences of eight words or fewer against Linear's 15%. The mix rule reported itself met, because its
+tolerance lets 22% of sentences sit in the wrong band, wider than the whole gap. What did move: new pieces
+use "we" at Linear's rate (22.5 per 1,000 words against 22.2; a rewrite of the same kind of post stayed
+at 2.8), with no em dash and no invented fact shipped. As the plan requires, there is no second iteration:
+the tolerance is a choice to be fixed in the voice study's pre-registration, before any output.
+
 ## [0.5.0] — 2026-09-29 (an easy first run, no added AI tells, and the claim reader qualified again)
 
 A full audit before Phase C covered detection, the loop, the moat and the competitor claims, and whether
