@@ -18,6 +18,8 @@ import { formatOf, checkFormat, FORMATS } from '../core/observers/formats.js';
 import { normalizeClass, checkClass } from '../core/observers/doc-class.js';
 import { signTestOneSidedP, mcnemarExactP, binomialUpperTailP } from '../core/stats/sign-test.js';
 import { accountRefusal } from '../providers/anthropic.js';
+import { isUnknownModel, ModelUnavailable, GenerationIncomplete } from '../core/inference/client.js';
+import { discoveryRetry } from '../cli/commands/discover.js';
 import { contrastForm } from '../cli/commands/discover.js';
 import { USAGE } from '../cli/help.js';
 import { BOOLEAN_OPTIONS } from '../cli/runtime.js';
@@ -365,6 +367,23 @@ describe('a provider that refuses the key is said in one line, request id kept',
     expect(accountRefusal(403, '{}')).toMatch(/HTTP 403/);
     expect(accountRefusal(400, '{"error":{"message":"max_tokens: too large"}}')).toBeNull();
     expect(accountRefusal(500, credit)).toBeNull();
+    expect(accountRefusal(429, '{}', 'req_4')).toMatch(/^the backend is limiting this key \(HTTP 429.*Nothing more was spent.*req_4/);
+  });
+  it('an unknown model is told apart from every other failure, on both providers\' shapes', () => {
+    expect(isUnknownModel(404, '{"type":"error","error":{"type":"not_found_error","message":"model: claude-fable-5"}}')).toBe(true);
+    expect(isUnknownModel(400, '{"error":{"message":"Invalid model name passed in model=claude-fable-5"}}')).toBe(true);
+    expect(isUnknownModel(400, '{"error":{"message":"The model `x` does not exist"}}')).toBe(true);
+    expect(isUnknownModel(400, '{"error":{"message":"max_tokens: too large"}}')).toBe(false);
+    expect(isUnknownModel(404, 'no route')).toBe(false);
+    expect(new ModelUnavailable('claude-fable-5', 'raw').message).toMatch(/^the model "claude-fable-5" is not available on this backend\. Name one it serves: ATELIER_MODEL/);
+  });
+  it('discovery swaps an unserved DEFAULT reader and says so; a model the person named is theirs', () => {
+    const unserved = { status: 404, error: { type: 'not_found_error', message: 'model: claude-fable-5' } };
+    const refused = new GenerationIncomplete({ kind: 'REFUSAL' }, 'declined');
+    expect(discoveryRetry(new ModelUnavailable('claude-fable-5', JSON.stringify(unserved)), true)).toBe('UNSERVED');
+    expect(discoveryRetry(new ModelUnavailable('my-model', 'x'), false)).toBeNull();
+    expect(discoveryRetry(refused, false)).toBe('REFUSED');
+    expect(discoveryRetry(new Error('anything else'), true)).toBeNull();
   });
 
   // In-process server, so the BIN runs asynchronously (execFileSync would block the server's loop).
@@ -373,9 +392,19 @@ describe('a provider that refuses the key is said in one line, request id kept',
   beforeAll(async () => {
     server = createServer((req, res) => {
       hits.push(req.url ?? '');
-      req.resume();
+      let body = '';
+      req.on('data', (c: Buffer) => { body += c.toString(); });
       req.on('end', () => {
         res.setHeader('connection', 'close');
+        // Under /unserved/, the default reader is unknown to this backend and every other model has no credit.
+        if ((req.url ?? '').startsWith('/unserved/')) {
+          const model = (JSON.parse(body || '{}') as { model?: string }).model ?? '';
+          if (model === 'claude-fable-5') {
+            res.writeHead(404, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ type: 'error', error: { type: 'not_found_error', message: `model: ${model}` } })); return;
+          }
+          res.writeHead(400, { 'content-type': 'application/json', 'request-id': 'req_011CAbc' }); res.end(credit); return;
+        }
         if ((req.url ?? '').includes('/v1/messages')) {
           res.writeHead(400, { 'content-type': 'application/json', 'request-id': 'req_011CAbc' }); res.end(credit); return;
         }
@@ -406,6 +435,21 @@ describe('a provider that refuses the key is said in one line, request id kept',
     expect(out).toMatch(/^EXIT:1/);
     expect(out).toMatch(/the API key has no credit left: add credits, or set another key \(request id req_011CAbc\)/);
     expect(out).not.toMatch(/"type":"error"|invalid_request_error/);
+  }, 60_000);
+
+  it('through the binary: an unserved default reader is swapped for the target model, said in one line', async () => {
+    const out = await runAsync({ ANTHROPIC_API_KEY: 'sk-test', ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/unserved` }, 'discover', '--no-contrast');
+    expect(out).toMatch(/claude-fable-5, the default reader, is not served by this backend; reading your work with claude-opus-5 instead/);
+    // the replacement then ran (and met this backend's credit refusal), so the swap reached a real call
+    expect(out).toMatch(/the API key has no credit left/);
+    expect(out).not.toMatch(/not_found_error/);
+  }, 60_000);
+
+  it('through the binary: a model the person named is never swapped; the setting to change is named', async () => {
+    const out = await runAsync({ ANTHROPIC_API_KEY: 'sk-test', ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/unserved` }, 'discover', '--no-contrast', '--model', 'claude-fable-5');
+    expect(out).toMatch(/^EXIT:1/);
+    expect(out).toMatch(/the model "claude-fable-5" is not available on this backend\. Name one it serves: ATELIER_MODEL/);
+    expect(out).not.toMatch(/reading your work with/);
   }, 60_000);
 
   it('through the binary, an OpenAI-compatible backend: a refused key is one line, request id kept', async () => {

@@ -13,6 +13,7 @@ import * as store from '../core/state/store.js';
 import { keysOf } from '../core/state/rule-key.js';
 import { unchosenDrafts } from '../cli/commands/improve.js';
 import { spend, metered, processSpentUsd } from '../core/inference/client.js';
+import { withDetails } from './fixtures.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 let backend: ChildProcess; let port = 0;
@@ -204,7 +205,7 @@ describe('the record can reproduce a study arm', () => {
     const call = async (): Promise<{ value: number; cost: ReturnType<typeof metered> }> => ({ value: 1, cost: metered(0.25) });
     await spend({ spentUsd: 0, capUsd: 1 }, 0.01, call); await spend({ spentUsd: 0, capUsd: 1 }, 0.01, call);
     expect(processSpentUsd() - before).toBeCloseTo(0.5);
-    expect(out).toMatch(/SkillVersion \w+ {2}· {2}\$\d+\.\d{4}/);
+    expect(withDetails(out)).toMatch(/SkillVersion \w+ {2}· {2}\$\d+\.\d{4}/);
     // the cap on unchosen text is across all drafts, and says when it cut
     expect(unchosenDrafts(['a'.repeat(10), 'kept', 'b'.repeat(10)], 1, 15)).toEqual({ texts: ['a'.repeat(10), 'b'.repeat(5)], truncated: true });
     // POLARITY: a mislabel is refused, not recorded

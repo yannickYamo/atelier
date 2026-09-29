@@ -13,7 +13,7 @@ import { keysOf } from '../core/state/rule-key.js';
 import type { Requirement, StandardVersion } from '../core/state/canonical-state.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
 import * as store from '../core/state/store.js';
-import { anInferenceResult, aRequirement } from './fixtures.js';
+import { anInferenceResult, aRequirement, withDetails } from './fixtures.js';
 import { draftOrder, type DraftScore } from '../cli/commands/invoke.js';
 
 const figure = aRequirement({ requirementId: 'p13', statement: 'I build the piece on one governing figure and keep returning to it.', materiality: 'PREFERRED' });
@@ -253,8 +253,8 @@ describe('through the binary: every output is read, labels earn authority, and t
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) } });
     holdback = '0';
     const first = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review');
-    expect(first).toContain('read against 1 reading-based rule(s): 0 followed, 1 missed');
-    expect(first).toContain('has not earned any authority yet');
+    expect(first).toContain('Taste reader: 1 of 1 reading-based rule(s) read as missed (reporting only until you label it');
+    expect(withDetails(first)).toContain('read against 1 reading-based rule(s): 0 followed, 1 missed');
     expect(store.readEvents(L).some((e) => e.kind === 'TASTE_READING')).toBe(true);
     // An OBSERVE-only verdict is a report, never evidence for the convergence loop.
     expect(store.listObservations(L).some((o) => o.producer === 'taste-reader')).toBe(false);
@@ -296,7 +296,7 @@ describe('through the binary: every output is read, labels earn authority, and t
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) },
     when: [{ contains: 'understanding it stayed dear', answer: readings([{ n: 1, verdict: 'FOLLOWED', quote: fixed }]) }] });
     const ranked = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review', '--drafts', '2');
-    expect(ranked).toMatch(/taste rule\(s\) read as missed/);
+    expect(withDetails(ranked)).toMatch(/taste rule\(s\) read as missed/);
     expect(ranked).not.toMatch(/^EXIT/);
 
     // And verify --taste now fails on a miss, as a broken REQUIRED rule does.
@@ -332,7 +332,7 @@ describe('through the binary: every output is read, labels earn authority, and t
         '--target-model', 'scripted', '--accept-new-binding'], { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_TASTE_HOLDBACK: '0' } });
     } catch (e) { targetOnly = `EXIT ${String((e as { stderr?: string }).stderr)}`; }
     expect(targetOnly).not.toMatch(/no model set/);
-    expect(targetOnly).toContain('1 followed');
+    expect(withDetails(targetOnly)).toContain('1 followed');
   }, 120_000);
 });
 

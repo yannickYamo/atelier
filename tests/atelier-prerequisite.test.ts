@@ -16,6 +16,9 @@
 import { describe, it, expect } from 'vitest';
 import { checkSatisfiable, describeSatisfiability, type Prerequisite } from '../core/state/prerequisite.js';
 import { defaultPlan, autonomousPromotionAllowed } from '../core/coverage/observation.js';
+import { materialLine, waitingForMaterial, withoutWaiting } from '../cli/commands/invoke.js';
+import { describeTaste, type TasteReading } from '../core/taste/reader.js';
+import type { Requirement } from '../core/state/canonical-state.js';
 
 const RECORDS: Prerequisite = {
   kind: 'RECORDS', name: 'support-ticket-history',
@@ -152,5 +155,38 @@ describe('the autonomy boundary, stated precisely', () => {
   it('a PREFERRED rule with no sensor does not block autonomy', () => {
     expect(autonomousPromotionAllowed([{ requirementId: 'r3', materiality: 'PREFERRED' }],
       [plan('r3', 'NONE')]).autonomous).toBe(true);
+  });
+});
+
+// ── A RULE WAITING FOR MATERIAL IS NOT A MISSED RULE ─────────────────────────────────────────────
+describe('when material is not bound, the run says so once, and nothing reads a waiting rule as missed', () => {
+  const figures: Prerequisite = { kind: 'CONTEXT', name: 'actual-figures-incidents', why: 'the actual figures from your incidents' };
+  const degraded = checkSatisfiable([{ requirementId: 'p6', statement: 'Give the real figure.', materiality: 'PREFERRED', prerequisites: [figures] }], new Set());
+
+  it('names the exact --with that lets the waiting rule fire, since a prerequisite is matched by name', () => {
+    const line = materialLine(degraded, false, true, 'posts');
+    expect(line).toMatch(/^1 rule\(s\) need your real specifics to fire \(p6\)\. Add them: --with actual-figures-incidents=<file>/);
+    expect(line).toMatch(/meanwhile any story, source or figure the draft invents is cut/);
+    expect(line?.split('\n')).toHaveLength(1);
+  });
+  it('with nothing waiting and no notes, one line on the cut; with notes or no claim guard, nothing to say', () => {
+    const ok = checkSatisfiable([], new Set());
+    expect(materialLine(ok, false, true, 'posts')).toMatch(/^No notes of yours are bound/);
+    expect(materialLine(ok, true, true, 'posts')).toBeNull();
+    expect(materialLine(ok, false, false, 'posts')).toBeNull();
+  });
+  it('a waiting rule leaves the taste reader\'s VETO: with nothing bound, a repair toward it could only invent', () => {
+    const waiting = waitingForMaterial(degraded);
+    expect([...waiting]).toEqual(['p6']);
+    const rules = [{ rule: { requirementId: 'p6' }, key: 'k6' }, { rule: { requirementId: 'p2' }, key: 'k2' }];
+    expect([...withoutWaiting(new Set(['k6', 'k2']), rules, waiting)]).toEqual(['k2']);
+  });
+  it('the reader\'s report counts it as waiting, not missed', () => {
+    const miss = { requirementId: 'p6', key: 'k6', verdict: 'MISSED', kind: 'PRESENCE', quote: '', why: 'no figure' } as unknown as TasteReading;
+    const rules = new Map([['p6', { requirementId: 'p6', statement: 'Give the real figure.' } as Requirement]]);
+    const told = describeTaste([miss], rules, new Set(), false, new Set(['p6']));
+    expect(told).toMatch(/0 missed.*1 waiting for your material \(p6\)/);
+    expect(told).not.toMatch(/missed p6/);
+    expect(describeTaste([miss], rules)).toMatch(/missed p6/);
   });
 });
