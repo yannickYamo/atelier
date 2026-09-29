@@ -9,6 +9,10 @@
 //   bar               ≤ 0.15, pooled over a standard's reading-based rules, with at least one
 //                     confirmed miss; a rule whose own labelled misses are wrong in more than a third
 //                     of three or more loses VETO on its own
+//   own labels        pooling sets the false-block bound, and never grants VETO to a rule nobody
+//                     labelled: a rule holds VETO only with at least one confirmed miss of its own. Twenty
+//                     confirmed misses on one rule said nothing about another, least of all a reworded
+//                     one, which TASTE.md says is OBSERVE again
 //   scope             the reader model and each rule's exact wording; change either and it is OBSERVE
 //
 // Everything here is a pure function of recorded events. Labels are the owner's, collected blind to
@@ -154,8 +158,10 @@ export function tastePermissions(
     const t = per.get(key) ?? { confirmed: 0, falseBlocks: 0, missedClears: 0 };
     const own = t.confirmed + t.falseBlocks;
     const revoked = own >= OWN_MIN && t.falseBlocks / own > OWN_BAR;
-    const permission: ObserverPermission = earned && !revoked ? 'VETO' : 'OBSERVE';
+    const unlabelled = t.confirmed < 1;
+    const permission: ObserverPermission = earned && !revoked && !unlabelled ? 'VETO' : 'OBSERVE';
     const why = revoked ? `its own labelled misses were wrong ${t.falseBlocks} of ${own} times`
+      : earned && unlabelled ? `the reader's misses held up on other rules (${falseBlocks} wrong of ${trials} labelled), but none of this rule's own misses has been confirmed yet`
       : earned ? `the reader's misses held up: ${falseBlocks} wrong of ${trials} labelled (at most ${Math.round(upper95 * 100)}%, 95% bound)`
         : trials ? `${falseBlocks} wrong of ${trials} labelled misses so far (at most ${Math.round(upper95 * 100)}%; needs ${Math.round(FALSE_BLOCK_BAR * 100)}%)`
           : 'no labelled misses yet';
