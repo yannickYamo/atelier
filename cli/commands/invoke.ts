@@ -141,6 +141,21 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
  * That check IS `deliveryEvidence`. It is also the whole of the DELIVERY_FAILURE route: a tampered
  * or stale artefact is caught here, deterministically, before any model is asked anything.
  */
+/** One draft's counts, as `invoke --drafts N` ranks them. */
+export interface DraftScore { readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number }
+
+/**
+ * THE ORDER DRAFTS ARE CHOSEN IN. REQUIRED rules first: the owner said an output breaking one is worse,
+ * and that is a count. The taste reader's VETO misses come second, because the reader is a model's
+ * reading, calibrated but still a reading; it ranked first, so a draft breaking a REQUIRED rule could
+ * win on the reader's opinion — a judge's taste outranking the owner's rule, which the comment on the
+ * choice said could not happen. Then machine-writing moves, all rules, the author's signals (an unread
+ * distance ranks last), and style (higher margin is better).
+ */
+export const draftOrder = (a: DraftScore, b: DraftScore): number =>
+  a.req - b.req || a.taste - b.taste || a.tells - b.tells || a.all - b.all
+  || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style;
+
 export async function invoke(): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const asked = flag('--task') ?? positional([name])
@@ -267,10 +282,11 @@ export async function invoke(): Promise<void> {
     };
   // ── SEVERAL DRAFTS, THE BEST BY COUNT ─────────────────────────────────────────────────────────
   //
-  // `--drafts N` writes N drafts side by side and delivers, in this order: the one the taste reader reads
-  // as missing the fewest rules it holds VETO on (when it has earned any), then the fewest REQUIRED rules
-  // broken, the fewest machine-writing moves, the fewest rules of any weight, and last the closest to the
-  // author's style. A count picks it, never a judge's taste.
+  // `--drafts N` writes N drafts side by side and delivers, in this order (draftOrder, below): the fewest
+  // REQUIRED rules broken, then the fewest rules the taste reader holds VETO on read as missed (when it
+  // has earned any), the fewest machine-writing moves, the fewest rules of any weight, the closest to
+  // the author's signals, and last the closest to the author's style. A count picks it, never a judge's
+  // taste: the reader breaks ties between drafts that break the same REQUIRED rules, never outranks one.
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
@@ -293,12 +309,13 @@ export async function invoke(): Promise<void> {
       // Machine-writing moves, catalogued and learned, counted instance by instance.
       const tells = r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0);
       // The author's signals: closest to their typical value, when the counts above tie.
-      const signal = signalDistance(drafts[i], signals) ?? 0;
+      // null when no signal could be read: unknown is not "on target", so it ranks last, not as 0
+      const signal = signalDistance(drafts[i], signals);
       return { i, req, all, style, tells, signal, taste: tasteMissed[i] };
     });
-    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || a.tells - b.tells || a.all - b.all || a.signal - b.signal || b.style - a.style);
+    scored.sort(draftOrder);
     const best = scored[0];
-    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${signals.length ? `, ${best.signal} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${signals.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
