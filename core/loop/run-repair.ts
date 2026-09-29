@@ -14,6 +14,7 @@ import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
+import { mechanicalFixes } from './mechanical-repair.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
@@ -172,6 +173,19 @@ export async function refineToStandard(
     report = checkDraft(skill, v, text, opts);
   };
   const kept: string[] = []; const revertedRules: string[] = []; const cut: string[] = [];
+  // THE FIXES THAT NEED NO MODEL (./mechanical-repair.ts): an em dash the author never uses, a paragraph
+  // longer than they write. Tried before the rewrite passes, which then have less to do, and again after,
+  // because a rewrite can put a dash back. Kept only on the same terms as a rewrite: nothing gets worse.
+  const mechanical: string[] = [];
+  const fixMechanically = async (): Promise<void> => {
+    const m = mechanicalFixes(v, report, text);
+    if (m.text === text) return;
+    const after = await checkDraftAsync(skill, v, m.text, opts);
+    sameInstrument();
+    if (!acceptRepair(report, after).ok) return;
+    text = m.text; report = after; mechanical.push(...m.fixed);
+  };
+  await fixMechanically();
   // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
   // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
   // broken, accuracy gets ONE pass of its own, not charged to the `maxPasses` style passes. An accuracy
@@ -239,13 +253,20 @@ export async function refineToStandard(
     }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }
+  if (report.failed) await fixMechanically();
+  if (mechanical.length) {
+    const how = `fixed without a model: ${mechanical.join('; ')}`;
+    why = report.failed ? `${why}; ${how}` : `every REQUIRED measured rule now holds (${how})`;
+  }
   // THE LAST RESORT FOR AN INVENTED STORY: CUT IT. When every rewrite failed (a model kept offering a
   // slot where it was told to cut), the sentences the claim check flagged are removed outright, and the
   // output lists them. An invented story does not ship because a rewrite could not be agreed.
   // Tried at most twice: if the reader fails on the cut text, the spans came from an instrument no longer
   // in use, so the cut is planned again from the current text as the pattern check reads it.
   for (let attempt = 0; attempt < 2 && !opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED'); attempt++) {
-    const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
+    const unsourced = report.checked.find((c) => c.requirementId === 'UNSOURCED');
+    if (!unsourced) throw new Error('UNSOURCED was violated but is not in the report.');
+    const spans = unsourced.result.spans.slice().sort((a, b) => b.start - a.start);
     let next = text;
     for (const sp of spans) next = cutClaim(next, sp.start, sp.end);
     const after = await checkDraftAsync(skill, v, next, opts);

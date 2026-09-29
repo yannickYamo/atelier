@@ -20,7 +20,7 @@ import { measure, findTerms } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
-import { TELL_FAMILIES } from './tells.js';
+import { TELL_FAMILIES, BAN_ONLY_FAMILIES } from './tells.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
 import type { MeasuredProposal } from './derive.js';
 
@@ -465,7 +465,13 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   // these moves more than the cap gets no rule, rather than a rule against them.
   // Per family: one the author never makes, in any piece, is never allowed; the rest are held to their
   // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
-  const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
+  // The pooled rate leaves out the ban-only families (./tells.ts BAN_ONLY_FAMILIES): an author's own em
+  // dashes would otherwise raise the cap on every other move.
+  const pooledRate = (t: string): number => {
+    const words = proseWords(t);
+    return words ? (findPattern(t, 'MACHINE_TELL').filter((s) => !(s.family && BAN_ONLY_FAMILIES.has(s.family))).length / words) * 1000 : 0;
+  };
+  const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], pooledRate, 0.9) * 1.5, 0.25));
   // HELD TO THE AUTHOR'S TYPICAL PIECE, NOT THEIR AVERAGE. A family is the author's to use only if at
   // least half their pieces use it; otherwise one of ours may not either. Held to an average, a move the
   // author made once in twenty pieces was allowed once in every piece (round 7: one per piece, each from a
@@ -483,7 +489,7 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   const ownCounts = all.map((t) => findPattern(t, 'MACHINE_TELL').length).sort((a, b) => a - b);
   const ownTolerance = Math.max(1, ownCounts[Math.min(ownCounts.length - 1, Math.ceil(ownCounts.length * 0.9) - 1)] ?? 1);
   const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= ownTolerance;
-  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
+  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
     'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
     `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words, in ${all.filter((t) => findPattern(t, 'MACHINE_TELL').length).length} of ${all.length} pieces; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`,
     false, false, occasional);
@@ -500,6 +506,16 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
       : `Write out what I write out ("do not", "it is"): at most ${cap} contractions per 1,000 words.`, 'BOUNDARY',
     { observer: 'PATTERN_RATE', params: { pattern: [other], maxPer1000: cap } },
     `you contract ${Math.round(share * 100)}% of the forms that can be contracted; the model's plain drafts: ${m} ${other === 'FULL_FORM' ? 'uncontracted forms' : 'contractions'} per 1,000 words`);
+    // AND NOT MORE THAN THE AUTHOR. A cap on the other form alone is one-sided: a repair told to cut
+    // "do not" contracted everything, 49 contractions to 8 whole forms against an author whose prose mixes
+    // them. The form the author prefers is capped at their own 90th-percentile piece too.
+    const mine = share >= 0.6 ? 'CONTRACTION' as const : 'FULL_FORM' as const;
+    const most = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, mine), 0.9) * 1.5, 1));
+    propose(share >= 0.6
+      ? `Contract as often as I do, not more: at most ${most} contractions per 1,000 words.`
+      : `Write out as often as I do, not more: at most ${most} uncontracted forms per 1,000 words.`, 'BOUNDARY',
+    { observer: 'PATTERN_RATE', params: { pattern: [mine], maxPer1000: most } },
+    `your 90th-percentile piece: ${r1(perPieceP(authorTexts, (t) => patternRate(t, mine), 0.9))} ${mine === 'CONTRACTION' ? 'contractions' : 'uncontracted forms'} per 1,000 words`);
   }
   const us = count('AMERICAN_SPELLING'); const uk = count('BRITISH_SPELLING');
   const dialect = us >= 10 && uk <= 0.15 * (us + uk) ? { other: 'BRITISH_SPELLING' as const, mine: 'American', eg: 'behavior, organize, center', not: 'behaviour, organise, centre' }

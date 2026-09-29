@@ -49,6 +49,12 @@ export function floorDimensions(v: StandardVersion): FloorDimension[] {
     .filter(({ rule: r }) => r.measurement && r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL' && isGeneralScope(r.appliesWhen));
 }
 
+/** floorDimensions admits only measured rules. */
+function measurementOf(d: FloorDimension): Measurement {
+  if (!d.rule.measurement) throw new Error(`floor dimension ${d.key} has no measurement.`);
+  return d.rule.measurement;
+}
+
 const num = (m: Measurement, k: string): number | null => (typeof m.params[k] === 'number' ? m.params[k] : null);
 
 /**
@@ -124,7 +130,8 @@ function oriented(m: Measurement, v: number): number {
 export function scoreOutput(dims: readonly FloorDimension[], text: string): DimScores {
   const out: DimScores = {};
   for (const d of dims) {
-    const s = orientedScore(d.rule.measurement!, measure(text, d.rule.measurement!));
+    const m = measurementOf(d);
+    const s = orientedScore(m, measure(text, m));
     if (s !== null) out[d.key] = s;
   }
   return out;
@@ -185,7 +192,7 @@ export function proposeMargins(dims: readonly FloorDimension[], authorTexts: rea
     const xs = scores[d.key] ?? [];
     if (xs.length < 3) return [];
     const spread = quantile(xs, 0.75) - quantile(xs, 0.25);
-    const margin = Math.max(MIN_MARGIN, resolution(d.rule.measurement!, authorTexts), Math.round((spread / 2) * 1000) / 1000);
+    const margin = Math.max(MIN_MARGIN, resolution(measurementOf(d), authorTexts), Math.round((spread / 2) * 1000) / 1000);
     return [{ key: d.key, margin, spread: Math.round(spread * 1000) / 1000, pieces: xs.length }];
   });
 }

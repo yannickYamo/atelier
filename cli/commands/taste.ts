@@ -120,10 +120,10 @@ export async function taste(): Promise<void> {
         const at = kv.lastIndexOf('=');
         const token = at > 0 ? kv.slice(0, at) : '';
         const label = ({ followed: 'FOLLOWED', missed: 'MISSED', broken: 'MISSED', unsure: 'UNSURE' } as Record<string, OwnerLabel | undefined>)[kv.slice(at + 1).toLowerCase()];
-        if (!label || !token) die(`--label takes <token>=followed|missed|unsure (the token from --list); got "${kv}".`);
+        if (!label || !token) return die(`--label takes <token>=followed|missed|unsure (the token from --list); got "${kv}".`);
         if (seen.has(token)) die(`--label: ${token} is labelled twice in one command. Nothing was recorded.`);
         seen.add(token);
-        return { q: byToken.get(token) ?? die(`--label: nothing waiting under ${token} (already labelled, or not in: atelier taste --skill ${name} --list). Nothing was recorded.`), label: label! };
+        return { q: byToken.get(token) ?? die(`--label: nothing waiting under ${token} (already labelled, or not in: atelier taste --skill ${name} --list). Nothing was recorded.`), label };
       });
       for (const { q, label } of parsed) record(q, label);
       console.log(`${parsed.length} label(s) recorded.`);
@@ -153,7 +153,7 @@ export async function taste(): Promise<void> {
   console.log(`Taste reader for ${name}  ·  model ${model}  ·  ${rules.length} reading-based rule(s)`);
   console.log(`  pooled: ${p.pooled.falseBlocks} wrong of ${p.pooled.trials} labelled misses (upper bound ${Math.round(p.pooled.upper95 * 100)}%, bar 15%) → ${p.pooled.earned ? 'VETO earned' : 'OBSERVE'}`);
   for (const { rule, key } of rules) {
-    const r = p.rules.get(key)!;
+    const r = p.rules.get(key) ?? die(`no taste permission was worked out for ${rule.requirementId}.`);
     console.log(`  ${rule.requirementId.padEnd(4)} ${r.permission.padEnd(7)} ${r.why.padEnd(46).slice(0, 46)}  ${rule.statement.slice(0, 60)}`);
   }
   console.log(`\nWhat the standard covers:\n${describeCoverage(coverageOf(v.requirements))}`);

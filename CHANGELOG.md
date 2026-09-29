@@ -92,91 +92,115 @@ fixed here. No new feature.
 - The same facts go to every arm, and every counted feature of every draft is recorded, to test which
   sensors track what readers prefer.
 
-## [Unreleased] — targeting 0.5.0 (the pre-Phase-C audit)
+### Changed: the first run, made short and safe (the ease-of-use brief)
 
-A full audit before Phase C covered detection, the loop, the moat and the competitor claims, and whether
-the study harness was ready. It found holes that would have made the study's measurements wrong. They are
-fixed here. No new feature.
+A first run by a new user took five commands and about 10,800 words of output to get one 498-word post, and
+died on a default model name. No feature was added: every change is a default, a merged step, a message, or
+something moved out of the default output. Measured offline on the brief's six-post corpus against the
+scripted backend: the first screen went from 1,992 to 960 words, the accept step from 4,100 to 228, and the
+text around an `invoke` post from 256 to 55.
 
-### Fixed: the invented-claim check (decision version 3, reader `a173339d`)
+- **The first run no longer dies on a model name.** A backend that does not serve a model now answers as
+  one plain line naming the setting to change (`ATELIER_MODEL`, or `ATELIER_DISCOVERY_MODEL` /
+  `ATELIER_TARGET_MODEL`), on both providers. When the model that reads your work is the built-in default,
+  discovery reads with the target model instead and says so, the same way a refused request already
+  retried, and so does the persona at build. A model you named is never swapped. A 429 is one line too.
+  Fixed on the way: after such a retry, the degraded single-pass path still called the model that had failed.
+- **Two commands to a skill.** Without a terminal, `atelier new` printed `atelier review --accept`, which only
+  recorded and reprinted the whole screen. It now prints `atelier new <folder> --accept`, which records and
+  builds. Continuing a run whose screen was already printed, `--accept` does not print it again; a first
+  `new --accept` still shows every rule before recording it, since only the person may make a rule theirs.
+- **The review screen shows what deserves attention.** The rules that will instruct the model and the ones
+  with the thinnest evidence are shown in full; rules shown only as examples take one line each, with what
+  they need from you. `atelier pending` and the page still show every rule with its evidence.
+- **Pressing Enter is safe on thin evidence.** Rejection was suggested when a rule failed in two pieces
+  discovery never read; on a six-post corpus that rejected moves the author plainly makes. It now needs four
+  (`MIN_PIECES_TO_REJECT`); on fewer, the rule is shown as an example, weakest first. The brief also asked
+  that no counted rule be suggested as an instruction when the author's reserved piece breaks it. Not done:
+  consulting the reserved pieces while building the standard would spend the blind check, so `atelier new`
+  reports how they fare after the build, as before.
+- **Under `atelier new`, each step reports in a line or two** (intake, discovery, ratify-close, build): what
+  was held back, what was minted and which rules instruct, where the skill is, what the host does not
+  deliver. The full reports remain on the standalone commands and in the run's files. A refusal, a failure
+  or a rule that binds is never shortened.
+- **A rule waiting for material is not a missed rule.** One line near the top names the exact
+  `--with <name>=<file>` that lets it fire (a prerequisite is matched by name, so "bind your notes" would not
+  have cleared it). The taste reader reports such a rule as waiting, and it is left out of the reader's VETO:
+  with nothing bound, a repair toward it could only invent.
+- **`invoke` prints the piece and a few lines**: any REQUIRED measured rule still broken, what was cut, what the taste
+  reader saw, and anything that failed. The full account (draft choice, repair passes, every cut, the claim
+  instrument, the taste reading, the cost) is written to `last-invocation.txt` in the run's directory, and the
+  path is printed.
+- The README said the pattern check "misses about half" of inventions. It missed 54% and then 74%.
 
-- **Headings and table rows are read.** A figure in a heading or a table was never seen before.
-- **True stories are kept.** Markdown is stripped before matching, a story may span the sentences of one
-  paragraph, and compound and scaled numbers are read: "twenty-five" is 25; "fourteen" is not "four";
-  "one million" is not "3 million".
-- **A reader failure mid-repair no longer ships an invented figure as fixed.** The sensor degrades for
-  good, both sides of every comparison use one instrument, and claims the reader had flagged are cut.
-- **Only a qualified reader may cut.** Version 3 reports until it is re-qualified, and the pattern check
-  gates meanwhile. The record keeps the instrument, its version, whether it was qualified, whether it
-  degraded, and what it spent.
+### Changed: polish (current API usage, clean lint, a front door a stranger can read)
 
-### Fixed: the moat and the loop
+Product behaviour changed only where a fix is named here.
 
-- **The standard's hash is checked on every load.** A hand-edited standard is refused.
-  `assertStandardUnchanged` now compares the incumbent with the candidate instead of a standard with
-  itself.
-- **A rejected habit no longer comes back through the persona.**
-- **Only a rule you made REQUIRED and confirmed can become an output schema.**
-- **`promote` refuses a candidate the gate or you already rejected**, unless `--override "<reason>"`, which
-  is recorded.
-- **Runs made by `fix` are recorded as FIX_EVALUATION, not organic use.** `STUDY` provenance exists for
-  studies.
-- **A REQUIRED measured rule that flips from pass to fail on a task blocks an automatic promotion**,
-  margin or not. Rules the floor does not guard are named. In `fix`, only REQUIRED regressions reject.
-- **Draft choice puts REQUIRED rules first, then taste**, and a draft too short to measure ranks last on
-  signals.
-- **A failed draft call keeps the drafts that came back.**
-- **The meaning check refuses seven more ways a rewrite can overstate:**
-  - a modal hardened ("can reduce" → "reduces");
-  - a stance dropped ("we think X" → "X");
-  - an added figure;
-  - an added name;
-  - correlation turned into cause;
-  - "one of the best" → "the best";
-  - an added intensifier.
+- **Current Claude API usage.** Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 reject forced tool choice with a
+  400, so a person who set one of them got an error on every call. The provider keeps forcing the call
+  wherever a model accepts it (the measured instruments are unchanged) and, on the models that refuse,
+  asks with `auto` and an instruction, still failing closed without a tool call
+  ([decision 0005](docs/decisions/0005-forced-tool-choice.md)).
+- **Zero lint warnings**, from 64: every non-null assertion replaced with real narrowing, none suppressed.
+- **Generated skills read cleanly.** "About 200 to 200 words" reads "about 200 words", and a test pins that
+  a condition with no words in it renders as general, never as "When , …".
+- **`invoke` split** from one 215-line function into its phases; the taste reader's shared state is one
+  class, and its client is still made before any draft is paid for. **`--help`** shows the six verbs first, then every command on one line.
+- **The README is under 1,000 words** (from about 2,900). The detail moved, none of it removed:
+  [USAGE](docs/USAGE.md), [COMPARISON](docs/COMPARISON.md), [RESULTS](docs/RESULTS.md) (wins and
+  failures side by side, with populations), [LESSONS](docs/LESSONS.md),
+  [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md), [decisions/](docs/decisions/README.md) (five records,
+  including the design of a search that cannot move the standard), a public [ROADMAP](docs/ROADMAP.md)
+  with what is not being built, and [PRODUCT-METRICS](docs/PRODUCT-METRICS.md).
+- **An example to run:** [examples/blog](examples/blog/README.md), six synthetic posts, declared AI-written.
+- The new docs were written with Atelier's own guard: each passes `atelier verify` against a skill built
+  from a public author's posts, with the repository's records bound as material.
+- Removed committed browser-tool logs; fixed a test that leaked a stubbed `fetch` into later suites.
 
-  A style span merged with a claim is still checked.
-- **The record can reproduce a study arm**: the claim instrument, the taste VETO set, the learned-tells
-  hash, the format, the version, the token limit and temperature, the flags, and the drafts not chosen.
-  The printed cost includes the claim reader.
-- **A run on a new surface names the earlier binding.**
-- `rollback` is recorded, and an accepted new binding sticks.
+### Studies: two rewrite tests (exploratory, not pre-registered)
 
-### Fixed: detection and discovery
+The owner asked for their company blog post (1,438 words, "we") rewritten in another publication's style.
 
-- Front matter and code no longer inflate the counted features; the digit and serial-comma counts are no
-  longer biased.
-- **FEATURE rules are suggested PREFERRED, never REQUIRED.** A zero-width band becomes a cap. Features that
-  would ask for more links, figures, names or quotations are proposed only as caps, so they can't
-  contradict the claim check. Rules and signals are capped separately.
-- **The taste reader needs a confirmed miss on a rule itself to hold VETO on it.** Pooled labels no longer
-  grant it to a rule nobody labelled.
-- The learned phrase list no longer reads the reserved pieces (`--include-reserved` to opt in).
-- **Discovery's comparison drafts are written in the skill's format and at the author's length**, not as
-  900-word blog posts. Stale signals are cleared.
-- Class aliases (`blog`, `linkedin`, `whitepaper`, `x`). An X post counts a link as 23 characters.
-- A one-sided exact sign test, and a binomial tail for the blinding check, in `core/stats`.
-- A key with no credit, or refused, gets one plain line with the request id, not raw JSON.
+- **a newsletter, 19 public previews** ($2.54). Failed. The rewrite kept most of the original's
+  sentences and added em dashes (0 to 4.3 per 1,000 words, against the author's 1.1) and runs of very
+  short sentences. Three reviews agreed it was a copyedit, not a voice transfer. Causes found: nothing in
+  the catalogue held em dashes or staccato runs; the contraction rule was one-sided; repair could not split
+  a paragraph; and 16 of the 19 previews ended in a paywall teaser, which discovery read as style. Fixed
+  above (the tell floor, two-sided contractions, no-model repairs); the corpus lesson is to use full pieces.
+- **a company blog, 16 full essays** ($4.21 including one rebuild after the fix below). Three arms on
+  the same writer model, packaged blind for the owner: Atelier, a plain prompt, and 14 essays pasted into
+  the prompt. Counted against the company's essays (1.8 em dashes and 0.1 staccato runs per 1,000 words): the
+  Atelier draft had 0 and 0, the plain prompt 4.0 and 1.3, the pasted essays 2.8 and 0.7. Atelier's
+  contractions matched the company's (25.3 against 22.2 per 1,000); the baselines stayed at the original's 7.
+  No arm moved sentence length toward the company's (median 15 words; every arm 11) or kept less than 72% of the
+  original's sentences. **What it shows:** the tell floor and register now hold; voice beyond register did
+  not transfer in any arm, because a rewrite anchors to its source and the sentence-length rule only caps.
+  Found and fixed during the run: an author's own em dashes had raised the cap on every other tell.
 
-### Claims corrected
+### Studies: the claim reader, version 3, pre-registered (not run)
 
-- **Not every study was pre-registered.** The confirmations and qualifications were; the early rounds and
-  development runs were exploratory.
-- **Round 7's "invented nothing"** is now stated with the stricter check that found six invented details
-  afterwards.
-- **The comparison table says what exists.** Atelier borrows two ideas from GEPA-style search, applied to
-  how rules are carried. "Nothing else gets worse" is now "no measured rule regresses beyond its margin;
-  rules no count reads are listed, not guarded".
-- **Populations are stated** for every result.
+`studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md` is sealed by the commit that adds it. It waits on
+the owner's go-ahead for about $5 (cap $8).
 
-### Added: Phase C, built and not run
+- **It breaks a promise, and says so.** Version 2's pre-registration said there would be no third attempt
+  before Phase C. Version 2 passed. The audit then found defects version 2's study could not see
+  (headings, tables, markdown stories, failing closed), and fixing them made a new instrument. It runs
+  under the positions paper's exception for an implementation bug, not because a result disappointed. It
+  is the last attempt before Phase C. Phase C does not wait on it: it decides only whether version 3 may
+  cut in the product.
+- **The harness now tests what changed.** The sealed version is `a173339d` and the seed
+  `claim-reader-v3-2026-09-29`. Excerpts keep their headings (39 of the 50 TEST excerpts carry one), and
+  two plant kinds put the invention in a heading or a table.
+- **Corpus:** 30 Lenny's Newsletter product essays no study has used. How they were drawn was not
+  recorded, so the exact set is sealed by hash instead.
+- Same floors: specificity ≥ 0.80, sensitivity ≥ 0.50.
 
-- `studies/harness/phase-c-generate.mjs`, `phase-c-package.mjs` and `phase-c-score.mjs`, and the draft
-  pre-registration.
-- Fresh letters per reader and per brief, and sealed keys.
-- The packager refuses any file beside the letters: round 7's log sat next to its letter file.
-- The same facts go to every arm, and every counted feature of every draft is recorded, to test which
-  sensors track what readers prefer.
+### Fixed: the records
+
+- This *Unreleased* section had been pasted twice.
+- The voice-rounds result's "not established" list and its "next" list predated the claim reader's
+  qualification; a dated note now says what has moved since.
 
 ## [0.4.0] — 2026-09-28 (taste detection)
 

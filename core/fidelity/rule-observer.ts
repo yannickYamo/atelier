@@ -165,7 +165,7 @@ export function rankByObserver(inputs: readonly RankInput[]): Ranking {
   const groups: string[][] = [];
   for (const c of sorted) {
     const last = groups[groups.length - 1];
-    const prev = last ? keyed.find((k) => k.candidateId === last[0])! : null;
+    const prev = last ? keyed.find((k) => k.candidateId === last[0]) : null;
     if (prev?.k1 === c.k1 && prev.k2 === c.k2) last.push(c.candidateId);
     else groups.push([c.candidateId]);
   }

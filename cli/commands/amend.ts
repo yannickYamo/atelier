@@ -59,7 +59,7 @@ export function amend(): void {
   const reason = flag('--reason') ?? die('--reason required — a version history without reasons can be counted, not audited.');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
-  const sv = store.getSkillVersion(L, activeHash)!;
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
   const found = resolveRule(prev.requirements, ruleRef);
   if ('error' in found) return void die(found.error);
@@ -144,7 +144,7 @@ export async function sharpen(): Promise<void> {
   const k = numericFlag('--questions', 2);
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
-  const sv = store.getSkillVersion(L, activeHash)!;
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
   const v = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
 
   // Recurrence is not persisted per requirement yet, so ordering falls back to the discovery order,
@@ -198,7 +198,7 @@ export function answerProbe(): void {
     : { shipped: flag('--pick') ?? die('--pick <number>, or --none, or --indifferent') };
 
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
-  const sv = store.getSkillVersion(L, activeHash)!;
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
   const target = prev.requirements.find((r) => r.requirementId === ruleId) ?? die(`${ruleId} is not in this standard.`);
   const out = foldAnswer({ requirementId: ruleId, statement: target.statement, blind, costUsd: 0 }, pick);

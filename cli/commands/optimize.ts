@@ -172,7 +172,8 @@ export async function optimize(opts: { readonly promote?: boolean } = {}): Promi
   }
   // A change counts only beyond the rule's own margin: rules score on different scales, and one cheap
   // draft per task is noisy.
-  const epsilon = Object.fromEntries(Object.entries(floor.contract!.dimensions).map(([k, d]) => [k, d.nonInferiorityMargin]));
+  const contract = floor.contract ?? die(`no floor contract: atelier floor --skill ${name} --corpus <folder>`);
+  const epsilon = Object.fromEntries(Object.entries(contract.dimensions).map(([k, d]) => [k, d.nonInferiorityMargin]));
   const countable = candidates.filter((c) => c.target !== null);
   const best = finalists(countable, (c) => c.screen ?? {}, champion, keep, epsilon);
   for (const c of candidates) {

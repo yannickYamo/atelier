@@ -205,9 +205,10 @@ function observe(): void {
     { what: 'the human key', requireKeys: ['labels'] });
 
   const byId = new Map(passages.map((p) => [p.id, p.text]));
-  const cases = labels
-    .filter((l) => byId.has(l.id))
-    .map((l) => ({ passage: byId.get(l.id)!, label: l.label }));
+  const cases = labels.flatMap((l) => {
+    const passage = byId.get(l.id);
+    return passage === undefined ? [] : [{ passage, label: l.label }];
+  });
   const unsure = cases.filter((c) => c.label === 'UNSURE').length;
 
   console.log(`${cases.length} labelled passage(s); ${cases.length - unsure} decided, ${unsure} unsure.`);

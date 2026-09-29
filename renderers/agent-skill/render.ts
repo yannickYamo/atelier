@@ -229,8 +229,10 @@ export function renderAgentSkill(
   // prohibition straight into the instructions. The requirement's own kind and authority cannot be
   // renamed, so they decide where it lands.
   const byId = new Map(v.requirements.map((r) => [r.requirementId, r]));
-  const carried = arch.components.flatMap((c) => c.carries.map((id) => ({ r: byId.get(id)!, role: c.gateRole, carrier: c.carrier })))
-    .filter((x) => x.r);
+  const carried = arch.components.flatMap((c) => c.carries.flatMap((id) => {
+    const r = byId.get(id);
+    return r ? [{ r, role: c.gateRole, carrier: c.carrier }] : [];
+  }));
 
   assertCarriersImplemented(carried);
 
@@ -422,7 +424,7 @@ export function renderAgentSkill(
     voice?.persona?.points.length ? `How I sound, and how often (each point is quoted from my own pieces; a "sometimes" is not an "always"):\n\n${describePersona(voice.persona)}` : '',
     pieceFiles.length ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.` : '',
     voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
-    voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0]} to ${voice.lengthWords[1]} words.` : '',
+    voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words.` : '',
   ].filter(Boolean);
   const voiceSection = voiceParts.length ? `
 ## How I sound

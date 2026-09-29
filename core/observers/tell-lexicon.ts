@@ -65,7 +65,9 @@ export function deriveTellLexicon(drafts: readonly TellDraft[], corpus: readonly
         const g = w.slice(i, i + n);
         if (g.every((x) => COMMON.has(x)) || g.some((x) => topicWords.has(x)) || g.some((x) => /^\d/.test(x))) continue;
         const k = g.join(' ');
-        (seen.get(k) ?? seen.set(k, new Set()).get(k)!).add(topic);
+        let under = seen.get(k);
+        if (!under) { under = new Set(); seen.set(k, under); }
+        under.add(topic);
         count.set(k, (count.get(k) ?? 0) + 1);
       }
     }

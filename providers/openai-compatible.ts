@@ -23,7 +23,7 @@
 // anyway. Nothing in the contract had to change to say that.
 
 import type { InferenceClient, InferenceRequest, InferenceResult, InferenceTermination } from '../core/inference/client.js';
-import { budgetUsd, inferenceTimeoutMs, GenerationIncomplete } from '../core/inference/client.js';
+import { budgetUsd, inferenceTimeoutMs, GenerationIncomplete, ModelUnavailable, isUnknownModel } from '../core/inference/client.js';
 import { OPENAI_COMPATIBLE_PRICING, costOf, isLocalBackend, priceFor, type Pricing } from './pricing.js';
 import { accountRefusal } from './anthropic.js';
 
@@ -311,6 +311,7 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
       // An account refusal (no credit, a key refused) is one plain line, not the backend's raw JSON.
       const plain = accountRefusal(r.status, text, r.headers.get('x-request-id') ?? r.headers.get('request-id'));
       if (plain) throw new Error(`${this.backend}: ${plain}`);
+      if (isUnknownModel(r.status, text)) throw new ModelUnavailable(this.cfg.modelId, `${this.backend}: ${text}`);
       throw new Error(`${this.backend} returned HTTP ${r.status} for ${url}. ${text.slice(0, 400)}`);
     }
     return await r.json() as ChatResponse;
