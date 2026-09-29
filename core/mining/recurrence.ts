@@ -113,8 +113,9 @@ export function findRecurrences(input: {
     if (g.length < MIN_RECURRENCE) continue;
     const named = g.map((r) => r.requirementId).filter((id): id is string => Boolean(id && byId.has(id)));
     const top = [...new Set(named)].map((id) => ({ id, n: named.filter((x) => x === id).length })).sort((a, b) => b.n - a.n)[0];
-    if (top && top.n >= MIN_RECURRENCE) {
-      out.push({ kind: 'MISSED_RULE', requirementId: top.id, statement: byId.get(top.id)!.statement,
+    const topRule = top ? byId.get(top.id) : undefined;
+    if (top && topRule && top.n >= MIN_RECURRENCE) {
+      out.push({ kind: 'MISSED_RULE', requirementId: top.id, statement: topRule.statement,
         complaints: g.map((r) => r.complaint), count: top.n });
     } else if (!named.length) {
       const times = new Set(g.map((r) => r.at));
@@ -130,9 +131,12 @@ export function findRecurrences(input: {
   const runs = current.length;
   if (runs >= 4) {
     const broken = new Map<string, { n: number; fixed: number }>();
-    for (const i of current) for (const id of i.repair?.violatedBefore ?? []) {
-      const b = broken.get(id) ?? { n: 0, fixed: 0 };
-      broken.set(id, { n: b.n + 1, fixed: b.fixed + (i.repair!.violatedAfter.includes(id) ? 0 : 1) });
+    for (const i of current) {
+      const rep = i.repair; if (!rep) continue;
+      for (const id of rep.violatedBefore) {
+        const b = broken.get(id) ?? { n: 0, fixed: 0 };
+        broken.set(id, { n: b.n + 1, fixed: b.fixed + (rep.violatedAfter.includes(id) ? 0 : 1) });
+      }
     }
     for (const [id, b] of broken) {
       const r = byId.get(id);
@@ -150,7 +154,8 @@ export function findRecurrences(input: {
     for (const id of ids) if (byId.has(id)) refused.set(id, (refused.get(id) ?? 0) + 1);
   }
   for (const [id, n] of refused) {
-    if (n >= MIN_RECURRENCE) out.push({ kind: 'LOST_MEANING', requirementId: id, statement: byId.get(id)!.statement, refused: n });
+    const r = byId.get(id);
+    if (r && n >= MIN_RECURRENCE) out.push({ kind: 'LOST_MEANING', requirementId: id, statement: r.statement, refused: n });
   }
 
   const weight = (r: Recurrence): number => (r.kind === 'GAP' || r.kind === 'MISSED_RULE' ? r.count * 3 : r.kind === 'BROKEN_DRAFT' ? r.broken : r.refused * 2);

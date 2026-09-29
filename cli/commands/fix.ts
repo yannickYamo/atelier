@@ -161,7 +161,8 @@ export async function fix(): Promise<void> {
     if (answer !== 'required' && answer !== 'preferred') die(`--add takes required|preferred; got "${answer}".`);
 
     // AN ADDITION LANDS ON THE ACTIVE STANDARD, NOT ON THE ONE THE COMPLAINT RAN AGAINST (see addition.ts).
-    const activeNow = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
+    const activeHash = store.getActive(L);
+    const activeNow = activeHash ? store.getSkillVersion(L, activeHash) : null;
     if (activeNow && activeNow.standardVersionHash !== ranStandard.standardVersionHash) {
       console.log(`Your standard has moved since that run (${ranStandard.standardVersionHash} -> ${activeNow.standardVersionHash}); the addition goes on the current one.`);
     }
@@ -204,8 +205,8 @@ export async function fix(): Promise<void> {
     ?? die(`architecture ${inv.architectureHash} missing — this SkillVersion predates architecture persistence.`);
   const requirement = ranStandard.requirements.find((r) => r.requirementId === d.requirementId)
     ?? die(`diagnosis named ${d.requirementId}, which is not in the standard that ran.`);
-  const carrying = ranArch.components.find((c) => c.carries.includes(d.requirementId!));
-  const ev: ServedMissEvidence = { invocationId: inv.invocationId, requirementId: d.requirementId!,
+  const carrying = ranArch.components.find((c) => c.carries.includes(requirement.requirementId));
+  const ev: ServedMissEvidence = { invocationId: inv.invocationId, requirementId: requirement.requirementId,
     carrierAtServe: carrying?.carrier ?? 'PROSE', expertConfirmed: true, at: new Date().toISOString() };
 
   const events = store.readEvents(L);

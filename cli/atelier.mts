@@ -225,24 +225,18 @@ const main = async (): Promise<void> => {
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}".\n  commands: ${known}`);
       }
-      // THE COMMON WORKFLOW FIRST, THEN EVERYTHING. A newcomer met eight verbs of equal weight, half of
-      // them for looking after a skill they did not have yet, and `verify` and `material` (the two that
-      // keep output honest) only further down. The six a skill is lived with lead, in the order it is
-      // lived; the full list stays below, because AGENTS.md promises --help lists every command.
-      console.log('common workflow:');
-      console.log('atelier new <folder-of-your-best-work> "<what it is for>"      create a skill from your work');
-      console.log('  atelier invoke --skill <name> "<task>"   (or /<name>)          use it');
-      console.log('  atelier verify --skill <name> <file>                           check any text (exit 1 = a REQUIRED rule broken)');
-      console.log('  atelier material --skill <name> <notes.md>                     your real stories and figures, so none are invented');
-      console.log('  atelier fix "<what was wrong>"                                 correct it');
-      console.log('  atelier status --skill <name>                                  where it stands');
+      // THE SIX VERBS A SKILL IS LIVED WITH, IN THE ORDER IT IS LIVED, THEN EVERY COMMAND ON ONE LINE:
+      // AGENTS.md promises --help lists every command, and a newcomer should not have to read forty.
+      console.log('atelier: your standard, learned from your work, kept in every draft.\n');
+      console.log('  atelier new <folder> "<what it is for>"      create a skill from your best work');
+      console.log('  atelier invoke --skill <name> "<task>"       write with it (or /<name> in Claude Code)');
+      console.log('  atelier verify --skill <name> <file>         check any text (exit 1 = a REQUIRED rule broken)');
+      console.log('  atelier material --skill <name> <notes.md>   your real stories and figures, so none are invented');
+      console.log('  atelier fix "<what was wrong>"               correct it in your own words');
+      console.log('  atelier status --skill <name>                where it stands');
       console.log('');
-      console.log('   state it instead: skill "<your rules>"');
-      console.log('   look after it: taste --skill <name> --calibrate · floor --skill <name> --setup · tend --skill <name> [--cap <usd>] [--auto]');
-      console.log('   read it too: verify --skill <name> --taste <file>');
-      console.log('      models: check [--role discovery|target] · profiles · carriers [--skill <name>] [--host codex]');
-      console.log('        lab: optimize · mine · reference --skill <name> (then --score --labels <json>) · contract --skill <name> [--bare] · study');
-      console.log('  staged spelling: create <path> · pending · ratify --decisions <json> · ratify-close · build --name <name>');
+      console.log('  look after it: taste --skill <name> --calibrate · floor --skill <name> · tend --skill <name> --auto');
+      console.log('  atelier <command> --help explains any command.');
       console.log(`  every command: ${known}`);
       return;
     }
