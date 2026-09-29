@@ -132,7 +132,9 @@ describe('P1: the skill carries passages the author wrote', () => {
     expect(md).toContain('## How I sound');
     expect(md).toMatch(/Never take my topics, facts,\s+names, figures, sentences, coined terms or stories/);
     expect(md).toContain(`> ${v.passages[0].split('\n')[0]}`);
-    expect(md).toMatch(/run about \d+ to \d+ words/);
+    // a range when the pieces vary, one number when they do not ("about 200 to 200" read as a defect)
+    expect(md).toMatch(/run about \d+( to \d+)? words/);
+    expect(md).not.toMatch(/run about (\d+) to \1 words/);
     expect(JSON.parse(pkg.assurance['voice.json'])).toEqual(JSON.parse(JSON.stringify(v)));
     expect(renderAgentSkill(std, compileArchitecture(std), 'x', 'd').files['SKILL.md']).not.toContain('How I sound');
   });

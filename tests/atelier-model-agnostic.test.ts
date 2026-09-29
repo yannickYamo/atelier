@@ -9,7 +9,9 @@
 // run, valid JSON, a model that never contradicts itself — is a fact about the first three, and each
 // pin below exists because that inference is easy to make and wrong.
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
+import { AnthropicInferenceClient, refusesForcedChoice } from '../providers/anthropic.js';
+import { createServer, type Server } from 'node:http';
 import { readFileSync, readdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -529,6 +531,9 @@ describe('a backend that is not the one whose SDK ships', () => {
   const REQ = { stableBlock: 's', variableBlock: 'v', userMessage: 'u', toolName: 'emit',
     toolDescription: 'd', schema: { type: 'object' }, maxTokens: 100 };
 
+  // Restored after each test: a stub left in place leaks into every later suite in this file.
+  const realFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = realFetch; });
   const wire = (payload: unknown, ok = true, text = ''): { body: () => Record<string, unknown> } => {
     let seen: Record<string, unknown> = {};
     globalThis.fetch = (async (_u: string, init: { body: string }) => {
@@ -604,5 +609,51 @@ describe('a backend that is not the one whose SDK ships', () => {
     for (const b of ['openai', 'groq', 'together', 'deepseek', 'fireworks', 'ollama', 'vllm', 'llama-cpp']) {
       expect(BACKEND_PRESETS[b], `${b} is not a known backend`).toBeTruthy();
     }
+  });
+});
+
+// ── FORCED TOOL CHOICE, WHERE THE MODEL STILL ACCEPTS IT ─────────────────────────────────────────
+describe('a model that refuses forced tool choice is asked in words, and a model that accepts it is not', () => {
+  const answer = (model: string) => JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model, stop_reason: 'tool_use', stop_sequence: null,
+    content: [{ type: 'tool_use', id: 'tu_1', name: 'emit_answer', input: { ok: true } }], usage: { input_tokens: 5, output_tokens: 5 } });
+  const seen: { model: string; choice: string; asked: boolean }[] = [];
+  let server: Server; let base = '';
+  const saved = process.env.ANTHROPIC_BASE_URL;
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: Buffer) => { body += c.toString(); });
+      req.on('end', () => {
+        const b = JSON.parse(body) as { model: string; tool_choice: { type: string }; messages: { content: string }[] };
+        seen.push({ model: b.model, choice: b.tool_choice.type, asked: b.messages[0].content.includes('Answer by calling the emit_answer tool') });
+        res.setHeader('content-type', 'application/json');
+        if (b.model === 'new-model' && b.tool_choice.type === 'tool') {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'tool_choice: type "tool" and "any" are not supported for this model.' } }));
+          return;
+        }
+        res.end(answer(b.model));
+      });
+    });
+    await new Promise<void>((ok) => { server.listen(0, '127.0.0.1', () => { ok(); }); });
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    process.env.ANTHROPIC_BASE_URL = base;
+  });
+  afterAll(() => { server.close(); if (saved === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = saved; });
+
+  const ask = (model: string) => new AnthropicInferenceClient(model, 'sk-test', null).complete({
+    stableBlock: 's', variableBlock: '', userMessage: 'q', toolName: 'emit_answer', toolDescription: 'd',
+    schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }, maxTokens: 100 });
+
+  it('retries once with auto and an instruction, remembers the model, and still returns the tool input', async () => {
+    expect((await ask('new-model')).json).toEqual({ ok: true });
+    expect((await ask('new-model')).json).toEqual({ ok: true });
+    expect(seen.filter((x) => x.model === 'new-model').map((x) => `${x.choice}${x.asked ? '+asked' : ''}`)).toEqual(['tool', 'auto+asked', 'auto+asked']);
+    expect(refusesForcedChoice(new Error('tool_choice not supported'))).toBe(false);
+  });
+  it('a model that accepts forced choice keeps it: the measured instruments do not change', async () => {
+    await ask('claude-haiku-4-5');
+    expect(seen.filter((x) => x.model === 'claude-haiku-4-5').map((x) => x.choice)).toEqual(['tool']);
   });
 });

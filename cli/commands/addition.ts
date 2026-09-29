@@ -29,7 +29,8 @@ export function addRuleToActive(L: store.StoreLayout, name: string, statement: s
   reason: string, fallback: StandardVersion | null = null,
   /** the complaints this rule answers, so `mine` does not offer the same gap again */
   feedbackIds: readonly string[] = []): Addition {
-  const activeSv = store.getActive(L) ? store.getSkillVersion(L, store.getActive(L)!) : null;
+  const activeHash = store.getActive(L);
+  const activeSv = activeHash ? store.getSkillVersion(L, activeHash) : null;
   const baseStandard = (activeSv && store.getStandard(L, activeSv.standardVersionHash)) ?? fallback
     ?? die(`no standard to add to for ${name}.`);
   let n = 0; for (const r of baseStandard.requirements) { const m = /^x(\d+)$/.exec(r.requirementId); if (m) n = Math.max(n, Number(m[1])); }
