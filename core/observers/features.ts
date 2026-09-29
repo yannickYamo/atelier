@@ -28,6 +28,12 @@ export interface Feature {
   readonly label: string;
   /** how the value reads: a rate per 1,000 prose words, a share between 0 and 1, or a plain value */
   readonly unit: 'per1000' | 'share' | 'value';
+  /**
+   * More of it means more specifics the writer must supply (links, figures, names, quotations). Such a
+   * feature is only ever proposed as a cap: a floor would ask a draft for links or figures that the
+   * UNSOURCED check (../loop/claim-extract.ts) then cuts, because nobody supplied them.
+   */
+  readonly specifics?: true;
   measure(text: string): number | null;
 }
 
@@ -47,6 +53,33 @@ const sentenceShare = (test: (s: string) => boolean) => (text: string): number |
   return ss.length < 10 ? null : r3(ss.filter((s) => test(s.text.trim())).length / ss.length);
 };
 const count = (s: string, re: RegExp): number => (s.match(re) ?? []).length;
+
+/**
+ * THE PAGE, WITHOUT WHAT IS NOT WRITING. The page-furniture counts read the raw markdown (a list item
+ * is its marker), so they must not read YAML front matter (a `tags:` list took list items from 0 to
+ * 15 per 1,000 words, and a `url:` line counted as a link) or the inside of a code fence (a `- flag`
+ * in a shell snippet is not a list item). Both are blanked, line for line; the fences themselves are
+ * counted, ``` and ~~~ alike, the same way ./text.ts reads them. An unclosed fence runs to the end.
+ */
+export function pageOf(text: string): { readonly body: string; readonly fences: number } {
+  const lines = text.split('\n');
+  let fence: string | null = null; let front = false; let fences = 0;
+  const body = lines.map((line, i) => {
+    const t = line.trim();
+    if (i === 0 && t === '---') { front = true; return ''; }
+    if (front) { if (t === '---' || t === '...') front = false; return ''; }
+    const f = /^(```|~~~)/.exec(t);
+    if (fence) { if (f && t.startsWith(fence)) fence = null; return ''; }
+    if (f) { fence = f[1]; fences += 1; return ''; }
+    return line;
+  }).join('\n');
+  return { body, fences };
+}
+/** A count over the page (see `pageOf`) per 1,000 prose words, or null under MIN_WORDS. */
+const perPage1000 = (c: (page: { body: string; fences: number }) => number) => (text: string): number | null => {
+  const n = proseWordCount(text);
+  return n < MIN_WORDS ? null : r3((c(pageOf(text)) / n) * 1000);
+};
 const lengths = (text: string): number[] => proseSentencesOf(text).map((s) => s.words).filter((w) => w > 0);
 
 const syllables = (w: string): number => {
@@ -72,6 +105,27 @@ const SMALL_WORDS = ['two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'n
 const IMPERATIVES = new Set(['use', 'write', 'stop', 'start', 'try', 'make', 'keep', 'ask', "don't", 'do', 'pick', 'run', 'read', 'think', 'look',
   'let', 'take', 'give', 'put', 'avoid', 'build', 'treat', 'check', 'measure', 'add', 'drop', 'cut', 'set', 'go', 'consider', 'remember', 'notice']);
 const DISCOURSE = /^(?:so|now|look|okay|ok|well|right|anyway|honestly)\b[,:]?/i;
+/** Words that open a sentence and take a comma without starting a list: sentence adverbs and connectives. */
+const INTRODUCTORY = new Set(['however', 'so', 'now', 'well', 'yes', 'no', 'still', 'also', 'then', 'thus', 'therefore', 'instead',
+  'meanwhile', 'moreover', 'furthermore', 'besides', 'indeed', 'first', 'second', 'third', 'finally', 'next', 'again', 'otherwise',
+  'anyway', 'look', 'okay', 'ok', 'right', 'today', 'yesterday', 'here', 'sometimes', 'often', 'later', 'afterwards', 'consequently',
+  'hence', 'nevertheless', 'nonetheless', 'similarly', 'likewise', 'overall', 'ultimately', 'but', 'and', 'or', 'yet']);
+/**
+ * Lists of three matched by `re`, less those whose first item (group 1) is an introductory word, or any
+ * -ly adverb, opening its sentence. Not a parser: the one bias it removes is the common one.
+ */
+function listsOf(p: string, re: RegExp): number {
+  let n = 0;
+  const g = new RegExp(re.source, 'g');
+  for (let m = g.exec(p); m; m = g.exec(p)) {
+    const first = m[1].toLowerCase();
+    const opensSentence = /(?:^|[.!?]["”')\]]*\s+)$/.test(p.slice(0, m.index));
+    // Skipped, the search resumes just past the introductory word, so a real list after it still counts.
+    if (opensSentence && (INTRODUCTORY.has(first) || first.endsWith('ly'))) { g.lastIndex = m.index + first.length; continue; }
+    n += 1;
+  }
+  return n;
+}
 
 export const FEATURES: readonly Feature[] = [
   // ── 1. punctuation and typography ──────────────────────────────────────────────────────────────
@@ -80,17 +134,21 @@ export const FEATURES: readonly Feature[] = [
   { id: 'exclamation', layer: 1, label: 'exclamation marks', unit: 'per1000', measure: per1000((p) => count(p, /!(?!\[)/g)) },
   { id: 'ellipsis', layer: 1, label: 'ellipses', unit: 'per1000', measure: per1000((p) => count(p, /…|\.\.\./g)) },
   { id: 'question', layer: 1, label: 'questions', unit: 'share', measure: sentenceShare((s) => s.endsWith('?')) },
-  { id: 'italic', layer: 1, label: 'italics', unit: 'per1000', measure: per1000((_p, raw) => count(raw.replace(/\*\*[^*]+\*\*/g, ''), /(?<![*\w])[*_][^*_\n]{2,80}[*_](?![*\w])/g)) },
-  { id: 'quoted', layer: 1, label: 'quoted phrases', unit: 'per1000', measure: per1000((p) => count(p, /["“][^"”\n]{2,200}["”]/g)) },
+  { id: 'italic', layer: 1, label: 'italics', unit: 'per1000', measure: perPage1000(({ body }) => count(body.replace(/\*\*[^*]+\*\*/g, ''), /(?<![*\w])[*_][^*_\n]{2,80}[*_](?![*\w])/g)) },
+  { id: 'quoted', layer: 1, label: 'quoted phrases', unit: 'per1000', specifics: true, measure: per1000((p) => count(p, /["“][^"”\n]{2,200}["”]/g)) },
+  // A list's first item is never an introductory word that opens its sentence: "However, the cat and
+  // dog" is a sentence adverb and a pair, not three items without the serial comma.
   { id: 'oxfordComma', layer: 1, label: 'the serial comma, in lists of three', unit: 'share', measure: (text) => {
     const p = prose(text);
-    const withComma = count(p, /\b\w+, \w+(?: \w+){0,2}, (?:and|or) \w/g);
-    const without = count(p, /\b\w+, \w+(?: \w+){0,2} (?:and|or) \w/g);
+    const withComma = listsOf(p, /\b(\w+), \w+(?: \w+){0,2}, (?:and|or) \w/g);
+    const without = listsOf(p, /\b(\w+), \w+(?: \w+){0,2} (?:and|or) \w/g);
     return withComma + without < 3 ? null : r3(withComma / (withComma + without));
   } },
   { id: 'smallNumerals', layer: 1, label: 'small numbers written as digits rather than words', unit: 'share', measure: (text) => {
     const p = prose(text);
-    const digits = count(p, /(?<![\d.,])\b[2-9]\b(?![\d.,%])/g);
+    // A digit is part of a larger number only when a digit is on the other side of the point or comma:
+    // "3.5" and "4,000" are not small numbers, "We had 3." and "then 4, then 5" are.
+    const digits = count(p, /(?<!\d[.,])\b[2-9]\b(?![.,]\d|%)/g);
     const spelled = count(p, new RegExp(`\\b(?:${SMALL_WORDS.join('|')})\\b`, 'gi'));
     return digits + spelled < 3 ? null : r3(digits / (digits + spelled));
   } },
@@ -112,10 +170,11 @@ export const FEATURES: readonly Feature[] = [
   { id: 'nominalisation', layer: 2, label: 'nominalisations (-tion, -ment, -ness, -ity, -ance, -ence)', unit: 'per1000', measure: per1000((p) => count(p, /\b\w{4,}(?:tion|ment|ness|ity|ance|ence)s?\b/gi)) },
   { id: 'triad', layer: 2, label: 'three-item lists', unit: 'per1000', measure: per1000((p) => count(p, /\b\w+(?: \w+)?, \w+(?: \w+)?,? (?:and|or) \w+/g)) },
   // ── 3. page and document ──────────────────────────────────────────────────────────────────────
-  { id: 'listItem', layer: 3, label: 'list items', unit: 'per1000', measure: (text) => { const n = proseWordCount(text); return n < MIN_WORDS ? null : r3((count(text, /^\s*(?:[-*+]|\d+[.)])\s+\S/gm) / n) * 1000); } },
-  { id: 'link', layer: 3, label: 'links', unit: 'per1000', measure: (text) => { const n = proseWordCount(text); return n < MIN_WORDS ? null : r3((count(text, /\]\(https?:\/\/|(?<!\()https?:\/\/\S+/g) / n) * 1000); } },
-  { id: 'codeBlock', layer: 3, label: 'code blocks', unit: 'per1000', measure: (text) => { const n = proseWordCount(text); return n < MIN_WORDS ? null : r3((Math.floor(count(text, /^```/gm) / 2) / n) * 1000); } },
-  { id: 'blockquote', layer: 3, label: 'block quotations', unit: 'per1000', measure: (text) => { const n = proseWordCount(text); return n < MIN_WORDS ? null : r3((count(text, /^>\s*\S/gm) / n) * 1000); } },
+  // Page furniture is read off the raw page, less front matter and the inside of code fences (`pageOf`).
+  { id: 'listItem', layer: 3, label: 'list items', unit: 'per1000', measure: perPage1000(({ body }) => count(body, /^\s*(?:[-*+]|\d+[.)])\s+\S/gm)) },
+  { id: 'link', layer: 3, label: 'links', unit: 'per1000', specifics: true, measure: perPage1000(({ body }) => count(body, /\]\(https?:\/\/|(?<!\()https?:\/\/\S+/g)) },
+  { id: 'codeBlock', layer: 3, label: 'code blocks', unit: 'per1000', measure: perPage1000(({ fences }) => fences) },
+  { id: 'blockquote', layer: 3, label: 'block quotations', unit: 'per1000', measure: perPage1000(({ body }) => count(body, /^>\s*\S/gm)) },
   // ── 4. lexicon and wording ────────────────────────────────────────────────────────────────────
   { id: 'lexicalDiversity', layer: 4, label: 'lexical diversity (MTLD)', unit: 'value', measure: (text) => {
     const w = wordsOf(prose(text)).map((x) => x.toLowerCase());
@@ -129,8 +188,8 @@ export const FEATURES: readonly Feature[] = [
   { id: 'firstPlural', layer: 4, label: '"we", "our" and "us"', unit: 'per1000', measure: per1000((p) => count(p, /\b(?:we|our|ours|us)\b/gi)) },
   { id: 'tentativeModal', layer: 4, label: 'tentative modals (might, may, could)', unit: 'per1000', measure: per1000((p) => count(p, /\b(?:might|may|could)\b/gi)) },
   { id: 'firmModal', layer: 4, label: 'firm modals (must, should, need to)', unit: 'per1000', measure: per1000((p) => count(p, /\b(?:must|should|need to|needs to)\b/gi)) },
-  { id: 'numbers', layer: 4, label: 'figures written in digits', unit: 'per1000', measure: per1000((p) => count(p, /\b\d[\d,.]*%?/g)) },
-  { id: 'names', layer: 4, label: 'names mid-sentence (people, products, organisations)', unit: 'per1000', measure: per1000((p) => count(p, /(?<=[a-z,;:] )[A-Z][a-z]+(?:[A-Z][a-z]+)*\b/g)) },
+  { id: 'numbers', layer: 4, label: 'figures written in digits', unit: 'per1000', specifics: true, measure: per1000((p) => count(p, /\b\d[\d,.]*%?/g)) },
+  { id: 'names', layer: 4, label: 'names mid-sentence (people, products, organisations)', unit: 'per1000', specifics: true, measure: per1000((p) => count(p, /(?<=[a-z,;:] )[A-Z][a-z]+(?:[A-Z][a-z]+)*\b/g)) },
   { id: 'discourse', layer: 4, label: 'spoken discourse markers opening a sentence (so, now, look, okay, well)', unit: 'share', measure: sentenceShare((s) => DISCOURSE.test(s)) },
   // ── 7. narrator and stance ────────────────────────────────────────────────────────────────────
   { id: 'imperative', layer: 7, label: 'sentences that tell the reader what to do', unit: 'share', measure: sentenceShare((s) => IMPERATIVES.has((s.split(/\s+/)[0] ?? '').toLowerCase().replace(/[^a-z']/g, ''))) },
@@ -149,7 +208,7 @@ export const FEATURES: readonly Feature[] = [
   }) },
   // ── 10. irregularity ──────────────────────────────────────────────────────────────────────────
   { id: 'sectionSpread', layer: 10, label: 'how uneven your sections are (longest over shortest, in words)', unit: 'value', measure: (text) => {
-    const sections = text.split(/^#{2,6}\s.*$/m).map((s) => wordsOf(prose(s)).length).filter((n) => n >= 30);
+    const sections = pageOf(text).body.split(/^#{2,6}\s.*$/m).map((s) => wordsOf(prose(s)).length).filter((n) => n >= 30);
     return sections.length < 3 ? null : r3(Math.max(...sections) / Math.min(...sections));
   } },
   { id: 'paragraphSpread', layer: 10, label: 'how uneven your paragraphs are (variation in length)', unit: 'value', measure: (text) => {
