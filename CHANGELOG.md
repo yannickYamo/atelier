@@ -6,7 +6,17 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
-## [Unreleased] — targeting 0.3.0
+## [0.3.0] — 2026-09-28
+
+The close-out release. What it contains is below.
+
+What it rests on:
+- the voice rounds: encouraging, one author, the owner as reader;
+- the claim reader's qualification: passed on unseen technical and marketing writing, failed on essays in
+  version 1.
+
+What it does not yet show is in the README under *What has been tested, and what hasn't*. The next piece
+of evidence is an external blind study, with readers other than the owner and more than one writer.
 
 ### Changed (the invented-claim check: read by a small model, decided in code)
 
