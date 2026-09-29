@@ -11,8 +11,8 @@ floors fixed in advance, and the product says which instrument ran on every line
 
 ## 2. A precise gate can still be blind
 
-The pattern check for invented facts never flagged a true piece in two studies. It also missed 54%, then
-74%, of planted inventions. A small model that reads and types each claim, with code checking the type
+The pattern check for invented facts flagged 3 true drafts in 129 across three studies. It also missed
+54%, 74% and 76% of planted inventions. A small model that reads and types each claim, with code checking the type
 against the source, caught 35 of 35 on fresh pieces. The fix was splitting the job: **a model reads, code
 decides**. ([v2 result](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md))
 
@@ -21,8 +21,8 @@ decides**. ([v2 result](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md))
 Version 1 of that reader failed: it trusted its own sentence numbers and cut plain sentences beside the
 one holding the claim. Version 2 passed. An audit then taught it to read headings and tables, which made
 it a new instrument, so it lost its qualification until measured again. The product says so, and the
-older gate keeps cutting meanwhile. ([v1](../studies/CLAIM_READER_QUALIFICATION_RESULT.md),
-[v3 pre-registration](../studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md))
+older gate cut meanwhile. Measured again on fresh essays, it passed. ([v1](../studies/CLAIM_READER_QUALIFICATION_RESULT.md),
+[v3](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md))
 
 ## 4. Same-family judges reward the wrong things
 

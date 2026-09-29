@@ -56,9 +56,10 @@ that doesn't trace is cut and listed, so you can add the real one.
 - Only a qualified reader may cut. On 28 pieces no test had used, version 2 caught all 35 planted inventions
   (a pattern check caught 9) and left 35 of 38 clean drafts alone
   ([result](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An audit then found it did not read headings
-  or tables, and could cut a true story written in markdown. The fixed reader (version 3) reports what it
-  finds, but it does not cut until it is qualified again. Until then the cut comes from the pattern check,
-  which has never flagged a true piece in either study, and missed 54% and then 74% of planted inventions.
+  or tables, and could cut a true story written in markdown. The fixed reader (version 3) was
+  measured again on 25 unused product essays and qualified: it caught all 45 planted inventions it read and
+  left 41 of 48 clean drafts alone ([result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)). Most of
+  its false flags were the author's own true stories, so bind yours with `atelier material`.
 - Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
 - Expect it to cut a true detail now and then. `atelier material --skill <name> <notes>` binds your notes,
   so a cut story comes back.
