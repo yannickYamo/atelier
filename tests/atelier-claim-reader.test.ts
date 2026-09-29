@@ -450,19 +450,21 @@ describe('the audit of the invented-claim check', () => {
   });
 
   describe('4. only a qualified instrument may cut', () => {
-    it('production: the list holds the one measured pair, and the decision-3 reader is not it', () => {
-      expect(QUALIFIED_READERS).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }]);
+    it('production: the list holds the measured pairs, the shipped decision-3 reader among them (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)', () => {
+      expect(QUALIFIED_READERS).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }, { model: 'claude-haiku-4-5', version: 'a173339d' }]);
       expect(DECISION_VERSION).toBe(3);
-      expect(READER_VERSION).not.toBe('0279163b');
-      expect(isQualified('claude-haiku-4-5')).toBe(false);
+      expect(READER_VERSION).toBe('a173339d');
+      expect(isQualified('claude-haiku-4-5')).toBe(true);
       expect(isQualified('claude-haiku-4-5', '0279163b')).toBe(true);
-      expect(isQualified('my-small-model', '0279163b')).toBe(false);
+      expect(isQualified('my-small-model')).toBe(false);
+      // the shipped default reader is the one that cuts
+      expect(modelSensor(scripted([]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx).gate).toBe('reader');
     });
 
     it('an unqualified reader reports (PREFERRED, never fails, never repaired); the pattern check gates as UNSOURCED', async () => {
       const text = 'The review took 94 minutes. It ended well.';
       const reads = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
-      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'my-small-model', ctx);
       expect(sensor.gate).toBe('pattern');
       const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
       const gate = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
@@ -483,7 +485,7 @@ describe('the audit of the invented-claim check', () => {
 
     it('the pattern gate still fails what the pattern finds, beside an unqualified reader', async () => {
       const text = 'According to a survey, 43% of operators agree.';
-      const sensor = modelSensor(scripted([{ specifics: [] }]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      const sensor = modelSensor(scripted([{ specifics: [] }]), { spentUsd: 0, capUsd: 1 }, 'my-small-model', ctx);
       const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
       expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.verdict).toBe('VIOLATED');
       expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')!.result.verdict).toBe('MET');
@@ -493,7 +495,7 @@ describe('the audit of the invented-claim check', () => {
     it('ATELIER_CLAIMS_GATE=reader (gateAnyway) lets an unqualified reader gate, loudly', async () => {
       const text = 'The review took 94 minutes. It ended well.';
       const reads = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
-      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, gateAnyway: true });
+      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'my-small-model', { ...ctx, gateAnyway: true });
       const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
       expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.verdict).toBe('VIOLATED');
       expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')).toBeUndefined();
@@ -507,10 +509,10 @@ describe('the audit of the invented-claim check', () => {
 
   describe('5. the record can say which claim instrument ran, on whose word, at what cost', () => {
     it('claimInstrumentOf: a model reader, before and after it degrades', async () => {
-      const sensor = modelSensor(scripted([{ specifics: [] }, new Error('budget spent')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      const sensor = modelSensor(scripted([{ specifics: [] }, new Error('budget spent')]), { spentUsd: 0, capUsd: 1 }, 'my-small-model', ctx);
       await sensor.read('One text.');
       expect(claimInstrumentOf({ claimSensor: sensor })).toEqual({
-        instrument: `pattern check, with claim reader (claude-haiku-4-5, prompt ${READER_VERSION}) reporting only: not qualified`,
+        instrument: `pattern check, with claim reader (my-small-model, prompt ${READER_VERSION}) reporting only: not qualified`,
         version: READER_VERSION, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0.001 });
       await sensor.read('Another text.');
       expect(claimInstrumentOf({ claimSensor: sensor })).toMatchObject({ degraded: true, spentUsd: 0.001, instrument: expect.stringMatching(/degraded/) as unknown });

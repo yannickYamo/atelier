@@ -30,16 +30,15 @@ write for *sounds like me*.
   examples. The approved standard is hashed and versioned, and nothing automated can change it.
 - **Every draft is checked, and only what broke is rewritten.** Counted rules are measured on every
   draft. Invented figures, quotations and stories are cut and listed, so you can add the real one. A
-  small model lists every specific and code checks it against what you supplied; the current version of
-  that reader reports until it is re-qualified, and a narrower pattern check does the cutting.
+  small model lists every specific, and code checks each one against what you supplied.
 
 It installs as a skill for Claude Code or Codex, a CLI guard (`atelier verify` exits 1 on a broken
 rule), an MCP server, and a Claude Code hook. See [USAGE](docs/USAGE.md) for every command.
 
 ## Where it stands
 
-**The guard works.** On pieces no test had used, the claim reader caught 35 of 35 planted inventions and
-left 35 of 38 clean drafts alone, where a pattern check caught 9. Rewriting a post in Linear's style,
+**The guard works.** On product essays no test had used, the claim reader caught all 45 planted inventions
+it read, in headings and tables too, and left 41 of 48 clean drafts alone, where a pattern check caught 11. Rewriting a post in Linear's style,
 three ways on the same model, Atelier's was the only version that changed none of the post's claims
 and added no em dash or other catalogued tell; a plain prompt added five claims and more than twice
 Linear's rate of em dashes. Read blind by the owner, Atelier's was ranked first.

@@ -4,9 +4,6 @@
 
 ## Now
 
-- **Re-qualify the claim reader.** An audit made it read headings and tables, which made it a new
-  instrument. Until its [pre-registered study](../studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md)
-  passes, a pattern check that misses most inventions does the cutting.
 - **Voice defaults.** A rewrite test showed the guard holding and the voice not moving: every version kept
   the source's rhythm. Rhythm rules become enforced from both sides, contrastive verdicts are held to the
   author's rate for every skill, and a rewrite is labelled a restyle with how much text moved.

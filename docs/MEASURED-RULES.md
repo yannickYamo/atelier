@@ -234,7 +234,7 @@ that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
   `core/loop/claim-extract.ts`). Any other reader reports on an `UNSOURCED·reader` line, and the pattern
   check gates. `ATELIER_CLAIMS_GATE=reader` overrides that, loudly. Version 3 (`a173339d`) reads headings and
   tables, strips markdown before matching, matches a story across the sentences of one paragraph, reads
-  compound and scaled numbers, and fails closed if it breaks mid-repair. It is not qualified yet.
+  compound and scaled numbers, and fails closed if it breaks mid-repair. **It is qualified** on 25 unused product essays: 41 of 48 clean drafts left alone (0.854), all 45 plants it read caught ([result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)).
   **Version 2 was qualified**: on 28 pieces
   no earlier study had used, it caught 35 of 35 planted inventions and left 35 of 38 clean drafts alone
   (specificity 0.921, 95% CI 0.786–0.983), clearing the pre-registered floors of 0.50 and 0.80
