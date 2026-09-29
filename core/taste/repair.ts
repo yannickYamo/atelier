@@ -61,7 +61,7 @@ export async function refineTaste(
   if (!missed.length) return { output: text, targeted: [], fixed: [], readings, why: 'nothing the reader may act on was missed' };
   // One target per located passage; overlapping passages merge, as in the counted repair. A miss whose
   // passage cannot be located is reported, not targeted: no call is spent rewriting nothing.
-  const raw = missed.flatMap((r) => { const sp = spanOfQuote(text, r.quote!); return sp ? [{ ...sp, r }] : []; }).sort((a, b) => a.start - b.start);
+  const raw = missed.flatMap((r) => { const sp = r.quote ? spanOfQuote(text, r.quote) : null; return sp ? [{ ...sp, r }] : []; }).sort((a, b) => a.start - b.start);
   if (!raw.length) return { output: text, targeted: [], fixed: [], readings, why: 'no quoted passage could be located in the text' };
   const merged: { start: number; end: number; reasons: string[]; rids: string[] }[] = [];
   for (const x of raw) {

@@ -51,13 +51,13 @@ describe('--help never runs the command', () => {
     expect(dispatched.filter((c) => !(c in USAGE))).toEqual([]);
   });
 
-  it('bare --help leads with the common workflow, in order, then still lists every command', () => {
+  it('bare --help leads with the six verbs, in order, then still lists every command', () => {
     const { data, proj } = fresh();
     const out = run(data, proj, '--help');
     expect(out).not.toMatch(/^EXIT:/);
     const lines = out.split('\n');
-    expect(lines[0]).toBe('common workflow:');
-    expect(lines.slice(1, 7).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'invoke', 'verify', 'material', 'fix', 'status']);
+    expect(lines[0]).toMatch(/^atelier: /);
+    expect(lines.slice(2, 8).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'invoke', 'verify', 'material', 'fix', 'status']);
     // AGENTS.md: "`atelier --help` lists everything". `study` is the one eval-only command left out.
     const every = /every command: (.+)/.exec(out)?.[1].split(' · ') ?? [];
     expect(Object.keys(USAGE).filter((c) => c !== 'study' && !every.includes(c))).toEqual([]);

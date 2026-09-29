@@ -76,7 +76,8 @@ export function sealStudySuite(
 ): SealedStudySuite {
   const asPairs = contexts.map((c) => ({ id: c.contextId, task: c.task }));
   if (violatesThreshold(asPairs, threshold)) {
-    const w = worstPair(asPairs)!;
+    const w = worstPair(asPairs);
+    if (!w) throw new Error('a suite over the overlap threshold has no worst pair.');
     throw new SuiteNotDiverse(w.a, w.b, w.overlap, threshold);
   }
   return {

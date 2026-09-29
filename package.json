@@ -15,6 +15,7 @@
     "MEASUREMENTS.md",
     "SECURITY.md",
     "docs",
+    "examples",
     "studies",
     "!studies/harness"
   ],

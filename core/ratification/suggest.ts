@@ -44,6 +44,24 @@ export function modeFromIntent(intent: string): { readonly mode: SkillMode; read
   return { mode: 'GENERATE', why: 'you described producing new work, so rules default to required only where the evidence is strong' };
 }
 
+// ── HOW MUCH UNREAD WORK A SUGGESTION NEEDS ────────────────────────────────────────────────────
+//
+// Pressing Enter accepts every suggestion, so for most people the suggestion IS the ruling, and it has
+// to be safe on thin evidence. Two pieces discovery never read decided too much: on a six-post corpus a
+// rule was suggested for rejection because two unread pieces lacked it, while one of them plainly made
+// the move. Below this floor the evidence cannot speak against a rule, so it is SHOWN AS AN EXAMPLE and
+// the reason says so: the person can still reject it.
+//
+// The pieces RESERVED for the blind comparison are never consulted here, even when one of them would
+// break a count suggested as an instruction: using them to shape the standard would spend the one check
+// nothing has read. `atelier new` reports how the reserved pieces fare after the build instead.
+
+/** Pieces where a rule applied and was never followed, before rejecting it is suggested (unread ones, when any were held out). */
+export const MIN_PIECES_TO_REJECT = 4;
+
+const TOO_FEW_TO_REJECT =
+  `too few pieces to suggest rejecting it (${MIN_PIECES_TO_REJECT} needed), so it is shown as an example for you to judge`;
+
 export interface ProposalEvidence {
   readonly framings: readonly string[];
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
@@ -76,7 +94,11 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const r = present / applicable;
     const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
     const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
-    if (r < 0.5) return { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` };
+    if (r < 0.5) {
+      return applicable >= MIN_PIECES_TO_REJECT
+        ? { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` }
+        : { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it; ${TOO_FEW_TO_REJECT}` };
+    }
     // A style distance is a measure to pick drafts by, not a span anything can rewrite; a floor ("at
     // least so many bold phrases") has nothing to point a repair at either. Both are shown by default.
     if (p.measurement.observer === 'STYLE_DISTANCE') {
@@ -113,11 +135,15 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
   const h = e?.heldOut ?? null;
   const rate = h && h.applicable > 0 ? h.present / h.applicable : null;
 
-  // Could have applied in held-out work at least twice and was followed in none of it: the one case the
-  // evidence speaks against a rule. It reads like a description of the pieces it came from.
-  if (h && h.applicable >= 2 && h.present === 0) {
-    return { decision: 'REJECT', materiality: null, needs, strength: 0,
-      why: `could have applied in ${h.applicable} pieces discovery never read, and was followed in none of them` };
+  // Could have applied in enough held-out work and was followed in none of it: the one case the evidence
+  // speaks against a rule. It reads like a description of the pieces it came from. On fewer pieces the
+  // same zero is shown as an example, the weakest on the screen, for the person to judge.
+  if (h && h.applicable > 0 && h.present === 0) {
+    return h.applicable >= MIN_PIECES_TO_REJECT
+      ? { decision: 'REJECT', materiality: null, needs, strength: 0,
+        why: `could have applied in ${h.applicable} pieces discovery never read, and was followed in none of them` }
+      : { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 0,
+        why: `could have applied in ${h.applicable} unread piece(s) and was followed in none; ${TOO_FEW_TO_REJECT}` };
   }
   const held = rate !== null && rate >= 0.5;
   const strength = ((held ? 2 : 0) + (agreed ? 1 : 0)) as 0 | 1 | 2 | 3;

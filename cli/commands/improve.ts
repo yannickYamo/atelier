@@ -48,7 +48,7 @@ export async function improve(): Promise<void> {
   const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
-  const sv = store.getSkillVersion(L, activeHash)!;
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('previous standard missing.');
   const invId = flag('--invocation');
 
@@ -153,8 +153,9 @@ export async function improve(): Promise<void> {
 
   // IMPLEMENTATION_MISS — the only route that authorises a change, and only to the arrangement.
   const ranArch = store.getArchitecture(L, inv.architectureHash, inv.standardVersionHash) ?? die(`architecture ${inv.architectureHash} missing — this SkillVersion predates architecture persistence.`);
-  const carrying = ranArch.components.find((c) => c.carries.includes(d.requirementId!));
-  const ev: ServedMissEvidence = { invocationId: inv.invocationId, requirementId: d.requirementId!,
+  const requirementId = d.requirementId ?? die('the diagnosis found an implementation miss but named no rule.');
+  const carrying = ranArch.components.find((c) => c.carries.includes(requirementId));
+  const ev: ServedMissEvidence = { invocationId: inv.invocationId, requirementId,
     carrierAtServe: carrying?.carrier ?? 'PROSE', expertConfirmed: true, at: new Date().toISOString() };
   const op = proposeEscalation(ev, ranArch);
   if ('refused' in op) { console.log(`\nNo repair proposed: ${op.reason}`); return; }

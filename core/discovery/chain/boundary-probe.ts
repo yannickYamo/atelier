@@ -176,7 +176,8 @@ export function foldProbeAnswer(
   // "no preference between <one tag>" is not indifference, it is a pick with odd phrasing.
   // Reading it as INDIFFERENT would silently discard a real preference.
   const single = answer.noPreference?.length === 1 ? answer.noPreference[0] : undefined;
-  const lvl = (answer.shipped ?? single) ? levelOf((answer.shipped ?? single)!) : undefined;
+  const pick = answer.shipped ?? single;
+  const lvl = pick ? levelOf(pick) : undefined;
   if (!lvl) throw new Error(`probe answer names no known variant (got ${JSON.stringify(answer)})`);
   return { contextId: blind.probe.contextId, preferredLevel: lvl };
 }

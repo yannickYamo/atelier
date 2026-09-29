@@ -64,7 +64,9 @@ export async function tells(): Promise<void> {
       : `Learned ${r.after} phrase(s) from ${r.drafts} draft(s) on ${r.topics} topic(s) (was ${r.before}).`);
   }
   const t = store.getTells(L); const active = store.activeTells(t);
-  const hasRule = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)?.requirements
+  const activeHash = store.getActive(L) ?? die(`no built skill called "${name}".`);
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
+  const hasRule = store.getStandard(L, sv.standardVersionHash)?.requirements
     .some((r) => r.measurement?.observer === 'PATTERN_RATE' && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   console.log(`Machine-writing phrases checked for ${name}: ${active.length} (${t.learned.length} learned${t.at ? ` from ${t.drafts} draft(s) on ${t.topics} topic(s)` : ''}, ${t.added.length} added by you, ${t.struck.length} struck).`);
   if (!hasRule) console.log('  This standard has no machine-tell rule, so the list is kept but not checked. Rebuild from your corpus to propose one.');
