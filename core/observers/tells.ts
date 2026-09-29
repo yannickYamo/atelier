@@ -48,11 +48,28 @@ export const TELL_FAMILIES: readonly TellFamily[] = [
   { id: 'RECURRING_THOUGHT', label: 'a recurring thought announced ("I keep coming back to")',
     re: /\bI keep (?:coming back to|bumping into|running into|returning to|circling back to)\b/gi },
   { id: 'AWKWARD_SIZE', label: '"the awkward middle"', re: /\bthe awkward (?:middle|size|stage|zone)\b/gi },
+  // PUNCTUATION AND RHYTHM, measured on a rewrite that added both to a post that had neither: em dashes
+  // went from 0 to 4.3 per 1,000 words against the target author's 1.1 (4 of their 19 pieces use one),
+  // and runs of three or more very short sentences from 2 to 4 ("The bots run on time. The plan gets
+  // made. The drafts arrive."), where the author had one in 9,944 words. Neither separated the author
+  // from a plain model at discovery, so nothing learned held them: the catalogue holds them for everyone.
+  { id: 'EM_DASH', label: 'an em dash', re: /—/g },
+  { id: 'STACCATO_RUN', label: 'a run of three or more very short sentences ("The plan gets made. The drafts arrive.")',
+    re: /(?<![^\s])(?:[^\s.!?]+ ){0,4}[^\s.!?]+[.!?]["”’)]?(?:\s+(?:[^\s.!?]+ ){0,4}[^\s.!?]+[.!?]["”’)]?){2,}/g },
   // THE OPENING VERDICT. A contrastive verdict as the piece's first line ("X isn't a meeting. It's a
   // written decision process.") is a model's opening, not a writer's; readers flagged it in four of five
   // pieces of one round. Found by position in ./style.ts, and held to how often the author opens that way.
   { id: 'VERDICT_OPENER', label: 'a contrastive verdict as the opening line', re: /(?!)/g, positional: true },
 ];
+
+/**
+ * FAMILIES THAT ONLY BAN. An em dash or a run of short sentences is a tell when the author never writes one,
+ * and ordinary punctuation or rhythm when they do. So they count only against authors who never use them
+ * (the rule's `never` list); for an author who does, they stay out of the pooled rate, where a
+ * dash-heavy corpus inflated the cap on every other move (one measured at 9.5 per 1,000 words). Their
+ * own rate is held by the counted rules discovery keeps, such as a cap on em dashes.
+ */
+export const BAN_ONLY_FAMILIES: ReadonlySet<string> = new Set(['EM_DASH', 'STACCATO_RUN']);
 
 /**
  * THE CONTRASTIVE VERDICT, every spelling of it: "isn't X, it's Y", "not X. It's Y", "not X, but Y",

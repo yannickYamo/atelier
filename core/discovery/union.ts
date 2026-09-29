@@ -140,7 +140,14 @@ export async function unionFramedRules<T>(
   const group = new Map<string, string>();
   const keyOf = (f: FramedRule<T>): string => `${f.framing}:${f.index}`;
   for (const f of all) group.set(keyOf(f), keyOf(f));
-  const find = (k: string): string => { let c = k; while (group.get(c) !== c) c = group.get(c)!; return c; };
+  const find = (k: string): string => {
+    let c = k;
+    for (let up = group.get(c); up !== c; up = group.get(c)) {
+      if (up === undefined) throw new Error(`rule ${c} has no group.`);
+      c = up;
+    }
+    return c;
+  };
   const join = (a: string, b: string): void => { const ra = find(a), rb = find(b); if (ra !== rb) group.set(ra, rb); };
 
   // ── WITHIN ONE VANTAGE FIRST ────────────────────────────────────────────────────────────
@@ -178,8 +185,9 @@ export async function unionFramedRules<T>(
   const buckets = new Map<string, FramedRule<T>[]>();
   for (const f of all) {
     const root = find(keyOf(f));
-    if (!buckets.has(root)) buckets.set(root, []);
-    buckets.get(root)!.push(f);
+    const bucket = buckets.get(root);
+    if (bucket) bucket.push(f);
+    else buckets.set(root, [f]);
   }
 
   const members: UnionMember<T>[] = [...buckets.values()].map((rules) => {

@@ -2,12 +2,11 @@
 //
 // The pattern check in ./claims.ts keys on how a claim is usually worded, so any wording it has not
 // seen is a claim it misses ("94 minutes", "nine people", a date with no year, a named quotation, a
-// figure followed by an invented link). Adding patterns cannot close that: the positions paper's own
-// Tier 1 records an unsourced-figure pattern that fired on 28 of 30 expert-perfect pieces, because it
-// measured how many numbers a text had rather than whether they were invented, and a gate built on the
-// model's own typed provenance that discriminated where the pattern did not.
+// figure followed by an invented link). Adding patterns cannot close that: an earlier unsourced-figure
+// pattern fired on 28 of 30 pieces an expert rated perfect, because it counted numbers rather than
+// asking whether they were invented (MEASUREMENTS.md). A check anchored on typed provenance did not.
 //
-// So the work is split the way that paper says an instrument must be split:
+// So the work is split in two:
 //
 //   READ (a model)   a small model, given the draft AND the harness context (the task the person
 //                    typed, the material they bound), lists every specific the draft asserts: figures,
@@ -169,14 +168,11 @@ const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCas
 
 // ── Numbers, however they are spelled ──────────────────────────────────────────────────────────
 //
-// "ten hours" and "10 hours" state the same figure, so a spelled-out number is read as its value. Version
-// 2 read ONE word at a time from a short list, and the audit found both directions of the failure it
-// allows. A word it did not list was no number at all, so "fourteen engineers" against material saying
-// "four engineers" had no figure to disagree with and passed; "one million users" against "3 million"
-// likewise. And "twenty-five" became "20-5", so a true "25 customers" was cut. Now a number is a PHRASE:
-// units, teens, tens, "twenty-five", "two hundred and fifty", "a dozen", and a multiplier on words or on
-// digits ("3 million" ≡ "three million" ≡ 3000000). A figure is its value, never a piece of it: "3
-// million" in the notes does not support "3 users".
+// "ten hours" and "10 hours" state the same figure, so a spelled-out number is read as its value. A number
+// is a PHRASE: units, teens, tens, "twenty-five", "two hundred and fifty", "a dozen", and a multiplier on
+// words or on digits ("3 million" ≡ "three million" ≡ 3000000). A figure is its value, never a piece of
+// it: "3 million" in the notes does not support "3 users", and "fourteen" is not "four". Reading one word
+// at a time let both mistakes through (docs/decisions/0002-claim-reader.md).
 const UNITS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
 const TEENS: Readonly<Record<string, number>> = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
   seventeen: 17, eighteen: 18, nineteen: 19 };
@@ -266,8 +262,8 @@ const norm = (s: string): string => {
 
 /**
  * MARKDOWN IS NOT WORDS. A person's notes say "our **checkout** broke" and link "[a stale cache](…)"; a
- * reader quoting them writes the words, and version 2 compared the two with the asterisks and the URL in
- * between, so a true story failed its own quotation and was cut. Emphasis, links (their text), images
+ * reader quoting them writes the words, so the two are compared without the markup, or a true story fails
+ * its own quotation and is cut. Emphasis, links (their text), images
  * (their alt text), inline code and heading, quote and table markers are dropped on both sides before
  * matching. The raw text is tried too, so a link's URL, which only the raw text carries, can still
  * support a URL the draft cites.
@@ -281,9 +277,8 @@ const plain = (s: string): string => s
 
 /**
  * THE PASSAGES A SUPPORT MAY FALL IN: runs of adjacent sentences inside ONE paragraph. A quoted story
- * often runs over two sentences ("In March our checkout broke. We traced it to a stale cache."), and
- * version 2 matched each sentence alone, so a two-sentence quotation had at most half its words in any
- * one passage and a true story was cut. The run is as long as the quotation has sentences, plus one for
+ * often runs over two sentences ("In March our checkout broke. We traced it to a stale cache."); matched a
+ * sentence at a time, it has half its words in any one passage and is cut. The run is as long as the quotation has sentences, plus one for
  * a sentence the reader skipped, and it never crosses a paragraph, a list item, a heading or a table row:
  * a support assembled from words scattered across the notes still supports nothing.
  */
@@ -346,11 +341,10 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   const bySentence = new Map<number, Claim>();
   const publicFacts: { start: number; end: number; text: string; why: string }[] = [];
   const rank: Readonly<Record<Claim['kind'], number>> = { EXPERIENCE: 3, SOURCE: 2, FIGURE: 1 };
-  // WHERE IS IT, REALLY. The reader numbers the sentence a specific sits in, and version 1 trusted the
-  // number: most of its false cuts were a plain sentence ("They force reflection.") beside the one that
-  // held the specific. The number is the reader's word like any other. The specific must be IN the
-  // sentence it names; if not, it is moved to the sentence that holds it; if no sentence does, nothing
-  // is cut on the reader's mistake.
+  // WHERE IS IT, REALLY. The sentence number the reader gives is its word like any other; trusting it
+  // cut plain sentences beside the one that held the specific. The specific must be IN the sentence it
+  // names; if not, it is moved to the sentence that holds it; if no sentence does, nothing is cut on the
+  // reader's mistake.
   const locate = (sp: ExtractedSpecific): number | null => {
     const t = norm(sp.text);
     if (!t) return null;
@@ -437,12 +431,10 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
  * reading as its `gate`, and the check shows the reader's findings as a warning beside it.
  * `gateAnyway` (ATELIER_CLAIMS_GATE=reader) lets an unqualified reader gate, and says so loudly.
  *
- * A FAILED READ DEGRADES THE WHOLE SENSOR, FOR GOOD. Version 2 fell back to the pattern check for the
- * one text whose read failed and kept the model's readings of the others, so the repair loop compared a
- * draft read by the model with a rewrite read by the pattern: the model flagged "94 minutes", the
- * rewrite said "95 minutes", the pattern saw nothing, and the loop reported "all now hold" over a figure
- * still invented. A comparison is only as good as its one instrument. So the first failure (an error, a
- * reply with no list, the reader's own budget spent) turns the sensor DEGRADED: from then on every
+ * A FAILED READ DEGRADES THE WHOLE SENSOR, FOR GOOD. A repair compares a draft with its rewrite, and a
+ * comparison is only as good as its one instrument: a draft read by the model and a rewrite read by the
+ * pattern check would report "all now hold" over a figure still invented. So the first failure (an
+ * error, a reply with no list, the reader's own budget spent) turns the sensor DEGRADED: from then on every
  * `reading`, of texts the model already read included, is the pattern check's, `instrument` names the
  * degraded state, and `notes` says why. A caller holding a report made before the failure re-reads it
  * (refineToStandard does).

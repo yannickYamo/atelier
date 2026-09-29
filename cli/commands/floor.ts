@@ -138,7 +138,9 @@ export function baselineProblem(L: store.StoreLayout, name: string, active: stri
 function baselineFor(L: store.StoreLayout, name: string, active: string, tasks: readonly string[], model: string, fires: number | null = null): readonly FrozenBaselineEntry[] {
   const problem = baselineProblem(L, name, active, tasks, model, fires);
   if (problem) throw new Error(problem);
-  return store.getBaseline(L, active)!;
+  const b = store.getBaseline(L, active);
+  if (!b) throw new Error(`the baseline for ${active} was found, then was not.`);
+  return b;
 }
 
 /** Tasks both versions are drafted on for the taste check, and how many more tasks the candidate must miss a rule on to be blocked. */
@@ -330,8 +332,9 @@ export async function floor(): Promise<void> {
   for (const [flagName, role] of [['--enforce', 'ENFORCE'], ['--observe', 'OBSERVE']] as const) {
     for (const ref of flagAll(flagName)) {
       const k = keyOf(ref);
-      const d = f.contract!.dimensions[k];
-      f = { ...f, contract: { ...f.contract!, dimensions: { ...f.contract!.dimensions, [k]: { ...d, gateRole: role } } } };
+      const contract = f.contract ?? die(`no floor contract: atelier floor --skill ${name} --corpus <folder>`);
+      const d = contract.dimensions[k];
+      f = { ...f, contract: { ...contract, dimensions: { ...contract.dimensions, [k]: { ...d, gateRole: role } } } };
     }
   }
 
@@ -371,7 +374,8 @@ export async function floor(): Promise<void> {
   const doQualify = async (): Promise<boolean> => {
     ready();
     { const problem = baselineProblem(L, name, active, f.tasks, model, fires); if (problem) die(problem); }
-    if (!Object.values(f.contract!.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
+    const contract = f.contract ?? die(`no floor contract: atelier floor --skill ${name} --corpus <folder>`);
+    if (!Object.values(contract.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
       die('no dimension is ENFORCE, so there is nothing that could raise a false alarm. Choose which rules may block: --enforce <rule>');
     }
     const { client } = clientAndBinding('target');
@@ -380,15 +384,15 @@ export async function floor(): Promise<void> {
     // Both halves are fresh in every run, so runs are independent of each other; the unit is the task.
     const a = runs.map((r) => freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(0, fires) }])[0]);
     const b = runs.map((r) => freeze(active, model, dims, [{ task: r.task, outputs: r.outputs.slice(fires) }])[0]);
-    const result = evaluateAcross(b, a, f.contract!);
-    const planted = plantedDetections(b, a, f.contract!);
+    const result = evaluateAcross(b, a, contract);
+    const planted = plantedDetections(b, a, contract);
     // Runs on the same situation accumulate; change anything the rate is a rate of and the count restarts.
     const key = qualificationKey(L, f, active, v.standardVersionHash, runtime, fires);
     const now = countAA(result);
     const prior = f.aa?.contractHash === key ? f.aa : { falseAlarms: 0, trials: 0, plantedHits: 0, planted: 0 };
     const tally = { falseAlarms: prior.falseAlarms + now.falseAlarms, trials: prior.trials + now.trials,
       plantedHits: (prior.plantedHits ?? 0) + planted.hits, planted: (prior.planted ?? 0) + planted.trials };
-    const q = qualifyFromAA(tally, f.tasks.length, `${name}: ${Object.keys(f.contract!.dimensions).length} measured dimension(s), ${f.tasks.length} task(s), ${fires} draft(s) per side, under ${runtime}`);
+    const q = qualifyFromAA(tally, f.tasks.length, `${name}: ${Object.keys(contract.dimensions).length} measured dimension(s), ${f.tasks.length} task(s), ${fires} draft(s) per side, under ${runtime}`);
     console.log(`This run: ${now.falseAlarms} false alarm(s) in ${now.trials} resolved rule comparison(s) across ${f.tasks.length} task(s); `
       + `caught ${planted.hits} of ${planted.trials} planted regression(s) of ${PLANTED_MARGINS} margins.`);
     console.log(`So far: ${tally.falseAlarms} false alarm(s) in ${tally.trials} (upper 95% bound ${(q.upper95 * 100).toFixed(1)}%, bar ${AA_BAR * 100}% over ${MIN_AA_TRIALS}+); `
@@ -427,14 +431,16 @@ export async function floor(): Promise<void> {
       f = { ...f, tasks: titles.map((t) => `Write a piece titled "${t}".`) };
       console.log(`Tasks: ${f.tasks.length}, from the titles of your own pieces.`);
     }
-    if (!Object.values(f.contract!.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
+    let contract = f.contract ?? die(`no floor contract: atelier floor --skill ${name} --corpus <folder>`);
+    if (!Object.values(contract.dimensions).some((d) => d.gateRole === 'ENFORCE')) {
       const required = new Set(dims.filter((d) => d.rule.materiality === 'REQUIRED').map((d) => d.key));
-      f = { ...f, contract: { ...f.contract!, dimensions: Object.fromEntries(Object.entries(f.contract!.dimensions)
-        .map(([k, d]) => [k, required.has(k) ? { ...d, gateRole: 'ENFORCE' as const } : d])) } };
+      contract = { ...contract, dimensions: Object.fromEntries(Object.entries(contract.dimensions)
+        .map(([k, d]) => [k, required.has(k) ? { ...d, gateRole: 'ENFORCE' as const } : d])) };
+      f = { ...f, contract };
     }
     // Refused BEFORE anything is spent: with fewer than two enforced rules the floor can never let a repair
     // install itself (a repair's own rule never guards itself), and one rule gives too few A/A trials.
-    const enforced = Object.values(f.contract!.dimensions).filter((d) => d.gateRole === 'ENFORCE').length;
+    const enforced = Object.values(contract.dimensions).filter((d) => d.gateRole === 'ENFORCE').length;
     if (enforced < 2) {
       store.setFloor(L, f);
       die(`--setup: ${enforced} counted rule(s) can be enforced, and a floor that lets repairs install themselves needs at least two `

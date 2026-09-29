@@ -52,6 +52,11 @@ npm run acceptance:carriers -- --host codex
 | C32 | a reader failure never ships an invented figure as fixed | the sensor degrades for good, both sides of a comparison use one instrument, and claims flagged before the failure are cut |
 | C33 | a FEATURE rule is a suggestion | discovery suggests PREFERRED, never REQUIRED; a feature that would ask for more links, figures, names or quotations is only ever a cap |
 | C34 | VETO is per rule | pooled labels never give the taste reader VETO on a rule with no confirmed miss of its own |
+| C35 | an unserved default model does not end the first run | discovery reads with the target model and says so in one line; a model the person named stops with the setting to change, never swapped |
+| C36 | two commands to a skill, without a terminal | `new` prints `new <folder> --accept`, which records and builds; continuing, it does not reprint the screen; a first `new --accept` shows every rule before recording |
+| C37 | Enter is safe on thin evidence | rejection is suggested only on 4 or more unread pieces; on fewer the rule is shown as an example, weakest first |
+| C38 | a rule waiting for material is not a miss | one line names the exact `--with`; the taste reader reports it as waiting and never repairs toward it |
+| C39 | `invoke` prints the piece and a few lines | a still-broken REQUIRED rule, a cut and a failed reader are always printed; the rest is in the file it names |
 
 ## CLAUDE CODE, live session, human
 

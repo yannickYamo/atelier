@@ -63,7 +63,21 @@ The guard improves a draft on the measures it checks (with and without, on the s
 model judges were the same family as the writer and rewarded copying and fabrication. The voice criterion
 rests on human reads.
 
-## Next, in order
+## Since then (note added 2026-09-29)
+
+The two lists above and below are kept as they stood when the rounds closed. What has moved:
+
+- **The invented-claim check was measured.** Version 1 failed on specificity
+  ([result](CLAIM_READER_QUALIFICATION_RESULT.md)). Version 2 qualified on technical and marketing writing
+  ([result](CLAIM_READER_V2_QUALIFICATION_RESULT.md)). Version 3, after the audit, is pre-registered and not
+  run ([pre-registration](CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md)); until it passes, it reports
+  and the pattern check gates. Measured against planted inventions, not an expert's labels.
+- **Item 1 below** was partly covered: version 1's study included the owner's 7 pieces, but as model
+  rewrites with the whole piece supplied as material, not as the owner's own drafts.
+- **Item 2 below** became Phase C ([draft pre-registration](PHASE_C_PREREGISTRATION.md)), not yet run.
+- Items 3 and 4 are still open.
+
+## Next, in order (as of the rounds' close)
 
 1. Run the invented-claim check over the owner's own corpus, where every story is true, to measure how often
    it cuts a real one.

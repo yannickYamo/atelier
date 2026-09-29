@@ -12,6 +12,16 @@ import type { Requirement, InvocationRecord } from '../core/state/canonical-stat
 import type { InferenceResult } from '../core/inference/client.js';
 import type { RuntimeBinding } from '../core/runtime/binding.js';
 import { observeRuntime } from '../core/runtime/binding.js';
+import { readFileSync } from 'node:fs';
+
+/**
+ * What `atelier invoke` printed, followed by everything the run checked. The command prints the piece and
+ * a few lines, and writes the full account to the file it names; a test about that account reads both.
+ */
+export const withDetails = (out: string): string => {
+  const m = /everything this run checked: (\S+)/.exec(out);
+  return m ? `${out}\n${readFileSync(m[1], 'utf8')}` : out;
+};
 
 /** A requirement with every field present. Override what a test is actually about. */
 export const aRequirement = (o: Partial<Requirement> & { requirementId: string }): Requirement => ({

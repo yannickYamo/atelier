@@ -36,7 +36,7 @@ export const MAX_PAIR_CHARS = 400;
  * Length and mix rules are NOT_APPLICABLE on one passage; for those the evidence is the accepted pass,
  * which measured the whole draft.
  */
-function stillTeaches(p: RepairPair, rule: Requirement | undefined): rule is Requirement {
+function stillTeaches(p: RepairPair, rule: Requirement | undefined): rule is Requirement & { measurement: Measurement } {
   if (!rule?.measurement || rule.authority === 'EXPERT_REJECTED' || rule.materiality === 'INCIDENTAL') return false;
   if (!p.before.trim() || !p.after.trim() || p.before.trim() === p.after.trim()) return false;
   if (p.before.length > MAX_PAIR_CHARS || p.after.length > MAX_PAIR_CHARS) return false;
@@ -87,7 +87,7 @@ export function selectContrastPairs(invocations: readonly InvocationRecord[], v:
       if (inHeldBackText(p.before) || inHeldBackText(p.after)) continue;
       seen.add(id);
       perRule.set(p.key, (perRule.get(p.key) ?? 0) + 1);
-      out.push({ key: p.key, check: p.check ?? measurementId(rule.measurement!), before: p.before, after: p.after, statement: rule.statement });
+      out.push({ key: p.key, check: p.check ?? measurementId(rule.measurement), before: p.before, after: p.after, statement: rule.statement });
     }
   }
   return out;
@@ -98,7 +98,7 @@ export function contrastFor(stored: readonly ContrastPair[], v: StandardVersion)
   const rules = byKey(v.requirements);
   return stored.flatMap((p) => {
     const rule = rules.get(p.key);
-    return stillTeaches(p, rule) ? [{ ...p, check: p.check ?? measurementId(rule.measurement!), statement: rule.statement }] : [];
+    return stillTeaches(p, rule) ? [{ ...p, check: p.check ?? measurementId(rule.measurement), statement: rule.statement }] : [];
   });
 }
 

@@ -31,6 +31,9 @@ import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 
 const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 
+/** A path as a person can paste it back into a shell. */
+const shellWord = (p: string): string => (/^[\w./~-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`);
+
 /** The folder the sealed corpus was read from, for runs that predate recording it. */
 const sealedFrom = (): string | null => {
   const f = runFile('corpus-paths.json');
@@ -76,6 +79,8 @@ export async function newSkill(): Promise<void> {
   if (cap && !argv.includes('--cap')) argv.push('--cap', cap);
   if (cap && cap !== s.cap && s.run.state !== 'EMPTY') { saveSession({ ...s, cap }); s = loadSession(); }
 
+  // A run continued at review printed its rules on the call that stopped there.
+  const shownBefore = s.run.state === 'PROPOSED';
   // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
   if (s.run.state === 'EMPTY' || !s.evidence) {
     assertReachable('discovery');
@@ -117,7 +122,7 @@ export async function newSkill(): Promise<void> {
       console.log(`These rules were read from ${s.publicSource ?? 'someone else\'s public work'}. Accepting ADOPTS them for your skill;`
         + ' it does not make them that author\'s standard, and the record will always say where they came from.\n');
     }
-    if (!(await review())) return;
+    if (!(await review({ continueWith: `atelier new ${shellWord(corpus)}`, shownBefore }))) return;
     s = loadSession();
     if (!s.decided.some((d) => d.authority !== 'EXPERT_REJECTED')) {
       console.log('\nEvery rule was rejected, so there is nothing to build.'
@@ -141,10 +146,8 @@ export async function newSkill(): Promise<void> {
   const built = s.skillName ?? name;
   heldOutCheck(built);
   proposeFloor(built);
-  console.log(`\nUse it:   /${built} <your task>          (in Claude Code)`);
-  console.log(`          atelier invoke --skill ${built} "<your task>"`);
-  console.log(`Check any text against it:  atelier verify --skill ${built} <file>`);
-  console.log(`Correct:  atelier fix "<what was wrong>"`);
+  console.log(`\nUse it:    /${built} <your task>   ·   atelier invoke --skill ${built} "<your task>"`);
+  console.log(`Check:     atelier verify --skill ${built} <file>   ·   correct it: atelier fix "<what was wrong>"`);
   if (s.reservation?.reserved.length) {
     console.log(`Compare it blind against the ${s.reservation.reserved.length} piece(s) held back:  atelier reference --skill ${built}`);
   }
@@ -165,14 +168,19 @@ function heldOutCheck(skill: string): void {
   const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
   const measured = (v?.requirements ?? []).filter((r) => r.measurement && r.authority !== 'EXPERT_REJECTED');
   if (!reserved.length || !measured.length) return;
-  console.log(`\nChecked against the ${reserved.length} piece(s) held back before anything read them:`);
-  for (const r of measured) {
-    const m = r.measurement;
-    if (!m) continue;
+  const rows = measured.flatMap((r) => (r.measurement ? [{ r, m: r.measurement }] : [])).map(({ r, m }) => {
     const results = reserved.map((u) => measure(u.artifact, m));
     const applicable = results.filter((x) => x.verdict !== 'NOT_APPLICABLE');
-    const met = applicable.filter((x) => x.verdict === 'MET').length;
-    console.log(`  ${r.requirementId}  ${applicable.length ? `${met} of ${applicable.length} meet it` : 'not measurable on these pieces'}   ${r.statement.slice(0, 70)}`);
+    return { r, applicable: applicable.length, met: applicable.filter((x) => x.verdict === 'MET').length };
+  });
+  // What matters is a rule the author's own unseen work misses: those are listed, and all-met is one line.
+  const measurable = rows.filter((x) => x.applicable > 0);
+  const missed = measurable.filter((x) => x.met < x.applicable);
+  if (!measurable.length) return;
+  console.log(`\nChecked against the ${reserved.length} piece(s) held back before anything read them: `
+    + `${measurable.length - missed.length} of ${measurable.length} measurable counted rule(s) met${missed.length ? '; missed by your own work:' : '.'}`);
+  for (const x of missed) {
+    console.log(`  ${x.r.requirementId}  ${x.met} of ${x.applicable} meet it   ${x.r.statement.slice(0, 70)}`);
   }
 }
 

@@ -56,8 +56,10 @@ export function mutationsOf(g: Genome, v: StandardVersion, available: { exemplar
   return out;
 }
 
+const quoted = (r: Requirement | undefined): string => (r ? ` ("${r.statement.slice(0, 50)}")` : '');
+
 export const describeMutation = (m: Mutation, rules?: ReadonlyMap<string, Requirement>): string =>
-  m.kind === 'CARRIER' ? `${m.requirementId}${rules?.get(m.requirementId) ? ` ("${rules.get(m.requirementId)!.statement.slice(0, 50)}")` : ''}: ${m.from} → ${m.to}`
+  m.kind === 'CARRIER' ? `${m.requirementId}${quoted(rules?.get(m.requirementId))}: ${m.from} → ${m.to}`
     : m.kind === 'EXEMPLAR' ? `${m.on ? 'ship' : 'drop'} the exemplar`
       : `${m.on ? 'ship' : 'drop'} the contrast examples`;
 
