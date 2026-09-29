@@ -204,9 +204,11 @@ that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
   `claude-haiku-4-5` on Anthropic, or `ATELIER_CLAIMS_MODEL` on any backend. With no reader available,
   the older pattern check (`core/loop/claims.ts`) runs instead. A reader that fails also falls back to
   the pattern check and says so, so a failed read is never reported as clean. Every UNSOURCED line names
-  the instrument that produced it, including the reader's prompt version. **Measured once, not qualified**: it caught 39 of 39 planted
-  inventions but flagged true material in 11 of 43 clean drafts, a specificity of 0.744 against a floor of
-  0.80 ([the result](../studies/CLAIM_READER_QUALIFICATION_RESULT.md)). The gate stays fail-closed.
+  the instrument that produced it, including the reader's version. **Qualified, version 2**: on 28 pieces
+  no earlier study had used, it caught 35 of 35 planted inventions and left 35 of 38 clean drafts alone
+  (specificity 0.921, 95% CI 0.786–0.983), clearing the pre-registered floors of 0.50 and 0.80
+  ([result](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). Version 1 failed on essays (0.744); the
+  reason, a trusted sentence number, is why version 2 checks location in code.
 - **It changes the output, never the standard.** The loop has no authority to relax a target.
 
 ### What is deliberately not proposed

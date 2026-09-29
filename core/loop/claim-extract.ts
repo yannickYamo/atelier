@@ -42,6 +42,8 @@ export interface ClaimReading {
   readonly publicFacts: readonly { readonly start: number; readonly end: number; readonly text: string; readonly why: string }[];
   /** which instrument produced this reading, as it will be reported */
   readonly instrument: string;
+  /** what the reader typed, verbatim, for audit: the decision above is made from these */
+  readonly specifics?: readonly ExtractedSpecific[];
 }
 
 /**
@@ -111,12 +113,29 @@ The material, the task and the draft arrive inside <material>, <task> and <draft
 Be exhaustive: a specific you leave out cannot be checked. Do not judge whether a specific is plausible, only where it comes from. When unsure between MATERIAL and NONE, choose NONE.`;
 
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
-/** The reader's version: the hash of what it is told. Recorded with every reading it makes. */
-export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}`).slice(0, 8);
+/**
+ * How the code decides on what the reader typed. Part of the instrument: a changed decision is a changed
+ * instrument, and a qualification result holds only for the version it measured.
+ *   1  the first, measured in studies/CLAIM_READER_QUALIFICATION_RESULT.md (specificity 0.744: failed)
+ *   2  the location is checked too, a specific found in the material verbatim is supported whatever the
+ *      reader said, and spelled-out numbers count as the same figure
+ */
+export const DECISION_VERSION = 2;
+/** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
+export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
-const numbersIn = (s: string): string[] => (s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, '').replace(/,/g, ''));
-const norm = (s: string): string => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+/** "ten hours" and "10 hours" state the same figure: spelled-out numbers are read as digits. */
+const NUMBER_WORDS: Readonly<Record<string, string>> = { two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9',
+  ten: '10', eleven: '11', twelve: '12', fifteen: '15', twenty: '20', thirty: '30', forty: '40', fifty: '50', sixty: '60', seventy: '70',
+  eighty: '80', ninety: '90', hundred: '100', thousand: '1000' };
+const numbersIn = (s: string): string[] => [
+  ...(s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, '').replace(/,/g, '')),
+  ...(s.match(/\b[a-z]+\b/gi) ?? []).map((w) => NUMBER_WORDS[w.toLowerCase()]).filter((n): n is string => Boolean(n)),
+];
+/** Compared as the same text: case, quote style, spacing and a spelled-out number ("ten" is "10") aside. */
+const norm = (s: string): string => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+  .replace(/\b[a-z]+\b/g, (w) => NUMBER_WORDS[w] ?? w).replace(/\s+/g, ' ').trim();
 
 /**
  * Is `support` really in `source`? Exactly (whitespace and quote style aside), or, because a model
@@ -162,17 +181,42 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   const bySentence = new Map<number, Claim>();
   const publicFacts: { start: number; end: number; text: string; why: string }[] = [];
   const rank: Readonly<Record<Claim['kind'], number>> = { EXPERIENCE: 3, SOURCE: 2, FIGURE: 1 };
+  // WHERE IS IT, REALLY. The reader numbers the sentence a specific sits in, and version 1 trusted the
+  // number: most of its false cuts were a plain sentence ("They force reflection.") beside the one that
+  // held the specific. The number is the reader's word like any other. The specific must be IN the
+  // sentence it names; if not, it is moved to the sentence that holds it; if no sentence does, nothing
+  // is cut on the reader's mistake.
+  const locate = (sp: ExtractedSpecific): number | null => {
+    const t = norm(sp.text);
+    if (!t) return null;
+    const named = ss[sp.sentence - 1];
+    if (named && norm(named.text).includes(t)) return sp.sentence - 1;
+    // Moved only on a specific long enough to be found honestly: "x" is in half the sentences of a draft.
+    const exact = t.length >= 4 ? ss.findIndex((x) => norm(x.text).includes(t)) : -1;
+    if (exact !== -1) return exact;
+    const cw = contentWords(sp.text);
+    if (cw.length < 2) return null;
+    let best = -1; let bestShare = 0;
+    ss.forEach((x, i) => { const w = new Set(contentWords(x.text)); const share = cw.filter((c) => w.has(c)).length / cw.length; if (share > bestShare) { best = i; bestShare = share; } });
+    return bestShare >= 0.6 ? best : null;
+  };
   for (const sp of specifics) {
-    const s = ss[sp.sentence - 1];
-    // A sentence number that points nowhere is the reader's mistake, and nothing is cut on a mistake.
-    if (!s) continue;
     if (!KINDS.includes(sp.kind) || !SOURCES.includes(sp.source)) continue;
+    const at = locate(sp);
+    if (at === null) continue;
+    const s = ss[at];
     const lived = LIVED.has(sp.kind) || sp.attributed;
+    const numbersOk = numbersIn(sp.text).every((n) => knownNumbers.has(n));
+    // IN THE MATERIAL, WHATEVER THE READER SAID. A specific whose own words and numbers are in what the
+    // person supplied traces to them; the reader calling it NONE, or quoting a weak support, does not
+    // make it invented. Code checks the trace both ways.
+    const tracedItself = numbersOk && supportIsIn(sp.text, known);
     let supported: boolean;
-    if (sp.source === 'MATERIAL' || sp.source === 'TASK') {
+    if (tracedItself) {
+      supported = true;
+    } else if (sp.source === 'MATERIAL' || sp.source === 'TASK') {
       const src = sp.source === 'MATERIAL' ? material : task;
       const inSource = supportIsIn(sp.support, src) || supportIsIn(sp.support, known);
-      const numbersOk = numbersIn(sp.text).every((n) => knownNumbers.has(n));
       // A lived event or a quotation must share its substance with the passage it cites, not just a topic.
       const cw = contentWords(sp.text);
       const sup = new Set(contentWords(sp.support));
@@ -186,13 +230,13 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
     }
     if (supported) continue;
     const kind = KIND_TO_CLAIM[sp.kind] ?? 'FIGURE';
-    const had = bySentence.get(sp.sentence);
+    const had = bySentence.get(at);
     if (!had || rank[kind] > rank[had.kind]) {
-      bySentence.set(sp.sentence, { start: s.start, end: s.end, text: s.text, kind, why: placeholders ? WHY[kind].slot : WHY[kind].cut });
+      bySentence.set(at, { start: s.start, end: s.end, text: s.text, kind, why: placeholders ? WHY[kind].slot : WHY[kind].cut });
     }
   }
   const claims = [...bySentence.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c);
-  return { claims, publicFacts, instrument };
+  return { claims, publicFacts, instrument, specifics };
 }
 
 /** The draft as the reader sees it: numbered sentences, so every specific is anchored to one. */

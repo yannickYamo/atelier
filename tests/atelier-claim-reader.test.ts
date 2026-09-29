@@ -87,6 +87,30 @@ describe('the decision is code: what the reader typed is checked against the sou
     expect(decideSpecifics(probe, [sp(99, 'x', 'FIGURE', 'NONE')], '', '', false, 'test').claims).toEqual([]);
   });
 
+  it('v2: a specific pinned to the wrong sentence is moved to the one that holds it, never cut where it is not', () => {
+    const text = 'That story stuck with me. We spent 94 minutes planning.';
+    const r = decideSpecifics(text, [sp(1, 'We spent 94 minutes', 'FIRST_PERSON_EVENT', 'NONE')], '', '', false, 't');
+    expect(r.claims.map((c) => c.text)).toEqual(['We spent 94 minutes planning.']);
+  });
+
+  it('v2: a specific no sentence holds cuts nothing', () => {
+    expect(decideSpecifics('They force reflection. It helps.', [sp(1, 'a 17% gap in retention', 'FIGURE', 'NONE')], '', '', false, 't').claims).toEqual([]);
+  });
+
+  it('v2: a specific that is verbatim in the material is supported, whatever source the reader named', () => {
+    const text = 'I deliberately leave 10% manual, on purpose.';
+    expect(decideSpecifics(text, [sp(1, '10% manual', 'FIGURE', 'NONE')], 'I keep 10% manual, not because we cannot automate.', '', false, 't').claims).toEqual([]);
+  });
+
+  it('v2: a spelled-out number is the same figure as its digits', () => {
+    const text = 'Give it ten hours and it can own a feature.';
+    const s1 = [sp(1, 'ten hours', 'FIGURE', 'MATERIAL', 'Give an agent 10 hours and it can own a whole feature.')];
+    expect(decideSpecifics(text, s1, 'Give an agent 10 hours and it can own a whole feature.', '', false, 't').claims).toEqual([]);
+    expect(decideSpecifics(text, [sp(1, 'ten hours', 'FIGURE', 'NONE')], 'Give an agent 12 hours.', '', false, 't').claims).toHaveLength(1);
+    // and in the material's own words, however either spells it
+    expect(decideSpecifics('For fifty years, people dreamed of it.', [sp(1, 'For fifty years', 'FIGURE', 'NONE')], 'For 50 years, people have dreamed of it.', '', false, 't').claims).toEqual([]);
+  });
+
   it('one claim per sentence, the strongest kind kept', () => {
     const r = decideSpecifics(probe, typed.filter((t) => t.sentence === 4), '', '', false, 'test');
     expect(r.claims).toHaveLength(1);

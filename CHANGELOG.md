@@ -98,6 +98,25 @@ a run in progress may not be.
   set Atelier up and use it for someone, and what it must leave to the person (approving the standard,
   editing compiled skills, supplying real material). Its commands are checked against the CLI by the tests.
 
+### Changed (the claim reader, version 2)
+
+- The decision now checks the reader's location too. A specific must be in the sentence the reader
+  names; otherwise it is moved to the sentence that holds it, and if no sentence does, nothing is cut.
+- A specific that traces to the material verbatim is supported, whatever the reader said.
+- Spelled-out numbers are the same figure as their digits.
+- The prompt is unchanged. The instrument version is `0279163b`, and readings now keep the reader's typed
+  specifics for audit.
+
+### Studies: qualifying the claim reader, version 2 (the one approved second attempt)
+
+- Pre-registered (studies/CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md, sealed before output) on 33
+  pieces no study had used: 25 technical newsletters and 8 marketing and study pieces. Same floors. $3.45.
+- **PASS.** Specificity 35 / 38 = 0.921 (95% CI 0.786–0.983). Sensitivity 35 / 35 = 1.00 (0.90–1.00).
+  The pattern check on the same drafts: 38 / 38 and 9 / 35.
+- The interval is wide, and its lower bound is below the floor. Version 1 failed on essays. The result
+  holds for this population.
+- v2 was developed on v1's spent test set (36 / 43 there), which is not counted as evidence.
+
 ### Studies: qualifying the claim reader (Phase B)
 
 - Pre-registered (studies/CLAIM_READER_QUALIFICATION_PREREGISTRATION.md, sealed before any output):
