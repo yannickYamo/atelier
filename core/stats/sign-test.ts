@@ -55,6 +55,17 @@ export function signTestOneSidedP(wins: number, n: number): number {
 }
 
 /**
+ * Exact upper tail P(X ≥ k | n, p) at any chance rate: the blinding check in Phase C, where a reader
+ * guessing which of three pieces is the product is right a third of the time by chance.
+ */
+export function binomialUpperTailP(k: number, n: number, p: number): number {
+  if (!Number.isInteger(k) || !Number.isInteger(n) || n < 0 || k < 0 || k > n || !(p >= 0 && p <= 1)) {
+    throw new RangeError(`binomialUpperTailP needs whole numbers 0 ≤ k ≤ n and 0 ≤ p ≤ 1 (got ${k}, ${n}, ${p})`);
+  }
+  return n === 0 ? 1 : binomTail(n, p, k);
+}
+
+/**
  * Exact (Clopper–Pearson) two-sided confidence interval for a binomial proportion, by bisection on
  * the exact tails — no approximation, which is the point of reporting it beside the p-value.
  */
