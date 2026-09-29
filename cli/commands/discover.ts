@@ -23,6 +23,8 @@ import { extract } from '../../core/intake/extract.js';
 
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
+import { featureOf } from '../../core/observers/features.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete } from '../../core/inference/client.js';
 import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
@@ -303,6 +305,13 @@ export async function discover(): Promise<void> {
       const read = openItems.filter((i) => readIds.has(i.id));
       const drafts = await contrastDrafts(read, ev.corpusHash);
       const contrast = deriveContrastRules(read, openItems.filter((i) => heldIds.has(i.id)), drafts, sourceProvenance());
+      // THE SIGNALS. Counted features that separate this author from the model over many drafts, but not
+      // draft by draft: kept with the skill to choose between drafts and to profile one, never proposed.
+      const signals = signalsOf(judgeCountedFeatures(read.map((i) => i.text), openItems.filter((i) => heldIds.has(i.id)).map((i) => i.text), drafts));
+      writeAtomic(runFile('signals.json'), JSON.stringify(signals, null, 1));
+      if (signals.length) {
+        console.log(`${signals.length} signal(s) of your style, used to choose between drafts (not rules): ${signals.map((x) => featureOf(x.id)?.label ?? x.id).join('; ')}.`);
+      }
       if (contrast.length) {
         console.log(`${contrast.length} rule(s) from comparing your writing with ${drafts.length} plain drafts by the model: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
         proposals = [...proposals, ...contrast.map((c) => c.requirement)];
