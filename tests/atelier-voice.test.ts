@@ -263,6 +263,11 @@ describe('the voice layer: register, and bands that choose rather than steer', (
     expect(r?.requirement.statement).toMatch(/^Contract as I do/);
     expect(r?.conformance.weak).toBeUndefined();
   });
+  it('and a cap on contractions too, so a repair told to cut "do not" cannot contract everything', () => {
+    const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'CONTRACTION');
+    expect(r?.requirement.statement).toMatch(/^Contract as often as I do, not more: at most [\d.]+ contractions per 1,000 words/);
+    expect(r?.requirement.measurement?.params.maxPer1000).toBeGreaterThan(0);
+  });
   it('first-person and signature bands are weak: checked and used to choose, never instructed', () => {
     const fp = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FIRST_PERSON');
     expect(fp?.conformance.weak).toBe(true);
