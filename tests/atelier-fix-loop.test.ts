@@ -217,6 +217,43 @@ describe('a counted decision goes through the promotion gate: it may reject on i
   }, 300_000);
 });
 
+describe('in fix, a deterministic regression means a REQUIRED rule got worse', () => {
+  // The target (x1, REQUIRED, counted) is fixed by the candidate while another counted rule gets worse.
+  // A PREFERRED rule getting worse used to make the gate AUTO_REJECT on its own.
+  const seedTwo = async (otherMateriality: 'PREFERRED' | 'REQUIRED'): Promise<{ data: string; proj: string }> => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-fix-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-fix-proj-'));
+    run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', 'REQUIRED', '--measure', 'LEXICON:synergy');
+    run(data, proj, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', otherMateriality, '--measure', 'LEXICON:leverage');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await setByTool({ emit_piece: { piece: 'the synergy answer' } });
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', '--no-repair'), 'seeding invoke failed').not.toMatch(/^EXIT:/);
+    return { data, proj };
+  };
+  const gateOf = (data: string): string | undefined =>
+    (store.readEvents({ root: data, skillName: 'focus' }).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined)?.authority;
+
+  it('a PREFERRED rule getting worse does not auto-reject: a person decides', async () => {
+    const { data, proj } = await seedTwo('PREFERRED');
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
+    const out = run(data, proj, 'fix', 'it said synergy');
+    expect(gateOf(data)).toBe('HUMAN_GATED');
+    expect(out).toContain('--pick a|b|same');
+    expect(out).not.toContain('decided by its count');
+  }, 120_000);
+
+  it('POLARITY — the same change breaking a REQUIRED rule is rejected by the count', async () => {
+    const { data, proj } = await seedTwo('REQUIRED');
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
+    const out = run(data, proj, 'fix', 'it said synergy');
+    expect(gateOf(data)).toBe('AUTO_REJECT');
+    expect(out).toContain('decided by its count');
+  }, 120_000);
+});
+
 describe('STANDARD_GAP: one approval mints, compiles and installs — or one refusal is remembered', () => {
   it('--add required supersedes with the complaint as the reason, and the rule instructs', async () => {
     const { data, proj } = await seeded();

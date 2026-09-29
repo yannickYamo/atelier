@@ -10,6 +10,7 @@ import { mkdtempSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
+import { keysOf } from '../core/state/rule-key.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 let backend: ChildProcess; let port = 0;
@@ -30,7 +31,7 @@ const run = (data: string, proj: string, ...args: string[]): string => {
   } catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`; }
 };
 
-const seed = async (): Promise<{ data: string; proj: string }> => {
+const seed = async (dropFromContract: string | null = null): Promise<{ data: string; proj: string }> => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-pa-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-pa-proj-'));
   run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--materiality', 'REQUIRED', '--measure', 'LEXICON:synergy');
   run(data, proj, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--materiality', 'REQUIRED', '--measure', 'LEXICON:leverage');
@@ -45,6 +46,16 @@ const seed = async (): Promise<{ data: string; proj: string }> => {
   writeFileSync(file, Array.from({ length: 10 }, (_, i) => `Task ${i + 1}.`).join('\n\n'));
   // synergy and leverage block; paradigm is REQUIRED but only observed.
   run(data, proj, 'floor', '--skill', 'focus', '--corpus', corpus, '--tasks', file, '--enforce', '1', '--enforce', '2');
+  if (dropFromContract) {
+    // A REQUIRED counted rule with no margin: in the standard, measured, and not a floor dimension.
+    // Dimensions are keyed by rule key (core/state/rule-key.ts); the rule is found by its statement.
+    const L = { root: data, skillName: 'focus' }; const f = store.getFloor(L);
+    const v = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
+    const key = keysOf(v.requirements)[v.requirements.findIndex((r) => r.statement.includes(dropFromContract))];
+    expect(key in f.contract!.dimensions, 'the rule to drop was a floor dimension').toBe(true);
+    const dims = Object.fromEntries(Object.entries(f.contract!.dimensions).filter(([k]) => k !== key));
+    store.setFloor(L, { ...f, contract: { ...f.contract!, dimensions: dims } });
+  }
   await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [{ change: 1, why: 'skimmed' }] } } });
   run(data, proj, 'floor', '--skill', 'focus', '--baseline');
   for (let i = 0; i < 6; i++) run(data, proj, 'floor', '--skill', 'focus', '--qualify');
@@ -72,6 +83,29 @@ describe('through the binary: the gate says what nothing read, and a REQUIRED ru
     expect(out).not.toContain('gate AUTO_PROMOTE');
     expect(out).toMatch(/gate AUTO_REJECT\. a previously-passing deterministic invariant now fails.*REQUIRED rule\(s\) .* regressed/);
     expect(store.getActive(L)).toBe(before);
+  }, 300_000);
+});
+
+describe('through the binary: a REQUIRED rule with no floor margin is still guarded (D3) and named (D2)', () => {
+  it('breaking it on the candidate is a deterministic regression, by the direct pass/fail check', async () => {
+    const { data, proj } = await seed('paradigm');
+    const L = { root: data, skillName: 'focus' };
+    const before = store.getActive(L);
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [{ change: 1, why: 'skimmed' }] } },
+      when: [{ contains: 'Before you finalize', answer: { piece: 'the paradigm answer, paradigm upon paradigm' } }] });
+    const out = run(data, proj, 'optimize', '--skill', 'focus', '--promote', '--cap', '50');
+    expect(out).not.toContain('gate AUTO_PROMOTE');
+    expect(out).toMatch(/gate AUTO_REJECT\. a previously-passing deterministic invariant now fails.*REQUIRED rule\(s\) R-\w+ regressed/);
+    expect(store.getActive(L)).toBe(before);
+  }, 300_000);
+
+  it('POLARITY — left intact, it promotes, and the promotion names it as measured but not guarded by a margin', async () => {
+    const { data, proj } = await seed('paradigm');
+    await post({ byTool: { emit_piece: { piece: 'the synergy answer, synergy upon synergy' }, emit_proposals: { proposals: [{ change: 1, why: 'skimmed' }] } },
+      when: [{ contains: 'Before you finalize', answer: { piece: 'the plain answer' } }] });
+    const out = run(data, proj, 'optimize', '--skill', 'focus', '--promote', '--cap', '50');
+    expect(out).toContain('gate AUTO_PROMOTE');
+    expect(out).toMatch(/Measured but not guarded by the floor: x3 \(no margin; pass\/fail checked\)/);
   }, 300_000);
 });
 

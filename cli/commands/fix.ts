@@ -377,7 +377,13 @@ async function settleBlindPick(
     const verdictOf = (r: typeof champReport): Map<string, string> => new Map(r.checked.map((c) => [c.requirementId, c.result.verdict]));
     const champ = verdictOf(champReport); const cand = verdictOf(candReport);
     const fixes = champ.get(move.requirementId) === 'VIOLATED' && cand.get(move.requirementId) === 'MET';
-    const breaks = regressions(champReport, candReport).length > 0;
+    // A DETERMINISTIC REGRESSION IS A REQUIRED RULE GETTING WORSE. It meant any measured rule, so a
+    // PREFERRED one — which the owner said an excellent output may break — let the gate AUTO_REJECT on
+    // its own. A PREFERRED rule getting worse still withholds the "count favours it" reading below; it
+    // just cannot reject without a person.
+    const worseRules = new Set(regressions(champReport, candReport));
+    const breaks = candReport.checked.some((c) => worseRules.has(c.requirementId) && c.materiality === 'REQUIRED');
+    const breaksAny = worseRules.size > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
     const champLetter = championFirst ? 'a' : 'b';
     // THE COUNT IS EVIDENCE; THE GATE DECIDES WHAT IT AUTHORISES.
@@ -404,7 +410,7 @@ async function settleBlindPick(
         console.log(`${move.requirementId} is a measured rule, so this was decided by its count, not by eye: `
           + `the new implementation does worse on the measured rules (${gateRejected}).`);
       }
-    } else if (fixes && !breaks) {
+    } else if (fixes && !breaksAny) {
       countFavoursCandidate = true;
       // Not which letter: naming it before the pick would unblind the only qualified instrument here.
       if (!flag('--pick')) {
