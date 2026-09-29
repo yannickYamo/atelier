@@ -6,6 +6,48 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## [0.4.0] — 2026-09-28 (taste detection)
+
+### Added
+
+- **Counted features, selected per author** (`core/observers/features.ts`, `core/observers/selection.ts`).
+  - 37 deterministic features across punctuation, sentence shape, the page, lexicon, stance, sound and
+    unevenness, none assumed to matter.
+  - Discovery measures each one on the author's pieces and on the model's plain drafts. A feature is kept
+    only if it separates the two (AUC at least 0.75 either way) and holds on held-back pieces.
+  - A kept feature is a **RULE** when the author's band tells single drafts apart. It is proposed as a
+    `FEATURE` rule, checked on both sides.
+  - Or it is a **SIGNAL** when only the distributions differ. Signals are kept with the skill, break ties
+    between drafts, and are never a gate.
+- **`atelier verify --profile`**: where a text sits on each counted feature the skill holds, layer by
+  layer, not one number.
+- **The move reader** (`core/taste/moves.ts`), a candidate for the deep layers: typed readings of figures,
+  argumentative moves, openings and closings, register, evidence, callbacks and humour. Every quote is
+  verified in code. It is parked until it qualifies.
+
+### Studies: taste detection in development
+
+- On the voice rounds' author against the rounds' model drafts, 7 counted features were kept, all as
+  signals: commas per sentence (AUC 0.92), three-item lists (0.89), the length of short sentences (0.88),
+  cadence (0.84), the length of long sentences (0.78), block quotations, and deictic openers. Single
+  drafts sat inside the author's wide range, so none could be a rule.
+- The move reader barely separated that author from the model (AUCs 0.45–0.71). Several of its features
+  were unstable on a re-read, and many quoted figures were not verbatim, so it was parked.
+- None of this is evidence. The sealed test is studies/SENSOR_QUALIFICATION_PREREGISTRATION.md.
+
+### Studies: qualifying the taste sensors (pre-registered, 40 unused newsletters, $3.75)
+
+- **Counted features: PASS.** Selection kept 10 features, and 9 of them replicated on unseen pieces
+  against unseen drafts.
+  - Two were rules (links, block quotations). Their bands held: 88–100% of unseen pieces inside, and 100%
+    of unseen drafts outside.
+  - Seven were signals: names, list items, figures, "you", digits, quoted phrases, long-sentence length.
+- **The move reader: FAIL.** Only concession was reliable, kept and replicating; the floor was two. Opening
+  and closing moves were reliable (0.93, 0.87) but did not separate this author from the model, and
+  figures separated but were unreliable. The reader stays parked.
+- The deep layers still have no qualified instrument. Phase C records every draft's profile beside the
+  human ranks, to test whether any sensor tracks what a reader hears.
+
 ## [0.3.0] — 2026-09-28
 
 The close-out release. What it contains is below.
