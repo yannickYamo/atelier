@@ -28,6 +28,10 @@ const server = createServer((req, res) => {
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
     res.setHeader('content-type', 'application/json');
+    // NO KEPT-ALIVE CONNECTIONS. The server closed idle sockets just as a client reused one, and a test's
+    // /__set failed with "other side closed" under full-suite load, leaving the next test on the previous
+    // script. A fresh connection per request costs nothing here and removes the race for every test.
+    res.setHeader('connection', 'close');
     if (req.url === '/__set') {
       const parsed = JSON.parse(body);
       when = Array.isArray(parsed.when) ? parsed.when : [];
