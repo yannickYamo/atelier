@@ -31,8 +31,8 @@
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
-import { sentencesOf, wordsOf } from '../observers/text.js';
-import { unsourcedClaims, type Claim } from './claims.js';
+import { wordsOf } from '../observers/text.js';
+import { unsourcedClaims, claimUnitsOf, type Claim } from './claims.js';
 import { createHash } from 'node:crypto';
 
 /** What a claim reader returns for one text: the unsupported claims, and the public specifics to check. */
@@ -119,36 +119,164 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  *   1  the first, measured in studies/CLAIM_READER_QUALIFICATION_RESULT.md (specificity 0.744: failed)
  *   2  the location is checked too, a specific found in the material verbatim is supported whatever the
  *      reader said, and spelled-out numbers count as the same figure
+ *   3  the reader sees headings and table rows as numbered units, not only sentences; support is matched
+ *      with markdown stripped and across adjacent sentences of one paragraph; a number is a phrase
+ *      ("twenty-five", "two hundred", "3 million", "a dozen"), and a lone "one" counts only where it
+ *      quantifies
  */
-export const DECISION_VERSION = 2;
+export const DECISION_VERSION = 3;
 /** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
 export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
-/** "ten hours" and "10 hours" state the same figure: spelled-out numbers are read as digits. */
-const NUMBER_WORDS: Readonly<Record<string, string>> = { two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9',
-  ten: '10', eleven: '11', twelve: '12', fifteen: '15', twenty: '20', thirty: '30', forty: '40', fifty: '50', sixty: '60', seventy: '70',
-  eighty: '80', ninety: '90', hundred: '100', thousand: '1000' };
-const numbersIn = (s: string): string[] => [
-  ...(s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, '').replace(/,/g, '')),
-  ...(s.match(/\b[a-z]+\b/gi) ?? []).map((w) => NUMBER_WORDS[w.toLowerCase()]).filter((n): n is string => Boolean(n)),
-];
-/** Compared as the same text: case, quote style, spacing and a spelled-out number ("ten" is "10") aside. */
-const norm = (s: string): string => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
-  .replace(/\b[a-z]+\b/g, (w) => NUMBER_WORDS[w] ?? w).replace(/\s+/g, ' ').trim();
+
+// ── Numbers, however they are spelled ──────────────────────────────────────────────────────────
+//
+// "ten hours" and "10 hours" state the same figure, so a spelled-out number is read as its value. Version
+// 2 read ONE word at a time from a short list, and the audit found both directions of the failure it
+// allows. A word it did not list was no number at all, so "fourteen engineers" against material saying
+// "four engineers" had no figure to disagree with and passed; "one million users" against "3 million"
+// likewise. And "twenty-five" became "20-5", so a true "25 customers" was cut. Now a number is a PHRASE:
+// units, teens, tens, "twenty-five", "two hundred and fifty", "a dozen", and a multiplier on words or on
+// digits ("3 million" ≡ "three million" ≡ 3000000). A figure is its value, never a piece of it: "3
+// million" in the notes does not support "3 users".
+const UNITS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+const TEENS: Readonly<Record<string, number>> = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19 };
+const TENS: Readonly<Record<string, number>> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const SCALES: Readonly<Record<string, number>> = { thousand: 1e3, million: 1e6, billion: 1e9 };
+/**
+ * "ONE" IS USUALLY NOT A FIGURE. "One of the reasons", "no one", "the one that", "one day": read as 1,
+ * each would demand a 1 in the material, and a true story would be cut for a pronoun. So a lone "one"
+ * counts only where it quantifies: followed by a word that is not a function word or one of these idioms,
+ * and not preceded by a determiner. Inside a number phrase ("one million", "twenty-one") it always counts.
+ */
+const ONE_BEFORE_NOT_A_FIGURE = new Set(['of', 'and', 'or', 'but', 'the', 'a', 'an', 'to', 'that', 'who', 'which', 'is', 'was', 'can', 'could',
+  'would', 'should', 'might', 'must', 'will', 'may', 'another', 'other', 'day', 'time', 'thing', 'way', 'point', 'side', 'hand', 'more', 'by',
+  'in', 'on', 'at', 'for', 'from', 'with', 'as', 'i', 'we', 'you', 'they', 'it', 'he', 'she', 'has', 'had', 'does', 'did', 'if', 'so']);
+const ONE_AFTER_NOT_A_FIGURE = new Set(['the', 'this', 'that', 'no', 'any', 'each', 'every', 'some', 'which', 'last', 'next', 'only', 'same', 'right', 'wrong']);
+
+interface NumberPhrase { readonly index: number; readonly length: number; readonly value: string }
+/** Every number in `s` written as words, or as digits with a scale word after them, with where it sits. */
+function numberPhrases(s: string): NumberPhrase[] {
+  const tokens = [...s.matchAll(/\d[\d,]*(?:\.\d+)?|[A-Za-z]+/g)].map((m) => ({ at: m.index, raw: m[0], w: m[0].toLowerCase() }));
+  const out: NumberPhrase[] = [];
+  const kind = (w: string): 'UNIT' | 'TEEN' | 'TENS' | 'HUNDRED' | 'SCALE' | 'DOZEN' | null =>
+    w in UNITS ? 'UNIT' : w in TEENS ? 'TEEN' : w in TENS ? 'TENS' : w === 'hundred' ? 'HUNDRED' : w in SCALES ? 'SCALE' : w === 'dozen' ? 'DOZEN' : null;
+  // Two tokens belong to one phrase only across a space or a hyphen: "five, six" is two numbers.
+  const joined = (a: { at: number; raw: string }, b: { at: number }): boolean => /^[\s-]+$/.test(s.slice(a.at + a.raw.length, b.at));
+  let i = 0;
+  while (i < tokens.length) {
+    const t0 = tokens[i];
+    const digits = /^\d/.test(t0.raw);
+    const leadA = t0.w === 'a' && tokens[i + 1] && joined(t0, tokens[i + 1]) && ['HUNDRED', 'SCALE', 'DOZEN'].includes(kind(tokens[i + 1].w) ?? '');
+    if (!digits && !leadA && !kind(t0.w)) { i += 1; continue; }
+    // A digit counts here only when a scale word follows it ("3 million"); plain digits are read elsewhere.
+    if (digits && !(tokens[i + 1] && joined(t0, tokens[i + 1]) && ['HUNDRED', 'SCALE', 'DOZEN'].includes(kind(tokens[i + 1].w) ?? ''))) { i += 1; continue; }
+    let total = 0; let current = digits ? Number(t0.raw.replace(/,/g, '')) : 0;
+    let last: string = digits ? 'DIGITS' : leadA ? 'A' : '';
+    let j = digits || leadA ? i + 1 : i; let end = j - 1;
+    for (; j < tokens.length; j++) {
+      const t = tokens[j];
+      if (j > i && !joined(tokens[j - 1], t)) break;
+      // "two hundred and fifty": "and" joins two parts of one number after a hundred or a scale, nothing else.
+      if (t.w === 'and' && (last === 'HUNDRED' || last === 'SCALE') && tokens[j + 1] && joined(t, tokens[j + 1]) && kind(tokens[j + 1].w)) { last = 'SCALED'; continue; }
+      const k = kind(t.w);
+      if (!k) break;
+      // After a unit or a teen only a multiplier may follow: "five six" is two numbers, not eleven.
+      if ((last === 'UNIT' || last === 'TEEN') && (k === 'UNIT' || k === 'TEEN' || k === 'TENS')) break;
+      if (last === 'TENS' && (k === 'TEEN' || k === 'TENS')) break;
+      if (k === 'UNIT') current += UNITS[t.w];
+      else if (k === 'TEEN') current += TEENS[t.w];
+      else if (k === 'TENS') current += TENS[t.w];
+      else if (k === 'HUNDRED') current = (current || 1) * 100;
+      else if (k === 'DOZEN') current = (current || 1) * 12;
+      else { total += (current || 1) * SCALES[t.w]; current = 0; }
+      last = k === 'SCALE' ? 'SCALE' : k; end = j;
+      if (k === 'DOZEN') break;
+    }
+    if (end < i || (leadA && end === i)) { i += 1; continue; }
+    const first = tokens[i]; const lastTok = tokens[end];
+    // The lone "one": a figure only where it quantifies (see ONE_BEFORE_NOT_A_FIGURE).
+    if (end === i && first.w === 'one') {
+      const next = tokens[i + 1]; const prev = tokens[i - 1];
+      const quantifies = next !== undefined && joined(first, next) && !ONE_BEFORE_NOT_A_FIGURE.has(next.w) && !/^\d/.test(next.raw)
+        && !(prev && joined(prev, first) && ONE_AFTER_NOT_A_FIGURE.has(prev.w));
+      if (!quantifies) { i += 1; continue; }
+    }
+    const value = total + current;
+    out.push({ index: first.at, length: lastTok.at + lastTok.raw.length - first.at, value: String(Math.round(value * 1000) / 1000) });
+    i = end + 1;
+  }
+  return out;
+}
+
+/** Every figure `s` states, as its value: digits ("1,000" is "1000"), and every number phrase. */
+export const numbersIn = (s: string): string[] => {
+  const phrases = numberPhrases(s);
+  // Digits that head a phrase ("3" of "3 million") are the phrase's, not a figure of their own.
+  const heads = new Set(phrases.map((p) => p.index));
+  const digits = [...s.matchAll(/\d[\d,]*(?:\.\d+)?/g)].filter((m) => !heads.has(m.index))
+    .map((m) => m[0].replace(/[.,]$/, '').replace(/,/g, ''));
+  return [...digits, ...phrases.map((p) => p.value)];
+};
+/** Compared as the same text: case, quote style, spacing, thousands separators and how a number is spelled aside. */
+const norm = (s: string): string => {
+  let t = s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/(\d),(?=\d{3}\b)/g, '$1');
+  for (const p of numberPhrases(t).reverse()) t = `${t.slice(0, p.index)}${p.value}${t.slice(p.index + p.length)}`;
+  return t.replace(/\s+/g, ' ').trim();
+};
 
 /**
- * Is `support` really in `source`? Exactly (whitespace and quote style aside), or, because a model
- * re-quoting a passage drops a word or two, when at least 80% of its content words fall in ONE passage
- * of the source. A passage scattered across the notes supports nothing.
+ * MARKDOWN IS NOT WORDS. A person's notes say "our **checkout** broke" and link "[a stale cache](…)"; a
+ * reader quoting them writes the words, and version 2 compared the two with the asterisks and the URL in
+ * between, so a true story failed its own quotation and was cut. Emphasis, links (their text), images
+ * (their alt text), inline code and heading, quote and table markers are dropped on both sides before
+ * matching. The raw text is tried too, so a link's URL, which only the raw text carries, can still
+ * support a URL the draft cites.
+ */
+const plain = (s: string): string => s
+  .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/`([^`]*)`/g, '$1')
+  .replace(/\*+|~~|(^|[^\w])_+|_+(?=[^\w]|$)/g, '$1')
+  .replace(/^\s*(?:#{1,6}\s+|>\s?)+/gm, '')
+  .replace(/\|/g, ' ');
+
+/**
+ * THE PASSAGES A SUPPORT MAY FALL IN: runs of adjacent sentences inside ONE paragraph. A quoted story
+ * often runs over two sentences ("In March our checkout broke. We traced it to a stale cache."), and
+ * version 2 matched each sentence alone, so a two-sentence quotation had at most half its words in any
+ * one passage and a true story was cut. The run is as long as the quotation has sentences, plus one for
+ * a sentence the reader skipped, and it never crosses a paragraph, a list item, a heading or a table row:
+ * a support assembled from words scattered across the notes still supports nothing.
+ */
+const sentenceSplit = (s: string): string[] => s.split(/(?<=[.!?])\s+/).filter((x) => x.trim());
+function passagesOf(source: string, span: number): Set<string>[] {
+  const paragraphs = source.split(/\n\s*\n|\n(?=\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|\|))/);
+  const out: Set<string>[] = [];
+  for (const p of paragraphs) {
+    const ss = sentenceSplit(p);
+    for (let i = 0; i < ss.length; i++) {
+      const words = new Set(contentWords(plain(ss.slice(i, i + span).join(' '))));
+      if (words.size) out.push(words);
+    }
+  }
+  return out;
+}
+
+/**
+ * Is `support` really in `source`? Exactly (whitespace, quote style, markdown and number spelling
+ * aside), or, because a model re-quoting a passage drops a word or two, when at least 80% of its content
+ * words fall in ONE passage of the source: adjacent sentences of one paragraph. A passage scattered
+ * across the notes supports nothing.
  */
 export function supportIsIn(support: string, source: string): boolean {
   if (!support.trim()) return false;
   if (norm(source).includes(norm(support))) return true;
-  const cw = contentWords(support);
+  if (norm(plain(source)).includes(norm(plain(support)))) return true;
+  const cw = contentWords(plain(support));
   if (cw.length < 3) return false;
-  const passages = source.split(/\n\s*\n|(?<=[.!?])\s+/).map((p) => new Set(contentWords(p))).filter((p) => p.size);
-  return passages.some((p) => cw.filter((w) => p.has(w)).length / cw.length >= 0.8);
+  return passagesOf(source, sentenceSplit(support).length + 1).some((p) => cw.filter((w) => p.has(w)).length / cw.length >= 0.8);
 }
 
 const LIVED: ReadonlySet<Kind> = new Set(['QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT']);
@@ -175,7 +303,7 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   instrument: string,
   /** a format where every specific must trace to the person (a white paper, a report, a contract): nothing passes as public */
   strict = false): ClaimReading {
-  const ss = sentencesOf(text);
+  const ss = claimUnitsOf(text);
   const known = `${material}\n\n${task}`;
   const knownNumbers = new Set(numbersIn(known));
   const bySentence = new Map<number, Claim>();
@@ -239,8 +367,12 @@ export function decideSpecifics(text: string, specifics: readonly ExtractedSpeci
   return { claims, publicFacts, instrument, specifics };
 }
 
-/** The draft as the reader sees it: numbered sentences, so every specific is anchored to one. */
-export const numbered = (text: string): string => sentencesOf(text).map((s, i) => `[${i + 1}] ${s.text}`).join('\n');
+/**
+ * The draft as the reader sees it: numbered units, so every specific is anchored to one. A unit is a
+ * sentence, a heading or a table row (`claimUnitsOf`): the numbers here and in `decideSpecifics` are
+ * the same list, or a specific would be located in the wrong place.
+ */
+export const numbered = (text: string): string => claimUnitsOf(text).map((s, i) => `[${i + 1}] ${s.text}`).join('\n');
 
 /** The pattern check, behind the same seam: what runs when no reader model is configured. */
 export function patternSensor(material: string, placeholders: boolean, why = 'pattern check'): Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } {
