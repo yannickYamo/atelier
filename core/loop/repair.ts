@@ -60,6 +60,14 @@ export interface RepairTarget {
   readonly recase?: boolean;
   /** an invented story or figure: its specifics are meant to be replaced by a placeholder */
   readonly specifics: boolean;
+  /**
+   * The unsourced claims' own text, when a claim span MERGED with a span that broke another rule. Only a
+   * span that is purely a claim skips the meaning check; a merged one is checked on everything outside
+   * these (see spanIntegrity's claimParts).
+   */
+  readonly claims?: readonly string[];
+  /** true when the span merged a claim with a span that is not one */
+  readonly mixed?: boolean;
   /** a machine-writing move: the sentence may be cut outright when it carries no figure and no name */
   readonly cuttable?: boolean;
 }
@@ -74,7 +82,7 @@ export function planRepair(text: string, report: VerifyReport,
   const requiredOnly = opts.requiredOnly ?? true;
   const sentences = sentencesOf(text);
   const paragraphs = paragraphsOf(text);
-  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; recase: boolean; cuttable: boolean }[] = [];
+  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
     if (requiredOnly && c.materiality !== 'REQUIRED') continue;
@@ -98,11 +106,14 @@ export function planRepair(text: string, report: VerifyReport,
         drop: c.observer && REMOVES_SPAN.has(c.observer) && (move !== undefined || !(sent && sp.start <= sent.start && sp.end >= sent.end))
           ? sp.text.trim().toLowerCase() : null,
         swap: c.observer && SWAPS_SPAN.has(c.observer) ? sp.text.trim().toLowerCase() : null,
-        specifics: c.requirementId === 'UNSOURCED', recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
+        specifics: c.requirementId === 'UNSOURCED', claim: c.requirementId === 'UNSOURCED' ? sp.text : null, recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
     }
   }
   raw.sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; recase: boolean; cuttable: boolean }[] = [];
+  // `specifics` stays "carries an unsourced claim" (what the loop reports as cut); `pure` is whether every
+  // part merged into the span is one. It was ORed into the one flag the meaning check read, so a style
+  // span that happened to overlap an invented figure skipped every check: its hedges and names could go.
+  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; pure: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
   for (const r of raw) {
     const last = merged[merged.length - 1];
     if (last && r.start < last.end) {
@@ -111,11 +122,14 @@ export function planRepair(text: string, report: VerifyReport,
       if (!last.rids.includes(r.rid)) last.rids.push(r.rid);
       if (r.drop && !last.drops.includes(r.drop)) last.drops.push(r.drop);
       if (r.swap && !last.swaps.includes(r.swap)) last.swaps.push(r.swap);
-      last.specifics ||= r.specifics; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
-    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [], specifics: r.specifics, recase: r.recase, cuttable: r.cuttable });
+      if (r.claim && !last.claims.includes(r.claim)) last.claims.push(r.claim);
+      last.specifics ||= r.specifics; last.pure &&= r.specifics; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
+    } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [],
+      specifics: r.specifics, pure: r.specifics, claims: r.claim ? [r.claim] : [], recase: r.recase, cuttable: r.cuttable });
   }
   return merged.map((m, i) => ({ id: i + 1, start: m.start, end: m.end, text: text.slice(m.start, m.end),
-    reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase, cuttable: m.cuttable }));
+    reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase, cuttable: m.cuttable,
+    ...(m.specifics && !m.pure ? { claims: m.claims, mixed: true } : {}) }));
 }
 
 export const REPAIR_SYSTEM = `You revise marked spans of a draft so that each one meets the rules it broke.
@@ -197,7 +211,10 @@ export function applyRepair(text: string, targets: readonly RepairTarget[], repl
       applied.push({ id: t.id, before: t.text, after: '' });
       continue;
     }
-    const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), t.specifics ?? false, new Set(t.swaps ?? []), t.recase ?? false);
+    // Only a span that is purely an unsourced claim skips the meaning check; a merged one is checked on
+    // everything outside its claims.
+    const integrity = spanIntegrity(t.text, rep, new Set(t.drops ?? []), (t.specifics ?? false) && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false,
+      t.mixed ? t.claims ?? [] : []);
     if (!integrity.ok) { reverted.push({ id: t.id, kind: 'MEANING', lost: integrity.lost }); continue; }
     // A banned move may not move: a replacement that lowers one spelling of a move and raises another
     // ("not X, it's Y" rewritten as "X rather than Y") is refused, this span only; the rest of the pass

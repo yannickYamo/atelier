@@ -4,9 +4,9 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 import { proposeAcrossFramings } from '../../core/discovery/propose.js';
 import { describeUnion } from '../../core/discovery/union.js';
@@ -25,9 +25,14 @@ import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
+import { formatOf } from '../../core/observers/formats.js';
+import { normalizeClass } from '../../core/observers/doc-class.js';
+import { quantile, wordsOf } from '../../core/observers/text.js';
+import * as store from '../../core/state/store.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete } from '../../core/inference/client.js';
-import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile } from '../runtime.js';
+import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -300,10 +305,14 @@ export async function discover(): Promise<void> {
   // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
   // Saved BEFORE the optional comparison: whatever happens to it, the discovery already paid for is kept.
   saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked }, proposals, proposalMeta });
+  // THE SIGNALS ARE THIS STEP'S OR NONE. Build installs whatever signals.json the run holds, so one left
+  // by an earlier discovery would be installed after a comparison that failed, or never ran
+  // (--no-contrast), as if this one had found them.
+  rmSync(runFile('signals.json'), { force: true });
   if (!argv.includes('--no-contrast')) {
     try {
       const read = openItems.filter((i) => readIds.has(i.id));
-      const drafts = await contrastDrafts(read, ev.corpusHash);
+      const drafts = await contrastDrafts(read, ev.corpusHash, contrastForm(read, declaredClass(s)));
       const contrast = deriveContrastRules(read, openItems.filter((i) => heldIds.has(i.id)), drafts, sourceProvenance());
       // THE SIGNALS. Counted features that separate this author from the model over many drafts, but not
       // draft by draft: kept with the skill to choose between drafts and to profile one, never proposed.
@@ -358,15 +367,43 @@ export async function discover(): Promise<void> {
   if (!process.env.ATELIER_ORCHESTRATED) console.log(`\nRun \`atelier ratify-close\` to mint the standard.`);
 }
 
+/** The document class this run declared: `--class` on this call, or the one `atelier new` kept for the skill. */
+function declaredClass(s: { skillName?: string | null; source?: string | null }): string | null {
+  const cls = flag('--class');
+  if (cls !== undefined) return cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls);
+  let name = s.skillName ?? null;
+  if (!name && s.source) { try { name = skillNameFrom(basename(s.source)); } catch { name = null; } }
+  return name ? store.getDocClass({ root: DATA, skillName: name }) : null;
+}
+
+/**
+ * WHAT THE MODEL IS ASKED TO WRITE, SO ITS DRAFTS ARE THE SAME KIND OF THING AS THE AUTHOR'S. Every
+ * comparison was against "a blog post, about 900 words", so the habits of a LinkedIn author were measured
+ * against blog posts three times their length. The declared class names the kind (a known format gives
+ * its label), and the length is the median of the author's own read pieces, held inside the format's
+ * usual band; with no class, "a piece" at that median.
+ */
+export function contrastForm(read: readonly { text: string }[], cls: string | null): { label: string; words: number } {
+  const counts = read.map((p) => wordsOf(p.text).length).filter((n) => n > 0);
+  const median = counts.length ? Math.round(quantile(counts, 0.5)) : 900;
+  const f = formatOf(cls);
+  const band = f?.words;
+  const words = band ? Math.min(band[1], Math.max(band[0], median)) : median;
+  const plain = cls ? cls.replace(/-/g, ' ') : null;
+  const label = f?.label ?? (plain ? `${/^[aeiou]/i.test(plain) ? 'an' : 'a'} ${plain}` : 'a piece');
+  // Rounded as a person would ask for it: to ten words under 200, to fifty above.
+  return { label, words: words < 200 ? Math.max(10, Math.round(words / 10) * 10) : Math.round(words / 50) * 50 };
+}
+
 /**
  * Plain drafts by the model that will serve the skill, on the author's own titles, no skill applied.
  * Kept per corpus so continuing or re-running discovery does not pay for them twice.
  */
-async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string): Promise<string[]> {
+async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string, form: { label: string; words: number }): Promise<string[]> {
   const path = runFile('contrast-drafts.json');
   const { client, binding } = clientAndBinding('target');
-  // Keyed by corpus AND model: another model's habits are another comparison.
-  const key = `${corpusHash}|${binding.requestedModel}`;
+  // Keyed by corpus, model AND form: another model's habits, or another kind of piece, is another comparison.
+  const key = `${corpusHash}|${binding.requestedModel}|${form.label}|${form.words}`;
   if (existsSync(path)) {
     const cached = readJson<{ corpusHash: string; key?: string; drafts: string[] }>(path, { what: 'the contrast drafts' });
     if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return cached.drafts;
@@ -378,7 +415,7 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   const drafts = await mapLimit(topics, topics.length, async (topic) => {
     const r = await spend(budget, 0.1, async () => {
       const x = await client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
-        userMessage: `Write a blog post titled "${topic}". About 900 words. Output only the piece.`,
+        userMessage: `Write ${form.label} titled "${topic}". About ${form.words} words. Output only the piece.`,
         toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
         schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens: 4000 });
       return { value: x, cost: x.cost };

@@ -22,6 +22,28 @@ const MAX_PAIRS_KEPT = 12;
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const broken = (r: VerifyReport): string[] => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').map((c) => c.requirementId);
 
+/**
+ * Cut one flagged claim. A sentence goes the way `cutSpan` cuts it. A heading or a table row is a line
+ * of its own (./claims.ts, claimUnitsOf), and cutting only its words left a bare `#` or an empty row
+ * behind, so the whole line goes: the heading's markers, a setext heading's underline, the row's pipes.
+ */
+function cutClaim(text: string, start: number, end: number): string {
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  const nl = text.indexOf('\n', end); const lineEnd = nl === -1 ? text.length : nl;
+  const pre = text.slice(lineStart, start); const post = text.slice(end, lineEnd);
+  const span = text.slice(start, end).trim();
+  const heading = /^\s*#{1,6}\s*$/.test(pre) && /^\s*#*\s*$/.test(post);
+  const row = !pre.trim() && !post.trim() && span.startsWith('|');
+  const under = nl === -1 ? null : /^[ \t]*(=+|-+)[ \t]*(?:\n|$)/.exec(text.slice(nl + 1));
+  const setext = !pre.trim() && !post.trim() && under !== null;
+  if (!heading && !row && !setext) return cutSpan(text, start, end);
+  const stop = setext && under ? nl + 1 + under[0].length : nl === -1 ? text.length : nl + 1;
+  // The blank line that set the heading off goes with it, unless it is all that separates two blocks.
+  const head = text.slice(0, lineStart); let rest = text.slice(stop);
+  if (/^[ \t]*\n/.test(rest) && (!head || /\n[ \t]*\n$/.test(head))) rest = rest.replace(/^[ \t]*\n/, '');
+  return `${head}${rest}`;
+}
+
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
 export interface CheckOptions {
@@ -83,25 +105,41 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   ] : [];
   if (opts.guardClaims === false) return { ...report, checked: [...report.checked, ...fmtLines], failed: report.failed || (fmt?.hard.length ?? 0) > 0 };
   const reading = opts.claimSensor?.reading(text);
-  const claims = reading ? reading.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
+  // WHICH READING GATES. A reading from an unqualified reader carries the pattern check's as its `gate`
+  // (./claim-extract.ts, QUALIFIED_READERS): the pattern's findings are the REQUIRED `UNSOURCED` line,
+  // and the reader's are shown beside it as `UNSOURCED·reader`, PREFERRED: a warning the person reads,
+  // never a failure, never a span the repair rewrites. Whichever reading gates keeps the id `UNSOURCED`,
+  // because the repair, the last-resort cut and a structured output's retry all key on it.
+  const gating = reading?.gate ?? reading;
+  const claims = gating ? gating.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
   // Which instrument ran is part of the verdict: a line that says "no invented claims" means something
   // different from a model reader than from a pattern, and the record keeps the difference.
-  const by = reading?.instrument ?? 'pattern check';
-  const line = { requirementId: 'UNSOURCED', statement: 'Never invent a story, a quotation, an attribution or a specific the person did not supply.',
+  const by = gating?.instrument ?? 'pattern check';
+  const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
+  const line = { requirementId: 'UNSOURCED', statement,
     materiality: 'REQUIRED', phase: 'ACCURACY' as const,
     result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: [...claims], value: claims.length,
       detail: `${claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
+  const readerOnly = reading?.gate ? reading : null;
+  const readerLine = readerOnly ? [{ requirementId: READER_REPORT, statement,
+    materiality: 'PREFERRED', phase: 'ACCURACY' as const,
+    result: { verdict: readerOnly.claims.length ? 'VIOLATED' as const : 'MET' as const, spans: [...readerOnly.claims], value: readerOnly.claims.length,
+      detail: (readerOnly.claims.length ? `${readerOnly.claims.length} claim(s) the reader found not in the material supplied` : 'the reader found no unsourced stories, quotations or specifics')
+        + `; reported only: this reader is not qualified, so the pattern check decides what fails [${readerOnly.instrument}]` } }] : [];
   // PUBLIC FACTS ARE LISTED, NOT CUT. Unattributed general knowledge needs no source of the person's, but
   // it is still a specific someone should check before publishing. PREFERRED, so it warns and never fails.
   const pub = reading?.publicFacts ?? [];
+  const pubBy = reading?.instrument ?? by;
   const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
-    result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${by}]` } }] : [];
-  return { ...report, checked: [...report.checked, line, ...pubLine, ...fmtLines], failed: report.failed || claims.length > 0 || (fmt?.hard.length ?? 0) > 0 };
+    result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${pubBy}]` } }] : [];
+  return { ...report, checked: [...report.checked, line, ...readerLine, ...pubLine, ...fmtLines], failed: report.failed || claims.length > 0 || (fmt?.hard.length ?? 0) > 0 };
 }
 
 /** The line listing public facts to check: informational, never a rule the draft broke. */
 export const PUBLIC_FACTS = 'UNSOURCED·public';
+/** The line an unqualified claim reader reports on: PREFERRED, beside the pattern check's `UNSOURCED`. */
+export const READER_REPORT = 'UNSOURCED·reader';
 
 /** `checkDraft`, after the claim reader (when there is one) has read the text. Every async path uses this. */
 export async function checkDraftAsync(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): Promise<VerifyReport> {
@@ -113,9 +151,26 @@ export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
   opts: CheckOptions = {},
 ): Promise<Refined> {
-  const first = await checkDraftAsync(skill, v, draft, opts);
+  let first = await checkDraftAsync(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
   let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
+  // ONE INSTRUMENT ON BOTH SIDES OF EVERY COMPARISON. A claim reader that fails mid-loop degrades for
+  // good (./claim-extract.ts, modelSensor), and from then on reads every text by the pattern check. The
+  // reports this loop already holds were read by the model; compared with a report read by the pattern,
+  // a figure the model flagged and the pattern cannot see looked fixed, and the loop said "all now hold"
+  // over it. So on the first read after the failure, the held reports are read again, by the pattern
+  // check, before anything is compared: the draft's (what `violatedBefore` records) and the current text's.
+  const sensor = opts.guardClaims !== false ? opts.claimSensor : undefined;
+  let readDegraded = sensor?.degraded ?? false; let degradedMidLoop = false;
+  // What the gating reader had flagged before it failed: claims it could see and the pattern cannot.
+  let flaggedBeforeFailure: string[] = [];
+  const sameInstrument = (): void => {
+    if (!sensor?.degraded || readDegraded) return;
+    flaggedBeforeFailure = (report.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
+    readDegraded = true; degradedMidLoop = true;
+    first = checkDraft(skill, v, draft, opts);
+    report = checkDraft(skill, v, text, opts);
+  };
   const kept: string[] = []; const revertedRules: string[] = []; const cut: string[] = [];
   // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
   // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
@@ -160,6 +215,7 @@ export async function refineToStandard(
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
     }
     const after = next === text ? report : await checkDraftAsync(skill, v, next, opts);
+    sameInstrument();
     // A span that moved a banned move onto a sibling, or left a slot, was refused inside applyRepair, that
     // span only: one bad sentence no longer throws away every good rewrite in the pass.
     const verdict = next === text
@@ -186,16 +242,44 @@ export async function refineToStandard(
   // THE LAST RESORT FOR AN INVENTED STORY: CUT IT. When every rewrite failed (a model kept offering a
   // slot where it was told to cut), the sentences the claim check flagged are removed outright, and the
   // output lists them. An invented story does not ship because a rewrite could not be agreed.
-  if (!opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
+  // Tried at most twice: if the reader fails on the cut text, the spans came from an instrument no longer
+  // in use, so the cut is planned again from the current text as the pattern check reads it.
+  for (let attempt = 0; attempt < 2 && !opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED'); attempt++) {
     const spans = report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.spans.slice().sort((a, b) => b.start - a.start);
     let next = text;
-    for (const sp of spans) next = cutSpan(next, sp.start, sp.end);
+    for (const sp of spans) next = cutClaim(next, sp.start, sp.end);
     const after = await checkDraftAsync(skill, v, next, opts);
+    const wasRead = readDegraded;
+    sameInstrument();
+    if (readDegraded !== wasRead) continue;
     if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
       for (const sp of spans) cut.push(sp.text.trim().slice(0, 160));
       text = next; report = after;
       why = report.failed ? `invented stories cut outright; ${why}` : 'every REQUIRED measured rule now holds (invented stories cut outright)';
     }
+    break;
+  }
+  // FAIL CLOSED ON WHAT THE READER ALREADY SAW. A claim the gating reader flagged before it failed is
+  // still an invented claim; the pattern check that took over cannot see it, but it need not: the
+  // sentence is known. Each one still in the text verbatim is cut, as the last resort cuts any other.
+  if (degradedMidLoop && !opts.placeholders) {
+    let next = text;
+    const gone: string[] = [];
+    for (const t of flaggedBeforeFailure) {
+      const at = next.indexOf(t);
+      if (at !== -1 && t.trim()) { next = cutClaim(next, at, at + t.length); gone.push(t.trim().slice(0, 160)); }
+    }
+    if (gone.length) {
+      const after = checkDraft(skill, v, next, opts);
+      if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
+        cut.push(...gone); text = next; report = after;
+        why = `claims the reader had flagged before it failed were cut outright; ${why}`;
+      }
+    }
+  }
+  if (degradedMidLoop) {
+    why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
+      + 'each comparison used one instrument, and a claim only the reader could see is no longer checked)';
   }
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
