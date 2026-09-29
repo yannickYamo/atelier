@@ -26,6 +26,11 @@ export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
  * A backend that is not Anthropic never gets a model it did not name: an Anthropic id sent to someone's
  * own server is a 404 at best. The reader has its own small budget (ATELIER_CLAIMS_CAP, default $0.50),
  * so checking never spends the writer's calls.
+ *
+ * A reader gates only when its (model, version) pair is qualified (QUALIFIED_READERS); otherwise it
+ * reports beside the pattern check, which gates. `ATELIER_CLAIMS_GATE=reader` lets an unqualified reader
+ * gate anyway: an escape hatch for someone who has measured it on their own writing, and the sensor's
+ * notes say so every time it is used.
  */
 export function claimSensorFor(material: string, task: string, placeholders: boolean, strict = false): ClaimSensor {
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
@@ -41,7 +46,8 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
   const model = named ?? CLAIMS_MODEL_DEFAULT;
   const cap = Number(process.env.ATELIER_CLAIMS_CAP ?? 0.5);
   const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 24 };
-  return modelSensor(clientAndBinding('discovery', model).client, budget, model, { material, task, placeholders, strict });
+  return modelSensor(clientAndBinding('discovery', model).client, budget, model,
+    { material, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader' });
 }
 
 /**
@@ -66,3 +72,4 @@ export function checksFor(L: store.StoreLayout, opts: {
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: claimSensorFor(opts.material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
 }
+

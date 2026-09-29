@@ -9,7 +9,10 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { decideSpecifics, supportIsIn, modelSensor, patternSensor, numbered, numbersIn, READER_VERSION, type ExtractedSpecific } from '../core/loop/claim-extract.js';
+import {
+  decideSpecifics, supportIsIn, modelSensor, patternSensor, numbered, numbersIn, isQualified,
+  READER_VERSION, DECISION_VERSION, QUALIFIED_READERS, type ExtractedSpecific,
+} from '../core/loop/claim-extract.js';
 import { checkDraftAsync, refineToStandard } from '../core/loop/run-repair.js';
 import { unsourcedClaims, claimUnitsOf } from '../core/loop/claims.js';
 import { stringLeaves, runOnce } from '../cli/commands/improve.js';
@@ -129,15 +132,21 @@ describe('the reader behind the seam', () => {
     complete: vi.fn((req) => { seen?.push(`${req.stableBlock}\n${req.variableBlock}\n${req.userMessage}`); return Promise.resolve({ json, cost: { basis: 'API_METERED', billingUsd: 0.001 }, termination: 'COMPLETE', modelId: 'm' } as never); }),
   });
 
-  it('checkDraftAsync reads through the model and reports which instrument ran, prompt version included', async () => {
-    const sensor = modelSensor(client({ specifics: typed }), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { material: '', task: '', placeholders: false });
+  // A pair a qualification stands behind, passed explicitly: production's list (QUALIFIED_READERS) is
+  // not touched, and after the decision-3 bump it holds no pair that matches (atelier-claim-fixes.test.ts).
+  const qualifiedReaders = [{ model: 'claude-haiku-4-5', version: READER_VERSION }];
+  it('a QUALIFIED reader gates: checkDraftAsync reads through the model and reports which instrument ran, prompt version included', async () => {
+    const sensor = modelSensor(client({ specifics: typed }), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { material: '', task: '', placeholders: false, qualifiedReaders });
     const r = await checkDraftAsync('d', v, probe, { claimSensor: sensor });
     const line = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
     expect(line.result.verdict).toBe('VIOLATED');
     expect(line.result.spans).toHaveLength(5);
     expect(line.result.detail).toContain(`claim reader (claude-haiku-4-5, prompt ${READER_VERSION})`);
     expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·public')?.materiality).toBe('PREFERRED');
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')).toBeUndefined();
     expect(r.failed).toBe(true);
+    expect(sensor.gate).toBe('reader');
+    expect(sensor.qualified).toBe(true);
   });
 
   it('the draft and the material reach the reader inside delimiters, as data', async () => {
@@ -164,7 +173,7 @@ describe('the reader behind the seam', () => {
     const line = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
     expect(line.result.detail).toMatch(/pattern check \(the claim reader could not run\)/);
     expect(line.result.verdict).toBe('VIOLATED');
-    expect(sensor.notes[0]).toMatch(/HTTP 529/);
+    expect(sensor.notes.some((n) => n.includes('HTTP 529'))).toBe(true);
   });
 
   it('a reply with no list of specifics is a failed read, not a clean one', async () => {
@@ -266,14 +275,22 @@ describe('through the binary: the reader runs on the person\'s own backend when 
   };
   const remote = (p: number): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${p}`];
 
-  it('ATELIER_CLAIMS_MODEL on an OpenAI-compatible backend: the reader catches what the pattern cannot', () => {
+  it('ATELIER_CLAIMS_MODEL on an OpenAI-compatible backend: the reader catches what the pattern cannot, and, unqualified, only reports it', () => {
     const { run, file } = setup();
     const byPattern = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
     expect(byPattern.code).toBe(0);
+    // An unmeasured pair (a model on the person's own backend) warns: the pattern check gates.
     const byReader = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model' }, 'verify', '--skill', 'house', file, ...remote(port));
-    expect(byReader.code).toBe(1);
-    expect(byReader.out).toMatch(/UNSOURCED/);
+    expect(byReader.code).toBe(0);
+    expect(byReader.out).toMatch(/warn {2}UNSOURCED·reader/);
+    expect(byReader.out).toMatch(/ok {4}UNSOURCED {2}Never/);
     expect(byReader.out).toContain('claim reader (my-small-model');
+    expect(byReader.out).toMatch(/not qualified/);
+    // The escape hatch: the same reader gates, and says loudly that it is unmeasured.
+    const gated = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' }, 'verify', '--skill', 'house', file, ...remote(port));
+    expect(gated.code).toBe(1);
+    expect(gated.out).toMatch(/FAIL {2}UNSOURCED {2}Never/);
+    expect(gated.out).toMatch(/ATELIER_CLAIMS_GATE=reader: claim reader \(my-small-model, prompt \w+\) is NOT QUALIFIED/);
   });
 
   it('a backend that is not Anthropic never gets a model it did not name: the pattern check runs, and says why', () => {
@@ -303,6 +320,8 @@ describe('the audit of the invented-claim check', () => {
     const c = { calls: 0, complete: () => { const a = answers[Math.min(c.calls++, answers.length - 1)]; return a instanceof Error ? Promise.reject(a) : ok(a); } };
     return c;
   };
+  const qualifiedReaders = [{ model: 'claude-haiku-4-5', version: READER_VERSION }];
+  const ctx = { material: '', task: '', placeholders: false };
 
   describe('1. headings and table rows are read: a specific in a title is as invented as one in a paragraph', () => {
     const probe = '# How we cut latency 73% at Stripe\n\n| p99 | 900ms | 120ms |\n\nWe changed the cache.';
@@ -391,6 +410,96 @@ describe('the audit of the invented-claim check', () => {
     });
   });
 
+  describe('3. a reader that fails mid-loop degrades for good: before and after are read by one instrument', () => {
+    const draft = 'The review took 94 minutes. It ended well.';
+    const flagged = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
+
+    it('once a read fails, every reading is the pattern check\'s, of texts the model already read included', async () => {
+      const sensor = modelSensor(scripted([flagged, new Error('HTTP 529 overloaded')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, qualifiedReaders });
+      await sensor.read(draft);
+      expect(sensor.reading(draft)!.claims).toHaveLength(1);
+      expect(sensor.degraded).toBe(false);
+      await sensor.read('Another text.');
+      expect(sensor.degraded).toBe(true);
+      expect(sensor.reading(draft)!.instrument).toMatch(/^pattern check/);
+      expect(sensor.reading(draft)!.claims).toHaveLength(0);
+      expect(sensor.instrument).toMatch(/degraded after it failed: HTTP 529/);
+      expect(sensor.gate).toBe('pattern');
+      expect(sensor.notes.join(' ')).toMatch(/already read included/);
+    });
+
+    it('refineToStandard: a reader that reads the draft, then fails, never lets a rewrite pass on a mixed comparison', async () => {
+      const sensor = modelSensor(scripted([flagged, new Error('HTTP 529 overloaded')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, qualifiedReaders });
+      const writer = scripted([{ replacements: [{ id: 1, text: 'The review took 95 minutes.' }] }]);
+      const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, draft, 2, { claimSensor: sensor });
+      // Before the fix: the model's reading of the draft against the pattern's of the rewrite, "95 minutes"
+      // accepted, violatedBefore [UNSOURCED], violatedAfter [], "every REQUIRED measured rule now holds".
+      expect(r.output).not.toContain('95 minutes');
+      expect(r.repair!.why).not.toBe('every REQUIRED measured rule now holds');
+      expect(r.repair!.why).toMatch(/claim reader failed during the repair/);
+      // before and after, by the same instrument
+      expect(r.repair!.violatedBefore).toEqual(r.repair!.violatedAfter);
+      expect(r.report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.detail).toMatch(/\[pattern check/);
+      expect(sensor.instrument).toMatch(/degraded/);
+    });
+  });
+
+  describe('4. only a qualified instrument may cut', () => {
+    it('production: the list holds the one measured pair, and the decision-3 reader is not it', () => {
+      expect(QUALIFIED_READERS).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }]);
+      expect(DECISION_VERSION).toBe(3);
+      expect(READER_VERSION).not.toBe('0279163b');
+      expect(isQualified('claude-haiku-4-5')).toBe(false);
+      expect(isQualified('claude-haiku-4-5', '0279163b')).toBe(true);
+      expect(isQualified('my-small-model', '0279163b')).toBe(false);
+    });
+
+    it('an unqualified reader reports (PREFERRED, never fails, never repaired); the pattern check gates as UNSOURCED', async () => {
+      const text = 'The review took 94 minutes. It ended well.';
+      const reads = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
+      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      expect(sensor.gate).toBe('pattern');
+      const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
+      const gate = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
+      const reader = r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')!;
+      expect(gate.materiality).toBe('REQUIRED');
+      expect(gate.result.verdict).toBe('MET');
+      expect(gate.result.detail).toMatch(/\[pattern check/);
+      expect(reader.materiality).toBe('PREFERRED');
+      expect(reader.result.verdict).toBe('VIOLATED');
+      expect(reader.result.detail).toMatch(/not qualified/);
+      expect(r.failed).toBe(false);
+      const writer = scripted([{ replacements: [] }]);
+      const refined = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, text, 2, { claimSensor: sensor });
+      expect(refined.repair).toBeNull();
+      expect(writer.calls).toBe(0);
+      expect(sensor.notes.join(' ')).toMatch(/is not qualified/);
+    });
+
+    it('the pattern gate still fails what the pattern finds, beside an unqualified reader', async () => {
+      const text = 'According to a survey, 43% of operators agree.';
+      const sensor = modelSensor(scripted([{ specifics: [] }]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.verdict).toBe('VIOLATED');
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')!.result.verdict).toBe('MET');
+      expect(r.failed).toBe(true);
+    });
+
+    it('ATELIER_CLAIMS_GATE=reader (gateAnyway) lets an unqualified reader gate, loudly', async () => {
+      const text = 'The review took 94 minutes. It ended well.';
+      const reads = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
+      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, gateAnyway: true });
+      const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.verdict).toBe('VIOLATED');
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')).toBeUndefined();
+      expect(r.failed).toBe(true);
+      expect(sensor.gate).toBe('reader');
+      expect(sensor.qualified).toBe(false);
+      expect(sensor.instrument).toMatch(/NOT QUALIFIED, gating anyway/);
+      expect(sensor.notes[0]).toMatch(/^ATELIER_CLAIMS_GATE=reader: .* is NOT QUALIFIED/);
+    });
+  });
+
   describe('through the binary', () => {
     const CLI = resolve('dist/cli/atelier.mjs');
     let backend: ChildProcess; let port = 0;
@@ -423,7 +532,7 @@ describe('the audit of the invented-claim check', () => {
     };
     const remote = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'writer'];
 
-    it('verify fails an invented figure in a heading, and --repair cuts the heading line whole', async () => {
+    it('1: verify fails an invented figure in a heading, and --repair cuts the heading line whole', async () => {
       const { run, file } = setup('# According to a survey, 43% of operators agree\n\nWe changed the cache.\n');
       const checked = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
       expect(checked.code).toBe(1);
@@ -433,6 +542,24 @@ describe('the audit of the invented-claim check', () => {
       const j = JSON.parse(repaired.out) as { output: string; failed: boolean };
       expect(j.output.trim()).toBe('We changed the cache.');
       expect(j.failed).toBe(false);
+    });
+
+    it('3: a reader that fails mid-repair does not deliver a rewrite judged on a mixed comparison', async () => {
+      const { run, file } = setup('The review took 94 minutes. It ended well.');
+      await script({
+        byTool: {
+          emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] },
+          emit_replacements: { replacements: [{ id: 1, text: 'The review took 95 minutes.' }] },
+        },
+        // the reader's second read (the rewrite) comes back with no list: a failed read
+        when: [{ contains: '[1] The review took 95 minutes.', answer: { nothing: true } }],
+      });
+      const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' },
+        'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
+      const j = JSON.parse(r.out) as { output: string; repair: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
+      expect(j.output).not.toContain('95 minutes');
+      expect(j.repair.why).toMatch(/claim reader failed during the repair/);
+      expect(j.repair.violatedBefore).toEqual(j.repair.violatedAfter);
     });
   });
 });
