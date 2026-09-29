@@ -32,6 +32,33 @@ export const anthropicTermination = (stopReason: string | null): InferenceTermin
   }
 };
 
+/**
+ * AN ACCOUNT REFUSAL, SAID IN ONE LINE. A provider that will not serve this key (no credit left, a key it
+ * does not recognise, or one it forbids) answered with its raw error JSON, which the CLI printed whole:
+ * a wall of braces around the one sentence a person needed. This returns that sentence, with the request
+ * id a support ticket needs, or null when the failure is anything else.
+ *
+ * Shared by both providers and the CLI's last-resort error path, so the wording lives in one place.
+ */
+export function accountRefusal(status: number | undefined, body: string, requestId?: string | null): string | null {
+  const id = requestId ?? /"request_id"\s*:\s*"([^"]+)"/.exec(body)?.[1] ?? /\b(req_[A-Za-z0-9]+)/.exec(body)?.[1] ?? null;
+  const tail = id ? ` (request id ${id})` : '';
+  if (status === 400 && /credit balance is too low|insufficient[_ ](?:credit|funds|quota)|exceeded your current quota/i.test(body)) {
+    return `the API key has no credit left: add credits, or set another key${tail}.`;
+  }
+  if (status === 401) return `the API key was not accepted (HTTP 401): check it, or set another key${tail}.`;
+  if (status === 403) return `the API key is not allowed to make this call (HTTP 403): check its permissions, or set another key${tail}.`;
+  return null;
+}
+
+/** An SDK error read the way `accountRefusal` reads one: its status, its body, its request id. */
+const refusalOf = (e: unknown): string | null => {
+  if (!(e instanceof Anthropic.APIError)) return null;
+  const body = JSON.stringify(e.error ?? null) + e.message;
+  const status: unknown = e.status;
+  return accountRefusal(typeof status === 'number' ? status : undefined, body, e.requestID ?? null);
+};
+
 export class AnthropicInferenceClient implements InferenceClient {
   private readonly client: Anthropic;
   constructor(private readonly modelId: string, apiKey?: string, private readonly pricing: Pricing | null = priceFor(ANTHROPIC_PRICING, modelId)) {
@@ -81,6 +108,10 @@ export class AnthropicInferenceClient implements InferenceClient {
       // the SDK's ten-minute default on every call regardless of size, and a stalled discovery run
       // spends twenty minutes over two retries before saying anything.
       timeout: inferenceTimeoutMs(req.maxTokens),
+    }).catch((e: unknown) => {
+      // An account refusal is said in one line, never as the provider's raw error JSON.
+      const plain = refusalOf(e);
+      throw plain ? new Error(plain, { cause: e }) : e;
     });
 
     const u = res.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
