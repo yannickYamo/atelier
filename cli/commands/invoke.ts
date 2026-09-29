@@ -11,7 +11,7 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
-import { overlapIndex } from '../../core/observers/overlap.js';
+import { overlapIndex, sentencesKept } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
@@ -223,6 +223,7 @@ export async function invoke(): Promise<void> {
   reportChecks(report, rec, std, checks);
   if (taste) await taste.report(report, rec, name);
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
+  reportRestyle(report, rec.output, material);
   finish(report, { rec, sv, name, task, budget, spentBefore });
 }
 
@@ -561,6 +562,17 @@ async function reportTaste(report: RunReport, t: TasteContext): Promise<void> {
     if (t.rec.repair?.taste) report.say(`taste repair: ${t.rec.repair.taste.why}.`);
     report.say(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
   }
+}
+
+/**
+ * A RESTYLE, SAID AS ONE. When the draft keeps most of the sentences of something it was given, it is
+ * that text restyled: its structure and narrator came with it, and the voice can only move as far as
+ * the sentences did. Said in one line, with the way to a voice: new pieces written from notes.
+ */
+function reportRestyle(report: RunReport, output: string, material: readonly { name: string; text: string }[]): void {
+  const kept = material.map((m) => ({ name: m.name, share: sentencesKept(output, m.text) })).sort((a, b) => b.share - a.share)[0];
+  if (!kept || kept.share < 0.5) return;
+  report.say(`Restyle of "${kept.name}": ${Math.round(kept.share * 100)}% of its sentences kept nearly as written, so its structure and rhythm came with it. For the voice, write a new piece from notes.`);
 }
 
 /** Copying, text that is not the deliverable, and an output contract that did not reach the provider: said. */

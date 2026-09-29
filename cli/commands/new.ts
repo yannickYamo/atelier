@@ -148,6 +148,8 @@ export async function newSkill(): Promise<void> {
   proposeFloor(built);
   console.log(`\nUse it:    /${built} <your task>   ·   atelier invoke --skill ${built} "<your task>"`);
   console.log(`Check:     atelier verify --skill ${built} <file>   ·   correct it: atelier fix "<what was wrong>"`);
+  // A voice is carried by what the author lived and measured, which Atelier will not invent.
+  console.log(`Material:  your real stories and figures make the voice: atelier material --skill ${built} <notes.md>`);
   if (s.reservation?.reserved.length) {
     console.log(`Compare it blind against the ${s.reservation.reserved.length} piece(s) held back:  atelier reference --skill ${built}`);
   }

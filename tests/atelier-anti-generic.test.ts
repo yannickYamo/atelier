@@ -184,9 +184,11 @@ describe('contrast proposes nothing the evidence does not support', () => {
   const read = [0, 1, 2, 3].map(author); const held = [4, 5].map(author);
   it('when the "model drafts" write like the author, nothing is proposed from the gap', () => {
     const same = deriveContrastRules(read, held, [6, 7, 8].map((i) => author(i).text), 'MACHINE_DISCOVERED');
-    // The machine-tell rule is the one exception: it is the model's catalogue, proposed for every author.
+    // Two exceptions, both held for every author at their own rate: the machine-tell catalogue, and the
+    // contrastive verdict (a rewrite inherits it from its source, where plain drafts never show it).
     expect(same.filter((r) => r.requirement.measurement?.observer === 'PATTERN_RATE'
-      && (r.requirement.measurement.params.role as string[] | undefined)?.[0] !== 'machine-tell')).toEqual([]);
+      && (r.requirement.measurement.params.role as string[] | undefined)?.[0] !== 'machine-tell'
+      && (r.requirement.measurement.params.pattern as string[] | undefined)?.[0] !== 'CONTRAST_VERDICT')).toEqual([]);
   });
 });
 
