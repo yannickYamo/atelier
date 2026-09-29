@@ -15,8 +15,7 @@ the skill is installed relative to where you are. The posts were written with AI
 pieces, one is held back for a blind comparison and two check the rules discovery proposes. That is
 enough to see how it works, and too few for any rule read from them to be suggested for rejection.
 
-The whole walkthrough costs about a dollar with the default models. `atelier new` prints an estimate
-before it reads anything, and stops at `--cap`. `invoke` writes, checks and repairs a draft, and prints where it wrote
+`atelier new` prints a cost estimate before it reads anything, and stops at `--cap`. `invoke` writes, checks and repairs a draft, and prints where it wrote
 everything it checked. Bind your own figures with `--with notes=<file>` and watch what stops being cut.
 
 [← README](../../README.md)
