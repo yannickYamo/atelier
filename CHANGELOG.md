@@ -98,6 +98,18 @@ a run in progress may not be.
   set Atelier up and use it for someone, and what it must leave to the person (approving the standard,
   editing compiled skills, supplying real material). Its commands are checked against the CLI by the tests.
 
+### Studies: qualifying the claim reader (Phase B)
+
+- Pre-registered (studies/CLAIM_READER_QUALIFICATION_PREREGISTRATION.md, sealed before any output):
+  specificity ≥ 0.80 on clean rewrites of 22 real pieces with their material, and sensitivity ≥ 0.50 on
+  one planted invention of eight kinds. Reader `claude-haiku-4-5`, prompt `a5c3ef8a`, frozen. $4.95.
+- **FAIL on specificity.** Sensitivity 39 / 39 = 1.00 (95% CI 0.91–1.00), against the pattern check's
+  18 / 39. Specificity 32 / 43 = 0.744 (0.59–0.87), against the pattern check's 43 / 43.
+- The gate stays fail-closed, and the README and docs state the rates.
+- Read after unblinding: most false positives are sentences with no specific, beside one that has it. The
+  reader appears to mislocate specifics, and the decision trusts its sentence number. That is a hypothesis
+  for the next reader, which must be qualified on pieces this study did not use.
+
 ### Studies: blind voice rounds on one public author's corpus (what each found, and what changed)
 
 One public author's Substack (20 posts, reserved pieces never read by any arm), one writer model
