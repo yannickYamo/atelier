@@ -8,6 +8,7 @@ import { planRepair, applyRepair, acceptRepair } from '../core/loop/repair.js';
 import { verifyText } from '../core/observers/verify.js';
 import * as store from '../core/state/store.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
+import { withDetails } from './fixtures.js';
 
 const v = { standardVersionHash: 's', requirements: [
   { requirementId: 'x1', statement: 'Never say leverage.', appliesWhen: 'GENERAL', kind: 'BOUNDARY', materiality: 'REQUIRED',
@@ -72,11 +73,14 @@ describe('through the binary: invoke delivers the checked draft and records what
     run('build', '--name', 'house');
     const out = run('invoke', '--skill', 'house', 'write a note', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted');
     expect(out).toContain('We use the data to decide.');
-    expect(out).toMatch(/1 REQUIRED rule\(s\) broken in the draft \(x1\); 1 rewrite pass\(es\).*all now hold/);
+    expect(out).toMatch(/Checked: every REQUIRED measured rule holds \(x1 fixed by rewriting only the spans that broke them\)/);
+    expect(withDetails(out)).toMatch(/1 REQUIRED rule\(s\) broken in the draft \(x1\); 1 rewrite pass\(es\).*all now hold/);
     const [rec] = store.listInvocations({ root: data, skillName: 'house' });
     expect(rec.output).not.toContain('leverage');
     expect(rec.repair?.violatedBefore).toEqual(['x1']);
     expect(rec.repair?.violatedAfter).toEqual([]);
+    // The piece and a few lines: everything else is in the file the run names.
+    expect(out.replace(rec.output, '').split(/\s+/).filter(Boolean).length, out).toBeLessThan(80);
   });
 });
 

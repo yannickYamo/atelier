@@ -18,7 +18,7 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
-import { checkSatisfiable, describeSatisfiability } from '../../core/state/prerequisite.js';
+import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
 import { runOnce, draftMaxTokens } from './improve.js';
@@ -186,7 +186,11 @@ export async function invoke(): Promise<void> {
   const satisfiable = checkSatisfiable(std?.requirements ?? [], boundResources());
   const shortfall = describeSatisfiability(satisfiable);
   if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall!);
-  if (shortfall) console.log(shortfall);
+  const report = new RunReport();
+  if (shortfall) report.detail(shortfall);
+  // Rules that cannot fire without material the person has not bound: said once, near the top, and read
+  // by the taste reader as waiting rather than missed (a rule with nothing to fire on was never missed).
+  const waiting = waitingForMaterial(satisfiable);
 
   // Several drafts cost several generations; the bounds grow with them, and a request the cap cannot
   // cover is refused before anything is spent rather than failing halfway with nothing delivered.
@@ -200,7 +204,11 @@ export async function invoke(): Promise<void> {
   // the counted repair, and a taste rewrite again: 3 per draft plus 7 at most. Its calls are in the
   // ceiling from the start, so a repair is never dropped for want of a call.
   const tasteOn = Boolean(std) && !argv.includes('--no-taste') && tasteRules(std!).length > 0;
-  const permissions = tasteOn ? tastePermissions(tasteRules(std!), store.readEvents(L), readerModel()) : null;
+  const readRules = tasteOn ? tasteRules(std!) : [];
+  const earned = tasteOn ? tastePermissions(readRules, store.readEvents(L), readerModel()) : null;
+  // A rule waiting for material must not be repaired toward either: a rewrite asked to satisfy "give the
+  // real figure" with no figure bound can only invent one.
+  const permissions = earned && { ...earned, veto: withoutWaiting(earned.veto, readRules, waiting) };
   const tasteActs = tasteOn && (permissions?.veto.size ?? 0) > 0;
   const tasteCalls = tasteOn ? (tasteActs ? 3 * nDrafts + 7 : 3) : 0;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)), maxCalls: numericFlag('--max-calls', nDrafts + 4 + tasteCalls) };
@@ -245,9 +253,8 @@ export async function invoke(): Promise<void> {
   // that are about judgement are not touched: nothing here has the standing to rewrite for them.
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from the
   // output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
-  if (!material.length && !argv.includes('--allow-unsourced')) {
-    console.log(`(No material of yours is bound, so any story, named source or figure the draft invents will be cut. To let it tell your real ones: atelier material --skill ${name} <notes.md>, or --with notes=<file>.)`);
-  }
+  const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name);
+  if (needsLine) report.say(needsLine);
   const checks = checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   // ── THE TASTE READER (docs/TASTE.md) ──────────────────────────────────────────────────────────
   //
@@ -350,79 +357,165 @@ export async function invoke(): Promise<void> {
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
     } : null, settings);
 
-  // A PROVIDER-SIDE VERSION FLIP UNDER AN UNCHANGED CONFIGURATION. Reported, never fatal: the user
-  // changed nothing, and refusing to run would punish them for someone else's release.
+  reportDrift(report, L, sv, rec);
+  console.log(`\n${rec.output}\n`);
+  reportChecks(report, rec, std, checks);
+  await reportTaste(report, { L, std, rec, asked, budget, tasteOn, tasteTaken, readings, tasteNotes, permissions, waiting, name });
+  reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
+  // THE WHOLE COST. The writer's budget and the claim reader's are separate meters; what this run spent
+  // on any of them is the process total since generation began (plus the taste record, above).
+  const spent = Math.max(budget.spentUsd, processSpentUsd() - spentBefore);
+  const reader = spent - budget.spentUsd;
+  report.detail(`invocation ${rec.invocationId}  ·  SkillVersion ${sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
+  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: name, input: task, at: rec.at }, null, 1));
+  const details = runFile('last-invocation.txt');
+  report.write(details);
+  console.log(`$${spent.toFixed(2)} · everything this run checked: ${details} · not right? atelier fix "<what was wrong>"`);
+}
+
+// ── WHAT A RUN SAYS, AND WHERE ──────────────────────────────────────────────────────────────────
+//
+// A 498-word post arrived inside 1,728 words of report: the prerequisite block, 26 cut claims one per
+// line, the repair account, the draft choice, and a reader with no authority listing five misses. The
+// person could not find the one line that mattered. So a run prints the post and at most a few lines:
+// what still breaks the standard (never hidden), what was cut, what the taste reader saw, and anything
+// that went wrong. Everything else is written, in full, beside the run record, and the path is printed.
+
+type Invocation = Awaited<ReturnType<typeof runOnce>>;
+type Checks = ReturnType<typeof checksFor>;
+type Standard = NonNullable<ReturnType<typeof store.getStandard>>;
+
+/** The run's report: `say` is read now and kept; `detail` is kept for the file only. */
+class RunReport {
+  private readonly lines: string[] = [];
+  say(line: string): void { console.log(line); this.lines.push(line); }
+  detail(line: string): void { this.lines.push(line); }
+  write(path: string): void { writeAtomic(path, `${this.lines.join('\n')}\n`); }
+}
+
+/** The rules that cannot fire on this invocation because material they need is not bound. */
+export function waitingForMaterial(v: SatisfiabilityVerdict): ReadonlySet<string> {
+  return new Set(v.kind === 'DEGRADED' ? v.missing.map((m) => m.requirementId) : []);
+}
+
+/** The taste reader's VETO, less the rules waiting for material: those have nothing to be repaired toward. */
+export function withoutWaiting(veto: ReadonlySet<string>, rules: readonly { rule: { requirementId: string }; key: string }[], waiting: ReadonlySet<string>): Set<string> {
+  const waitingKeys = new Set(rules.filter((r) => waiting.has(r.rule.requirementId)).map((r) => r.key));
+  return new Set([...veto].filter((k) => !waitingKeys.has(k)));
+}
+
+/**
+ * THE ONE LINE ABOUT MATERIAL, near the top. Names the exact `--with` that lets waiting rules fire:
+ * a prerequisite is matched by name, so a generic "bind your notes" would not have cleared it.
+ */
+export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string): string | null {
+  const cut = guardClaims ? 'any story, source or figure the draft invents is cut' : null;
+  if (v.kind === 'DEGRADED') {
+    const ids = [...new Set(v.missing.map((m) => m.requirementId))];
+    const binds = [...new Set(v.missing.map((m) => `--with ${m.prerequisite.name}=<file>`))];
+    return `${ids.length} rule(s) need your real specifics to fire (${ids.join(', ')}). Add them: ${binds.join(' ')}${cut ? `; meanwhile ${cut}` : ''}.`;
+  }
+  if (!materialBound && cut) return `No notes of yours are bound, so ${cut}. Add yours: --with notes=<file>, or atelier material --skill ${name} <file>.`;
+  return null;
+}
+
+/**
+ * A PROVIDER-SIDE VERSION FLIP UNDER AN UNCHANGED CONFIGURATION. Reported, never fatal: the user changed
+ * nothing, and refusing to run would punish them for someone else's release.
+ */
+function reportDrift(report: RunReport, L: store.StoreLayout, sv: SkillVersion, rec: Invocation): void {
   const prior = store.listInvocations(L)
     .filter((i) => i.skillVersionHash === sv.skillVersionHash && i.invocationId !== rec.invocationId)
     .map((i) => i.observedRuntime).find((o) => o?.bindingHash === rec.observedRuntime.bindingHash) ?? null;
   const drift = detectResolvedModelDrift(prior, rec.observedRuntime);
-  if (drift.drifted) {
-    console.log(`\nRESOLVED MODEL DRIFT — ${drift.why}.`);
-    console.log(`Nothing you set has changed. What has changed is what answers to it, so earlier observations`);
-    console.log(`on this binding describe a model that is no longer the one serving you.\n`);
-  }
+  if (!drift.drifted) return;
+  report.say(`\nRESOLVED MODEL DRIFT — ${drift.why}.`);
+  report.say(`Nothing you set has changed. What has changed is what answers to it, so earlier observations`);
+  report.say(`on this binding describe a model that is no longer the one serving you.\n`);
+}
 
-  console.log(`\n${rec.output}\n`);
-  if (rec.selection) console.log(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);
-  if (rec.repair) {
-    const r = rec.repair;
-    console.log(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
+/** The counted checks and the invented-claim check: a rule still broken is always said, and so is a cut. */
+function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, checks: Checks): void {
+  if (rec.selection) report.detail(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);
+  const repairOff = argv.includes('--no-repair');
+  const r = rec.repair;
+  if (r) {
+    report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
-    if (r.violatedAfter.length) console.log(`  ${r.why}`);
+    if (r.violatedAfter.length) report.say(`Still broken after repair: ${r.violatedAfter.join(', ')}. ${r.why}`);
+    else report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
     if (r.integrityReverted?.length) {
-      console.log(`  ${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
-      for (const k of r.integrityReverted) console.log(`    ${k}`);
+      report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
+      for (const k of r.integrityReverted) report.detail(`    ${k}`);
     }
-  } else if (std?.requirements.some((q) => q.measurement) && !argv.includes('--no-repair')) {
-    console.log('checked against the standard: every REQUIRED measured rule holds.');
+  } else if (std?.requirements.some((q) => q.measurement) && !repairOff) {
+    report.say('Checked: every REQUIRED measured rule holds.');
   }
-  // Which instrument read the draft for invented claims, and anything that went wrong with it.
-  if (checks.claimSensor && !argv.includes('--no-repair')) {
-    console.log(`invented-claim check: ${checks.claimSensor.instrument}.`);
-    for (const n of checks.claimSensor.notes) console.log(`  (${n})`);
-  }
-  // An invented story was cut, not left as a slot: say where a story of the person's own would fit.
-  if (rec.repair?.storiesCut?.length) {
-    console.log(`${rec.repair.storiesCut.length} invented stor(ies), unnamed quotation(s) or figure(s) cut. Your own would fit where these were (add it, or bind your notes with --with):`);
-    for (const c of rec.repair.storiesCut) console.log(`    "${c.slice(0, 120)}"`);
-  }
-  for (const n of tasteNotes) console.log(`(${n}.)`);
-  if (tasteOn && std) {
-    try {
-      const taken = tasteTaken ?? readings.get(rec.output) ?? null;
-      const { readings: read, permissions: p, held } = await recordTaste(L, std, rec.output, asked, rec.invocationId, budget, taken);
-      // A held-back reading shows nothing that names a rule, the taste repair included.
-      if (rec.repair?.taste) console.log(held ? 'taste repair: details held back with the reading.' : `taste repair: ${rec.repair.taste.why}.`);
-      console.log(describeTaste(read, new Map(std.requirements.map((q) => [q.requirementId, q])), p.veto, held));
-      if (!p.veto.size) console.log(`  (the reader has not earned any authority yet, so this is a report; label its readings: atelier taste --skill ${name} --calibrate)`);
-    } catch (e) {
-      if (rec.repair?.taste) console.log(`taste repair: ${rec.repair.taste.why}.`);
-      console.log(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
+  // Which instrument read the draft for invented claims. A reader that failed mid-run, or an unqualified
+  // one made to cut by override, is said; that an unqualified reader only reports is standing status.
+  const sensor = checks.claimSensor;
+  if (sensor && !repairOff) {
+    report.detail(`invented-claim check: ${sensor.instrument}.`);
+    const alarming = sensor.degraded || (sensor.gate === 'reader' && !sensor.qualified);
+    for (const n of sensor.notes) {
+      const line = `(invented-claim check: ${n})`;
+      if (alarming) report.say(line); else report.detail(line);
     }
   }
-  if (cls.ok && cls.note && std?.requirements.some((q) => q.measurement)) console.log(`(${cls.note})`);
+  if (r?.storiesCut?.length) {
+    report.say(`Cut ${r.storiesCut.length} invented stor(ies), quotation(s) or figure(s); your own would fit where they were (listed in the details).`);
+    for (const c of r.storiesCut) report.detail(`    cut: "${c.slice(0, 160)}"`);
+  }
+}
+
+interface TasteContext {
+  readonly L: store.StoreLayout; readonly std: Standard | null; readonly rec: Invocation; readonly asked: string; readonly budget: Budget;
+  readonly tasteOn: boolean; readonly tasteTaken: readonly TasteReading[] | null; readonly readings: ReadonlyMap<string, TasteReading[]>;
+  readonly tasteNotes: readonly string[]; readonly permissions: { veto: ReadonlySet<string> } | null;
+  readonly waiting: ReadonlySet<string>; readonly name: string;
+}
+
+/**
+ * The taste reader: recorded on every output, said in one line. A rule waiting for material is reported
+ * as waiting, never as missed. The reader never costs the person their output: a failure is said.
+ */
+async function reportTaste(report: RunReport, t: TasteContext): Promise<void> {
+  for (const n of t.tasteNotes) report.say(`(${n}.)`);
+  if (!t.tasteOn || !t.std) return;
+  const rules = new Map(t.std.requirements.map((q) => [q.requirementId, q]));
+  try {
+    const taken = t.tasteTaken ?? t.readings.get(t.rec.output) ?? null;
+    const { readings: read, permissions: earned, held } = await recordTaste(t.L, t.std, t.rec.output, t.asked, t.rec.invocationId, t.budget, taken);
+    // A held-back reading shows nothing that names a rule, the taste repair included.
+    if (t.rec.repair?.taste) report.say(held ? 'taste repair: details held back with the reading.' : `taste repair: ${t.rec.repair.taste.why}.`);
+    report.detail(describeTaste(read, rules, t.permissions?.veto ?? earned.veto, held, t.waiting));
+    if (held) return;
+    const missed = read.filter((x) => x.verdict === 'MISSED' && !t.waiting.has(x.requirementId)).length;
+    const waiting = read.filter((x) => t.waiting.has(x.requirementId)).length;
+    const status = t.permissions?.veto.size ? 'it acts on the rules your labels gave it' : `reporting only until you label it: atelier taste --skill ${t.name} --calibrate`;
+    report.say(`Taste reader: ${missed} of ${read.length} reading-based rule(s) read as missed${waiting ? `, ${waiting} waiting for your material` : ''} (${status}).`);
+  } catch (e) {
+    if (t.rec.repair?.taste) report.say(`taste repair: ${t.rec.repair.taste.why}.`);
+    report.say(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
+  }
+}
+
+/** Copying, text that is not the deliverable, and an output contract that did not reach the provider: said. */
+function reportIntegrity(report: RunReport, rec: Invocation, classNote: string | null | undefined, std: Standard | null, L: store.StoreLayout): void {
+  if (classNote && std?.requirements.some((q) => q.measurement)) report.detail(`(${classNote})`);
   // THE AUTHOR'S PIECES ARE FOR VOICE, NOT FOR COPYING. The skill serves some of the author's own
   // writing (core/compiler/voice.ts); an output that repeats a long run of it verbatim has lifted it.
   const voice = store.getVoice(L);
   const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
   if (served.length) {
     const lifted = overlapIndex(served)(rec.output).longestShared;
-    if (lifted >= LIFTED_RUN) console.log(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
+    if (lifted >= LIFTED_RUN) report.say(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
   }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and
   // passing them in would report a breach on every invocation.
   const breaches = findOwnershipBreaches(rec.output);
-  if (breaches.length) console.log(describeBreaches(breaches));
-  console.log(`─────────────────────────────────────────────────────────────`);
-  if (rec.delivery.outputContract) {
-    const c = rec.delivery.outputContract;
-    console.log(`output contract ${c.artifact} — ${c.enforced ? 'constrained this generation' : 'DID NOT REACH THE PROVIDER'}`);
-  }
-  // THE WHOLE COST. The writer's budget and the claim reader's are separate meters; what this run spent
-  // on any of them is the process total since generation began (plus the taste record, above).
-  const spent = Math.max(budget.spentUsd, processSpentUsd() - spentBefore);
-  const reader = spent - budget.spentUsd;
-  console.log(`invocation ${rec.invocationId}  ·  SkillVersion ${sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
-  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: rec.invocationId, skillName: name, input: task, at: rec.at }, null, 1));
-  console.log(`If that was not right:  atelier fix "<what was wrong>"`);
+  if (breaches.length) report.say(describeBreaches(breaches));
+  const c = rec.delivery.outputContract;
+  if (c?.enforced) report.detail(`output contract ${c.artifact} — constrained this generation`);
+  else if (c) report.say(`output contract ${c.artifact} — DID NOT REACH THE PROVIDER`);
 }
