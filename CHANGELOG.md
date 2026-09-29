@@ -133,6 +133,32 @@ text around an `invoke` post from 256 to 81.
   path is printed.
 - The README said the pattern check "misses about half" of inventions. It missed 54% and then 74%.
 
+### Changed: polish (current API usage, clean lint, a front door a stranger can read)
+
+No product behaviour changed apart from the fixes named here.
+
+- **Current Claude API usage.** Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 reject forced tool choice with a
+  400, so a person who set one of them got an error on every call. The provider keeps forcing the call
+  wherever a model accepts it (the measured instruments are unchanged) and, on the models that refuse,
+  asks with `auto` and an instruction, still failing closed without a tool call
+  ([decision 0005](docs/decisions/0005-forced-tool-choice.md)).
+- **Zero lint warnings**, from 64: every non-null assertion replaced with real narrowing, none suppressed.
+- **Generated skills read cleanly.** A condition with no words in it rendered as "When , I open with…";
+  it is now general, and an example carrying one is no longer withheld from every invocation. "About
+  200 to 200 words" reads "about 200 words".
+- **`invoke` split** from one 215-line function into its phases; the taste reader's shared state is one
+  class. **`--help`** shows the six verbs first, then every command on one line.
+- **The README is under 1,000 words** (from about 2,900). The detail moved, none of it removed:
+  [USAGE](docs/USAGE.md), [COMPARISON](docs/COMPARISON.md), [RESULTS](docs/RESULTS.md) (wins and
+  failures side by side, with populations), [LESSONS](docs/LESSONS.md),
+  [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md), [decisions/](docs/decisions/README.md) (five records,
+  including the design of a search that cannot move the standard), a public [ROADMAP](docs/ROADMAP.md)
+  with what is not being built, and [PRODUCT-METRICS](docs/PRODUCT-METRICS.md).
+- **An example to run:** [examples/blog](examples/blog/README.md), six synthetic posts, declared AI-written.
+- The new docs were written with Atelier's own guard: each passes `atelier verify` against a skill built
+  from a public author's posts, with the repository's records bound as material.
+- Removed committed browser-tool logs; fixed a test that leaked a stubbed `fetch` into later suites.
+
 ### Studies: the claim reader, version 3, pre-registered (not run)
 
 `studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md` is sealed by the commit that adds it. It waits on
