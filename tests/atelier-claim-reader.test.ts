@@ -436,6 +436,10 @@ describe('the audit of the invented-claim check', () => {
       // Before the fix: the model's reading of the draft against the pattern's of the rewrite, "95 minutes"
       // accepted, violatedBefore [UNSOURCED], violatedAfter [], "every REQUIRED measured rule now holds".
       expect(r.output).not.toContain('95 minutes');
+      // And the figure the reader flagged before it failed is not shipped either: it is cut, fail closed.
+      expect(r.output).not.toContain('94 minutes');
+      expect(r.repair!.storiesCut?.join(' ')).toContain('94 minutes');
+      expect(r.repair!.why).toMatch(/flagged before it failed were cut outright/);
       expect(r.repair!.why).not.toBe('every REQUIRED measured rule now holds');
       expect(r.repair!.why).toMatch(/claim reader failed during the repair/);
       // before and after, by the same instrument
