@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
 import { keysOf } from '../core/state/rule-key.js';
+import { unchosenDrafts } from '../cli/commands/improve.js';
+import { spend, metered, processSpentUsd } from '../core/inference/client.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 let backend: ChildProcess; let port = 0;
@@ -163,5 +165,34 @@ describe('a failed draft call costs that draft, not the run', () => {
     const out = runWith(data, proj, ['invoke', '--skill', 'house', '--drafts', '3', '--claims', 'pattern', 'write a note']);
     expect(out).toMatch(/^EXIT:1[\s\S]*HTTP 500/);
     expect(store.listInvocations(L)).toHaveLength(0);
+  }, 120_000);
+});
+
+describe('the record can reproduce a study arm', () => {
+  it('records the claim instrument, taste VETO keys, tells hash, format, version, tokens, temperature, flags, STUDY provenance and the unchosen drafts', async () => {
+    const { data, proj, L } = built();
+    await post({ byTool: { emit_piece: { piece: 'A plain note.' }, emit_specifics: { specifics: [] } } });
+    const out = runWith(data, proj, ['invoke', '--skill', 'house', '--drafts', '2', '--placeholders', '--no-taste', '--temperature', '0.3', '--max-tokens', '5000',
+      '--claims-model', 'scripted', 'write a note'], { ATELIER_PROVENANCE: 'STUDY', ATELIER_CLAIMS: 'model' });
+    expect(out).not.toMatch(/^EXIT/);
+    const rec = store.listInvocations(L)[0];
+    expect(rec.provenance).toBe('STUDY');
+    expect(rec.settings).toMatchObject({ claimInstrument: expect.stringMatching(/claim reader \(scripted/) as unknown, tasteVeto: [],
+      learnedTellsHash: expect.stringMatching(/^[0-9a-f]{16}$/) as unknown, formatProfile: null, maxTokens: 5000, temperature: 0.3,
+      flags: { drafts: 2, noTaste: true, allowUnsourced: false, placeholders: true } });
+    expect(rec.settings?.atelierVersion).toMatch(/^\d+\.\d+\.\d+/);
+    expect(rec.selection?.unchosen).toEqual(['A plain note.']);
+    // THE CLAIM READER'S SPENDING IS IN THE COST INVOKE PRINTS. It meters its own budget; a local backend
+    // bills nothing, so the tally the printed figure reads is pinned directly: every metered call counts,
+    // whichever budget it was metered on.
+    const before = processSpentUsd();
+    const call = async (): Promise<{ value: number; cost: ReturnType<typeof metered> }> => ({ value: 1, cost: metered(0.25) });
+    await spend({ spentUsd: 0, capUsd: 1 }, 0.01, call); await spend({ spentUsd: 0, capUsd: 1 }, 0.01, call);
+    expect(processSpentUsd() - before).toBeCloseTo(0.5);
+    expect(out).toMatch(/SkillVersion \w+ {2}· {2}\$\d+\.\d{4}/);
+    // the cap on unchosen text is across all drafts, and says when it cut
+    expect(unchosenDrafts(['a'.repeat(10), 'kept', 'b'.repeat(10)], 1, 15)).toEqual({ texts: ['a'.repeat(10), 'b'.repeat(5)], truncated: true });
+    // POLARITY: a mislabel is refused, not recorded
+    expect(runWith(data, proj, ['invoke', '--skill', 'house', '--claims', 'pattern', '--temperature', '0.3', '--provenance', 'STUDDY', 'write a note'])).toMatch(/^EXIT:1[\s\S]*not one of/);
   }, 120_000);
 });
