@@ -231,7 +231,7 @@ describe('through the binary', () => {
     run('build', '--name', 'peek', '--exemplar', ex, '--class', 'blog', '--contrast', 'none');
     const L = { root: data, skillName: 'peek' };
     expect(store.getExemplar(L)?.text).toBe('A piece of mine.');
-    expect(store.getDocClass(L)).toBe('blog');
+    expect(store.getDocClass(L)).toBe('blog-post');   // "blog" is the short name for the blog-post format
     expect(store.getContrast(L).off).toBe(true);
     expect(readFileSync(join(proj, '.claude', 'skills', 'peek', 'SKILL.md'), 'utf8')).not.toContain('Write this, not that');
   });
