@@ -7,7 +7,15 @@
 // refuses: its numbers would describe the wrong kind of writing. When either is missing, it runs and
 // says what it assumed, because refusing on silence would make the declaration a toll on every call.
 
-export const normalizeClass = (s: string): string => s.trim().toLowerCase().replace(/[\s_]+/g, '-');
+/** The short names people type for a known format, and the class each one means. */
+export const CLASS_ALIASES: Readonly<Record<string, string>> = {
+  whitepaper: 'white-paper', blog: 'blog-post', linkedin: 'linkedin-post', x: 'x-post', tweet: 'x-post', onepager: 'one-pager',
+};
+
+export const normalizeClass = (s: string): string => {
+  const c = s.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return CLASS_ALIASES[c] ?? c;
+};
 
 export type ClassCheck =
   | { readonly ok: true; readonly note: string | null }
