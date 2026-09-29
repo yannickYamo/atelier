@@ -120,11 +120,9 @@ describe('a decision that is not an approval is still a decision', () => {
 // codebase or leave this list; it may not leave silently.
 const PARKED: Readonly<Record<string, string>> = {
   'core/taste/moves.ts':
-    'A CANDIDATE INSTRUMENT, NOT YET QUALIFIED. The move reader types the deep layers (figures, moves, '
-    + 'openings, register) for the sensor qualification (studies/SENSOR_QUALIFICATION_PREREGISTRATION.md). '
-    + 'On development data it barely separated an author from the model and several of its answers were '
-    + 'unstable on a re-read, so it is wired into the product only if it qualifies there. Consumed by the '
-    + 'studies/harness runner.',
+    'A CANDIDATE INSTRUMENT THAT FAILED ITS QUALIFICATION (studies/SENSOR_QUALIFICATION_RESULT.md): one '
+    + 'feature reliable, kept and replicating against a floor of two. Kept for the next attempt and for the '
+    + 'studies/harness runner, wired into no command until an instrument for the deep layers qualifies.',
   'core/stats/sign-test.ts':
     'The external-expert study\'s analysis instrument (exact sign test, Clopper-Pearson, the '
     + 'discordant floor), named by a sealed preregistration and pinned by its own tests. Consumed '
