@@ -88,7 +88,10 @@ function proposeFeatureRules(authorTexts: readonly string[], heldTexts: readonly
 export function deriveContrastRules(
   read: readonly Piece[], held: readonly Piece[], drafts: readonly string[], provenance: Requirement['provenance'],
 ): MeasuredProposal[] {
-  if (read.length < 3 || drafts.length < 2) return [];
+  if (read.length < 3) return [];
+  // Without the model's drafts, only the rules measured on the author alone are proposed: the tell floor,
+  // register, and the contrastive verdict. Every rule that claims a gap from the model needs its drafts.
+  const compared = drafts.length >= 2;
   const authorTexts = read.map((p) => p.text);
   const authorAll = authorTexts.join('\n\n'); const modelAll = drafts.join('\n\n');
   const words = proseWords(authorAll);
@@ -138,7 +141,7 @@ export function deriveContrastRules(
     return { a, lo: r1(per(0.25) * 0.6), hi: r1(Math.max(per(0.9) * 1.5, a * 2)) };
   };
   for (const p of PATTERN_IDS) {
-    if (VOICE_LAYER.has(p)) continue;
+    if (VOICE_LAYER.has(p) || (!compared && p !== 'CONTRAST_VERDICT')) continue;
     const a = authorRate(p); const m = meanRate(drafts, p);
     const perPiece = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
     const ev = `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model on its own: ${m} per 1,000`;
@@ -202,7 +205,7 @@ export function deriveContrastRules(
 
   proposeVoice(authorTexts, held.map((p) => p.text), drafts, propose, bandOf, meanRate);
   // Many small counts, selected by this author's pieces against the model's drafts (./features.ts).
-  proposeFeatureRules(authorTexts, held.map((p) => p.text), drafts, propose);
+  if (compared) proposeFeatureRules(authorTexts, held.map((p) => p.text), drafts, propose);
 
   const aFrag = fragmentShare(authorAll, 5); const mFrag = fragmentShare(modelAll, 5);
   if (mFrag >= 1.5 * aFrag && mFrag - aFrag >= 0.05) {
