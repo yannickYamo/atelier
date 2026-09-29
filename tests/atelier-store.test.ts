@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, putStandard, getStandard, putSkillVersion, setActive, history, appendEvent, readEvents, type StoreLayout } from '../core/state/store.js';
 import { compileArchitecture } from '../core/architecture/compile.js';
 import { renderAgentSkill, skillNameFrom } from '../renderers/agent-skill/render.js';
-import type { StandardVersion, Requirement, SkillVersion } from '../core/state/canonical-state.js';
+import { standardHashOf, type StandardVersion, type Requirement, type SkillVersion } from '../core/state/canonical-state.js';
 
 const req = (o: Partial<Requirement> & { requirementId: string }): Requirement => ({
   statement: 'Open with a concrete scene.', appliesWhen: 'GENERAL', kind: 'GENERATIVE',
@@ -30,11 +30,12 @@ describe('the store is append-only; rollback is a pointer move', () => {
   });
 
   it('keeps every version and rolls back by moving one pointer', () => {
-    const v1 = std();
-    const v2 = std({ standardVersionHash: 'sv2', supersedes: 'sv1', reason: 'expert added two boundaries' });
+    const hashed = (o: Partial<StandardVersion>): StandardVersion => { const v = std(o); return { ...v, standardVersionHash: standardHashOf(v) }; };
+    const v1 = hashed({});
+    const v2 = hashed({ workType: 'essay', supersedes: v1.standardVersionHash, reason: 'expert added two boundaries' });
     for (const v of [v1, v2]) putStandard(L, v);
-    putSkillVersion(L, sv('k1', 'sv1', '2026-08-01T00:00:00Z'));
-    putSkillVersion(L, sv('k2', 'sv2', '2026-08-19T00:00:00Z'));
+    putSkillVersion(L, sv('k1', v1.standardVersionHash, '2026-08-01T00:00:00Z'));
+    putSkillVersion(L, sv('k2', v2.standardVersionHash, '2026-08-19T00:00:00Z'));
 
     setActive(L, 'k2');
     expect(history(L).map((h) => h.active)).toEqual([true, false]);          // newest first, newest active
@@ -43,7 +44,24 @@ describe('the store is append-only; rollback is a pointer move', () => {
     const h = history(L);
     expect(h).toHaveLength(2);                                               // history intact
     expect(h[1].active).toBe(true);
-    expect(getStandard(L, 'sv2')).not.toBeNull();                            // superseded standard still readable
+    expect(getStandard(L, v2.standardVersionHash)).not.toBeNull();           // superseded standard still readable
+  });
+
+  // A content-addressed file that was edited by hand is not the version its name says it is.
+  it('refuses to serve a standard whose content no longer hashes to its name', () => {
+    const v = std(); const good = { ...v, standardVersionHash: standardHashOf(v) };
+    putStandard(L, good);
+    expect(getStandard(L, good.standardVersionHash)?.requirements[0].statement).toBe('Open with a concrete scene.');
+    const p = join(L.root, 'skills', L.skillName, 'standards', `${good.standardVersionHash}.json`);
+    const edited = JSON.parse(readFileSync(p, 'utf8')) as StandardVersion;
+    writeFileSync(p, JSON.stringify({ ...edited, requirements: [{ ...edited.requirements[0], statement: 'Open with a question.' }] }));
+    expect(() => getStandard(L, good.standardVersionHash)).toThrow(/does not hash to its name/);
+    // the fields outside the hash are not identity: editing a reason is not a new standard
+    writeFileSync(p, JSON.stringify({ ...edited, reason: 'annotated later' }));
+    expect(getStandard(L, good.standardVersionHash)?.reason).toBe('annotated later');
+    // a stale name field under a valid content hash is refused as well
+    writeFileSync(p, JSON.stringify({ ...edited, standardVersionHash: 'someoneelse' }));
+    expect(() => getStandard(L, good.standardVersionHash)).toThrow(/names itself someoneelse/);
   });
 
   it('cannot activate a version that was never built', () => {

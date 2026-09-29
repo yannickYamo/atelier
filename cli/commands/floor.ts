@@ -25,9 +25,9 @@ import { readCorpus, sessionCorpus } from '../corpus.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { resolveRule, keysOf } from '../../core/state/rule-key.js';
-import type { StandardVersion } from '../../core/state/canonical-state.js';
+import { isGeneralScope, type StandardVersion } from '../../core/state/canonical-state.js';
 import { floorDimensions, perFire, proposeMargins, buildContract, evaluateAcross, pairsFor, targetComparison,
-  qualifyFromAA, countAA, plantedDetections, FLOOR_SCORING_VERSION, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, MIN_TASKS_FOR_VERDICT, AA_BAR, MIN_AA_TRIALS,
+  qualifyFromAA, countAA, requiredFlips, plantedDetections, FLOOR_SCORING_VERSION, PLANTED_MARGINS, MIN_SENSITIVITY, MIN_PLANTED, MIN_TASKS_FOR_VERDICT, AA_BAR, MIN_AA_TRIALS,
   type FloorDimension } from '../../core/distinctiveness/measured.js';
 import { gateState, type FrozenBaselineEntry, type QualityFloorResult, type FloorVerdict,
   type DistinctivenessState } from '../../core/distinctiveness/floor.js';
@@ -118,7 +118,7 @@ const freeze = (version: string, model: string, dims: readonly FloorDimension[],
   runs.map((r) => {
     const scores = perFire(dims, r.outputs);
     const mean = Object.fromEntries(Object.entries(scores).map(([k, xs]) => [k, xs.reduce((a, b) => a + b, 0) / xs.length]));
-    return { clusterId: version, fixtureContextId: sha(r.task), nGen: r.outputs.length, capturedUnderModel: model, meanScores: mean, perFireScores: scores };
+    return { clusterId: version, fixtureContextId: sha(r.task), nGen: r.outputs.length, capturedUnderModel: model, meanScores: mean, perFireScores: scores, outputs: [...r.outputs] };
   });
 
 /**
@@ -210,7 +210,16 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   // licence for an automatic change to break a rule they made REQUIRED. Any REQUIRED rule the floor
   // measured regressing on the candidate is a deterministic regression, whatever its gate role.
   const requiredKeys = new Set(dims.filter((d) => d.rule.materiality === 'REQUIRED').map((d) => d.key));
-  const requiredRegressed = result.perDim.filter((d) => requiredKeys.has(d.dim) && !exclude.has(d.dim) && d.verdict === 'REGRESSION').map((d) => d.dim);
+  const marginRegressed = result.perDim.filter((d) => requiredKeys.has(d.dim) && !exclude.has(d.dim) && d.verdict === 'REGRESSION').map((d) => d.dim);
+  // AND ANY REQUIRED MEASURED RULE, MARGIN OR NOT, THAT PASSED ON THE CHAMPION'S DRAFTS AND FAILS ON THE
+  // CANDIDATE'S (core/distinctiveness/measured.ts requiredFlips). The champion's drafts are the frozen
+  // baseline's own, so nothing extra is fired. A baseline frozen before drafts were kept cannot answer
+  // it; the check then rests on the margins alone and says so, rather than firing the champion again
+  // on a budget sized for the candidate.
+  const championDrafts = f.tasks.map((task) => ({ task, outputs: baseline.find((e) => e.fixtureContextId === sha(task))?.outputs ?? [] }));
+  const draftsKept = championDrafts.every((c) => c.outputs.length > 0);
+  const flipped = draftsKept ? requiredFlips(v, championDrafts, runs, exclude) : [];
+  const requiredRegressed = [...new Set([...marginRegressed, ...flipped])];
   const activeSv = store.getSkillVersion(L, active); const candSv = store.getSkillVersion(L, candidate);
   const decision = resolvePromotion({
     incumbentStandardHash: activeSv?.standardVersionHash ?? '', candidateStandardHash: candSv?.standardVersionHash ?? '?',
@@ -222,7 +231,8 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   });
   const unguarded = guarded ? '' : '; no enforced rule other than the target is watching, so nothing guards what the change did not aim at (--enforce another rule)';
   const regressedNote = requiredRegressed.length ? ` (REQUIRED rule(s) ${requiredRegressed.join(', ')} regressed)` : '';
-  let final: PromotionDecision = { ...decision, why: `${decision.why}${regressedNote}${unguarded}` };
+  const legacyNote = draftsKept ? '' : '; the baseline predates stored drafts, so REQUIRED rules without a margin were not compared pass/fail (re-freeze: --baseline)';
+  let final: PromotionDecision = { ...decision, why: `${decision.why}${regressedNote}${unguarded}${legacyNote}` };
   // THE TASTE READER, WHEREVER A CANDIDATE COULD INSTALL ITSELF (fix, floor --check, optimize, tend). On
   // the rules where your labels have earned it VETO, it may turn an automatic promotion into a
   // rejection; it can never make one. If it cannot run, the automatic promotion is withheld.
@@ -245,9 +255,17 @@ export async function checkCandidate(L: store.StoreLayout, name: string, v: Stan
   if (final.authority === 'AUTO_PROMOTE') {
     const veto = tastePermissions(tasteRules(v), store.readEvents(L), readerModel()).veto;
     const keys = keysOf(v.requirements);
-    const unread = v.requirements.filter((r, i) => !r.measurement && r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL'
-      && r.materiality !== null && !veto.has(keys[i])).map((r) => r.requirementId);
+    const live = (r: StandardVersion['requirements'][number]): boolean => r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL' && r.materiality !== null;
+    const unread = v.requirements.filter((r, i) => !r.measurement && live(r) && !veto.has(keys[i])).map((r) => r.requirementId);
     if (unread.length) final = { ...final, why: `${final.why}. Not read by any instrument: ${unread.length} ratified rule(s) (${unread.join(', ')})` };
+    // MEASURED IS NOT GUARDED. A counted rule with no margin in the contract, or a conditional one (the
+    // floor never measures those), was listed as read because it had a measurement, while nothing
+    // compared it. Named here, with whether the direct REQUIRED pass/fail check still looked at it.
+    const unguardedRules = v.requirements.map((r, i) => ({ r, k: keys[i] })).filter(({ r, k }) => r.measurement && live(r) && !veto.has(k)
+      && (!isGeneralScope(r.appliesWhen) || !(k in contract.dimensions)))
+      .map(({ r }) => `${r.requirementId} (${!isGeneralScope(r.appliesWhen) ? 'conditional' : 'no margin'}${
+        isGeneralScope(r.appliesWhen) && r.materiality === 'REQUIRED' && draftsKept ? '; pass/fail checked' : ''})`);
+    if (unguardedRules.length) final = { ...final, why: `${final.why}. Measured but not guarded by the floor: ${unguardedRules.join(', ')}` };
   }
   return { composite, result, comparison, state: st.state, decision: final };
 }

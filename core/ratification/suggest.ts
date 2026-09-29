@@ -87,6 +87,13 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
         why: `${seen}; the model's plain drafts did not show this habit clearly, so it is shown and used to choose between drafts until you make it required` };
     }
+    // A COUNTED FEATURE qualified as a DETECTOR: its band told the author's pieces from the model's plain
+    // drafts. Nothing measured whether holding a draft to it makes the draft better, so it is never
+    // suggested as required, however well it held (../observers/selection.ts: detection is not enforcement).
+    if (p.measurement.observer === 'FEATURE') {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
+        why: `${seen}; qualified to tell your pieces from the model's drafts, not to steer a draft, so it is shown and used to choose between drafts until you make it required` };
+    }
     const floorOnly = (p.measurement.observer === 'PATTERN_RATE' || p.measurement.observer === 'TERM_RATE')
       && typeof p.measurement.params.minPer1000 === 'number' && typeof p.measurement.params.maxPer1000 !== 'number';
     if (floorOnly) {

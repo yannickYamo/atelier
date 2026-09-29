@@ -25,12 +25,21 @@ export type Provenance =
   /** authored to make a requirement fail, on purpose. */
   | 'STRESS_PROBE'
   /** authored to drive architecture search or repair. */
-  | 'OPTIMIZATION_CONTEXT';
+  | 'OPTIMIZATION_CONTEXT'
+  /**
+   * `atelier fix` re-running the complained-about task, on the candidate or on the active version.
+   * A person reads the output (it is the blind pair), so it is not the optimizer grading itself; but
+   * the task is a replay chosen by the repair, not new work somebody wanted, so it is not organic use
+   * either. Recorded as ORGANIC_USE it inflated the one class a generalisation claim may rest on.
+   */
+  | 'FIX_EVALUATION'
+  /** made by a study harness to measure an arm: never organic, and named so a study is reproducible from its records */
+  | 'STUDY';
 
 /** Only organic use may support a claim that a skill generalises. */
 export const CERTIFICATION_GRADE: ReadonlySet<Provenance> = new Set<Provenance>(['ORGANIC_USE']);
 
-export const ALL_PROVENANCE: readonly Provenance[] = ['ORGANIC_USE', 'DEV_PROBE', 'STRESS_PROBE', 'OPTIMIZATION_CONTEXT'];
+export const ALL_PROVENANCE: readonly Provenance[] = ['ORGANIC_USE', 'DEV_PROBE', 'STRESS_PROBE', 'OPTIMIZATION_CONTEXT', 'FIX_EVALUATION', 'STUDY'];
 
 /** The environment variable every harness must set. Named so a grep finds all of them. */
 export const PROVENANCE_ENV = 'ATELIER_PROVENANCE';
