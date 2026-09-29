@@ -40,14 +40,14 @@ Five rules the code is not allowed to break, each enforced by a test:
   Major phases were audited by separate agent sessions reading the code cold; their findings were fixed
   or declined with a reason, and are recorded in the [CHANGELOG](../CHANGELOG.md).
 - **Studies sealed by commit.** A pre-registration is committed before any output exists, so the commit
-  time is the evidence. 22 are in [studies/](../studies/README.md), with every result, failures included.
+  time is the evidence. They are in [studies/](../studies/README.md), with every result, failures included.
 - **Censuses in the test suite.** Tests fail when a documented command does not exist, an exported value
   is unreachable, a claim in the docs drifts from the code, or a study is not indexed.
 
 ## By the numbers
 
-19 merged pull requests, 227 commits on `main` since 2026-08-24, 1,749 offline tests, and 22
-pre-registered studies. The suite drives the shipped binary end to end, against a scripted model.
+19 merged pull requests, 227 commits on `main` since 2026-08-24, over 1,700 offline tests, and 22
+pre-registrations, two of them drafts and one waiting to run. The suite drives the shipped binary end to end, against a scripted model.
 
 ## What I would do differently
 

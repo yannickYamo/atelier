@@ -89,12 +89,6 @@ export const defaultDescription = (workType: string): string =>
 // THE INVARIANT: public evidence may describe what was observed. It may never generalize that
 // observation into a claim about the source person's overall standard or identity.
 
-/**
- * A condition with no words in it ("; ", ",") holds everywhere. Discovery can emit one, and served as a
- * condition it read "When , I open with…" in the bytes a model is given.
- */
-const renderedAsGeneral = (appliesWhen: string): boolean => isGeneralScope(appliesWhen) || !/[a-z0-9]/i.test(appliesWhen);
-
 const condition = (appliesWhen: string): string => {
   const t = appliesWhen.trim();
   return /^when\b/i.test(t) ? t : `when ${t}`;
@@ -343,7 +337,7 @@ export function renderAgentSkill(
 
   const line = (r: typeof v.requirements[number], i: number): string => {
     const prov = provenanceLabel(r.provenance);
-    const text = renderedAsGeneral(r.appliesWhen)
+    const text = isGeneralScope(r.appliesWhen)
       ? r.statement
       : conditionalLine(r.statement, r.appliesWhen);
     // A rule that needs material the model does not have is where invention happens. `atelier invoke`
@@ -413,7 +407,7 @@ export function renderAgentSkill(
   // guarantee for a request is the substitution the carrier exists to prevent. Where a host cannot
   // enforce it, the honest report is UNSUPPORTED, not a paragraph.
   const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE');
-  const always = (r: { appliesWhen: string }): boolean => renderedAsGeneral(r.appliesWhen);
+  const always = (r: { appliesWhen: string }): boolean => isGeneralScope(r.appliesWhen);
   const referenceSection = exampleCarried.length
     ? `\n## Reference material\n\nEach file below shows an observed realization from the source work. Read a file when its condition\napplies to what you are writing; they are instances, not extra instructions.\n\n`
       + exampleCarried.map((x) => `- \`examples/${x.r.requirementId}.md\` — `
@@ -558,7 +552,7 @@ mintedAt:        ${v.mintedAt}
     // rather than headed, so there is no structure to continue.
     exampleFiles[`examples/${r.requirementId}.md`] =
       `[${r.requirementId}]${r.realizes ? ` — how ${r.realizes} lands` : ''}\n\n${shown}`
-      + (renderedAsGeneral(r.appliesWhen) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
+      + (isGeneralScope(r.appliesWhen) ? '' : `**Applies when:** ${r.appliesWhen}\n\n`)
       + `${binding}\n\n`
       // THE COUNTERFACTUAL IS NOT SERVED, AND THIS IS THE PLACE IT NEARLY WAS.
       //
@@ -593,7 +587,7 @@ mintedAt:        ${v.mintedAt}
   // Deterministic, and deliberately not a semantic router. It records the condition each component
   // already carries so a runtime can exclude what plainly does not apply. Having `appliesWhen` text
   // is not the same as routing on it, and this is the smallest thing that is actually routing.
-  const conditional = carried.filter((x) => !renderedAsGeneral(x.r.appliesWhen) && x.carrier !== 'NONE');
+  const conditional = carried.filter((x) => !isGeneralScope(x.r.appliesWhen) && x.carrier !== 'NONE');
   const contextMap: Record<string, string> = conditional.length ? { 'context-map.json': `${JSON.stringify({
     note: 'Serve a component when its condition holds. Unconditional components always serve.',
     components: conditional.map((x) => ({ requirementId: x.r.requirementId, carrier: x.carrier,

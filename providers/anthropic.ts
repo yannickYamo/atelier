@@ -65,10 +65,14 @@ export function accountRefusal(status: number | undefined, body: string, request
 /** Models this process has seen refuse forced tool choice. Learned from the API's own 400, not listed. */
 const noForcedChoice = new Set<string>();
 
-/** Whether an error is the API refusing forced tool choice for this model. */
+/**
+ * Whether an error is the API refusing forced tool choice for this model: a 400 that names `tool_choice`
+ * and says it is not supported. Matched loosely, so a reworded message still takes the fallback; the
+ * cost of a false match is one extra call with `auto`, which still fails closed.
+ */
 export const refusesForcedChoice = (e: unknown): boolean => {
   const f = statusAndBody(e);
-  return f?.status === 400 && /tool_choice[^.\n]{0,80}not supported/i.test(f.body);
+  return f?.status === 400 && /tool_choice/i.test(f.body) && /not supported|unsupported|not allowed/i.test(f.body);
 };
 
 /** An SDK error's status and body, as `accountRefusal` and `isUnknownModel` read them. */

@@ -97,8 +97,8 @@ fixed here. No new feature.
 A first run by a new user took five commands and about 10,800 words of output to get one 498-word post, and
 died on a default model name. No feature was added: every change is a default, a merged step, a message, or
 something moved out of the default output. Measured offline on the brief's six-post corpus against the
-scripted backend: the first screen went from 1,992 to 960 words, the accept step from 4,100 to 230, and the
-text around an `invoke` post from 256 to 81.
+scripted backend: the first screen went from 1,992 to 960 words, the accept step from 4,100 to 228, and the
+text around an `invoke` post from 256 to 55.
 
 - **The first run no longer dies on a model name.** A backend that does not serve a model now answers as
   one plain line naming the setting to change (`ATELIER_MODEL`, or `ATELIER_DISCOVERY_MODEL` /
@@ -135,7 +135,7 @@ text around an `invoke` post from 256 to 81.
 
 ### Changed: polish (current API usage, clean lint, a front door a stranger can read)
 
-No product behaviour changed apart from the fixes named here.
+Product behaviour changed only where a fix is named here.
 
 - **Current Claude API usage.** Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 reject forced tool choice with a
   400, so a person who set one of them got an error on every call. The provider keeps forcing the call
@@ -143,11 +143,10 @@ No product behaviour changed apart from the fixes named here.
   asks with `auto` and an instruction, still failing closed without a tool call
   ([decision 0005](docs/decisions/0005-forced-tool-choice.md)).
 - **Zero lint warnings**, from 64: every non-null assertion replaced with real narrowing, none suppressed.
-- **Generated skills read cleanly.** A condition with no words in it rendered as "When , I open with…";
-  it is now general, and an example carrying one is no longer withheld from every invocation. "About
-  200 to 200 words" reads "about 200 words".
+- **Generated skills read cleanly.** "About 200 to 200 words" reads "about 200 words", and a test pins that
+  a condition with no words in it renders as general, never as "When , …".
 - **`invoke` split** from one 215-line function into its phases; the taste reader's shared state is one
-  class. **`--help`** shows the six verbs first, then every command on one line.
+  class, and its client is still made before any draft is paid for. **`--help`** shows the six verbs first, then every command on one line.
 - **The README is under 1,000 words** (from about 2,900). The detail moved, none of it removed:
   [USAGE](docs/USAGE.md), [COMPARISON](docs/COMPARISON.md), [RESULTS](docs/RESULTS.md) (wins and
   failures side by side, with populations), [LESSONS](docs/LESSONS.md),
