@@ -24,8 +24,8 @@
 // The model types; code verifies the type against the source. The model cannot approve a claim, only
 // point at the passage that would. That is the typed-signal design, and it is why this reader may gate
 // where the pattern should not have. It remains a model instrument: its sensitivity and specificity are
-// measured before any claim about it is made (studies/, the qualification battery), and the report says
-// which instrument ran on every line.
+// measured before any claim about it is made (studies/, the qualification battery), only a measured
+// (model, version) pair gates (QUALIFIED_READERS), and the report says which instrument ran on every line.
 //
 // Runs on whatever backend the person configures (their own API included): `ATELIER_CLAIMS_MODEL`.
 
@@ -44,6 +44,12 @@ export interface ClaimReading {
   readonly instrument: string;
   /** what the reader typed, verbatim, for audit: the decision above is made from these */
   readonly specifics?: readonly ExtractedSpecific[];
+  /**
+   * Present when this reading is REPORT-ONLY (an unqualified reader, QUALIFIED_READERS): the reading
+   * that gates instead, from the pattern check. The check reports this reading as `UNSOURCED·reader`,
+   * PREFERRED, and `gate` as `UNSOURCED`, REQUIRED. Absent, this reading gates.
+   */
+  readonly gate?: ClaimReading;
 }
 
 /**
@@ -52,11 +58,20 @@ export interface ClaimReading {
  * and says so, rather than going unchecked.
  */
 export interface ClaimSensor {
+  /** the instrument as it stands NOW: a reader that degraded says so here, not only in `notes` */
   readonly instrument: string;
   read(text: string): Promise<void>;
   reading(text: string): ClaimReading | undefined;
   /** things the person should know about how the check ran (a failed call, a fallback) */
   readonly notes: string[];
+  /** the reader's version (READER_VERSION) when a model reads; null for the pattern check */
+  readonly version: string | null;
+  /** a model reader whose (model, version) pair a qualification result stands behind */
+  readonly qualified: boolean;
+  /** whose findings fail the check: the reader's, or the pattern check's */
+  readonly gate: 'reader' | 'pattern';
+  /** true once any read failed: from then on every reading is the pattern check's (see modelSensor) */
+  readonly degraded: boolean;
 }
 
 export const KINDS = ['FIGURE', 'DATE', 'QUOTATION', 'ATTRIBUTED_CLAIM', 'URL', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT', 'NAMED_FACT'] as const;
@@ -122,11 +137,31 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  *   3  the reader sees headings and table rows as numbered units, not only sentences; support is matched
  *      with markdown stripped and across adjacent sentences of one paragraph; a number is a phrase
  *      ("twenty-five", "two hundred", "3 million", "a dozen"), and a lone "one" counts only where it
- *      quantifies
+ *      quantifies. Not qualified: see QUALIFIED_READERS
  */
 export const DECISION_VERSION = 3;
 /** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
 export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
+
+/** A reader, named the way a qualification result names it: the model, and the READER_VERSION it measured. */
+export interface QualifiedReader { readonly model: string; readonly version: string }
+/**
+ * ONLY A MEASURED INSTRUMENT MAY CUT. A reader in this list met the qualification battery's bar
+ * (studies/): its sensitivity and specificity were measured on technical and marketing writing, for that
+ * model AND that READER_VERSION. Any other pair (a changed prompt, a changed decision, another model on
+ * someone's own backend) is an instrument nobody has measured, and an unmeasured instrument that cuts
+ * sentences is how a true story disappears from a person's draft. Such a reader still reads, and what it
+ * finds is reported as `UNSOURCED·reader`, PREFERRED: a warning, never a failure, never repaired. The
+ * pattern check, which held specificity 43/43 and 38/38 in both studies, stays the gate.
+ *
+ * '0279163b' is decision version 2 with claude-haiku-4-5. Decision version 3 hashes differently, so
+ * until a requalification adds its pair here, no reader gates by default. The list is updated by the
+ * study that measures the pair, never to make a reader gate.
+ */
+export const QUALIFIED_READERS: readonly QualifiedReader[] = [{ model: 'claude-haiku-4-5', version: '0279163b' }];
+/** Is this model, at this reader version, one a qualification result stands behind? */
+export const isQualified = (model: string, version = READER_VERSION, list: readonly QualifiedReader[] = QUALIFIED_READERS): boolean =>
+  list.some((q) => q.model === model && q.version === version);
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
 
@@ -379,7 +414,7 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
   const cache = new Map<string, ClaimReading>();
   const instrument = why;
   const sensor: Omit<ClaimSensor, 'reading'> & { reading(text: string): ClaimReading } = {
-    instrument, notes: [],
+    instrument, notes: [], version: null, qualified: false, gate: 'pattern', degraded: false,
     read: (text) => { sensor.reading(text); return Promise.resolve(); },
     reading: (text) => {
       const k = sha(text);
@@ -393,22 +428,57 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
 
 /**
  * The model reader. One call per distinct text, cached by content; its own small budget, so the check
- * never spends the writer's calls and a runaway loop cannot run it without bound. A call that fails
- * leaves that text to the pattern check, and the failure is noted: the draft is still checked.
+ * never spends the writer's calls and a runaway loop cannot run it without bound.
+ *
+ * WHO GATES. A reader whose (model, READER_VERSION) pair is in QUALIFIED_READERS gates: its findings
+ * fail the check and are cut. Any other reader reports: each reading carries the pattern check's
+ * reading as its `gate`, and the check shows the reader's findings as a warning beside it.
+ * `gateAnyway` (ATELIER_CLAIMS_GATE=reader) lets an unqualified reader gate, and says so loudly.
+ *
+ * A FAILED READ DEGRADES THE WHOLE SENSOR, FOR GOOD. Version 2 fell back to the pattern check for the
+ * one text whose read failed and kept the model's readings of the others, so the repair loop compared a
+ * draft read by the model with a rewrite read by the pattern: the model flagged "94 minutes", the
+ * rewrite said "95 minutes", the pattern saw nothing, and the loop reported "all now hold" over a figure
+ * still invented. A comparison is only as good as its one instrument. So the first failure (an error, a
+ * reply with no list, the reader's own budget spent) turns the sensor DEGRADED: from then on every
+ * `reading`, of texts the model already read included, is the pattern check's, `instrument` names the
+ * degraded state, and `notes` says why. A caller holding a report made before the failure re-reads it
+ * (refineToStandard does).
  */
 export function modelSensor(client: InferenceClient, budget: Budget, model: string,
-  ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean; readonly strict?: boolean }): ClaimSensor {
+  ctx: { readonly material: string; readonly task: string; readonly placeholders: boolean; readonly strict?: boolean
+    /** the pairs a qualification stands behind: QUALIFIED_READERS, unless a test passes its own */
+    readonly qualifiedReaders?: readonly QualifiedReader[];
+    /** ATELIER_CLAIMS_GATE=reader: an unqualified reader gates anyway */
+    readonly gateAnyway?: boolean }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
   const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
+  const gatePattern = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
+  const qualified = isQualified(model, READER_VERSION, ctx.qualifiedReaders ?? QUALIFIED_READERS);
+  const readerGates = qualified || (ctx.gateAnyway ?? false);
   // The prompt's hash is part of the instrument's name: a reading from a changed prompt is a reading
   // from a different instrument, and a qualification result holds for the version it measured.
-  const instrument = `claim reader (${model}, prompt ${READER_VERSION})`;
+  const named = `claim reader (${model}, prompt ${READER_VERSION})`;
+  const live = qualified ? named
+    : readerGates ? `${named}: NOT QUALIFIED, gating anyway (ATELIER_CLAIMS_GATE=reader)`
+      : `pattern check, with ${named} reporting only: not qualified`;
+  let degraded = false; let failure = '';
+  const notes: string[] = [];
+  if (!qualified && readerGates) {
+    notes.push(`ATELIER_CLAIMS_GATE=reader: ${named} is NOT QUALIFIED and is failing drafts and cutting sentences anyway. `
+      + 'Nobody has measured how often it cuts a true story or figure of yours; unset ATELIER_CLAIMS_GATE to let the pattern check gate');
+  } else if (!qualified) {
+    notes.push(`${named} is not qualified: what it finds is reported as a warning (UNSOURCED·reader), and the pattern check decides what fails`);
+  }
   const context = `THE AUTHOR'S MATERIAL (what they supplied; anything here is theirs to use):\n<material>\n${ctx.material.trim() || '(none)'}\n</material>\n\nTHE TASK THEY GAVE:\n<task>\n${ctx.task.trim() || '(none)'}\n</task>`;
   const sensor: ClaimSensor = {
-    instrument, notes: [],
+    get instrument() { return degraded ? `pattern check (${named} degraded after it failed: ${failure}; every text is read by the pattern check since)` : live; },
+    notes, version: READER_VERSION, qualified,
+    get gate() { return readerGates && !degraded ? 'reader' as const : 'pattern' as const; },
+    get degraded() { return degraded; },
     read: async (text) => {
       const k = sha(text);
-      if (cache.has(k)) return;
+      if (degraded || cache.has(k)) return;
       try {
         const res = await spend(budget, 0.02, async () => {
           const x = await client.complete({
@@ -423,14 +493,19 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
         if (!Array.isArray(raw)) throw new Error('the reader returned no list of specifics');
         const specifics = raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
           && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string');
-        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, instrument, ctx.strict ?? false));
+        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false));
       } catch (e) {
-        const why = (e as Error).message.split('\n')[0];
-        if (!sensor.notes.some((n) => n.includes(why))) sensor.notes.push(`the claim reader could not run (${why}); the pattern check was used instead`);
-        cache.set(k, fallback.reading(text));
+        failure = (e as Error).message.split('\n')[0];
+        degraded = true;
+        notes.push(`the claim reader could not run (${failure}); the pattern check was used instead, for this text and every one after it, `
+          + 'the texts the reader had already read included, so a draft and its rewrite are always compared by one instrument');
       }
     },
-    reading: (text) => cache.get(sha(text)),
+    reading: (text) => {
+      if (degraded) return fallback.reading(text);
+      const r = cache.get(sha(text));
+      return r && !readerGates ? { ...r, gate: gatePattern.reading(text) } : r;
+    },
   };
   return sensor;
 }
