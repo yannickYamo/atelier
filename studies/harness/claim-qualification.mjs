@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// THE CLAIM READER'S QUALIFICATION BATTERY (studies/CLAIM_READER_QUALIFICATION_PREREGISTRATION.md).
+// THE CLAIM READER'S QUALIFICATION BATTERY (studies/CLAIM_READER_QUALIFICATION_PREREGISTRATION.md for v1,
+// studies/CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md for v2: the sealed version and seed below are v2's).
 //
 // A discovered rule becomes a qualified sensor before it becomes a hard gate. UNSOURCED is a hard gate,
 // and its reader had never been measured. This builds the battery and scores it, nothing else:
@@ -29,8 +30,8 @@ import { modelSensor, patternSensor, READER_VERSION } from '../../dist/core/loop
 import { wordsOf } from '../../dist/core/observers/text.js';
 import { clopperPearson } from '../../dist/core/stats/sign-test.js';
 
-const SEALED_READER_VERSION = 'a5c3ef8a';
-const SEED = 'claim-qualification-2026-09-28';
+const SEALED_READER_VERSION = '0279163b';
+const SEED = 'claim-reader-v2-2026-09-29';
 const DEV_PIECES = 5;
 const EXCERPTS_PER_PIECE = 2;
 const EXCERPT_WORDS = 350;
@@ -131,7 +132,7 @@ async function read(text, material) {
   await m.read(text);
   const r = m.reading(text);
   const p = patternSensor(material, false).reading(text);
-  return { reader: { claims: r.claims.map((c) => c.text), publicFacts: r.publicFacts.map((f) => f.text), instrument: r.instrument, notes: m.notes }, pattern: { claims: p.claims.map((c) => c.text) } };
+  return { reader: { claims: r.claims.map((c) => c.text), publicFacts: r.publicFacts.map((f) => f.text), instrument: r.instrument, notes: m.notes, specifics: r.specifics ?? [] }, pattern: { claims: p.claims.map((c) => c.text) } };
 }
 const hits = (claims, sentence) => claims.some((c) => c.includes(sentence.slice(0, Math.min(40, sentence.length))) || sentence.includes(c.slice(0, 40)));
 
