@@ -6,6 +6,7 @@
 
 import { checksFor } from '../checks.js';
 import { refineToStandard, checkDraftAsync, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
+import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -273,6 +274,7 @@ export async function invoke(): Promise<void> {
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
+  const signals = store.getSignals(L);
   const select = std && nDrafts > 1 ? { n: nDrafts, choose: async (drafts: readonly string[]) => {
     // Taste first, where the reader has earned it: the draft missing the fewest VETO-holding rules.
     // If the reader fails here, the drafts are ranked by count alone.
@@ -290,11 +292,13 @@ export async function invoke(): Promise<void> {
       const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
       // Machine-writing moves, catalogued and learned, counted instance by instance.
       const tells = r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0);
-      return { i, req, all, style, tells, taste: tasteMissed[i] };
+      // The author's signals: closest to their typical value, when the counts above tie.
+      const signal = signalDistance(drafts[i], signals) ?? 0;
+      return { i, req, all, style, tells, signal, taste: tasteMissed[i] };
     });
-    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || a.tells - b.tells || a.all - b.all || b.style - a.style);
+    scored.sort((a, b) => a.taste - b.taste || a.req - b.req || a.tells - b.tells || a.all - b.all || a.signal - b.signal || b.style - a.style);
     const best = scored[0];
-    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    return { index: best.i, why: `${tasteActs ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${signals.length ? `, ${best.signal} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } } : null;
   const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,

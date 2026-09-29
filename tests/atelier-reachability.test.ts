@@ -119,6 +119,12 @@ describe('a decision that is not an approval is still a decision', () => {
 // deliberate state — but "is anything dark that nobody decided to park". A module may leave the
 // codebase or leave this list; it may not leave silently.
 const PARKED: Readonly<Record<string, string>> = {
+  'core/taste/moves.ts':
+    'A CANDIDATE INSTRUMENT, NOT YET QUALIFIED. The move reader types the deep layers (figures, moves, '
+    + 'openings, register) for the sensor qualification (studies/SENSOR_QUALIFICATION_PREREGISTRATION.md). '
+    + 'On development data it barely separated an author from the model and several of its answers were '
+    + 'unstable on a re-read, so it is wired into the product only if it qualifies there. Consumed by the '
+    + 'studies/harness runner.',
   'core/stats/sign-test.ts':
     'The external-expert study\'s analysis instrument (exact sign test, Clopper-Pearson, the '
     + 'discordant floor), named by a sealed preregistration and pinned by its own tests. Consumed '
