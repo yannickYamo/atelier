@@ -24,7 +24,7 @@ import { resolveProvenance } from '../../core/fidelity/provenance.js';
 import { runOnce, draftMaxTokens } from './improve.js';
 import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { compareBindings, describeMismatch, detectResolvedModelDrift } from '../../core/runtime/binding.js';
+import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile } from '../runtime.js';
 
 /**
@@ -223,6 +223,14 @@ export async function invoke(): Promise<void> {
   if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
     console.log(`\nRunning on a new runtime binding — ${describeBinding(binding)}.`);
     console.log(`Observations from here are recorded against this binding and are not evidence about the other one.\n`);
+    // Accepted is recorded now, not only when the run completes: the next invoke on this binding is the
+    // same configuration a person already said yes to, and must not be refused again.
+    store.recordBinding(L, sv.skillVersionHash, binding);
+    store.appendEvent(L, { kind: 'BINDING_ACCEPTED', at: new Date().toISOString(), skillVersionHash: sv.skillVersionHash, bindingHash: bindingHash(binding) });
+  }
+  if (verdict.kind === 'BINDING_UNRECORDED') {
+    const note = describeNewSurface(binding, store.bindingsElsewhere(L, sv.skillVersionHash, binding));
+    if (note) console.log(`(${note})`);
   }
 
   // ORGANIC USE IS THE DEFAULT AND IS CAPTURED WITHOUT ANYONE REMEMBERING. A harness declares

@@ -125,6 +125,21 @@ describe('through the binary: a /skill use in Claude Code does not lock the CLI 
     const out = run(data, proj, 'invoke', '--skill', 'house', 'write a note');
     expect(out).not.toMatch(/TARGET_BINDING_MISMATCH|EXIT:1/);
     expect(out).toContain('A plain note.');
+    // not refused, and not silent: the switch of surface is named
+    expect(out).toContain('first run on openai-compatible (scripted); earlier evidence was on claude-code (host)');
+    // POLARITY: the second run on this surface has its own baseline, and says nothing
+    expect(run(data, proj, 'invoke', '--skill', 'house', 'write a note')).not.toContain('first run on');
+  }, 120_000);
+
+  it('--accept-new-binding is remembered: the accepted configuration is not refused on the next run, a new one still is', async () => {
+    const { data, proj, L } = built();
+    await post({ byTool: { emit_piece: { piece: 'A plain note.' } } });
+    expect(runWith(data, proj, ['invoke', '--skill', 'house', '--claims', 'pattern', 'write a note'])).not.toMatch(/^EXIT/);
+    expect(runWith(data, proj, ['invoke', '--skill', 'house', '--claims', 'pattern', '--temperature', '0.5', 'write a note'])).toMatch(/TARGET_BINDING_MISMATCH/);
+    expect(runWith(data, proj, ['invoke', '--skill', 'house', '--claims', 'pattern', '--temperature', '0.5', '--accept-new-binding', 'write a note'])).not.toMatch(/^EXIT/);
+    expect(runWith(data, proj, ['invoke', '--skill', 'house', '--claims', 'pattern', '--temperature', '0.5', 'write a note'])).not.toMatch(/^EXIT/);
+    expect(store.readEvents(L).filter((e) => e.kind === 'BINDING_ACCEPTED')).toHaveLength(1);
+    expect(runWith(data, proj, ['invoke', '--skill', 'house', '--claims', 'pattern', '--temperature', '0.9', 'write a note'])).toMatch(/TARGET_BINDING_MISMATCH/);
   }, 120_000);
 });
 

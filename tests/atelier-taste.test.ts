@@ -8,6 +8,7 @@ import { readTaste, tasteRules, flatten, quoteIsReal, type TasteReading } from '
 import { tastePermissions, calibrationQueue, statementHash, passageAround, heldBack, labelToken, HOLDBACK, FALSE_BLOCK_BAR } from '../core/taste/calibration.js';
 import { dimensionOf, coverageOf } from '../core/taste/dimensions.js';
 import { refineTaste, spanOfQuote } from '../core/taste/repair.js';
+import { REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS } from '../core/loop/repair.js';
 import { keysOf } from '../core/state/rule-key.js';
 import type { Requirement, StandardVersion } from '../core/state/canonical-state.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
@@ -182,6 +183,17 @@ describe('taste repair: only where the reader holds VETO, only a quoted passage,
     const refused = await refineTaste(deny, deny, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null);
     expect(refused.output).toBe(TEXT);
     expect(refused.why).toMatch(/does not read any targeted rule as followed/);
+    // THE TASTE REWRITE IS TOLD WHAT THE PERSON ASKED FOR. With --placeholders it gets the placeholder
+    // instructions the counted repair gets; without, the prompt never mentions slots.
+    const systems = async (placeholders: boolean): Promise<string[]> => {
+      const seen: string[] = [];
+      const c: InferenceClient = { complete: async (req: InferenceRequest) => { if (req.toolName === 'emit_replacements') seen.push(req.stableBlock);
+        return anInferenceResult({ json: req.toolName === 'emit_replacements' ? { replacements: [{ id: 1, text: fixedText }] } : readings([{ n: 1, verdict: 'FOLLOWED', quote: fixedText }]) }); } };
+      await refineTaste(c, c, { spentUsd: 0, capUsd: 1 }, 'd', std, TEXT, missed, keys, null, { placeholders });
+      return seen;
+    };
+    expect(await systems(true)).toEqual([REPAIR_SYSTEM_WITH_PLACEHOLDERS]);
+    expect(await systems(false)).toEqual([REPAIR_SYSTEM]);
   });
   it('a reader that can no longer tell has not confirmed a fix', async () => {
     const fixedText = 'At the top, height got cheap and stopping stayed dear.';

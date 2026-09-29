@@ -76,7 +76,7 @@ export async function refineTaste(
   let res: Awaited<ReturnType<InferenceClient['complete']>>;
   try {
     res = await spend(budget, 0.05, async () => {
-      const x = await client.complete({ stableBlock: REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
+      const x = await client.complete({ stableBlock: checks.placeholders ? (await import('../loop/repair.js')).REPAIR_SYSTEM_WITH_PLACEHOLDERS : REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
         toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.', schema: REPAIR_SCHEMA, maxTokens: 4000 });
       return { value: x, cost: x.cost };
     });
