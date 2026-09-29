@@ -9,7 +9,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { modeFromIntent, suggest } from '../core/ratification/suggest.js';
+import { modeFromIntent, suggest, MIN_PIECES_TO_REJECT } from '../core/ratification/suggest.js';
 import type { Requirement } from '../core/state/canonical-state.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
@@ -60,15 +60,19 @@ describe('atelier new: a folder and a sentence', () => {
   beforeAll(() => { first = run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice'); });
 
   it('reserves some work before anything reads it, and reads the rest', () => {
-    expect(first).toMatch(/RESERVED, before anything read them/);
+    expect(first).toMatch(/Held back before anything reads them, for a blind comparison later: post-\d\.md/);
   });
 
   it('shows every rule with a suggested ruling, and compiles NOTHING without a yes', () => {
     expect(first).toMatch(/Lead with the decision/);
     expect(first).toMatch(/→ REQUIRED — instructs/);
-    expect(first).toMatch(/needs your material, so shown until you make it required/);
-    expect(first).toMatch(/needs from you: the actual figures for the period/);
+    // a rule shown as an example is one line, and still says what it needs from the person
+    expect(first).toMatch(/Shown to the model as examples, not instructed/);
+    expect(first).toMatch(/\(needs: the actual figures for the period\)/);
     expect(first).toMatch(/Nothing was decided/);
+    // the way out of the screen is the command that records AND builds, not one that only records
+    expect(first).toMatch(/atelier new \S+ --accept\s+accept all as shown, and build/);
+    expect(first).not.toMatch(/atelier review --accept/);
     expect(existsSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'))).toBe(false);
   });
 
@@ -78,6 +82,10 @@ describe('atelier new: a folder and a sentence', () => {
     const second = run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept', '--set', 'p2=required');
     expect(second).toMatch(/Continuing the run already in this project/);
     expect(second).not.toMatch(/Reading your work/);
+    // accepting records, builds and says so briefly: the screen is not printed a second time
+    expect(second).toMatch(/Your changes: p2 → REQUIRED — instructs/);
+    expect(second).not.toMatch(/Shown to the model as examples/);
+    expect(second.split(/\s+/).length, second).toBeLessThan(300);
     const md = readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8');
     expect(md).toMatch(/Lead with the decision/);
     // the rule that needs material says so in the skill a host reads
@@ -85,6 +93,14 @@ describe('atelier new: a folder and a sentence', () => {
     // and the purpose is how a host decides to load it
     expect(md).toMatch(/Use when asked to: write me a blog post/);
     expect(second).toMatch(/\/voice <your task>/);
+  });
+
+  it('a FIRST call with --accept still shows every rule before recording it: only the person ratifies', () => {
+    const d2 = mkdtempSync(join(tmpdir(), 'atelier-new-data-')); const p2 = mkdtempSync(join(tmpdir(), 'atelier-new-proj-'));
+    const once = run(d2, p2, 'new', corpus(p2, 8), 'write me a blog post in the voice and style of these', '--name', 'once', '--accept');
+    expect(once).toMatch(/rule\(s\) read from your work/);
+    expect(once).toMatch(/Lead with the decision/);
+    expect(existsSync(join(p2, '.claude', 'skills', 'once', 'SKILL.md'))).toBe(true);
   });
 
   it('invoke refuses a REQUIRED rule whose material is not bound, before any call', () => {
@@ -102,7 +118,21 @@ describe('the suggestion is computed from evidence, never decided', () => {
     expect(modeFromIntent('customer support needs to always answer this way').mode).toBe('RESPOND');
   });
   it('a rule never seen again where it could apply is suggested for rejection', () => {
-    expect(suggest(p, { framings: ['A'], heldOut: { applicable: 3, present: 0 }, needs: null }, 'GENERATE').decision).toBe('REJECT');
+    expect(suggest(p, { framings: ['A'], heldOut: { applicable: MIN_PIECES_TO_REJECT, present: 0 }, needs: null }, 'GENERATE').decision).toBe('REJECT');
+  });
+  it('on fewer unread pieces than that, the same zero is shown as an example, weakest first, never rejected', () => {
+    // Enter accepts every suggestion: two unread pieces lacking a move must not delete it.
+    for (const applicable of [1, 2, MIN_PIECES_TO_REJECT - 1]) {
+      const s = suggest(p, { framings: ['A'], heldOut: { applicable, present: 0 }, needs: null }, 'GENERATE');
+      expect(s).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED', strength: 0 });
+      expect(s.why).toMatch(/too few pieces to suggest rejecting it/);
+    }
+  });
+  it('a count the unread pieces miss follows the same floor', () => {
+    const counted = { ...p, measurement: { observer: 'PATTERN_RATE', params: {} } } as unknown as Requirement;
+    const on = (applicable: number) => suggest(counted, { framings: [], heldOut: null, needs: null, inSample: { applicable, present: 0, independent: true } }, 'GENERATE');
+    expect(on(2)).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED', strength: 0 });
+    expect(on(MIN_PIECES_TO_REJECT).decision).toBe('REJECT');
   });
   it('generating: required only on held-out evidence; guarding: agreement between readings is enough', () => {
     const agreedOnly = { framings: ['A', 'B'], heldOut: { applicable: 0, present: 0 }, needs: null };

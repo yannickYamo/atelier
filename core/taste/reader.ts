@@ -197,18 +197,23 @@ export async function readTaste(client: InferenceClient, budget: Budget, v: Stan
  * One line per reading, for the terminal. A held-back reading (./calibration.ts `heldBack`) shows no
  * verdicts and no count of them: it is kept blind so the owner can label it. What still shows is that a
  * check failed (verify's exit code, MCP's `failed`), which a guard cannot hide; docs/TASTE.md says so.
+ * `waiting` names rules whose material is not bound on this invocation: they had nothing to fire on, so a
+ * MISSED reading of one is reported as waiting, never as a miss.
  */
 export function describeTaste(readings: readonly TasteReading[], rules: ReadonlyMap<string, Requirement>, permitted: ReadonlySet<string> = new Set(),
-  held = false): string {
+  held = false, waiting: ReadonlySet<string> = new Set()): string {
   if (!readings.length) return 'No reading-based rules to read.';
   if (held) {
     return `read against ${readings.length} reading-based rule(s); this reading is held back so that your labels stay blind. `
       + 'Label it with: atelier taste --calibrate';
   }
-  const count = (v: TasteVerdict): number => readings.filter((r) => r.verdict === v).length;
+  const isWaiting = (r: TasteReading): boolean => waiting.has(r.requirementId);
+  const count = (v: TasteVerdict): number => readings.filter((r) => r.verdict === v && !isWaiting(r)).length;
+  const waitingIds = readings.filter(isWaiting).map((r) => r.requirementId);
   const head = `read against ${readings.length} reading-based rule(s): ${count('FOLLOWED')} followed, ${count('MISSED')} missed, `
-    + `${count('UNCLEAR') + count('UNSTABLE')} could not be told, ${count('NOT_APPLICABLE')} did not apply`;
-  const lines = readings.filter((r) => r.verdict === 'MISSED').map((r) =>
+    + `${count('UNCLEAR') + count('UNSTABLE')} could not be told, ${count('NOT_APPLICABLE')} did not apply`
+    + (waitingIds.length ? `, ${waitingIds.length} waiting for your material (${waitingIds.join(', ')})` : '');
+  const lines = readings.filter((r) => r.verdict === 'MISSED' && !isWaiting(r)).map((r) =>
     `  missed ${r.requirementId}${permitted.has(r.key) ? '' : ' (observed)'}: ${(rules.get(r.requirementId)?.statement ?? '').slice(0, 90)}\n`
     + `    ${r.kind === 'PRESENCE' && r.quote ? `"${r.quote.slice(0, 140)}"` : 'nowhere in the text'}: ${r.why.slice(0, 160)}`);
   return [head, ...lines].join('\n');

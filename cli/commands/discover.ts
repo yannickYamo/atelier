@@ -14,7 +14,7 @@ import { runDiscoveryChain } from '../../core/discovery/run-chain.js';
 import { anchoredQuote } from '../../core/discovery/conformance.js';
 import { type ImportPlan } from '../../core/discovery/chain/corpus-import.js';
 import { runMethodExtraction, describeMethodRun } from '../../core/discovery/run-methods.js';
-import type { Budget } from '../../core/inference/client.js';
+import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import { BudgetExceeded, spend } from '../../core/inference/client.js';
 import { transition, type Run } from '../../core/state/run-state.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
@@ -31,8 +31,8 @@ import { quantile, wordsOf } from '../../core/observers/text.js';
 import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
-import { GenerationIncomplete } from '../../core/inference/client.js';
-import { sha, die, argv, proposerModel, diagnoserModel, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA } from '../runtime.js';
+import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
+import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -40,6 +40,34 @@ import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/
 // derived from `framing.ts`. Nothing called them. They are removed rather than kept: a second
 // prompt that no path reaches is a prompt that drifts from the real one in silence, and the
 // next person to wire it would have bypassed the framing owner without noticing.
+
+/**
+ * Why discovery may retry on its other configured model, or null when it may not: the proposer REFUSED
+ * (a classifier's false positive on "describe how this author writes"), or the proposer is the built-in
+ * default and this backend does not serve it (UNSERVED). A model the person named is theirs, and is never
+ * swapped behind their back.
+ */
+export function discoveryRetry(e: unknown, proposerIsDefault: boolean): 'REFUSED' | 'UNSERVED' | null {
+  if (e instanceof GenerationIncomplete && e.termination.kind === 'REFUSAL') return 'REFUSED';
+  if (e instanceof ModelUnavailable && proposerIsDefault) return 'UNSERVED';
+  return null;
+}
+
+/**
+ * A call on the model that reads the corpus, outside discovery (the persona at build). An unserved DEFAULT
+ * reader is swapped for the target model once, and said, exactly as discovery swaps it: otherwise a backend
+ * that got through discovery would lose the persona at build with one parenthetical line.
+ */
+export async function onCorpusReader<T>(call: (client: InferenceClient) => Promise<T>): Promise<T> {
+  try {
+    return await call(clientFor(proposerModel()));
+  } catch (e) {
+    const target = modelFor('target');
+    if (discoveryRetry(e, proposerIsDefault()) !== 'UNSERVED' || target === proposerModel()) throw e;
+    console.log(`(${proposerModel()}, the default reader, is not served by this backend; using ${target}.)`);
+    return call(clientFor(target));
+  }
+}
 
 export async function discover(): Promise<void> {
   const s = loadSession();
@@ -59,7 +87,8 @@ export async function discover(): Promise<void> {
       + `\n  See where it is: atelier status`);
   }
 
-  const client = clientFor(proposerModel());
+  // `let`: a refused or unserved default proposer is replaced, and every later proposer call uses the replacement.
+  let client = clientFor(proposerModel());
   let proposals: Requirement[];
   let proposalMeta: Record<string, ProposalMeta>;
   let heldOutChecked = true;
@@ -79,7 +108,8 @@ export async function discover(): Promise<void> {
   // leaving a reserved piece in that list would let it be read as chain-held-out material, which is
   // read by the observer even when it is not read by the proposer.
   const reservedIds = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
-  if (reservedIds.size) {
+  // Under `atelier new`, intake has just said which pieces are held back.
+  if (reservedIds.size && !orchestrated()) {
     console.log(`\nHolding back ${reservedIds.size} reserved piece(s) — discovery will not see them: ${[...reservedIds].join(', ')}`);
   }
   const openItems = items.filter((i) => !reservedIds.has(i.id));
@@ -147,23 +177,30 @@ export async function discover(): Promise<void> {
       + `\n  Or spend less:    point at fewer pieces, or shorter ones.`);
   }
 
-  // ── A REFUSAL FROM THE PROPOSER IS NOT THE END OF DISCOVERY ──────────────────────────────────
+  // ── A REFUSAL, OR AN UNSERVED DEFAULT, IS NOT THE END OF DISCOVERY ──────────────────────────
   //
   // On the first real run against an author's own posts, the default proposer stopped with
   // stop_reason "refusal" on the rule-extraction call, twice, while the discovery-side model answered
   // it cleanly. A classifier's false positive on "describe how this author writes" should cost one
   // retry on the other configured model, said out loud — not the run.
-  const fallbackModel = diagnoserModel();
+  //
+  // The first run of the shipped CLI then died before any of that: the default proposer was not a model
+  // the person's gateway served. A DEFAULT that is not served is swapped the same way, and said. A model
+  // the person named is not swapped behind their back: that stops with the setting to change.
   let usedModel = proposerModel();
   let chain: Awaited<ReturnType<typeof runDiscoveryChain>>;
   try {
     chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
   } catch (e) {
-    const refused = e instanceof GenerationIncomplete && e.termination.kind === 'REFUSAL';
-    if (!refused || fallbackModel === usedModel) throw e;
-    console.log(`\n${usedModel} declined the request (a refusal, not an error in your work). Retrying once with ${fallbackModel}.`);
+    const retry = discoveryRetry(e, proposerIsDefault());
+    const fallbackModel = retry === 'UNSERVED' ? modelFor('target') : diagnoserModel();
+    if (!retry || fallbackModel === usedModel) throw e;
+    console.log(retry === 'REFUSED'
+      ? `\n${usedModel} declined the request (a refusal, not an error in your work). Retrying once with ${fallbackModel}.`
+      : `\n${usedModel}, the default reader, is not served by this backend; reading your work with ${fallbackModel} instead. The record names the model that read it.`);
     usedModel = fallbackModel;
-    chain = await runDiscoveryChain(clientFor(fallbackModel), budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
+    client = clientFor(fallbackModel);
+    chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
   }
 
   if ('refused' in chain) {

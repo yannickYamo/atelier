@@ -15,6 +15,7 @@ import { unsourcedClaims } from '../core/loop/claims.js';
 import { checkDraft } from '../core/loop/run-repair.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import * as store from '../core/state/store.js';
+import { withDetails } from './fixtures.js';
 
 const author = (i: number): { id: string; text: string } => ({ id: `a${i}.md`, text: Array.from({ length: 30 }, (_, k) =>
   `In practice the team - which owns the loop - reviewed item ${k + i} against the checklist and recorded what changed in the log.`).join(' ') });
@@ -144,7 +145,7 @@ describe('through the binary: material, and several drafts chosen by count', () 
     const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
     const out = run('invoke', '--skill', 'inc', 'write it', '--drafts', '2', '--placeholders', ...be);
     expect(out).toContain('[your story: a time a loop broke production]');
-    expect(out).toMatch(/wrote 2 drafts and kept one/);
+    expect(withDetails(out)).toMatch(/wrote 2 drafts and kept one/);
     const [rec] = store.listInvocations({ root: data, skillName: 'inc' });
     expect(rec.repair?.violatedBefore).toEqual(['UNSOURCED']);
     mkdirSync(join(proj, 'm'), { recursive: true });

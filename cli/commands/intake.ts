@@ -14,7 +14,7 @@ import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../.
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
 
-import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile } from '../runtime.js';
+import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile, orchestrated } from '../runtime.js';
 
 // ── intake ───────────────────────────────────────────────────────────────────────────────────
 /**
@@ -95,10 +95,7 @@ export function intake(path: string, workType: string): void {
     else refused.push({ file: f, reason: r.reason, remedy: r.remedy });
   }
 
-  if (read.length) {
-    console.log(`Reading ${read.length} file(s):`);
-    for (const r of read) console.log(`  ${r.file.padEnd(34)} ${Math.ceil(r.text.length / 4).toLocaleString().padStart(7)} tok   via ${r.via}`);
-  }
+  if (read.length) reportReading(read);
   if (meta.length) console.log(`\nSkipped as metadata (they are ABOUT the work, not the work): ${meta.join(', ')}\n  If these ARE the work — you are learning how this author writes documentation — pass --work-type documentation.`);
   if (docsWorkType && all.some((f) => META_NAME.test(basename(f)))) {
     console.log(`\nReading README/CONTRIBUTING as EVIDENCE, not as metadata — you asked for a documentation work type.`);
@@ -210,9 +207,7 @@ export function intake(path: string, workType: string): void {
     expertAction: 'the expert produced this artefact as it stands', artifact: r.text,
     provenance: { sourceRef: join(base, r.file), clusterId: clusters.clusterOf(r.file),
       contextId: r.file, clusterBasis: clusters.basis, consumedBy: [] } }));
-  const clusterCount = new Set(goldenUnits.map((u) => u.provenance.clusterId)).size;
-  console.log(`\n${goldenUnits.length} piece(s) in ${clusterCount} project cluster(s) [${clusters.basis}]`);
-  console.log(`  ${clusters.why}`);
+  reportClusters(goldenUnits.length, new Set(goldenUnits.map((u) => u.provenance.clusterId)).size, clusters);
   //
   // DECIDED BEFORE THE SPLIT, so the split is made over what discovery may read. A reserve applied
   // after roles were assigned let a reserved piece hold a proposal slot and left the proposer short.
@@ -232,17 +227,9 @@ export function intake(path: string, workType: string): void {
       console.log(`\nNot reserving automatically: ${r.why}`);
     } else {
       reservation = r;
-      console.log(`\nRESERVED, before anything read them: ${r.reserved.map((u) => u.unitId).join(', ')}`);
-      console.log(`  ${r.why}`);
-      console.log(`  ${describeGoldenEvidence(r.reserved, 'ACROSS_CLUSTERS')}`);
     }
   }
-  if (!reservation) {
-    console.log(`\nNOTHING RESERVED. Every piece here is available to discovery, so none of it can later`);
-    console.log(`  test whether the standard generalises. That is a fine place to start and it is a`);
-    console.log(`  decision: pass --reserve <file,file> at intake to hold work back. It cannot be done`);
-    console.log(`  afterwards — a split chosen once discovery has read the corpus is not a holdout.`);
-  }
+  reportReservation(reservation);
 
   const material = usableRead.map((r) => ({ id: r.file, text: r.text, kind: r.kind }));
   const heldOutFlag = flag('--held-out');
@@ -262,7 +249,13 @@ export function intake(path: string, workType: string): void {
   if (plan.refusals.length && reservation) {
     console.log(`\n(${reservation.reserved.length} piece(s) are reserved and not counted above. Reserve fewer, or add work.)`);
   }
-  console.log(`\n${plan.summary}`);
+  // A refusal is printed in full whoever is driving: it is the reason nothing happens next.
+  if (orchestrated() && !plan.refusals.length) {
+    const roles = (role: string): number => plan.goldens.filter((g) => g.role === role).length;
+    if (plan.journey === 'IMPROVE') console.log(`You already have a skill (${plan.existingSkillId ?? "an existing skill"}): looking for what your examples preserve that it does not.`);
+    console.log(`Reading ${roles('PROPOSAL')} piece(s) for rules, then checking each rule on ${roles('HELD_OUT')} it has not read.`);
+    if (plan.unread?.length) console.log(`${plan.unread.length} more piece(s) are past what one pass reads, and are not read: ${plan.unread.join(', ')}.`);
+  } else console.log(`\n${plan.summary}`);
   if (plan.refusals.length) process.exit(1);
   if (argv.includes('--dry-run')) { console.log('\n--dry-run: nothing sealed.'); return; }
 
@@ -292,16 +285,7 @@ export function intake(path: string, workType: string): void {
       : null;
   const ev: ExpertEvidence = { evidenceId: sha(`ev|${corpusHash}`), workType, items, corpusHash, sealedAt: new Date().toISOString(), aiAssisted, published: null };
 
-  if (aiAssisted === null) {
-    console.log('\n  provenance UNDECLARED. Nobody has said whether this work was AI-assisted, and it');
-    console.log('  changes what a discovered rule means: a pattern found in machine-assisted prose may');
-    console.log('  be the assistant\'s habit rather than yours. Ratification still makes the standard');
-    console.log('  yours — you approve each rule — but "discovered from your work" is a weaker claim.');
-    console.log('  Declare it:  --ai-assisted   or   --no-ai-assist\n');
-  } else if (aiAssisted) {
-    console.log('\n  provenance: AI-ASSISTED, declared. Recorded on the evidence, and it travels with');
-    console.log('  every result derived from this corpus.\n');
-  }
+  reportProvenance(aiAssisted);
 
   let s = loadSession();
   // The stale-session case, named where a person can act on it. An earlier run left this session
@@ -339,7 +323,69 @@ export function intake(path: string, workType: string): void {
   }
 
   const tok = items.reduce((n, i) => n + i.tokens, 0);
-  console.log(`\nSealed ${items.length} item(s), ~${tok.toLocaleString()} tokens, work type "${workType}".`);
-  console.log(`Corpus hash ${corpusHash} — the run is bound to it. Editing these files after this point starts a new run.`);
+  if (orchestrated()) console.log(`Sealed ${items.length} piece(s) as corpus ${corpusHash}; editing them after this starts a new run.`);
+  else {
+    console.log(`\nSealed ${items.length} item(s), ~${tok.toLocaleString()} tokens, work type "${workType}".`);
+    console.log(`Corpus hash ${corpusHash} — the run is bound to it. Editing these files after this point starts a new run.`);
+  }
   if (items.length < 3) console.log(`\nNote: ${items.length} item(s) is thin. A standard induced from very few examples over-generalises, and it cannot tell you that it has.`);
+}
+
+// ── WHAT INTAKE REPORTS ─────────────────────────────────────────────────────────────────────────
+//
+// Each in full for `atelier intake` run on its own, and in one line when `atelier new` drives it
+// (runtime.ts, `orchestrated`). The facts are the same; only how much is said changes.
+
+function reportReading(read: readonly { file: string; text: string; via: string }[]): void {
+  const tokens = (t: string): number => Math.ceil(t.length / 4);
+  if (orchestrated()) {
+    console.log(`Reading ${read.length} piece(s), ~${read.reduce((n, r) => n + tokens(r.text), 0).toLocaleString()} tokens.`);
+    return;
+  }
+  console.log(`Reading ${read.length} file(s):`);
+  for (const r of read) console.log(`  ${r.file.padEnd(34)} ${tokens(r.text).toLocaleString().padStart(7)} tok   via ${r.via}`);
+}
+
+/** How pieces group into projects, which bounds every claim made across them. */
+function reportClusters(pieces: number, clusterCount: number, clusters: { basis: string; why: string }): void {
+  if (orchestrated()) {
+    if (clusters.basis === 'SINGLE_CLUSTER_FALLBACK') console.log(`(All ${pieces} pieces sit in one folder, so they are counted as one project.)`);
+    return;
+  }
+  console.log(`\n${pieces} piece(s) in ${clusterCount} project cluster(s) [${clusters.basis}]`);
+  console.log(`  ${clusters.why}`);
+}
+
+/** What was held back before anything read it, or that nothing was, which cannot be undone later. */
+function reportReservation(reservation: Reservation | null): void {
+  if (reservation && orchestrated()) {
+    console.log(`Held back before anything reads them, for a blind comparison later: ${reservation.reserved.map((u) => u.unitId).join(', ')}.`);
+  } else if (reservation) {
+    console.log(`\nRESERVED, before anything read them: ${reservation.reserved.map((u) => u.unitId).join(', ')}`);
+    console.log(`  ${reservation.why}`);
+    console.log(`  ${describeGoldenEvidence(reservation.reserved, 'ACROSS_CLUSTERS')}`);
+  } else if (orchestrated()) {
+    console.log('Nothing held back: with this few pieces, none can later test the skill blind.');
+  } else {
+    console.log(`\nNOTHING RESERVED. Every piece here is available to discovery, so none of it can later`);
+    console.log(`  test whether the standard generalises. That is a fine place to start and it is a`);
+    console.log(`  decision: pass --reserve <file,file> at intake to hold work back. It cannot be done`);
+    console.log(`  afterwards — a split chosen once discovery has read the corpus is not a holdout.`);
+  }
+}
+
+/** Whether the work was AI-assisted: declared by the person, never inferred, and undeclared said so. */
+function reportProvenance(aiAssisted: boolean | null): void {
+  if (aiAssisted === null && orchestrated()) {
+    console.log('Not declared whether this work was AI-assisted; a rule found in assisted prose may be the assistant\'s habit. Declare it: --ai-assisted or --no-ai-assist.');
+  } else if (aiAssisted === null) {
+    console.log('\n  provenance UNDECLARED. Nobody has said whether this work was AI-assisted, and it');
+    console.log('  changes what a discovered rule means: a pattern found in machine-assisted prose may');
+    console.log('  be the assistant\'s habit rather than yours. Ratification still makes the standard');
+    console.log('  yours — you approve each rule — but "discovered from your work" is a weaker claim.');
+    console.log('  Declare it:  --ai-assisted   or   --no-ai-assist\n');
+  } else if (aiAssisted) {
+    console.log('\n  provenance: AI-ASSISTED, declared. Recorded on the evidence, and it travels with');
+    console.log('  every result derived from this corpus.\n');
+  }
 }

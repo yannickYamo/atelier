@@ -9,7 +9,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { InferenceClient, InferenceRequest, InferenceResult, InferenceTermination } from '../core/inference/client.js';
-import { budgetUsd, inferenceTimeoutMs, INFERENCE_MAX_RETRIES, GenerationIncomplete } from '../core/inference/client.js';
+import { budgetUsd, inferenceTimeoutMs, INFERENCE_MAX_RETRIES, GenerationIncomplete, ModelUnavailable, isUnknownModel } from '../core/inference/client.js';
 import { ANTHROPIC_PRICING, costOf, priceFor, type Pricing } from './pricing.js';
 
 export type { Pricing } from './pricing.js';
@@ -34,9 +34,9 @@ export const anthropicTermination = (stopReason: string | null): InferenceTermin
 
 /**
  * AN ACCOUNT REFUSAL, SAID IN ONE LINE. A provider that will not serve this key (no credit left, a key it
- * does not recognise, or one it forbids) answered with its raw error JSON, which the CLI printed whole:
- * a wall of braces around the one sentence a person needed. This returns that sentence, with the request
- * id a support ticket needs, or null when the failure is anything else.
+ * does not recognise, one it forbids, or one over its rate or budget limit) answered with its raw error
+ * JSON, which the CLI printed whole: a wall of braces around the one sentence a person needed. This
+ * returns that sentence, with the request id a support ticket needs, or null when the failure is anything else.
  *
  * Shared by both providers and the CLI's last-resort error path, so the wording lives in one place.
  */
@@ -48,15 +48,24 @@ export function accountRefusal(status: number | undefined, body: string, request
   }
   if (status === 401) return `the API key was not accepted (HTTP 401): check it, or set another key${tail}.`;
   if (status === 403) return `the API key is not allowed to make this call (HTTP 403): check its permissions, or set another key${tail}.`;
+  if (status === 429) return `the backend is limiting this key (HTTP 429: a rate or budget limit). Nothing more was spent; try again when the limit resets${tail}.`;
   return null;
 }
 
-/** An SDK error read the way `accountRefusal` reads one: its status, its body, its request id. */
-const refusalOf = (e: unknown): string | null => {
+/** An SDK error's status and body, as `accountRefusal` and `isUnknownModel` read them. */
+const statusAndBody = (e: unknown): { status: number | undefined; body: string; requestId: string | null } | null => {
   if (!(e instanceof Anthropic.APIError)) return null;
-  const body = JSON.stringify(e.error ?? null) + e.message;
   const status: unknown = e.status;
-  return accountRefusal(typeof status === 'number' ? status : undefined, body, e.requestID ?? null);
+  return { status: typeof status === 'number' ? status : undefined, body: JSON.stringify(e.error ?? null) + e.message, requestId: e.requestID ?? null };
+};
+
+/** A provider failure said plainly: an account refusal in one line, an unknown model as ModelUnavailable. */
+const plainFailure = (e: unknown, modelId: string): Error | null => {
+  const f = statusAndBody(e);
+  if (!f) return null;
+  const refusal = accountRefusal(f.status, f.body, f.requestId);
+  if (refusal) return new Error(refusal, { cause: e });
+  return isUnknownModel(f.status, f.body) ? new ModelUnavailable(modelId, f.body) : null;
 };
 
 export class AnthropicInferenceClient implements InferenceClient {
@@ -109,9 +118,8 @@ export class AnthropicInferenceClient implements InferenceClient {
       // spends twenty minutes over two retries before saying anything.
       timeout: inferenceTimeoutMs(req.maxTokens),
     }).catch((e: unknown) => {
-      // An account refusal is said in one line, never as the provider's raw error JSON.
-      const plain = refusalOf(e);
-      throw plain ? new Error(plain, { cause: e }) : e;
+      // An account refusal or an unknown model is said plainly, never as the provider's raw error JSON.
+      throw plainFailure(e, this.modelId) ?? e;
     });
 
     const u = res.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };

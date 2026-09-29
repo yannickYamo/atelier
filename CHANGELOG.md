@@ -92,6 +92,47 @@ fixed here. No new feature.
 - The same facts go to every arm, and every counted feature of every draft is recorded, to test which
   sensors track what readers prefer.
 
+### Changed: the first run, made short and safe (the ease-of-use brief)
+
+A first run by a new user took five commands and about 10,800 words of output to get one 498-word post, and
+died on a default model name. No feature was added: every change is a default, a merged step, a message, or
+something moved out of the default output. Measured offline on the brief's six-post corpus against the
+scripted backend: the first screen went from 1,992 to 960 words, the accept step from 4,100 to 230, and the
+text around an `invoke` post from 256 to 81.
+
+- **The first run no longer dies on a model name.** A backend that does not serve a model now answers as
+  one plain line naming the setting to change (`ATELIER_MODEL`, or `ATELIER_DISCOVERY_MODEL` /
+  `ATELIER_TARGET_MODEL`), on both providers. When the model that reads your work is the built-in default,
+  discovery reads with the target model instead and says so, the same way a refused request already
+  retried, and so does the persona at build. A model you named is never swapped. A 429 is one line too.
+  Fixed on the way: after such a retry, the degraded single-pass path still called the model that had failed.
+- **Two commands to a skill.** Without a terminal, `atelier new` printed `atelier review --accept`, which only
+  recorded and reprinted the whole screen. It now prints `atelier new <folder> --accept`, which records and
+  builds. Continuing a run whose screen was already printed, `--accept` does not print it again; a first
+  `new --accept` still shows every rule before recording it, since only the person may make a rule theirs.
+- **The review screen shows what deserves attention.** The rules that will instruct the model and the ones
+  with the thinnest evidence are shown in full; rules shown only as examples take one line each, with what
+  they need from you. `atelier pending` and the page still show every rule with its evidence.
+- **Pressing Enter is safe on thin evidence.** Rejection was suggested when a rule failed in two pieces
+  discovery never read; on a six-post corpus that rejected moves the author plainly makes. It now needs four
+  (`MIN_PIECES_TO_REJECT`); on fewer, the rule is shown as an example, weakest first. The brief also asked
+  that no counted rule be suggested as an instruction when the author's reserved piece breaks it. Not done:
+  consulting the reserved pieces while building the standard would spend the blind check, so `atelier new`
+  reports how they fare after the build, as before.
+- **Under `atelier new`, each step reports in a line or two** (intake, discovery, ratify-close, build): what
+  was held back, what was minted and which rules instruct, where the skill is, what the host does not
+  deliver. The full reports remain on the standalone commands and in the run's files. A refusal, a failure
+  or a rule that binds is never shortened.
+- **A rule waiting for material is not a missed rule.** One line near the top names the exact
+  `--with <name>=<file>` that lets it fire (a prerequisite is matched by name, so "bind your notes" would not
+  have cleared it). The taste reader reports such a rule as waiting, and it is left out of the reader's VETO:
+  with nothing bound, a repair toward it could only invent.
+- **`invoke` prints the piece and a few lines**: any REQUIRED measured rule still broken, what was cut, what the taste
+  reader saw, and anything that failed. The full account (draft choice, repair passes, every cut, the claim
+  instrument, the taste reading, the cost) is written to `last-invocation.txt` in the run's directory, and the
+  path is printed.
+- The README said the pattern check "misses about half" of inventions. It missed 54% and then 74%.
+
 ### Studies: the claim reader, version 3, pre-registered (not run)
 
 `studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md` is sealed by the commit that adds it. It waits on
