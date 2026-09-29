@@ -48,6 +48,7 @@ export interface Observer {
 export { proseRegions, wordsOf, sentencesOf, paragraphsOf, quantile, findTerms, splitTerm, DEFAULT_HEDGES, proseBlocks } from './text.js';
 export type { Sentence } from './text.js';
 import { proseRegions, wordsOf, sentencesOf, paragraphsOf, quantile, findTerms, splitTerm, DEFAULT_HEDGES } from './text.js';
+import { BAN_ONLY_FAMILIES } from './tells.js';
 
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
 const list = (p: Measurement['params'], k: string): readonly string[] | null => {
@@ -161,7 +162,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       // 4,000-word piece spend the author's small budget on moves they never make.
       const never = new Set(list(p, 'never') ?? []);
       const banned = all.filter((s) => s.family !== undefined && never.has(s.family));
-      const hits = all.filter((s) => !(s.family !== undefined && never.has(s.family)));
+      // A ban-only family the author does use is theirs: it is held by its own rule, not by this rate.
+      const hits = all.filter((s) => !(s.family !== undefined && (never.has(s.family) || BAN_ONLY_FAMILIES.has(s.family))));
       const rate = Math.round((hits.length / words) * 10000) / 10;
       const lo = num(p, 'minPer1000'); const hi = num(p, 'maxPer1000');
       if (banned.length) {

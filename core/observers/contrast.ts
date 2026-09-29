@@ -20,7 +20,7 @@ import { measure, findTerms } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
-import { TELL_FAMILIES } from './tells.js';
+import { TELL_FAMILIES, BAN_ONLY_FAMILIES } from './tells.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
 import type { MeasuredProposal } from './derive.js';
 
@@ -465,7 +465,13 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   // these moves more than the cap gets no rule, rather than a rule against them.
   // Per family: one the author never makes, in any piece, is never allowed; the rest are held to their
   // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
-  const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], (t) => patternRate(t, 'MACHINE_TELL'), 0.9) * 1.5, 0.25));
+  // The pooled rate leaves out the ban-only families (./tells.ts BAN_ONLY_FAMILIES): an author's own em
+  // dashes would otherwise raise the cap on every other move.
+  const pooledRate = (t: string): number => {
+    const words = proseWords(t);
+    return words ? (findPattern(t, 'MACHINE_TELL').filter((s) => !(s.family && BAN_ONLY_FAMILIES.has(s.family))).length / words) * 1000 : 0;
+  };
+  const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], pooledRate, 0.9) * 1.5, 0.25));
   // HELD TO THE AUTHOR'S TYPICAL PIECE, NOT THEIR AVERAGE. A family is the author's to use only if at
   // least half their pieces use it; otherwise one of ours may not either. Held to an average, a move the
   // author made once in twenty pieces was allowed once in every piece (round 7: one per piece, each from a
