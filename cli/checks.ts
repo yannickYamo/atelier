@@ -53,6 +53,7 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
 /**
  * The checks for one skill: the person's material (theirs to cite), the invented-claim guard, whether
  * invented material becomes a slot or is cut, and the machine-writing phrases this skill has learned.
+ * The claim sensor carries its instrument, qualification and spend; `claimInstrumentOf` reads them.
  */
 export function checksFor(L: store.StoreLayout, opts: {
   /** everything the person supplied for this output: the task, bound files, stored material */
@@ -73,3 +74,30 @@ export function checksFor(L: store.StoreLayout, opts: {
     ...(guardClaims ? { claimSensor: claimSensorFor(opts.material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
 }
 
+/** What `invoke` records about the invented-claim check that ran: which instrument, and on whose word. */
+export interface ClaimInstrument {
+  /** the instrument as it stood at the end of the run (a reader that degraded says so) */
+  readonly instrument: string;
+  /** READER_VERSION when a model read; null for the pattern check */
+  readonly version: string | null;
+  /** a model reader whose (model, version) pair a qualification result stands behind */
+  readonly qualified: boolean;
+  /** whose findings failed the check: the reader's, or the pattern check's */
+  readonly gate: 'reader' | 'pattern';
+  /** a read failed and every reading since was the pattern check's */
+  readonly degraded: boolean;
+  /** what the reader spent from its own budget, never the writer's */
+  readonly spentUsd: number;
+}
+
+/**
+ * THE CLAIM INSTRUMENT, AS A RECORD CAN KEEP IT. A verdict of "no invented claims" means one thing from a
+ * qualified reader, another from an unqualified one that only reported, and another from a pattern check
+ * that took over when the reader failed. Read it after the run: `degraded` and `spentUsd` change as it
+ * goes. Null when the check was turned off (`--allow-unsourced`).
+ */
+export function claimInstrumentOf(checks: CheckOptions): ClaimInstrument | null {
+  const s = checks.guardClaims === false ? undefined : checks.claimSensor;
+  if (!s) return checks.guardClaims === false ? null : { instrument: 'pattern check', version: null, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0 };
+  return { instrument: s.instrument, version: s.version, qualified: s.qualified, gate: s.gate, degraded: s.degraded, spentUsd: s.spentUsd };
+}
