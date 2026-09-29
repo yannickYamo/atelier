@@ -382,7 +382,8 @@ export function parseMeasure(spec: string): Measurement {
     TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
     DISTRIBUTION: ['edges', 'shares', 'tolerance'],
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
-    HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'] };
+    HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
+    FEATURE: ['feature', 'minValue', 'maxValue'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
   const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid']);
@@ -397,6 +398,12 @@ export function parseMeasure(spec: string): Measurement {
       if (KEYS[observer] && !KEYS[observer].includes(k)) die(`--measure: ${observer} takes ${KEYS[observer].join(', ')}; not "${k}"`);
       // `prefer` keeps its spaces: " - " is the point of it.
       if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
+      // A feature id is case-sensitive (core/observers/features.ts), and its band may sit below zero.
+      if (k === 'feature') return [k, [v.trim()]];
+      if (observer === 'FEATURE') {
+        if (!/^-?\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
+        return [k, Number(v)];
+      }
       if (LIST_KEYS.has(k)) return [k, v.split('|').map((t) => t.trim().toLowerCase()).filter(Boolean)];
       if (NUMBER_LIST_KEYS.has(k)) {
         const xs = v.split('/').map((t) => t.trim());
