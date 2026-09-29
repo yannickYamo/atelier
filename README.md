@@ -73,8 +73,12 @@ checks that against what you actually supplied. Anything that doesn't trace to y
 request is cut and listed, so you can add the real one. A figure credited to a study, a quote from a
 named person, or a link offered as a source counts as yours to supply, never as "general knowledge".
 In a white paper, a report or a contract, nothing passes as general knowledge. How often this reader
-misses a specific, and how often it cuts a true one, is being measured on real corpora; until that's
-published, treat it as a strong filter, not a proof.
+misses a specific, and how often it cuts a true one, was measured once
+([studies/CLAIM_READER_QUALIFICATION_RESULT.md](studies/CLAIM_READER_QUALIFICATION_RESULT.md)). It caught
+all 39 inventions planted in real pieces, where a pattern check caught 18. It also flagged something true
+in about one clean draft in four, which missed the bar set in advance, so it is **not yet qualified**. Until
+a revised reader passes on new pieces, expect it to cut a real detail now and then. `atelier material`
+binds your notes, so a cut true story comes back.
 
 ## What it builds: the whole harness
 
