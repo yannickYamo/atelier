@@ -21,7 +21,7 @@ import { readJson } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
-import { assertSupersessionRecorded } from './canonical-state.js';
+import { assertSupersessionRecorded, assertStandardIntegrity } from './canonical-state.js';
 import type { SkillArchitecture } from '../architecture/compile.js';
 import type { RatificationLedger } from '../ratification/decision-record.js';
 
@@ -270,9 +270,22 @@ export function clearMaterial(l: StoreLayout): void {
   if (existsSync(d)) rmSync(d, { recursive: true, force: true });
 }
 
+/**
+ * A STANDARD IS SERVED ONLY IF IT STILL HASHES TO ITS NAME. `putStandard` refused a second body under
+ * a hash, but nothing re-checked the first one on the way out, so a hand edit to a statement in
+ * `standards/<hash>.json` was served, compiled and promoted under the identity of the version the person
+ * ratified — the one edit the whole append-only layout exists to make visible. Both the file name and the
+ * hash field must match the recomputed hash: a copied file with a stale field is the same defect.
+ */
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
   const p = join(dirs(l).standards, `${hash}.json`);
-  return existsSync(p) ? readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] }) : null;
+  if (!existsSync(p)) return null;
+  const v = readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] });
+  assertStandardIntegrity({ ...v, standardVersionHash: hash }, `standard file ${hash}.json`);
+  if (v.standardVersionHash !== hash) {
+    throw new Error(`STORE: standard file ${hash}.json names itself ${v.standardVersionHash}. A content-addressed file cannot carry another identity; it is not served.`);
+  }
+  return v;
 };
 
 export function putSkillVersion(l: StoreLayout, s: SkillVersion): void {
@@ -549,8 +562,31 @@ export function listBindings(l: StoreLayout, skillVersionHash: string): BindingL
  */
 export function expectedBinding(l: StoreLayout, skillVersionHash: string, candidate?: RuntimeBinding): RuntimeBinding | null {
   const log = listBindings(l, skillVersionHash);
+  // A BINDING ALREADY ON THE LOG WAS ACCEPTED. The log only grows by a run that was allowed to happen:
+  // the first on a surface, the same configuration again, or one a person took with --accept-new-binding.
+  // Comparing only against the first binding made that acceptance last one run: the next invoke on the
+  // accepted model was refused again, as if nobody had said yes. The exact configuration matches itself;
+  // anything not on the log is still compared with the surface's first binding.
+  if (candidate) {
+    const h = bindingHash(candidate);
+    const accepted = log.find((b) => b.hash === h);
+    if (accepted) return accepted.binding;
+  }
   const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
   return onSurface[0]?.binding ?? null;
+}
+
+/**
+ * The first binding of every OTHER surface, when the candidate's surface has none. A run on a new surface
+ * is not a mismatch (one baseline per surface), and is not refused; it is also not the same evidence,
+ * and a switch of provider went by without a word.
+ */
+export function bindingsElsewhere(l: StoreLayout, skillVersionHash: string, candidate: RuntimeBinding): RuntimeBinding[] {
+  const log = listBindings(l, skillVersionHash);
+  if (log.some((b) => b.binding.providerAdapter === candidate.providerAdapter)) return [];
+  const firsts = new Map<string, RuntimeBinding>();
+  for (const b of log) if (!firsts.has(b.binding.providerAdapter)) firsts.set(b.binding.providerAdapter, b.binding);
+  return [...firsts.values()];
 }
 
 /** Append-only, and a no-op for a binding already on the log. */

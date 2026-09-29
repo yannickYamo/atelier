@@ -249,3 +249,27 @@ describe('mcp answers a batch, and ignores responses', () => {
     expect((JSON.parse(lines[0]) as unknown[]).length).toBe(2);
   });
 });
+
+describe('a merged span is checked on everything outside its unsourced claim', () => {
+  // A style span overlapping an unsourced one used to inherit its licence to lose specifics, so the
+  // style rewrite could drop a hedge unchecked because an invented figure sat in the same sentence.
+  const text = 'We leverage the data and it may cut costs by 40% at Acme. The team met twice.';
+  const claim = 'by 40% at Acme';
+  const withClaim = (report: ReturnType<typeof verifyText>, claimOnly = false): ReturnType<typeof verifyText> => ({ ...report,
+    checked: [...(claimOnly ? [] : report.checked), { requirementId: 'UNSOURCED', statement: 'no invented specifics', materiality: 'REQUIRED',
+      result: { verdict: 'VIOLATED', value: 1, detail: 'd', spans: [{ start: text.indexOf(claim), end: text.indexOf(claim) + claim.length, text: claim, why: 'not in your material' }] } }] });
+  it('merged: losing the hedge outside the claim is refused; losing only the claim is kept; a pure claim span is still exempt', () => {
+    const targets = planRepair(text, withClaim(verifyText('d', v, text)));
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toMatchObject({ specifics: true, mixed: true, claims: [claim] });
+    const reverted: Parameters<typeof applyRepair>[3] = [];
+    expect(applyRepair(text, targets, [{ id: 1, text: 'We use the data and it cuts costs.' }], reverted)).toBe(text);
+    expect(reverted[0].lost.join(' ')).toMatch(/qualifier "may"/);
+    expect(applyRepair(text, targets, [{ id: 1, text: 'We use the data and it may cut costs.' }]))
+      .toBe('We use the data and it may cut costs. The team met twice.');
+    // POLARITY: a span that is purely the claim keeps its exemption, hedge and all
+    const pure = planRepair(text, withClaim(verifyText('d', v, text), true));
+    expect(pure[0].mixed).toBeUndefined();
+    expect(applyRepair(text, pure, [{ id: 1, text: 'It cuts costs.' }])).toBe('It cuts costs. The team met twice.');
+  });
+});

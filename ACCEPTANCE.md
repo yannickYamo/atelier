@@ -42,6 +42,11 @@ npm run acceptance:carriers -- --host codex
 | C22 | a failed install never moves the active pointer | `promote`, `confirm`, `amend` and `addition` install first and activate second; a file where the skills directory must go leaves `active` where it was |
 | C23 | a blind pick compares two implementations of one task | a resumed `fix` pairs the candidate only with its run of the same task (`inputHash`), and otherwise sends the person to `promote`/`reject` |
 | C24 | a standard's identity is what its hash covers | the same content minted twice is one version and the first mint is kept; a different body under an existing hash is refused |
+| C25 | a hand-edited standard is not served | every `getStandard` re-hashes `{ evidenceId, workType, requirements }` and refuses a file that does not hash to its name; a repair's candidate is checked against the incumbent's recorded standard and the rendered content re-hashed |
+| C26 | a rejected candidate is not promoted by a pointer move | `promote` refuses a recorded `PROMOTION_GATE` `AUTO_REJECT` or `REPAIR_SETTLED` `REJECTED` unless `--override "<reason>"`, which is recorded as `PROMOTION_OVERRIDE` |
+| C27 | a REQUIRED counted rule is guarded with or without a floor margin | `checkCandidate` compares every general REQUIRED measured rule pass/fail on the baseline's stored drafts against the candidate's (`requiredFlips`); an automatic promotion names measured rules the floor does not guard; in `fix` only a REQUIRED rule getting worse is a deterministic regression |
+| C28 | a rewrite may not make a claim stronger | `spanIntegrity` refuses a dropped or strengthened modal, a dropped stance frame, an added figure or name, an added cause, "one of the" turned superlative and an added intensifier; a span merged with an unsourced claim is checked outside the claim |
+| C29 | a failed draft call costs that draft, not the run | `invoke --drafts N` keeps the drafts that came back and records the failures; only no draft at all fails the run |
 
 ## CLAUDE CODE, live session, human
 
