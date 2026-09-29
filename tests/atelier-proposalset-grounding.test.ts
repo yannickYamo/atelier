@@ -122,8 +122,7 @@ describe('POLARITY 2: an invented rule marked faithful never becomes the person\
 
     const accepted = run(data, proj, 'skill', PROMPT, '--yes', '--name', 'guard');
     // the compiler-computed summary: the grounded rule instructs, the invented one is shown
-    expect(accepted).toMatch(/x1 instructs/);
-    expect(accepted).toMatch(/x2 shown/);
+    expect(accepted).toMatch(/Instructing: x1\. Shown as examples: 1\./);
 
     const md = readFileSync(join(proj, '.claude', 'skills', 'guard', 'SKILL.md'), 'utf8');
     const doStart = md.indexOf('## What to do');

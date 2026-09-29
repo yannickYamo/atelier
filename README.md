@@ -90,7 +90,7 @@ that doesn't trace is cut and listed, so you can add the real one.
   ([result](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An audit then found it did not read headings
   or tables, and could cut a true story written in markdown. The fixed reader (version 3) reports what it
   finds, but it does not cut until it is qualified again. Until then the cut comes from the pattern check,
-  which has never flagged a true piece in either study and misses about half of real inventions.
+  which has never flagged a true piece in either study, and missed 54% and then 74% of planted inventions.
 - Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
 - Expect it to cut a true detail now and then. `atelier material --skill <name> <notes>` binds your notes,
   so a cut story comes back.
@@ -117,7 +117,9 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 - **A compiled skill.** Instructions, a persona of how you sound (each point quoted from your own pieces,
   with how often you do it), a few of your whole pieces spanning how you write, and a schema where a rule
   has a fixed shape. Installed for Claude Code or Codex.
-- **A runtime.** `atelier invoke` writes, checks, repairs and records. A repair can change how something is
+- **A runtime.** `atelier invoke` writes, checks, repairs and records. It prints the piece and a few lines:
+  any rule still broken, what was cut, what the taste reader saw. The full account is written to a file it
+  names. A repair can change how something is
   said and never what it claims: a rewrite that drops a figure, a negation or a name is refused.
 - **A guard for anything else.** `atelier verify` holds any text to your standard and exits 1 on a broken
   rule, so it fits a pipeline; `--repair` fixes only what broke. The same check runs as an MCP server for
@@ -129,10 +131,14 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 
 ## When it asks you
 
-- **Once, when you create a skill.** It shows the rules it found, strongest evidence first, each with a
-  suggested ruling. Press Enter to accept them all, or change any. Accepting a suggestion is a ruling like any
-  other, and the record keeps which you took and which you changed: `atelier status --skill <name>` shows
-  both counts, so "you approved it" never hides "you pressed Enter".
+- **Once, when you create a skill.** It shows the rules it found, each with a suggested ruling: the rules
+  that will instruct the model and the ones with the thinnest evidence in full, the rest one line each
+  (`atelier pending` shows every rule with its evidence). Press Enter to accept them all, or change any
+  (`p3=reject`). Without a terminal, `atelier new <folder> --accept` accepts and builds in one step.
+  Rejection is suggested only when a rule failed in at least four pieces discovery never read; on fewer,
+  the rule is shown as an example for you to judge. Accepting a suggestion is a ruling like any other, and
+  the record keeps which you took and which you changed: `atelier status --skill <name>` shows both counts,
+  so "you approved it" never hides "you pressed Enter".
 - **Whenever you want to.** `atelier fix "the close was a summary, not a turn"` in your own words. Label a few
   of the reader's verdicts (`atelier taste --calibrate`) to let it act. Change what "good" means with
   `atelier amend`, which only you can do.
@@ -257,7 +263,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 |---|---|
 | `ATELIER_DATA` | where standards, skills and runs live (default `~/.atelier`) |
 | `ATELIER_MODEL` | the model for every role, unless a more specific setting names one |
-| `ATELIER_DISCOVERY_MODEL`, `ATELIER_TARGET_MODEL` | the model for reading your work, and for running the skill |
+| `ATELIER_DISCOVERY_MODEL`, `ATELIER_TARGET_MODEL` | the model for reading your work, and for running the skill. If your backend does not serve the default reader, discovery reads with the target model and says so; a model you name is never swapped |
 | `ATELIER_PROVIDER` | `anthropic` (default) or `openai-compatible`, with `ATELIER_BASE_URL` |
 | `ATELIER_HOST` | `claude-code` (default) or `codex`: where a built skill is installed |
 | `ATELIER_CLAIMS_MODEL` | the small model that reads drafts for invented specifics (default `claude-haiku-4-5` on Anthropic; on your own backend, name one of yours) |
@@ -273,7 +279,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 108 files and 1738 tests, runs offline, and drives the shipped binary end to end.
+The suite is 108 files and 1749 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 

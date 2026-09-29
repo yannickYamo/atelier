@@ -19,7 +19,7 @@ import { blindSpotsOf, BLIND_SPOT_QUESTION } from '../../core/coverage/blind-spo
 import type { StandardVersion, Requirement } from '../../core/state/canonical-state.js';
 import { discoveryRecall, declaredGeneralShare, unconfirmedRate, authorityStateOf, isGeneralScope, sourceModeOf } from '../../core/state/canonical-state.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { sha, die, argv, flag, loadSession, saveSession, step, runFile, authoredIdAllocator, type Session } from '../runtime.js';
+import { sha, die, argv, flag, loadSession, saveSession, step, runFile, orchestrated, authoredIdAllocator, type Session } from '../runtime.js';
 import { existsSync } from 'node:fs';
 import { readJson } from '../../core/state/read-json.js';
 import { decide, type DecisionVerb } from '../../core/ratification/authority.js';
@@ -319,13 +319,27 @@ export function applyDecisions(list: readonly RatificationDecision[]): void {
         ruling: rulingOf({ ...d, needs: why || undefined }, outcome.requirement.materiality) });
   }
   saveSession({ ...s, decided, ledger });
+  reportDecided(decided, added);
+}
+
+/**
+ * What the rulings amount to. Under `atelier new`, one line; on its own, the per-rule roles as well.
+ * COMPUTED BY THE COMPILER, NOT RESTATED BY THE CLI: "instructs" is read off `roleFor`, the function the
+ * build calls, so this line and the skill cannot disagree about what binds.
+ */
+function reportDecided(decided: readonly Requirement[], added: number): void {
   const kept = decided.filter((d) => d.authority !== 'EXPERT_REJECTED');
-  console.log(`${kept.length} rule(s) kept, ${decided.length - kept.length} rejected${added ? `, ${added} added by you` : ''}.`);
+  const rejected = decided.length - kept.length;
+  if (orchestrated()) {
+    const instructs = kept.filter((d) => roleFor(d) === 'ENFORCE').length;
+    console.log(`${kept.length} rule(s) kept: ${instructs} instruct the model, ${kept.length - instructs} shown as examples; ${rejected} rejected${added ? `; ${added} added by you` : ''}.`);
+    return;
+  }
+  console.log(`${kept.length} rule(s) kept, ${rejected} rejected${added ? `, ${added} added by you` : ''}.`);
   const byMat = kept.reduce<Record<string, number>>((a, d) => ({ ...a, [d.materiality ?? 'undeclared']: (a[d.materiality ?? 'undeclared'] ?? 0) + 1 }), {});
   console.log(`  ${Object.entries(byMat).map(([k, n]) => `${n} ${k}`).join(' · ')}`);
-  // COMPUTED BY THE COMPILER, NOT RESTATED BY THE CLI. This line once said undeclared rules "will be
-  // SHOWN, not instructed" while `roleFor` compiled exactly those rules to ENFORCE. Whatever this
-  // prints now is read off the same function the build will call, so the two cannot disagree again.
+  // This line once said undeclared rules "will be SHOWN, not instructed" while `roleFor` compiled exactly
+  // those rules to ENFORCE; it is read off the same function now.
   console.log(`  ${kept.map((d) => `${d.requirementId} ${roleFor(d) === 'ENFORCE' ? 'instructs' : 'shown'}`).join(' · ')}`);
   if (kept.some((d) => roleFor(d) !== 'ENFORCE' && d.materiality === null)) {
     console.log('  A shown rule starts instructing when you declare it:  "materiality":"REQUIRED"');
@@ -520,6 +534,27 @@ export function ratifyClose(): void {
   saveSession(s);
   writeAtomic(runFile('pending-standard.json'), JSON.stringify(v, null, 1));
   if (stamped) writeAtomic(runFile('ratification-ledger.json'), JSON.stringify(stamped, null, 1));
+  const instructing = reportMinted(v, kept, stamped);
+  if (!orchestrated()) {
+    console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');
+  }
+}
+
+/**
+ * What was minted. On its own, the full account: roles, discovery and ratification rates, and what PREFERRED
+ * means. Under `atelier new`, the version and its counts in one line. Either way, a standard in which
+ * nothing instructs is said in full, because a skill built from it would instruct nothing.
+ * Returns how many rules instruct, for the next step's wording.
+ */
+function reportMinted(v: StandardVersion, kept: readonly Requirement[], stamped: RatificationLedger | null): number {
+  const instructing = kept.filter((r) => roleFor(r) === 'ENFORCE').length;
+  if (orchestrated()) {
+    // The ids that instruct are named: which rule binds is the fact an audit of this run asks first.
+    const ids = kept.filter((r) => roleFor(r) === 'ENFORCE').map((r) => r.requirementId);
+    if (instructing) console.log(`Standard ${v.standardVersionHash} minted from your rulings. Instructing: ${ids.join(', ')}. Shown as examples: ${kept.length - instructing}.`);
+    else reportNothingInstructs(kept);
+    return instructing;
+  }
   console.log(`StandardVersion ${v.standardVersionHash} [${v.authorityState}]: ${kept.length} requirements.`);
   // Read off the compiler, so this line and the build cannot disagree about what binds.
   console.log(`  ${kept.map((r) => `${r.requirementId} ${roleFor(r) === 'ENFORCE' ? 'instructs' : 'shown'}`).join(' · ')}`);
@@ -543,10 +578,6 @@ export function ratifyClose(): void {
       + `${su.rejected} rejected · ${su.decidedNotRequirement} kept as non-obligation · ${su.deferred} open`);
     console.log(`  survival ${(su.survivalRate * 100).toFixed(0)}%  ·  decided ${(su.decidedRate * 100).toFixed(0)}%  ·  ${runFile('ratification-ledger.json')}`);
   }
-  // A standard in which NOTHING instructs is legal — governance lets it be minted and built — but the
-  // printed next step used to walk a person straight into building a skill whose instruction section
-  // is empty. Say so, and point at the decision that would change it.
-  const instructing = kept.filter((r) => roleFor(r) === 'ENFORCE').length;
   // PREFERRED compiles exactly as EXEMPLAR_ONLY — shown, never binding — which is the governance
   // (the owner said breaking it is not thereby worse) but was never said. Say it where it is decided.
   const preferredShown = kept.filter((r) => r.materiality === 'PREFERRED' && roleFor(r) !== 'ENFORCE');
@@ -554,19 +585,22 @@ export function ratifyClose(): void {
     console.log(`  ${preferredShown.map((r) => r.requirementId).join(', ')}: PREFERRED is shown to the model as an example, not instructed.`
       + ' Mark a rule REQUIRED for it to instruct.');
   }
-  if (!instructing) {
-    // Two different reasons, two different next steps: rules nobody has ruled on yet, and rules that
-    // were ruled on and deliberately not made obligatory.
-    const undecided = kept.filter((r) => r.materiality === null && r.authority === 'DERIVED_UNRATIFIED').length;
-    console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.');
-    if (kept.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')) {
-      console.log('  Read from someone else\'s public work, these are shown and never instructed — the ceiling that');
-      console.log('  source can carry. Judge the output, and make a rule bind in your own words:  atelier fix "<what was wrong>"');
-    } else if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
-    else console.log('  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:\n    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
-  }
-  if (!process.env.ATELIER_ORCHESTRATED) {
-    console.log(instructing ? 'Run `atelier build --name <name>`.' : 'Or build it as it stands, knowing that: `atelier build --name <name>`.');
-  }
+  if (!instructing) reportNothingInstructs(kept);
+  return instructing;
 }
 
+/**
+ * A standard in which NOTHING instructs is legal — governance lets it be minted and built — but the printed
+ * next step used to walk a person straight into building a skill whose instruction section is empty. Said,
+ * with the decision that would change it. Two reasons, two next steps: rules nobody has ruled on yet, and
+ * rules that were ruled on and deliberately not made obligatory.
+ */
+function reportNothingInstructs(kept: readonly Requirement[]): void {
+  const undecided = kept.filter((r) => r.materiality === null && r.authority === 'DERIVED_UNRATIFIED').length;
+  console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.');
+  if (kept.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')) {
+    console.log('  Read from someone else\'s public work, these are shown and never instructed — the ceiling that');
+    console.log('  source can carry. Judge the output, and make a rule bind in your own words:  atelier fix "<what was wrong>"');
+  } else if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
+  else console.log('  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:\n    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
+}

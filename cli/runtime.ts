@@ -39,6 +39,17 @@ const plainProviderError = (m: string): string => {
 };
 export const die = (m: string): never => { console.error(`atelier: ${plainProviderError(m)}`); process.exit(1); };
 
+/**
+ * WHEN `atelier new` DRIVES A STEP, THE STEP REPORTS IN A LINE.
+ *
+ * Intake, discovery, review, ratify-close and build were each written as a command of their own, with the
+ * full report someone running that command alone wants. Chained by `new`, the reports added up to about
+ * 10,000 words before a first post, and the lines a person had to act on were lost among them. Under `new`
+ * a step prints what the person must know or do; the full report stays with the standalone command and in
+ * the files the run writes. A refusal, a failure or a rule that binds is never shortened away.
+ */
+export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === '1';
+
 // ── THE COMMAND GRAMMAR, DECLARED ─────────────────────────────────────────────────────────────
 //
 // Option arity is STATED here, never inferred from what a token looks like. The bug that forced this
@@ -281,6 +292,13 @@ export const modelFor = (role: Role, fallback = MODEL): string => {
  */
 export const proposerModel = (): string =>
   roleFlag('discovery', 'model') ?? flag('--model') ?? process.env.ATELIER_PROPOSER_MODEL ?? modelFor('discovery', PROPOSER);
+
+/**
+ * Whether the corpus is read by the built-in default rather than a model the person named. Only a default
+ * may be swapped for another model when a backend does not serve it: a model the person named is theirs.
+ */
+export const proposerIsDefault = (): boolean => proposerModel() === PROPOSER && !process.env.ATELIER_PROPOSER_MODEL
+  && !roleFlag('discovery', 'model') && !flag('--model') && !process.env.ATELIER_MODEL;
 
 /** Whether a role has a model without dying for one: set explicitly, or an Anthropic default applies. */
 export const hasModelFor = (role: Role): boolean =>
