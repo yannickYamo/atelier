@@ -162,8 +162,11 @@ export async function refineToStandard(
   // check, before anything is compared: the draft's (what `violatedBefore` records) and the current text's.
   const sensor = opts.guardClaims !== false ? opts.claimSensor : undefined;
   let readDegraded = sensor?.degraded ?? false; let degradedMidLoop = false;
+  // What the gating reader had flagged before it failed: claims it could see and the pattern cannot.
+  let flaggedBeforeFailure: string[] = [];
   const sameInstrument = (): void => {
     if (!sensor?.degraded || readDegraded) return;
+    flaggedBeforeFailure = (report.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
     readDegraded = true; degradedMidLoop = true;
     first = checkDraft(skill, v, draft, opts);
     report = checkDraft(skill, v, text, opts);
@@ -255,6 +258,24 @@ export async function refineToStandard(
       why = report.failed ? `invented stories cut outright; ${why}` : 'every REQUIRED measured rule now holds (invented stories cut outright)';
     }
     break;
+  }
+  // FAIL CLOSED ON WHAT THE READER ALREADY SAW. A claim the gating reader flagged before it failed is
+  // still an invented claim; the pattern check that took over cannot see it, but it need not: the
+  // sentence is known. Each one still in the text verbatim is cut, as the last resort cuts any other.
+  if (degradedMidLoop && !opts.placeholders) {
+    let next = text;
+    const gone: string[] = [];
+    for (const t of flaggedBeforeFailure) {
+      const at = next.indexOf(t);
+      if (at !== -1 && t.trim()) { next = cutClaim(next, at, at + t.length); gone.push(t.trim().slice(0, 160)); }
+    }
+    if (gone.length) {
+      const after = checkDraft(skill, v, next, opts);
+      if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
+        cut.push(...gone); text = next; report = after;
+        why = `claims the reader had flagged before it failed were cut outright; ${why}`;
+      }
+    }
   }
   if (degradedMidLoop) {
     why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
