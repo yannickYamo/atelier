@@ -13,6 +13,8 @@
 //
 // Like every discovered rule, these are proposals. The person rules on them on the same screen.
 
+import { judgeCountedFeatures } from './selection.js';
+import { featureOf } from './features.js';
 import type { Measurement, Requirement } from '../state/canonical-state.js';
 import { measure, findTerms } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
@@ -48,6 +50,19 @@ const SIGNATURE: ReadonlySet<PatternId> = new Set<PatternId>(['BOLD_SPAN', 'ONE_
 
 /** Constructions measured as model habits (an audit of one author's corpus against model drafts, 2026-09-27): capped at the author's rate when they rarely use them. */
 const MODEL_TYPICAL: ReadonlySet<PatternId> = new Set<PatternId>(['EM_DASH', 'CONTRAST_VERDICT', 'THAT_OPENER', 'HERES_OPENER', 'SIGNPOST', 'INTENSIFIER', 'SHORT_VERDICT', 'REPEATED_OPENER']);
+
+/** A counted feature whose band tells single drafts from the author's work, proposed as a rule (./selection.ts). */
+function proposeFeatureRules(authorTexts: readonly string[], heldTexts: readonly string[], drafts: readonly string[], propose: Propose): void {
+  for (const v of judgeCountedFeatures(authorTexts, heldTexts, drafts)) {
+    const f = featureOf(v.id); const band = v.band;
+    if (!v.kept || v.role !== 'RULE' || !band || !f) continue;
+    const show = (x: number): string => (f.unit === 'share' ? `${Math.round(x * 100)}%` : `${x}`);
+    const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
+    propose(`Keep ${f.label} within my range: ${show(band[0])} to ${show(band[1])}${unit} (I'm around ${show(v.authorMedian ?? 0)}).`, 'GENERATIVE',
+      { observer: 'FEATURE', params: { feature: [v.id], minValue: band[0], maxValue: band[1] } },
+      `you: ${show(v.authorMedian ?? 0)}; the model on its own: ${show(v.modelMedian ?? 0)}; separates your pieces from its drafts (AUC ${v.auc})`, false, true);
+  }
+}
 
 export function deriveContrastRules(
   read: readonly Piece[], held: readonly Piece[], drafts: readonly string[], provenance: Requirement['provenance'],
@@ -160,6 +175,8 @@ export function deriveContrastRules(
   }
 
   proposeVoice(authorTexts, held.map((p) => p.text), drafts, propose, bandOf, meanRate);
+  // Many small counts, selected by this author's pieces against the model's drafts (./features.ts).
+  proposeFeatureRules(authorTexts, held.map((p) => p.text), drafts, propose);
 
   const aFrag = fragmentShare(authorAll, 5); const mFrag = fragmentShare(modelAll, 5);
   if (mFrag >= 1.5 * aFrag && mFrag - aFrag >= 0.05) {

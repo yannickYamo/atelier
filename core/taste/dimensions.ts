@@ -8,6 +8,7 @@
 // its observer counts, and a reading-based rule by the words its statement uses. It can be wrong about
 // an unusual rule, and where no keyword matches it says "unsorted" rather than guessing.
 
+import { featureOf, type Layer } from '../observers/features.js';
 import type { PatternId } from '../observers/style.js';
 import type { Requirement } from '../state/canonical-state.js';
 
@@ -44,6 +45,9 @@ const BY_PATTERN: Readonly<Record<PatternId, Dimension>> = {
   MACHINE_TELL: 'REGISTER', DASH_ASIDE: 'PACE', BOLD_SPAN: 'STRUCTURE', ONE_LINE_PARAGRAPH: 'PACE',
 };
 
+/** A counted feature (../observers/features.ts) sorts by the layer of the text it measures. */
+const BY_LAYER: Readonly<Record<Layer, Dimension>> = { 1: 'VOCABULARY', 2: 'PACE', 3: 'STRUCTURE', 4: 'VOCABULARY', 7: 'REGISTER', 9: 'PACE', 10: 'STRUCTURE' };
+
 /** Checked in order; the first match wins, so the more specific kinds come first. */
 const BY_WORDS: readonly [Dimension, RegExp][] = [
   ['FIGURE', /\b(metaphor|figure|image|imagery|analog(y|ies)|comparison|picture)\b/i],
@@ -59,6 +63,10 @@ const BY_WORDS: readonly [Dimension, RegExp][] = [
 export function dimensionOf(r: Requirement): Dimension {
   if (r.measurement) {
     if (r.measurement.observer === 'PATTERN_RATE') return BY_PATTERN[((r.measurement.params.pattern as readonly string[] | undefined) ?? [])[0] as PatternId] ?? 'VOCABULARY';
+    if (r.measurement.observer === 'FEATURE') {
+      const f = featureOf(((r.measurement.params.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+      return f ? BY_LAYER[f.layer] : 'UNSORTED';
+    }
     return BY_OBSERVER[r.measurement.observer] ?? 'UNSORTED';
   }
   return BY_WORDS.find(([, re]) => re.test(r.statement))?.[0] ?? 'UNSORTED';
