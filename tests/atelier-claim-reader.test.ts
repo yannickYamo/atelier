@@ -15,6 +15,7 @@ import {
 } from '../core/loop/claim-extract.js';
 import { checkDraftAsync, refineToStandard } from '../core/loop/run-repair.js';
 import { unsourcedClaims, claimUnitsOf } from '../core/loop/claims.js';
+import { claimInstrumentOf, checksFor } from '../cli/checks.js';
 import { stringLeaves, runOnce } from '../cli/commands/improve.js';
 import * as store from '../core/state/store.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -497,6 +498,24 @@ describe('the audit of the invented-claim check', () => {
       expect(sensor.qualified).toBe(false);
       expect(sensor.instrument).toMatch(/NOT QUALIFIED, gating anyway/);
       expect(sensor.notes[0]).toMatch(/^ATELIER_CLAIMS_GATE=reader: .* is NOT QUALIFIED/);
+    });
+  });
+
+  describe('5. the record can say which claim instrument ran, on whose word, at what cost', () => {
+    it('claimInstrumentOf: a model reader, before and after it degrades', async () => {
+      const sensor = modelSensor(scripted([{ specifics: [] }, new Error('budget spent')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      await sensor.read('One text.');
+      expect(claimInstrumentOf({ claimSensor: sensor })).toEqual({
+        instrument: `pattern check, with claim reader (claude-haiku-4-5, prompt ${READER_VERSION}) reporting only: not qualified`,
+        version: READER_VERSION, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0.001 });
+      await sensor.read('Another text.');
+      expect(claimInstrumentOf({ claimSensor: sensor })).toMatchObject({ degraded: true, spentUsd: 0.001, instrument: expect.stringMatching(/degraded/) as unknown });
+    });
+
+    it('checksFor exposes it: the pattern check offline, and nothing when the check is off', () => {
+      const L = { root: mkdtempSync(join(tmpdir(), 'atelier-claimi-')), skillName: 'skill' }; store.initStore(L);
+      expect(claimInstrumentOf(checksFor(L, { material: '' }))).toEqual({ instrument: 'pattern check (--claims pattern)', version: null, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0 });
+      expect(claimInstrumentOf(checksFor(L, { material: '', guardClaims: false }))).toBeNull();
     });
   });
 
