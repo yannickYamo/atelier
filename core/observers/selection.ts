@@ -45,10 +45,18 @@ export interface FeatureVerdict {
   readonly kept: boolean;
   /** what a kept feature is for: a per-draft rule, or a signal read over many drafts. Null when not kept. */
   readonly role: 'RULE' | 'SIGNAL' | null;
+  /**
+   * The band has no width worth the name: the read pieces all sit at 0 and the band is the minimum padding
+   * around it. "Between -0.001 and 0.001" means the author never does it, so it is proposed as a cap, or not.
+   */
+  readonly flat?: true;
   readonly why: string;
 }
 
 export const SELECTION = { minAucDistance: 0.25, minHeldIn: 0.8, minModelOut: 0.6, minRead: 4, minHeld: 2, minModel: 3, widen: 0.25 } as const;
+
+/** A band this narrow is the padding `bandOf` puts around one value near 0, not a range the author writes in. */
+const FLAT_WIDTH = 0.002;
 
 const vals = (xs: readonly (number | null)[]): number[] => xs.filter((x): x is number => x !== null && Number.isFinite(x));
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
@@ -76,7 +84,8 @@ export function judgeFeature(id: string, s: FeatureSample): FeatureVerdict {
   const heldIn = held.length ? r3(held.filter(inBand).length / held.length) : null;
   const modelOut = model.length && band ? r3(model.filter((x) => !inBand(x)).length / model.length) : null;
   const med = (xs: number[]): number | null => (xs.length ? r3(quantile(xs, 0.5)) : null);
-  const base = { id, auc, band, heldIn, modelOut, authorMedian: med([...read, ...held]), modelMedian: med(model) };
+  const flat = band !== null && band[1] - band[0] <= FLAT_WIDTH;
+  const base = { id, auc, band, heldIn, modelOut, authorMedian: med([...read, ...held]), modelMedian: med(model), ...(flat ? { flat: true as const } : {}) };
   const no = (why: string): FeatureVerdict => ({ ...base, kept: false, role: null, why });
   if (read.length < SELECTION.minRead || held.length < SELECTION.minHeld || model.length < SELECTION.minModel) {
     return no(`too few measurable texts (read ${read.length}, held back ${held.length}, model ${model.length})`);
@@ -90,16 +99,28 @@ export function judgeFeature(id: string, s: FeatureSample): FeatureVerdict {
   return { ...base, kept: true, role: 'RULE', why: `separates you from the model draft by draft (AUC ${auc}, ${Math.round((modelOut ?? 0) * 100)}% of its drafts outside your range); ${held_}` };
 }
 
-/** Every feature judged; the kept ones first, strongest separation first, at most `limit` kept. */
-export function selectFeatures(samples: ReadonlyMap<string, FeatureSample>, limit = 8): FeatureVerdict[] {
+/** How many of each role are kept when nothing else is asked: rules and signals do not compete for one list. */
+export const PER_ROLE_LIMIT = 6;
+
+/**
+ * Every feature judged; the kept ones first, strongest separation first, at most `limit` kept IN EACH
+ * ROLE. One shared top-eight let a run of strong rules crowd out every signal (or the reverse), though
+ * the two do different jobs: a rule checks one draft, a signal chooses between several.
+ */
+export function selectFeatures(samples: ReadonlyMap<string, FeatureSample>, limit = PER_ROLE_LIMIT): FeatureVerdict[] {
   const strength = (v: FeatureVerdict): number => (v.kept ? Math.abs((v.auc ?? 0.5) - 0.5) : -1);
   const all = [...samples.entries()].map(([id, s]) => judgeFeature(id, s)).sort((a, b) => strength(b) - strength(a));
-  // Beyond the strongest few, a kept feature is shown but not proposed: depth without flooding the review.
-  return all.map((v, i) => (v.kept && i >= limit ? { ...v, kept: false, role: null, why: `${v.why}; beyond the ${limit} strongest` } : v));
+  // Beyond the strongest few of its role, a kept feature is shown but not proposed: depth without flooding the review.
+  const seen = { RULE: 0, SIGNAL: 0 };
+  return all.map((v) => {
+    if (!v.kept || !v.role) return v;
+    seen[v.role] += 1;
+    return seen[v.role] > limit ? { ...v, kept: false, role: null, why: `${v.why}; beyond the ${limit} strongest ${v.role === 'RULE' ? 'rules' : 'signals'}` } : v;
+  });
 }
 
 /** Every registered counted feature, judged on the author's read and held-back pieces against the model's drafts. */
-export function judgeCountedFeatures(read: readonly string[], held: readonly string[], model: readonly string[], limit = 8): FeatureVerdict[] {
+export function judgeCountedFeatures(read: readonly string[], held: readonly string[], model: readonly string[], limit = PER_ROLE_LIMIT): FeatureVerdict[] {
   return selectFeatures(new Map(FEATURES.map((f) => [f.id, { read: read.map((t) => f.measure(t)), held: held.map((t) => f.measure(t)), model: model.map((t) => f.measure(t)) }])), limit);
 }
 
