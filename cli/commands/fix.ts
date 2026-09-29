@@ -47,8 +47,16 @@ import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, TASTE_G
 import { keysOf } from '../../core/state/rule-key.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure } from '../../core/optimizer/reflect.js';
 import type { Mutation } from '../../core/optimizer/genome.js';
+import type { Provenance } from '../../core/fidelity/provenance.js';
 import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
   projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, carriedFrom } from '../runtime.js';
+
+/**
+ * Every run `fix` makes is a replay of the complained-about task, made to evaluate a repair: recorded as
+ * such, never as ORGANIC_USE, which is the only class a claim that a skill generalises may rest on. It
+ * is not the optimizer grading itself either (a person reads the pair), so `promote` still accepts it.
+ */
+const FIX_RUN: Provenance = 'FIX_EVALUATION';
 
 const ask = async (question: string, allowed: readonly string[]): Promise<string | null> => {
   if (!process.stdin.isTTY) return null;
@@ -188,7 +196,7 @@ export async function fix(): Promise<void> {
       const budget0: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
       const cur = resolveServedVersion(L, activeSv.skillVersionHash, '');
       inv = await runOnce(L, activeSv, cur.servedText, cur.servedHash, cur.delivery,
-        inv.input, c0, budget0, b0, 'ORGANIC_USE', cur.contractFile, 'HOST_PROMPT');
+        inv.input, c0, budget0, b0, FIX_RUN, cur.contractFile, 'FIX');
       ranStandard = current;
     }
   }
@@ -297,7 +305,10 @@ export async function fix(): Promise<void> {
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
   // ── CONSTRAINT B, AT THE MINT ── a repair that moved the standard dies here, before anything ships.
-  assertStandardUnchanged(ranStandard, store.getStandard(L, candidate.standardVersionHash) ?? ranStandard);
+  // The incumbent is the version the complaint ran on; its recorded standard is what the candidate
+  // must carry, and what it was rendered from must still hash to it.
+  const incumbent = store.getSkillVersion(L, inv.skillVersionHash) ?? die(`SkillVersion ${inv.skillVersionHash} missing.`);
+  assertStandardUnchanged(incumbent, candidate, ranStandard);
   if (candidate.standardVersionHash !== inv.standardVersionHash) {
     die(`REPAIR INVARIANT: candidate is bound to ${candidate.standardVersionHash} but the complaint is about ${inv.standardVersionHash}. Nothing was changed.`);
   }
@@ -316,7 +327,7 @@ export async function fix(): Promise<void> {
   // candidate's must, or the pair compares two ways of serving rather than two implementations.
   const served = resolveServedVersion(L, candidate.skillVersionHash, '');
   const candRec = await runOnce(L, candidate, served.servedText, served.servedHash, served.delivery,
-    inv.input, client, budget, binding, 'ORGANIC_USE', served.contractFile, 'HOST_PROMPT');
+    inv.input, client, budget, binding, FIX_RUN, served.contractFile, 'FIX');
 
   await settleBlindPick(L, name, inv, candidate, candRec, pkg,
     { requirementId: op.requirementId, from: op.from, to: op.to },
@@ -366,7 +377,13 @@ async function settleBlindPick(
     const verdictOf = (r: typeof champReport): Map<string, string> => new Map(r.checked.map((c) => [c.requirementId, c.result.verdict]));
     const champ = verdictOf(champReport); const cand = verdictOf(candReport);
     const fixes = champ.get(move.requirementId) === 'VIOLATED' && cand.get(move.requirementId) === 'MET';
-    const breaks = regressions(champReport, candReport).length > 0;
+    // A DETERMINISTIC REGRESSION IS A REQUIRED RULE GETTING WORSE. It meant any measured rule, so a
+    // PREFERRED one — which the owner said an excellent output may break — let the gate AUTO_REJECT on
+    // its own. A PREFERRED rule getting worse still withholds the "count favours it" reading below; it
+    // just cannot reject without a person.
+    const worseRules = new Set(regressions(champReport, candReport));
+    const breaks = candReport.checked.some((c) => worseRules.has(c.requirementId) && c.materiality === 'REQUIRED');
+    const breaksAny = worseRules.size > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
     const champLetter = championFirst ? 'a' : 'b';
     // THE COUNT IS EVIDENCE; THE GATE DECIDES WHAT IT AUTHORISES.
@@ -393,7 +410,7 @@ async function settleBlindPick(
         console.log(`${move.requirementId} is a measured rule, so this was decided by its count, not by eye: `
           + `the new implementation does worse on the measured rules (${gateRejected}).`);
       }
-    } else if (fixes && !breaks) {
+    } else if (fixes && !breaksAny) {
       countFavoursCandidate = true;
       // Not which letter: naming it before the pick would unblind the only qualified instrument here.
       if (!flag('--pick')) {

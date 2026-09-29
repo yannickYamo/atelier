@@ -20,7 +20,7 @@ import { contrastFor, type ContrastPair } from '../core/compiler/contrast-exampl
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
 import type { InferenceClient } from '../core/inference/client.js';
-import { AnthropicInferenceClient } from '../providers/anthropic.js';
+import { AnthropicInferenceClient, accountRefusal } from '../providers/anthropic.js';
 import { ClaudeCodeAdapter } from '../adapters/claude-code/adapter.js';
 import { CodexAdapter } from '../adapters/codex/adapter.js';
 import type { HostAdapter } from '../adapters/host-adapter.js';
@@ -28,7 +28,16 @@ import { skillNameFrom } from '../renderers/agent-skill/render.js';
 
 export const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 export const DATA = process.env.ATELIER_DATA ?? join(process.env.HOME ?? '.', '.atelier');
-export const die = (m: string): never => { console.error(`atelier: ${m}`); process.exit(1); };
+/**
+ * The last line of defence for a provider's raw error: an SDK message is "<status> <body JSON>", and a
+ * refusal over the account (no credit, a key refused) that reached here unconverted is said in one plain
+ * line, request id kept, rather than dumped as JSON.
+ */
+const plainProviderError = (m: string): string => {
+  const raw = /\b(40[013]) (\{[\s\S]*\})/.exec(m);
+  return (raw && accountRefusal(Number(raw[1]), raw[2])) ?? m;
+};
+export const die = (m: string): never => { console.error(`atelier: ${plainProviderError(m)}`); process.exit(1); };
 
 // ── THE COMMAND GRAMMAR, DECLARED ─────────────────────────────────────────────────────────────
 //
@@ -63,7 +72,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
   'task', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
-  'why', 'work-type',
+  'why', 'work-type', 'override',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
@@ -72,7 +81,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'taste', 'no-taste', 'setup', 'auto',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto',
 ];
 
 export const argv = process.argv.slice(2);

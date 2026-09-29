@@ -207,6 +207,13 @@ export interface FrozenBaselineEntry {
    * records predate the requirement; `evaluateQualityFloor` fails closed when it is absent.
    */
   perFireScores?: Record<string, readonly number[]>;
+  /**
+   * The drafts these scores were read off. Kept so a REQUIRED rule can be checked pass/fail against the
+   * champion's own texts (see requiredFlips in ./measured.ts): a margin compares means, and a rule the
+   * owner made REQUIRED without a margin was compared by nothing. Optional because baselines frozen
+   * before it carry scores only; a check against one says so and falls back to the margins.
+   */
+  outputs?: readonly string[];
 }
 
 /** Look up a cluster+fixture's frozen entry (throws — a missing baseline must FAIL CLOSED). */

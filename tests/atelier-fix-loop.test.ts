@@ -14,9 +14,11 @@ import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
 import { proposeReplacement, eligibleCarriers, assertStandardUnchanged } from '../core/architecture/replace-carrier.js';
 import { mayPropose, WEAKEST_EVALUATION, WEAKEST_EVIDENCE, type RepairRecord, type Prohibition } from '../core/architecture/repair-memory.js';
-import type { ServedMissEvidence } from '../core/architecture/escalate.js';
+import { applyEscalation, type ServedMissEvidence } from '../core/architecture/escalate.js';
+import { mutationsOf } from '../core/optimizer/genome.js';
 import type { SkillArchitecture } from '../core/architecture/compile.js';
 import { aRequirement } from './fixtures.js';
+import { standardHashOf, type StandardVersion } from '../core/state/canonical-state.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 
@@ -114,6 +116,27 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
     expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'PROMOTED')).toBe(true);
   }, 120_000);
 
+  // Every run fix makes is a replay made to evaluate a repair. Recorded as ORGANIC_USE it inflated the
+  // one class a generalisation claim may rest on; it is also not the optimizer grading itself, so a
+  // person may still promote the candidate it produced.
+  it('fix records its runs as FIX_EVALUATION from source FIX, and promote still accepts the candidate', async () => {
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const organicBefore = store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE').length;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
+    expect(run(data, proj, 'fix', 'the answer buried the recommendation')).toContain('--pick a|b|same');
+    const proposed = store.readEvents(L).filter((e) => e.kind === 'REPAIR_PROPOSED');
+    const cand = (proposed[proposed.length - 1] as { candidateSkillVersionHash: string }).candidateSkillVersionHash;
+    const candRuns = store.listInvocations(L).filter((r) => r.skillVersionHash === cand);
+    expect(candRuns).toHaveLength(1);
+    expect(candRuns[0].provenance).toBe('FIX_EVALUATION');
+    expect(candRuns[0].request.source).toBe('FIX');
+    expect(store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE')).toHaveLength(organicBefore);
+    const out = run(data, proj, 'promote', '--skill', 'focus', '--candidate', cand, '--why', 'it led with the action');
+    expect(out).not.toMatch(/^EXIT/);
+    expect(store.getActive(L)).toBe(cand);
+  }, 120_000);
+
   it('picking the champion records the rejection and keeps everything as it was', async () => {
     const { data, proj } = await seeded();
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
@@ -192,6 +215,43 @@ describe('a counted decision goes through the promotion gate: it may reject on i
     }
     expect(refused, 'never drew the candidate as A in 12 seeds').toBe(true);
   }, 300_000);
+});
+
+describe('in fix, a deterministic regression means a REQUIRED rule got worse', () => {
+  // The target (x1, REQUIRED, counted) is fixed by the candidate while another counted rule gets worse.
+  // A PREFERRED rule getting worse used to make the gate AUTO_REJECT on its own.
+  const seedTwo = async (otherMateriality: 'PREFERRED' | 'REQUIRED'): Promise<{ data: string; proj: string }> => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-fix-data-'));
+    const proj = mkdtempSync(join(tmpdir(), 'atelier-fix-proj-'));
+    run(data, proj, 'add', '--statement', 'Never say synergy.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', 'REQUIRED', '--measure', 'LEXICON:synergy');
+    run(data, proj, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL',
+      '--materiality', otherMateriality, '--measure', 'LEXICON:leverage');
+    run(data, proj, 'ratify-close', '--work-type', 'writing');
+    run(data, proj, 'build', '--name', 'focus');
+    await setByTool({ emit_piece: { piece: 'the synergy answer' } });
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', '--no-repair'), 'seeding invoke failed').not.toMatch(/^EXIT:/);
+    return { data, proj };
+  };
+  const gateOf = (data: string): string | undefined =>
+    (store.readEvents({ root: data, skillName: 'focus' }).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined)?.authority;
+
+  it('a PREFERRED rule getting worse does not auto-reject: a person decides', async () => {
+    const { data, proj } = await seedTwo('PREFERRED');
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
+    const out = run(data, proj, 'fix', 'it said synergy');
+    expect(gateOf(data)).toBe('HUMAN_GATED');
+    expect(out).toContain('--pick a|b|same');
+    expect(out).not.toContain('decided by its count');
+  }, 120_000);
+
+  it('POLARITY — the same change breaking a REQUIRED rule is rejected by the count', async () => {
+    const { data, proj } = await seedTwo('REQUIRED');
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
+    const out = run(data, proj, 'fix', 'it said synergy');
+    expect(gateOf(data)).toBe('AUTO_REJECT');
+    expect(out).toContain('decided by its count');
+  }, 120_000);
 });
 
 describe('STANDARD_GAP: one approval mints, compiles and installs — or one refusal is remembered', () => {
@@ -276,6 +336,9 @@ describe('a repair follows a moved standard instead of dying on it', () => {
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'a fresh answer on the current standard' } });
     const out = run(data, proj, 'fix', 'the answer buried the recommendation');
     expect(out).toContain('has moved since that run');
+    // the re-run on the current version is fix's replay too, not organic use
+    expect(store.listInvocations(L).filter((r) => r.request.source === 'FIX').every((r) => r.provenance === 'FIX_EVALUATION')).toBe(true);
+    expect(store.listInvocations(L).filter((r) => r.provenance === 'FIX_EVALUATION').length).toBeGreaterThanOrEqual(2);
     expect(out).toContain('IMPLEMENTATION_MISS');
     expect(out).not.toContain('REPAIR INVARIANT');
     expect(out).toContain('--pick a|b|same');
@@ -312,7 +375,27 @@ describe('the lateral policy (unit)', () => {
   it('eligibility comes from typed properties, never materiality', () => {
     expect(eligibleCarriers(rule({ evidence: null, outputShape: null }))).toEqual(['SELF_CHECK', 'PROSE']);
     expect(eligibleCarriers(rule({ evidence: 'a quote', outputShape: null }))).toContain('EXAMPLE');
-    expect(eligibleCarriers(rule({ outputShape: { v: {} }, evidence: null }))).toContain('OUTPUT_CONTRACT');
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, evidence: null, materiality: 'REQUIRED' }))).toContain('OUTPUT_CONTRACT');
+  });
+
+  // A contract enforces. A PREFERRED rule — "an excellent output may break this" — or an unconfirmed
+  // one with a shape was a legal OUTPUT_CONTRACT move, so fix and optimize could harden guidance.
+  it('a rule that is not ENFORCE is never moved to OUTPUT_CONTRACT', () => {
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, materiality: 'PREFERRED' }))).not.toContain('OUTPUT_CONTRACT');
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, materiality: 'REQUIRED', authority: 'DERIVED_UNRATIFIED' }))).not.toContain('OUTPUT_CONTRACT');
+    const preferred = rule({ outputShape: { v: {} }, materiality: 'PREFERRED' });
+    const v = { standardVersionHash: 's', evidenceId: null, workType: 'w', requirements: [preferred],
+      authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null } as StandardVersion;
+    const g = { carriers: { x1: 'PROSE' as const }, exemplar: false, contrast: false };
+    expect(mutationsOf(g, v, { exemplar: false, contrast: false }).filter((m) => m.kind === 'CARRIER' && m.to === 'OUTPUT_CONTRACT')).toEqual([]);
+    const required = { ...preferred, materiality: 'REQUIRED' as const };
+    expect(mutationsOf(g, { ...v, requirements: [required] }, { exemplar: false, contrast: false })
+      .some((m) => m.kind === 'CARRIER' && m.to === 'OUTPUT_CONTRACT')).toBe(true);
+    // and the mint itself refuses, whoever proposed the move
+    const observing: SkillArchitecture = { architectureHash: 'a', standardVersionHash: 's',
+      components: [{ id: 'c', carries: ['x1'], carrier: 'PROSE', sensor: 'NONE', gateRole: 'OBSERVE', rationale: 'r' }] };
+    expect(() => applyEscalation(observing, { kind: 'ESCALATE_CARRIER', requirementId: 'x1', from: 'PROSE', to: 'OUTPUT_CONTRACT', becauseInvocation: 'i', rationale: 'r' }, 'b'))
+      .toThrow(/AUTHORITY ESCALATION/);
   });
 
   it('the first untried legal alternative under the fixed ordering is the candidate', () => {
@@ -365,10 +448,16 @@ describe('Amendment A2: rejection memory is (standard, model)-scoped (unit)', ()
 });
 
 describe('Constraint B: the standard hash is a throwing assertion (unit)', () => {
-  const std = (hash: string) => ({ standardVersionHash: hash, evidenceId: null, workType: 'writing',
-    requirements: [], authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null }) as never;
-  it('identical hashes pass; a moved standard dies', () => {
-    expect(() => { assertStandardUnchanged(std('aaaa'), std('aaaa')); }).not.toThrow();
-    expect(() => { assertStandardUnchanged(std('aaaa'), std('bbbb')); }).toThrow(/STANDARD MUTATED/);
+  const body = { evidenceId: null, workType: 'writing', requirements: [aRequirement({ requirementId: 'r1' })] };
+  const real = { ...body, standardVersionHash: standardHashOf(body), authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null } as StandardVersion;
+  it('identical hashes over unchanged content pass; a moved standard dies', () => {
+    expect(() => { assertStandardUnchanged(real, real, real); }).not.toThrow();
+    expect(() => { assertStandardUnchanged(real, { standardVersionHash: 'bbbb' }, real); }).toThrow(/STANDARD MUTATED/);
+  });
+  // The old call sites compared a standard with itself. The rendered content is now re-hashed, so a
+  // statement edited in memory under an unchanged hash field is caught even though every name agrees.
+  it('POLARITY — content edited under an unchanged hash field dies', () => {
+    const edited = { ...real, requirements: [{ ...real.requirements[0], statement: 'something else' }] };
+    expect(() => { assertStandardUnchanged(real, real, edited); }).toThrow(/STANDARD MUTATED BY REPAIR/);
   });
 });

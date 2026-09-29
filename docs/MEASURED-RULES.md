@@ -230,7 +230,12 @@ that broke it are rewritten (`core/loop/repair.ts`). The guarantees are:
   `claude-haiku-4-5` on Anthropic, or `ATELIER_CLAIMS_MODEL` on any backend. With no reader available,
   the older pattern check (`core/loop/claims.ts`) runs instead. A reader that fails also falls back to
   the pattern check and says so, so a failed read is never reported as clean. Every UNSOURCED line names
-  the instrument that produced it, including the reader's version. **Qualified, version 2**: on 28 pieces
+  the instrument that produced it, including the reader's version. **Only a qualified reader may cut** (`QUALIFIED_READERS` in
+  `core/loop/claim-extract.ts`). Any other reader reports on an `UNSOURCED·reader` line, and the pattern
+  check gates. `ATELIER_CLAIMS_GATE=reader` overrides that, loudly. Version 3 (`a173339d`) reads headings and
+  tables, strips markdown before matching, matches a story across the sentences of one paragraph, reads
+  compound and scaled numbers, and fails closed if it breaks mid-repair. It is not qualified yet.
+  **Version 2 was qualified**: on 28 pieces
   no earlier study had used, it caught 35 of 35 planted inventions and left 35 of 38 clean drafts alone
   (specificity 0.921, 95% CI 0.786–0.983), clearing the pre-registered floors of 0.50 and 0.80
   ([result](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). Version 1 failed on essays (0.744); the

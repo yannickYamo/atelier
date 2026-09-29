@@ -22,7 +22,7 @@ import { join, resolve } from 'node:path';
 import { renderAgentSkill } from '../renderers/agent-skill/render.js';
 import { compileArchitecture } from '../core/architecture/compile.js';
 import * as store from '../core/state/store.js';
-import type { StandardVersion, InvocationRecord } from '../core/state/canonical-state.js';
+import { standardHashOf, type StandardVersion, type InvocationRecord } from '../core/state/canonical-state.js';
 import { A_BINDING } from './fixtures.js';
 import { observeRuntime } from '../core/runtime/binding.js';
 
@@ -52,7 +52,7 @@ const run = (dataRoot: string, projectDir: string, ...args: string[]): string =>
   }
 };
 
-const std = (): StandardVersion => ({
+const stdBody = (): StandardVersion => ({
   standardVersionHash: 'std1', evidenceId: 'ev1', workType: 'study-notes', authorityState: 'RATIFIED',
   mintedAt: '2026-08-24T00:00:00Z', reason: 'fixture', supersedes: null,
   requirements: [{
@@ -63,6 +63,9 @@ const std = (): StandardVersion => ({
     materiality: 'REQUIRED', realizationTolerance: 'FLEXIBLE', outputShape: null,
   }],
 });
+/** Content-addressed, as every minting site is: the store refuses a standard that does not hash to its name. */
+const std = (): StandardVersion => { const v = stdBody(); return { ...v, standardVersionHash: standardHashOf(v) }; };
+const STD1 = std().standardVersionHash;
 
 /**
  * A store holding two versions of one skill, both built with a CUSTOM description.
@@ -199,7 +202,7 @@ describe('E2E: inspect checks against what was built', () => {
 
   it('a version whose package is missing reports that it cannot check, not that you edited it', () => {
     const { dataRoot, projectDir, L } = seed();
-    store.putSkillVersion(L, { skillVersionHash: 'k-old', skillName: SKILL, standardVersionHash: 'std1',
+    store.putSkillVersion(L, { skillVersionHash: 'k-old', skillName: SKILL, standardVersionHash: STD1,
       architectureHash: 'a-gone', materializedHash: 'never-stored', builtAt: '2026-01-01T00:00:00Z' });
     store.setActive(L, 'k-old');
     const out = run(dataRoot, projectDir, 'inspect', '--skill', SKILL);
@@ -208,11 +211,70 @@ describe('E2E: inspect checks against what was built', () => {
   });
 });
 
+describe('E2E: a hand-edited standard is not served', () => {
+  // The standard is content-addressed. An edit to its file used to be served, compiled and promoted
+  // under the identity the person ratified; now every read re-hashes it and the CLI refuses.
+  it('promote refuses when the standard file no longer hashes to its name, and nothing moves', () => {
+    const { dataRoot, projectDir, L } = seed();
+    const p = join(dataRoot, 'skills', SKILL, 'standards', `${STD1}.json`);
+    const v = JSON.parse(readFileSync(p, 'utf8')) as StandardVersion;
+    writeFileSync(p, JSON.stringify({ ...v, requirements: [{ ...v.requirements[0], statement: 'Name every ruler.' }] }));
+    const before = store.getActive(L);
+    const out = run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'x');
+    expect(out).toMatch(/^EXIT:1/);
+    expect(out).toMatch(/does not hash to its name/);
+    expect(store.getActive(L)).toBe(before);
+  });
+  it('POLARITY — the untouched file promotes', () => {
+    const { dataRoot, projectDir, L } = seed();
+    expect(run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'x')).not.toMatch(/^EXIT/);
+    expect(store.getActive(L)).toBe('k-cand');
+  });
+});
+
+describe('E2E: promote does not install what the gate already rejected', () => {
+  const gateReject = (L: store.StoreLayout): void => {
+    store.appendEvent(L, { kind: 'PROMOTION_GATE', candidateSkillVersionHash: 'k-cand',
+      requirementId: 'p1', authority: 'AUTO_REJECT', unmet: [], why: 'a deterministic regression. More.', at: '2026-08-24T00:20:00Z' });
+  };
+  it('refuses a candidate with a recorded PROMOTION_GATE AUTO_REJECT, and nothing moves', () => {
+    const { dataRoot, projectDir, L } = seed();
+    gateReject(L);
+    const out = run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'I like it');
+    expect(out).toMatch(/^EXIT:1/);
+    expect(out).toMatch(/already rejected[\s\S]*auto-rejected it on p1/);
+    expect(store.getActive(L)).toBe('k-champ');
+  });
+  it('refuses a candidate whose repair was settled REJECTED', () => {
+    const { dataRoot, projectDir, L } = seed();
+    store.appendEvent(L, { kind: 'REPAIR_PROPOSED', repairId: 'r1', skillName: SKILL, requirementId: 'p1', from: 'PROSE', to: 'SELF_CHECK',
+      sourceSkillVersionHash: 'k-champ', candidateSkillVersionHash: 'k-cand', at: '2026-08-24T00:15:00Z' });
+    store.appendEvent(L, { kind: 'REPAIR_SETTLED', repairId: 'r1', outcome: 'REJECTED', at: '2026-08-24T00:16:00Z', note: 'flat' });
+    const out = run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'I like it');
+    expect(out).toMatch(/^EXIT:1[\s\S]*settled REJECTED/);
+    expect(store.getActive(L)).toBe('k-champ');
+  });
+  it('--override "<reason>" installs it and records the override as an event', () => {
+    const { dataRoot, projectDir, L } = seed();
+    gateReject(L);
+    const out = run(dataRoot, projectDir, 'promote', '--skill', SKILL, '--candidate', 'k-cand', '--why', 'I like it', '--override', 'the count misreads my lists');
+    expect(out).not.toMatch(/^EXIT/);
+    expect(store.getActive(L)).toBe('k-cand');
+    const ov = store.readEvents(L).filter((e) => e.kind === 'PROMOTION_OVERRIDE');
+    expect(ov).toHaveLength(1);
+    expect(ov[0]).toMatchObject({ candidateSkillVersionHash: 'k-cand', reason: 'the count misreads my lists' });
+  });
+});
+
 describe('E2E: rollback reinstalls the bytes that version built', () => {
-  it('the installed files equal the STORED package, byte for byte', () => {
-    const { dataRoot, projectDir, champ } = seed();
+  it('the installed files equal the STORED package, byte for byte, and the move is an event', () => {
+    const { dataRoot, projectDir, champ, L } = seed();
+    store.setActive(L, 'k-cand');
     const out = run(dataRoot, projectDir, 'rollback', '--skill', SKILL, '--to', 'k-champ');
     expect(out).toContain(champ.pkg.packageHash);
+    // a pointer move the log could not see left the newest PROMOTED reading as the live version
+    expect(store.readEvents(L).filter((e) => e.kind === 'ROLLED_BACK'))
+      .toEqual([expect.objectContaining({ skillVersionHash: 'k-champ', supersededActive: 'k-cand', packageHash: champ.pkg.packageHash })]);
     for (const [rel, content] of Object.entries(champ.pkg.files)) {
       expect(readFileSync(join(projectDir, '.claude', 'skills', champ.pkg.skillId, rel), 'utf8')).toBe(content);
     }
@@ -228,13 +290,14 @@ describe('E2E: rollback reinstalls the bytes that version built', () => {
 
   it('rolling back to a version with no stored package REFUSES and leaves the pointer alone', () => {
     const { dataRoot, projectDir, L } = seed();
-    store.putSkillVersion(L, { skillVersionHash: 'k-old', skillName: SKILL, standardVersionHash: 'std1',
+    store.putSkillVersion(L, { skillVersionHash: 'k-old', skillName: SKILL, standardVersionHash: STD1,
       architectureHash: 'a-gone', materializedHash: 'never-stored', builtAt: '2026-01-01T00:00:00Z' });
     const before = store.getActive(L);
     const out = run(dataRoot, projectDir, 'rollback', '--skill', SKILL, '--to', 'k-old');
     expect(out).toContain('EXIT:1');
     expect(out).toContain('cannot be reinstalled as it was built');
     expect(store.getActive(L)).toBe(before);
+    expect(store.readEvents(L).some((e) => e.kind === 'ROLLED_BACK')).toBe(false);
   });
 });
 

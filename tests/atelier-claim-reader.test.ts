@@ -9,9 +9,13 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { decideSpecifics, supportIsIn, modelSensor, patternSensor, numbered, READER_VERSION, type ExtractedSpecific } from '../core/loop/claim-extract.js';
-import { checkDraftAsync } from '../core/loop/run-repair.js';
-import { unsourcedClaims } from '../core/loop/claims.js';
+import {
+  decideSpecifics, supportIsIn, modelSensor, patternSensor, numbered, numbersIn, isQualified,
+  READER_VERSION, DECISION_VERSION, QUALIFIED_READERS, type ExtractedSpecific,
+} from '../core/loop/claim-extract.js';
+import { checkDraftAsync, refineToStandard } from '../core/loop/run-repair.js';
+import { unsourcedClaims, claimUnitsOf } from '../core/loop/claims.js';
+import { claimInstrumentOf, checksFor } from '../cli/checks.js';
 import { stringLeaves, runOnce } from '../cli/commands/improve.js';
 import * as store from '../core/state/store.js';
 import type { InferenceClient } from '../core/inference/client.js';
@@ -129,15 +133,21 @@ describe('the reader behind the seam', () => {
     complete: vi.fn((req) => { seen?.push(`${req.stableBlock}\n${req.variableBlock}\n${req.userMessage}`); return Promise.resolve({ json, cost: { basis: 'API_METERED', billingUsd: 0.001 }, termination: 'COMPLETE', modelId: 'm' } as never); }),
   });
 
-  it('checkDraftAsync reads through the model and reports which instrument ran, prompt version included', async () => {
-    const sensor = modelSensor(client({ specifics: typed }), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { material: '', task: '', placeholders: false });
+  // A pair a qualification stands behind, passed explicitly: production's list (QUALIFIED_READERS) is
+  // not touched, and after the decision-3 bump it holds no pair that matches (atelier-claim-fixes.test.ts).
+  const qualifiedReaders = [{ model: 'claude-haiku-4-5', version: READER_VERSION }];
+  it('a QUALIFIED reader gates: checkDraftAsync reads through the model and reports which instrument ran, prompt version included', async () => {
+    const sensor = modelSensor(client({ specifics: typed }), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { material: '', task: '', placeholders: false, qualifiedReaders });
     const r = await checkDraftAsync('d', v, probe, { claimSensor: sensor });
     const line = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
     expect(line.result.verdict).toBe('VIOLATED');
     expect(line.result.spans).toHaveLength(5);
     expect(line.result.detail).toContain(`claim reader (claude-haiku-4-5, prompt ${READER_VERSION})`);
     expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·public')?.materiality).toBe('PREFERRED');
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')).toBeUndefined();
     expect(r.failed).toBe(true);
+    expect(sensor.gate).toBe('reader');
+    expect(sensor.qualified).toBe(true);
   });
 
   it('the draft and the material reach the reader inside delimiters, as data', async () => {
@@ -164,7 +174,7 @@ describe('the reader behind the seam', () => {
     const line = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
     expect(line.result.detail).toMatch(/pattern check \(the claim reader could not run\)/);
     expect(line.result.verdict).toBe('VIOLATED');
-    expect(sensor.notes[0]).toMatch(/HTTP 529/);
+    expect(sensor.notes.some((n) => n.includes('HTTP 529'))).toBe(true);
   });
 
   it('a reply with no list of specifics is a failed read, not a clean one', async () => {
@@ -266,19 +276,313 @@ describe('through the binary: the reader runs on the person\'s own backend when 
   };
   const remote = (p: number): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${p}`];
 
-  it('ATELIER_CLAIMS_MODEL on an OpenAI-compatible backend: the reader catches what the pattern cannot', () => {
+  it('ATELIER_CLAIMS_MODEL on an OpenAI-compatible backend: the reader catches what the pattern cannot, and, unqualified, only reports it', () => {
     const { run, file } = setup();
     const byPattern = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
     expect(byPattern.code).toBe(0);
+    // An unmeasured pair (a model on the person's own backend) warns: the pattern check gates.
     const byReader = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model' }, 'verify', '--skill', 'house', file, ...remote(port));
-    expect(byReader.code).toBe(1);
-    expect(byReader.out).toMatch(/UNSOURCED/);
+    expect(byReader.code).toBe(0);
+    expect(byReader.out).toMatch(/warn {2}UNSOURCED·reader/);
+    expect(byReader.out).toMatch(/ok {4}UNSOURCED {2}Never/);
     expect(byReader.out).toContain('claim reader (my-small-model');
+    expect(byReader.out).toMatch(/not qualified/);
+    // The escape hatch: the same reader gates, and says loudly that it is unmeasured.
+    const gated = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' }, 'verify', '--skill', 'house', file, ...remote(port));
+    expect(gated.code).toBe(1);
+    expect(gated.out).toMatch(/FAIL {2}UNSOURCED {2}Never/);
+    expect(gated.out).toMatch(/ATELIER_CLAIMS_GATE=reader: claim reader \(my-small-model, prompt \w+\) is NOT QUALIFIED/);
   });
 
   it('a backend that is not Anthropic never gets a model it did not name: the pattern check runs, and says why', () => {
     const { run, file } = setup();
     const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: '' }, 'verify', '--skill', 'house', file, ...remote(port));
     expect(r.out).toMatch(/no claim reader configured: set ATELIER_CLAIMS_MODEL/);
+  });
+});
+
+// THE AUDIT OF THE INVENTED-CLAIM CHECK, EACH FINDING PINNED.
+//
+// Five defects, each reproduced before it was fixed:
+//   1  a heading or a table row was never read, by the reader or the pattern: "# How we cut latency 73%
+//      at Stripe" reached the reader as nothing at all
+//   2  true stories were cut: markdown in the notes, a quotation over two sentences, "twenty-five"
+//      read as "20-5"; and false ones passed: "fourteen" was no number, so "four" could not contradict it
+//   3  a reader that failed mid-loop left a model reading compared with a pattern reading, and the loop
+//      said "all now hold" over a figure the model had flagged
+//   4  a reader nobody had measured (a changed version, another model) failed drafts and cut sentences
+//   5  the record could not say which instrument ran, whether it was qualified, or what it spent
+// Through the binary where the failure was visible there (tests/fixtures/scripted-backend.mjs).
+describe('the audit of the invented-claim check', () => {
+  const v = { standardVersionHash: 's', requirements: [] } as unknown as StandardVersion;
+  const ok = (json: unknown): Promise<never> => Promise.resolve({ json, cost: { basis: 'API_METERED', billingUsd: 0.001 }, termination: 'COMPLETE', modelId: 'm' } as never);
+  /** Answers each call from the list in turn; an Error in the list is a failed call. */
+  const scripted = (answers: readonly unknown[]): InferenceClient & { calls: number } => {
+    const c = { calls: 0, complete: () => { const a = answers[Math.min(c.calls++, answers.length - 1)]; return a instanceof Error ? Promise.reject(a) : ok(a); } };
+    return c;
+  };
+  const qualifiedReaders = [{ model: 'claude-haiku-4-5', version: READER_VERSION }];
+  const ctx = { material: '', task: '', placeholders: false };
+
+  describe('1. headings and table rows are read: a specific in a title is as invented as one in a paragraph', () => {
+    const probe = '# How we cut latency 73% at Stripe\n\n| p99 | 900ms | 120ms |\n\nWe changed the cache.';
+
+    it('the reader is shown every heading and table row, numbered with the sentences', () => {
+      expect(numbered(probe)).toBe('[1] How we cut latency 73% at Stripe\n[2] | p99 | 900ms | 120ms |\n[3] We changed the cache.');
+    });
+
+    it('a specific the reader types in a heading or a row is flagged, and its span is the real text', () => {
+      const r = decideSpecifics(probe, [sp(1, 'cut latency 73% at Stripe', 'FIRST_PERSON_EVENT', 'NONE'), sp(2, '900ms', 'FIGURE', 'NONE')], '', '', false, 't');
+      expect(r.claims.map((c) => probe.slice(c.start, c.end))).toEqual(['How we cut latency 73% at Stripe', '| p99 | 900ms | 120ms |']);
+      // and the same specifics, supplied by the person, pass
+      expect(decideSpecifics(probe, [sp(1, 'cut latency 73% at Stripe', 'FIRST_PERSON_EVENT', 'MATERIAL', 'we cut latency 73% at Stripe')], 'At Stripe we cut latency 73%. Notes: we cut latency 73% at Stripe.', '', false, 't').claims).toEqual([]);
+    });
+
+    it('the pattern check reads headings and rows too, and still skips code fences and front matter', () => {
+      const text = '---\ntitle: According to a survey, 43% agree\n---\n# According to a survey, 43% of operators agree\n\n'
+        + '| According to a survey, 61% of buyers agree | x |\n|---|---|\n\n```\nAccording to a survey, 77% agree.\n```\n\nWe changed the cache.';
+      const claims = unsourcedClaims(text, '');
+      expect(claims.map((c) => text.slice(c.start, c.end))).toEqual(['According to a survey, 43% of operators agree', '| According to a survey, 61% of buyers agree | x |']);
+      expect(claimUnitsOf(text).map((u) => u.text)).not.toContain('title: According to a survey, 43% agree');
+      expect(claimUnitsOf(text).map((u) => u.text).join(' ')).not.toMatch(/77%/);
+      // a setext heading is a heading
+      expect(claimUnitsOf('Intro\n\nWe grew 40% in 2023\n===\n\nBody.').map((u) => u.text)).toEqual(['Intro', 'We grew 40% in 2023', 'Body.']);
+    });
+
+    it('the last-resort cut removes a flagged heading whole, not its words alone', async () => {
+      const text = '# According to a survey, 43% of operators agree\n\nWe changed the cache.';
+      // A rewrite that keeps the claim is refused; the last resort cuts the heading line.
+      const writer = scripted([{ replacements: [{ id: 1, text: 'According to a survey, 43% of operators agree' }] }]);
+      const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, text, 1, {});
+      expect(r.output).toBe('We changed the cache.');
+      expect(r.report.failed).toBe(false);
+    });
+  });
+
+  describe('2. true stories are kept, false figures are not', () => {
+    const figure = (text: string, support: string, material: string): number =>
+      decideSpecifics(`We had ${text}.`, [sp(1, text, 'FIGURE', 'MATERIAL', support)], material, '', false, 't').claims.length;
+
+    it('"fourteen engineers" is not supported by "four engineers"', () => {
+      expect(figure('fourteen engineers', 'We hired four engineers', 'We hired four engineers.')).toBe(1);
+      expect(figure('fourteen engineers', 'We hired 14 engineers', 'We hired 14 engineers.')).toBe(0);
+    });
+
+    it('"one million users" is not supported by "3 million"; "three million" is', () => {
+      expect(figure('one million users', 'We reached 3 million users', 'We reached 3 million users.')).toBe(1);
+      expect(figure('three million users', 'We reached 3 million users', 'We reached 3 million users.')).toBe(0);
+      // a figure is its value, never a piece of it
+      expect(figure('3 users', 'We reached 3 million users', 'We reached 3 million users.')).toBe(1);
+    });
+
+    it('"twenty-five customers" is supported by "25 customers"', () => {
+      expect(figure('twenty-five customers', 'We signed 25 customers', 'We signed 25 customers.')).toBe(0);
+      expect(figure('twenty-six customers', 'We signed 25 customers', 'We signed 25 customers.')).toBe(1);
+    });
+
+    it('number phrases read as their value', () => {
+      expect(numbersIn('two hundred and fifty')).toEqual(['250']);
+      expect(numbersIn('a dozen, two dozen, dozen')).toEqual(['12', '24', '12']);
+      expect(numbersIn('thirteen, nineteen, ten thousand, 1.5 million, 1,000')).toEqual(['1000', '13', '19', '10000', '1500000']);
+      expect(numbersIn('five, six')).toEqual(['5', '6']);
+    });
+
+    it('"one" is a figure only where it quantifies: a pronoun or an idiom demands no 1 in the material', () => {
+      expect(numbersIn('one engineer')).toEqual(['1']);
+      expect(numbersIn('one of the reasons')).toEqual([]);
+      expect(numbersIn('no one knew, the one that stuck, one day')).toEqual([]);
+      expect(numbersIn('twenty-one, one hundred')).toEqual(['21', '100']);
+      const text = 'One of the engineers rewrote the retry loop.';
+      expect(decideSpecifics(text, [sp(1, 'One of the engineers rewrote the retry loop', 'FIRST_PERSON_EVENT', 'MATERIAL', 'an engineer rewrote the retry loop')],
+        'Last spring an engineer rewrote the retry loop.', '', false, 't').claims).toEqual([]);
+    });
+
+    it('a two-sentence story with **bold** and a [link](u) in the material, quoted plainly, is supported', () => {
+      const material = 'In March our **checkout** broke for six hours. We traced it to a [stale cache](https://notes.invalid/incident) and rolled back.\n\nUnrelated note.';
+      const quote = 'In March our checkout broke for six hours. We traced it to a stale cache and rolled back.';
+      expect(supportIsIn(quote, material)).toBe(true);
+      const text = 'It was the six-hour checkout outage we traced to a stale cache.';
+      const story = [sp(1, 'the six-hour checkout outage we traced to a stale cache', 'FIRST_PERSON_EVENT', 'MATERIAL', quote)];
+      expect(decideSpecifics(text, story, material, '', false, 't').claims).toEqual([]);
+      // the polarity: the same words spread over separate paragraphs support nothing
+      expect(decideSpecifics(text, story, 'In March our checkout broke.\n\nWe traced a different bug to a stale cache and rolled back.', '', false, 't').claims).toHaveLength(1);
+      // and a URL the draft cites is still found in a markdown link of the person's
+      expect(supportIsIn('https://notes.invalid/incident', material)).toBe(true);
+    });
+  });
+
+  describe('3. a reader that fails mid-loop degrades for good: before and after are read by one instrument', () => {
+    const draft = 'The review took 94 minutes. It ended well.';
+    const flagged = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
+
+    it('once a read fails, every reading is the pattern check\'s, of texts the model already read included', async () => {
+      const sensor = modelSensor(scripted([flagged, new Error('HTTP 529 overloaded')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, qualifiedReaders });
+      await sensor.read(draft);
+      expect(sensor.reading(draft)!.claims).toHaveLength(1);
+      expect(sensor.degraded).toBe(false);
+      await sensor.read('Another text.');
+      expect(sensor.degraded).toBe(true);
+      expect(sensor.reading(draft)!.instrument).toMatch(/^pattern check/);
+      expect(sensor.reading(draft)!.claims).toHaveLength(0);
+      expect(sensor.instrument).toMatch(/degraded after it failed: HTTP 529/);
+      expect(sensor.gate).toBe('pattern');
+      expect(sensor.notes.join(' ')).toMatch(/already read included/);
+    });
+
+    it('refineToStandard: a reader that reads the draft, then fails, never lets a rewrite pass on a mixed comparison', async () => {
+      const sensor = modelSensor(scripted([flagged, new Error('HTTP 529 overloaded')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, qualifiedReaders });
+      const writer = scripted([{ replacements: [{ id: 1, text: 'The review took 95 minutes.' }] }]);
+      const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, draft, 2, { claimSensor: sensor });
+      // Before the fix: the model's reading of the draft against the pattern's of the rewrite, "95 minutes"
+      // accepted, violatedBefore [UNSOURCED], violatedAfter [], "every REQUIRED measured rule now holds".
+      expect(r.output).not.toContain('95 minutes');
+      // And the figure the reader flagged before it failed is not shipped either: it is cut, fail closed.
+      expect(r.output).not.toContain('94 minutes');
+      expect(r.repair!.storiesCut?.join(' ')).toContain('94 minutes');
+      expect(r.repair!.why).toMatch(/flagged before it failed were cut outright/);
+      expect(r.repair!.why).not.toBe('every REQUIRED measured rule now holds');
+      expect(r.repair!.why).toMatch(/claim reader failed during the repair/);
+      // before and after, by the same instrument
+      expect(r.repair!.violatedBefore).toEqual(r.repair!.violatedAfter);
+      expect(r.report.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.detail).toMatch(/\[pattern check/);
+      expect(sensor.instrument).toMatch(/degraded/);
+    });
+  });
+
+  describe('4. only a qualified instrument may cut', () => {
+    it('production: the list holds the one measured pair, and the decision-3 reader is not it', () => {
+      expect(QUALIFIED_READERS).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }]);
+      expect(DECISION_VERSION).toBe(3);
+      expect(READER_VERSION).not.toBe('0279163b');
+      expect(isQualified('claude-haiku-4-5')).toBe(false);
+      expect(isQualified('claude-haiku-4-5', '0279163b')).toBe(true);
+      expect(isQualified('my-small-model', '0279163b')).toBe(false);
+    });
+
+    it('an unqualified reader reports (PREFERRED, never fails, never repaired); the pattern check gates as UNSOURCED', async () => {
+      const text = 'The review took 94 minutes. It ended well.';
+      const reads = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
+      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      expect(sensor.gate).toBe('pattern');
+      const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
+      const gate = r.checked.find((c) => c.requirementId === 'UNSOURCED')!;
+      const reader = r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')!;
+      expect(gate.materiality).toBe('REQUIRED');
+      expect(gate.result.verdict).toBe('MET');
+      expect(gate.result.detail).toMatch(/\[pattern check/);
+      expect(reader.materiality).toBe('PREFERRED');
+      expect(reader.result.verdict).toBe('VIOLATED');
+      expect(reader.result.detail).toMatch(/not qualified/);
+      expect(r.failed).toBe(false);
+      const writer = scripted([{ replacements: [] }]);
+      const refined = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, text, 2, { claimSensor: sensor });
+      expect(refined.repair).toBeNull();
+      expect(writer.calls).toBe(0);
+      expect(sensor.notes.join(' ')).toMatch(/is not qualified/);
+    });
+
+    it('the pattern gate still fails what the pattern finds, beside an unqualified reader', async () => {
+      const text = 'According to a survey, 43% of operators agree.';
+      const sensor = modelSensor(scripted([{ specifics: [] }]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.verdict).toBe('VIOLATED');
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')!.result.verdict).toBe('MET');
+      expect(r.failed).toBe(true);
+    });
+
+    it('ATELIER_CLAIMS_GATE=reader (gateAnyway) lets an unqualified reader gate, loudly', async () => {
+      const text = 'The review took 94 minutes. It ended well.';
+      const reads = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
+      const sensor = modelSensor(scripted([reads]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { ...ctx, gateAnyway: true });
+      const r = await checkDraftAsync('d', v, text, { claimSensor: sensor });
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')!.result.verdict).toBe('VIOLATED');
+      expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·reader')).toBeUndefined();
+      expect(r.failed).toBe(true);
+      expect(sensor.gate).toBe('reader');
+      expect(sensor.qualified).toBe(false);
+      expect(sensor.instrument).toMatch(/NOT QUALIFIED, gating anyway/);
+      expect(sensor.notes[0]).toMatch(/^ATELIER_CLAIMS_GATE=reader: .* is NOT QUALIFIED/);
+    });
+  });
+
+  describe('5. the record can say which claim instrument ran, on whose word, at what cost', () => {
+    it('claimInstrumentOf: a model reader, before and after it degrades', async () => {
+      const sensor = modelSensor(scripted([{ specifics: [] }, new Error('budget spent')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', ctx);
+      await sensor.read('One text.');
+      expect(claimInstrumentOf({ claimSensor: sensor })).toEqual({
+        instrument: `pattern check, with claim reader (claude-haiku-4-5, prompt ${READER_VERSION}) reporting only: not qualified`,
+        version: READER_VERSION, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0.001 });
+      await sensor.read('Another text.');
+      expect(claimInstrumentOf({ claimSensor: sensor })).toMatchObject({ degraded: true, spentUsd: 0.001, instrument: expect.stringMatching(/degraded/) as unknown });
+    });
+
+    it('checksFor exposes it: the pattern check offline, and nothing when the check is off', () => {
+      const L = { root: mkdtempSync(join(tmpdir(), 'atelier-claimi-')), skillName: 'skill' }; store.initStore(L);
+      expect(claimInstrumentOf(checksFor(L, { material: '' }))).toEqual({ instrument: 'pattern check (--claims pattern)', version: null, qualified: false, gate: 'pattern', degraded: false, spentUsd: 0 });
+      expect(claimInstrumentOf(checksFor(L, { material: '', guardClaims: false }))).toBeNull();
+    });
+  });
+
+  describe('through the binary', () => {
+    const CLI = resolve('dist/cli/atelier.mjs');
+    let backend: ChildProcess; let port = 0;
+    const script = async (body: unknown): Promise<void> => {
+      const send = (): Promise<Response> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify(body) });
+      try { await send(); } catch { await send(); }
+    };
+    beforeAll(async () => {
+      if (!existsSync(CLI)) throw new Error('build first');
+      backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+      port = await new Promise<number>((done) => { backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) done(Number(m[1])); }); });
+    });
+    afterAll(() => { backend.kill(); });
+
+    const setup = (draft: string): { run: (env: Record<string, string>, ...a: string[]) => { out: string; code: number }; file: string } => {
+      const data = mkdtempSync(join(tmpdir(), 'atelier-cfix-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-cfix-proj-'));
+      const base = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+      const run = (env: Record<string, string>, ...a: string[]): { out: string; code: number } => {
+        try { return { out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env: { ...base, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }), code: 0 }; } catch (e) {
+          const x = e as { stdout?: string; stderr?: string; status?: number };
+          return { out: `${x.stdout ?? ''}${x.stderr ?? ''}`, code: x.status ?? 1 };
+        }
+      };
+      run({}, 'add', '--statement', 'Never say leverage.', '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', 'REQUIRED', '--measure', 'LEXICON:leverage');
+      run({}, 'ratify-close', '--work-type', 'writing');
+      run({}, 'build', '--name', 'house');
+      const file = join(proj, 'd.md');
+      writeFileSync(file, draft);
+      return { run, file };
+    };
+    const remote = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'writer'];
+
+    it('1: verify fails an invented figure in a heading, and --repair cuts the heading line whole', async () => {
+      const { run, file } = setup('# According to a survey, 43% of operators agree\n\nWe changed the cache.\n');
+      const checked = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file);
+      expect(checked.code).toBe(1);
+      expect(checked.out).toContain('According to a survey, 43% of operators agree');
+      await script({ byTool: { emit_replacements: { replacements: [{ id: 1, text: 'According to a survey, 43% of operators agree' }] } } });
+      const repaired = run({ ATELIER_CLAIMS: 'pattern' }, 'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
+      const j = JSON.parse(repaired.out) as { output: string; failed: boolean };
+      expect(j.output.trim()).toBe('We changed the cache.');
+      expect(j.failed).toBe(false);
+    });
+
+    it('3: a reader that fails mid-repair does not deliver a rewrite judged on a mixed comparison', async () => {
+      const { run, file } = setup('The review took 94 minutes. It ended well.');
+      await script({
+        byTool: {
+          emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] },
+          emit_replacements: { replacements: [{ id: 1, text: 'The review took 95 minutes.' }] },
+        },
+        // the reader's second read (the rewrite) comes back with no list: a failed read
+        when: [{ contains: '[1] The review took 95 minutes.', answer: { nothing: true } }],
+      });
+      const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' },
+        'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
+      const j = JSON.parse(r.out) as { output: string; repair: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
+      expect(j.output).not.toContain('95 minutes');
+      expect(j.repair.why).toMatch(/claim reader failed during the repair/);
+      expect(j.repair.violatedBefore).toEqual(j.repair.violatedAfter);
+    });
   });
 });

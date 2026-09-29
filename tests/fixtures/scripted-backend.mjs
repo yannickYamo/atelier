@@ -8,7 +8,8 @@
 //   POST /chat/completions  → the scripted payload, as a forced tool call
 //                             (`when`: [{ contains, answer }] answers a request whose body contains
 //                              the text first, so a candidate and its champion can answer differently)
-//   POST /__set             → replace the scripted payload (JSON body)
+//   POST /__set             → replace the scripted payload (JSON body); `failNext: k` answers the
+//                             next k completions with HTTP 500, so a failed call can be scripted
 //   GET  /__count           → how many /chat/completions requests have been served
 //
 // Prints "PORT <n>" on stdout once listening.
@@ -22,6 +23,7 @@ let payload = { rules: [], workType: 'writing' };
 let byTool = null;
 let when = [];
 let count = 0;
+let failNext = 0;
 
 const server = createServer((req, res) => {
   let body = '';
@@ -35,11 +37,13 @@ const server = createServer((req, res) => {
     if (req.url === '/__set') {
       const parsed = JSON.parse(body);
       when = Array.isArray(parsed.when) ? parsed.when : [];
+      failNext = typeof parsed.failNext === 'number' ? parsed.failNext : 0;
       if (parsed.byTool) { byTool = parsed.byTool; } else { payload = parsed; byTool = null; }
       res.end('{"ok":true}'); return;
     }
     if (req.url === '/__count') { res.end(JSON.stringify({ count })); return; }
     count += 1;
+    if (failNext > 0) { failNext -= 1; res.statusCode = 500; res.end('{"error":"scripted failure"}'); return; }
     let answer = payload;
     if (byTool) {
       const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name;
