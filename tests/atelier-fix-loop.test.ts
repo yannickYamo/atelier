@@ -14,7 +14,8 @@ import { join, resolve } from 'node:path';
 import * as store from '../core/state/store.js';
 import { proposeReplacement, eligibleCarriers, assertStandardUnchanged } from '../core/architecture/replace-carrier.js';
 import { mayPropose, WEAKEST_EVALUATION, WEAKEST_EVIDENCE, type RepairRecord, type Prohibition } from '../core/architecture/repair-memory.js';
-import type { ServedMissEvidence } from '../core/architecture/escalate.js';
+import { applyEscalation, type ServedMissEvidence } from '../core/architecture/escalate.js';
+import { mutationsOf } from '../core/optimizer/genome.js';
 import type { SkillArchitecture } from '../core/architecture/compile.js';
 import { aRequirement } from './fixtures.js';
 import { standardHashOf, type StandardVersion } from '../core/state/canonical-state.js';
@@ -313,7 +314,27 @@ describe('the lateral policy (unit)', () => {
   it('eligibility comes from typed properties, never materiality', () => {
     expect(eligibleCarriers(rule({ evidence: null, outputShape: null }))).toEqual(['SELF_CHECK', 'PROSE']);
     expect(eligibleCarriers(rule({ evidence: 'a quote', outputShape: null }))).toContain('EXAMPLE');
-    expect(eligibleCarriers(rule({ outputShape: { v: {} }, evidence: null }))).toContain('OUTPUT_CONTRACT');
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, evidence: null, materiality: 'REQUIRED' }))).toContain('OUTPUT_CONTRACT');
+  });
+
+  // A contract enforces. A PREFERRED rule — "an excellent output may break this" — or an unconfirmed
+  // one with a shape was a legal OUTPUT_CONTRACT move, so fix and optimize could harden guidance.
+  it('a rule that is not ENFORCE is never moved to OUTPUT_CONTRACT', () => {
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, materiality: 'PREFERRED' }))).not.toContain('OUTPUT_CONTRACT');
+    expect(eligibleCarriers(rule({ outputShape: { v: {} }, materiality: 'REQUIRED', authority: 'DERIVED_UNRATIFIED' }))).not.toContain('OUTPUT_CONTRACT');
+    const preferred = rule({ outputShape: { v: {} }, materiality: 'PREFERRED' });
+    const v = { standardVersionHash: 's', evidenceId: null, workType: 'w', requirements: [preferred],
+      authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null } as StandardVersion;
+    const g = { carriers: { x1: 'PROSE' as const }, exemplar: false, contrast: false };
+    expect(mutationsOf(g, v, { exemplar: false, contrast: false }).filter((m) => m.kind === 'CARRIER' && m.to === 'OUTPUT_CONTRACT')).toEqual([]);
+    const required = { ...preferred, materiality: 'REQUIRED' as const };
+    expect(mutationsOf(g, { ...v, requirements: [required] }, { exemplar: false, contrast: false })
+      .some((m) => m.kind === 'CARRIER' && m.to === 'OUTPUT_CONTRACT')).toBe(true);
+    // and the mint itself refuses, whoever proposed the move
+    const observing: SkillArchitecture = { architectureHash: 'a', standardVersionHash: 's',
+      components: [{ id: 'c', carries: ['x1'], carrier: 'PROSE', sensor: 'NONE', gateRole: 'OBSERVE', rationale: 'r' }] };
+    expect(() => applyEscalation(observing, { kind: 'ESCALATE_CARRIER', requirementId: 'x1', from: 'PROSE', to: 'OUTPUT_CONTRACT', becauseInvocation: 'i', rationale: 'r' }, 'b'))
+      .toThrow(/AUTHORITY ESCALATION/);
   });
 
   it('the first untried legal alternative under the fixed ordering is the candidate', () => {
