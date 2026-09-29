@@ -16,7 +16,7 @@ import { tastePermissions, statementHash } from '../core/taste/calibration.js';
 import { tasteRules } from '../core/taste/reader.js';
 import { formatOf, checkFormat, FORMATS } from '../core/observers/formats.js';
 import { normalizeClass, checkClass } from '../core/observers/doc-class.js';
-import { signTestOneSidedP, mcnemarExactP } from '../core/stats/sign-test.js';
+import { signTestOneSidedP, mcnemarExactP, binomialUpperTailP } from '../core/stats/sign-test.js';
 import { accountRefusal } from '../providers/anthropic.js';
 import { contrastForm } from '../cli/commands/discover.js';
 import { USAGE } from '../cli/help.js';
@@ -331,6 +331,15 @@ describe('the contrast drafts are the author\'s kind of piece, at the author\'s 
 });
 
 // ── 9. the one-sided sign test ───────────────────────────────────────────────────────────────────
+describe('binomialUpperTailP: the blinding check at a chance rate of one in three', () => {
+  it('pinned values, and the one-sided sign test is its p = ½ case', () => {
+    expect(Math.abs(binomialUpperTailP(18, 36, 1 / 3) - 0.0283)).toBeLessThanOrEqual(0.0005);
+    expect(Math.abs(binomialUpperTailP(12, 36, 1 / 3) - 0.5624)).toBeLessThanOrEqual(0.0005);
+    expect(binomialUpperTailP(24, 36, 0.5)).toBeCloseTo(signTestOneSidedP(24, 36), 12);
+    expect(() => binomialUpperTailP(3, 2, 0.5)).toThrow(RangeError);
+  });
+});
+
 describe('signTestOneSidedP: the exact upper tail P(X ≥ wins | n, ½)', () => {
   it('pinned values', () => {
     expect(signTestOneSidedP(24, 36)).toBeCloseTo(0.0326, 3);
