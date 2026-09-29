@@ -54,6 +54,11 @@ Four things make it more than a style prompt:
 - **It learns from the gap between you and the model.** Atelier has the model write plain drafts on your own
   topics, then counts what the model does that you don't. Each gap becomes a proposed rule carrying both
   numbers, for example "you: none in 42,605 words; the model on its own: 8.4 per 1,000".
+- **It keeps only what separates you.** Atelier counts dozens of small features, from colons, links and
+  list items to sentence-length tails, cadence and how often you name people. It keeps only those that tell
+  your pieces from the model's own drafts and hold on pieces it never read. Some tell single drafts apart
+  and become rules you approve. Others only show over many drafts; they choose between drafts and show in
+  `verify --profile`, and never block anything.
 - **It checks each rule on work it never read.** Some of your pieces are held back before anything reads
   them. A rule your own unseen writing breaks is a rule against you, and it's proposed for rejection.
 - **It knows how often you do something.** Writers work in modes. A move you make in two pieces out of five
@@ -144,6 +149,10 @@ Every study is pre-registered and published with its result, including the ones 
   not settled ([result](studies/VOICE_ROUNDS_RESULT.md)).
 - **Invented claims.** The claim reader was qualified against bars set in advance, on pieces it had never
   seen (above).
+- **What it keeps.** On 40 pieces no test had used, 9 of the 10 features selection kept still separated
+  new pieces from new model drafts ([result](studies/SENSOR_QUALIFICATION_RESULT.md)). A reader for the
+  deeper layers (figures, argument, how a piece opens and lands) failed the same test. So those layers are
+  still carried by your pieces and the persona, and read by the taste reader, but not measured.
 - **Not yet shown:**
   - that it works for other writers, or read by other people;
   - how it does against GEPA-style optimizers on a shared task;
@@ -255,7 +264,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 107 files and 1626 tests, runs offline, and drives the shipped binary end to end.
+The suite is 108 files and 1640 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 

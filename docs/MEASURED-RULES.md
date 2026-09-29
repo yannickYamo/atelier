@@ -34,6 +34,7 @@ it, but there is nothing specific to rewrite.
 | `HEADINGS` | section headings: phrases, sentence or title case, length, how many per 1,000 words | `HEADINGS:avoid=the thing\|gets wrong,case=SENTENCE,maxWords=8` |
 | `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
+| `FEATURE` | one counted feature from `core/observers/features.ts` (colons, parentheses, the serial comma, sentence-length tails, cadence, sentence openers, passives, three-item lists, links, lexical diversity, pronouns, modals, names, reading ease, commas per sentence, unevenness, and more), held to a band on both sides | `FEATURE:feature=colon,minValue=2,maxValue=9` |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
 `THAT_OPENER`, `HERES_OPENER`, `SIGNPOST`, `INTENSIFIER`, `SHORT_VERDICT`, `BOLD_SPAN`,
@@ -54,6 +55,31 @@ Declare one on your own rule with `atelier add --statement "…" --kind BOUNDARY
 or add one to an existing rule with `atelier amend --rule <rule> --measure "<spec>" --reason "…"`. The
 parser is strict: a target you did not mean is worse than a refusal, because it is enforced on every
 output from then on.
+
+## Counted features, and which of them are your taste
+
+Nobody should hand-pick the features that carry a voice. Discovery measures every counted feature
+(`atelier verify --help` names the observer; `core/observers/features.ts` lists them) on your pieces and on
+the model's plain drafts. Only features that pass one test are kept (`core/observers/selection.ts`):
+
+- **They separate you from the model.** The chance that a random piece of yours and a random draft of the
+  model's are ordered the same way (AUC) is at least 0.75 either way.
+- **They hold.** At least 80% of your held-back pieces fall in your range: the 10th to 90th percentile of
+  your pieces, widened a quarter each side, and checked on both sides.
+
+A kept feature earns one of two roles. This is the difference between detection and enforcement:
+
+| role | when | what it does |
+|---|---|---|
+| **RULE** | most of the model's drafts (60%) fall outside your range, so the range tells a single draft from your work | proposed on the review screen as a `FEATURE` rule, checked on every draft |
+| **SIGNAL** | the distributions differ, but your own range is wide enough that most single drafts sit inside it | never a rule. Kept with the skill; breaks ties when choosing between drafts; shown by `verify --profile`, layer by layer |
+
+On the voice rounds' author, every kept feature was a signal: commas per sentence, three-item lists, the
+length of short and long sentences, cadence. The model's drafts differ from that author on average, while
+single drafts sit inside the author's wide range. Held to a band, those features would pass nearly
+everything. Selection was qualified on pieces it never read
+([result](../studies/SENSOR_QUALIFICATION_RESULT.md)): on 40 newsletters, 9 of the 10 features it kept
+separated unseen pieces from unseen drafts. Two of them were rules, and their bands held.
 
 ## Where proposed rules come from
 
