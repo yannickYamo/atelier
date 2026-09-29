@@ -158,6 +158,26 @@ Product behaviour changed only where a fix is named here.
   from a public author's posts, with the repository's records bound as material.
 - Removed committed browser-tool logs; fixed a test that leaked a stubbed `fetch` into later suites.
 
+### Studies: two rewrite tests (exploratory, not pre-registered)
+
+The owner asked for their company blog post (1,438 words, "we") rewritten in another publication's style.
+
+- **Nate's Newsletter, 19 public previews** ($2.54). Failed. The rewrite kept most of the original's
+  sentences and added em dashes (0 to 4.3 per 1,000 words, against the author's 1.1) and runs of very
+  short sentences. Three reviews agreed it was a copyedit, not a voice transfer. Causes found: nothing in
+  the catalogue held em dashes or staccato runs; the contraction rule was one-sided; repair could not split
+  a paragraph; and 16 of the 19 previews ended in a paywall teaser, which discovery read as style. Fixed
+  above (the tell floor, two-sided contractions, no-model repairs); the corpus lesson is to use full pieces.
+- **Linear's Now blog, 16 full essays** ($4.21 including one rebuild after the fix below). Three arms on
+  the same writer model, packaged blind for the owner: Atelier, a plain prompt, and 14 essays pasted into
+  the prompt. Counted against Linear's essays (1.8 em dashes and 0.1 staccato runs per 1,000 words): the
+  Atelier draft had 0 and 0, the plain prompt 4.0 and 1.3, the pasted essays 2.8 and 0.7. Atelier's
+  contractions matched Linear's (25.3 against 22.2 per 1,000); the baselines stayed at the original's 7.
+  No arm moved sentence length toward Linear's (median 15 words; every arm 11) or kept less than 72% of the
+  original's sentences. **What it shows:** the tell floor and register now hold; voice beyond register did
+  not transfer in any arm, because a rewrite anchors to its source and the sentence-length rule only caps.
+  Found and fixed during the run: an author's own em dashes had raised the cap on every other tell.
+
 ### Studies: the claim reader, version 3, pre-registered (not run)
 
 `studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md` is sealed by the commit that adds it. It waits on
