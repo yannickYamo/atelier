@@ -74,11 +74,13 @@ request is cut and listed, so you can add the real one. A figure credited to a s
 named person, or a link offered as a source counts as yours to supply, never as "general knowledge".
 In a white paper, a report or a contract, nothing passes as general knowledge. How often this reader
 misses a specific, and how often it cuts a true one, was measured once
-([studies/CLAIM_READER_QUALIFICATION_RESULT.md](studies/CLAIM_READER_QUALIFICATION_RESULT.md)). It caught
-all 39 inventions planted in real pieces, where a pattern check caught 18. It also flagged something true
-in about one clean draft in four, which missed the bar set in advance, so it is **not yet qualified**. Until
-a revised reader passes on new pieces, expect it to cut a real detail now and then. `atelier material`
-binds your notes, so a cut true story comes back.
+against bars set in advance. The first version caught every planted invention but cut something true in
+about one draft in four, and failed. The second version checks the reader's work more strictly in code.
+On 28 pieces no earlier test had used, it caught all 35 planted inventions, where a pattern check caught 9.
+It left 35 of 38 clean drafts alone
+([studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)).
+That passes, on technical explainers; the first version's essays scored lower. Expect it to cut a true
+detail now and then. `atelier material` binds your notes, so a cut story comes back.
 
 ## What it builds: the whole harness
 
