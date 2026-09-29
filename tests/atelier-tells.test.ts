@@ -16,6 +16,7 @@ import { applyRepair, planRepair } from '../core/loop/repair.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { aRequirement } from './fixtures.js';
 import { replaceEmDashes, splitLongParagraphs, mechanicalFixes } from '../core/loop/mechanical-repair.js';
+import { sentencesKept } from '../core/observers/overlap.js';
 
 describe('the catalogue: the model\'s moves, not any author\'s', () => {
   const cases: [string, string][] = [
@@ -251,5 +252,25 @@ describe('the fixes that need no model', () => {
     const broken = { checked: [{ requirementId: 'c6', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', spans: [] } }] } as never;
     expect(mechanicalFixes(std(tell), broken, 'It runs — daily.').text).toBe('It runs, daily.');
     expect(mechanicalFixes(std(theirs), broken, 'It runs — daily.').text).toBe('It runs — daily.');
+  });
+});
+
+describe('the contrastive verdict is held for every author, at their own rate', () => {
+  it('an author who uses it gets a cap at their rate, and it instructs, even when plain drafts do not overuse it', () => {
+    const contrasty = (i: number): { id: string; text: string } => ({ id: `v${i}.md`, text: `The work in piece ${i} is not a checklist, it is a practice we keep up with care every single week. `.repeat(12) + 'We wrote the rest of it plainly, with ordinary sentences that carry the point without turning on a contrast. '.repeat(12) });
+    const rule = deriveContrastRules([0, 1, 2, 3].map(contrasty), [4, 5].map(contrasty),
+      ['A plain draft that states things directly and moves on. '.repeat(40), 'Another plain draft, direct and calm, with nothing turned on a contrast. '.repeat(40)], 'MACHINE_DISCOVERED')
+      .find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'CONTRAST_VERDICT');
+    expect(rule?.requirement.statement).toMatch(/to my rate: at most [\d.]+ per 1,000 words/);
+    expect(rule?.conformance.weak).toBeUndefined();
+  });
+});
+
+describe('a rewrite that keeps its source is reported as a restyle', () => {
+  it('measures the share of sentences kept nearly as written', () => {
+    const source = 'We built the chart to run every morning at eight. It drafts the plan and sends it to the founder for review. Nothing goes out without a yes from him.';
+    expect(sentencesKept(source, source)).toBe(1);
+    expect(sentencesKept('We built the chart to run every single morning at eight. A different sentence with other words entirely here now.', source)).toBe(0.5);
+    expect(sentencesKept('Completely new prose about something else, written from notes and nothing more than that.', source)).toBe(0);
   });
 });

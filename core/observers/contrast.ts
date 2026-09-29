@@ -165,17 +165,22 @@ export function deriveContrastRules(
             `you: ${aside} dash asides per 1,000 words; the model on its own: ${moved}`);
         }
       }
-    } else if (MODEL_TYPICAL.has(p) && a <= 0.5 && m > a + 0.2) {
+    } else if (MODEL_TYPICAL.has(p) && ((a <= 0.5 && m > a + 0.2) || p === 'CONTRAST_VERDICT')) {
       // A construction models reach for, which this author almost never uses. The cap sits at the
       // author's own rate. Where the model's plain drafts already exceed it, the evidence is direct;
       // where they do not, the tic may only appear under a skill's instructions (as it did when a rule
       // asking for "a short declarative reversal" produced one per paragraph), and the rule is proposed
       // as WEAK: shown and used to choose between drafts, not instructed, until the owner says so.
+      //
+      // THE CONTRASTIVE VERDICT IS HELD FOR EVERY AUTHOR, AT THEIR OWN RATE. A rewrite inherits it from
+      // its source, so a plain model's drafts never showed it: a post using it three times as often as
+      // Linear kept every one through a rewrite in Linear's voice. It is the move readers name first.
       const cap = r1(Math.max(perPiece(0.9) * 1.5, 0.5));
-      propose(`Keep ${PATTERN_LABEL[p]} rare: at most ${cap} per 1,000 words.`, 'BOUNDARY',
+      const always = p === 'CONTRAST_VERDICT';
+      propose(`Keep ${PATTERN_LABEL[p]} ${always && a > 0.5 ? 'to my rate' : 'rare'}: at most ${cap} per 1,000 words.`, 'BOUNDARY',
         { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap } },
         `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model's plain drafts here: ${m} per 1,000`,
-        m <= cap);
+        !always && m <= cap);
     } else if (SIGNATURE.has(p) && a >= 1) {
       const b = bandOf(p);
       if (b.lo > 0) {
