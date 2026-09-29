@@ -24,7 +24,7 @@
 
 import type { Carrier, SkillArchitecture } from './compile.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
-import { assertFeedbackDidNotMutate } from '../state/canonical-state.js';
+import { assertFeedbackDidNotMutate, standardHashOf } from '../state/canonical-state.js';
 import type { ServedMissEvidence, EscalateCarrier, EscalationRefusal } from './escalate.js';
 
 /** The fixed ordering candidates are tried in. Position is precedence, nothing else. */
@@ -78,9 +78,23 @@ export function proposeReplacement(
  * THE HARD INVARIANT OF IMPLEMENTATION REPAIR — Constraint B, as an assertion that throws.
  *
  * A repair may change how a standard is realized and nothing about what it says. Asserted where the
- * candidate is minted and again before promotion, so a code path that edited a statement, condition,
- * materiality or authority under a repair's name dies instead of shipping.
+ * candidate is minted, so a code path that edited a statement, condition, materiality or authority
+ * under a repair's name dies instead of shipping.
+ *
+ * THREE HASHES, NOT ONE COMPARED WITH ITSELF. Both call sites used to pass the standard they rendered
+ * and `getStandard(candidate.standardVersionHash) ?? <that same standard>`: the candidate's hash was
+ * copied from the rendered standard one line earlier, so the two were the same object and the check
+ * could not fire. Now: the INCUMBENT's recorded standard (the version being repaired) must equal the
+ * CANDIDATE's recorded standard, and the content the candidate was actually RENDERED from is
+ * re-hashed, so an in-memory edit to a requirement between load and render is caught as well.
  */
-export function assertStandardUnchanged(before: StandardVersion, after: StandardVersion): void {
-  assertFeedbackDidNotMutate(before, after);
+export function assertStandardUnchanged(incumbent: { readonly standardVersionHash: string },
+  candidate: { readonly standardVersionHash: string }, renderedFrom: StandardVersion): void {
+  assertFeedbackDidNotMutate(incumbent as StandardVersion, candidate as StandardVersion);
+  const recomputed = standardHashOf(renderedFrom);
+  if (recomputed !== incumbent.standardVersionHash) {
+    throw new Error(`STANDARD MUTATED BY REPAIR: the candidate was rendered from content hashing to ${recomputed}, `
+      + `not the incumbent's standard ${incumbent.standardVersionHash}. A repair changes how a standard is carried, `
+      + 'never what it says; a changed standard is minted by amend or confirm with a recorded reason.');
+  }
 }
