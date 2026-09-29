@@ -15,6 +15,7 @@ import { checkDraft, refineToStandard } from '../core/loop/run-repair.js';
 import { applyRepair, planRepair } from '../core/loop/repair.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { aRequirement } from './fixtures.js';
+import { replaceEmDashes, splitLongParagraphs, mechanicalFixes } from '../core/loop/mechanical-repair.js';
 
 describe('the catalogue: the model\'s moves, not any author\'s', () => {
   const cases: [string, string][] = [
@@ -50,11 +51,13 @@ describe('every author gets the machine-tell rule at their own rate; the contras
     expect(r?.requirement.measurement?.params.maxPer1000).toBe(0.3);   // the floor of 0.25, to one decimal
     expect(r?.conformance.weak).toBeUndefined();
   });
-  it('an author who writes formally gets a cap on contractions, not on full forms', () => {
+  it('an author who writes formally gets a cap on contractions, and on full forms only at their own rate', () => {
     const formal = (i: number) => author(i, 'It is not the case that we do not check. I am certain that it is done, and we have not skipped it.');
     const rules = deriveContrastRules([0, 1, 2, 3].map(formal), [4, 5].map(formal), [model(0), model(1), model(2)], 'MACHINE_DISCOVERED');
     expect(rules.some((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'CONTRACTION')).toBe(true);
-    expect(rules.some((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FULL_FORM')).toBe(false);
+    // Two-sided: a repair told to cut contractions must not expand every one beyond what the author writes.
+    const whole = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FULL_FORM');
+    expect(whole?.requirement.statement).toMatch(/^Write out as often as I do, not more/);
   });
 });
 
@@ -193,5 +196,60 @@ describe('a move the author never makes is banned at any length', () => {
     const std = { standardVersionHash: 's', requirements: [rule] } as unknown as StandardVersion;
     expect(checkDraft('x', std, 'Let me be blunt: the refund is on its way.', { guardClaims: false }).failed).toBe(true);
     expect(checkDraft('x', std, 'The refund is on its way.', { guardClaims: false }).checked[0].result.verdict).toBe('NOT_APPLICABLE');
+  });
+});
+
+describe('em dashes and staccato runs are tells for every author, held to their own rate', () => {
+  it('the catalogue finds an em dash, and a run of three short sentences but not two', () => {
+    const ids = (t: string): string[] => findTells(t).map((m) => m.family.id);
+    expect(ids('The chart runs — every morning.')).toContain('EM_DASH');
+    expect(ids('The bots run on time. The plan gets made. The drafts arrive.')).toContain('STACCATO_RUN');
+    expect(ids('The founder rules. The agents report.')).not.toContain('STACCATO_RUN');
+    expect(ids('He came back. It was late, and the long day had worn everybody down to the bone. We slept.')).not.toContain('STACCATO_RUN');
+  });
+  it('an author who never uses an em dash gets it banned outright, with no plain drafts needed to show it', () => {
+    const piece = (i: number): { id: string; text: string } => ({ id: `a${i}.md`, text: `This is piece ${i}, and it runs long enough to count, with commas, colons: and full stops. `.repeat(20) });
+    const rule = deriveContrastRules([0, 1, 2, 3].map(piece), [4, 5].map(piece), ['draft one.', 'draft two.'], 'MACHINE_DISCOVERED')
+      .find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.includes('MACHINE_TELL'));
+    expect(rule?.requirement.measurement?.params.never).toEqual(expect.arrayContaining(['EM_DASH', 'STACCATO_RUN']));
+    expect(rule?.requirement.statement).toMatch(/an em dash, a run of three or more very short sentences/);
+  });
+});
+
+describe('an author who does use em dashes keeps them, and they do not loosen the cap on other moves', () => {
+  it('dashes stay out of the pooled rate, both when the cap is set and when a draft is checked', () => {
+    const dashy = (i: number): { id: string; text: string } => ({ id: `d${i}.md`, text: `Piece ${i} holds a view \u2014 and a reason for it, with room to breathe. `.repeat(30) });
+    const rule = deriveContrastRules([0, 1, 2, 3].map(dashy), [4, 5].map(dashy), ['draft one.', 'draft two.'], 'MACHINE_DISCOVERED')
+      .find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.includes('MACHINE_TELL'));
+    const p = rule?.requirement.measurement?.params as { never: string[]; maxPer1000: number };
+    expect(p.never).not.toContain('EM_DASH');
+    expect(p.maxPer1000).toBe(0.3);   // the floor: the author's dashes did not raise it
+    const draft = `A plain sentence here \u2014 with a dash, as the author writes. `.repeat(20);
+    const std = { requirements: [{ ...rule!.requirement, materiality: 'REQUIRED' }] } as unknown as StandardVersion;
+    expect(checkDraft('s', std, draft).checked.find((c) => c.requirementId === rule!.requirement.requirementId)?.result.verdict).not.toBe('VIOLATED');
+  });
+});
+
+describe('the fixes that need no model', () => {
+  it('replaces em dashes with the punctuation a writer who never uses them would reach for, leaving code alone', () => {
+    expect(replaceEmDashes('The chart runs — every morning — at 08:00.')).toBe('The chart runs, every morning, at 08:00.');
+    expect(replaceEmDashes('It holds hands — not the judgment that decides what they are for.')).toBe('It holds hands: not the judgment that decides what they are for.');
+    expect(replaceEmDashes('Done — really.')).toBe('Done, really.');
+    expect(replaceEmDashes('Keep `a—b` as code.')).toBe('Keep `a—b` as code.');
+    expect(replaceEmDashes('```\nx — y\n```')).toBe('```\nx — y\n```');
+  });
+  it('splits a paragraph longer than the author writes at sentence boundaries, and leaves headings and lists alone', () => {
+    expect(splitLongParagraphs('One. Two. Three. Four. Five. Six. Seven. Eight.', 6)).toBe('One. Two. Three. Four.\n\nFive. Six. Seven. Eight.');
+    expect(splitLongParagraphs('- One. Two. Three. Four. Five. Six. Seven.', 6)).toBe('- One. Two. Three. Four. Five. Six. Seven.');
+    expect(splitLongParagraphs('One. Two.', 6)).toBe('One. Two.');
+  });
+  it('applies only what a broken REQUIRED rule calls for: a dash the author uses in most pieces is theirs', () => {
+    const tell = aRequirement({ requirementId: 'c6', materiality: 'REQUIRED', kind: 'BOUNDARY',
+      measurement: { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: 1, never: ['EM_DASH'] } } });
+    const theirs = { ...tell, measurement: { observer: 'PATTERN_RATE' as const, params: { pattern: ['MACHINE_TELL'], maxPer1000: 1, never: [] } } };
+    const std = (r: typeof tell) => ({ requirements: [r] }) as unknown as StandardVersion;
+    const broken = { checked: [{ requirementId: 'c6', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', spans: [] } }] } as never;
+    expect(mechanicalFixes(std(tell), broken, 'It runs — daily.').text).toBe('It runs, daily.');
+    expect(mechanicalFixes(std(theirs), broken, 'It runs — daily.').text).toBe('It runs — daily.');
   });
 });

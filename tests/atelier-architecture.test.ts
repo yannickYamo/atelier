@@ -280,3 +280,19 @@ describe('escalating a carrier changes what the model is actually served', () =>
     expect(observed).not.toContain('Before you finalize');
   });
 });
+
+describe('a condition with no words in it is rendered as general, never as "When , …"', () => {
+  it('in the instructions, in the reference list, and in the context map an invocation reads', () => {
+    const wordless = (id: string, materiality: Requirement['materiality']): Requirement =>
+      ({ ...req(id, 'GENERATIVE', 'EXPERT_RATIFIED', `I open with a thesis ${id}.`, materiality), appliesWhen: '; ' });
+    const v = std([wordless('w1', 'REQUIRED'), wordless('w2', 'PREFERRED')]);
+    const pkg = renderAgentSkill(v, compileArchitecture(v), 'my-voice', 'd');
+    const md = pkg.files['SKILL.md'];
+    expect(md).toContain('I open with a thesis w1.');
+    expect(md).not.toMatch(/When ,|when ;/i);
+    expect(md).toMatch(/examples\/w2\.md` — relevant to any piece of this kind/);
+    // an example with a condition nobody can match would be withheld from every invocation
+    const map = JSON.parse(pkg.files['context-map.json'] ?? '{"components":[]}') as { components: { requirementId: string }[] };
+    expect(map.components.map((c) => c.requirementId)).not.toContain('w2');
+  });
+});

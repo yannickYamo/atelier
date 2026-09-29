@@ -13,12 +13,14 @@ import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { describeBackup } from '../../adapters/install-tree.js';
+import { onCorpusReader } from './discover.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 import type { StandardVersion } from '../../core/state/canonical-state.js';
-import { compileArchitecture, observedBoundaries } from '../../core/architecture/compile.js';
+import { compileArchitecture, observedBoundaries, type SkillArchitecture } from '../../core/architecture/compile.js';
+import type { HostAdapter } from '../../adapters/host-adapter.js';
 import { renderAgentSkill, assertPortable, skillNameFrom, defaultDescription } from '../../renderers/agent-skill/render.js';
 import { buildProposal, renderProposal, unconfirmedIn } from '../../core/compiler/proposal.js';
 import { defaultPlan, maintenanceMap, describeMaintenance } from '../../core/coverage/observation.js';
@@ -29,7 +31,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile, clientFor, proposerModel, numericFlag } from '../runtime.js';
+  loadSession, saveSession, step, runFile, numericFlag, orchestrated } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -85,7 +87,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   if (readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
   try {
-    const persona = reconcilePersona(await derivePersona(clientFor(proposerModel()), budget, readable), standardForbids(v));
+    const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
     console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
       + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
       + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
@@ -217,7 +219,10 @@ export async function build(nameArg?: string): Promise<void> {
   const review = argv.includes('--review');
   const proposal = buildProposal(name, v.standardVersionHash, v.requirements, arch, new Set<string>());
   const proposalText = renderProposal(proposal, { gated: review });
-  console.log(`\n${proposalText}`);
+  // Under `atelier new` the rule-by-rule plan is written, not printed: the person has just ruled on
+  // every rule, and the plan restates each one. `atelier build` on its own prints it.
+  if (orchestrated() && !review) console.log(`What each rule became, and why: ${runFile('proposal.md')}`);
+  else console.log(`\n${proposalText}`);
   const guessed = unconfirmedIn(proposal);
   if (guessed.length) {
     console.log(`${guessed.length} of these we inferred and you have not confirmed. \`atelier pending\` lists them.\n`);
@@ -310,12 +315,22 @@ export async function build(nameArg?: string): Promise<void> {
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
   saveSession({ ...s, skillName: name });
-  // ── "READY" IS EARNED, NOT ANNOUNCED ─────────────────────────────────────────────────────
-  //
-  // `create` used to end with this banner over a package whose "What to do" was `_(none)_` — every
-  // rule unratified, nothing instructing, and the one pointer forward buried above the celebration.
-  // The banner now means what it says: at least one rule reaches the model as an instruction.
+  reportInstalled(host, inst.installedAt, name, v, arch, pkg.packageHash);
+  reportObservedBoundaries(arch, v, name);
+}
+
+/**
+ * The install, reported. "READY" IS EARNED, NOT ANNOUNCED: the banner means at least one rule reaches the
+ * model as an instruction. Under `atelier new`, one line and any delivery gap; on its own, the hashes and
+ * the host's full delivery matrix.
+ */
+function reportInstalled(host: HostAdapter, installedAt: string, name: string, v: StandardVersion, arch: SkillArchitecture, packageHash: string): void {
   const instructs = arch.components.some((c) => c.gateRole === 'ENFORCE');
+  if (instructs && orchestrated()) {
+    console.log(`\nYour skill is ready: ${host.invocationHint(name).trim()}   (installed for ${host.detect().hostId} at ${installedAt})`);
+    reportDeliveryGap(host, arch, name);
+    return;
+  }
   if (instructs) {
     console.log(`\nYour skill is ready.\n`);
   } else {
@@ -326,8 +341,8 @@ export async function build(nameArg?: string): Promise<void> {
     console.log('');
   }
   console.log(`  ${host.invocationHint(name)}\n`);
-  console.log(`Installed for ${host.detect().hostId} at ${inst.installedAt}`);
-  console.log(`StandardVersion ${v.standardVersionHash} · architecture ${arch.architectureHash} · package ${pkg.packageHash}`);
+  console.log(`Installed for ${host.detect().hostId} at ${installedAt}`);
+  console.log(`StandardVersion ${v.standardVersionHash} · architecture ${arch.architectureHash} · package ${packageHash}`);
 
   // ── WHAT THIS HOST ACTUALLY HOLDS ──────────────────────────────────────────────────────────
   //
@@ -340,19 +355,35 @@ export async function build(nameArg?: string): Promise<void> {
   {
     const present = [...new Set(arch.components.map((c) => c.carrier))] as Carrier[];
     console.log(`\n${describeMatrix(`${host.detect().hostId} (invoked as ${host.invocationHint(name).trim()})`, host.carrierDelivery(), present)}`);
-    const gap = present.filter((c) => host.carrierDelivery()[c].state !== 'DELIVERED' && c !== 'NONE');
-    if (gap.length) {
+    if (undelivered(host, arch).length) {
       console.log(`Everything in your standard is delivered when Atelier owns the call:`);
       console.log(`  atelier invoke --skill ${name} "<your task>"\n`);
     }
   }
+}
 
-  // ── THE POST-BUILD DISCLOSURE ──────────────────────────────────────────────────────────────
-  // It comes AFTER the skill works, and it asks about one thing only: prohibitions nobody confirmed.
-  // Those are the decisions that cannot be checked against the corpus, because the evidence for a
-  // prohibition is the thing that is not there.
+/** Carriers in this skill the host does not deliver itself: they reach the model only through `atelier invoke`. */
+function undelivered(host: HostAdapter, arch: SkillArchitecture): Carrier[] {
+  const present = [...new Set(arch.components.map((c) => c.carrier))] as Carrier[];
+  return present.filter((c) => host.carrierDelivery()[c].state !== 'DELIVERED' && c !== 'NONE');
+}
+
+/** One line when part of the skill is only referenced on this host, naming the call that delivers all of it. */
+function reportDeliveryGap(host: HostAdapter, arch: SkillArchitecture, name: string): void {
+  const gap = undelivered(host, arch);
+  if (gap.length) console.log(`(${host.detect().hostId} is not seen to load ${gap.join(', ')}; everything is delivered by: atelier invoke --skill ${name} "<your task>")`);
+}
+
+/**
+ * THE POST-BUILD DISCLOSURE. It comes AFTER the skill works, and asks about one thing only: prohibitions
+ * nobody confirmed, the decisions the corpus cannot check, because their evidence is what is not there.
+ */
+function reportObservedBoundaries(arch: SkillArchitecture, v: StandardVersion, name: string): void {
   const observed = observedBoundaries(arch, v);
-  if (observed.length) {
+  if (observed.length && orchestrated()) {
+    console.log(`${observed.length} pattern(s) you seem to avoid are watched, not enforced: ${observed.map((c) => c.carries[0]).join(', ')}. `
+      + `Confirm one: atelier confirm --skill ${name} --rule <id>   (or --drop)`);
+  } else if (observed.length) {
     const byId = new Map(v.requirements.map((r) => [r.requirementId, r]));
     console.log(`\nOne thing worth a look. I noticed ${observed.length} pattern(s) you seem to avoid.`);
     console.log('I could be wrong — absence in your work does not prove it was deliberate — so these are');

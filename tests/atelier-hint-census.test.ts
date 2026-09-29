@@ -107,7 +107,7 @@ describe('generation budgets are not literals below the measured median (reviewe
 
   it("the help's first line teaches the documented front door, not the staged spelling", () => {
     const src = readFileSync('cli/atelier.mts', 'utf8');
-    const firstHelp = /console\.log\('atelier ([a-z-]+)/.exec(src);
+    const firstHelp = /console\.log\('\s*atelier ([a-z-]+)/.exec(src);
     expect(firstHelp?.[1], 'bare `atelier` must lead with the README front door').toBe('new');
   });
 });

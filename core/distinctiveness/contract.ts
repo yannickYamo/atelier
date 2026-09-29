@@ -196,7 +196,8 @@ export function approveFloor(
 export function toQualityFloorContract(v: FloorContractVersion): QualityFloorContract {
   const dimensions: Record<string, DimensionFloor> = {};
   for (const d of v.dimensions) {
-    dimensions[d.id] = { nonInferiorityMargin: d.margin!, gateRole: d.gateRole,
+    if (d.margin === null) throw new Error(`approved floor dimension ${d.id} has no margin.`);
+    dimensions[d.id] = { nonInferiorityMargin: d.margin, gateRole: d.gateRole,
       rationale: `protects ${d.sourceRequirementIds.join(', ')}: ${short(d.protectedBehavior)}` };
   }
   return { instrument: 'scoreDimensionByPolicy', dimensions };

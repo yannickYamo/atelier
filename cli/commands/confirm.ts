@@ -33,7 +33,7 @@ export function confirmBoundary(): void {
   const drop = argv.includes('--drop');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const activeHash = store.getActive(L) ?? die(`no active version for ${name}.`);
-  const sv = store.getSkillVersion(L, activeHash)!;
+  const sv = store.getSkillVersion(L, activeHash) ?? die(`skill version ${activeHash} is missing.`);
   const prev = store.getStandard(L, sv.standardVersionHash) ?? die('standard missing.');
 
   const found = resolveRule(prev.requirements, ruleRef);

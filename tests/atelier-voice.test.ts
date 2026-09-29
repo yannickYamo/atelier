@@ -132,7 +132,9 @@ describe('P1: the skill carries passages the author wrote', () => {
     expect(md).toContain('## How I sound');
     expect(md).toMatch(/Never take my topics, facts,\s+names, figures, sentences, coined terms or stories/);
     expect(md).toContain(`> ${v.passages[0].split('\n')[0]}`);
-    expect(md).toMatch(/run about \d+ to \d+ words/);
+    // a range when the pieces vary, one number when they do not ("about 200 to 200" read as a defect)
+    expect(md).toMatch(/run about \d+( to \d+)? words/);
+    expect(md).not.toMatch(/run about (\d+) to \1 words/);
     expect(JSON.parse(pkg.assurance['voice.json'])).toEqual(JSON.parse(JSON.stringify(v)));
     expect(renderAgentSkill(std, compileArchitecture(std), 'x', 'd').files['SKILL.md']).not.toContain('How I sound');
   });
@@ -260,6 +262,11 @@ describe('the voice layer: register, and bands that choose rather than steer', (
     const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FULL_FORM');
     expect(r?.requirement.statement).toMatch(/^Contract as I do/);
     expect(r?.conformance.weak).toBeUndefined();
+  });
+  it('and a cap on contractions too, so a repair told to cut "do not" cannot contract everything', () => {
+    const r = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'CONTRACTION');
+    expect(r?.requirement.statement).toMatch(/^Contract as often as I do, not more: at most [\d.]+ contractions per 1,000 words/);
+    expect(r?.requirement.measurement?.params.maxPer1000).toBeGreaterThan(0);
   });
   it('first-person and signature bands are weak: checked and used to choose, never instructed', () => {
     const fp = rules.find((x) => (x.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'FIRST_PERSON');

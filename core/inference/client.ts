@@ -125,6 +125,30 @@ export type InferenceTermination =
 export const isReadableTermination = (t: InferenceTermination): boolean => t.kind === 'COMPLETE';
 
 /**
+ * THE MODEL NAMED IS NOT ONE THIS BACKEND SERVES. The key works; the name does not. Anthropic answers
+ * 404, a gateway such as LiteLLM answers 400 "Invalid model name", and both used to reach a person as raw
+ * JSON that never named the setting to change. The first run of the shipped CLI died here, on a default.
+ *
+ * Distinct from a refusal (the model answered and declined) and from an account problem (the key was
+ * refused), because the fix differs: name another model. A caller running on a DEFAULT model may try its
+ * other configured model and say so (discovery does); a model the person named is theirs to change.
+ */
+export class ModelUnavailable extends Error {
+  constructor(readonly model: string, readonly providerDetail: string) {
+    super(`the model "${model}" is not available on this backend. Name one it serves: ATELIER_MODEL for every step, `
+      + `or ATELIER_DISCOVERY_MODEL / ATELIER_TARGET_MODEL for one (\`atelier check\` tests them before anything is spent).`
+      + `\n  the backend said: ${providerDetail.replace(/\s+/g, ' ').slice(0, 300)}`);
+    this.name = 'ModelUnavailable';
+  }
+}
+
+/** Whether a provider's error says the model id is unknown to it. Status and body, as both providers see them. */
+export const isUnknownModel = (status: number | undefined, body: string): boolean =>
+  (status === 404 && /\bmodel\b/i.test(body))
+  || ((status === 400 || status === 404)
+    && /invalid model|unknown model|no such model|model[^.\n]{0,60}(?:not found|does not exist|not supported|is not available)/i.test(body));
+
+/**
  * Raised when a generation did not finish, so no partial artifact can reach an observer.
  *
  * THIS THROWS RATHER THAN RETURNING, AND THAT IS DELIBERATE. `provider-conformance.ts` establishes
