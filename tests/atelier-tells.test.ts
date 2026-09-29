@@ -216,6 +216,20 @@ describe('em dashes and staccato runs are tells for every author, held to their 
   });
 });
 
+describe('an author who does use em dashes keeps them, and they do not loosen the cap on other moves', () => {
+  it('dashes stay out of the pooled rate, both when the cap is set and when a draft is checked', () => {
+    const dashy = (i: number): { id: string; text: string } => ({ id: `d${i}.md`, text: `Piece ${i} holds a view \u2014 and a reason for it, with room to breathe. `.repeat(30) });
+    const rule = deriveContrastRules([0, 1, 2, 3].map(dashy), [4, 5].map(dashy), ['draft one.', 'draft two.'], 'MACHINE_DISCOVERED')
+      .find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.includes('MACHINE_TELL'));
+    const p = rule?.requirement.measurement?.params as { never: string[]; maxPer1000: number };
+    expect(p.never).not.toContain('EM_DASH');
+    expect(p.maxPer1000).toBe(0.3);   // the floor: the author's dashes did not raise it
+    const draft = `A plain sentence here \u2014 with a dash, as the author writes. `.repeat(20);
+    const std = { requirements: [{ ...rule!.requirement, materiality: 'REQUIRED' }] } as unknown as StandardVersion;
+    expect(checkDraft('s', std, draft).checked.find((c) => c.requirementId === rule!.requirement.requirementId)?.result.verdict).not.toBe('VIOLATED');
+  });
+});
+
 describe('the fixes that need no model', () => {
   it('replaces em dashes with the punctuation a writer who never uses them would reach for, leaving code alone', () => {
     expect(replaceEmDashes('The chart runs — every morning — at 08:00.')).toBe('The chart runs, every morning, at 08:00.');
