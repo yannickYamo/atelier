@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { checksFor } from '../checks.js';
+import { checksFor, claimInstrumentOf } from '../checks.js';
 import { refineToStandard, checkDraftAsync, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -331,9 +331,9 @@ export async function invoke(): Promise<void> {
   const temperature = flag('--temperature') === undefined ? undefined : Number(flag('--temperature'));
   const settings: InvocationSettings = {
     atelierVersion: version(),
-    // TODO(claims): once cli/checks.ts exports claimInstrumentOf(checks), record its qualified and
-    // degraded fields as well; the instrument's own name is what is available here today.
     claimInstrument: checks.claimSensor?.instrument ?? null,
+    // Read when the record is written, after the run: a reader that degraded mid-run says so here.
+    get claim() { return claimInstrumentOf(checks); },
     tasteVeto: [...(permissions?.veto ?? [])].sort(),
     learnedTellsHash: sha(JSON.stringify(checks.learnedTells ?? [])),
     formatProfile: checks.format?.id ?? null,

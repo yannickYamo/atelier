@@ -47,6 +47,11 @@ npm run acceptance:carriers -- --host codex
 | C27 | a REQUIRED counted rule is guarded with or without a floor margin | `checkCandidate` compares every general REQUIRED measured rule pass/fail on the baseline's stored drafts against the candidate's (`requiredFlips`); an automatic promotion names measured rules the floor does not guard; in `fix` only a REQUIRED rule getting worse is a deterministic regression |
 | C28 | a rewrite may not make a claim stronger | `spanIntegrity` refuses a dropped or strengthened modal, a dropped stance frame, an added figure or name, an added cause, "one of the" turned superlative and an added intensifier; a span merged with an unsourced claim is checked outside the claim |
 | C29 | a failed draft call costs that draft, not the run | `invoke --drafts N` keeps the drafts that came back and records the failures; only no draft at all fails the run |
+| C30 | the claim check reads headings and tables | an invented figure in a `#` heading or a table row is flagged, and `verify --repair` cuts the line |
+| C31 | only a qualified claim reader cuts | an unqualified reader's findings are an `UNSOURCED·reader` warning, the pattern check gates, and `ATELIER_CLAIMS_GATE=reader` overrides that, loudly |
+| C32 | a reader failure never ships an invented figure as fixed | the sensor degrades for good, both sides of a comparison use one instrument, and claims flagged before the failure are cut |
+| C33 | a FEATURE rule is a suggestion | discovery suggests PREFERRED, never REQUIRED; a feature that would ask for more links, figures, names or quotations is only ever a cap |
+| C34 | VETO is per rule | pooled labels never give the taste reader VETO on a rule with no confirmed miss of its own |
 
 ## CLAUDE CODE, live session, human
 

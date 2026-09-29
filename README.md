@@ -85,11 +85,15 @@ that doesn't trace is cut and listed, so you can add the real one.
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
 - In a white paper, a report or a contract, nothing passes as general knowledge.
-- On 28 pieces no test had used, the reader caught all 35 planted inventions (a pattern check caught 9) and
-  left 35 of 38 clean drafts alone
-  ([result](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An earlier version failed the same bar on
-  essays, and that is recorded too. Expect it to cut a true detail now and then;
-  `atelier material --skill <name> <notes>` binds your notes, so a cut story comes back.
+- Only a qualified reader may cut. On 28 pieces no test had used, version 2 caught all 35 planted inventions
+  (a pattern check caught 9) and left 35 of 38 clean drafts alone
+  ([result](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An audit then found it did not read headings
+  or tables, and could cut a true story written in markdown. The fixed reader (version 3) reports what it
+  finds, but it does not cut until it is qualified again. Until then the cut comes from the pattern check,
+  which has never flagged a true piece in either study and misses about half of real inventions.
+- Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
+- Expect it to cut a true detail now and then. `atelier material --skill <name> <notes>` binds your notes,
+  so a cut story comes back.
 
 ## What it builds: the whole harness
 
@@ -269,7 +273,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 108 files and 1640 tests, runs offline, and drives the shipped binary end to end.
+The suite is 108 files and 1738 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 
