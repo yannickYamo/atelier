@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { mapLimit } from '../../core/inference/concurrency.js';
+import { mapLimitSettled } from '../../core/inference/concurrency.js';
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
@@ -339,8 +339,19 @@ export async function runOnce(
     }
   }
   const n = select && contract === null ? Math.max(1, Math.floor(select.n)) : 1;
-  const written = await mapLimit(Array.from({ length: n }, (_, i) => i), n, () => spendOneWithResult(client, budget, servedText, task, contract));
-  const picked = n > 1 && select ? await select.choose(written.map((w) => w.piece)) : { index: 0, why: '' };
+  // A FAILED DRAFT CALL COSTS THAT DRAFT, NOT THE RUN. With several drafts, the ones that came back are
+  // kept and the choice is made among them; the failure is said and recorded. Only when none came back
+  // is there nothing to deliver, and the first error is what the person sees.
+  const settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, () => spendOneWithResult(client, budget, servedText, task, contract));
+  const written = settled.flatMap((x) => (x.ok ? [x.value] : []));
+  const failures = settled.flatMap((x) => (x.ok ? [] : [(x.error as Error).message?.split('\n')[0] ?? String(x.error)]));
+  if (!written.length) {
+    const first = settled.find((x) => !x.ok);
+    throw first && !first.ok ? first.error : new Error('no draft was written');
+  }
+  if (failures.length) process.stderr.write(`atelier: ${failures.length} of ${n} draft call(s) failed (${failures[0]}); choosing among the ${written.length} that came back.\n`);
+  const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece))
+    : { index: 0, why: n > 1 ? `the only draft of ${n} that came back` : '' };
   let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   if (contract !== null && claimGuard) {
     const found = await claimGuard(stringLeaves(draft));
@@ -383,7 +394,8 @@ export async function runOnce(
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
     ...(refined.repair ? { repair: refined.repair } : {}),
-    ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why } } : {}) };
+    ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
+      ...(failures.length ? { written: written.length, failed: failures } : {}) } } : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.
