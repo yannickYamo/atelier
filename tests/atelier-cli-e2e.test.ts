@@ -267,10 +267,14 @@ describe('E2E: promote does not install what the gate already rejected', () => {
 });
 
 describe('E2E: rollback reinstalls the bytes that version built', () => {
-  it('the installed files equal the STORED package, byte for byte', () => {
-    const { dataRoot, projectDir, champ } = seed();
+  it('the installed files equal the STORED package, byte for byte, and the move is an event', () => {
+    const { dataRoot, projectDir, champ, L } = seed();
+    store.setActive(L, 'k-cand');
     const out = run(dataRoot, projectDir, 'rollback', '--skill', SKILL, '--to', 'k-champ');
     expect(out).toContain(champ.pkg.packageHash);
+    // a pointer move the log could not see left the newest PROMOTED reading as the live version
+    expect(store.readEvents(L).filter((e) => e.kind === 'ROLLED_BACK'))
+      .toEqual([expect.objectContaining({ skillVersionHash: 'k-champ', supersededActive: 'k-cand', packageHash: champ.pkg.packageHash })]);
     for (const [rel, content] of Object.entries(champ.pkg.files)) {
       expect(readFileSync(join(projectDir, '.claude', 'skills', champ.pkg.skillId, rel), 'utf8')).toBe(content);
     }
@@ -293,6 +297,7 @@ describe('E2E: rollback reinstalls the bytes that version built', () => {
     expect(out).toContain('EXIT:1');
     expect(out).toContain('cannot be reinstalled as it was built');
     expect(store.getActive(L)).toBe(before);
+    expect(store.readEvents(L).some((e) => e.kind === 'ROLLED_BACK')).toBe(false);
   });
 });
 
