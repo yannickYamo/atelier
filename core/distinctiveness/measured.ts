@@ -51,6 +51,40 @@ export function floorDimensions(v: StandardVersion): FloorDimension[] {
 
 const num = (m: Measurement, k: string): number | null => (typeof m.params[k] === 'number' ? m.params[k] : null);
 
+/**
+ * THE DIRECT D3 CHECK: A REQUIRED RULE THAT PASSED ON THE CHAMPION AND FAILS ON THE CANDIDATE.
+ *
+ * The floor's composite reads only rules with a margin, and its REQUIRED override reads only rules the
+ * floor has a dimension for. A REQUIRED measured rule with no margin was compared by nothing, so an
+ * automatic change could break it on every task and still be promoted. This is a pass/fail count on
+ * the same tasks: per task, a rule FAILS when any of its drafts is VIOLATED (the same number of drafts
+ * on both sides, so the "any" is symmetric). A rule regresses when some task flipped from passing to
+ * failing AND the candidate fails on more tasks than the champion did — one flip offset by one repair
+ * elsewhere is noise, not a regression. Conditional rules are excluded: whether one applies to a text
+ * is a judgement, and a count cannot tell "broke it" from "it did not apply". Returns rule keys.
+ */
+export function requiredFlips(v: StandardVersion, champion: readonly { readonly task: string; readonly outputs: readonly string[] }[],
+  candidate: readonly { readonly task: string; readonly outputs: readonly string[] }[], exclude: ReadonlySet<string> = new Set()): string[] {
+  const keys = keysOf(v.requirements);
+  const out: string[] = [];
+  v.requirements.forEach((r, i) => {
+    if (!r.measurement || r.materiality !== 'REQUIRED' || r.authority === 'EXPERT_REJECTED' || !isGeneralScope(r.appliesWhen) || exclude.has(keys[i])) return;
+    const m = r.measurement;
+    const fails = (texts: readonly string[]): boolean => texts.some((t) => measure(t, m).verdict === 'VIOLATED');
+    let champFails = 0; let candFails = 0; let flips = 0;
+    for (const c of candidate) {
+      const ch = champion.find((x) => x.task === c.task);
+      if (!ch?.outputs.length || !c.outputs.length) continue;
+      const a = fails(ch.outputs); const b = fails(c.outputs);
+      if (a) champFails++;
+      if (b) candFails++;
+      if (!a && b) flips++;
+    }
+    if (flips > 0 && candFails > champFails) out.push(keys[i]);
+  });
+  return out;
+}
+
 /** An observer's reading, turned so that higher is better. Null when the rule did not apply. */
 export function orientedScore(m: Measurement, r: ObserverResult): number | null {
   if (r.verdict === 'NOT_APPLICABLE' || r.value === null) return null;

@@ -279,3 +279,38 @@ describe('the standard wins over the persona', () => {
     expect(r.conflicting).toBe(1);
   });
 });
+
+describe('a rejected habit does not come back through the persona', () => {
+  // `build` composes exactly this: reconcilePersona(derivePersona(...), standardForbids(v)).
+  const persona = { points: [
+    { aspect: 'q', description: 'Turns to the reader with a question.', frequency: 'OFTEN' as const, quote: 'So why does this keep happening?' },
+    { aspect: 'd', description: 'Uses rhetorical questions to open a section.', frequency: 'SOMETIMES' as const, quote: 'It starts in March.' },
+    { aspect: 'r', description: 'Talks to the reader directly.', frequency: 'OFTEN' as const, quote: 'you should' },
+  ], dropped: 0 };
+  const stdWith = (authority: 'EXPERT_REJECTED' | 'EXPERT_RATIFIED', kind: 'GENERATIVE' | 'BOUNDARY'): StandardVersion => ({
+    standardVersionHash: 'h', evidenceId: null, workType: 'w', authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null,
+    requirements: [aRequirement({ requirementId: 'rq', statement: 'Use rhetorical questions.', kind, authority, materiality: 'REQUIRED',
+      measurement: { observer: 'PATTERN_RATE', params: { pattern: ['RHETORICAL_QUESTION'], min: 1 } } })],
+  });
+  it('a REJECTED "use rhetorical questions" drops the point that exhibits one and the point that describes one', async () => {
+    const { reconcilePersona, standardForbids } = await import('../core/compiler/persona.js');
+    const r = reconcilePersona(persona, standardForbids(stdWith('EXPERT_REJECTED', 'GENERATIVE')));
+    expect(r.points.map((x) => x.aspect)).toEqual(['r']);
+    expect(r.conflicting).toBe(2);
+  });
+  it('POLARITY — the same rule KEPT leaves the persona alone', async () => {
+    const { reconcilePersona, standardForbids } = await import('../core/compiler/persona.js');
+    expect(reconcilePersona(persona, standardForbids(stdWith('EXPERT_RATIFIED', 'GENERATIVE'))).points).toHaveLength(3);
+  });
+  it('a rejected BOUNDARY drops only the point that restates it, not the quote that uses the move', async () => {
+    const { reconcilePersona, standardForbids } = await import('../core/compiler/persona.js');
+    expect(reconcilePersona(persona, standardForbids(stdWith('EXPERT_REJECTED', 'BOUNDARY'))).points.map((x) => x.aspect)).toEqual(['q', 'r']);
+  });
+  it('a rejected LEXICON rule drops a point naming its words', async () => {
+    const { reconcilePersona, standardForbids } = await import('../core/compiler/persona.js');
+    const v: StandardVersion = { ...stdWith('EXPERT_REJECTED', 'BOUNDARY'),
+      requirements: [aRequirement({ requirementId: 'lx', authority: 'EXPERT_REJECTED', kind: 'BOUNDARY', measurement: { observer: 'LEXICON', params: { terms: ['leverage'] } } })] };
+    const p = { points: [{ aspect: 'l', description: 'Avoids "leverage".', frequency: 'ALWAYS' as const, quote: 'we used it' }, persona.points[2]], dropped: 0 };
+    expect(reconcilePersona(p, standardForbids(v)).points.map((x) => x.aspect)).toEqual(['r']);
+  });
+});
