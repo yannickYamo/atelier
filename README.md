@@ -1,7 +1,8 @@
 # Atelier
 
-**Learns your writing style from your own work, lets you approve each rule, and writes drafts in your
-voice that never invent a fact you did not supply.**
+**Holds AI drafts to a writing standard learned from real work: it never invents a fact you did not
+supply, and never adds a machine-writing tell the author does not use. Writing in someone's voice is
+the next thing it has to prove.**
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -34,18 +35,22 @@ write for *sounds like me*.
 It installs as a skill for Claude Code or Codex, a CLI guard (`atelier verify` exits 1 on a broken
 rule), an MCP server, and a Claude Code hook. See [USAGE](docs/USAGE.md) for every command.
 
-## Results
+## Where it stands
 
-| | |
-|---|---|
-| Invented specifics caught on 28 unused pieces (claim reader, version 2) | 35 of 35, with 35 of 38 clean drafts left alone (a pattern check caught 9) |
-| Style features that held on unseen work | 9 of 10, one writer |
-| Blind preference over a model given the author's own pieces | first on both briefs read, copying 3.6 six-word runs per piece against 97 |
+**The guard works.** On pieces no test had used, the claim reader caught 35 of 35 planted inventions and
+left 35 of 38 clean drafts alone, where a pattern check caught 9. Rewriting a post in the company's style,
+three ways on the same model, Atelier's was the only version that changed none of the post's claims
+and added no em dash or other catalogued tell; a plain prompt added five claims and more than twice
+the company's rate of em dashes. Read blind by the owner, Atelier's was ranked first.
 
-The last row is one author, read by the person who built the tool: encouraging, not settled. Two
-studies came back null and one negative, and they are listed beside the wins in
-[RESULTS](docs/RESULTS.md). Not yet shown: that it works for other writers read by other people. An
-outside blind study is next.
+**The voice is not shown yet.** In that test every version, Atelier's included, kept most of the
+original's sentences and its rhythm, where the company blog writes longer, flowing sentences. The one blind win
+on voice so far is one author, read by the person who built the tool. The next study tests new pieces,
+not rewrites, read blind by three people, with its pass rule sealed before any output exists
+([ROADMAP](docs/ROADMAP.md)).
+
+Two studies came back null and one negative. They are listed beside the wins in
+[RESULTS](docs/RESULTS.md).
 
 ## How it compares
 
