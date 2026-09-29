@@ -446,7 +446,8 @@ export interface DeliveryEvidence {
 }
 
 /** Where a task came from, so a wrong task can be traced to the surface that produced it. */
-export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS' | 'HOST_PROMPT';
+/** `FIX`: the task an earlier run was given, replayed by `atelier fix` to evaluate a repair. */
+export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS' | 'HOST_PROMPT' | 'FIX';
 
 export interface RequestBinding {
   /** what the command resolved the user's request to be */

@@ -47,8 +47,16 @@ import { checkCandidate, floorStateFor, promoteChecked, runtimeIdentity, TASTE_G
 import { keysOf } from '../../core/state/rule-key.js';
 import { REFLECT_SYSTEM, REFLECT_SCHEMA, reflectPrompt, parseReflection, type Failure } from '../../core/optimizer/reflect.js';
 import type { Mutation } from '../../core/optimizer/genome.js';
+import type { Provenance } from '../../core/fidelity/provenance.js';
 import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
   projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, carriedFrom } from '../runtime.js';
+
+/**
+ * Every run `fix` makes is a replay of the complained-about task, made to evaluate a repair: recorded as
+ * such, never as ORGANIC_USE, which is the only class a claim that a skill generalises may rest on. It
+ * is not the optimizer grading itself either (a person reads the pair), so `promote` still accepts it.
+ */
+const FIX_RUN: Provenance = 'FIX_EVALUATION';
 
 const ask = async (question: string, allowed: readonly string[]): Promise<string | null> => {
   if (!process.stdin.isTTY) return null;
@@ -188,7 +196,7 @@ export async function fix(): Promise<void> {
       const budget0: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
       const cur = resolveServedVersion(L, activeSv.skillVersionHash, '');
       inv = await runOnce(L, activeSv, cur.servedText, cur.servedHash, cur.delivery,
-        inv.input, c0, budget0, b0, 'ORGANIC_USE', cur.contractFile, 'HOST_PROMPT');
+        inv.input, c0, budget0, b0, FIX_RUN, cur.contractFile, 'FIX');
       ranStandard = current;
     }
   }
@@ -319,7 +327,7 @@ export async function fix(): Promise<void> {
   // candidate's must, or the pair compares two ways of serving rather than two implementations.
   const served = resolveServedVersion(L, candidate.skillVersionHash, '');
   const candRec = await runOnce(L, candidate, served.servedText, served.servedHash, served.delivery,
-    inv.input, client, budget, binding, 'ORGANIC_USE', served.contractFile, 'HOST_PROMPT');
+    inv.input, client, budget, binding, FIX_RUN, served.contractFile, 'FIX');
 
   await settleBlindPick(L, name, inv, candidate, candRec, pkg,
     { requirementId: op.requirementId, from: op.from, to: op.to },
