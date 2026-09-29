@@ -297,7 +297,10 @@ export async function fix(): Promise<void> {
     standardVersionHash: ranStandard.standardVersionHash, architectureHash: nextArch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
   // ── CONSTRAINT B, AT THE MINT ── a repair that moved the standard dies here, before anything ships.
-  assertStandardUnchanged(ranStandard, store.getStandard(L, candidate.standardVersionHash) ?? ranStandard);
+  // The incumbent is the version the complaint ran on; its recorded standard is what the candidate
+  // must carry, and what it was rendered from must still hash to it.
+  const incumbent = store.getSkillVersion(L, inv.skillVersionHash) ?? die(`SkillVersion ${inv.skillVersionHash} missing.`);
+  assertStandardUnchanged(incumbent, candidate, ranStandard);
   if (candidate.standardVersionHash !== inv.standardVersionHash) {
     die(`REPAIR INVARIANT: candidate is bound to ${candidate.standardVersionHash} but the complaint is about ${inv.standardVersionHash}. Nothing was changed.`);
   }

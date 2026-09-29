@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { componentFor, type SkillArchitecture } from '../core/architecture/compile.js';
 import { renderAgentSkill } from '../renderers/agent-skill/render.js';
-import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
+import { standardHashOf, type StandardVersion, type Requirement } from '../core/state/canonical-state.js';
 import type { InferenceClient, InferenceRequest, Budget } from '../core/inference/client.js';
 import {
   ATELIER_CLI_DELIVERY, assertDeliveryClaim, assertMatrix, describeMatrix, type Carrier,
@@ -35,13 +35,13 @@ const req = (id: string, over: Partial<Requirement> = {}): Requirement =>
   aRequirement({ requirementId: id, statement: `rule ${id}`, materiality: 'PREFERRED', ...over });
 
 const std = (reqs: Requirement[]): StandardVersion => ({
-  standardVersionHash: 'sv1', evidenceId: 'e', workType: 'analysis', requirements: reqs,
+  standardVersionHash: standardHashOf({ evidenceId: 'e', workType: 'analysis', requirements: reqs }), evidenceId: 'e', workType: 'analysis', requirements: reqs,
   authorityState: 'RATIFIED', mintedAt: '2026-08-23T00:00:00Z', supersedes: null, reason: null,
 });
 
 const compiled = (reqs: Requirement[]) => {
   const v = std(reqs);
-  const arch: SkillArchitecture = { architectureHash: 'ar', standardVersionHash: 'sv1', components: reqs.map(componentFor) };
+  const arch: SkillArchitecture = { architectureHash: 'ar', standardVersionHash: v.standardVersionHash, components: reqs.map(componentFor) };
   return { v, arch, pkg: renderAgentSkill(v, arch, 'skill', 'desc') };
 };
 
@@ -72,7 +72,7 @@ describe('an OUTPUT_CONTRACT constrains the generation, not just the directory',
     const c = capturing();
     const budget: Budget = { spentUsd: 0, capUsd: 1 };
     const rec = await runOnce(
-      L, { skillVersionHash: 'k1', standardVersionHash: 'sv1', architectureHash: 'ar' },
+      L, { skillVersionHash: 'k1', standardVersionHash: v.standardVersionHash, architectureHash: 'ar' },
       pkg.runtime['SKILL.md'], 'p1',
       { expectedPackageHash: 'p1', servedPackageHash: 'p1', matched: true, servedFiles: Object.keys(pkg.runtime) },
       'a task', c.client, budget, A_BINDING, 'ORGANIC_USE', contract,

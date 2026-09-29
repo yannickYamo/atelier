@@ -20,6 +20,7 @@ import type { Prerequisite } from './prerequisite.js';
 // This one says why an INVOCATION was made (organic use, dev probe, stress probe). They share no
 // values. An inline `import()` was hiding the collision at the one place both are in scope.
 import type { Provenance as InvocationProvenance } from '../fidelity/provenance.js';
+import { createHash } from 'node:crypto';
 
 /**
  * Who stands behind a requirement.
@@ -608,6 +609,27 @@ export function assertFeedbackDidNotMutate(before: StandardVersion, after: Stand
       + 'Feedback accumulates in EvidenceHistory and may propose a change. An authority-changing update '
       + 'mints a new StandardVersion with an explicit supersedes link and a recorded reason.',
     );
+  }
+}
+
+/**
+ * WHAT A STANDARD'S HASH IS A HASH OF, as one function. Every minting site (ratify-close, amend,
+ * confirm, add) hashes exactly `{ evidenceId, workType, requirements }` in that key order, and
+ * `mintedAt`, `supersedes`, `reason` and `authorityState` sit outside it. The store recomputes this on
+ * every read: a file whose content no longer hashes to its name was edited by hand, and serving it
+ * would put words the person never ratified under an identity they did.
+ */
+export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements'>): string =>
+  createHash('sha256').update(JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements })).digest('hex').slice(0, 16);
+
+/** Throws unless `v`'s content hashes to the name it carries. */
+export function assertStandardIntegrity(v: StandardVersion, where = 'standard'): void {
+  const recomputed = standardHashOf(v);
+  if (recomputed !== v.standardVersionHash) {
+    throw new Error(`STORE: ${where} ${v.standardVersionHash} does not hash to its name (its content hashes to ${recomputed}). `
+      + 'A standard is content-addressed, so this file was edited after it was minted. It is not served: '
+      + 'what the person ratified is no longer what it says. Restore it from history, or mint the change '
+      + 'properly with atelier amend / confirm.');
   }
 }
 

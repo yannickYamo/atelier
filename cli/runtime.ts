@@ -63,7 +63,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
   'task', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
-  'why', 'work-type',
+  'why', 'work-type', 'override',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
