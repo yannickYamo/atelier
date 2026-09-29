@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // THE CLAIM READER'S QUALIFICATION BATTERY (studies/CLAIM_READER_QUALIFICATION_PREREGISTRATION.md for v1,
-// studies/CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md for v2: the sealed version and seed below are v2's).
+// studies/CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md for v2,
+// studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md for v3: the sealed version and seed below are v3's).
+// v3 reads headings and table rows, so from v3 excerpts keep their headings, and two plant kinds put the
+// invention in a heading or a table.
 //
 // A discovered rule becomes a qualified sensor before it becomes a hard gate. UNSOURCED is a hard gate,
 // and its reader had never been measured. This builds the battery and scores it, nothing else:
@@ -30,12 +33,12 @@ import { modelSensor, patternSensor, READER_VERSION } from '../../dist/core/loop
 import { wordsOf } from '../../dist/core/observers/text.js';
 import { clopperPearson } from '../../dist/core/stats/sign-test.js';
 
-const SEALED_READER_VERSION = '0279163b';
-const SEED = 'claim-reader-v2-2026-09-29';
+const SEALED_READER_VERSION = 'a173339d';
+const SEED = 'claim-reader-v3-2026-09-29';
 const DEV_PIECES = 5;
 const EXCERPTS_PER_PIECE = 2;
 const EXCERPT_WORDS = 350;
-const KINDS = ['FIGURE', 'DATED_EVENT', 'NAMED_QUOTE', 'ANONYMOUS_QUOTE', 'ATTRIBUTED_STAT', 'LINKED_FIGURE', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT'];
+const KINDS = ['FIGURE', 'DATED_EVENT', 'NAMED_QUOTE', 'ANONYMOUS_QUOTE', 'ATTRIBUTED_STAT', 'LINKED_FIGURE', 'FIRST_PERSON_EVENT', 'SECOND_HAND_EVENT', 'HEADING_FIGURE', 'TABLE_FIGURE'];
 const KIND_ASK = {
   FIGURE: 'a sentence stating a specific measured quantity (a count, a duration, a percentage or a change from one number to another) about the subject',
   DATED_EVENT: 'a sentence describing something that happened on a particular date or in a particular month and year',
@@ -45,6 +48,8 @@ const KIND_ASK = {
   LINKED_FIGURE: 'a sentence stating a figure followed by a markdown link to a source URL',
   FIRST_PERSON_EVENT: 'a sentence in which the author (I or we) recounts something they did or saw, as lived experience',
   SECOND_HAND_EVENT: 'a sentence recounting what happened at a team or company the author says they know or worked with',
+  HEADING_FIGURE: 'a markdown section heading (one line starting with "## ") that states a specific measured quantity about the subject',
+  TABLE_FIGURE: 'a small markdown table (a header row, a separator row and one or two rows) in which one cell states a specific measured quantity about the subject',
 };
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i === -1 ? d : process.argv[i + 1]; };
@@ -73,14 +78,16 @@ const dev = new Set(ordered.slice(0, DEV_PIECES).map((p) => p.id));
 
 /** Excerpts: whole paragraphs from a seeded start, until EXCERPT_WORDS; two per piece that fits, apart. */
 function excerptsOf(p) {
-  const paras = p.text.split(/\n\s*\n/).map((x) => x.trim()).filter((x) => x && !/^#/.test(x) && wordsOf(x).length >= 8);
+  // Headings are kept with the prose that follows them (v3 reads them); they never start an excerpt or count toward its length.
+  const heading = (x) => /^#{1,6}\s/.test(x);
+  const paras = p.text.split(/\n\s*\n/).map((x) => x.trim()).filter((x) => x && (heading(x) || wordsOf(x).length >= 8));
   const out = [];
-  const starts = [...paras.keys()].sort((a, b) => rank(`${p.id}|${a}`) - rank(`${p.id}|${b}`));
+  const starts = [...paras.keys()].filter((i) => !heading(paras[i])).sort((a, b) => rank(`${p.id}|${a}`) - rank(`${p.id}|${b}`));
   const used = new Set();
   for (const s of starts) {
     if (out.length >= EXCERPTS_PER_PIECE) break;
     const take = []; let n = 0;
-    for (let i = s; i < paras.length && n < EXCERPT_WORDS; i++) { if (used.has(i)) break; take.push(i); n += wordsOf(paras[i]).length; }
+    for (let i = s; i < paras.length && n < EXCERPT_WORDS; i++) { if (used.has(i)) break; take.push(i); if (!heading(paras[i])) n += wordsOf(paras[i]).length; }
     if (n < EXCERPT_WORDS * 0.6) continue;
     take.forEach((i) => used.add(i));
     out.push(take.map((i) => paras[i]).join('\n\n'));
@@ -97,8 +104,8 @@ const call = (sys, user, schema, name) => spend(budget, 0.05, async () => {
   return { value: x.json, cost: x.cost };
 });
 
-const PARAPHRASE_SYS = 'You rewrite a passage as a fresh draft in your own words, as if drafting a post from notes. Keep EVERY fact exactly: every figure, date, name, quotation, link and story stays, with the same meaning. Do not add any fact, figure, date, name, quotation, link or story that is not in the passage. Change the wording and sentence order freely.';
-const PLANT_SYS = 'You are building a test for a fact-checking tool. You insert exactly ONE new sentence into a draft, at a natural position, and change nothing else. The new sentence must state something specific that appears neither in the draft nor in the notes: it is an invention, and it must read naturally in the draft\'s voice.';
+const PARAPHRASE_SYS = 'You rewrite a passage as a fresh draft in your own words, as if drafting a post from notes. Keep EVERY fact exactly: every figure, date, name, quotation, link and story stays, with the same meaning. Do not add any fact, figure, date, name, quotation, link or story that is not in the passage. Keep markdown headings as headings and tables as tables. Change the wording and sentence order freely.';
+const PLANT_SYS = 'You are building a test for a fact-checking tool. You insert exactly ONE new sentence into a draft (or, when asked, one heading or one small table), at a natural position, and change nothing else. The new sentence must state something specific that appears neither in the draft nor in the notes: it is an invention, and it must read naturally in the draft\'s voice.';
 
 async function paraphrase(excerpt) {
   for (let t = 0; t < 3; t++) {
@@ -112,12 +119,14 @@ async function paraphrase(excerpt) {
 
 async function plant(draft, material, kind) {
   for (let t = 0; t < 3; t++) {
-    const r = await call(PLANT_SYS, `NOTES (the author's material):\n${material}\n\nDRAFT:\n${draft}\n\nInsert ${KIND_ASK[kind]}. Return the whole new draft, and the inserted sentence exactly as it appears in it.`,
+    const r = await call(PLANT_SYS, `NOTES (the author's material):\n${material}\n\nDRAFT:\n${draft}\n\nInsert ${KIND_ASK[kind]}. Return the whole new draft, and the inserted sentence (or heading, or table) exactly as it appears in it.`,
       { type: 'object', additionalProperties: false, required: ['draft', 'inserted'], properties: { draft: { type: 'string' }, inserted: { type: 'string' } } }, 'emit_planted');
     const d = r?.draft ?? ''; const s = (r?.inserted ?? '').trim();
     if (!d || !s || !d.includes(s) || draft.includes(s)) continue;
     const newNums = numbersIn(s).filter((n) => !numbersIn(material).includes(n));
-    if (['FIGURE', 'ATTRIBUTED_STAT', 'LINKED_FIGURE', 'DATED_EVENT'].includes(kind) && !newNums.length) continue;
+    if (['FIGURE', 'ATTRIBUTED_STAT', 'LINKED_FIGURE', 'DATED_EVENT', 'HEADING_FIGURE', 'TABLE_FIGURE'].includes(kind) && !newNums.length) continue;
+    if (kind === 'HEADING_FIGURE' && !/^#{1,6}\s/.test(s)) continue;
+    if (kind === 'TABLE_FIGURE' && !/^\|.*\|\s*\n\|[\s:|-]+\|/m.test(s)) continue;
     if (kind === 'LINKED_FIGURE' && !/\]\(https?:\/\//.test(s)) continue;
     if (kind.endsWith('QUOTE') && !/["“”]/.test(s)) continue;
     return { draft: d, inserted: s };
