@@ -63,6 +63,15 @@ export const TELL_FAMILIES: readonly TellFamily[] = [
 ];
 
 /**
+ * FAMILIES THAT ONLY BAN. An em dash or a run of short sentences is a tell when the author never writes one,
+ * and ordinary punctuation or rhythm when they do. So they count only against authors who never use them
+ * (the rule's `never` list); for an author who does, they stay out of the pooled rate, where a
+ * dash-heavy corpus inflated the cap on every other move (one measured at 9.5 per 1,000 words). Their
+ * own rate is held by the counted rules discovery keeps, such as a cap on em dashes.
+ */
+export const BAN_ONLY_FAMILIES: ReadonlySet<string> = new Set(['EM_DASH', 'STACCATO_RUN']);
+
+/**
  * THE CONTRASTIVE VERDICT, every spelling of it: "isn't X, it's Y", "not X. It's Y", "not X, but Y",
  * "X rather than Y" as a verdict, "has little to do with… what matters is". Capping one spelling moved
  * the move onto the next in every round, so the move is counted as one thing.
