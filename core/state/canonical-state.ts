@@ -525,7 +525,12 @@ export interface InvocationRecord {
    */
   readonly repair?: RepairRecord;
   /** when several drafts were written and one delivered: how many, and why that one */
-  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string };
+  /**
+   * `drafts` is how many were asked for; when some calls failed, `written` is how many came back and
+   * `chosen` indexes those, and `failed` says why each missing one is missing.
+   */
+  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string;
+    readonly written?: number; readonly failed?: readonly string[] };
 }
 
 export interface RepairPair {
