@@ -16,7 +16,7 @@ import type { StandardVersion, Requirement } from '../state/canonical-state.js';
 import type { Budget, InferenceClient } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { sentencesOf, paragraphsOf } from '../observers/text.js';
-import { applyRepair, regressions, repairPrompt, REPAIR_SYSTEM, REPAIR_SCHEMA, type RepairTarget, type Reverted } from '../loop/repair.js';
+import { applyRepair, regressions, repairPrompt, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type RepairTarget, type Reverted } from '../loop/repair.js';
 import { checkDraftAsync, type CheckOptions } from '../loop/run-repair.js';
 import { readTaste, squash, vetoMisses, type TasteReading } from './reader.js';
 
@@ -76,7 +76,7 @@ export async function refineTaste(
   let res: Awaited<ReturnType<InferenceClient['complete']>>;
   try {
     res = await spend(budget, 0.05, async () => {
-      const x = await client.complete({ stableBlock: REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
+      const x = await client.complete({ stableBlock: checks.placeholders ? REPAIR_SYSTEM_WITH_PLACEHOLDERS : REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
         toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.', schema: REPAIR_SCHEMA, maxTokens: 4000 });
       return { value: x, cost: x.cost };
     });
@@ -84,7 +84,7 @@ export async function refineTaste(
     return { output: text, targeted, fixed: [], readings, why: `the rewrite could not run (${(e as Error).message.split('\n')[0]})` };
   }
   const reverted: Reverted[] = [];
-  const next = applyRepair(text, targets, (res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? [], reverted);
+  const next = applyRepair(text, targets, (res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? [], reverted, [], checks.placeholders ?? false);
   if (next === text) return { output: text, targeted, fixed: [], readings, why: reverted.length ? 'every rewrite changed what the text claims, so none was kept' : 'the rewrite returned nothing usable' };
   // No counted rule that held may break.
   const worse = regressions(await checkDraftAsync(skill, v, text, checks), await checkDraftAsync(skill, v, next, checks));

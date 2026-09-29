@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { USAGE } from '../cli/help.js';
 import { renderAgentSkill } from '../renderers/agent-skill/render.js';
 import { compileArchitecture } from '../core/architecture/compile.js';
-import type { StandardVersion } from '../core/state/canonical-state.js';
+import { standardHashOf, type StandardVersion } from '../core/state/canonical-state.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 beforeAll(() => {
@@ -258,10 +258,12 @@ const seedInferred = (): { data: string; proj: string; L: store.StoreLayout; fir
       { ...base, requirementId: 'p2', statement: 'Never open with a question.', kind: 'BOUNDARY', authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED', materiality: null },
     ],
   } as unknown as StandardVersion;
+  // content-addressed: the store refuses to serve a standard that does not hash to its name
+  (sv0 as { standardVersionHash: string }).standardVersionHash = standardHashOf(sv0);
   const arch = compileArchitecture(sv0);
   const pkg = renderAgentSkill(sv0, arch, 'demo', 'd');
   store.putStandard(L, sv0); store.putArchitecture(L, arch); store.putPackage(L, pkg);
-  store.putSkillVersion(L, { skillVersionHash: 'k0', skillName: 'demo', standardVersionHash: 'std0', architectureHash: arch.architectureHash,
+  store.putSkillVersion(L, { skillVersionHash: 'k0', skillName: 'demo', standardVersionHash: sv0.standardVersionHash, architectureHash: arch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: '2026-09-01T00:00:00Z', description: 'd' });
   store.setActive(L, 'k0');
   return { data, proj, L, first: 'k0' };
@@ -283,8 +285,8 @@ describe('the same standard minted twice is one version, not a conflict', () => 
   });
 
   it('the store still refuses a different body under an existing hash (the polarity)', () => {
-    const { L } = seedInferred();
-    const v = store.getStandard(L, 'std0')!;
+    const { L, first } = seedInferred();
+    const v = store.getStandard(L, store.getSkillVersion(L, first)!.standardVersionHash)!;
     expect(() => store.putStandard(L, { ...v, mintedAt: '2030-01-01T00:00:00Z', reason: 'again' })).not.toThrow();
     expect(store.putStandard(L, { ...v, mintedAt: '2030-01-01T00:00:00Z' }).mintedAt).toBe('2026-09-01T00:00:00Z');
     expect(() => store.putStandard(L, { ...v, workType: 'journal' })).toThrow(/two bodies cannot share one/);

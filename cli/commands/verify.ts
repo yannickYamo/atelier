@@ -58,6 +58,7 @@ export async function verify(): Promise<void> {
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);
+    for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
     if (argv.includes('--json')) {
       console.log(JSON.stringify({ output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd }, null, 1));
     } else {

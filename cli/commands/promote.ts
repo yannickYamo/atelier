@@ -195,6 +195,36 @@ export function promote(): void {
   if (prevSv && prevSv.standardVersionHash !== sv.standardVersionHash) {
     die(`PROMOTION REFUSED: ${cand} is bound to StandardVersion ${sv.standardVersionHash} but ${prevActive} is bound to ${prevSv.standardVersionHash}. Promoting would silently move what good means; that is not what this command does.`);
   }
+  // THE STANDARD IT CARRIES MUST STILL BE THE ONE THAT WAS RATIFIED. Promote never read it, so a
+  // hand-edited standard file was installed under the ratified identity; `getStandard` re-hashes.
+  let carried: ReturnType<typeof store.getStandard> = null;
+  try { carried = store.getStandard(L, sv.standardVersionHash); }
+  catch (e) { die(`PROMOTION REFUSED: ${(e as Error).message}`); }
+  if (!carried) die(`PROMOTION REFUSED: StandardVersion ${sv.standardVersionHash} is missing from the store.`);
+
+  // ── A CANDIDATE THE GATE ALREADY REJECTED IS NOT RE-OPENED BY A POINTER MOVE ─────────────────
+  //
+  // `fix` records a PROMOTION_GATE AUTO_REJECT when a ratified count says the candidate is worse, and a
+  // REPAIR_SETTLED REJECTED when the gate or the person turned it down. Both were written and never
+  // read here, so `promote` installed exactly what the loop had refused, and the refusal became a
+  // suggestion. Overriding stays possible — the person owns the skill — but it takes a stated reason,
+  // and the override is an event of its own so the ledger shows a refusal was overruled, not absent.
+  const events = store.readEvents(L);
+  const gateRejects = events.filter((e) => e.kind === 'PROMOTION_GATE' && e.candidateSkillVersionHash === cand && e.authority === 'AUTO_REJECT');
+  const settledRejects = foldRepairs(events).filter((r) => r.candidateSkillVersionHash === cand && r.outcome === 'REJECTED');
+  const override = flag('--override')?.trim() ?? '';
+  if (gateRejects.length || settledRejects.length) {
+    const said = [
+      ...gateRejects.map((e) => `the promotion gate auto-rejected it${typeof e.requirementId === 'string' ? ` on ${e.requirementId}` : ''}: ${(typeof e.why === 'string' ? e.why : '').split('.')[0]}`),
+      ...settledRejects.map((r) => `repair ${r.repairId} (${r.requirementId}: ${r.from} -> ${r.to}) was settled REJECTED${r.note ? ` — "${r.note}"` : ''}`),
+    ];
+    if (!override) {
+      die(`PROMOTION REFUSED: ${cand} was already rejected.\n  ${said.join('\n  ')}\n`
+        + `To install it anyway, say why:  atelier promote --skill ${name} --candidate ${cand} --why "<...>" --override "<why the rejection is wrong>"`);
+    }
+    store.appendEvent(L, { kind: 'PROMOTION_OVERRIDE', candidateSkillVersionHash: cand, reason: override, overruled: said, at: new Date().toISOString() });
+    console.log(`Overriding a recorded rejection (${said.length}): ${override}`);
+  }
 
   // ── WHICH RULE IS THIS A JUDGEMENT ABOUT? JOINED, NEVER GUESSED ──────────────────────────────
   //
@@ -203,7 +233,6 @@ export function promote(): void {
   // `--rule` names one explicitly when you promoted without comparing; the repair's own requirement is
   // the last fallback. When none of the three yields a rule, nothing rule-specific is written, because
   // a judgement filed against a requirement nobody examined is a fabricated label.
-  const events = store.readEvents(L);
   const compared = foldJudgements(events)
     .filter((r) => r.observer && r.candidateSkillVersionHash === cand
       && r.championSkillVersionHash === (prevActive ?? ''))

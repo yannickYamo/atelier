@@ -49,7 +49,7 @@ Atelier reads your work along eight dimensions, and checks each one the way it c
 | **Figure** | your metaphors and images, and where you draw them from | reading |
 | **Cadence** | how a section lands, the move that closes an argument | reading |
 
-Four things make it more than a style prompt:
+Five things make it more than a style prompt:
 
 - **It learns from the gap between you and the model.** Atelier has the model write plain drafts on your own
   topics, then counts what the model does that you don't. Each gap becomes a proposed rule carrying both
@@ -79,17 +79,21 @@ write.
 Your stories, figures and sources are yours to supply. A small model reads every draft for specifics:
 figures, dates, quotations, attributions, links, and stories told as lived. It says where each one came
 from, and code checks the claim against what you actually gave it: the passage it quotes must be in your
-material, the numbers must be there, and the specific must be in the sentence the reader named. Anything
+material, the numbers must be there, and the specific must really be where the reader said it was. Anything
 that doesn't trace is cut and listed, so you can add the real one.
 
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
 - In a white paper, a report or a contract, nothing passes as general knowledge.
-- On 28 pieces no test had used, the reader caught all 35 planted inventions (a pattern check caught 9) and
-  left 35 of 38 clean drafts alone
-  ([result](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An earlier version failed the same bar on
-  essays, and that is recorded too. Expect it to cut a true detail now and then;
-  `atelier material --skill <name> <notes>` binds your notes, so a cut story comes back.
+- Only a qualified reader may cut. On 28 pieces no test had used, version 2 caught all 35 planted inventions
+  (a pattern check caught 9) and left 35 of 38 clean drafts alone
+  ([result](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An audit then found it did not read headings
+  or tables, and could cut a true story written in markdown. The fixed reader (version 3) reports what it
+  finds, but it does not cut until it is qualified again. Until then the cut comes from the pattern check,
+  which has never flagged a true piece in either study and misses about half of real inventions.
+- Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
+- Expect it to cut a true detail now and then. `atelier material --skill <name> <notes>` binds your notes,
+  so a cut story comes back.
 
 ## What it builds: the whole harness
 
@@ -138,19 +142,22 @@ is built and tested offline; it has not yet looked after a live skill for weeks.
 
 ## What has been tested, and what hasn't
 
-Every study is pre-registered and published with its result, including the ones that failed
-([studies/](studies/README.md)).
+Every study is published with its result, including the ones that failed
+([studies/](studies/README.md)). The confirmations and qualifications were pre-registered before any
+output existed; the early voice rounds and the development runs were exploratory, and are marked as such.
 
 - **Voice.** Seven blind rounds on one public author's 20 posts, with the same writer model throughout. In
   the last round, read blind by this project's owner, Atelier ranked first on both briefs read, above the
   model given the author's own pieces. It copied far less (3.6 shared six-word runs per piece against 97)
-  and invented nothing (against 2 invented stories). The sealed gate as a whole still failed on two
-  criteria. This is one author, two briefs, and one reader who built the tool, so treat it as encouraging,
+  and none of its stories was caught as invented, where the pasted-examples version invented 2. A stricter
+  check run afterwards still found six invented details in those drafts, which is why the claim check was
+  rebuilt (below). The sealed gate as a whole failed on two criteria. This is one author, two briefs, and one reader who built the tool, so treat it as encouraging,
   not settled ([result](studies/VOICE_ROUNDS_RESULT.md)).
 - **Invented claims.** The claim reader was qualified against bars set in advance, on pieces it had never
   seen (above).
 - **What it keeps.** On 40 pieces no test had used, 9 of the 10 features selection kept still separated
-  new pieces from new model drafts ([result](studies/SENSOR_QUALIFICATION_RESULT.md)). A reader for the
+  new pieces from new model drafts ([result](studies/SENSOR_QUALIFICATION_RESULT.md)). That was one writer
+  in one genre, technical explainers, checked against a second sample rather than a human reader. A reader for the
   deeper layers (figures, argument, how a piece opens and lands) failed the same test. So those layers are
   still carried by your pieces and the persona, and read by the taste reader, but not measured.
 - **Not yet shown:**
@@ -172,8 +179,8 @@ Every study is pre-registered and published with its result, including the ones 
 | machine tells | its own habits come back | caught as moves, held to your own rate |
 | your stories, sources and figures | invented when missing | read for, traced to what you supplied; the rest cut and listed |
 | your sentences | lifted when pasted | shown for voice; copying flagged |
-| after the draft | nothing checks it | every rule checked; only what broke is rewritten |
-| next month | no memory of what went wrong | `fix` and `tend` learn from it, through a gate |
+| after the draft | nothing checks it | every counted rule checked, the rest read (reporting only, until you label it); only what broke is rewritten |
+| next month | no memory of what went wrong | `fix` and `tend` propose changes, installed only through a gate (not yet shown on a live skill) |
 | another model | re-prompt and hope | recompile the same standard |
 
 **Against skill and prompt optimizers:**
@@ -182,14 +189,16 @@ Every study is pre-registered and published with its result, including the ones 
 |---|---|---|---|---|
 | [GEPA](https://arxiv.org/abs/2507.19457) | prompt text, by reflecting on rollouts | a metric you supply | the metric's author | yes, given the metric |
 | [SkillOpt](https://arxiv.org/abs/2605.23904) | a skill file, through trajectory-driven edits | a validation gate you supply | the gate's author | yes |
-| SSO (arXiv:2607.28777) | a skill, without labels | its own judge's win margin | the judge | yes, circularly |
+| SSO (arXiv:2607.28777) | a skill, without labels | its own judge's win margin | the judge | yes, scored by its own judge |
 | EvoSkill (arXiv:2603.02766) | a set of skills, from execution failures | the task's success signal | whoever owns the task | yes |
 | **Atelier** | **how your standard is carried, never the standard** | **your work, approved by you rule by rule** | **only you** | **yes, below your standard** |
 
 Each of them needs a score someone else wrote, or lets its own judge decide. Taste has no such score.
-Atelier borrows their search (`atelier optimize` uses reflective proposals and a Pareto screen) and puts it
-under a standard you approved: its judge can block a change and never approve one, and a change installs
-only when your measured rules improve and nothing else gets worse. Atelier hasn't been benchmarked against
+Atelier borrows two ideas from their search, a reflective choice among legal changes and a Pareto screen
+over your measured rules, and applies them to how your rules are carried, never to their text. It puts
+that search under a standard you approved. Its judge can block a change and never install one. A change
+installs only when your measured rules improve and none regresses beyond its margin; rules no count reads
+are listed, not guarded. Atelier hasn't been benchmarked against
 these systems on a shared task yet; the difference is in the architecture, and you can check it in the code.
 
 **Against style checkers:** Vale, proselint, Acrolinx and Writer hold copy to rules someone wrote down.
@@ -264,7 +273,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 108 files and 1640 tests, runs offline, and drives the shipped binary end to end.
+The suite is 108 files and 1738 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 

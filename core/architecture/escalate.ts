@@ -109,6 +109,16 @@ export function proposeEscalation(
  * incapable of moving it. `assertArchitectureServesStandard` will refuse the result if it ever does.
  */
 export function applyEscalation(arch: SkillArchitecture, op: EscalateCarrier, newHash: string): SkillArchitecture {
+  // THE LAST PLACE A MOVE TO A CONTRACT CAN BE STOPPED, whoever proposed it: `fix`, `optimize` and any
+  // later proposer all mint through here. A component that OBSERVEs may be shown or checked, never
+  // enforced as a schema (see eligibleCarriers).
+  if (op.to === 'OUTPUT_CONTRACT') {
+    const observing = arch.components.find((c) => c.carries.includes(op.requirementId) && c.gateRole !== 'ENFORCE');
+    if (observing) {
+      throw new Error(`AUTHORITY ESCALATION: ${op.requirementId} is ${observing.gateRole}, and an OUTPUT_CONTRACT enforces. `
+        + 'Only a rule the owner made REQUIRED (and confirmed) may be carried as a contract.');
+    }
+  }
   const components: ArchitectureComponent[] = arch.components.map((c) =>
     c.carries.includes(op.requirementId)
       ? { ...c, carrier: op.to, rationale: `${c.rationale}; escalated ${op.from}->${op.to} after ${op.becauseInvocation}` }

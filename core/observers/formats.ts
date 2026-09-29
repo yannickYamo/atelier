@@ -27,6 +27,8 @@ export interface FormatProfile {
   readonly label: string;
   /** characters the platform accepts; over it the post is broken */
   readonly maxChars?: number;
+  /** what the platform counts one URL as, whatever its length (X shortens every link to 23 characters) */
+  readonly urlChars?: number;
   /** characters shown before a "see more" fold: the opening line should land within it */
   readonly foldChars?: number;
   /** where pieces of this format usually sit, in words */
@@ -36,7 +38,7 @@ export interface FormatProfile {
 }
 
 export const FORMATS: Readonly<Record<string, FormatProfile>> = {
-  'x-post': { id: 'x-post', label: 'a post on X', maxChars: 280, words: [5, 60], strictSpecifics: false },
+  'x-post': { id: 'x-post', label: 'a post on X', maxChars: 280, urlChars: 23, words: [5, 60], strictSpecifics: false },
   'linkedin-post': { id: 'linkedin-post', label: 'a LinkedIn post', maxChars: 3000, foldChars: 210, words: [60, 600], strictSpecifics: false },
   'blog-post': { id: 'blog-post', label: 'a blog post', words: [500, 5000], strictSpecifics: false },
   'book-chapter': { id: 'book-chapter', label: 'a book chapter', words: [1500, 12000], strictSpecifics: false },
@@ -49,14 +51,19 @@ export const FORMATS: Readonly<Record<string, FormatProfile>> = {
 /** The profile a class names, if it is a known format. Unknown classes carry none: nothing is assumed. */
 export const formatOf = (cls: string | null | undefined): FormatProfile | null => (cls ? FORMATS[normalizeClass(cls)] ?? null : null);
 
+/** A text's length as the platform counts it: every URL as `urlChars` where the format says so. */
+export const charsOf = (body: string, f: FormatProfile): number =>
+  (f.urlChars === undefined ? body.length : body.replace(/https?:\/\/\S+/g, 'x'.repeat(f.urlChars)).length);
+
 export interface FormatFindings { readonly hard: Span[]; readonly soft: Span[] }
 
 /** Check a text against its format's fixed facts: hard limits, and the usual length. */
 export function checkFormat(text: string, f: FormatProfile): FormatFindings {
   const hard: Span[] = []; const soft: Span[] = [];
   const body = text.trim();
-  if (f.maxChars !== undefined && body.length > f.maxChars) {
-    hard.push({ start: 0, end: text.length, text: body.slice(0, 80), why: `${body.length} characters; ${f.label} holds at most ${f.maxChars}` });
+  const chars = charsOf(body, f);
+  if (f.maxChars !== undefined && chars > f.maxChars) {
+    hard.push({ start: 0, end: text.length, text: body.slice(0, 80), why: `${chars} characters; ${f.label} holds at most ${f.maxChars}${f.urlChars !== undefined ? ` (a link counts as ${f.urlChars})` : ''}` });
   }
   if (f.foldChars !== undefined) {
     const first = body.split('\n')[0] ?? '';

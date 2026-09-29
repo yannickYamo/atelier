@@ -6,6 +6,178 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## [Unreleased] — targeting 0.5.0 (the pre-Phase-C audit)
+
+A full audit before Phase C covered detection, the loop, the moat and the competitor claims, and whether
+the study harness was ready. It found holes that would have made the study's measurements wrong. They are
+fixed here. No new feature.
+
+### Fixed: the invented-claim check (decision version 3, reader `a173339d`)
+
+- **Headings and table rows are read.** A figure in a heading or a table was never seen before.
+- **True stories are kept.** Markdown is stripped before matching, a story may span the sentences of one
+  paragraph, and compound and scaled numbers are read: "twenty-five" is 25; "fourteen" is not "four";
+  "one million" is not "3 million".
+- **A reader failure mid-repair no longer ships an invented figure as fixed.** The sensor degrades for
+  good, both sides of every comparison use one instrument, and claims the reader had flagged are cut.
+- **Only a qualified reader may cut.** Version 3 reports until it is re-qualified, and the pattern check
+  gates meanwhile. The record keeps the instrument, its version, whether it was qualified, whether it
+  degraded, and what it spent.
+
+### Fixed: the moat and the loop
+
+- **The standard's hash is checked on every load.** A hand-edited standard is refused.
+  `assertStandardUnchanged` now compares the incumbent with the candidate instead of a standard with
+  itself.
+- **A rejected habit no longer comes back through the persona.**
+- **Only a rule you made REQUIRED and confirmed can become an output schema.**
+- **`promote` refuses a candidate the gate or you already rejected**, unless `--override "<reason>"`, which
+  is recorded.
+- **Runs made by `fix` are recorded as FIX_EVALUATION, not organic use.** `STUDY` provenance exists for
+  studies.
+- **A REQUIRED measured rule that flips from pass to fail on a task blocks an automatic promotion**,
+  margin or not. Rules the floor does not guard are named. In `fix`, only REQUIRED regressions reject.
+- **Draft choice puts REQUIRED rules first, then taste**, and a draft too short to measure ranks last on
+  signals.
+- **A failed draft call keeps the drafts that came back.**
+- **The meaning check refuses seven more ways a rewrite can overstate:**
+  - a modal hardened ("can reduce" → "reduces");
+  - a stance dropped ("we think X" → "X");
+  - an added figure;
+  - an added name;
+  - correlation turned into cause;
+  - "one of the best" → "the best";
+  - an added intensifier.
+
+  A style span merged with a claim is still checked.
+- **The record can reproduce a study arm**: the claim instrument, the taste VETO set, the learned-tells
+  hash, the format, the version, the token limit and temperature, the flags, and the drafts not chosen.
+  The printed cost includes the claim reader.
+- **A run on a new surface names the earlier binding.**
+- `rollback` is recorded, and an accepted new binding sticks.
+
+### Fixed: detection and discovery
+
+- Front matter and code no longer inflate the counted features; the digit and serial-comma counts are no
+  longer biased.
+- **FEATURE rules are suggested PREFERRED, never REQUIRED.** A zero-width band becomes a cap. Features that
+  would ask for more links, figures, names or quotations are proposed only as caps, so they can't
+  contradict the claim check. Rules and signals are capped separately.
+- **The taste reader needs a confirmed miss on a rule itself to hold VETO on it.** Pooled labels no longer
+  grant it to a rule nobody labelled.
+- The learned phrase list no longer reads the reserved pieces (`--include-reserved` to opt in).
+- **Discovery's comparison drafts are written in the skill's format and at the author's length**, not as
+  900-word blog posts. Stale signals are cleared.
+- Class aliases (`blog`, `linkedin`, `whitepaper`, `x`). An X post counts a link as 23 characters.
+- A one-sided exact sign test, and a binomial tail for the blinding check, in `core/stats`.
+- A key with no credit, or refused, gets one plain line with the request id, not raw JSON.
+
+### Claims corrected
+
+- **Not every study was pre-registered.** The confirmations and qualifications were; the early rounds and
+  development runs were exploratory.
+- **Round 7's "invented nothing"** is now stated with the stricter check that found six invented details
+  afterwards.
+- **The comparison table says what exists.** Atelier borrows two ideas from GEPA-style search, applied to
+  how rules are carried. "Nothing else gets worse" is now "no measured rule regresses beyond its margin;
+  rules no count reads are listed, not guarded".
+- **Populations are stated** for every result.
+
+### Added: Phase C, built and not run
+
+- `studies/harness/phase-c-generate.mjs`, `phase-c-package.mjs` and `phase-c-score.mjs`, and the draft
+  pre-registration.
+- Fresh letters per reader and per brief, and sealed keys.
+- The packager refuses any file beside the letters: round 7's log sat next to its letter file.
+- The same facts go to every arm, and every counted feature of every draft is recorded, to test which
+  sensors track what readers prefer.
+
+## [Unreleased] — targeting 0.5.0 (the pre-Phase-C audit)
+
+A full audit before Phase C covered detection, the loop, the moat and the competitor claims, and whether
+the study harness was ready. It found holes that would have made the study's measurements wrong. They are
+fixed here. No new feature.
+
+### Fixed: the invented-claim check (decision version 3, reader `a173339d`)
+
+- **Headings and table rows are read.** A figure in a heading or a table was never seen before.
+- **True stories are kept.** Markdown is stripped before matching, a story may span the sentences of one
+  paragraph, and compound and scaled numbers are read: "twenty-five" is 25; "fourteen" is not "four";
+  "one million" is not "3 million".
+- **A reader failure mid-repair no longer ships an invented figure as fixed.** The sensor degrades for
+  good, both sides of every comparison use one instrument, and claims the reader had flagged are cut.
+- **Only a qualified reader may cut.** Version 3 reports until it is re-qualified, and the pattern check
+  gates meanwhile. The record keeps the instrument, its version, whether it was qualified, whether it
+  degraded, and what it spent.
+
+### Fixed: the moat and the loop
+
+- **The standard's hash is checked on every load.** A hand-edited standard is refused.
+  `assertStandardUnchanged` now compares the incumbent with the candidate instead of a standard with
+  itself.
+- **A rejected habit no longer comes back through the persona.**
+- **Only a rule you made REQUIRED and confirmed can become an output schema.**
+- **`promote` refuses a candidate the gate or you already rejected**, unless `--override "<reason>"`, which
+  is recorded.
+- **Runs made by `fix` are recorded as FIX_EVALUATION, not organic use.** `STUDY` provenance exists for
+  studies.
+- **A REQUIRED measured rule that flips from pass to fail on a task blocks an automatic promotion**,
+  margin or not. Rules the floor does not guard are named. In `fix`, only REQUIRED regressions reject.
+- **Draft choice puts REQUIRED rules first, then taste**, and a draft too short to measure ranks last on
+  signals.
+- **A failed draft call keeps the drafts that came back.**
+- **The meaning check refuses seven more ways a rewrite can overstate:**
+  - a modal hardened ("can reduce" → "reduces");
+  - a stance dropped ("we think X" → "X");
+  - an added figure;
+  - an added name;
+  - correlation turned into cause;
+  - "one of the best" → "the best";
+  - an added intensifier.
+
+  A style span merged with a claim is still checked.
+- **The record can reproduce a study arm**: the claim instrument, the taste VETO set, the learned-tells
+  hash, the format, the version, the token limit and temperature, the flags, and the drafts not chosen.
+  The printed cost includes the claim reader.
+- **A run on a new surface names the earlier binding.**
+- `rollback` is recorded, and an accepted new binding sticks.
+
+### Fixed: detection and discovery
+
+- Front matter and code no longer inflate the counted features; the digit and serial-comma counts are no
+  longer biased.
+- **FEATURE rules are suggested PREFERRED, never REQUIRED.** A zero-width band becomes a cap. Features that
+  would ask for more links, figures, names or quotations are proposed only as caps, so they can't
+  contradict the claim check. Rules and signals are capped separately.
+- **The taste reader needs a confirmed miss on a rule itself to hold VETO on it.** Pooled labels no longer
+  grant it to a rule nobody labelled.
+- The learned phrase list no longer reads the reserved pieces (`--include-reserved` to opt in).
+- **Discovery's comparison drafts are written in the skill's format and at the author's length**, not as
+  900-word blog posts. Stale signals are cleared.
+- Class aliases (`blog`, `linkedin`, `whitepaper`, `x`). An X post counts a link as 23 characters.
+- A one-sided exact sign test, and a binomial tail for the blinding check, in `core/stats`.
+- A key with no credit, or refused, gets one plain line with the request id, not raw JSON.
+
+### Claims corrected
+
+- **Not every study was pre-registered.** The confirmations and qualifications were; the early rounds and
+  development runs were exploratory.
+- **Round 7's "invented nothing"** is now stated with the stricter check that found six invented details
+  afterwards.
+- **The comparison table says what exists.** Atelier borrows two ideas from GEPA-style search, applied to
+  how rules are carried. "Nothing else gets worse" is now "no measured rule regresses beyond its margin;
+  rules no count reads are listed, not guarded".
+- **Populations are stated** for every result.
+
+### Added: Phase C, built and not run
+
+- `studies/harness/phase-c-generate.mjs`, `phase-c-package.mjs` and `phase-c-score.mjs`, and the draft
+  pre-registration.
+- Fresh letters per reader and per brief, and sealed keys.
+- The packager refuses any file beside the letters: round 7's log sat next to its letter file.
+- The same facts go to every arm, and every counted feature of every draft is recorded, to test which
+  sensors track what readers prefer.
+
 ## [0.4.0] — 2026-09-28 (taste detection)
 
 ### Added
