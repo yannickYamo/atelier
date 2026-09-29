@@ -562,8 +562,31 @@ export function listBindings(l: StoreLayout, skillVersionHash: string): BindingL
  */
 export function expectedBinding(l: StoreLayout, skillVersionHash: string, candidate?: RuntimeBinding): RuntimeBinding | null {
   const log = listBindings(l, skillVersionHash);
+  // A BINDING ALREADY ON THE LOG WAS ACCEPTED. The log only grows by a run that was allowed to happen:
+  // the first on a surface, the same configuration again, or one a person took with --accept-new-binding.
+  // Comparing only against the first binding made that acceptance last one run: the next invoke on the
+  // accepted model was refused again, as if nobody had said yes. The exact configuration matches itself;
+  // anything not on the log is still compared with the surface's first binding.
+  if (candidate) {
+    const h = bindingHash(candidate);
+    const accepted = log.find((b) => b.hash === h);
+    if (accepted) return accepted.binding;
+  }
   const onSurface = candidate ? log.filter((b) => b.binding.providerAdapter === candidate.providerAdapter) : log;
   return onSurface[0]?.binding ?? null;
+}
+
+/**
+ * The first binding of every OTHER surface, when the candidate's surface has none. A run on a new surface
+ * is not a mismatch (one baseline per surface), and is not refused; it is also not the same evidence,
+ * and a switch of provider went by without a word.
+ */
+export function bindingsElsewhere(l: StoreLayout, skillVersionHash: string, candidate: RuntimeBinding): RuntimeBinding[] {
+  const log = listBindings(l, skillVersionHash);
+  if (log.some((b) => b.binding.providerAdapter === candidate.providerAdapter)) return [];
+  const firsts = new Map<string, RuntimeBinding>();
+  for (const b of log) if (!firsts.has(b.binding.providerAdapter)) firsts.set(b.binding.providerAdapter, b.binding);
+  return [...firsts.values()];
 }
 
 /** Append-only, and a no-op for a binding already on the log. */

@@ -166,6 +166,17 @@ export function detectResolvedModelDrift(before: ObservedRuntime | null, now: Ob
     why: `the configuration did not change and the backend answered with "${now.resolvedModel}" where it previously answered with "${before.resolvedModel}"` };
 }
 
+/**
+ * What a person reads on the first run on a surface when other surfaces have evidence: not a refusal (the
+ * guard compares within a surface), a note, so a provider switch is never silent.
+ */
+export function describeNewSurface(candidate: RuntimeBinding, earlier: readonly RuntimeBinding[]): string | null {
+  if (!earlier.length) return null;
+  const name = (b: RuntimeBinding): string => `${b.providerAdapter} (${b.requestedModel})`;
+  return `first run on ${name(candidate)}; earlier evidence was on ${earlier.map(name).join(', ')}. `
+    + 'Nothing recorded there describes how this runtime behaves; observations from here are recorded against it.';
+}
+
 /** What a person reads when the guard fires. Says what is lost, not only what differs. */
 export function describeMismatch(v: Extract<BindingVerdict, { kind: 'TARGET_BINDING_MISMATCH' }>, skillVersionHash: string): string {
   const rows = v.differences.map((d) => `  ${d.field.padEnd(18)} recorded: ${d.expected}\n  ${' '.repeat(18)} now:      ${d.actual}`).join('\n');
