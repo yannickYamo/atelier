@@ -99,7 +99,12 @@ export function rollback(): void {
   const r = pickHost().install(pkg, projectDir());
   { const moved = describeBackup(r); if (moved) console.log(moved); }
   if (!r.ok) return void die(`reinstall failed: ${r.reason}`);
+  // THE POINTER MOVE IS AN EVENT, like every other one. Promote and the gate's own installs append
+  // PROMOTED; a rollback moved the pointer and wrote nothing, so the log could not say why the active
+  // version was not the last one promoted, and a later reader took the ledger's newest PROMOTED as live.
+  const prev = store.getActive(L);
   store.setActive(L, to);
+  store.appendEvent(L, { kind: 'ROLLED_BACK', at: new Date().toISOString(), skillVersionHash: to, supersededActive: prev, packageHash: sv.materializedHash });
   console.log(`rolled back to ${to}. Reinstalled package ${sv.materializedHash}, the one it built.`);
   console.log(`History is unchanged — this can itself be rolled back.`);
 }
