@@ -2,7 +2,7 @@
 //
 //   atelier tells --skill <name>                         what is checked, and where it came from
 //   atelier tells --skill <name> --learn [--probe <n>]    learn from this skill's own drafts (its past uses,
-//                                                        plus n new drafts on your own titles, a model call each)
+//                  [--include-reserved]                  plus n new drafts on your own titles, a model call each)
 //   atelier tells --skill <name> --add "<phrase>"...      a phrase you know reads as machine-written
 //   atelier tells --skill <name> --strike "<phrase>"...   a learned phrase that is in fact yours
 //
@@ -19,10 +19,15 @@ import { spendOneWithResult } from './improve.js';
 import { sessionCorpus } from '../corpus.js';
 
 
-/** Learn the lexicon from the skill's recorded uses and, optionally, probe drafts. Returns what changed. */
-export async function learnTells(L: store.StoreLayout, name: string, probe = 0, budget?: Budget): Promise<{ before: number; after: number; drafts: number; topics: number } | null> {
-  // Reserved pieces count too: a phrase the author used anywhere is theirs.
-  const corpus = sessionCorpus(name, { includeReserved: true });
+/**
+ * Learn the lexicon from the skill's recorded uses and, optionally, probe drafts. Returns what changed.
+ *
+ * THE RESERVE STAYS UNREAD. The pieces held back for blind testing are the one check nothing has
+ * shaped; a lexicon learned against them has read them, and a later test on them is no longer blind.
+ * So they are left out unless the person asks (`--include-reserved`), accepting that trade.
+ */
+export async function learnTells(L: store.StoreLayout, name: string, probe = 0, budget?: Budget, includeReserved = false): Promise<{ before: number; after: number; drafts: number; topics: number } | null> {
+  const corpus = sessionCorpus(name, { includeReserved });
   if (!corpus.length) return null;
   const drafts: TellDraft[] = store.listInvocations(L).map((i) => ({ task: i.input, text: i.repair?.draft ?? i.output }));
   if (probe > 0) {
@@ -52,7 +57,7 @@ export async function tells(): Promise<void> {
   }
   if (argv.includes('--learn')) {
     const probe = Math.max(0, Math.floor(numericFlag('--probe', 0)));
-    const r = await learnTells(L, name, probe)
+    const r = await learnTells(L, name, probe, undefined, argv.includes('--include-reserved'))
       ?? die('the pieces this skill was built from are not readable here, so there is nothing to compare its drafts with.');
     console.log(r.topics < TELL_MIN_TOPICS
       ? `Only ${r.topics} topic(s) in ${r.drafts} draft(s): a phrase must recur across ${TELL_MIN_TOPICS} before it counts. Use the skill more, or add --probe ${TELL_MIN_TOPICS + 3}.`
