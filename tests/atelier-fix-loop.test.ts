@@ -116,6 +116,27 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
     expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'PROMOTED')).toBe(true);
   }, 120_000);
 
+  // Every run fix makes is a replay made to evaluate a repair. Recorded as ORGANIC_USE it inflated the
+  // one class a generalisation claim may rest on; it is also not the optimizer grading itself, so a
+  // person may still promote the candidate it produced.
+  it('fix records its runs as FIX_EVALUATION from source FIX, and promote still accepts the candidate', async () => {
+    const { data, proj } = await seeded();
+    const L: store.StoreLayout = { root: data, skillName: 'focus' };
+    const organicBefore = store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE').length;
+    await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
+    expect(run(data, proj, 'fix', 'the answer buried the recommendation')).toContain('--pick a|b|same');
+    const proposed = store.readEvents(L).filter((e) => e.kind === 'REPAIR_PROPOSED');
+    const cand = (proposed[proposed.length - 1] as { candidateSkillVersionHash: string }).candidateSkillVersionHash;
+    const candRuns = store.listInvocations(L).filter((r) => r.skillVersionHash === cand);
+    expect(candRuns).toHaveLength(1);
+    expect(candRuns[0].provenance).toBe('FIX_EVALUATION');
+    expect(candRuns[0].request.source).toBe('FIX');
+    expect(store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE')).toHaveLength(organicBefore);
+    const out = run(data, proj, 'promote', '--skill', 'focus', '--candidate', cand, '--why', 'it led with the action');
+    expect(out).not.toMatch(/^EXIT/);
+    expect(store.getActive(L)).toBe(cand);
+  }, 120_000);
+
   it('picking the champion records the rejection and keeps everything as it was', async () => {
     const { data, proj } = await seeded();
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
@@ -278,6 +299,9 @@ describe('a repair follows a moved standard instead of dying on it', () => {
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'a fresh answer on the current standard' } });
     const out = run(data, proj, 'fix', 'the answer buried the recommendation');
     expect(out).toContain('has moved since that run');
+    // the re-run on the current version is fix's replay too, not organic use
+    expect(store.listInvocations(L).filter((r) => r.request.source === 'FIX').every((r) => r.provenance === 'FIX_EVALUATION')).toBe(true);
+    expect(store.listInvocations(L).filter((r) => r.provenance === 'FIX_EVALUATION').length).toBeGreaterThanOrEqual(2);
     expect(out).toContain('IMPLEMENTATION_MISS');
     expect(out).not.toContain('REPAIR INVARIANT');
     expect(out).toContain('--pick a|b|same');
