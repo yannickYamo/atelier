@@ -475,6 +475,28 @@ export function assertRequestBound(r: RequestBinding, resolvedTask: string): voi
   }
 }
 
+/**
+ * WHAT A RECORD NEEDS TO BE RE-RUN, NOT ONLY READ. A study arm was recorded with its binding and its
+ * package, and still could not be reproduced: which instrument read it for invented claims, which taste
+ * rules held VETO, which learned tells were served, which format profile applied, the token ceiling and
+ * the flags all changed what was delivered and none of them was on the record.
+ */
+export interface InvocationSettings {
+  /** the Atelier package version that ran */
+  readonly atelierVersion: string;
+  /** the invented-claim instrument, as it names itself; null when the check was off */
+  readonly claimInstrument: string | null;
+  /** rule keys the taste reader held VETO on for this run (empty: it acted on nothing) */
+  readonly tasteVeto: readonly string[];
+  /** hash of the learned machine-writing phrases served to the checks */
+  readonly learnedTellsHash: string;
+  /** the format profile the text was checked as, when one applied */
+  readonly formatProfile: string | null;
+  readonly maxTokens: number;
+  readonly temperature?: number;
+  readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean };
+}
+
 export interface InvocationRecord {
   readonly invocationId: string;
   readonly skillName: string;
@@ -524,13 +546,18 @@ export interface InvocationRecord {
    * is what was delivered. Absent when nothing was checked or nothing needed fixing.
    */
   readonly repair?: RepairRecord;
-  /** when several drafts were written and one delivered: how many, and why that one */
   /**
-   * `drafts` is how many were asked for; when some calls failed, `written` is how many came back and
-   * `chosen` indexes those, and `failed` says why each missing one is missing.
+   * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
+   * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
+   * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not
+   * delivered, in the order written, capped in total (UNCHOSEN_CAP_CHARS) with `unchosenTruncated` set
+   * when the cap cut it: a study comparing the chosen draft with the others needs the others.
    */
   readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string;
-    readonly written?: number; readonly failed?: readonly string[] };
+    readonly written?: number; readonly failed?: readonly string[];
+    readonly unchosen?: readonly string[]; readonly unchosenTruncated?: boolean };
+  /** what the run was configured with beyond the binding, so a study arm can be re-run from its record */
+  readonly settings?: InvocationSettings;
 }
 
 export interface RepairPair {
