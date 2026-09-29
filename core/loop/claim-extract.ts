@@ -138,7 +138,7 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  *   3  the reader sees headings and table rows as numbered units, not only sentences; support is matched
  *      with markdown stripped and across adjacent sentences of one paragraph; a number is a phrase
  *      ("twenty-five", "two hundred", "3 million", "a dozen"), and a lone "one" counts only where it
- *      quantifies. Not qualified: see QUALIFIED_READERS
+ *      quantifies. Qualified on product essays: see QUALIFIED_READERS
  */
 export const DECISION_VERSION = 3;
 /** The reader's version: the hash of what it is told and how its answer is decided. Recorded with every reading. */
@@ -155,11 +155,15 @@ export interface QualifiedReader { readonly model: string; readonly version: str
  * finds is reported as `UNSOURCED·reader`, PREFERRED: a warning, never a failure, never repaired. The
  * pattern check, which held specificity 43/43 and 38/38 in both studies, stays the gate.
  *
- * '0279163b' is decision version 2 with claude-haiku-4-5. Decision version 3 hashes differently, so
- * until a requalification adds its pair here, no reader gates by default. The list is updated by the
- * study that measures the pair, never to make a reader gate.
+ * '0279163b' is decision version 2 and 'a173339d' decision version 3, both with claude-haiku-4-5: version 2
+ * qualified on technical and marketing writing, version 3 on product essays
+ * (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md). The list is updated by the study that measures the
+ * pair, never to make a reader gate.
  */
-export const QUALIFIED_READERS: readonly QualifiedReader[] = [{ model: 'claude-haiku-4-5', version: '0279163b' }];
+export const QUALIFIED_READERS: readonly QualifiedReader[] = [
+  { model: 'claude-haiku-4-5', version: '0279163b' },
+  { model: 'claude-haiku-4-5', version: 'a173339d' },
+];
 /** Is this model, at this reader version, one a qualification result stands behind? */
 export const isQualified = (model: string, version = READER_VERSION, list: readonly QualifiedReader[] = QUALIFIED_READERS): boolean =>
   list.some((q) => q.model === model && q.version === version);
