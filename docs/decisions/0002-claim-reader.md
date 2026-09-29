@@ -2,7 +2,7 @@
 
 **Context.** A draft published under someone's name must not contain a figure, quotation or story they
 did not supply. Pattern checks key on how a claim is usually worded, so any new wording escapes them. On
-two corpora the pattern check never flagged a true piece, and missed 54% and then 74% of planted
+three corpora the pattern check flagged 3 true drafts in 129, and missed 54%, 74% and 76% of planted
 inventions.
 
 **Decision.** Split the job (`core/loop/claim-extract.ts`). A small model lists every specific in the
@@ -22,6 +22,9 @@ said. An attributed figure, a quotation, a link or a lived story can never pass 
   engineers" and cut a true "25 customers". A reader failure mid-repair now degrades the whole sensor,
   so a draft and its rewrite are never compared by two instruments.
 
-**Cost.** Each version is a new instrument and must be measured again before it may cut. Version 3
-reports until its [pre-registered qualification](../../studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md)
-passes; the pattern check cuts meanwhile.
+**Result.** Version 3 qualified on product essays: 41 of 48 clean drafts left alone, all 45 plants it read
+caught, including every figure planted in a heading or a table
+([result](../../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)).
+
+**Cost.** Each version is a new instrument and must be measured again before it may cut, on each population
+it is trusted with. Most false flags are a person's own true stories, which is why material is bound.

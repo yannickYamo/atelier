@@ -6,7 +6,7 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
-## [Unreleased] — targeting 0.5.0 (the pre-Phase-C audit)
+## [0.5.0] — 2026-09-29 (an easy first run, no added AI tells, and the claim reader qualified again)
 
 A full audit before Phase C covered detection, the loop, the moat and the competitor claims, and whether
 the study harness was ready. It found holes that would have made the study's measurements wrong. They are
@@ -20,8 +20,8 @@ fixed here. No new feature.
   "one million" is not "3 million".
 - **A reader failure mid-repair no longer ships an invented figure as fixed.** The sensor degrades for
   good, both sides of every comparison use one instrument, and claims the reader had flagged are cut.
-- **Only a qualified reader may cut.** Version 3 reports until it is re-qualified, and the pattern check
-  gates meanwhile. The record keeps the instrument, its version, whether it was qualified, whether it
+- **Only a qualified reader may cut.** Version 3 reported until it was re-qualified, and the pattern check
+  gated meanwhile. It qualified in this release (see *Studies* below) and now cuts by default. The record keeps the instrument, its version, whether it was qualified, whether it
   degraded, and what it spent.
 
 ### Fixed: the moat and the loop
@@ -178,7 +178,17 @@ The owner asked for their company blog post (1,438 words, "we") rewritten in ano
   not transfer in any arm, because a rewrite anchors to its source and the sentence-length rule only caps.
   Found and fixed during the run: an author's own em dashes had raised the cap on every other tell.
 
-### Studies: the claim reader, version 3, pre-registered (not run)
+### Studies: the claim reader, version 3, qualified (pre-registered, 25 unused product essays, $7.98)
+
+**PASS.** Version 3 left 41 of 48 clean drafts alone (0.854, 95% CI 0.722–0.939, floor 0.80) and caught all
+45 plants it read, including every figure planted in a heading or a table (floor 0.50). The pattern check
+caught 11 of 46, none in a heading or table, and flagged 3 true drafts, its first false flags in three
+studies. Five of the reader's seven false flags were the author's own true first-person stories: bind them
+as material. The $8 cap ran out on the last planted draft, which the pattern check read; it is reported
+apart. `{ claude-haiku-4-5, a173339d }` joins `QUALIFIED_READERS`, so version 3 cuts by default
+([result](studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)).
+
+The pre-registration, as sealed:
 
 `studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md` is sealed by the commit that adds it. It waits on
 the owner's go-ahead for about $5 (cap $8).

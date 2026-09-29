@@ -11,7 +11,7 @@ exploratory, and say so.
 
 | Result | Number | Population | Record |
 |---|---|---|---|
-| The claim reader (version 2) catches invented specifics | caught 35 of 35 planted inventions; left 35 of 38 clean drafts alone. A pattern check on the same drafts caught 9. The shipped version 3 reports only, until it is re-qualified | 28 unused technical and marketing pieces; plants were one sentence each | [v2 result](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md) |
+| The claim reader catches invented specifics | version 3 (shipped): all 45 plants it read caught, including figures in headings and tables; 41 of 48 clean drafts left alone (95% CI 0.722–0.939); a pattern check caught 11 of 46. Version 2: 35 of 35, and 35 of 38 | v3: 25 unused product essays; v2: 28 technical and marketing pieces; one-sentence plants | [v3](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md), [v2](../studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md) |
 | Counted style features chosen per author hold on unseen work | 9 of 10 kept features still separated new pieces from new model drafts | one writer, one genre, 40 unused newsletters | [sensor result](../studies/SENSOR_QUALIFICATION_RESULT.md) |
 | A skill preferred over the model given the author's own pieces | ranked first on both briefs read blind; 3.6 six-word runs copied per piece against 97. The pre-registered gate as a whole failed, on machine-written moves and one piece's range | one public author, two briefs, one reader who built the tool | [voice rounds](../studies/VOICE_ROUNDS_RESULT.md) |
 | A standard read from public review comments beats raw examples | majority winner in 15 of 17 held-out contexts, at about 18 times less context, on a secondary endpoint. The pre-registered primary endpoint could not discriminate and failed | one maintainer's public work, a surrogate authority, one study | [close](../studies/MAINTAINER_A_STUDY_CLOSE.md) |
@@ -50,7 +50,6 @@ exploratory, and say so.
 - That it handles support replies.
 - That the self-improving loop holds up on a live skill over weeks.
 - How it compares with GEPA-style optimizers on a shared task.
-- The claim reader on essays: version 3 is [pre-registered](../studies/CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md)
-  and not yet run. Until it passes, the pattern check does the cutting.
+- The claim reader on a person's own writing: most of its false flags were true first-person stories.
 
 A result table with only wins would be the one number here you should not trust.
