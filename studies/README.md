@@ -41,6 +41,7 @@ else in these records has been altered, and no result depends on the identities.
 
 | | |
 |---|---|
+| [VOICE_STUDY_PREREGISTRATION.md](VOICE_STUDY_PREREGISTRATION.md) | **DRAFT.** The study that closes the voice question: new pieces in the company's voice, Atelier against a plain prompt and the essays pasted, same model and facts, 8 briefs, 3 blind readers. Voice is shown if Atelier is first in 13 of 24 reads (p = 0.028 against one in three) and for 2 of 3 readers, and no Atelier piece changes a claim. Either result closes it. |
 | [PHASE_C_PREREGISTRATION.md](PHASE_C_PREREGISTRATION.md) | **DRAFT.** The external blind confirmation: three experts, 36 briefs, ATELIER against the expert's pieces plus the same guard, read first by someone who knows the expert and has not seen the standard. Win if 24 of 36 (one-sided exact). It also asks which sensors track what readers prefer. Harness: `studies/harness/phase-c-*.mjs`. |
 | [PROOF_STUDY_PREREGISTRATION.md](PROOF_STUDY_PREREGISTRATION.md) | **DRAFT.** Recall of discovery against the owner's hand-built house standard (sealed answer key), and the shipped loop against a model's own guide to the same corpus, with a deterministic measured-rule table anyone can recompute (`scripts/measured-conformance.mts`, `scripts/recall-sheet.mts`). Sealed only by the owner's commit, before discovery reads the corpus. |
 
