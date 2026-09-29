@@ -1,8 +1,9 @@
 # Atelier
 
-**Holds AI drafts to a writing standard learned from real work: it never invents a fact you did not
-supply, and never adds a machine-writing tell the author does not use. Writing in someone's voice is
-the next thing it has to prove.**
+**Your taste, learned from your best work and owned by you.** Atelier reads what you have written,
+turns the decisions behind it into a standard you approve once, and holds every AI draft to it: nothing
+invented, nothing that reads as machine-written. No optimizer, judge or model update can change what
+"good" means. Only you can.
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
