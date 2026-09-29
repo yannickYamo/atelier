@@ -17,6 +17,7 @@ import { mayPropose, WEAKEST_EVALUATION, WEAKEST_EVIDENCE, type RepairRecord, ty
 import type { ServedMissEvidence } from '../core/architecture/escalate.js';
 import type { SkillArchitecture } from '../core/architecture/compile.js';
 import { aRequirement } from './fixtures.js';
+import { standardHashOf, type StandardVersion } from '../core/state/canonical-state.js';
 
 const CLI = resolve('dist/cli/atelier.mjs');
 
@@ -365,10 +366,16 @@ describe('Amendment A2: rejection memory is (standard, model)-scoped (unit)', ()
 });
 
 describe('Constraint B: the standard hash is a throwing assertion (unit)', () => {
-  const std = (hash: string) => ({ standardVersionHash: hash, evidenceId: null, workType: 'writing',
-    requirements: [], authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null }) as never;
-  it('identical hashes pass; a moved standard dies', () => {
-    expect(() => { assertStandardUnchanged(std('aaaa'), std('aaaa')); }).not.toThrow();
-    expect(() => { assertStandardUnchanged(std('aaaa'), std('bbbb')); }).toThrow(/STANDARD MUTATED/);
+  const body = { evidenceId: null, workType: 'writing', requirements: [aRequirement({ requirementId: 'r1' })] };
+  const real = { ...body, standardVersionHash: standardHashOf(body), authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null } as StandardVersion;
+  it('identical hashes over unchanged content pass; a moved standard dies', () => {
+    expect(() => { assertStandardUnchanged(real, real, real); }).not.toThrow();
+    expect(() => { assertStandardUnchanged(real, { standardVersionHash: 'bbbb' }, real); }).toThrow(/STANDARD MUTATED/);
+  });
+  // The old call sites compared a standard with itself. The rendered content is now re-hashed, so a
+  // statement edited in memory under an unchanged hash field is caught even though every name agrees.
+  it('POLARITY — content edited under an unchanged hash field dies', () => {
+    const edited = { ...real, requirements: [{ ...real.requirements[0], statement: 'something else' }] };
+    expect(() => { assertStandardUnchanged(real, real, edited); }).toThrow(/STANDARD MUTATED BY REPAIR/);
   });
 });

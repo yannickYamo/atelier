@@ -21,7 +21,7 @@ import { readJson } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
-import { assertSupersessionRecorded } from './canonical-state.js';
+import { assertSupersessionRecorded, assertStandardIntegrity } from './canonical-state.js';
 import type { SkillArchitecture } from '../architecture/compile.js';
 import type { RatificationLedger } from '../ratification/decision-record.js';
 
@@ -270,9 +270,22 @@ export function clearMaterial(l: StoreLayout): void {
   if (existsSync(d)) rmSync(d, { recursive: true, force: true });
 }
 
+/**
+ * A STANDARD IS SERVED ONLY IF IT STILL HASHES TO ITS NAME. `putStandard` refused a second body under
+ * a hash, but nothing re-checked the first one on the way out, so a hand edit to a statement in
+ * `standards/<hash>.json` was served, compiled and promoted under the identity of the version the person
+ * ratified — the one edit the whole append-only layout exists to make visible. Both the file name and the
+ * hash field must match the recomputed hash: a copied file with a stale field is the same defect.
+ */
 export const getStandard = (l: StoreLayout, hash: string): StandardVersion | null => {
   const p = join(dirs(l).standards, `${hash}.json`);
-  return existsSync(p) ? readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] }) : null;
+  if (!existsSync(p)) return null;
+  const v = readJson<StandardVersion>(p, { what: 'a StandardVersion', requireKeys: ['requirements'] });
+  assertStandardIntegrity({ ...v, standardVersionHash: hash }, `standard file ${hash}.json`);
+  if (v.standardVersionHash !== hash) {
+    throw new Error(`STORE: standard file ${hash}.json names itself ${v.standardVersionHash}. A content-addressed file cannot carry another identity; it is not served.`);
+  }
+  return v;
 };
 
 export function putSkillVersion(l: StoreLayout, s: SkillVersion): void {
