@@ -9,6 +9,10 @@ import {
   dimensionVerdict, evaluateQualityFloor, requireFloorContract, gateState,
   type QualityFloorContract, type FrozenBaselineEntry,
 } from '../core/distinctiveness/floor.js';
+import { requiredFlips } from '../core/distinctiveness/measured.js';
+import { keysOf } from '../core/state/rule-key.js';
+import type { Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import { aRequirement } from './fixtures.js';
 
 const CONTRACT: QualityFloorContract = {
   instrument: 'scoreDimensionByPolicy',
@@ -72,5 +76,28 @@ describe('the qualification did NOT transfer', () => {
 
   it('each intermediate state says what is missing, so the next step is named', () => {
     expect(gateState(CONTRACT, false, null).why).toContain('nothing has been scored and frozen');
+  });
+});
+
+describe('requiredFlips: a REQUIRED rule that passed on the champion and fails on the candidate (D3)', () => {
+  const rule = (id: string, o: Partial<Requirement> = {}): Requirement => aRequirement({ requirementId: id, kind: 'BOUNDARY', materiality: 'REQUIRED',
+    measurement: { observer: 'LEXICON', params: { terms: [id] } }, ...o });
+  const v = (...rs: Requirement[]): StandardVersion => ({ standardVersionHash: 'h', evidenceId: null, workType: 'w', requirements: rs,
+    authorityState: 'RATIFIED', mintedAt: 't', supersedes: null, reason: null });
+  const runs = (...texts: string[]) => texts.map((t, i) => ({ task: `t${i}`, outputs: [t] }));
+  it('flags a rule that passed everywhere on the champion and fails on the candidate', () => {
+    const std = v(rule('paradigm'));
+    expect(requiredFlips(std, runs('plain', 'plain', 'plain'), runs('paradigm', 'plain', 'plain'))).toEqual(keysOf(std.requirements));
+  });
+  it('POLARITY — a flip offset by a repair elsewhere is not a regression, nor is an unchanged failure', () => {
+    const std = v(rule('paradigm'));
+    expect(requiredFlips(std, runs('paradigm', 'plain'), runs('plain', 'paradigm'))).toEqual([]);
+    expect(requiredFlips(std, runs('paradigm', 'plain'), runs('paradigm', 'plain'))).toEqual([]);
+  });
+  it('PREFERRED, conditional, rejected and excluded rules are not read', () => {
+    const cases = [rule('a', { materiality: 'PREFERRED' }), rule('b', { appliesWhen: 'when the piece is a review' }), rule('c', { authority: 'EXPERT_REJECTED' })];
+    for (const r of cases) expect(requiredFlips(v(r), runs('plain'), runs(r.requirementId))).toEqual([]);
+    const std = v(rule('d'));
+    expect(requiredFlips(std, runs('plain'), runs('d'), new Set(keysOf(std.requirements)))).toEqual([]);
   });
 });

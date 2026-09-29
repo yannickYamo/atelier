@@ -273,6 +273,15 @@ export class UnboundedRuntime extends Error {
  * same number and three different facts. The caller already holds the typed value; flattening it here
  * is what let an unpriced runtime look fully accounted for.
  */
+/**
+ * EVERYTHING THIS PROCESS SPENT, WHICHEVER BUDGET IT WAS METERED ON. A command can hold budgets it
+ * cannot see: the claim reader meters its own (cli/checks.ts), so `invoke` printed the writer's cost
+ * and not the reader's, and the figure a person read was short by every claim check. Summed here, in
+ * the one function every metered call goes through, so no budget can be left out of the total.
+ */
+let processSpent = 0;
+export const processSpentUsd = (): number => processSpent;
+
 export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Promise<{ value: T; cost: InferenceCost }>): Promise<T> {
   const inFlight = budget.inFlightUsd ?? 0;
   if (budget.spentUsd + inFlight + estimateUsd > budget.capUsd) throw new BudgetExceeded(budget.spentUsd + inFlight + estimateUsd, budget.capUsd);
@@ -286,6 +295,7 @@ export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Pr
   try { result = await fn(); } finally { budget.inFlightUsd = (budget.inFlightUsd ?? 0) - estimateUsd; }
   const { value, cost } = result;
   budget.spentUsd += budgetUsd(cost);
+  processSpent += budgetUsd(cost);
   // AFTER ONE CALL, AND NOT BEFORE. What a call costs is reported by the provider, so the first one
   // is what establishes whether a dollar cap is capable of binding this runtime at all. If it is not,
   // and no call bound was set, then continuing means running with no bound while displaying one.

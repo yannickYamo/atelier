@@ -257,7 +257,7 @@ async function reflect(L: store.StoreLayout, v: StandardVersion, legal: readonly
 }
 
 /** Mint one candidate: rebuilt from the standard with one gene changed. */
-function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { skillVersionHash: string; description?: string | null },
+function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { skillVersionHash: string; standardVersionHash: string; description?: string | null },
   arch: SkillArchitecture, carried: ReturnType<typeof carriedFrom>, p: { mutation: Mutation; proposer: Proposer; why: string },
   scope: { standardVersionHash: string; providerAdapter: string; requestedModel: string }, evidence: { missContexts: number; invocationIds: string[] },
   keyOfRule: ReadonlyMap<string, string>, dims: ReturnType<typeof floorDimensions>): Candidate {
@@ -275,7 +275,8 @@ function build(L: store.StoreLayout, name: string, v: StandardVersion, sv: { ski
     standardVersionHash: v.standardVersionHash, architectureHash: nextArch.architectureHash,
     materializedHash: pkg.packageHash, builtAt: new Date().toISOString(), description: desc };
   // CONSTRAINT B, AT THE MINT: the candidate is bound to the very standard it was built from.
-  assertStandardUnchanged(v, store.getStandard(L, candidate.standardVersionHash) ?? v);
+  // Against the CHAMPION's recorded standard, with the rendered content re-hashed (see replace-carrier.ts).
+  assertStandardUnchanged(sv, candidate, v);
   store.putArchitecture(L, nextArch); store.putPackage(L, pkg); store.putSkillVersion(L, candidate);
   let repairId: string | null = null;
   if (m.kind === 'CARRIER') {

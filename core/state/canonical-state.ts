@@ -20,6 +20,7 @@ import type { Prerequisite } from './prerequisite.js';
 // This one says why an INVOCATION was made (organic use, dev probe, stress probe). They share no
 // values. An inline `import()` was hiding the collision at the one place both are in scope.
 import type { Provenance as InvocationProvenance } from '../fidelity/provenance.js';
+import { createHash } from 'node:crypto';
 
 /**
  * Who stands behind a requirement.
@@ -445,7 +446,8 @@ export interface DeliveryEvidence {
 }
 
 /** Where a task came from, so a wrong task can be traced to the surface that produced it. */
-export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS' | 'HOST_PROMPT';
+/** `FIX`: the task an earlier run was given, replayed by `atelier fix` to evaluate a repair. */
+export type TaskSource = 'POSITIONAL' | 'FLAG' | 'STDIN' | 'FILE' | 'API' | 'HARNESS' | 'HOST_PROMPT' | 'FIX';
 
 export interface RequestBinding {
   /** what the command resolved the user's request to be */
@@ -471,6 +473,28 @@ export function assertRequestBound(r: RequestBinding, resolvedTask: string): voi
       + `  resolved task began: "${resolvedTask.slice(0, 80)}"\n`
       + `  The output answers a request nobody made. Nothing is recorded.`);
   }
+}
+
+/**
+ * WHAT A RECORD NEEDS TO BE RE-RUN, NOT ONLY READ. A study arm was recorded with its binding and its
+ * package, and still could not be reproduced: which instrument read it for invented claims, which taste
+ * rules held VETO, which learned tells were served, which format profile applied, the token ceiling and
+ * the flags all changed what was delivered and none of them was on the record.
+ */
+export interface InvocationSettings {
+  /** the Atelier package version that ran */
+  readonly atelierVersion: string;
+  /** the invented-claim instrument, as it names itself; null when the check was off */
+  readonly claimInstrument: string | null;
+  /** rule keys the taste reader held VETO on for this run (empty: it acted on nothing) */
+  readonly tasteVeto: readonly string[];
+  /** hash of the learned machine-writing phrases served to the checks */
+  readonly learnedTellsHash: string;
+  /** the format profile the text was checked as, when one applied */
+  readonly formatProfile: string | null;
+  readonly maxTokens: number;
+  readonly temperature?: number;
+  readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean };
 }
 
 export interface InvocationRecord {
@@ -522,8 +546,18 @@ export interface InvocationRecord {
    * is what was delivered. Absent when nothing was checked or nothing needed fixing.
    */
   readonly repair?: RepairRecord;
-  /** when several drafts were written and one delivered: how many, and why that one */
-  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string };
+  /**
+   * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
+   * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
+   * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not
+   * delivered, in the order written, capped in total (UNCHOSEN_CAP_CHARS) with `unchosenTruncated` set
+   * when the cap cut it: a study comparing the chosen draft with the others needs the others.
+   */
+  readonly selection?: { readonly drafts: number; readonly chosen: number; readonly why: string;
+    readonly written?: number; readonly failed?: readonly string[];
+    readonly unchosen?: readonly string[]; readonly unchosenTruncated?: boolean };
+  /** what the run was configured with beyond the binding, so a study arm can be re-run from its record */
+  readonly settings?: InvocationSettings;
 }
 
 export interface RepairPair {
@@ -608,6 +642,27 @@ export function assertFeedbackDidNotMutate(before: StandardVersion, after: Stand
       + 'Feedback accumulates in EvidenceHistory and may propose a change. An authority-changing update '
       + 'mints a new StandardVersion with an explicit supersedes link and a recorded reason.',
     );
+  }
+}
+
+/**
+ * WHAT A STANDARD'S HASH IS A HASH OF, as one function. Every minting site (ratify-close, amend,
+ * confirm, add) hashes exactly `{ evidenceId, workType, requirements }` in that key order, and
+ * `mintedAt`, `supersedes`, `reason` and `authorityState` sit outside it. The store recomputes this on
+ * every read: a file whose content no longer hashes to its name was edited by hand, and serving it
+ * would put words the person never ratified under an identity they did.
+ */
+export const standardHashOf = (v: Pick<StandardVersion, 'evidenceId' | 'workType' | 'requirements'>): string =>
+  createHash('sha256').update(JSON.stringify({ evidenceId: v.evidenceId, workType: v.workType, requirements: v.requirements })).digest('hex').slice(0, 16);
+
+/** Throws unless `v`'s content hashes to the name it carries. */
+export function assertStandardIntegrity(v: StandardVersion, where = 'standard'): void {
+  const recomputed = standardHashOf(v);
+  if (recomputed !== v.standardVersionHash) {
+    throw new Error(`STORE: ${where} ${v.standardVersionHash} does not hash to its name (its content hashes to ${recomputed}). `
+      + 'A standard is content-addressed, so this file was edited after it was minted. It is not served: '
+      + 'what the person ratified is no longer what it says. Restore it from history, or mint the change '
+      + 'properly with atelier amend / confirm.');
   }
 }
 
