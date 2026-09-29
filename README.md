@@ -67,20 +67,24 @@ Four things make it more than a style prompt:
 It also catches what marks text as machine-written: families of moves (announced insights, self-graded
 lists, stacked superlatives, "let me be blunt", "that's the whole game", one problem "wearing another's
 clothes") held to your own rate, plus the phrases each skill's own drafts keep repeating that you never
-write. And it keeps your life yours. A small model reads every draft for specifics: figures, dates,
-quotations, attributions, links, and stories told as lived. It says where each one came from, and code
-checks that against what you actually supplied. Anything that doesn't trace to your material or your
-request is cut and listed, so you can add the real one. A figure credited to a study, a quote from a
-named person, or a link offered as a source counts as yours to supply, never as "general knowledge".
-In a white paper, a report or a contract, nothing passes as general knowledge. How often this reader
-misses a specific, and how often it cuts a true one, was measured once
-against bars set in advance. The first version caught every planted invention but cut something true in
-about one draft in four, and failed. The second version checks the reader's work more strictly in code.
-On 28 pieces no earlier test had used, it caught all 35 planted inventions, where a pattern check caught 9.
-It left 35 of 38 clean drafts alone
-([studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)).
-That passes, on technical explainers; the first version's essays scored lower. Expect it to cut a true
-detail now and then. `atelier material` binds your notes, so a cut story comes back.
+write.
+
+### Nothing invented, and checked
+
+Your stories, figures and sources are yours to supply. A small model reads every draft for specifics:
+figures, dates, quotations, attributions, links, and stories told as lived. It says where each one came
+from, and code checks the claim against what you actually gave it: the passage it quotes must be in your
+material, the numbers must be there, and the specific must be in the sentence the reader named. Anything
+that doesn't trace is cut and listed, so you can add the real one.
+
+- A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
+  supply. It never passes as "general knowledge".
+- In a white paper, a report or a contract, nothing passes as general knowledge.
+- On 28 pieces no test had used, the reader caught all 35 planted inventions (a pattern check caught 9) and
+  left 35 of 38 clean drafts alone
+  ([result](studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md)). An earlier version failed the same bar on
+  essays, and that is recorded too. Expect it to cut a true detail now and then;
+  `atelier material --skill <name> <notes>` binds your notes, so a cut story comes back.
 
 ## What it builds: the whole harness
 
@@ -124,7 +128,29 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
   of the reader's verdicts (`atelier taste --calibrate`) to let it act. Change what "good" means with
   `atelier amend`, which only you can do.
 
-Everything else runs without you, from `atelier invoke` to `atelier tend --auto` on a schedule.
+Everything else runs without you, from `atelier invoke` to `atelier tend --auto` on a schedule. (The loop
+is built and tested offline; it has not yet looked after a live skill for weeks. See below.)
+
+## What has been tested, and what hasn't
+
+Every study is pre-registered and published with its result, including the ones that failed
+([studies/](studies/README.md)).
+
+- **Voice.** Seven blind rounds on one public author's 20 posts, with the same writer model throughout. In
+  the last round, read blind by this project's owner, Atelier ranked first on both briefs read, above the
+  model given the author's own pieces. It copied far less (3.6 shared six-word runs per piece against 97)
+  and invented nothing (against 2 invented stories). The sealed gate as a whole still failed on two
+  criteria. This is one author, two briefs, and one reader who built the tool, so treat it as encouraging,
+  not settled ([result](studies/VOICE_ROUNDS_RESULT.md)).
+- **Invented claims.** The claim reader was qualified against bars set in advance, on pieces it had never
+  seen (above).
+- **Not yet shown:**
+  - that it works for other writers, or read by other people;
+  - how it does against GEPA-style optimizers on a shared task;
+  - that it handles support replies;
+  - that the self-improving loop holds up on a live skill over time.
+
+  An external blind study is next.
 
 ## How it compares
 
@@ -133,7 +159,7 @@ Everything else runs without you, from `atelier invoke` to `atelier tend --auto`
 | | a model | Atelier on that model |
 |---|---|---|
 | where "good" is defined | re-guessed from examples every run | a standard you approved, versioned and diffable |
-| which habits matter | can't tell a decision from an accident | each rule weighed, with when it applies, proven on work it never read |
+| which habits matter | can't tell a decision from an accident | each rule weighed, with when it applies, checked on work it never read |
 | machine tells | its own habits come back | caught as moves, held to your own rate |
 | your stories, sources and figures | invented when missing | read for, traced to what you supplied; the rest cut and listed |
 | your sentences | lifted when pasted | shown for voice; copying flagged |
@@ -201,7 +227,9 @@ atelier tend --skill posts --auto                        # look after it, from c
 
 One standard describes one format, read off your pieces of that format: build a LinkedIn skill from your
 LinkedIn posts, with `--class linkedin-post`, and it also holds each post to what LinkedIn fixes
-([docs/FORMATS.md](docs/FORMATS.md)). The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
+([docs/FORMATS.md](docs/FORMATS.md)).
+
+The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always
 deliver everything the CLI does; `atelier carriers --skill posts --host codex` says what it drops.
@@ -216,6 +244,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 | `ATELIER_HOST` | `claude-code` (default) or `codex`: where a built skill is installed |
 | `ATELIER_CLAIMS_MODEL` | the small model that reads drafts for invented specifics (default `claude-haiku-4-5` on Anthropic; on your own backend, name one of yours) |
 | `ATELIER_CLAIMS` | `pattern` for the offline pattern check instead of the reader |
+| `ATELIER_CLAIMS_CAP` | the claim reader's own spending cap per command, in dollars (default 0.50) |
 
 ## Learn more
 
@@ -226,7 +255,7 @@ deliver everything the CLI does; `atelier carriers --skill posts --host codex` s
 - [studies/](studies/README.md): every pre-registration and result, including the ones that failed
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
 
-The suite is 107 files and 1622 tests, runs offline, and drives the shipped binary end to end.
+The suite is 107 files and 1626 tests, runs offline, and drives the shipped binary end to end.
 
 ## Contributing
 
