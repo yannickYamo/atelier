@@ -15,6 +15,7 @@
 // claim or moves a banned move onto a sibling is refused), and prints the repaired text. Nothing else
 // in the text is touched: it keeps its own voice.
 
+import { profileOf } from '../../core/observers/selection.js';
 import { checksFor } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
@@ -83,8 +84,18 @@ export async function verify(): Promise<void> {
           authority: actsAsMiss(r) && permissions.veto.has(r.key) ? 'VETO' : 'OBSERVE' })) };
     } catch (e) { fail(`the taste reader could not run: ${(e as Error).message.split('\n')[0]}`); }
   }
+  // THE PROFILE (--profile): where the text sits on each counted feature the skill holds, by layer.
+  // A profile, not a score: the layers fail independently, and one number would hide which.
+  const bands = [...v.requirements.flatMap((r) => {
+    const m = r.measurement;
+    if (r.authority === 'EXPERT_REJECTED' || m?.observer !== 'FEATURE') return [];
+    const lo = typeof m.params.minValue === 'number' ? m.params.minValue : -Infinity;
+    const hi = typeof m.params.maxValue === 'number' ? m.params.maxValue : Infinity;
+    return [{ id: ((m.params.feature as readonly string[] | undefined) ?? [])[0] ?? '', band: [lo, hi] as const }];
+  }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band }))];
+  const profile = argv.includes('--profile') ? profileOf(text, bands) : null;
   if (argv.includes('--json')) {
-    console.log(JSON.stringify({ ...report, failed: report.failed || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+    console.log(JSON.stringify({ ...report, ...(profile ? { profile } : {}), failed: report.failed || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
     console.log(describeVerify(report));
@@ -92,6 +103,14 @@ export async function verify(): Promise<void> {
       console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
     }
     if (classNote) console.log(`\n(${classNote})`);
+    if (profile) {
+      if (!profile.entries.length) console.log('\nprofile: this skill holds no counted features of your style yet (they come from discovery).');
+      else {
+        console.log('\nprofile (0 = inside your range; 1 = a full range-width outside):');
+        for (const l of profile.layers) console.log(`  ${l.layer.padEnd(28)} ${l.distance.toFixed(2)}  (${l.features} feature${l.features === 1 ? '' : 's'})`);
+        for (const e of profile.entries) console.log(`    ${e.id.padEnd(20)} ${e.value ?? 'n/a'}  your range ${e.band[0]} to ${e.band[1]}${e.distance ? `  → ${e.distance} off` : ''}`);
+      }
+    }
     if (taste) console.log(`\n${taste.text}`);
   }
   if (taste?.failed) process.exitCode = 1;

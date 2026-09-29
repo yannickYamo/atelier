@@ -21,21 +21,34 @@ Every feature below becomes a rule through the same path, whatever its depth:
 
 The owner approves the rule. A sensor never adds one.
 
+Steps 1 to 4 are one pipeline for every counted feature (`core/observers/selection.ts`). A feature that
+passes becomes a RULE if its band tells single drafts apart, or a SIGNAL if only the distributions differ
+([MEASURED-RULES.md](MEASURED-RULES.md#counted-features-and-which-of-them-are-your-taste)). `atelier verify
+--profile` reports a text layer by layer, not as one number.
+
 ## The eleven layers, and where Atelier stands
 
 | layer | what is measured | how | in Atelier today |
 |---|---|---|---|
-| 1. Punctuation and typography | dashes, semicolons, question marks, contractions, spelling, bold, headings | M | `PATTERN_RATE`: dashes, dash asides, semicolons, rhetorical questions, contractions and full forms, spelling, bold spans. `HEADINGS`: case and tropes |
-| 2. Sentence architecture | length distribution, cadence, openers, fragments, parallelism | M/H | `SENTENCE_LENGTH`, `DISTRIBUTION` (length mix), `RHYTHM` (variation), repeated and stock openers. *Not yet:* syntax shape, voice and agency |
-| 3. Paragraph and document pace | paragraph lengths, one-line paragraphs, section shape, opening and closing moves, length | M/R | `PARAGRAPH_LENGTH`, one-line paragraphs, `OPENING`, `CLOSING`, `HEADINGS`, and the format's length band ([formats](#formats)). *Not yet:* register rotation, abstraction run length, links and artifacts per 1,000 words |
-| 4. Lexicon and wording | signature phrases, function words, hedges, boosters, pronouns, the author's verbs | M | `LEXICON`, `TERM_RATE` (connectives, the model's stock vocabulary), hedges, `FIRST_PERSON`, `STYLE_DISTANCE` (Burrows' Delta on function words). *Not yet:* the author's signature verbs, richness (MTLD) |
-| 5. Figures and rhetoric | metaphor families, analogy, antithesis, aphorism, humour, coinage | R/H | The contrast verdict (`CONTRAST_VERDICT`, `NOT_X_ITS_Y`) is counted. The rest go to the taste reader ([TASTE.md](TASTE.md)), which reports until your labels qualify it |
+| 1. Punctuation and typography | dashes, semicolons, question marks, contractions, spelling, bold, headings | M | `PATTERN_RATE`: dashes, dash asides, semicolons, rhetorical questions, contractions and full forms, spelling, bold spans. `HEADINGS`: case and tropes. `FEATURE`: colons, parentheses, exclamations, ellipses, questions, italics, quoted phrases, the serial comma, small numbers as digits |
+| 2. Sentence architecture | length distribution, cadence, openers, fragments, parallelism | M/H | `SENTENCE_LENGTH`, `DISTRIBUTION` (length mix), `RHYTHM` (variation), repeated and stock openers. `FEATURE`: short and long sentence lengths, cadence (lag-one correlation), conjunction, self and deictic openers, passives, nominalisations, three-item lists. *Not yet:* syntax depth (needs a parser) |
+| 3. Paragraph and document pace | paragraph lengths, one-line paragraphs, section shape, opening and closing moves, length | M/R | `PARAGRAPH_LENGTH`, one-line paragraphs, `OPENING`, `CLOSING`, `HEADINGS`, and the format's length band ([formats](#formats)). `FEATURE`: list items, links, code blocks, block quotations. The type of opening and closing move and register rotation are in the move reader (a candidate, below) |
+| 4. Lexicon and wording | signature phrases, function words, hedges, boosters, pronouns, the author's verbs | M | `LEXICON`, `TERM_RATE` (connectives, the model's stock vocabulary), hedges, `FIRST_PERSON`, `STYLE_DISTANCE` (Burrows' Delta on function words). `FEATURE`: lexical diversity (MTLD), word length, "you", "we", tentative and firm modals, figures, names, spoken discourse markers. *Not yet:* the author's signature verbs |
+| 5. Figures and rhetoric | metaphor families, analogy, antithesis, aphorism, humour, coinage | R/H | The contrast verdict (`CONTRAST_VERDICT`, `NOT_X_ITS_Y`) is counted. The move reader (a candidate) types figures and their domains, aphorisms and humour, but its figures were unstable on a re-read in development. The rest go to the taste reader ([TASTE.md](TASTE.md)), which reports until your labels qualify it |
 | 6. Argument engine | the author's moves and how often they make them, what counts as proof, what they refuse | R | Reading rules, served with their frequency ("moves I sometimes make", capped per piece). Checked by the taste reader |
 | 7. Narrator and stance | person and tense, self-disclosure, authority style, directness | M/R | First person as a band. Candour prefaces are counted in the machine-tell catalogue. The rest goes to the reader |
 | 8. Content signature | obsessions, where examples come from, callbacks, the bridge back to the home thesis | R | Served through whole pieces and the persona. *Not yet counted* |
-| 9. Sound and prosody | readability, comma density, runs of monosyllables | M | *Not yet* |
-| 10. Irregularity | polish variance, idiosyncratic errors, unevenness between sections | M | *Not yet* |
+| 9. Sound and prosody | readability, comma density, runs of monosyllables | M | `FEATURE`: reading ease, commas per sentence, runs of five one-syllable words. *Not measured:* sentence-final stress and alliteration (they need a pronunciation dictionary) |
+| 10. Irregularity | polish variance, idiosyncratic errors, unevenness between sections | M | `FEATURE`: how uneven sections and paragraphs are. *Not measured:* polish variance and consistent misuses (they need a grammar checker) |
 | 11. Negative space and model contrast | the learned tell lexicon, the author-to-model ratio, substitute forms, weighting by position | M | Machine-tell catalogue (14 families) held to your rate. Learned lexicon (`atelier tells --learn`). Every capped mark carries its substitute forms (a dash aside, whatever the character). Opening and closing are weighted by position |
+
+**The move reader** (`core/taste/moves.ts`) is a candidate for layers 3, 5, 6, 7 and 8. A small model types
+each paragraph: its register, its figures and where they come from, whether it concedes, lands an
+aphorism, calls back or jokes, and how it gives evidence. It also types how the piece opens and closes, and
+which argumentative moves it makes. Code verifies every quote and counts. It was qualified and **failed**
+([result](../studies/SENSOR_QUALIFICATION_RESULT.md)). Some of its features are reliable but don't
+separate (openings, closings). Others separate but aren't reliable (figures). It stays parked. Whether any
+sensor tracks what a reader hears in these layers is Phase C's question.
 
 The deep layers (5, 6 and 8) are where "sounds like them" lives, and a count cannot reach them. They
 are read, and the reading gains authority only from your blind labels. The shallow layers are cheap
