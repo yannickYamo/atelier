@@ -27,8 +27,9 @@ write for *sounds like me*.
 - **You approve what binds.** A rule you mark required instructs the model; the rest are shown as
   examples. The approved standard is hashed and versioned, and nothing automated can change it.
 - **Every draft is checked, and only what broke is rewritten.** Counted rules are measured on every
-  draft. A small model lists every figure, quotation and story, and code checks each one against what
-  you supplied. What does not trace is cut and listed, so you can add the real one.
+  draft. Invented figures, quotations and stories are cut and listed, so you can add the real one. A
+  small model lists every specific and code checks it against what you supplied; the current version of
+  that reader reports until it is re-qualified, and a narrower pattern check does the cutting.
 
 It installs as a skill for Claude Code or Codex, a CLI guard (`atelier verify` exits 1 on a broken
 rule), an MCP server, and a Claude Code hook. See [USAGE](docs/USAGE.md) for every command.
@@ -37,7 +38,7 @@ rule), an MCP server, and a Claude Code hook. See [USAGE](docs/USAGE.md) for eve
 
 | | |
 |---|---|
-| Invented specifics caught on 28 unused pieces | 35 of 35, with 35 of 38 clean drafts left alone (a pattern check caught 9) |
+| Invented specifics caught on 28 unused pieces (claim reader, version 2) | 35 of 35, with 35 of 38 clean drafts left alone (a pattern check caught 9) |
 | Style features that held on unseen work | 9 of 10, one writer |
 | Blind preference over a model given the author's own pieces | first on both briefs read, copying 3.6 six-word runs per piece against 97 |
 

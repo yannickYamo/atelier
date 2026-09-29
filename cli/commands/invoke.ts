@@ -194,6 +194,9 @@ export async function invoke(): Promise<void> {
     maxCalls: numericFlag('--max-calls', nDrafts + 4 + (taste?.callsFor(nDrafts) ?? 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
+  // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
+  // refusal after the drafts were written would cost the person their output.
+  if (taste?.acts) taste.client();
   const { client, binding } = checkedBinding(L, sv);
 
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from

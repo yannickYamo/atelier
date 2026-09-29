@@ -33,15 +33,17 @@ reads; the judges are tracked, never trusted. ([voice rounds](../studies/VOICE_R
 ## 5. Silence scores perfectly on conditional rules
 
 A rule that does not apply cannot be violated. So an adherence score over conditional rules rated
-silence as perfect: 138 outputs, every arm at 100%, including a bare model. The fix moved who decides
-applicability: the expert sealed it per case before any output existed.
-([design record](../studies/M2_PRICING_STUDY_DESIGN.md))
+silence as perfect: 138 outputs had 3 violations in all, and two repetitions scored every arm at 100%,
+including a base model. The fix moved who decides applicability: the expert sealed it per case before
+any output existed. ([close](../studies/MAINTAINER_A_STUDY_CLOSE.md),
+[the redesign](../studies/M2_PRICING_STUDY_DESIGN.md))
 
 ## 6. Compiling rules keeps what to say and loses when not to
 
 A compiled standard scored exactly what a bare model scored on pricing decisions. Underneath, the arms
-traded off: coverage went up, restraint went down. On a second standard, stating each rule's
-otherwise-branch restored restraint (+0.250, replicated). ([null](../studies/M2_PRICING_STUDY_CLOSE.md),
+traded off: coverage went up, restraint went down, though that drop did not survive correction for
+multiple tests. On a second standard, stating each rule's otherwise-branch restored the restraint the
+compiled skill had lost (+0.250, replicated). It fixed the compiler; it did not beat a bare model. ([null](../studies/M2_PRICING_STUDY_CLOSE.md),
 [fix](../studies/NEGATIVE_BRANCH_CLOSE.md))
 
 ## 7. When Enter accepts everything, the suggestion is the decision
