@@ -35,7 +35,7 @@ spent as evidence, so it served as development data. On those same drafts, versi
   `claim-reader-v2-2026-09-29`) from the 77 with at least 500 words once the metadata header is removed.
   These are technical explainers dense in figures, names and benchmarks, copied to
   `~/atelier-claims-v2/newsletters`.
-- **8 short pieces**: `~/stratos-voice/corpus` (4, marketing pages) and `~/atelier-b2-study/corpus` (4).
+- **8 short pieces**: 4 marketing pages the owner wrote (private, not published) and `~/atelier-b2-study/corpus` (4).
 
 The DEV/TEST split (5 DEV pieces), excerpts, clean drafts, plants, measures and statistics all follow the
 [version 1 pre-registration](CLAIM_READER_QUALIFICATION_PREREGISTRATION.md) unchanged. The only

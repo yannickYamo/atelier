@@ -19,13 +19,6 @@ a run in progress may not be.
   commands, the table and links were added by hand, and the whole passes that skill's checks.
 - The package and plugin descriptions say the same.
 
-### Changed: the repository's history, rewritten to leave the tested authors unnamed
-
-On 2026-09-30 every commit was rewritten to describe the public authors used in tests rather than name
-them. No file's code or result changed, and each commit keeps its date and its content otherwise. Commit IDs
-changed, so the studies now cite the new ID of each sealing commit: every pre-registration was committed
-before its result, as before; only the name of that commit is new.
-
 ### Fixed: an invented claim is deleted, never reworded (from an outside review)
 
 - **Cut in code, not rewritten.** The repair used to ask the model to rewrite an invented story "without it,
@@ -51,12 +44,6 @@ material. **Clean drafts wrongly flagged: 3 of 129 before, 5 after** (first stud
 far enough from the material that support was not found. **Planted inventions caught: 38 of 120 before,
 41 after.** The model reader, which gates by default when a key is set, is unchanged; how it reads vague
 evidence is not yet measured.
-
-### Changed: the README, and the test authors unnamed
-
-- **The README leads with where Atelier is going**, written with the product's own voice check, and states
-  the voice results without naming the authors tested.
-- **Public authors used in tests are described, not named**, across the docs, the studies and code comments.
 
 ### Changed: the voice defaults (Phase 1 of closing Atelier as a voice engine)
 
