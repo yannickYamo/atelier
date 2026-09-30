@@ -23,9 +23,6 @@ const DOCS: readonly string[] = ['README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'A
   ...readdirSync('docs').filter((f) => f.endsWith('.md')).map((f) => join('docs', f))];
 const allDocs = DOCS.map(read).join('\n');
 
-const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true })
-  .flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
-
 describe('every command the docs tell a reader to type is dispatched by the CLI', () => {
   const dispatched = new Set(
     [...read('cli/atelier.mts').matchAll(/case '([a-z-]+)':/g)].map((m) => m[1]),
@@ -158,36 +155,15 @@ describe('the vocabulary the docs teach is the vocabulary the compiler accepts',
 });
 
 describe('the numbers in prose', () => {
-  it('the documented test count tracks the suite', () => {
-    // Counted statically, which undercounts by however many `it`s are generated in a loop. So this
-    // asserts a BAND rather than an equality: wide enough to survive a loop, narrow enough that
-    // "539" against a suite of 640 fails, which is the drift that actually happened.
-    // EVERY doc that states a count, not just CONTRIBUTING. The narrow version of this test shipped
-    // while README carried "52 files and 825 tests" against a suite of 54 and 855 — the same drift it
-    // was written to catch, in the one section that tells a reader what they can reproduce.
-    const written = walk('tests').filter((f) => f.endsWith('.ts'))
-      .reduce((acc, f) => acc + [...read(f).matchAll(/^\s*(?:it|test)\(/gm)].length, 0);
-    expect(written, 'no tests found — the counter has stopped counting').toBeGreaterThan(100);
-
-    const stating = DOCS.filter((d) => /([0-9]{3,}) tests/.test(read(d)));
-    expect(stating.length, 'no document states a test count any more').toBeGreaterThan(0);
-    for (const doc of stating) {
-      for (const m of read(doc).matchAll(/([0-9]{3,}) tests/g)) {
-        const n = Number(m[1]);
-        expect(n, `${doc} says ${n} tests; ${written} are written in tests/`).toBeGreaterThanOrEqual(written);
-        // The slack is for parameterised tests: an `it.each` or `describe.each` is written once and runs
-        // once per row, so the suite reports more tests than a static count finds. Sixty covers the rows
-        // in the tree today (the audit fixes added tables of cases); a README claim beyond that is drift.
-        expect(n - written, `${doc} says ${n}, only ${written} are written`).toBeLessThanOrEqual(60);
-      }
-    }
-
-    // File counts drift the same way and were never pinned at all.
-    const files = walk('tests').filter((f) => f.endsWith('.test.ts')).length;
+  it('no document states a test count: the suite and CI state it, and a written one drifts', () => {
+    // A count written by hand is a claim, and every version of this guard let one drift. CONTRIBUTING said
+    // 539 against a suite of 640; the README said "52 files and 825 tests" against 54 and 855; then, under
+    // a band meant to absorb loop-generated tests, CONTRIBUTING said 1749 against 1789. A band wide enough
+    // for `it` calls made in a loop is wide enough to hide drift, and counting exactly means running the
+    // suite. So no document states one: `npm test` prints the number, and CI runs it on every push.
     for (const doc of DOCS) {
-      for (const m of read(doc).matchAll(/([0-9]{2,}) files and [0-9]{3,} tests/g)) {
-        expect(Number(m[1]), `${doc} says ${m[1]} test files; there are ${files}`).toBe(files);
-      }
+      const count = /\b[0-9]{3,}\s+tests\b|\b[0-9]{2,}\s+(?:test\s+)?files(?:,| and)\s+[0-9]{3,}\s+tests\b/.exec(read(doc));
+      expect(count?.[0], `${doc} states a test count; say what the suite covers instead`).toBeUndefined();
     }
   });
 
