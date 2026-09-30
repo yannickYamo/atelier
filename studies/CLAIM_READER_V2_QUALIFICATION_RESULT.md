@@ -52,5 +52,5 @@ The three false flags on clean drafts:
 
 - TEST result: `~/atelier-claims-v2/test/result.json`, sha256 prefix `a5d0bc88d93c922d`. It holds every draft,
   plant, and the reader's typed specifics.
-- The pieces: `~/atelier-claims-v2/newsletters` (a copy), `~/stratos-voice/corpus` and
+- The pieces: `~/atelier-claims-v2/newsletters` (a copy), the owner's private marketing pages and
   `~/atelier-b2-study/corpus`.

@@ -36,7 +36,7 @@ import type { Span } from '../observers/registry.js';
  * left out: code is not a claim in the writer's voice, and front matter is metadata.
  *
  * Offsets point at the real text (a heading's words, not its `#`; a row from its first `|` to its
- * last), because a span is what the repair rewrites and what the last resort cuts. A table's rule row
+ * last), because a flagged unit is what the loop deletes (run-repair.ts, enforceClaims). A table's rule row
  * (`|---|:--:|`) carries no words and is not a unit.
  */
 export function claimUnitsOf(text: string): Sentence[] {
