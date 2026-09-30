@@ -153,7 +153,9 @@ export interface QualifiedReader { readonly model: string; readonly version: str
  * someone's own backend) is an instrument nobody has measured, and an unmeasured instrument that cuts
  * sentences is how a true story disappears from a person's draft. Such a reader still reads, and what it
  * finds is reported as `UNSOURCED·reader`, PREFERRED: a warning, never a failure, never repaired. The
- * pattern check, which held specificity 43/43 and 38/38 in both studies, stays the gate.
+ * pattern check stays the gate. It held specificity 43/43 and 38/38 in the first two studies; with the
+ * vague-evidence patterns added after them (./claims.ts), replayed offline on the same drafts, 41/43 and 38/38,
+ * and 45/48 on the third, unchanged.
  *
  * '0279163b' is decision version 2 and 'a173339d' decision version 3, both with claude-haiku-4-5: version 2
  * qualified on technical and marketing writing, version 3 on product essays
@@ -322,11 +324,11 @@ const KIND_TO_CLAIM: Readonly<Record<Kind, Claim['kind']>> = {
   FIRST_PERSON_EVENT: 'EXPERIENCE', SECOND_HAND_EVENT: 'EXPERIENCE',
 };
 const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot: string }>> = {
-  EXPERIENCE: { cut: 'a story told as lived that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another',
+  EXPERIENCE: { cut: 'a story told as lived that is not in your material or your request: the sentence is cut; if it is yours, add it to your material (atelier material)',
     slot: 'a story told as lived that is not in your material or your request; replace it with a placeholder like [your story: a time you ...]' },
-  SOURCE: { cut: 'a quotation, attribution or link not in your material or your request: make the point in your own words without it, or cut it',
+  SOURCE: { cut: 'a quotation, attribution or link not in your material or your request: the sentence is cut; if it is yours, add it to your material (atelier material)',
     slot: 'a quotation, attribution or link not in your material or your request; replace it with a placeholder like [source: who said this, and where]' },
-  FIGURE: { cut: 'a specific (a figure, a date, a fact) not in your material or your request: say it without the specific, or cut the claim',
+  FIGURE: { cut: 'a specific (a figure, a date, a fact) not in your material or your request: the sentence is cut; if it is yours, add it to your material (atelier material)',
     slot: 'a specific not in your material or your request; replace it with a placeholder like [figure: what it measures, and its source]' },
 };
 

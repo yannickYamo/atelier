@@ -12,7 +12,7 @@ import { unsourcedClaims } from './claims.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, regressions, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes } from './mechanical-repair.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -53,8 +53,8 @@ export interface CheckOptions {
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
   readonly guardClaims?: boolean;
   /**
-   * What happens to an invented story or figure. By default it is CUT: the span is rewritten without
-   * it, keeping the point it made, and the output lists where a story of the person's own would fit.
+   * What happens to an invented story or figure. By default the sentence is CUT, in code (enforceClaims),
+   * and the output lists what was cut, so the person can add their own.
    * A bracketed slot in the delivered text ("[your story: …]") was honest but read as a broken draft to
    * every reader of a blind round; `placeholders: true` (`--placeholders`) asks for slots instead.
    */
@@ -148,31 +148,72 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
   return checkDraft(skill, v, text, opts);
 }
 
+/** The spans the gating claim check flagged: whole claim units (a sentence, a heading, a table row). */
+const flaggedClaims = (r: VerifyReport): readonly { start: number; end: number; text: string }[] =>
+  r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
+
+/** The slot left where a claim was, when the person asked for slots (`--placeholders`). */
+export const CLAIM_SLOT = '[your own story, figure or source goes here]';
+
+/**
+ * AN INVENTED CLAIM IS DELETED, NEVER REWORDED. Every claim unit the gating check flags is removed in code,
+ * or replaced by a slot when the person asked for slots. No model sees it: asked to "rewrite without the
+ * story, keeping its point", a model turned "I pulled 200 tickets" into "when we looked at our tickets"
+ * and the vaguer claim passed the check. No other guard can keep it either: the cut is not weighed against
+ * the style rules, because a draft that breaks a paragraph rule is visible and a false claim is not.
+ * Read again after each cut, up to three times, since removing a sentence can change what the next reads as.
+ */
+export async function enforceClaims(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {},
+  known?: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> {
+  let report = known ?? await checkDraftAsync(skill, v, text, opts);
+  const cut: string[] = [];
+  if (opts.guardClaims === false) return { text, report, cut };
+  for (let round = 0; round < 3; round++) {
+    const spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
+    if (!spans.length) break;
+    let next = text;
+    for (const sp of spans) {
+      next = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);
+      cut.push(sp.text.trim().slice(0, 160));
+    }
+    if (next === text) break;
+    text = next; report = await checkDraftAsync(skill, v, text, opts);
+  }
+  return { text, report, cut: cut.reverse() };
+}
+
+/** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
+const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED') });
+
 export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
   opts: CheckOptions = {},
 ): Promise<Refined> {
   let first = await checkDraftAsync(skill, v, draft, opts);
   if (!first.failed) return { output: draft, repair: null, report: first };
-  let text = draft; let report = first; let passes = 0; let why = 'every REQUIRED measured rule now holds';
-  // ONE INSTRUMENT ON BOTH SIDES OF EVERY COMPARISON. A claim reader that fails mid-loop degrades for
-  // good (./claim-extract.ts, modelSensor), and from then on reads every text by the pattern check. The
-  // reports this loop already holds were read by the model; compared with a report read by the pattern,
-  // a figure the model flagged and the pattern cannot see looked fixed, and the loop said "all now hold"
-  // over it. So on the first read after the failure, the held reports are read again, by the pattern
-  // check, before anything is compared: the draft's (what `violatedBefore` records) and the current text's.
+  const cut: string[] = [];
+  // Whether the claim reader had already failed before this run: read before the first cut, which may be
+  // the read that fails it.
   const sensor = opts.guardClaims !== false ? opts.claimSensor : undefined;
   let readDegraded = sensor?.degraded ?? false; let degradedMidLoop = false;
-  // What the gating reader had flagged before it failed: claims it could see and the pattern cannot.
-  let flaggedBeforeFailure: string[] = [];
+  // Claims first, in code, before any rewrite: a style pass never holds an invented sentence.
+  const enforced = await enforceClaims(skill, v, draft, opts, first);
+  let text = enforced.text; let report = enforced.report; let passes = 0;
+  cut.push(...enforced.cut);
+  let why = cut.length ? 'invented claims cut' : 'every REQUIRED measured rule now holds';
+  // ONE INSTRUMENT ON BOTH SIDES OF EVERY COMPARISON. A claim reader that fails mid-loop degrades for
+  // good (./claim-extract.ts, modelSensor), and from then on reads every text by the pattern check. The
+  // reports this loop holds were read by the model; compared with a report read by the pattern, a figure
+  // the model flagged and the pattern cannot see looked fixed. So on the first read after the failure, the
+  // held reports are read again by the pattern check before anything is compared.
   const sameInstrument = (): void => {
     if (!sensor?.degraded || readDegraded) return;
-    flaggedBeforeFailure = (report.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
     readDegraded = true; degradedMidLoop = true;
     first = checkDraft(skill, v, draft, opts);
     report = checkDraft(skill, v, text, opts);
   };
-  const kept: string[] = []; const revertedRules: string[] = []; const cut: string[] = [];
+  sameInstrument();
+  const kept: string[] = []; const revertedRules: string[] = [];
   // THE FIXES THAT NEED NO MODEL (./mechanical-repair.ts): an em dash the author never uses, a paragraph
   // longer than they write. Tried before the rewrite passes, which then have less to do, and again after,
   // because a rewrite can put a dash back. Kept only on the same terms as a rewrite: nothing gets worse.
@@ -185,25 +226,24 @@ export async function refineToStandard(
     if (!acceptRepair(report, after).ok) return;
     text = m.text; report = after; mechanical.push(...m.fixed);
   };
-  await fixMechanically();
-  // ACCURACY BEFORE STYLE. A claim that is about to become a placeholder is not worth shortening, and
-  // a style pass run over it first can change the words the accuracy check keys on. When both kinds are
-  // broken, accuracy gets ONE pass of its own, not charged to the `maxPasses` style passes. An accuracy
-  // pass that makes no progress is dropped and the loop moves on to style: it never ends the loop.
+  if (report.failed) await fixMechanically();
+  // ACCURACY BEFORE STYLE, for the owner's own accuracy rules (the invented-claim line is never planned:
+  // it was cut above). When both kinds are broken, accuracy gets ONE pass of its own, not charged to the
+  // `maxPasses` style passes; a pass that makes no progress is dropped and the loop moves on to style.
   let accuracyTried = false; let stylePasses = 0;
   const pairs: RepairPair[] = [];
   const keys = keysOf(v.requirements);
   const keyOf = new Map(v.requirements.map((r, i) => [r.requirementId, keys[i]]));
   const checkOf = new Map(v.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, measurementId(r.measurement)] as const] : [])));
   while (report.failed && stylePasses < maxPasses) {
-    const accuracy = accuracyTried ? [] : planRepair(text, report, { phase: 'ACCURACY' });
-    const accuracyPass = accuracy.length > 0 && planRepair(text, report, { phase: 'STYLE' }).length > 0;
-    const targets = accuracyPass ? accuracy : planRepair(text, report);
+    const plannable = withoutClaims(report);
+    const accuracy = accuracyTried ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
+    const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE' }).length > 0;
+    const targets = accuracyPass ? accuracy : planRepair(text, plannable);
     accuracyTried = true;
-    if (!targets.length) { why = 'nothing the rules pointed at could be rewritten'; break; }
-    // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for and already meets
-    // every rule the repair was not about; a failed call (a refusal, a 500, an exhausted budget)
-    // delivers it as it stands and says why, rather than ending the command with nothing.
+    if (!targets.length) { why = cut.length ? `invented claims cut; ${flaggedClaims(report).length ? 'some could not be located to cut' : 'nothing else the rules pointed at could be rewritten'}` : 'nothing the rules pointed at could be rewritten'; break; }
+    // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for; a failed call (a
+    // refusal, a 500, an exhausted budget) delivers it as it stands and says why.
     let res: Awaited<ReturnType<InferenceClient['complete']>>;
     try {
       res = await spend(budget, 0.05, async () => {
@@ -230,24 +270,19 @@ export async function refineToStandard(
     }
     const after = next === text ? report : await checkDraftAsync(skill, v, next, opts);
     sameInstrument();
-    // A span that moved a banned move onto a sibling, or left a slot, was refused inside applyRepair, that
-    // span only: one bad sentence no longer throws away every good rewrite in the pass.
+    // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
       : acceptRepair(report, after);
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
-      // Another attempt, while passes remain: the spans are planned again from the same draft, and the
-      // reasons name the forms a move may not take. Stopping at the first refusal left the guard idle.
       continue;
     }
     text = next; report = after;
-    for (const a of applied) if (targets.find((x) => x.id === a.id)?.specifics && !opts.placeholders) cut.push(a.before.trim().slice(0, 160));
-    // An accepted pass's style rewrites are examples of this standard in action. One rule per pair,
-    // and never an invented claim turned placeholder: that teaches nothing about writing.
+    // An accepted pass's style rewrites are examples of this standard in action. One rule per pair.
     for (const a of applied) {
       const t = targets.find((x) => x.id === a.id);
-      const rid = t && !t.specifics && t.requirementIds.length === 1 ? t.requirementIds[0] : undefined;
+      const rid = t?.requirementIds.length === 1 ? t.requirementIds[0] : undefined;
       const key = rid ? keyOf.get(rid) : undefined;
       if (rid && key && a.before !== a.after) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
@@ -258,46 +293,11 @@ export async function refineToStandard(
     const how = `fixed without a model: ${mechanical.join('; ')}`;
     why = report.failed ? `${why}; ${how}` : `every REQUIRED measured rule now holds (${how})`;
   }
-  // THE LAST RESORT FOR AN INVENTED STORY: CUT IT. When every rewrite failed (a model kept offering a
-  // slot where it was told to cut), the sentences the claim check flagged are removed outright, and the
-  // output lists them. An invented story does not ship because a rewrite could not be agreed.
-  // Tried at most twice: if the reader fails on the cut text, the spans came from an instrument no longer
-  // in use, so the cut is planned again from the current text as the pattern check reads it.
-  for (let attempt = 0; attempt < 2 && !opts.placeholders && report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED'); attempt++) {
-    const unsourced = report.checked.find((c) => c.requirementId === 'UNSOURCED');
-    if (!unsourced) throw new Error('UNSOURCED was violated but is not in the report.');
-    const spans = unsourced.result.spans.slice().sort((a, b) => b.start - a.start);
-    let next = text;
-    for (const sp of spans) next = cutClaim(next, sp.start, sp.end);
-    const after = await checkDraftAsync(skill, v, next, opts);
-    const wasRead = readDegraded;
-    sameInstrument();
-    if (readDegraded !== wasRead) continue;
-    if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
-      for (const sp of spans) cut.push(sp.text.trim().slice(0, 160));
-      text = next; report = after;
-      why = report.failed ? `invented stories cut outright; ${why}` : 'every REQUIRED measured rule now holds (invented stories cut outright)';
-    }
-    break;
-  }
-  // FAIL CLOSED ON WHAT THE READER ALREADY SAW. A claim the gating reader flagged before it failed is
-  // still an invented claim; the pattern check that took over cannot see it, but it need not: the
-  // sentence is known. Each one still in the text verbatim is cut, as the last resort cuts any other.
-  if (degradedMidLoop && !opts.placeholders) {
-    let next = text;
-    const gone: string[] = [];
-    for (const t of flaggedBeforeFailure) {
-      const at = next.indexOf(t);
-      if (at !== -1 && t.trim()) { next = cutClaim(next, at, at + t.length); gone.push(t.trim().slice(0, 160)); }
-    }
-    if (gone.length) {
-      const after = checkDraft(skill, v, next, opts);
-      if (!regressions(report, after).filter((id) => id !== 'UNSOURCED').length) {
-        cut.push(...gone); text = next; report = after;
-        why = `claims the reader had flagged before it failed were cut outright; ${why}`;
-      }
-    }
-  }
+  // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
+  const last = await enforceClaims(skill, v, text, opts, report);
+  sameInstrument();
+  if (last.cut.length) { text = last.text; report = last.report; cut.push(...last.cut); }
+  if (cut.length && !report.failed) why = 'every REQUIRED measured rule now holds (invented claims cut)';
   if (degradedMidLoop) {
     why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
       + 'each comparison used one instrument, and a claim only the reader could see is no longer checked)';

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spanIntegrity } from '../core/loop/integrity.js';
 import { planRepair, applyRepair, type Reverted } from '../core/loop/repair.js';
-import { refineToStandard, checkDraft } from '../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, CLAIM_SLOT } from '../core/loop/run-repair.js';
 import { checkClass, normalizeClass } from '../core/observers/doc-class.js';
 import { decide } from '../core/ratification/authority.js';
 import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
@@ -93,40 +93,52 @@ describe('the splice refuses a rewrite that changes the claim, and keeps the ori
 
 describe('the loop: accuracy first, and refused rewrites are recorded', () => {
   const budget = () => ({ spentUsd: 0, capUsd: 5 });
-  it('an UNSOURCED claim is repaired in its own pass before any style rule', async () => {
+  it('an invented claim never reaches the model: it is slotted in code, then style is repaired', async () => {
     const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
     const draft = 'According to a 2023 survey, 73% of teams failed. We value synergy here. The rest is plain.';
     const seen: string[] = [];
     const client: InferenceClient = { complete: async (r: InferenceRequest) => {
       seen.push(r.userMessage);
-      const first = seen.length === 1;
-      // The placeholder has no full stop, so the next pass's sentence starts at it; the model keeps it.
-      return anInferenceResult({ json: { replacements: [{ id: 1, text: first ? '[figure: what failed, and its source]' : '[figure: what failed, and its source] We value working together here.' }] } });
+      const spans = [...r.userMessage.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map((m) => ({ id: Number(m[1]), text: m[2] }));
+      return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.replace('synergy', 'working together') })) } });
     } };
     // Slots are asked for here (--placeholders); by default an invented claim is cut instead.
     const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '', placeholders: true });
-    expect(seen[0]).toContain('UNSOURCED');
-    expect(seen[0]).not.toContain('synergy (');
-    expect(seen[1]).toContain('synergy');
-    expect(out.output).toBe('[figure: what failed, and its source] We value working together here. The rest is plain.');
-    expect(out.repair?.passes).toBe(2);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain('UNSOURCED');
+    expect(seen.join()).not.toMatch(/SPAN[\s\S]*73%/);
+    expect(out.output).toBe(`${CLAIM_SLOT} We value working together here. The rest is plain.`);
+    expect(out.repair?.violatedAfter).toEqual([]);
   });
-  it('an accuracy pass that fixes only one of two invented claims is kept, and style still gets its passes', async () => {
+  it('every invented claim is deleted, never paraphrased, and style still gets its passes', async () => {
     const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
     const draft = 'According to a 2023 survey, 73% of teams failed. We value synergy here. In 2021 I watched 40% of launches slip.';
-    let n = 0;
     const client: InferenceClient = { complete: async (r: InferenceRequest) => {
-      n += 1;
-      if (n === 1) return anInferenceResult({ json: { replacements: [{ id: 1, text: '[figure: what failed, and its source]' }] } });
       const spans = [...r.userMessage.matchAll(/SPAN (\d+)\n"""([\s\S]*?)"""/g)].map((m) => ({ id: Number(m[1]), text: m[2] }));
-      return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.includes('2021')
-        ? '[your story: a launch that slipped]' : x.text.replace('synergy', 'working together') })) } });
+      return anInferenceResult({ json: { replacements: spans.map((x) => ({ id: x.id, text: x.text.replace('synergy', 'working together') })) } });
     } };
-    // Slots are asked for here (--placeholders); by default an invented claim is cut instead.
-    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '', placeholders: true });
-    expect(out.output).toContain('[figure: what failed, and its source]');
-    expect(out.output).toContain('working together');
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    expect(out.output).toBe('We value working together here.');
+    expect(out.repair?.storiesCut).toHaveLength(2);
     expect(out.repair?.violatedAfter).toEqual([]);
+  });
+  it('no other rule can keep an invented claim: the cut stands even when it breaks a count', async () => {
+    // "whereas" appears only in the invented sentence; a rule asking for it at least once per thousand
+    // words breaks when that sentence goes. The claim is cut anyway, and the broken count is said.
+    const v = std([{ measurement: { observer: 'TERM_RATE', params: { terms: ['whereas'], minPer1000: 1 } } }]);
+    const draft = 'Plain words open this piece. In 2021 I watched 40% of launches slip, whereas none had before. Plain words close it.';
+    const client: InferenceClient = { complete: async () => anInferenceResult({ json: { replacements: [] } }) };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 2, { material: '' });
+    expect(out.output).not.toContain('40%');
+    expect(out.output).toBe('Plain words open this piece. Plain words close it.');
+    expect(out.repair?.storiesCut?.[0]).toContain('40%');
+  });
+  it('a rewrite that slips in a vague claim ("I checked our logs") is refused', async () => {
+    const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['synergy'] } } }]);
+    const draft = 'We value synergy here. The rest is plain.';
+    const client: InferenceClient = { complete: async () => anInferenceResult({ json: { replacements: [{ id: 1, text: 'I checked our logs, and we value working together here.' }] } }) };
+    const out = await refineToStandard(client, budget(), 'd', v, draft, 1, { material: '' });
+    expect(out.output).not.toContain('checked our logs');
   });
   it('a pass whose every rewrite loses meaning ends the loop with the draft, and says why', async () => {
     const v = std([{ measurement: { observer: 'LEXICON', params: { terms: ['leverage'] } } }]);

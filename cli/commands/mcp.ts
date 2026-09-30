@@ -37,7 +37,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'atelier_rules', description: "A skill's ratified standard: every rule, its weight (REQUIRED instructs), and how it is checked.",
     inputSchema: { type: 'object', properties: { skill: { type: 'string' } }, required: ['skill'], additionalProperties: false } },
-  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for invented specifics (stories told as lived, quotations, attributions, links, figures) that do not trace to the skill\'s material (UNSOURCED). Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; cut an UNSOURCED story, quotation or figure (keep the point it made), never replace it with another invented one.',
+  { name: 'atelier_verify', description: 'Check a text against every measured rule of an Atelier skill, and for invented specifics (stories told as lived, quotations, attributions, links, figures) that do not trace to the skill\'s material (UNSOURCED). Returns each violation with the exact span; failed=true when a REQUIRED rule is broken. Rewrite only the spans it names; delete each UNSOURCED sentence outright: do not reword it, and never replace it with another invented claim.',
     inputSchema: { type: 'object', properties: { skill: { type: 'string' }, text: { type: 'string' },
       class: { type: 'string', description: 'the kind of document the text is ("blog-post", "support-reply"); refused when the skill measures another kind' },
       material: { type: 'string', description: 'notes, figures or sources the text may draw on, beyond the skill\'s own material' },
