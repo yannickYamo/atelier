@@ -140,8 +140,8 @@ replacement that:
   - keeps the meaning, facts, names and figures of the original span, and every negation and qualifier
     ("not", "may", "most", "roughly"), unless a reason names that very word as the problem: a rewrite
     that drops one is refused and the original kept;
-  - where a reason says a story or figure is not in the author's material, rewrites the span without it,
-    keeping the point it made. Never substitute another invented one, and never leave a bracketed slot;
+  - adds no story, figure, quotation, source or first-hand claim ("I checked", "we found") that the span
+    did not already carry, and never leaves a bracketed slot;
   - keeps every [bracketed placeholder] already in the span, word for word;
   - reads naturally in place: the text immediately before and after it will not change;
   - uses no em dash (—) anywhere, placeholders included; write a comma, a colon or " - " instead.
@@ -149,13 +149,11 @@ replacement that:
 Return a replacement for every numbered span. Do not return the rest of the draft.`;
 
 /**
- * The same instructions for a person who asked for slots (`--placeholders`): an invented story or figure
- * becomes a short bracketed placeholder saying what belongs there. Without that request the prompt does
- * not mention slots at all: told "cut it, or leave a slot", a model left slots three times running.
+ * The same instructions for a person who asked for slots (`--placeholders`). An invented claim never
+ * reaches a rewrite (it is cut or slotted in code, ./run-repair.ts enforceClaims); this variant only lets
+ * a rewrite keep the slots already there.
  */
-export const REPAIR_SYSTEM_WITH_PLACEHOLDERS = REPAIR_SYSTEM.replace(
-  'rewrites the span without it,\n    keeping the point it made. Never substitute another invented one, and never leave a bracketed slot;',
-  'replaces just that story or\n    figure with a short bracketed placeholder saying what belongs there, e.g. [your story: a time a control\n    got routed around]. Never substitute another invented one;');
+export const REPAIR_SYSTEM_WITH_PLACEHOLDERS = REPAIR_SYSTEM.replace(', and never leaves a bracketed slot;', ';');
 
 export const REPAIR_SCHEMA: Record<string, unknown> = {
   type: 'object',

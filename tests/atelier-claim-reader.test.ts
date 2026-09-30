@@ -436,10 +436,10 @@ describe('the audit of the invented-claim check', () => {
       // Before the fix: the model's reading of the draft against the pattern's of the rewrite, "95 minutes"
       // accepted, violatedBefore [UNSOURCED], violatedAfter [], "every REQUIRED measured rule now holds".
       expect(r.output).not.toContain('95 minutes');
-      // And the figure the reader flagged before it failed is not shipped either: it is cut, fail closed.
+      // And the figure the reader flagged is not shipped either: it is cut in code before any rewrite,
+      // while the reader that saw it is still the instrument.
       expect(r.output).not.toContain('94 minutes');
       expect(r.repair!.storiesCut?.join(' ')).toContain('94 minutes');
-      expect(r.repair!.why).toMatch(/flagged before it failed were cut outright/);
       expect(r.repair!.why).not.toBe('every REQUIRED measured rule now holds');
       expect(r.repair!.why).toMatch(/claim reader failed during the repair/);
       // before and after, by the same instrument
@@ -569,22 +569,22 @@ describe('the audit of the invented-claim check', () => {
       expect(j.failed).toBe(false);
     });
 
-    it('3: a reader that fails mid-repair does not deliver a rewrite judged on a mixed comparison', async () => {
+    it('3: a figure the reader flags is cut before any rewrite, so no rewrite is ever judged on it', async () => {
       const { run, file } = setup('The review took 94 minutes. It ended well.');
       await script({
         byTool: {
           emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] },
           emit_replacements: { replacements: [{ id: 1, text: 'The review took 95 minutes.' }] },
         },
-        // the reader's second read (the rewrite) comes back with no list: a failed read
         when: [{ contains: '[1] The review took 95 minutes.', answer: { nothing: true } }],
       });
       const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' },
         'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
-      const j = JSON.parse(r.out) as { output: string; repair: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
+      const j = JSON.parse(r.out) as { output: string; repair: { storiesCut?: string[]; violatedAfter: string[] } };
       expect(j.output).not.toContain('95 minutes');
-      expect(j.repair.why).toMatch(/claim reader failed during the repair/);
-      expect(j.repair.violatedBefore).toEqual(j.repair.violatedAfter);
+      expect(j.output).not.toContain('94 minutes');
+      expect(j.repair.storiesCut?.join(' ')).toContain('94 minutes');
+      expect(j.repair.violatedAfter).toEqual([]);
     });
   });
 });
