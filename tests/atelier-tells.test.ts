@@ -16,7 +16,7 @@ import { applyRepair, planRepair } from '../core/loop/repair.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { aRequirement } from './fixtures.js';
 import { replaceEmDashes, splitLongParagraphs, mechanicalFixes } from '../core/loop/mechanical-repair.js';
-import { sentencesKept } from '../core/observers/overlap.js';
+import { sentencesKept, sentencesAdded } from '../core/observers/overlap.js';
 
 describe('the catalogue: the model\'s moves, not any author\'s', () => {
   const cases: [string, string][] = [
@@ -281,7 +281,15 @@ describe('the tell floor needs no plain drafts', () => {
     const rules = deriveContrastRules([0, 1, 2, 3].map(piece), [4, 5].map(piece), [], 'MACHINE_DISCOVERED');
     const tell = rules.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.includes('MACHINE_TELL'));
     expect(tell?.requirement.measurement?.params.never).toEqual(expect.arrayContaining(['EM_DASH', 'STACCATO_RUN']));
-    // nothing that would claim the model does something the author does not
-    expect(rules.filter((r) => r.requirement.measurement?.observer === 'DISTRIBUTION')).toEqual([]);
+    // nothing that claims the model does something the author does not: there are no drafts to show it
+    expect(rules.filter((r) => (r.requirement.evidence ?? '').includes('the model on its own'))).toEqual([]);
+  });
+});
+
+describe('a restyle lists what it added', () => {
+  it('a sentence with no counterpart in the source is listed; a light rephrase is not', () => {
+    const source = 'Founders are building agent org charts. The charts run the work every morning. Nobody has written down what the work is for.';
+    const out = 'Founders are building agent org charts now. The charts run the work each morning. Agents made execution cheap, and they did not make judgment cheap.';
+    expect(sentencesAdded(out, source)).toEqual(['Agents made execution cheap, and they did not make judgment cheap.']);
   });
 });

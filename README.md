@@ -43,10 +43,10 @@ three ways on the same model, Atelier's was the only version that changed none o
 and added no em dash or other catalogued tell; a plain prompt added five claims and more than twice
 the company's rate of em dashes. Read blind by the owner, Atelier's was ranked first.
 
-**The voice is not shown yet.** In that test every version, Atelier's included, kept most of the
-original's sentences and its rhythm, where the company blog writes longer, flowing sentences. The one blind win
-on voice so far is one author, read by the person who built the tool. The next study tests new pieces,
-not rewrites, read blind by three people, with its pass rule sealed before any output exists
+**The voice is starting to show.** Rewriting the same post in a technical author's voice, an outside reviewer
+ranked Atelier's version first of three, blind: the only one with his punctuation and register, and
+nothing copied. That is one post and one reviewer, and the rhythm did not move yet. The study that
+decides tests new pieces, read blind by three people, with its pass rule sealed before any output exists
 ([ROADMAP](docs/ROADMAP.md)).
 
 Two studies came back null and one negative. They are listed beside the wins in
