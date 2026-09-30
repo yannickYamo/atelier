@@ -17,6 +17,28 @@ a run in progress may not be.
 - **A restyle is said as one.** When a draft keeps most of a bound text's sentences, `invoke` says so
   and points to writing a new piece from notes. `atelier new` ends by asking for real stories and figures.
 
+### Changed: rhythm from the author's own pieces, and a restyle lists what it added
+
+- **The sentence mix is read off the author's pieces alone.** It was proposed only where it separated the
+  author from a plain model's drafts, but a rewrite's short sentences come from its source: the the author
+  skill had no mix rule at all, and both rewrites kept 38% of sentences at eight words or fewer against
+  the authors' typical 19 to 20%. Its tolerance is now the author's 80th-percentile piece (about 12 to
+  14% for the company blog and the author) instead of the 90th, rounded up (22% for the company blog).
+- **A restyle lists the sentences it added.** Every sentence with no counterpart in the source (under 35%
+  of its words shared with any source sentence) is listed for the person to approve or cut: the claim
+  check stops invented facts, not invented arguments.
+
+### Studies: the a technical author rewrite (exploratory, $4.83 including a build discarded for a bug)
+
+The same post and instruction as the the company blog test, three versions on the same model, read blind by an
+outside reviewer against 20 of the author's posts. **The reviewer ranked Atelier's version first**, and picked
+it out as Atelier's from its signature. It was the only version without em dashes (the author writes none; the
+plain prompt had 7.2 per 1,000 words, the pasted posts 3.3), used his hyphen style and his contraction
+register, and borrowed how he reasons without copying a six-word run. Rhythm did not move (a median
+sentence of 12 words against his 16), and it added three arguments the post never made, one a design
+rationale for the product. Both led to the changes above. One post, one reviewer, a rewrite: the voice
+study of new pieces is what decides.
+
 ### Studies: the Phase 1 check (exploratory, $0.85)
 
 Two new pieces (not rewrites) with the the company blog skill, its sentence mix made required, each from a fact
