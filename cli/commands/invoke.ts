@@ -11,7 +11,7 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
-import { overlapIndex, sentencesKept } from '../../core/observers/overlap.js';
+import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
@@ -570,9 +570,15 @@ async function reportTaste(report: RunReport, t: TasteContext): Promise<void> {
  * the sentences did. Said in one line, with the way to a voice: new pieces written from notes.
  */
 function reportRestyle(report: RunReport, output: string, material: readonly { name: string; text: string }[]): void {
-  const kept = material.map((m) => ({ name: m.name, share: sentencesKept(output, m.text) })).sort((a, b) => b.share - a.share)[0];
+  const kept = material.map((m) => ({ name: m.name, text: m.text, share: sentencesKept(output, m.text) })).sort((a, b) => b.share - a.share)[0];
   if (!kept || kept.share < 0.5) return;
   report.say(`Restyle of "${kept.name}": ${Math.round(kept.share * 100)}% of its sentences kept nearly as written, so its structure and rhythm came with it. For the voice, write a new piece from notes.`);
+  // AN ADDED ARGUMENT IS NOT AN INVENTED FACT, AND NOTHING ELSE CATCHES IT: every sentence with no
+  // counterpart in the source is listed for the person to approve or cut before publishing.
+  const added = sentencesAdded(output, kept.text);
+  if (!added.length) return;
+  report.say(`${added.length} sentence(s) have no counterpart in "${kept.name}", which can mean a new argument: check them before publishing (listed in the details).`);
+  for (const a of added) report.detail(`    added: "${a.slice(0, 200)}"`);
 }
 
 /** Copying, text that is not the deliverable, and an output contract that did not reach the provider: said. */

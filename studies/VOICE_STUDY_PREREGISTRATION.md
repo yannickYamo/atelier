@@ -1,7 +1,7 @@
 # Pre-registration (DRAFT): does Atelier write in someone's voice?
 
-**Status: DRAFT.** Sealed only by the owner's commit, after the readers are named, the briefs and fact
-packs are written and hashed here, and the two choices marked **CONFIRM** are made. Nothing is generated
+**Status: DRAFT.** Sealed only by the owner's commit, after the readers are named (the one choice marked
+**CONFIRM**) and the briefs and fact packs are written and hashed here. Nothing is generated
 before that commit.
 
 ## Why this study, and why it is the last on voice
@@ -41,9 +41,11 @@ All on `claude-opus-5`, one piece per brief per arm, the same facts bound to eac
 The skill is built with `atelier new … --accept`: its rulings are the evidence-based suggestions, and no
 rule is chosen by hand.
 
-**CONFIRM (rhythm):** the sentence-mix rule's tolerance is the author's own 90th-percentile spread, which
-on Linear is 22% of sentences, wider than the gap it should close (Phase 1 check, CHANGELOG). Recommended:
-cap the tolerance at 0.12 for this study, in code, before the skill is built, and record it.
+**Rhythm (decided 2026-09-30, in the product, not for this study).** The sentence-mix rule is read off
+the author's own pieces, with a tolerance of their 80th-percentile piece (about 12 to 14% of sentences on
+Linear and on Addy Osmani), and instructs when their unread work bears it out. A flat 12% was considered
+and rejected: only 11 of Linear's 16 essays sit within it, so the rule would reject Linear's own writing
+and discovery would drop it. The skill in this study is built with that rule as shipped.
 
 ## Briefs
 

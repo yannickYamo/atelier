@@ -348,25 +348,27 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
   }
 
   // ── The mix of sentence lengths ───────────────────────────────────────────────────────────────
+  //
+  // THE AUTHOR'S RHYTHM, READ OFF THEIR OWN PIECES. It was proposed only where it separated the author
+  // from a plain model's drafts, but a rewrite's short sentences come from its source, not the model: in
+  // two rewrites (toward Linear and toward Addy Osmani) 38% of sentences stayed at eight words or fewer
+  // against the authors' typical 19 to 20%, and no rule pulled them. So the mix is proposed from the
+  // author's pieces alone. Its tolerance is their 80th-percentile piece (about 12 to 14% of sentences for
+  // both authors), their typical range rather than their outliers; the 90th percentile, rounded up, had
+  // let 22% of sentences sit in the wrong band. The held-out guard still applies.
   const mixable = authorTexts.filter((t) => sentencesOf(t).length >= DISTRIBUTION_MIN_SENTENCES);
   const draftMixable = drafts.filter((t) => sentencesOf(t).length >= DISTRIBUTION_MIN_SENTENCES);
-  if (mixable.length >= 3 && draftMixable.length >= 2) {
+  if (mixable.length >= 3) {
     const mean = (mixes: number[][]): number[] => mixes[0].map((_, i) => mixes.reduce((x, m) => x + m[i], 0) / mixes.length);
     const author = mean(mixable.map((t) => lengthMix(t, LENGTH_EDGES).shares));
-    const model = mean(draftMixable.map((t) => lengthMix(t, LENGTH_EDGES).shares));
-    const gap = mixDistance(author, model);
-    // Tolerance from the author's own spread: their least typical piece must pass.
-    const spread = quantile(mixable.map((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author)), 0.9);
-    const tolerance = Math.ceil(Math.max(0.1, spread) * 100) / 100;
-    // Proposed only if it separates: most of the model's drafts, each on its own, fall outside it.
-    const outside = draftMixable.filter((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author) > tolerance).length;
-    if (gap >= 0.1 && outside / draftMixable.length >= 0.6) {
-      const shares = toHundredths(author);
-      const show = (m: readonly number[]): string => m.map((x, i) => `${pct(x)} ${bandLabel(LENGTH_EDGES, i)}`).join(', ');
-      propose(`Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
-        { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
-        `you: ${show(author)}; the model on its own: ${show(model)} (${pct(gap)} of its sentences in a different band)`);
-    }
+    const spread = quantile(mixable.map((t) => mixDistance(lengthMix(t, LENGTH_EDGES).shares, author)), 0.8);
+    const tolerance = Math.round(Math.max(0.1, spread) * 100) / 100;
+    const shares = toHundredths(author);
+    const show = (m: readonly number[]): string => m.map((x, i) => `${pct(x)} ${bandLabel(LENGTH_EDGES, i)}`).join(', ');
+    const model = draftMixable.length >= 2 ? mean(draftMixable.map((t) => lengthMix(t, LENGTH_EDGES).shares)) : null;
+    propose(`Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
+      { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
+      `you: ${show(author)}${model ? `; the model on its own: ${show(model)} (${pct(mixDistance(author, model))} of its sentences in a different band)` : ''}`);
   }
 }
 
