@@ -15,7 +15,7 @@ never been measured. This study measures it, once, against thresholds fixed here
 
 - Reader: `claude-haiku-4-5`, prompt version **`a5c3ef8a`** (`READER_VERSION`, the hash of its instructions
   and schema). The harness refuses to run on any other version.
-- Decision: `decideSpecifics` as merged in PR #23 (main at `b488619`).
+- Decision: `decideSpecifics` as merged in PR #23 (main at `1167747`).
 - Harness: `studies/harness/claim-qualification.mjs`, sha256 prefix **`166568818eea1a77`** at sealing.
 - **No tuning.** Nothing about the reader changes because of this study's test results. A changed reader is
   a different instrument, and it needs a new set of pieces to be qualified on. A sensor tuned against its

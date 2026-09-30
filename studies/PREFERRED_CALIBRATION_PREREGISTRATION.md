@@ -3,7 +3,7 @@
 **Status:** SEALED by the public commit introducing this file, before any task prompt was sent to
 any model, before any generation, before any label.
 **Motivation, declared as post-hoc:** this design was written **after** the pilot closed
-ACQUISITION-ONLY at its gate (`EXTERNAL_EXPERT_PILOT_CLOSE.md`, commit `2c02a97`) and **after** the
+ACQUISITION-ONLY at its gate (`EXTERNAL_EXPERT_PILOT_CLOSE.md`, commit `312371a`) and **after** the
 builder relayed the reviewer's informal debrief, quoted verbatim from the builder's message:
 *"the reviewer said to me they thoguth prefered was too hard and its wy they didnt chose it … for
 what i unerstodd their prefered means our require"* (read in context: the reviewer found the
