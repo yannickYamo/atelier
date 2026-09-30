@@ -1,6 +1,6 @@
 # Close — the pilot stops at its own gate: ACQUISITION-ONLY
 
-**Preregistration:** `EXTERNAL_EXPERT_PILOT_PREREGISTRATION.md`, sealed by public commit `943ab6a`
+**Preregistration:** `EXTERNAL_EXPERT_PILOT_PREREGISTRATION.md`, sealed by public commit `201a921`
 on 2026-09-02, before discovery read any corpus byte. **Closed:** 2026-09-04, at the stage-1 gate,
 before any task, any generation, or any preference label existed. **Spend:** $0.52 of $40
 authorised. **The reviewer's 59 endpoint trials were never spent** — which is what the gate was for.

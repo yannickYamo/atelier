@@ -1,7 +1,7 @@
 # Result: qualifying the claim reader, version 2
 
 Pre-registration: [CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md](CLAIM_READER_V2_QUALIFICATION_PREREGISTRATION.md),
-sealed in `f0b075d` before any output. Instrument `0279163b` (reader `claude-haiku-4-5`, decision version
+sealed in `4b57eeb` before any output. Instrument `0279163b` (reader `claude-haiku-4-5`, decision version
 2), unchanged throughout. Pieces: 33 that no study had used; 28 TEST. Spent: $3.45.
 
 ## Verdict: PASS
