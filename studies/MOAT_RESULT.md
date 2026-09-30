@@ -1,6 +1,6 @@
 # Result — The moat experiment closes NEGATIVE
 
-**Preregistration:** `MOAT_PREREGISTRATION.md`, sealed by public commit `5c8d31b` on 2026-08-30,
+**Preregistration:** `MOAT_PREREGISTRATION.md`, sealed by public commit `52bdb2f` on 2026-08-30,
 before any generation. **Labels collected:** 2026-08-31. **Spend:** $2.60 of $10 authorised
 (41 metered calls). **Blinding:** the key file `MOAT_BLIND_KEY.json` is published beside this
 result; its sha256 — `9836b199bff0da5a72cccd4a3515064f1686d9f4a3707bc9129840031e64b801` — was

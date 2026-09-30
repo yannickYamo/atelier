@@ -1,6 +1,6 @@
 // tests/atelier-install-tree.test.ts — THE INSTALLED DIRECTORY IS THE PACKAGE, AND NOTHING ELSE.
 //
-// Found by an independent audit at d9f590a: install() wrote the package's files over whatever the skill
+// Found by an independent audit at e6dfc6f: install() wrote the package's files over whatever the skill
 // directory held and never cleared it, so installs were additive across builds. After a rebuild the
 // directory held 16 example files against a package of 5, four of them rules the owner had REJECTED,
 // and `atelier inspect` reported "installed file matches the package that was built" — the verifier

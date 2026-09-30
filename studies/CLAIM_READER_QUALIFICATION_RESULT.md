@@ -1,7 +1,7 @@
 # Result: qualifying the claim reader (Phase B)
 
 Pre-registration: [CLAIM_READER_QUALIFICATION_PREREGISTRATION.md](CLAIM_READER_QUALIFICATION_PREREGISTRATION.md),
-sealed in `1e7de8c` before any output existed. Reader `claude-haiku-4-5`, prompt `a5c3ef8a`, unchanged
+sealed in `7e9583d` before any output existed. Reader `claude-haiku-4-5`, prompt `a5c3ef8a`, unchanged
 throughout. Harness `studies/harness/claim-qualification.mjs`, run as sealed. Spent: $4.95 on TEST and
 $1.55 on DEV.
 
