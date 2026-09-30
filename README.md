@@ -1,90 +1,74 @@
 # Atelier
 
-**Your voice, learned from your best work, and kept in every draft an agent writes for you.** Atelier
-reads what you've written, finds the decisions that make it yours, and turns them into a standard you
-approve once. Every draft is then written, checked and repaired against it, with nothing invented and
-nothing that reads as machine-written. No model update, optimizer or judge can change what "good" means.
-Only you can.
+**A writing standard you approve once, and a model that can't quietly drift away from it.**
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
+Atelier is an open-source CLI that reproduces a writing taste at scale. The taste can be yours, your team's, or a style you admire - you point it at a folder of pieces written the way you want to write, whoever wrote them. It reads that folder, finds the decisions that make the writing sound the way it does, and proposes them to you as rules, each one carrying its evidence. You approve them once. From then on every draft is written, checked against that standard, and repaired where it broke. It's MIT licensed and lives at yannickYamo/atelier.
+
 ```bash
-atelier new ./my-best-posts "write me a blog post like these"   # read your work, find the rules
-atelier new ./my-best-posts --accept                              # approve them, install the skill
-atelier invoke --skill my-best-posts "write the launch post"      # a draft, checked and repaired
+atelier new ./writing-i-want-to-match "blog posts like these"   # read the pieces, propose the rules
+atelier new ./writing-i-want-to-match --accept                   # approve them, install the skill
+atelier invoke --skill writing-i-want-to-match "the launch post"  # a draft, checked and repaired
 ```
 
 ## Why it exists
 
-Models got very good at writing. So why does a draft still not sound like you?
+Models write well. They don't write in a particular style on every run.
 
-Paste your examples into a prompt and you get something close; close is the problem. It lifts your sentences, invents stories
-you never lived, and drifts back to its own habits a few drafts later. A better prompt won't fix that,
-because the model re-guesses your style on every run. A prompt optimizer won't either, because nobody
-can write a score for *sounds like me*.
+Paste your examples into a prompt and three things happen. The model lifts sentences straight out of them. It invents stories the author never lived. And a few drafts later it drifts back to its own habits, the ones you were trying to get away from. A better prompt doesn't fix this, because the model re-guesses the style from scratch on every run. A prompt optimizer doesn't fix it either, because an optimizer needs a score, and nobody can write a score for "sounds like this writer."
 
-**The standard has to live outside the model, and it has to be yours.**
+So the standard has to live outside the model. And someone has to own it. Once it's approved, the standard is hashed and versioned. No model update, no optimizer, no judge can change it. Only the person who approved it can.
 
 ## How it works
 
-1. **It reads your work and proposes the rules behind it, with evidence.** For each rule you see how
-   often you do it, how often a plain model does, and whether it held on pieces it never read.
-2. **You approve the standard once.** It's hashed and versioned. Required rules instruct the model and
-   the rest guide it by example. Nothing automated can edit it.
-3. **Every draft is checked, and only what broke gets rewritten.** Counted rules are measured on every
-   draft. A small model lists every specific claim and code checks each one against what you supplied.
-   Invented figures, quotes and stories are cut and listed, so you can add the real one.
+1. It reads your pieces and proposes rules with evidence attached: how often the writer does this thing, how often a plain model does it, and whether the rule held up on pieces the system never read.
+2. You approve the standard once. Required rules instruct the model directly. The rest guide it by example.
+3. Every draft gets checked. Counted rules are measured on each one. Then a small model lists every specific claim in the draft, and code checks each claim against the material you supplied. An invented figure, quote, story or claim of evidence - "I checked our logs" - is deleted rather than reworded, and listed for you, so you can put the real one in.
+4. Machine-writing tells never get past the rate the writer uses them. Em dashes, runs of very short sentences, announced insights.
 
-It ships as a skill for Claude Code or Codex, a CLI guard (`atelier verify` exits 1 on a broken rule), an
-MCP server your agents can call on their own output, and a Claude Code hook. [USAGE](docs/USAGE.md) has
-every command.
+## What it can write
 
-## What it does today
+**Blog posts and essays in a writer's voice.** Tested. In blind tests on two published authors, readers ranked Atelier's version first of three, ahead of a plain prompt and ahead of a prompt with the author's own posts pasted in. It was the only version with none of the tells that give AI writing away.
 
-**The guard is proven.** On product essays no test had used, the claim reader caught all 45 planted
-inventions it read, in headings and tables too, and left 41 of 48 clean drafts alone. A pattern check
-caught 11 of 46.
+**Code review comments in a maintainer's style.** A standard read from one maintainer's public review comments beat raw examples in 15 of 17 held-out contexts, at roughly 18 times less context, but that was the secondary endpoint, and the primary endpoint failed.
 
-**The voice works.** In blind tests on two published authors, readers ranked Atelier's version first of
-three: ahead of a plain prompt, and ahead of a prompt with the author's own posts pasted in. It was the
-only version with none of the tells that give AI writing away, and it kept what the author never does
-out of the draft, down to the punctuation.
+**Contracts, white papers and reports.** With `--class contract`, or white-paper, or financial-report, nothing passes as general knowledge: every specific has to trace to the material you supplied. Built, not yet validated with users.
 
-Not everything worked. Two studies came back null and one negative, and they sit next to the wins in
-[RESULTS](docs/RESULTS.md).
+**Customer support replies** in a team's voice, via `--mode respond` and `--class support-reply`. Built, not yet validated.
 
-## How it compares
+**LinkedIn and X posts**, with each platform's limits checked, via `--class linkedin-post` and `--class x-post`.
 
-| | Where the objective comes from | Can the target move? |
-|---|---|---|
-| A strong model with your examples | re-guessed from the examples every run | every run |
-| Voice tools (Spiral, Writer, Jasper) | inferred from your samples by the vendor | whenever the vendor re-reads you or its judge feeds back |
-| Style checkers (Vale, Markup AI) | rules someone writes by hand | when they edit them |
-| Prompt optimizers (GEPA, SkillOpt, SSO, EvoSkill) | a metric or judge someone else wrote | by whoever owns the metric |
-| **Atelier** | **your work, approved by you rule by rule** | **only by you** |
+## Where it stands
 
-The fair objection is that a strong model with a few examples gets you most of the way. It does, on the
-first draft. Atelier is for the fiftieth, when you need the same standard on every run and a record of
-what changed. It searches over how your rules are carried, never over the rules, and it hasn't yet been
-benchmarked against these systems on a shared task. More in [COMPARISON](docs/COMPARISON.md).
+On product essays no test had used, the claim reader caught all 45 planted inventions it read, including ones hiding in headings and tables, and left 41 of 48 clean drafts alone. A pattern check on the same material caught 11 of 46.
+
+Two studies came back null. One came back negative. They sit next to the wins in [RESULTS](docs/RESULTS.md), because a results page that only shows wins isn't a results page. Every confirmation was pre-registered before its result existed, and every result is published.
+
+An outside review found something I'd missed: the repair step could paraphrase an invented claim into a vaguer claim instead of removing it. That's fixed. Flagged claims are deleted in code now, and nothing downstream can keep them.
 
 ## Where it's going
 
-Agents will write most of what a team ships: docs, release notes, support replies, the launch post.
-Each of those needs a standard that belongs to someone, because models change every few months and your
-standard shouldn't.
+Agents will write most of what a team ships. Docs, release notes, support replies, review comments, the launch post. Each of those needs a standard someone owns, and while models change every few months, the standard shouldn't.
 
-- **One-line install** from npm, in place of clone and build.
-- **Skills that look after themselves.** The loop that tends a skill over weeks is built and tested
-  offline. Next it runs on live skills.
-- **Search under a fixed standard.** Optimizer-class search over how rules are carried, with a judge
-  checked against people before it's trusted ([decision 0004](docs/decisions/0004-search-under-a-fixed-standard.md)).
-- **Beyond blog posts.** Support replies and team docs, where one standard has to hold across many
-  writers.
+Next up: a one-line install from npm. Skills that look after themselves over weeks, where the loop is built and tested offline. And search over how rules are carried under a fixed standard, with the judge checked against people first, which is [decision 0004](docs/decisions/0004-search-under-a-fixed-standard.md).
 
-The full list, and what's deliberately not being built, is in the [ROADMAP](docs/ROADMAP.md).
+## How it compares
+
+| | Where the standard comes from | Who can move it |
+|---|---|---|
+| A strong model with examples | re-guessed from the examples every run | every run |
+| Voice tools (Spiral, Writer, Jasper) | inferred from your samples by the vendor | the vendor, or its judge |
+| Style checkers (Vale, Markup AI) | rules someone writes by hand | whoever edits them |
+| Prompt optimizers (GEPA, SkillOpt, SSO, EvoSkill) | a metric or judge someone else wrote | whoever owns the metric |
+| **Atelier** | **the writing you chose, approved rule by rule** | **only you** |
+
+
+A strong model with examples re-guesses the objective from those examples on every run. Voice tools like Spiral, Writer and Jasper infer the voice from your samples on the vendor's side, and the voice changes when the vendor re-reads or its judge feeds back into itself. Prompt optimizers - GEPA, SkillOpt, SSO, EvoSkill - optimize toward a metric or a judge that someone else wrote. Atelier is the writing you chose, approved rule by rule, changed only by you.
+
+A strong model with a few examples gets you most of the way there on the first draft. If that's the draft you need, use it. Atelier is for the fiftieth draft, when you need the same standard on every run and a record of what changed. It also hasn't been benchmarked against any of these systems on a shared task, so treat the comparison as a description of where the standard lives, not a score. More in [COMPARISON](docs/COMPARISON.md).
 
 ## Install
 
@@ -95,20 +79,17 @@ cd atelier && npm install && npm run build && npm link
 
 Node 22 or later. In Claude Code: `/plugin marketplace add yannickYamo/atelier`, then
 `/plugin install atelier@atelier`. Steps that call a model need `ANTHROPIC_API_KEY` or any
-OpenAI-compatible backend, and `atelier check` tests yours before anything is spent. Your standards and
-outputs stay under `~/.atelier`. No account, no telemetry.
-
-No writing of your own to hand? [examples/blog](examples/blog/README.md) has a six-post corpus to try.
+OpenAI-compatible backend, and `atelier check` tests yours before anything is spent. Standards and outputs
+stay under `~/.atelier`, with no account and no telemetry. If you have no pieces to hand,
+[examples/blog](examples/blog/README.md) has a six-post corpus to try. [USAGE](docs/USAGE.md) has every command.
 
 ## How I built it
 
-I set the direction, the architecture and the rules the code has to keep. Coding agents wrote most of
-the code against written briefs, and independent audits checked it. Every confirmation was
-pre-registered before its result existed, and every result is published, failures included.
+I set the direction, the architecture, and the rules the code has to keep. Coding agents wrote most of the code against written briefs, and independent audits checked their work.
 
-**Agents do the volume. A person sets the bar and owns the call.** It's how Atelier works, and it's how
-Atelier was made. [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md) says who did what, and
-[LESSONS](docs/LESSONS.md) says what it taught.
+Agents do the volume. A person sets the bar and owns the call. That's how Atelier works, and it's how Atelier was made.
+
+[HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md) says who did what, and [LESSONS](docs/LESSONS.md) says what it taught.
 
 ## Learn more
 
@@ -121,9 +102,6 @@ Atelier was made. [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md) says who did what
 
 ## Contributing
 
-The most useful contribution is evidence. Point Atelier at writing whose standard you know, hold some
-back, and tell us what it got right, what sounded right and was wrong, and whether pasting your examples
-did as well. Negative results stay in; see [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
-
-Your taste is the one part of the work no model can supply. Write it down once, and make every agent
-keep it.
+The most useful contribution is evidence. Point Atelier at writing whose standard you know, hold some back,
+and report what it got right, what sounded right and was wrong, and whether pasting the examples did as
+well; negative results stay in. See [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
