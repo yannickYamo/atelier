@@ -1,7 +1,7 @@
 # Result: qualifying the taste sensors (Phase A2)
 
 Pre-registration: [SENSOR_QUALIFICATION_PREREGISTRATION.md](SENSOR_QUALIFICATION_PREREGISTRATION.md), sealed in
-`08206d6` before any output. Corpus: 40 newsletters no study had used, split before generation (INNER 16,
+`a327ea4` before any output. Corpus: 40 newsletters no study had used, split before generation (INNER 16,
 INNER HELD 8, OUTER 16). Model drafts: A 24 and B 16. Spent: $3.75.
 
 ## C1, counted features: PASS
