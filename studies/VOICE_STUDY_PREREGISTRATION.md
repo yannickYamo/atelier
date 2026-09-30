@@ -75,7 +75,9 @@ A **win** is a read (one reader, one brief) in which ATELIER is ranked first. Th
 
 **Voice is shown if both hold:**
 1. ATELIER is first in at least **13 of 24** reads. Against a chance rate of one in three, that has
-   p = 0.028 (`binomialUpperTailP(13, 24, 1/3)`, core/stats). Power: 0.79 if ATELIER truly wins 60% of reads.
+   p = 0.028 (`binomialUpperTailP(13, 24, 1/3)`, core/stats). Power, if ATELIER truly wins 60% of reads: 0.79 for
+   this condition alone, 0.63 with the next one too (simulated); the chance both hold when ATELIER wins one
+   read in three is 0.014.
 2. At least **2 of the 3 readers** rank ATELIER first in at least 5 of their 8 briefs, so one reader
    cannot carry the result.
 

@@ -60,7 +60,8 @@ Not everything worked. Two studies came back null and one negative, and they sit
 | | Where the objective comes from | Can the target move? |
 |---|---|---|
 | A strong model with your examples | re-guessed from the examples every run | every run |
-| Style checkers (Vale, Acrolinx) | rules someone writes by hand | when they edit them |
+| Voice tools (Spiral, Writer, Jasper) | inferred from your samples by the vendor | whenever the vendor re-reads you or its judge feeds back |
+| Style checkers (Vale, Markup AI) | rules someone writes by hand | when they edit them |
 | Prompt optimizers (GEPA, SkillOpt, SSO, EvoSkill) | a metric or judge someone else wrote | by whoever owns the metric |
 | **Atelier** | **your work, approved by you rule by rule** | **only by you** |
 

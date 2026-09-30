@@ -8,6 +8,32 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Fixed: an invented claim is deleted, never reworded (from an outside review)
+
+- **Cut in code, not rewritten.** The repair used to ask the model to rewrite an invented story "without it,
+  keeping the point it made", with the meaning checks off for that span. "I pulled 200 tickets" could come
+  back as "when we looked at our tickets", and the vaguer claim passed. Now every flagged sentence is deleted
+  in code (or slotted, with `--placeholders`) before any rewrite and again on the final text. No model sees it.
+- **No other rule can keep it.** The last-resort cut used to be dropped when it made another rule worse (a
+  paragraph too short, a count too low), and the claim shipped. The cut now stands; a rule it breaks is said.
+- **The report is the delivered text's.** After a taste rewrite, the text is checked again, claims are cut
+  again, and "still broken" and the cut list are counted on what you receive.
+- **Vague evidence is a claim.** The offline check now flags a first person gathering evidence with nothing
+  shown: "I checked our logs and…", "we tested this internally", "a customer told me…". Views ("in my
+  experience") and counterfactuals ("we should have tested") are left alone.
+- A rewrite that slips in a new claim of any kind makes the claim check worse, and is refused.
+- The voice study's draft states its power with both pass conditions: 0.63, not 0.79 (a false pass at
+  chance is 0.014).
+
+### Studies: the vague-evidence patterns, replayed on the three qualification studies (offline, $0)
+
+The new offline patterns, run on the saved drafts of all three claim-reader studies with each draft's own
+material. **Clean drafts wrongly flagged: 3 of 129 before, 5 after** (first study 0 → 2 of 43, second 0 of
+38, third 3 of 48 unchanged). Both new flags are the author's own "I've seen teams…" stories, paraphrased
+far enough from the material that support was not found. **Planted inventions caught: 38 of 120 before,
+41 after.** The model reader, which gates by default when a key is set, is unchanged; how it reads vague
+evidence is not yet measured.
+
 ### Changed: the README, and the test authors unnamed
 
 - **The README leads with where Atelier is going**, written with the product's own voice check, and states
