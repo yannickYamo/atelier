@@ -8,6 +8,38 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Fixed: an invented claim is deleted, never reworded (from an outside review)
+
+- **Cut in code, not rewritten.** The repair used to ask the model to rewrite an invented story "without it,
+  keeping the point it made", with the meaning checks off for that span. "I pulled 200 tickets" could come
+  back as "when we looked at our tickets", and the vaguer claim passed. Now every flagged sentence is deleted
+  in code (or slotted, with `--placeholders`) before any rewrite and again on the final text. No model sees it.
+- **No other rule can keep it.** The last-resort cut used to be dropped when it made another rule worse (a
+  paragraph too short, a count too low), and the claim shipped. The cut now stands; a rule it breaks is said.
+- **The report is the delivered text's.** After a taste rewrite, the text is checked again, claims are cut
+  again, and "still broken" and the cut list are counted on what you receive.
+- **Vague evidence is a claim.** The offline check now flags a first person gathering evidence with nothing
+  shown: "I checked our logs and…", "we tested this internally", "a customer told me…". Views ("in my
+  experience") and counterfactuals ("we should have tested") are left alone.
+- A rewrite that slips in a new claim of any kind makes the claim check worse, and is refused.
+- The voice study's draft states its power with both pass conditions: 0.63, not 0.79 (a false pass at
+  chance is 0.014).
+
+### Studies: the vague-evidence patterns, replayed on the three qualification studies (offline, $0)
+
+The new offline patterns, run on the saved drafts of all three claim-reader studies with each draft's own
+material. **Clean drafts wrongly flagged: 3 of 129 before, 5 after** (first study 0 → 2 of 43, second 0 of
+38, third 3 of 48 unchanged). Both new flags are the author's own "I've seen teams…" stories, paraphrased
+far enough from the material that support was not found. **Planted inventions caught: 38 of 120 before,
+41 after.** The model reader, which gates by default when a key is set, is unchanged; how it reads vague
+evidence is not yet measured.
+
+### Changed: the README, and the test authors unnamed
+
+- **The README leads with where Atelier is going**, written with the product's own voice check, and states
+  the voice results without naming the authors tested.
+- **Public authors used in tests are described, not named**, across the docs, the studies and code comments.
+
 ### Changed: the voice defaults (Phase 1 of closing Atelier as a voice engine)
 
 - **Rhythm instructs.** The author's sentence-length mix is suggested as required when their unread work
@@ -20,28 +52,28 @@ a run in progress may not be.
 ### Changed: rhythm from the author's own pieces, and a restyle lists what it added
 
 - **The sentence mix is read off the author's pieces alone.** It was proposed only where it separated the
-  author from a plain model's drafts, but a rewrite's short sentences come from its source: the the author
-  skill had no mix rule at all, and both rewrites kept 38% of sentences at eight words or fewer against
+  author from a plain model's drafts, but a rewrite's short sentences come from its source: the technical
+  author's skill had no mix rule at all, and both rewrites kept 38% of sentences at eight words or fewer against
   the authors' typical 19 to 20%. Its tolerance is now the author's 80th-percentile piece (about 12 to
-  14% for the company blog and the author) instead of the 90th, rounded up (22% for the company blog).
+  14% for both authors) instead of the 90th, rounded up (22% for the company blog).
 - **A restyle lists the sentences it added.** Every sentence with no counterpart in the source (under 35%
   of its words shared with any source sentence) is listed for the person to approve or cut: the claim
   check stops invented facts, not invented arguments.
 
-### Studies: the a technical author rewrite (exploratory, $4.83 including a build discarded for a bug)
+### Studies: the second rewrite, a technical author (exploratory, $4.83 including a build discarded for a bug)
 
-The same post and instruction as the the company blog test, three versions on the same model, read blind by an
+The same post and instruction as the company-blog test, three versions on the same model, read blind by an
 outside reviewer against 20 of the author's posts. **The reviewer ranked Atelier's version first**, and picked
 it out as Atelier's from its signature. It was the only version without em dashes (the author writes none; the
-plain prompt had 7.2 per 1,000 words, the pasted posts 3.3), used his hyphen style and his contraction
+plain prompt had 7.2 per 1,000 words, the pasted posts 3.3), used the author's hyphen style and contraction
 register, and borrowed how he reasons without copying a six-word run. Rhythm did not move (a median
-sentence of 12 words against his 16), and it added three arguments the post never made, one a design
+sentence of 12 words against the author's 16), and it added three arguments the post never made, one a design
 rationale for the product. Both led to the changes above. One post, one reviewer, a rewrite: the voice
 study of new pieces is what decides.
 
 ### Studies: the Phase 1 check (exploratory, $0.85)
 
-Two new pieces (not rewrites) with the the company blog skill, its sentence mix made required, each from a fact
+Two new pieces (not rewrites) with the company-blog skill, its sentence mix made required, each from a fact
 pack. **Rhythm did not move.** Median sentence 10.5 and 11 words against the company's 15; 29% and 36% of
 sentences of eight words or fewer against the company's 15%. The mix rule reported itself met, because its
 tolerance lets 22% of sentences sit in the wrong band, wider than the whole gap. What did move: new pieces
@@ -205,13 +237,13 @@ Product behaviour changed only where a fix is named here.
 
 The owner asked for their company blog post (1,438 words, "we") rewritten in another publication's style.
 
-- **a newsletter, 19 public previews** ($2.54). Failed. The rewrite kept most of the original's
+- **A newsletter, 19 public previews** ($2.54). Failed. The rewrite kept most of the original's
   sentences and added em dashes (0 to 4.3 per 1,000 words, against the author's 1.1) and runs of very
   short sentences. Three reviews agreed it was a copyedit, not a voice transfer. Causes found: nothing in
   the catalogue held em dashes or staccato runs; the contraction rule was one-sided; repair could not split
   a paragraph; and 16 of the 19 previews ended in a paywall teaser, which discovery read as style. Fixed
   above (the tell floor, two-sided contractions, no-model repairs); the corpus lesson is to use full pieces.
-- **a company blog, 16 full essays** ($4.21 including one rebuild after the fix below). Three arms on
+- **A company blog, 16 full essays** ($4.21 including one rebuild after the fix below). Three arms on
   the same writer model, packaged blind for the owner: Atelier, a plain prompt, and 14 essays pasted into
   the prompt. Counted against the company's essays (1.8 em dashes and 0.1 staccato runs per 1,000 words): the
   Atelier draft had 0 and 0, the plain prompt 4.0 and 1.3, the pasted essays 2.8 and 0.7. Atelier's
