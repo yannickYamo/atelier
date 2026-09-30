@@ -22,7 +22,8 @@
 //   0 9 * * 1  cd /path/to/project && atelier tend --skill house-style --cap 5 --auto >> ~/.atelier/tend.log 2>&1
 
 import * as store from '../../core/state/store.js';
-import { findRecurrences } from '../../core/mining/recurrence.js';
+import { findRecurrences, ruleBreakRates, regressedRules, type VersionBreakRates } from '../../core/mining/recurrence.js';
+import { rollbackTo } from './inspect.js';
 import { tasteRules } from '../../core/taste/reader.js';
 import { tastePermissions, calibrationQueue } from '../../core/taste/calibration.js';
 import { coverageOf, DIMENSION_LABEL, DIMENSIONS } from '../../core/taste/dimensions.js';
@@ -48,7 +49,11 @@ export async function tend(): Promise<void> {
       ...(Array.isArray(e.feedbackIds) ? { feedbackIds: e.feedbackIds as string[] } : {}) }));
   const items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listInvocations(L), requirements: v.requirements,
     standardVersionHash: v.standardVersionHash, proposals });
-  store.setMining(L, { at: new Date().toISOString(), standardVersionHash: v.standardVersionHash, items });
+  // Internal: each measured rule's break rate per version, for the loop, not for the person (below).
+  const breakRates = ruleBreakRates(store.listInvocations(L), v.standardVersionHash);
+  store.setMining(L, { at: new Date().toISOString(), standardVersionHash: v.standardVersionHash, items, breakRates });
+  const healed = undoOwnRegression(L, active, events, breakRates);
+  if (healed) digest.push(healed);
   digest.push(items.length ? `${items.length} recurring problem(s); the strongest: ${items[0].kind.toLowerCase().replace(/_/g, ' ')}. See: atelier mine --skill ${name}`
     : 'nothing recurs in what has been recorded');
 
@@ -118,4 +123,24 @@ export function skillDashboard(name: string): void {
   console.log(`  uses           ${store.listInvocations(L).length} recorded`);
   console.log(`  waiting        ${pending.length} candidate(s)`);
   console.log(`  last tended    ${lastTend ? String(lastTend.at) : 'never (atelier tend --skill ' + name + ')'}`);
+}
+
+/**
+ * SELF-IMPROVEMENT THAT CAN UNDO ITSELF. `tend --auto` may install a version the search found; if later
+ * uses show that version breaking a measured rule clearly more often than the one it replaced
+ * (core/mining/recurrence.ts, regressedRules), the install is undone. Only an install the loop made
+ * itself (AUTO_PROMOTE) is undone, and only with --auto: a version a person promoted is theirs. Returns
+ * the digest line, or null.
+ */
+function undoOwnRegression(L: store.StoreLayout, active: string, events: readonly Record<string, unknown>[], rates: readonly VersionBreakRates[]): string | null {
+  if (!argv.includes('--auto')) return null;
+  const installed = [...events].reverse().find((e) => e.kind === 'PROMOTED' && e.skillVersionHash === active);
+  const previous = typeof installed?.supersededActive === 'string' ? installed.supersededActive : null;
+  if (installed?.authority !== 'AUTO_PROMOTE' || !previous) return null;
+  const worse = regressedRules(rates, active, previous);
+  if (!worse.length) return null;
+  const why = worse.map((w) => `${w.requirementId} broke in ${Math.round(w.after * 100)}% of first drafts, against ${Math.round(w.before * 100)}% before`).join('; ');
+  const r = rollbackTo(L, previous, `an automatic install made a rule break more often: ${why}`);
+  return r.ok ? `undid its own install of ${active}: it made the drafts worse (${why}); ${previous} is active again`
+    : `its own install of ${active} made the drafts worse (${why}) but could not be undone: ${r.why}`;
 }

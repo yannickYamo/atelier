@@ -8,6 +8,12 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Added: self-improvement that can undo itself
+
+- `tend --auto` now undoes an install it made itself when later uses show that version breaking a
+  measured rule clearly more often than the one it replaced (at least 3 uses of each, a rise of 25 points
+  or more in first drafts that break it). A version a person promoted is never undone.
+
 ### Fixed: the claim check no longer takes an answer apart
 
 - **One verdict per sentence.** After each cut the text was read again, and the reader flagged sentences it
@@ -33,8 +39,10 @@ A popular hand-written skill of ten rules for coding-assistant answers, against 
 cut technical content, including every closing next step. With the check off it had 0, and every answer
 ended on one concrete next step; its answers were also about 80% longer. A plain model with a neutral system
 prompt refused 8 of the 10 turns. The run also found that `atelier skill` dropped one of the ten rules and
-bound only the 3 it could ground in the text. On the fixed build, as an `assistant-reply` skill, the two
-worst turns kept their content with the specifics listed. One session, one model: a signal, not a result.
+bound only the 3 it could ground in the text. **On the fixed build, as an `assistant-reply` skill, the
+full session scored 1 violation to the hand-written skill's 5**, with nothing cut and 2 to 11 specifics
+per answer listed for checking; its answers stayed about 80% longer. One session, one model: a signal,
+not a result. Total spend $5.51.
 
 ### Changed: the README, written by Atelier
 
