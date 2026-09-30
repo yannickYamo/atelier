@@ -8,6 +8,12 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Changed: the README, and the test authors unnamed
+
+- **The README leads with where Atelier is going**, written with the product's own voice check, and states
+  the voice results without naming the authors tested.
+- **Public authors used in tests are described, not named**, across the docs, the studies and code comments.
+
 ### Changed: the voice defaults (Phase 1 of closing Atelier as a voice engine)
 
 - **Rhythm instructs.** The author's sentence-length mix is suggested as required when their unread work
@@ -20,32 +26,32 @@ a run in progress may not be.
 ### Changed: rhythm from the author's own pieces, and a restyle lists what it added
 
 - **The sentence mix is read off the author's pieces alone.** It was proposed only where it separated the
-  author from a plain model's drafts, but a rewrite's short sentences come from its source: the Addy
-  skill had no mix rule at all, and both rewrites kept 38% of sentences at eight words or fewer against
+  author from a plain model's drafts, but a rewrite's short sentences come from its source: the technical
+  author's skill had no mix rule at all, and both rewrites kept 38% of sentences at eight words or fewer against
   the authors' typical 19 to 20%. Its tolerance is now the author's 80th-percentile piece (about 12 to
-  14% for Linear and Addy) instead of the 90th, rounded up (22% for Linear).
+  14% for both authors) instead of the 90th, rounded up (22% for the company blog).
 - **A restyle lists the sentences it added.** Every sentence with no counterpart in the source (under 35%
   of its words shared with any source sentence) is listed for the person to approve or cut: the claim
   check stops invented facts, not invented arguments.
 
-### Studies: the Addy Osmani rewrite (exploratory, $4.83 including a build discarded for a bug)
+### Studies: the second rewrite, a technical author (exploratory, $4.83 including a build discarded for a bug)
 
-The same post and instruction as the Linear test, three versions on the same model, read blind by an
-outside reviewer against 20 of Addy's posts. **The reviewer ranked Atelier's version first**, and picked
-it out as Atelier's from its signature. It was the only version without em dashes (Addy writes none; the
-plain prompt had 7.2 per 1,000 words, the pasted posts 3.3), used his hyphen style and his contraction
+The same post and instruction as the company-blog test, three versions on the same model, read blind by an
+outside reviewer against 20 of the author's posts. **The reviewer ranked Atelier's version first**, and picked
+it out as Atelier's from its signature. It was the only version without em dashes (the author writes none; the
+plain prompt had 7.2 per 1,000 words, the pasted posts 3.3), used the author's hyphen style and contraction
 register, and borrowed how he reasons without copying a six-word run. Rhythm did not move (a median
-sentence of 12 words against his 16), and it added three arguments the post never made, one a design
+sentence of 12 words against the author's 16), and it added three arguments the post never made, one a design
 rationale for the product. Both led to the changes above. One post, one reviewer, a rewrite: the voice
 study of new pieces is what decides.
 
 ### Studies: the Phase 1 check (exploratory, $0.85)
 
-Two new pieces (not rewrites) with the Linear skill, its sentence mix made required, each from a fact
-pack. **Rhythm did not move.** Median sentence 10.5 and 11 words against Linear's 15; 29% and 36% of
-sentences of eight words or fewer against Linear's 15%. The mix rule reported itself met, because its
+Two new pieces (not rewrites) with the company-blog skill, its sentence mix made required, each from a fact
+pack. **Rhythm did not move.** Median sentence 10.5 and 11 words against the company's 15; 29% and 36% of
+sentences of eight words or fewer against the company's 15%. The mix rule reported itself met, because its
 tolerance lets 22% of sentences sit in the wrong band, wider than the whole gap. What did move: new pieces
-use "we" at Linear's rate (22.5 per 1,000 words against 22.2; a rewrite of the same kind of post stayed
+use "we" at the company's rate (22.5 per 1,000 words against 22.2; a rewrite of the same kind of post stayed
 at 2.8), with no em dash and no invented fact shipped. As the plan requires, there is no second iteration:
 the tolerance is a choice to be fixed in the voice study's pre-registration, before any output.
 
@@ -205,18 +211,18 @@ Product behaviour changed only where a fix is named here.
 
 The owner asked for their company blog post (1,438 words, "we") rewritten in another publication's style.
 
-- **Nate's Newsletter, 19 public previews** ($2.54). Failed. The rewrite kept most of the original's
+- **A newsletter, 19 public previews** ($2.54). Failed. The rewrite kept most of the original's
   sentences and added em dashes (0 to 4.3 per 1,000 words, against the author's 1.1) and runs of very
   short sentences. Three reviews agreed it was a copyedit, not a voice transfer. Causes found: nothing in
   the catalogue held em dashes or staccato runs; the contraction rule was one-sided; repair could not split
   a paragraph; and 16 of the 19 previews ended in a paywall teaser, which discovery read as style. Fixed
   above (the tell floor, two-sided contractions, no-model repairs); the corpus lesson is to use full pieces.
-- **Linear's Now blog, 16 full essays** ($4.21 including one rebuild after the fix below). Three arms on
+- **A company blog, 16 full essays** ($4.21 including one rebuild after the fix below). Three arms on
   the same writer model, packaged blind for the owner: Atelier, a plain prompt, and 14 essays pasted into
-  the prompt. Counted against Linear's essays (1.8 em dashes and 0.1 staccato runs per 1,000 words): the
+  the prompt. Counted against the company's essays (1.8 em dashes and 0.1 staccato runs per 1,000 words): the
   Atelier draft had 0 and 0, the plain prompt 4.0 and 1.3, the pasted essays 2.8 and 0.7. Atelier's
-  contractions matched Linear's (25.3 against 22.2 per 1,000); the baselines stayed at the original's 7.
-  No arm moved sentence length toward Linear's (median 15 words; every arm 11) or kept less than 72% of the
+  contractions matched the company's (25.3 against 22.2 per 1,000); the baselines stayed at the original's 7.
+  No arm moved sentence length toward the company's (median 15 words; every arm 11) or kept less than 72% of the
   original's sentences. **What it shows:** the tell floor and register now hold; voice beyond register did
   not transfer in any arm, because a rewrite anchors to its source and the sentence-length rule only caps.
   Found and fixed during the run: an author's own em dashes had raised the cap on every other tell.

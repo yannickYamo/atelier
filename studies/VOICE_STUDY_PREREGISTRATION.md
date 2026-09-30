@@ -20,8 +20,8 @@ pieces pasted into the prompt, **without changing or inventing a claim**?
 
 ## The author
 
-**Linear's Now blog** (linear.app/now): full essays, free to read, a company writing as "we". The corpus
-is its product, engineering-practice and quality essays (22, fetched from `https://linear.app/rss/now.xml`
+**A public company blog**: full essays, free to read, a company writing as "we". The corpus
+is its product, engineering-practice and quality essays (22, fetched from its public RSS feed
 and hashed here), excluding customer case studies, funding announcements, post-mortems and stubs.
 
 - Three essays **outside** the corpus are set aside as the readers' reference (below).
@@ -34,7 +34,7 @@ All on `claude-opus-5`, one piece per brief per arm, the same facts bound to eac
 
 | Arm | What it is |
 |---|---|
-| **PLAIN** | "Write a post for Linear's blog…" with the brief and the fact pack |
+| **PLAIN** | "Write a post for the company's blog…" with the brief and the fact pack |
 | **CONTEXT** | the same, with the corpus essays pasted into the prompt |
 | **ATELIER** | `atelier invoke` on a skill built from the same corpus, as shipped, facts bound with `--with facts=<file>` |
 
@@ -43,8 +43,8 @@ rule is chosen by hand.
 
 **Rhythm (decided 2026-09-30, in the product, not for this study).** The sentence-mix rule is read off
 the author's own pieces, with a tolerance of their 80th-percentile piece (about 12 to 14% of sentences on
-Linear and on Addy Osmani), and instructs when their unread work bears it out. A flat 12% was considered
-and rejected: only 11 of Linear's 16 essays sit within it, so the rule would reject Linear's own writing
+the company blog and on the technical author), and instructs when their unread work bears it out. A flat 12% was considered
+and rejected: only 11 of the company's 16 essays sit within it, so the rule would reject the company's own writing
 and discovery would drop it. The skill in this study is built with that rule as shipped.
 
 ## Briefs
@@ -64,7 +64,7 @@ letter is which; a blind guessed right significantly above chance is reported as
 ## Readers
 
 **Three**: the owner and two people the owner names. Each first reads the three reference essays, then
-ranks each brief's three pieces by how much they sound like Linear wrote them, with no model help, and
+ranks each brief's three pieces by how much they sound like the company wrote them, with no model help, and
 marks sentences that read machine-written. All forms are handed in before any key is opened.
 
 **CONFIRM (readers):** the two outside readers, named here.
@@ -96,7 +96,7 @@ invented claim in ATELIER fails the study whatever the ranks.
 
 | Result | What follows |
 |---|---|
-| Voice shown and the guard holds | Atelier 1.0 as a voice engine with a guard; the README says so, with this study |
+| Voice shown and the guard holds | Atelier 1.0 as a voice engine with a guard; the README cites this study |
 | Guard holds, voice not shown | Atelier 1.0 as a guard; voice listed as tested and not shown; no further voice round |
 | The guard fails | recorded; fixed as a defect before any release claims the guard |
 

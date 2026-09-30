@@ -4,13 +4,10 @@
 
 ## Now
 
-- **Voice defaults.** A rewrite test showed the guard holding and the voice not moving: every version kept
-  the source's rhythm. Rhythm rules become enforced from both sides, contrastive verdicts are held to the
-  author's rate for every skill, and a rewrite is labelled a restyle with how much text moved.
-- **The study that decides voice.** New pieces, not rewrites, in Linear's voice from its public essays:
-  Atelier against a plain prompt and against the essays pasted into the prompt, same model, read blind by
-  three people, with the pass rule sealed before any output. Either result closes the question: a voice
-  engine with a guard, or a guard.
+- **Voice at scale.** Blind tests on rewrites put Atelier first. The next study writes new pieces, not
+  rewrites, from a public corpus: Atelier against a plain prompt and against the essays pasted into the
+  prompt, same model, read blind by three people, with the pass rule sealed before any output
+  ([pre-registration](../studies/VOICE_STUDY_PREREGISTRATION.md)).
 
 ## Next
 

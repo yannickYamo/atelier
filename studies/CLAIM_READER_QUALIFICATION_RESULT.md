@@ -68,7 +68,7 @@ it.
 
 ## Record
 
-- TEST result: `~/atelier-addy-study/claim-qualification/test/result.json`, sha256 prefix `ad051ca5335f644c`.
-- DEV result: `~/atelier-addy-study/claim-qualification/dev/result.json`, sha256 prefix `6d1779735d68cf1a`.
+- TEST result: the study folder outside the repository (`claim-qualification/test/result.json`), sha256 prefix `ad051ca5335f644c`.
+- DEV result: the study folder outside the repository (`claim-qualification/dev/result.json`), sha256 prefix `6d1779735d68cf1a`.
 
 Both hold every draft, plant and reading. They are kept on the owner's machine and are not published.
