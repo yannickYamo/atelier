@@ -8,7 +8,7 @@ import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
-import { unsourcedClaims } from './claims.js';
+import { unsourcedClaims, claimUnitsOf } from './claims.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
@@ -116,9 +116,13 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // Which instrument ran is part of the verdict: a line that says "no invented claims" means something
   // different from a model reader than from a pattern, and the record keeps the difference.
   const by = gating?.instrument ?? 'pattern check';
-  const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
+  // LISTED, NOT CUT, where the format says specifics are the reader's to check (formats.ts, `claims`).
+  const listOnly = opts.format?.claims === 'list';
+  const statement = listOnly
+    ? 'Specifics not in the material supplied: listed for you to check, never cut in this format.'
+    : 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
   const line = { requirementId: 'UNSOURCED', statement,
-    materiality: 'REQUIRED', phase: 'ACCURACY' as const,
+    materiality: listOnly ? 'PREFERRED' : 'REQUIRED', phase: 'ACCURACY' as const,
     result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: [...claims], value: claims.length,
       detail: `${claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
   const readerOnly = reading?.gate ? reading : null;
@@ -134,7 +138,8 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${pubBy}]` } }] : [];
-  return { ...report, checked: [...report.checked, line, ...readerLine, ...pubLine, ...fmtLines], failed: report.failed || claims.length > 0 || (fmt?.hard.length ?? 0) > 0 };
+  return { ...report, checked: [...report.checked, line, ...readerLine, ...pubLine, ...fmtLines],
+    failed: report.failed || (!listOnly && claims.length > 0) || (fmt?.hard.length ?? 0) > 0 };
 }
 
 /** The line listing public facts to check: informational, never a rule the draft broke. */
@@ -148,38 +153,106 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
   return checkDraft(skill, v, text, opts);
 }
 
-/** The spans the gating claim check flagged: whole claim units (a sentence, a heading, a table row). */
+/** The spans the gating claim check flagged: whole claim units. Only a REQUIRED line cuts; a listed one never does. */
 const flaggedClaims = (r: VerifyReport): readonly { start: number; end: number; text: string }[] =>
-  r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
+  r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
+/** The specifics a `list` format leaves in for the person to check. */
+export const listedClaims = (r: VerifyReport): string[] =>
+  (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality !== 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [])
+    .map((sp) => sp.text.trim().slice(0, 160));
 
 /** The slot left where a claim was, when the person asked for slots (`--placeholders`). */
 export const CLAIM_SLOT = '[your own story, figure or source goes here]';
 
 /**
+ * ONE JUDGEMENT PER SENTENCE. The claim reader is a model, and a model reading the same sentence twice
+ * can answer differently. The loop re-reads the text after every cut and every rewrite, and a reader that
+ * flagged three sentences of a technical answer on the first read flagged others it had passed on the
+ * next, and others again on the next: fourteen sentences of sixteen were cut, the answer was gone, and
+ * the report said every rule held. So a sentence the reader has passed once, in the fuller text, keeps
+ * that verdict for the rest of the run. A sentence a rewrite changed, or added, is new and is read.
+ */
+export interface ClaimMemory {
+  apply(text: string, report: VerifyReport): VerifyReport;
+  /** hold these sentences to "listed for the person to check" for the rest of the run: never cut, never failing */
+  demote(sentences: readonly string[]): void;
+  /** every sentence demoted so far, in order */
+  listed(): string[];
+}
+export function claimMemory(): ClaimMemory {
+  const key = (t: string): string => t.replace(/\s+/g, ' ').trim().toLowerCase();
+  const passed = new Set<string>();
+  const demoted = new Map<string, string>();
+  return {
+    demote(sentences) { for (const t of sentences) demoted.set(key(t), t.trim().slice(0, 160)); },
+    listed() { return [...demoted.values()]; },
+    apply(text, report) {
+      const line = report.checked.find((c) => c.requirementId === 'UNSOURCED');
+      if (!line) return report;
+      const flagged = new Set(line.result.spans.map((sp) => key(sp.text)));
+      const kept = line.result.spans.filter((sp) => !passed.has(key(sp.text)) && !demoted.has(key(sp.text)));
+      for (const u of claimUnitsOf(text)) { const k = key(u.text); if (k && !flagged.has(k)) passed.add(k); }
+      if (kept.length === line.result.spans.length) return report;
+      const settled = line.result.spans.length - kept.length;
+      const checked = report.checked.map((c) => (c !== line ? c : { ...c, result: { ...c.result, spans: kept, value: kept.length,
+        verdict: kept.length ? 'VIOLATED' as const : 'MET' as const,
+        detail: `${c.result.detail}; ${settled} sentence(s) already passed or listed for you to check kept that verdict` } }));
+      return { ...report, checked, failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED') };
+    },
+  };
+}
+
+/**
  * AN INVENTED CLAIM IS DELETED, NEVER REWORDED. Every claim unit the gating check flags is removed in code,
  * or replaced by a slot when the person asked for slots. No model sees it: asked to "rewrite without the
  * story, keeping its point", a model turned "I pulled 200 tickets" into "when we looked at our tickets"
- * and the vaguer claim passed the check. No other guard can keep it either: the cut is not weighed against
- * the style rules, because a draft that breaks a paragraph rule is visible and a false claim is not.
- * Read again after each cut, up to three times, since removing a sentence can change what the next reads as.
+ * and the vaguer claim passed. No other rule can keep it either: the cut is not weighed against the style
+ * rules, because a draft that breaks a paragraph rule is visible and a false claim is not. The text is read
+ * again after each cut, at most three times, with `memory` holding each sentence to its first verdict.
  */
 export async function enforceClaims(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {},
-  known?: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> {
-  let report = known ?? await checkDraftAsync(skill, v, text, opts);
+  known?: VerifyReport, memory: ClaimMemory = claimMemory()): Promise<{ text: string; report: VerifyReport; cut: string[]; listed: string[] }> {
+  let report = memory.apply(text, known ?? await checkDraftAsync(skill, v, text, opts));
   const cut: string[] = [];
-  if (opts.guardClaims === false) return { text, report, cut };
+  if (opts.guardClaims === false) return { text, report, cut, listed: [] };
   for (let round = 0; round < 3; round++) {
-    const spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
+    let spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
     if (!spans.length) break;
+    // THE BALANCE. A third or more of the text flagged (at least three sentences) is the check misreading
+    // general knowledge far more often than a draft that invented a third of itself. Then only what is
+    // unambiguously invented is cut: a story told as lived, a claim of evidence, a quotation or an
+    // attribution. Figures, dates and facts are listed for the person to check instead of deleted.
+    const units = claimUnitsOf(text).length;
+    if (spans.length >= 3 && units && spans.length / units >= 1 / 3) {
+      const lived = (sp: object): boolean => { const k = (sp as { kind?: string }).kind; return k === 'EXPERIENCE' || k === 'SOURCE'; };
+      memory.demote(spans.filter((sp) => !lived(sp)).map((sp) => sp.text));
+      report = memory.apply(text, report);
+      spans = spans.filter(lived);
+      if (!spans.length) break;
+    }
     let next = text;
     for (const sp of spans) {
       next = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);
       cut.push(sp.text.trim().slice(0, 160));
     }
     if (next === text) break;
-    text = next; report = await checkDraftAsync(skill, v, text, opts);
+    text = next; report = memory.apply(text, await checkDraftAsync(skill, v, text, opts));
   }
-  return { text, report, cut: cut.reverse() };
+  return { text, report, cut: cut.reverse(), listed: memory.listed() };
+}
+
+/**
+ * WHEN THE CUT TOOK THE ANSWER WITH IT. A third or more of a draft's sentences cut (and at least three)
+ * is not a draft with a few invented claims removed; it is usually the check misreading general knowledge
+ * (a coding answer, an explainer) as the person's own specifics. It is said as that, never as "every rule
+ * holds". Returns the sentence to say, or null.
+ */
+export function heavyCut(draft: string, cut: readonly string[]): string | null {
+  const units = claimUnitsOf(draft).length;
+  if (cut.length < 3 || !units || cut.length / units < 1 / 3) return null;
+  return `the claim check cut ${cut.length} of ${units} sentences, so much of the draft is gone. `
+    + 'If they are general knowledge rather than claims about you (a coding answer, an explainer), run with '
+    + '--allow-unsourced; if they are yours, bind them with --with or atelier material';
 }
 
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
@@ -189,15 +262,21 @@ export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
   opts: CheckOptions = {},
 ): Promise<Refined> {
-  let first = await checkDraftAsync(skill, v, draft, opts);
-  if (!first.failed) return { output: draft, repair: null, report: first };
+  const memory = claimMemory();
+  const check = async (t: string): Promise<VerifyReport> => memory.apply(t, await checkDraftAsync(skill, v, t, opts));
+  let first = await check(draft);
+  if (!first.failed) {
+    const toCheck = listedClaims(first);
+    return { output: draft, report: first, repair: toCheck.length ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
+      claimsToCheck: toCheck, why: 'every REQUIRED measured rule holds' } : null };
+  }
   const cut: string[] = [];
   // Whether the claim reader had already failed before this run: read before the first cut, which may be
   // the read that fails it.
   const sensor = opts.guardClaims !== false ? opts.claimSensor : undefined;
   let readDegraded = sensor?.degraded ?? false; let degradedMidLoop = false;
   // Claims first, in code, before any rewrite: a style pass never holds an invented sentence.
-  const enforced = await enforceClaims(skill, v, draft, opts, first);
+  const enforced = await enforceClaims(skill, v, draft, opts, first, memory);
   let text = enforced.text; let report = enforced.report; let passes = 0;
   cut.push(...enforced.cut);
   let why = cut.length ? 'invented claims cut' : 'every REQUIRED measured rule now holds';
@@ -209,8 +288,8 @@ export async function refineToStandard(
   const sameInstrument = (): void => {
     if (!sensor?.degraded || readDegraded) return;
     readDegraded = true; degradedMidLoop = true;
-    first = checkDraft(skill, v, draft, opts);
-    report = checkDraft(skill, v, text, opts);
+    first = memory.apply(draft, checkDraft(skill, v, draft, opts));
+    report = memory.apply(text, checkDraft(skill, v, text, opts));
   };
   sameInstrument();
   const kept: string[] = []; const revertedRules: string[] = [];
@@ -221,7 +300,7 @@ export async function refineToStandard(
   const fixMechanically = async (): Promise<void> => {
     const m = mechanicalFixes(v, report, text);
     if (m.text === text) return;
-    const after = await checkDraftAsync(skill, v, m.text, opts);
+    const after = await check(m.text);
     sameInstrument();
     if (!acceptRepair(report, after).ok) return;
     text = m.text; report = after; mechanical.push(...m.fixed);
@@ -268,7 +347,7 @@ export async function refineToStandard(
       kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
     }
-    const after = next === text ? report : await checkDraftAsync(skill, v, next, opts);
+    const after = next === text ? report : await check(next);
     sameInstrument();
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
@@ -294,10 +373,14 @@ export async function refineToStandard(
     why = report.failed ? `${why}; ${how}` : `every REQUIRED measured rule now holds (${how})`;
   }
   // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
-  const last = await enforceClaims(skill, v, text, opts, report);
+  const last = await enforceClaims(skill, v, text, opts, report, memory);
   sameInstrument();
   if (last.cut.length) { text = last.text; report = last.report; cut.push(...last.cut); }
   if (cut.length && !report.failed) why = 'every REQUIRED measured rule now holds (invented claims cut)';
+  const heavy = heavyCut(draft, cut);
+  if (heavy) why = `${heavy}; ${why}`;
+  const toCheck = [...new Set([...memory.listed(), ...listedClaims(report)])];
+  if (memory.listed().length) why = `${why}; ${memory.listed().length} flagged figure(s) or fact(s) left in for you to check, because the check flagged too much of the draft to trust every flag`;
   if (degradedMidLoop) {
     why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
       + 'each comparison used one instrument, and a claim only the reader could see is no longer checked)';
@@ -305,5 +388,5 @@ export async function refineToStandard(
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
       ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
-      ...(cut.length ? { storiesCut: cut } : {}), why } };
+      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), why } };
 }

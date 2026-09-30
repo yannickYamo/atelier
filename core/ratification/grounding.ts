@@ -78,3 +78,39 @@ export function groundedInUserText(
 
   return { grounded: true, why: 'GROUNDED' };
 }
+
+/**
+ * WHAT THE PERSON SAID THAT NO RULE CARRIES. The splitter can drop a rule as easily as invent one: given
+ * ten numbered rules, it returned twelve and none of them was the tenth ("no preamble, no recap, no
+ * closing pleasantries"), and nothing said so. So the person's text is cut into sections (its markdown
+ * headings when it has any, else its paragraphs) and a section is carried when a rule quotes from it (its
+ * source span is inside the section), draws most of its words from it (60% of a rule's content words in
+ * the section), or names its heading (half the heading's content words in one rule). Sections too short to hold a rule (under four content words) are skipped. Returns each uncarried
+ * section's first line, in order.
+ */
+export function uncarriedSections(userText: string, rules: readonly { statement: string; sourceSpan: string }[]): string[] {
+  const hasHeadings = /^#{1,6}\s/m.test(userText);
+  const sections = hasHeadings
+    ? userText.split(/^(?=#{1,6}\s)/m)
+    : userText.split(/\n\s*\n/);
+  const spans = rules.map((r) => squash(r.sourceSpan)).filter((s) => s.length > 0);
+  const statements = rules.map((r) => new Set(contentWords(r.statement)));
+  const out: string[] = [];
+  for (const section of sections) {
+    const body = squash(section);
+    if (contentWords(section).length < 4) continue;
+    const head = section.trim().split('\n')[0].replace(/^#{1,6}\s*/, '').replace(/^\d+[.)]\s*/, '');
+    const headWords = contentWords(head);
+    const quoted = spans.some((s) => body.includes(s));
+    // Restated: most of a rule's own words come from this section (a rule drawn from its body), or half
+    // the heading's words are in one rule (a rule that names it).
+    const bodyWords = new Set(contentWords(section));
+    const drawnFrom = statements.some((st) => st.size > 0 && [...st].filter((w) => bodyWords.has(w)).length / st.size >= 0.6);
+    const named = headWords.length > 0 && statements.some((st) => headWords.filter((w) => st.has(w)).length / headWords.length >= 0.5);
+    const restated = drawnFrom || named;
+    // A heading that only groups others ("## Rules") holds no rule of its own when its subsections do.
+    const groupOnly = hasHeadings && section.trim().split('\n').filter((l) => l.trim()).length === 1;
+    if (!quoted && !restated && !groupOnly) out.push(head.trim().slice(0, 120));
+  }
+  return out;
+}

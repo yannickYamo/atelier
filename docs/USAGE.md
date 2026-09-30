@@ -131,6 +131,11 @@ One standard describes one format, read off your pieces of that format: build a 
 LinkedIn posts, with `--class linkedin-post`, and it also holds each post to what LinkedIn fixes
 ([FORMATS.md](FORMATS.md)).
 
+For answers rather than published writing (a coding assistant, support replies, review comments), use
+`--class assistant-reply`; `atelier skill` picks it when its rules are about replies. Its answers name
+versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
+you to check, not cut. Everywhere else an invented story, claim of evidence or quotation is cut.
+
 The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always

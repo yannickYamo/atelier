@@ -67,11 +67,23 @@ export function checksFor(L: store.StoreLayout, opts: {
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
+  // THE SKILL'S OWN WORDS ARE KNOWN. A rule the person approved ("end with one thing the reader can do in
+  // under two minutes") puts its wording in every draft, and the claim check, reading only the material,
+  // cut that sentence as an invented figure. What the approved standard says is theirs to repeat.
+  const material = [opts.material, ...standardStatements(L)].filter(Boolean).join('\n\n');
   // The format the text is: the one declared for it, or the class the standard was built from.
   const format = formatOf(flag('--class') ?? store.getDocClass(L));
-  return { material: opts.material, guardClaims, placeholders, format,
+  return { material, guardClaims, placeholders, format,
     learnedTells: store.activeTells(store.getTells(L)),
-    ...(guardClaims ? { claimSensor: claimSensorFor(opts.material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
+    ...(guardClaims ? { claimSensor: claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
+}
+
+/** The statements of the active skill's approved rules, or none when the skill is not built yet. */
+function standardStatements(L: store.StoreLayout): string[] {
+  const active = store.getActive(L);
+  const sv = active ? store.getSkillVersion(L, active) : null;
+  const v = sv ? store.getStandard(L, sv.standardVersionHash) : null;
+  return (v?.requirements ?? []).filter((r) => r.authority !== 'EXPERT_REJECTED').map((r) => r.statement);
 }
 
 /** What `invoke` records about the invented-claim check that ran: which instrument, and on whose word. */

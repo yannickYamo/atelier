@@ -8,6 +8,34 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Fixed: the claim check no longer takes an answer apart
+
+- **One verdict per sentence.** After each cut the text was read again, and the reader flagged sentences it
+  had passed the time before. On a technical explanation that cascaded to 14 of 16 sentences cut, two empty
+  list items delivered, and a report saying every rule held. A sentence passed once now keeps that verdict
+  for the run.
+- **The balance.** When the check flags a third or more of a draft, only what is unambiguously invented is
+  cut: a story told as lived, a claim of evidence, a quotation. Figures and facts are listed to check.
+- **Honest about a heavy cut.** A cut that takes a third or more of a draft is said as that, never as
+  "every rule holds".
+- **Assistant replies.** A new class, `assistant-reply`, lists untraced specifics instead of cutting them:
+  an answer's versions, costs and time estimates are the reader's to check, not claims about the person.
+  `atelier skill` uses it when its rules are about replies or answers.
+- **The skill's own words are known.** Wording from the approved rules is no longer flagged as invented.
+- **`atelier skill` shows what it dropped.** A section of the stated rules that became no rule is listed
+  before anything binds.
+
+### Studies: an answer-style skill, head to head (exploratory, $4.63)
+
+A popular hand-written skill of ten rules for coding-assistant answers, against the same rules built with
+`atelier skill`, over one scripted 10-turn session on the same model, scored in code (pre-registered).
+**As shipped, Atelier lost**: 8 counted violations to the hand-written skill's 5, because its claim check
+cut technical content, including every closing next step. With the check off it had 0, and every answer
+ended on one concrete next step; its answers were also about 80% longer. A plain model with a neutral system
+prompt refused 8 of the 10 turns. The run also found that `atelier skill` dropped one of the ten rules and
+bound only the 3 it could ground in the text. On the fixed build, as an `assistant-reply` skill, the two
+worst turns kept their content with the specifics listed. One session, one model: a signal, not a result.
+
 ### Changed: the README, written by Atelier
 
 - **Taste at scale, not only your own.** The README says what Atelier is for: a writing standard learned
