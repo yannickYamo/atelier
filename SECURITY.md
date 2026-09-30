@@ -15,7 +15,13 @@ The latest release only. This project is pre-1.0 and there is no backport branch
 ## What this tool does with your data, so you can judge the surface
 
 - **It reads a corpus you point it at.** Discovery sends that material to whichever inference
-  provider you configured. Nothing else leaves the machine.
+  provider you configured.
+- **Writing and checking a draft send text to the same provider.** `invoke` sends the task, the compiled
+  skill and any material you bind to the writer model. With a key set, `verify` and `invoke` also send the
+  draft and that material to a small claim-reading model (`claude-haiku-4-5` by default, or
+  `ATELIER_CLAIMS_MODEL`), and the taste reader sends the draft and the rules it reads. `--claims pattern`,
+  `--no-taste` and `atelier verify` without a key keep everything on the machine. Nothing goes anywhere
+  but the provider you configured.
 - **It stores state locally**, under `$ATELIER_DATA` or `~/.atelier`: standards, compiled packages,
   the ratification ledger, invocation records. No telemetry, no account, no network calls except to
   your configured provider.
