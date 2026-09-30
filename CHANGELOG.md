@@ -8,6 +8,13 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Changed: the repository's history, rewritten to leave the tested authors unnamed
+
+On 2026-09-30 every commit was rewritten to describe the public authors used in tests rather than name
+them. No file's code or result changed, and each commit keeps its date and its content otherwise. Commit IDs
+changed, so the studies now cite the new ID of each sealing commit: every pre-registration was committed
+before its result, as before; only the name of that commit is new.
+
 ### Fixed: an invented claim is deleted, never reworded (from an outside review)
 
 - **Cut in code, not rewritten.** The repair used to ask the model to rewrite an invented story "without it,
