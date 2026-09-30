@@ -8,6 +8,27 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Fixed: the runtime never makes an answer worse (from an outside test)
+
+A skill built from 12 coding answers matched a hand-tuned skill as a plug-in, and scored below no skill at
+all through `atelier invoke`: the claim check cut 189 sentences from 31 of 42 answers, and 17 went out with
+empty bullets. Fixed:
+
+- **Answers are checked as answers.** `atelier new --mode respond` records the `assistant-reply` class
+  (skills built in respond mode before this: `atelier build --class assistant-reply` once). A `code-review`
+  class joins it. Specifics are listed to check, never cut; claims of work done or results come first.
+- **Never a fragment for a pass.** A cut that leaves an empty bullet, a bare label or no answer is
+  redrafted once without the flagged statements (never reworded) and kept only if it reads whole and
+  nothing in it is flagged. Otherwise the draft goes out uncut, the claims listed, and the check fails.
+- **A repeatable reader.** Checking calls (the claim reader, the taste reader) ask for temperature 0;
+  `--temperature` is now sent to Anthropic, not only recorded; a claim reading is kept on disk, so the same
+  text, material and task get the same reading on the next run.
+- **Derived figures are the person's.** A figure one operation away from two of theirs (a total, a ratio,
+  a growth rate), at its own precision, is listed with its arithmetic to check, not cut.
+- **Nothing asked that needs material nobody gave.** Rules waiting for material are withheld from that
+  run's prompt and named in its record; a decision told as made ("we considered X and rejected it") is a
+  claim. On the three claim studies' saved drafts, the offline check's false flags went from 5 to 6 of 129.
+
 ### Added: self-improvement that can undo itself
 
 - `tend --auto` now undoes an install it made itself when later uses show that version breaking a

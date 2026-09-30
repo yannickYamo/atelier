@@ -26,6 +26,12 @@ export interface InferenceRequest {
    * that ignores them would pay for a measurement nobody takes.
    */
   readonly wantLogprobs?: boolean;
+  /**
+   * Sampling temperature for this call. Checking calls (the claim reader, the taste reader) send 0: an
+   * instrument that reads the same text twice must read it the same way, and at the default of 1.0 the
+   * claim reader gave pass, one flag and two flags on one text. Absent, the client's own setting applies.
+   */
+  readonly temperature?: number;
 }
 
 /**

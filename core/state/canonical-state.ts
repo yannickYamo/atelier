@@ -424,6 +424,8 @@ export interface DeliveryEvidence {
   readonly servedPackageHash: string;
   readonly matched: boolean;
   readonly servedFiles: readonly string[];
+  /** rules withheld from this run's prompt because the material they need was not bound (invoke.ts) */
+  readonly withheldRules?: readonly string[];
   /**
    * Proof that the OUTPUT_CONTRACT carrier reached the provider — not that its file exists.
    *

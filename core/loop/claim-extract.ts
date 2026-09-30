@@ -33,6 +33,10 @@ import { spend } from '../inference/client.js';
 import { wordsOf } from '../observers/text.js';
 import { unsourcedClaims, claimUnitsOf, type Claim } from './claims.js';
 import { createHash } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { readJson } from '../state/read-json.js';
+import { writeAtomic } from '../state/fs-atomic.js';
+import { join } from 'node:path';
 
 /** What a claim reader returns for one text: the unsupported claims, and the public specifics to check. */
 export interface ClaimReading {
@@ -450,8 +454,29 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
     /** the pairs a qualification stands behind: QUALIFIED_READERS, unless a test passes its own */
     readonly qualifiedReaders?: readonly QualifiedReader[];
     /** ATELIER_CLAIMS_GATE=reader: an unqualified reader gates anyway */
-    readonly gateAnyway?: boolean }): ClaimSensor {
+    readonly gateAnyway?: boolean
+    /**
+     * Where readings persist between runs. The same text, material and task read by the same reader
+     * version gets the same reading: at temperature 0 a model still varies a little, and a check that
+     * passes a sentence today and cuts it tomorrow is not one a person can trust. What is stored is the
+     * reader's list of specifics; the decision in code is run again on it, so it can never go stale.
+     */
+    readonly cacheDir?: string }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
+  const diskKey = (text: string): string => sha(JSON.stringify([model, READER_VERSION, text, ctx.material, ctx.task, ctx.placeholders, ctx.strict ?? false]));
+  const fromDisk = (text: string): readonly ExtractedSpecific[] | null => {
+    if (!ctx.cacheDir) return null;
+    try {
+      const raw = readJson<unknown[]>(join(ctx.cacheDir, `${diskKey(text)}.json`), { kind: 'array', what: 'a cached claim reading' });
+      // A cached file is read like the reader's own answer: a list of specifics, or it is not used.
+      return Array.isArray(raw) ? raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
+        && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string') : null;
+    } catch { return null; }
+  };
+  const toDisk = (text: string, specifics: readonly ExtractedSpecific[]): void => {
+    if (!ctx.cacheDir) return;
+    try { mkdirSync(ctx.cacheDir, { recursive: true }); writeAtomic(join(ctx.cacheDir, `${diskKey(text)}.json`), JSON.stringify(specifics)); } catch { /* a cache that cannot be written is only a slower run */ }
+  };
   const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
   const gatePattern = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
   const qualified = isQualified(model, READER_VERSION, ctx.qualifiedReaders ?? QUALIFIED_READERS);
@@ -480,13 +505,15 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
     read: async (text) => {
       const k = sha(text);
       if (degraded || cache.has(k)) return;
+      const stored = fromDisk(text);
+      if (stored) { cache.set(k, decideSpecifics(text, stored, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false)); return; }
       try {
         const res = await spend(budget, 0.02, async () => {
           const x = await client.complete({
             stableBlock: EXTRACT_SYSTEM, variableBlock: context,
             userMessage: `THE DRAFT, sentence by sentence:\n<draft>\n${numbered(text)}\n</draft>`,
             toolName: 'emit_specifics', toolDescription: 'Return every specific the draft asserts, with where it comes from.',
-            schema: EXTRACT_SCHEMA, maxTokens: 8000,
+            schema: EXTRACT_SCHEMA, maxTokens: 8000, temperature: 0,
           });
           return { value: x, cost: x.cost };
         });
@@ -495,6 +522,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
         const specifics = raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
           && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string');
         cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false));
+        toDisk(text, specifics);
       } catch (e) {
         failure = (e as Error).message.split('\n')[0];
         degraded = true;

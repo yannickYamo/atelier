@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor, claimInstrumentOf } from '../checks.js';
-import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -208,7 +208,14 @@ export async function invoke(): Promise<void> {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
   const spentBefore = processSpentUsd();
-  const rec = await runOnce(L, sv, servedText, servedHash, delivery, task, client, budget, binding,
+  // ASKED ONLY FOR WHAT CAN BE DONE HONESTLY. A move that needs material nobody bound ("name the design
+  // alternative we rejected") was still sent, and the writer met it by inventing: 16 "we considered / we
+  // rejected" lines against 7 without the skill. Such rules are withheld from this run's prompt and named
+  // in the record; the compiled skill is untouched.
+  const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
+  const servedForRun = withheld.length ? withoutRules(servedText, withheld) : servedText;
+  const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
+  const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, task, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? refineDraft({ client, budget, name, std, checks, taste }) : null,
@@ -375,6 +382,11 @@ function refineDraft(c: DraftContext & { readonly client: InferenceClient; reado
     // THE REPORT IS THE DELIVERED TEXT'S. The taste rewrite changed the text after the counted checks
     // read it, so the text is held to the claim floor again and every figure below is counted on it.
     const final = await enforceClaims(c.name, c.std, t.output, c.checks);
+    // A cut that breaks the tasted text: deliver the draft the counted checks already cleared instead.
+    if (final.cut.length && brokenByCut(t.output, final.text)) {
+      taste.notes.push('the taste rewrite added claims that could not be cut without breaking it; delivered as the counted checks left it');
+      return { output: r.output, repair: r.repair };
+    }
     const fixed = { targeted: t.targeted, fixed: t.fixed, why: t.why };
     const cut = [...(r.repair?.storiesCut ?? []), ...final.cut];
     const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: t.why };
@@ -616,4 +628,21 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   const c = rec.delivery.outputContract;
   if (c?.enforced) report.detail(`output contract ${c.artifact} — constrained this generation`);
   else if (c) report.say(`output contract ${c.artifact} — DID NOT REACH THE PROVIDER`);
+}
+
+/**
+ * The served skill without the lines that state `statements`: a rule's line and the indented lines that
+ * belong to it (its "Checked:" line, its record comment), or a move's list item. Matched on the start of
+ * each statement, as the renderer writes it.
+ */
+export function withoutRules(skillMd: string, statements: readonly string[]): string {
+  const heads = statements.map((st) => st.trim().slice(0, 60)).filter((h) => h.length >= 12);
+  const out: string[] = []; let dropping = false;
+  for (const line of skillMd.split('\n')) {
+    if (heads.some((h) => line.includes(h))) { dropping = true; continue; }
+    if (dropping && /^\s{2,}\S/.test(line)) continue;
+    dropping = false;
+    out.push(line);
+  }
+  return out.join('\n');
 }

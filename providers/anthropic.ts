@@ -64,6 +64,14 @@ export function accountRefusal(status: number | undefined, body: string, request
 
 /** Models this process has seen refuse forced tool choice. Learned from the API's own 400, not listed. */
 const noForcedChoice = new Set<string>();
+/** Models that rejected a `temperature` setting: asked once, then called without one. */
+const noTemperature = new Set<string>();
+
+/** Whether an error is the API refusing a temperature setting for this model (a 400 that names it). */
+export const refusesTemperature = (e: unknown): boolean => {
+  const f = statusAndBody(e);
+  return f?.status === 400 && /temperature/i.test(f.body);
+};
 
 /**
  * Whether an error is the API refusing forced tool choice for this model: a 400 that names `tool_choice`
@@ -93,7 +101,9 @@ const plainFailure = (e: unknown, modelId: string): Error | null => {
 
 export class AnthropicInferenceClient implements InferenceClient {
   private readonly client: Anthropic;
-  constructor(private readonly modelId: string, apiKey?: string, private readonly pricing: Pricing | null = priceFor(ANTHROPIC_PRICING, modelId)) {
+  constructor(private readonly modelId: string, apiKey?: string, private readonly pricing: Pricing | null = priceFor(ANTHROPIC_PRICING, modelId),
+    /** `--temperature`, sent on every call that sets none of its own; it used to be recorded and never sent */
+    private readonly defaultTemperature?: number) {
     // Two credential forms, both the SDK's own: an API key, or a bearer token (ANTHROPIC_AUTH_TOKEN),
     // which is what a corporate gateway issues. Accepting only the first blocked anyone behind one
     // before the SDK was ever reached. The SDK reads ANTHROPIC_BASE_URL itself.
@@ -117,6 +127,11 @@ export class AnthropicInferenceClient implements InferenceClient {
     try {
       res = await this.create(req, !noForcedChoice.has(this.modelId));
     } catch (e) {
+      // A model that takes no temperature: remembered, and the same call sent again without one.
+      if (refusesTemperature(e) && !noTemperature.has(this.modelId)) {
+        noTemperature.add(this.modelId);
+        return this.complete(req);
+      }
       if (!refusesForcedChoice(e)) throw plainFailure(e, this.modelId) ?? e;
       noForcedChoice.add(this.modelId);
       res = await this.create(req, false).catch((x: unknown) => { throw plainFailure(x, this.modelId) ?? x; });
@@ -126,9 +141,11 @@ export class AnthropicInferenceClient implements InferenceClient {
 
   /** One request. `forced`: the tool call is required; otherwise it is asked for in words. */
   private create(req: InferenceRequest, forced: boolean): Promise<Anthropic.Message> {
+    const temperature = noTemperature.has(this.modelId) ? undefined : req.temperature ?? this.defaultTemperature;
     return this.client.messages.create({
       model: this.modelId,
       max_tokens: req.maxTokens,
+      ...(temperature === undefined ? {} : { temperature }),
       // STABLE first and cached; VARIABLE second and not. Reversing these still works and costs ~9x.
       //
       // AN EMPTY STABLE BLOCK IS OMITTED, NOT SENT EMPTY. The API rejects `cache_control` on an empty

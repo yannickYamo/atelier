@@ -97,6 +97,13 @@ const EVIDENCE_ACT = /\b(?:I|we|my team|our team)(?:['’]ve| have| had)?\b[^.!?
 const EVIDENCE_LOOK = /\b(?:I|we|my team|our team)(?:['’]ve| have| had)?\b[^.!?]{0,15}?\b(?:checked|looked (?:at|into|through)|reviewed|pulled|analy[sz]ed|went through|dug into|combed through|counted|tracked|traced|compared|talked to|spoke (?:to|with)|asked|saw|seen|noticed)\b[^.!?]{0,40}?\b(?:logs?|data|tickets?|numbers|metrics|dashboards?|analytics|customers?|users?|clients?|teams?|engineers?|results?|incidents?|feedback|interviews?|surveys?|codebase|repos?|pull requests|PRs|production|support queue|churn|usage|traces)\b/i;
 /** "We should have tested", "I'd check", "we need to measure": what one would or should do, not what was done. */
 const NOT_DONE = /\b(?:I|we|my team|our team)(?:['’]d|['’]ll)?\s+(?:should|could|would|might|must|will|can|may|need to|want to|plan to|have to|never)\b|\b(?:I|we)['’](?:d|ll)\b/i;
+/**
+ * A DECISION TOLD AS MADE. "We considered a queue and rejected it", "we chose Postgres over Mongo", "the
+ * reason we dropped it was cost": a first person deciding, weighing or ruling out, which a writer asked to
+ * "name the alternative we rejected" supplies when the notes hold none. A decision the person made is in
+ * their material; one the draft made up is an invented story.
+ */
+const DECISION = /\b(?:I|we|my team|our team)(?:['’]ve| have| had)?\b[^.!?]{0,15}?\b(?:considered|rejected|ruled out|decided|chose|picked|opted|went with|settled on|dropped|abandoned|weighed)\b|\bthe reason (?:I|we)\b/i;
 const REPORTED_TO_US = /\b(?:a|one|some|several|many|most|our|the) (?:customers?|users?|clients?|readers?|engineers?|developers?|people|teams?|prospects?|buyers?)\b[^.!?]{0,20}?\b(?:told (?:me|us)|tell (?:me|us)|said to (?:me|us)|wrote to (?:me|us)|emailed (?:me|us)|keep telling (?:me|us))\b/i;
 /** SOMEONE ELSE'S STORY, TOLD AS KNOWN FIRST-HAND: "a team I worked with", "teams I've talked to have". */
 const SECOND_HAND = /\b(?:(?:a|one|the|several|many|most|some) )?(?:teams?|clients?|compan(?:y|ies)|customers?|colleagues?|friends?|engineers?|managers?|startups?|leads?|CTOs?|orgs?|organi[sz]ations?) (?:I|we)(?:['’]ve| have)? (?:worked with|know|knew|advised|talked to|spoke (?:to|with)|met|coached|consulted (?:for|with)|spent time with)\b/i;
@@ -148,7 +155,7 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
   let inStory = false;
   for (const s of ss) {
     const opens = (FIRST_PERSON_PAST.test(s.text) && PARTICULAR_TIME.test(s.text)) || ANECDOTE.test(s.text) || SECOND_HAND.test(s.text)
-      || ((EVIDENCE_ACT.test(s.text) || EVIDENCE_LOOK.test(s.text)) && !NOT_DONE.test(s.text)) || REPORTED_TO_US.test(s.text);
+      || ((EVIDENCE_ACT.test(s.text) || EVIDENCE_LOOK.test(s.text) || DECISION.test(s.text)) && !NOT_DONE.test(s.text)) || REPORTED_TO_US.test(s.text);
     if (ANONYMOUS_SOURCE.test(s.text) && !storySupported(s.text)) {
       out.push({ ...s, kind: 'SOURCE', why: why('SOURCE') });
       inStory = false;

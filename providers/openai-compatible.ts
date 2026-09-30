@@ -184,7 +184,7 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
     const body: Record<string, unknown> = {
       model: this.cfg.modelId, messages,
       [this.cfg.tokenLimitParam ?? 'max_tokens']: req.maxTokens,
-      ...(this.cfg.temperature === undefined ? {} : { temperature: this.cfg.temperature }),
+      ...((req.temperature ?? this.cfg.temperature) === undefined ? {} : { temperature: req.temperature ?? this.cfg.temperature }),
       // ASKED FOR ONLY WHERE A CALLER WANTS THEM. Logprobs enlarge every response, and a reading
       // nobody consumes is a cost with no consumer. The instrument that reads a distribution sets
       // `wantLogprobs`; ordinary generation does not.

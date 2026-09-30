@@ -72,6 +72,7 @@ the facts no author's taste decides:
 | `financial-report` | none | none | **the person's only** |
 | `contract` | none | none | **the person's only** |
 | `assistant-reply` | none | none | listed for you to check, never cut |
+| `code-review` | none | none | listed for you to check, never cut |
 
 In a format marked "the person's only", the claim check cuts a figure, date or fact unless your material
 or your task supplies it, even when it reads as general knowledge. In `assistant-reply` (a coding assistant, support,

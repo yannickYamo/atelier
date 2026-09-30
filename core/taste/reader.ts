@@ -114,7 +114,7 @@ async function readOnce(client: InferenceClient, budget: Budget, text: string, r
       stableBlock: READING_SYSTEM, variableBlock: '',
       userMessage: `RULES\n${rules.map((r, i) => `${i + 1}. ${r.statement}`).join('\n')}\n\nTEXT\n"""\n${text}\n"""`,
       toolName: 'emit_readings', toolDescription: 'One reading per numbered rule.',
-      schema: READING_SCHEMA, maxTokens: 3000,
+      schema: READING_SCHEMA, maxTokens: 3000, temperature: 0,
     });
     return { value: x, cost: x.cost };
   });
@@ -137,7 +137,7 @@ export async function applicability(client: InferenceClient, budget: Budget, tas
       stableBlock: APPLICABILITY_SYSTEM, variableBlock: '',
       userMessage: `TASK\n${task}\n\nCONDITIONS\n${conditional.map(({ r }, j) => `${j + 1}. ${r.appliesWhen}`).join('\n')}`,
       toolName: 'emit_applicability', toolDescription: 'One answer per numbered condition.',
-      schema: APPLICABILITY_SCHEMA, maxTokens: 800,
+      schema: APPLICABILITY_SCHEMA, maxTokens: 800, temperature: 0,
     });
     return { value: x, cost: x.cost };
   });
