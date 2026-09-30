@@ -8,6 +8,19 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Added: skills that fit other domains
+
+- **What a piece must contain is counted.** `PRESENCE` checks sections in order, mentions of given phrases,
+  a figure, and how a part starts, in the whole text or one part: a report's Recommendation before its
+  Bets, a figure in every kill criterion, an answer that ends on its next step.
+- **The request sets the length when it says one.** "A detailed explanation" or "one line" withholds the
+  learned length from that run; a correct two-line answer is no longer held to an opening minimum meant for
+  pieces long enough to have one.
+- **Short answers are examples.** A skill that answers people keeps examples down to 20 characters at
+  intake (writing keeps 200): the one-line answers are the ones that teach brevity.
+- **`atelier export`** writes a skill as one file with its examples inlined, for an agent or a system
+  prompt with no skill folder.
+
 ### Fixed: the runtime never makes an answer worse (from an outside test)
 
 A skill built from 12 coding answers matched a hand-tuned skill as a plug-in, and scored below no skill at

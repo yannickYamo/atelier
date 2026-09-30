@@ -74,6 +74,12 @@ export interface ImportPlan {
 
 /** Below this a "golden" is a fragment, not an example of finished work. */
 export const MIN_GOLDEN_CHARS = 200;
+/**
+ * The same floor for a skill that answers people. A correct answer can be one line ("Run `npm ci`, then
+ * retry."), and those are the examples that teach brevity: at 200 characters the three short answers in
+ * a set of twelve were dropped, and the skill learned only from the long ones.
+ */
+export const MIN_ANSWER_CHARS = 20;
 
 /**
  * THE SPLIT SCALES WITH THE CORPUS. It used the MINIMUM as the value: two pieces proposed, whatever the
@@ -127,7 +133,8 @@ export function assignRoles(goldens: readonly { readonly id: string; readonly te
   return { refs, unread };
 }
 
-export function planImport(material: readonly ImportedMaterial[], opts: SplitOptions & { readonly reserved?: readonly string[] } = {}): ImportPlan {
+export function planImport(material: readonly ImportedMaterial[], opts: SplitOptions & { readonly reserved?: readonly string[]; readonly minChars?: number } = {}): ImportPlan {
+  const minChars = opts.minChars ?? MIN_GOLDEN_CHARS;
   const goldens = material.filter(m => m.kind === 'GOLDEN');
   const rejected = material.filter(m => m.kind === 'REJECTED');
   const methodology = material.filter(m => m.kind === 'METHODOLOGY');
@@ -135,14 +142,14 @@ export function planImport(material: readonly ImportedMaterial[], opts: SplitOpt
   const journey: Journey = skill ? 'IMPROVE' : 'CREATE';
 
   const refusals: string[] = [];
-  const thin = goldens.filter(g => g.text.trim().length < MIN_GOLDEN_CHARS);
+  const thin = goldens.filter(g => g.text.trim().length < minChars);
   for (const t of thin) {
     refusals.push(`"${t.id}" is too short to be an example of finished work — we would be reading a fragment`);
   }
 
   // Reserved pieces take no role at all: nothing in discovery reads them, not even the observer.
   const reserved = new Set(opts.reserved ?? []);
-  const usable = goldens.filter(g => g.text.trim().length >= MIN_GOLDEN_CHARS && !reserved.has(g.id));
+  const usable = goldens.filter(g => g.text.trim().length >= minChars && !reserved.has(g.id));
   const need = MIN_PROPOSAL_GOLDENS + MIN_HELD_OUT_GOLDENS;
   if (usable.length < need) {
     refusals.push(

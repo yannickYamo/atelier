@@ -396,10 +396,10 @@ export function parseMeasure(spec: string): Measurement {
     DISTRIBUTION: ['edges', 'shares', 'tolerance'],
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
-    FEATURE: ['feature', 'minValue', 'maxValue'] };
-  const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit']);
+    FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts'] };
+  const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
-  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid']);
+  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts']);
   // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
   const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
   const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'

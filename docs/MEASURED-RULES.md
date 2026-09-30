@@ -31,6 +31,7 @@ it, but there is nothing specific to rewrite.
 | `DISTRIBUTION` | the mix of sentence lengths across bands | `DISTRIBUTION:edges=8/18/30,shares=0.3/0.4/0.2/0.1,tolerance=0.2` |
 | `OPENING` | the first prose paragraph: phrases it must not use, and a length band | `OPENING:avoid=in today's\|imagine,maxWords=80` |
 | `CLOSING` | the last prose paragraph: the same | `CLOSING:avoid=ultimately\|in conclusion` |
+| `PRESENCE` | what a piece must contain: sections in order, mentions of given phrases, a figure, how a part starts, in the whole text or one part (`in=first`, `in=last`, `in=<section>`) | `PRESENCE:sections=Recommendation\|Bets`, `PRESENCE:in=last,starts=next`, `PRESENCE:in=Bets,figure=1` |
 | `HEADINGS` | section headings: phrases, sentence or title case, length, how many per 1,000 words | `HEADINGS:avoid=the thing\|gets wrong,case=SENTENCE,maxWords=8` |
 | `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |

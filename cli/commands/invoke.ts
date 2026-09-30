@@ -213,6 +213,12 @@ export async function invoke(): Promise<void> {
   // rejected" lines against 7 without the skill. Such rules are withheld from this run's prompt and named
   // in the record; the compiled skill is untouched.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
+  // THE REQUEST SETS THE LENGTH WHEN IT SAYS ONE. "I want a detailed explanation" met a learned "my pieces
+  // run about 100 words" and lost; so did "one line, please" against a long one. The learned length is
+  // withheld from this run's prompt when the request asks for detail or brevity, and said in the record.
+  const lengthAsked = requestedLength(asked);
+  const lengthLine = lengthAsked ? servedText.split('\n').find((l) => l.trim().startsWith('My pieces of this kind run about ')) : undefined;
+  if (lengthLine) withheld.push(lengthLine.trim());
   const servedForRun = withheld.length ? withoutRules(servedText, withheld) : servedText;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, task, client, budget, binding,
@@ -645,4 +651,11 @@ export function withoutRules(skillMd: string, statements: readonly string[]): st
     out.push(line);
   }
   return out.join('\n');
+}
+
+/** Whether the request itself asks for a long or a short answer, in so many words; null when it does not. */
+export function requestedLength(task: string): 'LONG' | 'SHORT' | null {
+  if (/\b(?:in detail|detailed|in[- ]depth|thorough(?:ly)?|comprehensive|step[- ]by[- ]step|walk me through|explain (?:fully|everything)|long(?:er)? (?:answer|explanation|version))\b/i.test(task)) return 'LONG';
+  if (/\b(?:brief(?:ly)?|short(?:er)? (?:answer|version|reply)|one[- ]line(?:r)?|in (?:a|one) sentence|tl;?dr|quick answer|keep it short)\b/i.test(task)) return 'SHORT';
+  return null;
 }
