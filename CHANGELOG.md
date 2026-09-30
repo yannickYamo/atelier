@@ -80,15 +80,13 @@ not a result. Total spend $5.51.
 
 ### Changed: the README, written by Atelier
 
-- **Taste at scale, not only your own.** The README says what Atelier is for: a writing standard learned
-  from the pieces you choose (yours, your team's, or a style you admire), approved once, and held on every
-  draft. It lists what it can write, and says which uses are tested (blog posts, code review) and which are
-  built and not yet validated (contracts and reports, support replies).
-- **Written with its own skill.** The prose is an `atelier invoke` with a technical author's voice skill, over
-  a fact sheet bound as material ($0.69). It cut five sentences it could not trace to the facts; badges,
-  commands, the table and links were added by hand, and the whole passes that skill's checks.
-- The package and plugin descriptions say the same.
-
+- **What it is, from the evidence.** The README leads with building a standard from examples and checking
+  every output against it, for writing and for answers. It states the outside test's result (a skill built
+  from 12 answers matched a hand-tuned one), the runtime failure that test found and its fix, and that voice
+  is not settled: a fresh call with the author's essays pasted in was as steady and scored higher on voice.
+- **Written with its own skill.** The prose is an `atelier invoke` with a technical author's voice skill
+  over a fact sheet ($0.65); badges, commands, the table and links were added by hand, and the whole passes
+  that skill's checks.
 ### Fixed: an invented claim is deleted, never reworded (from an outside review)
 
 - **Cut in code, not rewritten.** The repair used to ask the model to rewrite an invented story "without it,
