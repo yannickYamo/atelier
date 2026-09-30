@@ -1,6 +1,8 @@
 ---
 name: inspect
 description: Show which approved standard currently owns a skill's behaviour, its version history, and roll back if needed.
+metadata:
+  internal: true
 ---
 
 # Inspect, history, rollback

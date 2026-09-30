@@ -1,6 +1,8 @@
 ---
 name: ratify
 description: Review and approve the rules Atelier proposed. Use when candidate rules are waiting for the user's decision.
+metadata:
+  internal: true
 ---
 
 # Ratification — this is where authority enters

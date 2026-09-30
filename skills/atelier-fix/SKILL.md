@@ -1,11 +1,19 @@
 ---
-name: fix
+name: atelier-fix
 description: Say what was wrong with a skill's output. Atelier repairs the implementation, or asks one question when the standard itself needs to change. Use whenever the user is unhappy with what an Atelier skill produced.
-metadata:
-  internal: true
 ---
 
 # Fix — one correction path
+
+## Before anything
+
+Atelier's guarantees are enforced by the `atelier` command, not by these instructions. Run
+`atelier --version` first. If it fails, stop, do not improvise the steps, and tell the user to install it:
+
+```bash
+git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link
+```
+
 
 The user says what was wrong, in their words. Run exactly:
 

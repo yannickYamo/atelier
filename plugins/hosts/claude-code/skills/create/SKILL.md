@@ -1,11 +1,13 @@
 ---
 name: create
-description: Point Atelier at a folder of your best work and get back a reusable skill. Use when the user wants to build a skill from examples of their own writing or work.
+description: Build a writing skill from a folder of pieces written the way the user wants to write, their own or a style they admire. Use when the user wants a skill that writes like a set of examples.
+metadata:
+  internal: true
 ---
 
-# Create a skill from your work
+# Create a skill from writing you want to match
 
-The user gives a path to their own work. You orchestrate the whole path and they never invoke an
+The user gives a path to a folder of pieces written the way they want to write. You orchestrate the whole path and they never invoke an
 internal stage by hand.
 
 ## Run this

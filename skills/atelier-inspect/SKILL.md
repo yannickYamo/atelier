@@ -1,11 +1,19 @@
 ---
-name: inspect
+name: atelier-inspect
 description: Show which approved standard currently owns a skill's behaviour, its version history, and roll back if needed.
-metadata:
-  internal: true
 ---
 
 # Inspect, history, rollback
+
+## Before anything
+
+Atelier's guarantees are enforced by the `atelier` command, not by these instructions. Run
+`atelier --version` first. If it fails, stop, do not improvise the steps, and tell the user to install it:
+
+```bash
+git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link
+```
+
 
 ```bash
 atelier inspect  --skill <name>     # active version + the standard that owns it

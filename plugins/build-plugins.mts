@@ -89,6 +89,14 @@ fi
 exit 0
 `;
 
+/**
+ * The plugin copies, hidden from the \`skills\` CLI (\`metadata.internal: true\`, which it reads as a
+ * boolean). It finds a plugin's skills through the marketplace manifest, and without this every skill
+ * would be listed twice on skills.sh: once here under a bare name, once as the standalone copy below.
+ * Hosts ignore the field.
+ */
+const hiddenFromSkillsCli = (skill: string): string => skill.replace(/^(---\n[\s\S]*?)\n---\n/, '$1\nmetadata:\n  internal: true\n---\n');
+
 rmSync(OUT, { recursive: true, force: true });
 for (const h of HOSTS) {
   const root = join(OUT, h.id);
@@ -111,10 +119,38 @@ for (const h of HOSTS) {
     // The ONLY host substitution: how a user types a plugin skill. Everything else is identical prose,
     // so a reviewer diffing the two trees sees exactly the surface that legitimately differs.
     const body = readFileSync(join(SRC, skill, 'SKILL.md'), 'utf8').replace(/\/atelier:/g, h.prefix);
-    writeFileSync(join(dst, 'SKILL.md'), body);
+    writeFileSync(join(dst, 'SKILL.md'), hiddenFromSkillsCli(body));
   }
   console.log(`built ${h.id}: ${readdirSync(join(root, 'skills')).length} skills, manifest ${h.manifestDir}/plugin.json`);
 }
+
+// THE STANDALONE SKILLS, for installers that copy skill folders alone (\`npx skills add yannickYamo/atelier\`,
+// listed on skills.sh). They read \`skills/\` at the repository root. Such an install brings no plugin
+// namespace, so the names carry it (\`atelier-create\`, not a bare \`create\` that would sit beside any other
+// \`create\`), and no SessionStart hook, so each skill checks for the CLI itself before anything else.
+const STANDALONE = join(REPO, 'skills');
+const NEEDS_CLI = `## Before anything
+
+Atelier's guarantees are enforced by the \`atelier\` command, not by these instructions. Run
+\`atelier --version\` first. If it fails, stop, do not improvise the steps, and tell the user to install it:
+
+\`\`\`bash
+git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link
+\`\`\`
+
+`;
+rmSync(STANDALONE, { recursive: true, force: true });
+for (const skill of readdirSync(SRC)) {
+  const dst = join(STANDALONE, `atelier-${skill}`);
+  mkdirSync(dst, { recursive: true });
+  const body = readFileSync(join(SRC, skill, 'SKILL.md'), 'utf8')
+    .replace(/^name: .*$/m, `name: atelier-${skill}`)
+    .replace(/\/atelier:/g, '/atelier-')
+    // The check goes right after the title, before any step.
+    .replace(/^(# .*\n)/m, `$1\n${NEEDS_CLI}`);
+  writeFileSync(join(dst, 'SKILL.md'), body);
+}
+console.log(`built skills/: ${readdirSync(STANDALONE).length} standalone skills`);
 
 // The marketplace Claude Code reads: `.claude-plugin/marketplace.json` at the repository root, naming
 // the committed plugin tree by relative path. `/plugin marketplace add yannickYamo/atelier` then

@@ -1,6 +1,8 @@
 ---
 name: fix
 description: Say what was wrong with a skill's output. Atelier repairs the implementation, or asks one question when the standard itself needs to change. Use whenever the user is unhappy with what an Atelier skill produced.
+metadata:
+  internal: true
 ---
 
 # Fix — one correction path
