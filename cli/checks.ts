@@ -8,7 +8,8 @@
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
-import { flag, providerFor, clientAndBinding } from './runtime.js';
+import { flag, providerFor, clientAndBinding, DATA } from './runtime.js';
+import { join } from 'node:path';
 import { formatOf } from '../core/observers/formats.js';
 
 /** The claim reader's default on Anthropic: small, fast, and it only has to type and quote. */
@@ -47,7 +48,7 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
   const cap = Number(process.env.ATELIER_CLAIMS_CAP ?? 0.5);
   const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 24 };
   return modelSensor(clientAndBinding('discovery', model).client, budget, model,
-    { material, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader' });
+    { material, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims') });
 }
 
 /**

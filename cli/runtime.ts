@@ -374,7 +374,7 @@ export function clientAndBinding(role: Role, modelOverride?: string): { client: 
 
   if (provider === 'anthropic') {
     return {
-      client: new AnthropicInferenceClient(model, undefined, priceOverride ?? priceFor(ANTHROPIC_PRICING, model)),
+      client: new AnthropicInferenceClient(model, undefined, priceOverride ?? priceFor(ANTHROPIC_PRICING, model), temperature),
       binding: { providerAdapter: 'anthropic', backend: 'api.anthropic.com', requestedModel: model,
         structuredOutput: 'NATIVE_TOOL_USE', parameters, runtimeProfile: null },
     };

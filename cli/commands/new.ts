@@ -72,6 +72,14 @@ export async function newSkill(): Promise<void> {
   // may be a later continuation that does not repeat the flag.
   const cls = flag('--class');
   if (cls) store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, cls.trim().toLowerCase() === 'none' ? null : normalizeClass(cls));
+  // A SKILL THAT ANSWERS PEOPLE IS CHECKED AS ANSWERS. Respond mode was only a weighting: its skills kept the
+  // claim check of published writing, which cut 189 sentences from 42 coding answers, a correct "17 times 6
+  // is 102" among them. Unless a class was chosen, it now takes `assistant-reply`: specifics are listed for
+  // the reader to check, never cut (core/observers/formats.ts).
+  else if (mode === 'RESPOND' && !store.getDocClass({ root: DATA, skillName: skillNameFrom(name) })) {
+    store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, 'assistant-reply');
+    console.log('Checked as answers (assistant-reply): specifics not in your material are listed for you to check, not cut. (--class none to cut them.)');
+  }
 
   process.env.ATELIER_ORCHESTRATED = '1';
   // The limit the person set is theirs for the whole run: a continuation without --cap keeps it.

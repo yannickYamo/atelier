@@ -54,6 +54,7 @@ export const FORMATS: Readonly<Record<string, FormatProfile>> = {
   'financial-report': { id: 'financial-report', label: 'a financial report', strictSpecifics: true },
   'contract': { id: 'contract', label: 'a contract', strictSpecifics: true },
   'assistant-reply': { id: 'assistant-reply', label: 'an assistant reply', strictSpecifics: false, claims: 'list' },
+  'code-review': { id: 'code-review', label: 'a code review comment', strictSpecifics: false, claims: 'list' },
 };
 
 /** The profile a class names, if it is a known format. Unknown classes carry none: nothing is assumed. */

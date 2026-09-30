@@ -9,6 +9,7 @@ import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims, claimUnitsOf } from './claims.js';
+import { derivedFromKnown } from './derived.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
@@ -112,7 +113,11 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // never a failure, never a span the repair rewrites. Whichever reading gates keeps the id `UNSOURCED`,
   // because the repair, the last-resort cut and a structured output's retry all key on it.
   const gating = reading?.gate ?? reading;
-  const claims = gating ? gating.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
+  const flagged = gating ? gating.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
+  // A FIGURE COMPUTED FROM THE PERSON'S OWN is theirs: "17 times 6 is 102", "revenue grew 25%" from 80 to 100.
+  // Listed with its arithmetic to check, never cut (./derived.ts).
+  const derived = flagged.filter((c) => c.kind === 'FIGURE' && derivedFromKnown(c.text, opts.material ?? ''));
+  const claims = flagged.filter((c) => !derived.includes(c));
   // Which instrument ran is part of the verdict: a line that says "no invented claims" means something
   // different from a model reader than from a pattern, and the record keeps the difference.
   const by = gating?.instrument ?? 'pattern check';
@@ -133,7 +138,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
         + `; reported only: this reader is not qualified, so the pattern check decides what fails [${readerOnly.instrument}]` } }] : [];
   // PUBLIC FACTS ARE LISTED, NOT CUT. Unattributed general knowledge needs no source of the person's, but
   // it is still a specific someone should check before publishing. PREFERRED, so it warns and never fails.
-  const pub = reading?.publicFacts ?? [];
+  const pub = [...(reading?.publicFacts ?? []), ...derived.map((c) => ({ start: c.start, end: c.end, text: c.text, why: 'a figure computed from yours: check the arithmetic' }))];
   const pubBy = reading?.instrument ?? by;
   const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
@@ -157,9 +162,14 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
 const flaggedClaims = (r: VerifyReport): readonly { start: number; end: number; text: string }[] =>
   r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
 /** The specifics a `list` format leaves in for the person to check. */
-export const listedClaims = (r: VerifyReport): string[] =>
-  (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality !== 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [])
-    .map((sp) => sp.text.trim().slice(0, 160));
+export const listedClaims = (r: VerifyReport): string[] => {
+  const spans = r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality !== 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
+  // Claims of work done or results seen ("1.1M of 2.4M rows written", "I fixed the retry") come first and
+  // are marked: an answer inventing its own progress is the one listing the reader must not skim past.
+  const lived = (sp: object): boolean => (sp as { kind?: string }).kind === 'EXPERIENCE';
+  return [...spans.filter(lived).map((sp) => `[work done or result] ${sp.text.trim().slice(0, 160)}`),
+    ...spans.filter((sp) => !lived(sp)).map((sp) => sp.text.trim().slice(0, 160))];
+};
 
 /** The slot left where a claim was, when the person asked for slots (`--placeholders`). */
 export const CLAIM_SLOT = '[your own story, figure or source goes here]';
@@ -242,6 +252,43 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
 }
 
 /**
+ * DID THE CUT LEAVE A FRAGMENT? A list item with nothing in it, a label with nothing under it, nothing at
+ * all, only a label or a "Next:" line where the answer was, or, in a draft of 80 words or more, under half
+ * its words. Returns what broke, most specific first, or null. Only what the cut introduced counts: a draft
+ * that had an empty bullet already is not blamed on the cut. `structureOnly` judges a redraft, which is
+ * meant to be shorter by what it dropped.
+ */
+export function brokenByCut(before: string, after: string, opts: { readonly structureOnly?: boolean } = {}): string | null {
+  const count = (t: string, re: RegExp): number => (t.match(re) ?? []).length;
+  const EMPTY_ITEM = /^[ \t]*(?:\d+[.)]|[-*+])[ \t]*$/gm;
+  const DANGLING = /^[^\n#|>`]*\S:[ \t]*\n(?:[ \t]*\n)*(?=#|$(?![\s\S]))/gm;
+  if (count(after, EMPTY_ITEM) > count(before, EMPTY_ITEM)) return 'an empty list item';
+  if (count(after, DANGLING) > count(before, DANGLING)) return 'a label with nothing under it';
+  const words = (t: string): number => (t.match(/\S+/g) ?? []).length;
+  if (!words(after)) return 'nothing';
+  // Only a label or a "Next:" line left: the answer it introduced is gone ("Next: nothing to do.").
+  const body = after.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (body.every((l) => l.endsWith(':') || /^(?:\*\*|_)?next\b/i.test(l))) return 'no answer, only its label';
+  // A redraft is meant to be shorter by what it dropped: only its structure is judged.
+  if (opts.structureOnly) return null;
+  // A share only means something in a draft long enough for a gutting to show.
+  if (words(before) >= 80 && words(after) < words(before) / 2) return `${words(after)} of ${words(before)} words`;
+  return null;
+}
+
+export const REDRAFT_SYSTEM = `You are given a draft and a numbered list of statements that must go because nothing the author
+supplied supports them. Rewrite the draft so it reads whole without them.
+
+  - Remove each listed statement entirely. Do not restate it in other words, soften it, or hint at it.
+  - Add nothing: no new claim, story, figure, result, source or example.
+  - Keep everything else, including its wording, structure, code blocks and the answer to the request.
+  - If a list or a section is left without content, drop its heading or label too.
+  - Use no em dash (—).
+
+Return the whole rewritten draft.`;
+export const REDRAFT_SCHEMA: Record<string, unknown> = { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false };
+
+/**
  * WHEN THE CUT TOOK THE ANSWER WITH IT. A third or more of a draft's sentences cut (and at least three)
  * is not a draft with a few invented claims removed; it is usually the check misreading general knowledge
  * (a coding answer, an explainer) as the person's own specifics. It is said as that, never as "every rule
@@ -276,7 +323,41 @@ export async function refineToStandard(
   const sensor = opts.guardClaims !== false ? opts.claimSensor : undefined;
   let readDegraded = sensor?.degraded ?? false; let degradedMidLoop = false;
   // Claims first, in code, before any rewrite: a style pass never holds an invented sentence.
-  const enforced = await enforceClaims(skill, v, draft, opts, first, memory);
+  // NEVER A FRAGMENT FOR A PASS. A cut that leaves an empty bullet, a bare label or no answer is redrafted
+  // once without the flagged statements (never reworded, see REDRAFT_SYSTEM) and kept only if it reads
+  // whole and nothing in it is flagged. Otherwise the text goes out uncut, the claims listed and the check
+  // failed: a visible failure, never a hollow pass.
+  const listedHere: string[] = []; const notes: string[] = []; let keptUncut = false;
+  const cutSafely = async (t: string, known: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> => {
+    const e = await enforceClaims(skill, v, t, opts, known, memory);
+    listedHere.push(...e.listed);
+    const broke = e.cut.length ? brokenByCut(t, e.text) : null;
+    if (!broke) return e;
+    const redrafted = await redraft(t, e.cut);
+    if (redrafted !== null) {
+      const rr = await check(redrafted);
+      if (!flaggedClaims(rr).length && !brokenByCut(t, redrafted, { structureOnly: true })) {
+        notes.push(`cutting ${e.cut.length} flagged claim(s) left ${broke}, so the draft was rewritten once without them`);
+        return { text: redrafted, report: rr, cut: e.cut };
+      }
+    }
+    notes.push(`the ${e.cut.length} flagged claim(s) were not cut: cutting them left ${broke}. Check them before you use this`);
+    listedHere.push(...e.cut); keptUncut = true;
+    return { text: t, report: known, cut: [] };
+  };
+  const redraft = async (t: string, gone: readonly string[]): Promise<string | null> => {
+    try {
+      const res = await spend(budget, 0.05, async () => {
+        const x = await client.complete({ stableBlock: REDRAFT_SYSTEM, variableBlock: '',
+          userMessage: `THE DRAFT\n"""\n${t}\n"""\n\nTHE STATEMENTS THAT MUST GO\n${gone.map((g, i) => `${i + 1}. ${g}`).join('\n')}`,
+          toolName: 'emit_draft', toolDescription: 'Return the whole rewritten draft.', schema: REDRAFT_SCHEMA, maxTokens: 6000 });
+        return { value: x, cost: x.cost };
+      });
+      const out = (res.json as { text?: unknown } | null)?.text;
+      return typeof out === 'string' && out.trim() ? out.trim() : null;
+    } catch { return null; }
+  };
+  const enforced = await cutSafely(draft, first);
   let text = enforced.text; let report = enforced.report; let passes = 0;
   cut.push(...enforced.cut);
   let why = cut.length ? 'invented claims cut' : 'every REQUIRED measured rule now holds';
@@ -373,13 +454,15 @@ export async function refineToStandard(
     why = report.failed ? `${why}; ${how}` : `every REQUIRED measured rule now holds (${how})`;
   }
   // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
-  const last = await enforceClaims(skill, v, text, opts, report, memory);
+  // Once the flagged claims were kept uncut, cutting them again at the end would only repeat the attempt.
+  const last = keptUncut ? { text, report, cut: [] as string[] } : await cutSafely(text, report);
   sameInstrument();
   if (last.cut.length) { text = last.text; report = last.report; cut.push(...last.cut); }
   if (cut.length && !report.failed) why = 'every REQUIRED measured rule now holds (invented claims cut)';
   const heavy = heavyCut(draft, cut);
   if (heavy) why = `${heavy}; ${why}`;
-  const toCheck = [...new Set([...memory.listed(), ...listedClaims(report)])];
+  const toCheck = [...new Set([...memory.listed(), ...listedHere, ...listedClaims(report)])];
+  if (notes.length) why = `${notes.join('; ')}; ${why}`;
   if (memory.listed().length) why = `${why}; ${memory.listed().length} flagged figure(s) or fact(s) left in for you to check, because the check flagged too much of the draft to trust every flag`;
   if (degradedMidLoop) {
     why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
