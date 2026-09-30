@@ -1,6 +1,6 @@
 # Close — VOID by the sealed gate, and the clearest negative signal this repository has produced
 
-**Design:** `EXPLORATORY_OVERRIDE_ENDPOINT.md`, sealed exploratory by public commit `1143be3` on
+**Design:** `EXPLORATORY_OVERRIDE_ENDPOINT.md`, sealed exploratory by public commit `02c557b` on
 2026-09-04, before the B2 guide existed and before any generation. **Labels collected:** 2026-09-08,
 all 51 in one delivery, none seen by the builder before collection closed. **Spend:** ~$4 of $15.
 **Blinding:** `OVERRIDE_BLIND_KEY.json` sha256
