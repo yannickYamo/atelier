@@ -55,3 +55,29 @@ export function sentencesKept(output: string, source: string): number {
   };
   return out.filter((o) => src.some((s) => near(o, s))).length / out.length;
 }
+
+/**
+ * WHAT A REWRITE ADDED: the output's sentences (four words or longer) that share under 35% of their words
+ * with every sentence of the source. The claim check stops an invented fact; it does not stop an
+ * invented argument, and a rewrite toward another author's voice added three, one of them a design
+ * rationale for the product that its owner never stated. Listed, so the person can approve or cut each.
+ * The threshold was set on that rewrite: at 35% all four added arguments were listed among 13 sentences;
+ * at 50%, 21 (heavy rephrasings too); at 30%, one argument was missed. A guard lists too many before it
+ * misses one.
+ */
+/** The share of a sentence's words, in percent, that a source sentence must hold to count as its counterpart. */
+const COUNTERPART_PERCENT = 35;
+
+export function sentencesAdded(output: string, source: string): string[] {
+  const key = (s: string): Set<string> => new Set(wordsOf(s).map((w) => w.toLowerCase()));
+  const src = sentencesOf(source).map((s) => key(s.text));
+  const overlap = (a: Set<string>, b: Set<string>): number => {
+    let common = 0;
+    for (const w of a) if (b.has(w)) common += 1;
+    return common / Math.max(a.size, b.size, 1);
+  };
+  return sentencesOf(output).filter((s) => {
+    const k = key(s.text);
+    return k.size >= 4 && !src.some((x) => overlap(k, x) * 100 >= COUNTERPART_PERCENT);
+  }).map((s) => s.text.trim());
+}
