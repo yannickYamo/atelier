@@ -11,6 +11,7 @@
 // meaning the same thing. So the renderer emits ONLY `name` and `description`, and anything
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
+import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import type { Voice } from '../../core/compiler/voice.js';
 import { describePersona } from '../../core/compiler/persona.js';
@@ -221,6 +222,9 @@ export function renderAgentSkill(
   voice: Voice | null = null,
 ): PortableSkillPackage {
   assertArchitectureServesStandard(arch, v);
+  // A skill that answers people is compiled in the words of answers, not essays (the length is a default the
+  // request overrides; the line against invention names results, files and commands, not stories).
+  const answers = isReplyWork(v.workType);
   // SECTION ROUTING IS BY AUTHORITY AND KIND, NEVER BY COMPONENT ID.
   //
   // The first version keyed on an id prefix (`do:` / `avoid:` / `observe:`). That made the safety of
@@ -424,15 +428,20 @@ export function renderAgentSkill(
     voice?.persona?.points.length ? `How I sound, and how often (each point is quoted from my own pieces; a "sometimes" is not an "always"):\n\n${describePersona(voice.persona)}` : '',
     pieceFiles.length ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.` : '',
     voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
-    voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words.` : '',
+    voice?.lengthWords ? (answers
+      ? `My answers usually run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words, unless the request asks for more or less.`
+      : `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words.`) : '',
   ].filter(Boolean);
   const voiceSection = voiceParts.length ? `
 ## How I sound
 
 ${voiceParts.join('\n\n')}
 
-Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
-names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.
+${answers
+    ? `Take who is speaking, the register, the rhythm and the spelling. Never state a result, file, command or
+system detail the request did not give, and never claim work you did not do: ask instead.`
+    : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
+names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
 ` : '';
   // ── MOVES I SOMETIMES MAKE ───────────────────────────────────────────────────────────────────────
   //
@@ -447,8 +456,10 @@ names, figures, sentences, coined terms or stories: a story of mine you were not
   const sometimesSection = sometimes.length ? `
 ## Moves I sometimes make
 
-Not rules: things I do in some pieces and not others. Use about ${perPiece} of them in one piece, only where the piece
-calls for one, and never the same set every time.
+${answers
+    ? 'Not rules: things I do in some answers and not others. Use one only where the request calls for it.'
+    : `Not rules: things I do in some pieces and not others. Use about ${perPiece} of them in one piece, only where the piece
+calls for one, and never the same set every time.`}
 
 ${sometimes.map((r) => `- ${r.statement.trim()}${r.observedRate ? ` (in ${r.observedRate.present} of ${r.observedRate.applicable} of my pieces where it could apply)` : ''}`).join('\n')}
 ` : '';

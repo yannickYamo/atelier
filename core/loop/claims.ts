@@ -104,6 +104,8 @@ const NOT_DONE = /\b(?:I|we|my team|our team)(?:['’]d|['’]ll)?\s+(?:should|c
  * their material; one the draft made up is an invented story.
  */
 const DECISION = /\b(?:I|we|my team|our team)(?:['’]ve| have| had)?\b[^.!?]{0,15}?\b(?:considered|rejected|ruled out|decided|chose|picked|opted|went with|settled on|dropped|abandoned|weighed)\b|\bthe reason (?:I|we)\b/i;
+/** A ROLE THAT SAID IT. "Our CFO said revenue grew 25%": an attribution to a person the reader can't check, as invented as an anonymous one when the material has no such remark. */
+const ROLE_SOURCE = /\b(?:our|my|the|their)\s+(?:CEO|CFO|CTO|COO|CPO|VP\b[^.!?]{0,20}|head of \w+|director|manager|board|investors?|lead engineer|tech lead|product lead)\b[^.!?]{0,25}?\b(?:said|says|told (?:me|us)|put it|called it|reported|estimated|pointed out|argued)\b/i;
 const REPORTED_TO_US = /\b(?:a|one|some|several|many|most|our|the) (?:customers?|users?|clients?|readers?|engineers?|developers?|people|teams?|prospects?|buyers?)\b[^.!?]{0,20}?\b(?:told (?:me|us)|tell (?:me|us)|said to (?:me|us)|wrote to (?:me|us)|emailed (?:me|us)|keep telling (?:me|us))\b/i;
 /** SOMEONE ELSE'S STORY, TOLD AS KNOWN FIRST-HAND: "a team I worked with", "teams I've talked to have". */
 const SECOND_HAND = /\b(?:(?:a|one|the|several|many|most|some) )?(?:teams?|clients?|compan(?:y|ies)|customers?|colleagues?|friends?|engineers?|managers?|startups?|leads?|CTOs?|orgs?|organi[sz]ations?) (?:I|we)(?:['’]ve| have)? (?:worked with|know|knew|advised|talked to|spoke (?:to|with)|met|coached|consulted (?:for|with)|spent time with)\b/i;
@@ -156,7 +158,7 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
   for (const s of ss) {
     const opens = (FIRST_PERSON_PAST.test(s.text) && PARTICULAR_TIME.test(s.text)) || ANECDOTE.test(s.text) || SECOND_HAND.test(s.text)
       || ((EVIDENCE_ACT.test(s.text) || EVIDENCE_LOOK.test(s.text) || DECISION.test(s.text)) && !NOT_DONE.test(s.text)) || REPORTED_TO_US.test(s.text);
-    if (ANONYMOUS_SOURCE.test(s.text) && !storySupported(s.text)) {
+    if ((ANONYMOUS_SOURCE.test(s.text) || ROLE_SOURCE.test(s.text)) && !storySupported(s.text)) {
       out.push({ ...s, kind: 'SOURCE', why: why('SOURCE') });
       inStory = false;
       continue;

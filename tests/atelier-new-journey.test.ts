@@ -147,7 +147,14 @@ describe('the suggestion is computed from evidence, never decided', () => {
   it('responding: a conditional rule is suggested as shown, not instructed, unless the evidence is strong', () => {
     const cond = { ...p, appliesWhen: 'the customer is asking for a refund' } as Requirement;
     expect(suggest(cond, { framings: ['A', 'B'], heldOut: { applicable: 1, present: 0 }, needs: null }, 'RESPOND').materiality).toBe('PREFERRED');
-    expect(suggest(cond, { framings: ['A', 'B'], heldOut: { applicable: 2, present: 2 }, needs: null }, 'RESPOND').materiality).toBe('REQUIRED');
+    // The bar is the one new writing uses: "followed in 1 of 1 unread pieces" made a conditional rule REQUIRED
+    // and it refused every request its condition did not touch (an outside re-test, P0-4).
+    expect(suggest(cond, { framings: ['A', 'B'], heldOut: { applicable: 1, present: 1 }, needs: null }, 'RESPOND').materiality).toBe('PREFERRED');
+    expect(suggest(cond, { framings: ['A', 'B'], heldOut: { applicable: 2, present: 2 }, needs: null }, 'RESPOND').materiality).toBe('PREFERRED');
+    expect(suggest(cond, { framings: ['A', 'B'], heldOut: { applicable: 3, present: 3 }, needs: null }, 'RESPOND').materiality).toBe('REQUIRED');
+    // and one that needs the person's material is never REQUIRED from here
+    const withNeeds = { framings: ['A', 'B'], heldOut: { applicable: 3, present: 3 }, needs: { kind: 'CONTEXT', name: 'real-path-line-number', why: 'paths' } };
+    expect(suggest(cond, withNeeds as never, 'RESPOND').materiality).toBe('PREFERRED');
   });
 });
 
@@ -251,5 +258,29 @@ describe('whose work it is is decided once, at intake, and kept', () => {
     const std = JSON.parse(readFileSync(join(data, 'runs', readdirSync(join(data, 'runs'))[0], 'pending-standard.json'), 'utf8')) as { requirements: { provenance: string; authority: string }[] };
     expect(std.requirements.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')).toBe(true);
     expect(std.requirements.every((r) => r.authority === 'USER_ADOPTED')).toBe(true);
+  });
+});
+
+// ── An outside re-test: the short-answer floor never ran on the real path ──────────────────────
+// `new` called intake before saving the mode, so intake read an empty session and dropped a one-line
+// answer at 200 characters. Driven through the binary, as a person would run it: a unit test of the
+// floor passed all along, because it set the session first.
+describe('atelier new --mode respond keeps a one-line answer', () => {
+  const answers = (proj: string): string => {
+    const dir = join(proj, 'answers');
+    mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 7; i++) writeFileSync(join(dir, `answer-${i}.md`), `Run the migration, then restart the worker. ${'Check the log for the first error and paste it. '.repeat(5)}`);
+    writeFileSync(join(dir, '06-thanks.md'), 'Glad it works. Nothing left open on this one.');
+    return dir;
+  };
+  it('the 45-character answer is kept in respond mode', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-short-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-short-proj-'));
+    const out = run(data, proj, 'new', answers(proj), "answer a developer's requests in a coding assistant, the way these answers do", '--mode', 'respond', '--name', 'dev');
+    expect(out).not.toMatch(/Too short to read as finished work[\s\S]*06-thanks/);
+  });
+  it('polarity: the same folder built as writing still leaves it out', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-short-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-short-proj-'));
+    const out = run(data, proj, 'new', answers(proj), 'write me a blog post in the voice and style of these', '--mode', 'generate', '--name', 'dev');
+    expect(out).toMatch(/Too short to read as finished work \(200\+ characters\)[\s\S]*06-thanks/);
   });
 });

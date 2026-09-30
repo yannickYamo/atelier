@@ -1,6 +1,6 @@
 {
   "name": "@yannickyamo/atelier",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Reproduce a writing taste at scale: learn a standard from the writing you choose, approve it once, and hold every AI draft to it.",
   "type": "module",
   "bin": {

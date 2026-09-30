@@ -10,6 +10,8 @@ import type { StandardVersion, RepairRecord } from '../state/canonical-state.js'
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims, claimUnitsOf } from './claims.js';
 import { derivedFromKnown } from './derived.js';
+import { answerWorkClaims, answerSentences } from './answer-claims.js';
+import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
@@ -74,6 +76,14 @@ export interface CheckOptions {
   readonly claimSensor?: ClaimSensor;
   /** the format this text is (../observers/formats.ts): its hard limits checked as the product's floor */
   readonly format?: FormatProfile | null;
+  /**
+   * Rules not applied to this output, and why: withheld from the run's prompt, so not counted against it
+   * either (a conditional rule whose material is not bound; a presentation rule the request overrides).
+   * Reported as not applicable with the reason, never silently dropped.
+   */
+  readonly waived?: ReadonlyMap<string, string>;
+  /** a small model for the questions that need context (./context-judge.ts); absent, the word patterns decide */
+  readonly judge?: ContextJudge;
 }
 
 
@@ -87,7 +97,7 @@ export interface CheckOptions {
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const base = verifyText(skill, v, text);
+  const base = waive(verifyText(skill, v, text), opts.waived);
   const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
@@ -116,20 +126,34 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const flagged = gating ? gating.claims : unsourcedClaims(text, opts.material ?? '', opts.placeholders ?? false);
   // A FIGURE COMPUTED FROM THE PERSON'S OWN is theirs: "17 times 6 is 102", "revenue grew 25%" from 80 to 100.
   // Listed with its arithmetic to check, never cut (./derived.ts).
-  const derived = flagged.filter((c) => c.kind === 'FIGURE' && derivedFromKnown(c.text, opts.material ?? ''));
-  const claims = flagged.filter((c) => !derived.includes(c));
+  // THE NUMBER IS EXEMPT, NOT THE SENTENCE. "According to a 2024 report, revenue grew 25% from 80 to 100"
+  // has correct arithmetic and an invented report; exempting the sentence let the report ride through on
+  // the arithmetic. A sentence that also attributes or cites something stays flagged, as a source.
+  const derived = flagged.filter((c) => c.kind === 'FIGURE' && !ATTRIBUTION.test(c.text) && derivedFromKnown(c.text, opts.material ?? ''));
+  const claims = flagged.filter((c) => !derived.includes(c))
+    .map((c) => (c.kind === 'FIGURE' && ATTRIBUTION.test(c.text) && derivedFromKnown(c.text, opts.material ?? '')
+      ? { ...c, kind: 'SOURCE' as const, why: 'a source or attribution not in your material or your request, around a figure that is yours: the sentence is cut; if the source is yours, add it to your material' } : c));
   // Which instrument ran is part of the verdict: a line that says "no invented claims" means something
   // different from a model reader than from a pattern, and the record keeps the difference.
   const by = gating?.instrument ?? 'pattern check';
   // LISTED, NOT CUT, where the format says specifics are the reader's to check (formats.ts, `claims`).
+  // IN ANSWERS, WHAT IS ABOUT THE PERSON'S OWN SYSTEM IS CUT; GENERAL KNOWLEDGE IS LISTED. Listing
+  // everything left "Checked this against the failing case: … returns 200" and an invented "2.3M rows, 40
+  // min" in the answer, and a plan that named a table and a script the request never mentioned. An
+  // answer's claim that the assistant did or saw something, a result figure, or an identifier from the
+  // person's environment that the request did not give is cut (./answer-claims.ts); the rest is listed.
   const listOnly = opts.format?.claims === 'list';
-  const statement = listOnly
-    ? 'Specifics not in the material supplied: listed for you to check, never cut in this format.'
-    : 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
-  const line = { requirementId: 'UNSOURCED', statement,
-    materiality: listOnly ? 'PREFERRED' : 'REQUIRED', phase: 'ACCURACY' as const,
-    result: { verdict: claims.length ? 'VIOLATED' as const : 'MET' as const, spans: [...claims], value: claims.length,
-      detail: `${claims.length ? `${claims.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
+  const workClaims = listOnly ? answerWorkClaims(text, opts.material ?? '', claims, opts.judge?.workClaims(answerSentences(text)) ?? null) : [];
+  const toCut = listOnly ? workClaims : claims;
+  const toList = listOnly ? claims.filter((c) => !workClaims.some((w) => w.start === c.start)) : [];
+  const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
+  const line = { requirementId: 'UNSOURCED', statement: listOnly ? 'Never claim work done, a result seen, or a detail of the person\'s own system that the request did not give.' : statement,
+    materiality: 'REQUIRED', phase: 'ACCURACY' as const,
+    result: { verdict: toCut.length ? 'VIOLATED' as const : 'MET' as const, spans: [...toCut], value: toCut.length,
+      detail: `${toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
+  const checkLine = toList.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: 'Specifics not in the material supplied: listed for you to check, never cut in this format.',
+    materiality: 'PREFERRED', phase: 'ACCURACY' as const,
+    result: { verdict: 'VIOLATED' as const, spans: [...toList], value: toList.length, detail: `${toList.length} specific(s) to check [${by}]` } }] : [];
   const readerOnly = reading?.gate ? reading : null;
   const readerLine = readerOnly ? [{ requirementId: READER_REPORT, statement,
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
@@ -143,9 +167,20 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${pubBy}]` } }] : [];
-  return { ...report, checked: [...report.checked, line, ...readerLine, ...pubLine, ...fmtLines],
-    failed: report.failed || (!listOnly && claims.length > 0) || (fmt?.hard.length ?? 0) > 0 };
+  return { ...report, checked: [...report.checked, line, ...checkLine, ...readerLine, ...pubLine, ...fmtLines],
+    failed: report.failed || toCut.length > 0 || (fmt?.hard.length ?? 0) > 0 };
 }
+
+/** The report with each waived rule shown as not applicable, with its reason, and `failed` recomputed. */
+function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>): VerifyReport {
+  if (!waived?.size) return r;
+  const checked = r.checked.map((c) => (waived.has(c.requirementId)
+    ? { ...c, result: { verdict: 'NOT_APPLICABLE' as const, spans: [], value: null, detail: `withheld for this run: ${waived.get(c.requirementId) ?? ''}` } } : c));
+  return { ...r, checked, failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED') };
+}
+
+/** A sentence that attributes or cites: its source is a claim of its own, whatever its figures. */
+const ATTRIBUTION = /\b(?:according to|(?:a|an|the|this|one)\s+(?:\d{4}\s+)?(?:\w+\s+){0,2}(?:report|study|survey|poll|paper|analysis|benchmark|audit)\b|research (?:shows|found|finds|suggests)|studies (?:show|found)|data from|(?:said|says|told (?:me|us)|reported|estimated|estimates)\b)|["“][^"”]{3,}["”]/i;
 
 /** The line listing public facts to check: informational, never a rule the draft broke. */
 export const PUBLIC_FACTS = 'UNSOURCED·public';
@@ -155,6 +190,7 @@ export const READER_REPORT = 'UNSOURCED·reader';
 /** `checkDraft`, after the claim reader (when there is one) has read the text. Every async path uses this. */
 export async function checkDraftAsync(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): Promise<VerifyReport> {
   if (opts.guardClaims !== false && opts.claimSensor) await opts.claimSensor.read(text);
+  if (opts.guardClaims !== false && opts.format?.claims === 'list' && opts.judge) await opts.judge.readAnswer(answerSentences(text));
   return checkDraft(skill, v, text, opts);
 }
 
@@ -162,14 +198,10 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
 const flaggedClaims = (r: VerifyReport): readonly { start: number; end: number; text: string }[] =>
   r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
 /** The specifics a `list` format leaves in for the person to check. */
-export const listedClaims = (r: VerifyReport): string[] => {
-  const spans = r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality !== 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
-  // Claims of work done or results seen ("1.1M of 2.4M rows written", "I fixed the retry") come first and
-  // are marked: an answer inventing its own progress is the one listing the reader must not skim past.
-  const lived = (sp: object): boolean => (sp as { kind?: string }).kind === 'EXPERIENCE';
-  return [...spans.filter(lived).map((sp) => `[work done or result] ${sp.text.trim().slice(0, 160)}`),
-    ...spans.filter((sp) => !lived(sp)).map((sp) => sp.text.trim().slice(0, 160))];
-};
+export const listedClaims = (r: VerifyReport): string[] =>
+  (r.checked.find((c) => c.requirementId === CLAIMS_TO_CHECK && c.result.verdict === 'VIOLATED')?.result.spans ?? []).map((sp) => sp.text.trim().slice(0, 160));
+/** The line listing an answer's specifics to check: never a rule the answer broke. */
+export const CLAIMS_TO_CHECK = 'UNSOURCED·check';
 
 /** The slot left where a claim was, when the person asked for slots (`--placeholders`). */
 export const CLAIM_SLOT = '[your own story, figure or source goes here]';
@@ -276,13 +308,75 @@ export function brokenByCut(before: string, after: string, opts: { readonly stru
   return null;
 }
 
+/** A sentence that opens by pointing back at what came before it. */
+const POINTS_BACK = /^\W*(?:this|that|these|those|it|its|they|them|either|if it|if so|so|but|which|such|here|there|nobody\b[^.!?]*\bthem)\b/i;
+const norm = (t: string): string => t.toLowerCase().replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * THE SENTENCES A CUT LEFT POINTING AT NOTHING. "An issue must fit in a week. If it can't, we split it."
+ * with the first cut delivers "If it can't, we split it."; a post opened on "Nobody misses them." once
+ * their subject went. Each sentence of the cut text that opens by pointing back, and that followed a cut
+ * sentence (or is the new first sentence), is returned.
+ */
+export function danglingAfterCut(before: string, after: string, cut: readonly string[]): string[] {
+  const gone = new Set(cut.map(norm));
+  const was = claimUnitsOf(before).map((u) => u.text.trim());
+  const now = claimUnitsOf(after).map((u) => u.text.trim());
+  const out: string[] = [];
+  now.forEach((t, i) => {
+    if (!POINTS_BACK.test(t)) return;
+    const at = was.findIndex((w) => norm(w) === norm(t));
+    const followedCut = at > 0 && gone.has(norm(was[at - 1]));
+    const newlyFirst = i === 0 && at > 0;
+    if (followedCut || newlyFirst) out.push(t);
+  });
+  return out;
+}
+
+/**
+ * Whether a redraft kept everything it was not asked to change: every sentence of the original outside the
+ * cut and the dangling ones is still there (compared without markup, case or spacing), save a label that
+ * the cut left empty. A redraft that drops supported content is refused like one that invents.
+ */
+export function redraftPreserves(original: string, redrafted: string, changeable: readonly string[]): boolean {
+  const free = new Set(changeable.map(norm));
+  const body = norm(redrafted);
+  return claimUnitsOf(original).map((u) => u.text.trim())
+    .filter((t) => !free.has(norm(t)) && !t.endsWith(':'))
+    .every((t) => body.includes(norm(t)));
+}
+
+/**
+ * `danglingAfterCut`, read by the context judge when there is one: every sentence that followed a cut one
+ * (or is the new first sentence) is put to it, and those it says no longer stand alone are returned. The
+ * word pattern is the floor when there is no judge or it cannot answer.
+ */
+export async function danglingJudged(before: string, after: string, cut: readonly string[], judge?: ContextJudge): Promise<string[]> {
+  if (!judge) return danglingAfterCut(before, after, cut);
+  const gone = new Set(cut.map(norm));
+  const was = claimUnitsOf(before).map((u) => u.text.trim());
+  const now = new Set(claimUnitsOf(after).map((u) => norm(u.text)));
+  const pairs: { removed: string; next: string }[] = [];
+  was.forEach((w, i) => {
+    const next = was[i + 1];
+    if (gone.has(norm(w)) && next && !gone.has(norm(next)) && now.has(norm(next))) pairs.push({ removed: w, next });
+  });
+  const verdicts = await judge.standsAlone(pairs);
+  if (!verdicts) return danglingAfterCut(before, after, cut);
+  return pairs.filter((_, i) => !verdicts[i]).map((p) => p.next);
+}
+
 export const REDRAFT_SYSTEM = `You are given a draft and a numbered list of statements that must go because nothing the author
 supplied supports them. Rewrite the draft so it reads whole without them.
 
   - Remove each listed statement entirely. Do not restate it in other words, soften it, or hint at it.
   - Add nothing: no new claim, story, figure, result, source or example.
-  - Keep everything else, including its wording, structure, code blocks and the answer to the request.
+  - Keep everything else word for word, including its structure, code blocks and the answer to the
+    request. Only the sentences listed as pointing at removed text may be rewritten, so each stands on
+    its own, or dropped.
   - If a list or a section is left without content, drop its heading or label too.
+  - If what remains no longer answers the request, end with the one question you would need answered
+    to answer it (which service, which environment, which file), instead of guessing.
   - Use no em dash (—).
 
 Return the whole rewritten draft.`;
@@ -331,25 +425,37 @@ export async function refineToStandard(
   const cutSafely = async (t: string, known: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> => {
     const e = await enforceClaims(skill, v, t, opts, known, memory);
     listedHere.push(...e.listed);
-    const broke = e.cut.length ? brokenByCut(t, e.text) : null;
+    const dangling = e.cut.length ? await danglingJudged(t, e.text, e.cut, opts.judge) : [];
+    const broke = e.cut.length ? brokenByCut(t, e.text) ?? (dangling.length ? `${dangling.length} sentence(s) pointing at cut text` : null) : null;
     if (!broke) return e;
-    const redrafted = await redraft(t, e.cut);
+    const redrafted = await redraft(t, e.cut, dangling);
     if (redrafted !== null) {
       const rr = await check(redrafted);
-      if (!flaggedClaims(rr).length && !brokenByCut(t, redrafted, { structureOnly: true })) {
+      if (!flaggedClaims(rr).length && !brokenByCut(t, redrafted, { structureOnly: true }) && redraftPreserves(t, redrafted, [...e.cut, ...dangling])) {
         notes.push(`cutting ${e.cut.length} flagged claim(s) left ${broke}, so the draft was rewritten once without them`);
         return { text: redrafted, report: rr, cut: e.cut };
+      }
+    }
+    // Only sentences left pointing at nothing, and no redraft to be had: they go with their parent, when
+    // that leaves the text whole. An invented claim is not shipped to spare a sentence that means nothing.
+    if (dangling.length && !brokenByCut(t, e.text)) {
+      let withParents = e.text;
+      for (const d of dangling) { const at = withParents.indexOf(d); if (at !== -1) withParents = cutClaim(withParents, at, at + d.length); }
+      if (!brokenByCut(t, withParents)) {
+        notes.push(`${dangling.length} sentence(s) that pointed at cut text were cut with it`);
+        return { text: withParents, report: await check(withParents), cut: [...e.cut, ...dangling] };
       }
     }
     notes.push(`the ${e.cut.length} flagged claim(s) were not cut: cutting them left ${broke}. Check them before you use this`);
     listedHere.push(...e.cut); keptUncut = true;
     return { text: t, report: known, cut: [] };
   };
-  const redraft = async (t: string, gone: readonly string[]): Promise<string | null> => {
+  const redraft = async (t: string, gone: readonly string[], pointing: readonly string[] = []): Promise<string | null> => {
     try {
       const res = await spend(budget, 0.05, async () => {
         const x = await client.complete({ stableBlock: REDRAFT_SYSTEM, variableBlock: '',
-          userMessage: `THE DRAFT\n"""\n${t}\n"""\n\nTHE STATEMENTS THAT MUST GO\n${gone.map((g, i) => `${i + 1}. ${g}`).join('\n')}`,
+          userMessage: `THE DRAFT\n"""\n${t}\n"""\n\nTHE STATEMENTS THAT MUST GO\n${gone.map((g, i) => `${i + 1}. ${g}`).join('\n')}`
+            + (pointing.length ? `\n\nSENTENCES THAT WILL POINT AT REMOVED TEXT (rewrite each to stand alone, or drop it)\n${pointing.map((g) => `- ${g}`).join('\n')}` : ''),
           toolName: 'emit_draft', toolDescription: 'Return the whole rewritten draft.', schema: REDRAFT_SCHEMA, maxTokens: 6000 });
         return { value: x, cost: x.cost };
       });

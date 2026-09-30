@@ -164,10 +164,14 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
   const required = mode === 'GENERATE' ? nearlyAlways && !needs : (held || agreed);
   // RESPOND with a condition: the measured weak spot. A conditional rule served as an instruction was
   // applied where its condition did not hold. Suggested as required only on strong evidence, and said.
+  // The bar is the same as for new writing: "followed in 1 of 1 unread pieces" made a conditional rule
+  // REQUIRED, and it refused every request it did not apply to. It must have held in four of five unread
+  // pieces where it applied (three or more), and a rule that needs the person's material is never
+  // suggested REQUIRED from here: answering binds that material per request, and most requests have none.
   const conditionalRespond = mode === 'RESPOND' && !isGeneralScope(p.appliesWhen);
-  const materiality = conditionalRespond ? (held && agreed ? 'REQUIRED' : 'PREFERRED') : required ? 'REQUIRED' : 'PREFERRED';
+  const materiality = conditionalRespond ? (nearlyAlways && agreed && !needs ? 'REQUIRED' : 'PREFERRED') : required ? 'REQUIRED' : 'PREFERRED';
   const caveat = conditionalRespond && materiality === 'PREFERRED'
-    ? '; conditional, so shown rather than instructed until the evidence is strong'
+    ? (needs ? '; conditional and needs your material, so shown rather than instructed' : '; conditional, so shown rather than instructed until the evidence is strong')
     : mode === 'GENERATE' && needs && held ? '; needs your material, so shown until you make it required' : '';
   return { decision: 'APPROVE', materiality, needs, strength, why: `${seen}${also}${caveat}` };
 }

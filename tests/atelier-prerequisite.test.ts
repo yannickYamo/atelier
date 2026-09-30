@@ -64,7 +64,7 @@ describe('a rule the author did not make obligatory', () => {
   it('DEGRADES rather than refusing — the run proceeds and the behaviour is not attempted', () => {
     const v = checkSatisfiable([rule('g5', 'PREFERRED', [RECORDS])], new Set());
     expect(v.kind).toBe('DEGRADED');
-    expect(describeSatisfiability(v)).toMatch(/None of these is REQUIRED, so the run proceeds/);
+    expect(describeSatisfiability(v)).toMatch(/The run proceeds and those behaviours are not attempted/);
   });
 
   it('but one REQUIRED among many PREFERRED still refuses the whole run', () => {

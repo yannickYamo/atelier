@@ -8,6 +8,7 @@
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import { flag, providerFor, clientAndBinding, DATA } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf } from '../core/observers/formats.js';
@@ -46,9 +47,26 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
   }
   const model = named ?? CLAIMS_MODEL_DEFAULT;
   const cap = Number(process.env.ATELIER_CLAIMS_CAP ?? 0.5);
-  const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 24 };
+  // Two reads per new text (the gate below), so twice the calls of a single-read reader.
+  const budget = { spentUsd: 0, capUsd: Number.isFinite(cap) && cap > 0 ? cap : 0.5, maxCalls: 48 };
   return modelSensor(clientAndBinding('discovery', model).client, budget, model,
-    { material, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims') });
+    { material, task, placeholders, strict, gateAnyway: process.env.ATELIER_CLAIMS_GATE === 'reader', cacheDir: join(DATA, 'cache', 'claims'), reads: 2 });
+}
+
+/**
+ * The context judge (core/loop/context-judge.ts): the same small model as the claim reader, on the same
+ * backend, for the questions that need reading. None offline (`--claims pattern`, no key, no model on a
+ * non-Anthropic backend): then the word patterns decide, as they did before.
+ */
+export function contextJudgeFor(): ContextJudge | undefined {
+  const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
+  if (mode === 'pattern') return undefined;
+  const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
+  const provider = providerFor('discovery');
+  if (!named && provider !== 'anthropic') return undefined;
+  if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return undefined;
+  const model = named ?? CLAIMS_MODEL_DEFAULT;
+  return modelJudge(clientAndBinding('discovery', model).client, { spentUsd: 0, capUsd: 0.2, maxCalls: 40 });
 }
 
 /**
@@ -65,6 +83,8 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly placeholders?: boolean;
   /** the task the person typed, when there is one: the claim reader's context, beside the material */
   readonly task?: string;
+  /** the context judge, when the caller already made one (invoke asks it about the request first) */
+  readonly judge?: ContextJudge;
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
@@ -74,7 +94,8 @@ export function checksFor(L: store.StoreLayout, opts: {
   const material = [opts.material, ...standardStatements(L)].filter(Boolean).join('\n\n');
   // The format the text is: the one declared for it, or the class the standard was built from.
   const format = formatOf(flag('--class') ?? store.getDocClass(L));
-  return { material, guardClaims, placeholders, format,
+  const judge = opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
+  return { material, guardClaims, placeholders, format, ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
 }

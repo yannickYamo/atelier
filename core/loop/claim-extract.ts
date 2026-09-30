@@ -461,21 +461,43 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
      * passes a sentence today and cuts it tomorrow is not one a person can trust. What is stored is the
      * reader's list of specifics; the decision in code is run again on it, so it can never go stale.
      */
-    readonly cacheDir?: string }): ClaimSensor {
+    readonly cacheDir?: string
+    /**
+     * Uncached reads per text. At temperature 0 one text read three times still gave pass, one flag and two
+     * flags. With 2, a flag both reads raise is acted on; a flag only one raises is listed to check, never
+     * cut: a gate that deletes text must not act on a coin flip, and taking the union of reads would only
+     * raise false cuts. Both reads are cached, so the resolved verdict holds on every later run.
+     */
+    readonly reads?: 1 | 2 }): ClaimSensor {
   const cache = new Map<string, ClaimReading>();
   const diskKey = (text: string): string => sha(JSON.stringify([model, READER_VERSION, text, ctx.material, ctx.task, ctx.placeholders, ctx.strict ?? false]));
-  const fromDisk = (text: string): readonly ExtractedSpecific[] | null => {
+  const reads = ctx.reads ?? 1;
+  const asSpecifics = (raw: unknown): ExtractedSpecific[] | null => (Array.isArray(raw) ? raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
+    && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string') : null);
+  const diskFile = (text: string): string => join(ctx.cacheDir ?? '', `${diskKey(text)}${reads === 2 ? '.2' : ''}.json`);
+  const fromDisk = (text: string): ExtractedSpecific[][] | null => {
     if (!ctx.cacheDir) return null;
     try {
-      const raw = readJson<unknown[]>(join(ctx.cacheDir, `${diskKey(text)}.json`), { kind: 'array', what: 'a cached claim reading' });
-      // A cached file is read like the reader's own answer: a list of specifics, or it is not used.
-      return Array.isArray(raw) ? raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
-        && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string') : null;
+      // A cached file is read like the reader's own answers: one list of specifics per read, or it is not used.
+      const raw = readJson<unknown[]>(diskFile(text), { kind: 'array', what: 'a cached claim reading' });
+      const each = reads === 2 ? raw.map(asSpecifics) : [asSpecifics(raw)];
+      return each.every((x): x is ExtractedSpecific[] => x !== null) && each.length === reads ? each : null;
     } catch { return null; }
   };
-  const toDisk = (text: string, specifics: readonly ExtractedSpecific[]): void => {
+  const toDisk = (text: string, each: readonly (readonly ExtractedSpecific[])[]): void => {
     if (!ctx.cacheDir) return;
-    try { mkdirSync(ctx.cacheDir, { recursive: true }); writeAtomic(join(ctx.cacheDir, `${diskKey(text)}.json`), JSON.stringify(specifics)); } catch { /* a cache that cannot be written is only a slower run */ }
+    try { mkdirSync(ctx.cacheDir, { recursive: true }); writeAtomic(diskFile(text), JSON.stringify(reads === 2 ? each : each[0])); } catch { /* a cache that cannot be written is only a slower run */ }
+  };
+  /** One reading from one or two reads: flags both raise, and the ones only one raised listed to check. */
+  const resolve = (text: string, each: readonly (readonly ExtractedSpecific[])[]): ClaimReading => {
+    const [a, b] = each.map((sp) => decideSpecifics(text, sp, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false));
+    if (!b) return a;
+    const at = (c: { start: number; end: number }): string => `${c.start}:${c.end}`;
+    const both = new Set(b.claims.map(at));
+    const agreed = a.claims.filter((c) => both.has(at(c)));
+    const disputed = [...a.claims, ...b.claims].filter((c, i, all) => !agreed.some((x) => at(x) === at(c)) && all.findIndex((y) => at(y) === at(c)) === i);
+    return { ...a, claims: agreed, publicFacts: [...a.publicFacts,
+      ...disputed.map((c) => ({ start: c.start, end: c.end, text: c.text, why: 'flagged on one of two reads: check it before you publish' }))] };
   };
   const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
   const gatePattern = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');
@@ -506,23 +528,26 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
       const k = sha(text);
       if (degraded || cache.has(k)) return;
       const stored = fromDisk(text);
-      if (stored) { cache.set(k, decideSpecifics(text, stored, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false)); return; }
+      if (stored) { cache.set(k, resolve(text, stored)); return; }
       try {
-        const res = await spend(budget, 0.02, async () => {
-          const x = await client.complete({
-            stableBlock: EXTRACT_SYSTEM, variableBlock: context,
-            userMessage: `THE DRAFT, sentence by sentence:\n<draft>\n${numbered(text)}\n</draft>`,
-            toolName: 'emit_specifics', toolDescription: 'Return every specific the draft asserts, with where it comes from.',
-            schema: EXTRACT_SCHEMA, maxTokens: 8000, temperature: 0,
+        const readOnce = async (): Promise<ExtractedSpecific[]> => {
+          const res = await spend(budget, 0.02, async () => {
+            const x = await client.complete({
+              stableBlock: EXTRACT_SYSTEM, variableBlock: context,
+              userMessage: `THE DRAFT, sentence by sentence:\n<draft>\n${numbered(text)}\n</draft>`,
+              toolName: 'emit_specifics', toolDescription: 'Return every specific the draft asserts, with where it comes from.',
+              schema: EXTRACT_SCHEMA, maxTokens: 8000, temperature: 0,
+            });
+            return { value: x, cost: x.cost };
           });
-          return { value: x, cost: x.cost };
-        });
-        const raw = (res.json as { specifics?: unknown } | null)?.specifics;
-        if (!Array.isArray(raw)) throw new Error('the reader returned no list of specifics');
-        const specifics = raw.filter((x): x is ExtractedSpecific => typeof x === 'object' && x !== null
-          && typeof (x as ExtractedSpecific).sentence === 'number' && typeof (x as ExtractedSpecific).text === 'string');
-        cache.set(k, decideSpecifics(text, specifics, ctx.material, ctx.task, ctx.placeholders, named, ctx.strict ?? false));
-        toDisk(text, specifics);
+          const raw = (res.json as { specifics?: unknown } | null)?.specifics;
+          if (!Array.isArray(raw)) throw new Error('the reader returned no list of specifics');
+          return asSpecifics(raw) ?? [];
+        };
+        const each: ExtractedSpecific[][] = [];
+        for (let i = 0; i < reads; i++) each.push(await readOnce());
+        cache.set(k, resolve(text, each));
+        toDisk(text, each);
       } catch (e) {
         failure = (e as Error).message.split('\n')[0];
         degraded = true;

@@ -88,3 +88,7 @@ export function checkFormat(text: string, f: FormatProfile): FormatFindings {
   }
   return { hard, soft };
 }
+
+/** Work that is a reply to someone: an assistant's answers, support replies, review comments. */
+export const isReplyWork = (workType: string): boolean =>
+  /\b(repl(?:y|ies)|answers?|assistant|chat|support|review comments?|code reviews?)\b/i.test(workType);

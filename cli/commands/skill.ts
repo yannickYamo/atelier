@@ -275,6 +275,5 @@ export async function skill(): Promise<void> {
   await build(flag('--name') ?? basename(process.cwd()));
 }
 
-/** Work that is a reply to someone: an assistant's answers, support replies, review comments. */
-export const isReplyWork = (workType: string): boolean =>
-  /\b(repl(?:y|ies)|answers?|assistant|chat|support|review comments?|code reviews?)\b/i.test(workType);
+import { isReplyWork } from '../../core/observers/formats.js';
+export { isReplyWork };

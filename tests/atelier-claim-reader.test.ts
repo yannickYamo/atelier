@@ -412,7 +412,7 @@ describe('the audit of the invented-claim check', () => {
   });
 
   describe('3. a reader that fails mid-loop degrades for good: before and after are read by one instrument', () => {
-    const draft = 'The review took 94 minutes. It ended well.';
+    const draft = 'The review took 94 minutes. The team shipped the fix the same day.';
     const flagged = { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] };
 
     it('once a read fails, every reading is the pattern check\'s, of texts the model already read included', async () => {
@@ -570,7 +570,7 @@ describe('the audit of the invented-claim check', () => {
     });
 
     it('3: a figure the reader flags is cut before any rewrite, so no rewrite is ever judged on it', async () => {
-      const { run, file } = setup('The review took 94 minutes. It ended well.');
+      const { run, file } = setup('The review took 94 minutes. The team shipped the fix the same day.');
       await script({
         byTool: {
           emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] },

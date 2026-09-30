@@ -97,7 +97,7 @@ export async function newSkill(): Promise<void> {
     // A held-out check without having to know what one is: some of the work is set aside before
     // anything reads it (when there are six or more pieces), unless the person named their own.
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
-    intake(path, flag('--work-type') ?? 'writing');
+    intake(path, flag('--work-type') ?? (mode === 'RESPOND' ? 'answers' : 'writing'), mode);
     s = loadSession();
     // The name is the run's from the first call: a continuation that does not repeat --name must build
     // the same skill (it once built one named after the folder, and the class set on the first call

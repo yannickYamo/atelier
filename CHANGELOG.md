@@ -6,7 +6,42 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
-## [Unreleased] — voice defaults
+## [0.6.0] — 2026-09-30 (outside the blog: answers, code review, reports)
+
+### Fixed: an outside re-test of the runtime (all five blockers, three of its five follow-ups)
+
+An outside re-test measured the earlier fixes: the plug-in beat a hand-tuned skill on that skill's own
+benchmark in three judge runs, and the runtime rose from 3.21 to 4.26 against its 4.32. It also found four
+regressions. Fixed, each with a test that reproduces it and one for the opposite polarity:
+
+- **An invented source no longer rides on correct arithmetic.** The derived-figure exemption covers the
+  number, not the sentence: "According to a 2024 report, revenue grew 25% from 80 to 100" is flagged as a
+  source. A remark attributed to a role ("our CFO said") is a source too.
+- **An answer may not make up the person's system or its own work.** In `assistant-reply`, a claim of work
+  done or a result seen ("Checked this against the failing case: … returns 200", "2.3M rows, 40 min") and an
+  identifier the request never gave (a file path, an `npm run` script, a table or branch) are cut; general
+  knowledge is still listed. A redraft that loses its point asks the question it needs instead.
+- **Short answers are kept on the real path.** `new --mode respond` passes its mode to intake, which ran
+  before the mode was saved and dropped one-line answers at 200 characters.
+- **A conditional rule cannot refuse an unrelated request.** A REQUIRED rule that applies under a
+  condition and lacks its material is withheld from that run and named; only a rule that applies to every
+  output refuses. Respond-mode suggestions meet the bar new writing uses (4 in 5 of 3+ unread pieces), and
+  a rule that needs material is never suggested REQUIRED there.
+- **The request's own format wins.** "Return only the code block" withholds the skill's presentation rules
+  from that run's prompt and its count, and says so.
+- **A repeatable reader, as a gate.** Each new text is read twice; a flag both reads raise is acted on, a
+  flag only one raised is listed, never cut. Not yet re-qualified at these settings.
+- **A redraft keeps what it was not asked to change,** and **nothing points at cut text**: a sentence left
+  pointing back is redrafted or cut with it.
+- **A small model for what needs context.** Whether a sentence still stands alone, what a request dictates,
+  and whether an answer claims its own work are read by a small model (validated in code, temperature 0),
+  with the word patterns as the floor when it cannot run.
+- **Skills for answers are compiled in the words of answers**: a typical length the request overrides, and
+  "never state a result, file, command or system detail the request did not give" in place of the essay line.
+
+Known limits: multi-step figures (a market size built in two steps) are still judged as untraced; the claim
+reader has not been re-qualified at temperature 0 with two reads; neither the runtime nor the blog test has
+been re-run on this build.
 
 ### Added: skills that fit other domains
 

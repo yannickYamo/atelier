@@ -106,14 +106,13 @@ describe('a stated rule that became no rule is shown before anything binds', () 
 });
 
 describe('assistant replies: specifics are listed for the reader to check, never cut', () => {
-  const reply = 'Cost 14 is your 2 seconds. I checked the logs and a compare at 12 takes about 300 ms. Next: run the login test.';
+  const reply = 'Cost 14 is your 2 seconds. A senior engineer once told me cost 12 is plenty. Next: run the login test.';
   const listing = { material: '', format: FORMATS['assistant-reply'] };
 
-  it('an untraced figure in an assistant reply is a PREFERRED line: listed, not failed', () => {
+  it('an untraced remark in an assistant reply is listed to check, not failed', () => {
     const r = checkDraft('d', v, reply, listing);
-    const u = r.checked.find((c) => c.requirementId === 'UNSOURCED');
-    expect(u?.materiality).toBe('PREFERRED');
-    expect(u?.result.verdict).toBe('VIOLATED');
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('MET');
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·check')?.materiality).toBe('PREFERRED');
     expect(r.failed).toBe(false);
   });
 
@@ -122,13 +121,13 @@ describe('assistant replies: specifics are listed for the reader to check, never
     const out = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, reply, 2, listing);
     expect(out.output).toBe(reply);
     expect(out.repair?.storiesCut).toBeUndefined();
-    expect(out.repair?.claimsToCheck?.join(' ')).toContain('300 ms');
+    expect(out.repair?.claimsToCheck?.join(' ')).toContain('cost 12 is plenty');
   });
 
   it('polarity: the same reply as published writing is cut', async () => {
     const writer = { complete: () => ok({ replacements: [] }) } as unknown as InferenceClient;
     const out = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, reply, 2, { material: '' });
-    expect(out.output).not.toContain('300 ms');
+    expect(out.output).not.toContain('cost 12 is plenty');
   });
 
   it('atelier skill reads reply work as replies, and other writing as writing', () => {

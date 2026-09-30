@@ -57,6 +57,24 @@ npm run acceptance:carriers -- --host codex
 | C37 | Enter is safe on thin evidence | rejection is suggested only on 4 or more unread pieces; on fewer the rule is shown as an example, weakest first |
 | C38 | a rule waiting for material is not a miss | one line names the exact `--with`; the taste reader reports it as waiting and never repairs toward it |
 | C39 | `invoke` prints the piece and a few lines | a still-broken REQUIRED rule, a cut and a failed reader are always printed; the rest is in the file it names |
+| C40 | what a piece must contain is counted | `PRESENCE`: sections in order, mentions, a figure, how a part starts, scoped to a part (`tests/atelier-phase-b.test.ts`) |
+| C41 | the claim check gives one verdict per sentence per run | a sentence the reader passed is not cut on a later re-read; polarity: without the memory a drifting reader cascades (`tests/atelier-claim-cascade.test.ts`) |
+| C42 | a heavy cut is balanced and said | a third or more flagged: only lived, evidence and quoted claims cut, figures listed; never reported as "every rule holds" (`tests/atelier-claim-cascade.test.ts`) |
+| C43 | answers are checked as answers | `--mode respond` records `assistant-reply`; general knowledge in an answer is listed, never cut (`tests/atelier-phase-a.test.ts`, `tests/atelier-fix-first.test.ts`) |
+| C44 | an answer may not make up the person's system or its own work | work done, result figures and identifiers the request never gave are cut; general commands and given paths stay (`tests/atelier-fix-first.test.ts`) |
+| C45 | a derived figure is the person's; a source beside it is not | one operation on two known figures is listed with its arithmetic; a sentence that also attributes stays flagged as SOURCE (`tests/atelier-phase-a.test.ts`) |
+| C46 | never a fragment for a pass | a cut that breaks structure is redrafted once; the redraft must keep every sentence it was not asked to change; else the text ships uncut and the check fails (`tests/atelier-phase-a.test.ts`, `tests/atelier-fix-first.test.ts`) |
+| C47 | nothing points at cut text | a sentence that followed a cut one and points back is redrafted or cut with it (`tests/atelier-fix-first.test.ts`) |
+| C48 | the claim reader is repeatable | temperature 0; readings cached on disk; with two reads a flag only one raised is listed, never cut (`tests/atelier-phase-a.test.ts`, `tests/atelier-fix-first.test.ts`) |
+| C49 | a conditional rule cannot refuse an unrelated request | a conditional REQUIRED rule missing its material is withheld and named; a GENERAL one still refuses (`tests/atelier-fix-first.test.ts`) |
+| C50 | respond-mode suggestions meet the writing bar | a conditional rule is suggested REQUIRED only on 4 in 5 of 3+ unread pieces, never when it needs material (`tests/atelier-new-journey.test.ts`) |
+| C51 | the request sets its own length and format | an explicit length or format withholds the learned length and the presentation rules for that run, from the prompt and the count, and says so (`tests/atelier-phase-b.test.ts`, `tests/atelier-fix-first.test.ts`) |
+| C52 | a respond skill keeps its one-line examples | driven through the real `new --mode respond`: a 45-character answer is kept; polarity: as writing it is left out (`tests/atelier-new-journey.test.ts`) |
+| C53 | nothing is asked that needs material nobody gave | rules waiting for material are withheld from the run's prompt and named in its record (`tests/atelier-phase-a.test.ts`) |
+| C54 | a small model answers what needs context, and code decides | the context judge's answers are validated (the request's own words, indexes in range); on any failure the word patterns decide (`tests/atelier-fix-first.test.ts`) |
+| C55 | self-improvement can undo itself | `tend --auto` rolls back an install of its own that made a rule break clearly more often; never a person's promotion (`tests/atelier-break-rates.test.ts`) |
+| C56 | a skill as one file | `atelier export` writes the skill with its examples inlined (`tests/atelier-phase-b.test.ts`) |
+| C57 | a skill for answers is compiled in the words of answers | the length is a default the request overrides; the line against invention names results, files and commands (`tests/atelier-fix-first.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 
