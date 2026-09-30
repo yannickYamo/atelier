@@ -36,11 +36,12 @@ describe('A1: answers are checked as answers', () => {
     expect(FORMATS['code-review'].claims).toBe('list');
     expect(FORMATS['blog-post'].claims).toBeUndefined();
   });
-  it('a claim of work done is listed first and marked, so it is not skimmed past', () => {
+  it('a claim of work done is cut in an answer, not listed (an outside re-test, P0-2)', () => {
     const t = 'The index is in place. I checked the logs and 1.1M of 2.4M rows are written. Next: rerun the job.';
     const r = checkDraft('d', v, t, { material: '', format: FORMATS['assistant-reply'] });
-    expect(r.failed).toBe(false);
-    expect(listedClaims(r)[0]).toMatch(/^\[work done or result\] I checked the logs/);
+    expect(r.failed).toBe(true);
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans[0].text).toMatch(/^I checked the logs/);
+    expect(listedClaims(r)).toEqual([]);
   });
 });
 
@@ -54,10 +55,10 @@ describe('A2: never a fragment for a pass', () => {
 
   const draft = 'Last year I shipped the retry loop and it broke production for a day.\n\nFix it:\n\n1. Last month we saw retries double the load.\n2. Add a budget.';
   it('a cut that breaks the text is redrafted once, and the redraft is kept when it reads whole and is clean', async () => {
-    const w = writer({ text: 'Fix it:\n\n1. Add a retry budget.\n2. Cap concurrent retries.' });
+    const w = writer({ text: 'Fix it:\n\n1. Add a budget.' });
     const out = await refineToStandard(w, { spentUsd: 0, capUsd: 1 }, 'd', v, draft, 2, { material: '' });
     expect(w.seen.some((r) => r.toolName === 'emit_draft')).toBe(true);
-    expect(out.output).toBe('Fix it:\n\n1. Add a retry budget.\n2. Cap concurrent retries.');
+    expect(out.output).toBe('Fix it:\n\n1. Add a budget.');
     expect(out.repair?.why).toMatch(/rewritten once without them/);
     expect(out.repair?.violatedAfter).toEqual([]);
   });
@@ -110,11 +111,16 @@ describe('A4: a figure computed from the person\'s own is theirs', () => {
   it(`past ${MAX_KNOWN} known figures nothing is derived: almost any number would be some pair's result`, () => {
     expect(derivable('4999', Array.from({ length: MAX_KNOWN + 1 }, (_, i) => i * 7))).toBe(false);
   });
-  it('the check lists a derived figure to check instead of cutting it', () => {
-    const t = 'According to a 2024 report, revenue grew 25% from 80 to 100.';
-    const r = checkDraft('d', v, t, { material: 'Revenue was 80 last year and 100 this year.' });
-    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('MET');
-    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·public')?.result.spans[0].why).toMatch(/check the arithmetic/);
+  it('the number is exempt, never an invented source beside it (an outside re-test, P0-1)', () => {
+    const material = 'Revenue was 80 last year and 100 this year.';
+    const sourced = checkDraft('d', v, 'According to a 2024 report, revenue grew 25% from 80 to 100.', { material });
+    const u = sourced.checked.find((c) => c.requirementId === 'UNSOURCED');
+    expect(u?.result.verdict).toBe('VIOLATED');
+    expect((u?.result.spans[0] as { kind?: string }).kind).toBe('SOURCE');
+    const plain = checkDraft('d', v, 'Data shows revenue grew 25% from 80 to 100.', { material });
+    expect(plain.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('MET');
+    expect(plain.checked.find((c) => c.requirementId === 'UNSOURCED·public')?.result.spans[0].why).toMatch(/check the arithmetic/);
+    expect(checkDraft('d', v, 'Our CFO said revenue grew 25%.', { material }).checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('VIOLATED');
   });
 });
 

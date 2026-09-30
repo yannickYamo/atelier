@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { checksFor, claimInstrumentOf } from '../checks.js';
+import { checksFor, claimInstrumentOf, contextJudgeFor } from '../checks.js';
 import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -203,7 +203,6 @@ export async function invoke(): Promise<void> {
   // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
   const needsLine = materialLine(satisfiable, material.length > 0, !argv.includes('--allow-unsourced'), name);
   if (needsLine) report.say(needsLine);
-  const checks = checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
@@ -211,17 +210,36 @@ export async function invoke(): Promise<void> {
   // ASKED ONLY FOR WHAT CAN BE DONE HONESTLY. A move that needs material nobody bound ("name the design
   // alternative we rejected") was still sent, and the writer met it by inventing: 16 "we considered / we
   // rejected" lines against 7 without the skill. Such rules are withheld from this run's prompt and named
-  // in the record; the compiled skill is untouched.
+  // in the record; the compiled skill is untouched. A REQUIRED one applies only under a condition (a
+  // general one refused the run above), so it is also not counted against this output.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
+  const waived = new Map<string, string>();
+  for (const q of std?.requirements ?? []) if (waiting.has(q.requirementId)) waived.set(q.requirementId, 'the material it needs is not bound');
   // THE REQUEST SETS THE LENGTH WHEN IT SAYS ONE. "I want a detailed explanation" met a learned "my pieces
   // run about 100 words" and lost; so did "one line, please" against a long one. The learned length is
   // withheld from this run's prompt when the request asks for detail or brevity, and said in the record.
-  const lengthAsked = requestedLength(asked);
+  // Read by the context judge when there is one (core/loop/context-judge.ts); the word patterns are the floor.
+  const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor() : undefined;
+  const intent = judge ? await judge.requestIntent(asked) : null;
+  const lengthAsked = intent ? intent.length : requestedLength(asked);
   const lengthLine = lengthAsked ? servedText.split('\n').find((l) => l.trim().startsWith('My pieces of this kind run about ')) : undefined;
   if (lengthLine) withheld.push(lengthLine.trim());
+  // AND ITS FORMAT, WHEN IT STATES ONE. "Return only the code block" met a learned "end every piece with a
+  // line starting Next:" and lost in 3 of 3 trials. The request is the one thing in the room written today:
+  // the skill's presentation rules are withheld from the prompt and from the count for this run, and named.
+  const formatAsked = intent ? intent.format : requestedFormat(asked);
+  if (formatAsked && std) {
+    const p = presentationRules(std.requirements);
+    for (const q of p.measured) waived.set(q.requirementId, `the request states its own format ("${formatAsked}")`);
+    withheld.push(...p.prose.map((q) => q.statement));
+    report.say(`The request states its own format ("${formatAsked}"): ${p.measured.length + p.prose.length} presentation rule(s) withheld for this run.`);
+  }
+  const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
+    ...(waived.size ? { waived } : {}) };
   const servedForRun = withheld.length ? withoutRules(servedText, withheld) : servedText;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
-  const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, task, client, budget, binding,
+  const taskForRun = formatAsked ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)` : task;
+  const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? refineDraft({ client, budget, name, std, checks, taste }) : null,
@@ -658,4 +676,27 @@ export function requestedLength(task: string): 'LONG' | 'SHORT' | null {
   if (/\b(?:in detail|detailed|in[- ]depth|thorough(?:ly)?|comprehensive|step[- ]by[- ]step|walk me through|explain (?:fully|everything)|long(?:er)? (?:answer|explanation|version))\b/i.test(task)) return 'LONG';
   if (/\b(?:brief(?:ly)?|short(?:er)? (?:answer|version|reply)|one[- ]line(?:r)?|in (?:a|one) sentence|tl;?dr|quick answer|keep it short)\b/i.test(task)) return 'SHORT';
   return null;
+}
+
+/**
+ * Whether the request states its own output format in so many words ("return only the code block",
+ * "just the number", "JSON only", "yes or no"), and the words that said it; null when it does not.
+ */
+export function requestedFormat(task: string): string | null {
+  const m = /\b(?:(?:return|give me|reply with|respond with|output|answer with)\s+(?:only|just)\b[^.?!\n]{0,40}|only (?:the|a|one)\s+(?:code|code block|number|json|sql|command|answer|list|diff|function)\b|just (?:the|a)\s+(?:code|number|json|command|answer|diff)\b|no (?:explanation|prose|commentary|preamble|extra text)\b|json only\b|yes or no\b|one[- ]line answer\b)/i.exec(task);
+  return m ? m[0].trim() : null;
+}
+
+/** Observers whose rules shape how an output is presented, not what it says. */
+const PRESENTATION = new Set(['PRESENCE', 'OPENING', 'CLOSING', 'PARAGRAPH_LENGTH', 'SENTENCE_LENGTH', 'FRAGMENT_SHARE', 'HEADINGS', 'RHYTHM', 'DISTRIBUTION']);
+/** Prose rules about presentation: where a piece starts or ends, its lines, lists, headings, length. */
+const PRESENTATION_WORDS = /\b(?:end(?:s|ing)?|clos(?:e|es|ing)|open(?:s|ing)?|start(?:s|ing)?|first line|last line|lines?|bullets?|lists?|headings?|paragraphs?|words? long|length|format|next:)/i;
+
+/** The rules a request that states its own format overrides: measured presentation rules, and prose ones. */
+export function presentationRules(requirements: readonly { requirementId: string; statement: string; measurement?: { observer: string } | null }[]): {
+  measured: typeof requirements; prose: typeof requirements } {
+  return {
+    measured: requirements.filter((q) => q.measurement && PRESENTATION.has(q.measurement.observer)),
+    prose: requirements.filter((q) => !q.measurement && PRESENTATION_WORDS.test(q.statement)),
+  };
 }

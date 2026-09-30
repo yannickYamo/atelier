@@ -51,7 +51,8 @@ export function autoReserveIds(ids: readonly string[]): string[] {
   return [...ids].sort((a, b) => sha(a).localeCompare(sha(b))).slice(0, k);
 }
 
-export function intake(path: string, workType: string): void {
+export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND'): void {
+  const minChars = minCharsFor(mode);
   const dir = resolve(path);
   if (!existsSync(dir)) die(`no such path: ${dir}`);
   // A folder of someone's work usually also contains files that are ABOUT the work. Reading a README as
@@ -180,9 +181,9 @@ export function intake(path: string, workType: string): void {
   const classified = read
     .filter((r) => !inPackage(r.file) || /(^|\/)SKILL\.md$/i.test(r.file))
     .map((r) => ({ ...r, kind: classify(r.file) }));
-  const thinGoldens = classified.filter((r) => r.kind === 'GOLDEN' && r.text.trim().length < minCharsNow());
+  const thinGoldens = classified.filter((r) => r.kind === 'GOLDEN' && r.text.trim().length < minChars);
   if (thinGoldens.length) {
-    console.log(`\nToo short to read as finished work (${minCharsNow()}+ characters), left out:`);
+    console.log(`\nToo short to read as finished work (${minChars}+ characters), left out:`);
     for (const t of thinGoldens) console.log(`  ${t.file}  (${t.text.trim().length} chars)`);
   }
   const usableRead = classified.filter((r) => !thinGoldens.includes(r));
@@ -240,7 +241,7 @@ export function intake(path: string, workType: string): void {
   }
   const plan = planImport(material, {
     reserved: reservation?.reserved.map((u) => u.unitId) ?? [],
-    minChars: minCharsNow(),
+    minChars: minChars,
     ...(heldOut === undefined ? {} : { heldOut }),
   });
   const heldActual = plan.goldens.filter((g) => g.role === 'HELD_OUT').length;
@@ -391,7 +392,11 @@ function reportProvenance(aiAssisted: boolean | null): void {
   }
 }
 
-/** The shortest piece that counts as an example: an answer can be one line, finished writing cannot. */
-function minCharsNow(): number {
-  return loadSession().intent?.mode === 'RESPOND' ? MIN_ANSWER_CHARS : MIN_GOLDEN_CHARS;
+/**
+ * The shortest piece that counts as an example: an answer can be one line, finished writing cannot. The
+ * mode is passed in by `new`, which knows it before intake runs; read from the session it was still
+ * empty on a first run, and the three short answers of a respond skill were dropped at 200 characters.
+ */
+function minCharsFor(mode?: string): number {
+  return (mode ?? loadSession().intent?.mode) === 'RESPOND' ? MIN_ANSWER_CHARS : MIN_GOLDEN_CHARS;
 }

@@ -38,15 +38,15 @@ That asymmetry in step 4 matters more than it looks. Deleting an invented anecdo
 
 **I'll give you the wins and the failure in the same breath, because an outside test found the failure and I'd rather you hear it from me.**
 
-Building a skill works outside writing. In an outside test, Atelier built a skill from 12 example coding-assistant answers in 90 seconds for $0.41. Against a popular hand-written skill tuned for that benchmark, it matched it: 4.43 to 4.30, inside the judge's noise of about 0.1, with the lowest spread across repeats. A 90-second artifact holding even with a hand-tuned one is the result I care about most.
+Building a skill works outside writing. In an outside test, Atelier built a skill from 12 example coding-assistant answers in 90 seconds for $0.41. On the benchmark of a popular hand-written skill tuned for it, the Atelier skill used as a plug-in scored 4.51 against 4.32, ahead in three separate judge runs, with the lowest spread between trials (0.34 against 0.59). A 90-second artifact beating a hand-tuned one on its own eval is the result I care about most.
 
-The same test found the runtime hurting answers. The claim check cut correct sentences, and some answers went out with empty bullets. Both are fixed - answers are listed, not cut, and a fragment never passes - and the fix has not been re-measured on that benchmark yet. On our own ten-turn coding session after the fix, Atelier's answers broke a counted rule once, against five times for the hand-written skill. Our own session, our own harness, so weigh it accordingly.
+The runtime isn't there yet. Run through `atelier invoke`, the same skill first scored 3.21, below no skill at all: the claim check cut correct sentences and some answers went out with empty bullets. After the first round of fixes it reached 4.26 against the hand-written skill's 4.32. A re-test then found four regressions, which 0.6.0 fixes and nobody has re-measured yet. Until someone does, the plug-in is the path I'd use for answers.
 
 The invented-claim check is the piece I trust most. On product essays no test had used, it caught all 45 planted inventions it read, and left 41 of 48 clean drafts alone. A pattern check on the same material caught 11 of 46.
 
-The counted guarantees hold where prompting doesn't. In the outside test, Atelier's posts had no em dashes and broke the machine-writing rule in 2 of 9. A prompt with the author's essays pasted in produced 14 em dashes and broke it in 7 of 9.
+The counted guarantees hold where prompting doesn't. In the outside blog test, every Atelier post had no em dashes, no invisible characters and no copied six-word runs, and all its required rules held in 7 of 9 posts, against 2 of 9 for a prompt with the author's essays pasted in.
 
-Voice is not settled, and I won't pretend otherwise. In that same test, a fresh call with the author's essays pasted in scored as steady as Atelier and higher on voice with a blind judge. Earlier, blind readers ranked Atelier's version first on two rewrites - one reader each, which is barely evidence. A long single chat does drift; a fresh call with fixed context doesn't, with or without Atelier. Two of our studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size.
+Voice is close, not settled. On one brief written five times, a blind judge scored Atelier 7.2 and a fresh call with the author's essays pasted in 7.4. Across five briefs, Atelier's post came first in 3 of 4 groups, with the fewest unsupported claims and the tightest spread (13.4 a post, standard deviation 1.6, against 14.0 and 3.5). A long single chat does drift; a fresh call with fixed context doesn't, with or without Atelier. Two of our studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size.
 
 ## How it compares
 

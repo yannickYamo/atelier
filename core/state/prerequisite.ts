@@ -25,6 +25,8 @@
 // be. `RECORDS("support-ticket-history")` can later be satisfied by a file or a CRM without this
 // module learning either.
 
+import { isGeneralScope } from './canonical-state.js';
+
 /** A named thing a requirement needs in order to be executed truthfully. */
 export interface Prerequisite {
   /** the kind of thing needed. Open on purpose; the runtime matches on `name`, not on this. */
@@ -51,6 +53,8 @@ export interface MissingPrerequisite {
   readonly statement: string;
   readonly materiality: string | null;
   readonly prerequisite: Prerequisite;
+  /** REQUIRED, but only under a condition: withheld from this run rather than refusing it */
+  readonly conditional?: boolean;
 }
 
 interface RequirementLike {
@@ -58,6 +62,8 @@ interface RequirementLike {
   readonly statement: string;
   readonly materiality: string | null;
   readonly prerequisites?: readonly Prerequisite[];
+  /** the rule's condition; GENERAL (or absent) applies to every output */
+  readonly appliesWhen?: string;
 }
 
 /**
@@ -73,13 +79,19 @@ export function checkSatisfiable(
 ): SatisfiabilityVerdict {
   const missing: MissingPrerequisite[] = [];
   for (const r of requirements) {
+    // A CONDITIONAL RULE CANNOT REFUSE A REQUEST ITS CONDITION MAY NOT TOUCH. "Name the exact file and
+    // line, when pointing at a change I made" refused "What is 17 multiplied by 6?" because no file of
+    // paths was bound. Whether a prose condition applies cannot be known before the answer exists, so
+    // such a rule is withheld from the run and named; only a rule that applies to everything refuses.
+    const conditional = r.appliesWhen !== undefined && !isGeneralScope(r.appliesWhen);
     for (const p of r.prerequisites ?? []) {
       if (bound.has(p.name)) continue;
-      missing.push({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, prerequisite: p });
+      missing.push({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, prerequisite: p,
+        ...(conditional && r.materiality === 'REQUIRED' ? { conditional: true } : {}) });
     }
   }
   if (!missing.length) return { kind: 'SATISFIABLE' };
-  return missing.some((m) => m.materiality === 'REQUIRED')
+  return missing.some((m) => m.materiality === 'REQUIRED' && !m.conditional)
     ? { kind: 'MISSING_REQUIRED_EVIDENCE', missing }
     : { kind: 'DEGRADED', missing };
 }
@@ -93,9 +105,10 @@ export function describeSatisfiability(v: SatisfiabilityVerdict): string | null 
     + `      why:  ${m.prerequisite.why}`).join('\n');
 
   if (v.kind === 'DEGRADED') {
+    const held = v.missing.filter((m) => m.conditional).map((m) => m.requirementId);
     return `\nNot every rule can fire on this invocation.\n\n${rows}\n\n`
-      + 'None of these is REQUIRED, so the run proceeds and those behaviours are not attempted.\n'
-      + 'Bind the source to get them.\n';
+      + (held.length ? `${held.join(', ')} ${held.length === 1 ? 'is' : 'are'} REQUIRED only under a condition, so withheld from this run rather than refusing it.\n` : '')
+      + 'The run proceeds and those behaviours are not attempted. Bind the source to get them.\n';
   }
   return `MISSING_REQUIRED_EVIDENCE — nothing was generated.\n\n${rows}\n\n`
     + 'A REQUIRED rule depends on a source this invocation does not have. Running anyway would ask the\n'
