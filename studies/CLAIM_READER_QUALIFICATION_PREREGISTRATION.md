@@ -24,7 +24,7 @@ never been measured. This study measures it, once, against thresholds fixed here
 ## Materials
 
 Two corpora, 27 pieces:
-- 20 public posts by the author of the voice rounds (`~/atelier-study/corpus`);
+- 20 public posts by the author of the voice rounds (in the study folder outside the repository);
 - the owner's 7 pieces (`~/atelier-yannick-voice/corpus`).
 
 The facts in both are the authors' own, whatever wrote the prose.

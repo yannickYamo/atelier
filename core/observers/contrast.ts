@@ -177,7 +177,7 @@ export function deriveContrastRules(
       //
       // THE CONTRASTIVE VERDICT IS HELD FOR EVERY AUTHOR, AT THEIR OWN RATE. A rewrite inherits it from
       // its source, so a plain model's drafts never showed it: a post using it three times as often as
-      // The company blog kept every one through a rewrite in the company's voice. It is the move readers name first.
+      // a company blog kept every one through a rewrite in that blog's voice. It is the move readers name first.
       const cap = r1(Math.max(perPiece(0.9) * 1.5, 0.5));
       const always = p === 'CONTRAST_VERDICT';
       propose(`Keep ${PATTERN_LABEL[p]} ${always && a > 0.5 ? 'to my rate' : 'rare'}: at most ${cap} per 1,000 words.`, 'BOUNDARY',
@@ -351,7 +351,7 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
   //
   // THE AUTHOR'S RHYTHM, READ OFF THEIR OWN PIECES. It was proposed only where it separated the author
   // from a plain model's drafts, but a rewrite's short sentences come from its source, not the model: in
-  // two rewrites (toward the company blog and toward a technical author) 38% of sentences stayed at eight words or fewer
+  // two rewrites (toward a company blog and toward a technical author) 38% of sentences stayed at eight words or fewer
   // against the authors' typical 19 to 20%, and no rule pulled them. So the mix is proposed from the
   // author's pieces alone. Its tolerance is their 80th-percentile piece (about 12 to 14% of sentences for
   // both authors), their typical range rather than their outliers; the 90th percentile, rounded up, had
