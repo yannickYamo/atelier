@@ -54,10 +54,11 @@ jobs:
       - run: npm run build
       - run: npm test
 
-      # The plugin tree is committed because a marketplace install reads it from the checkout. A
-      # source edit without a rebuild would ship the old protocol while looking current.
-      - name: the committed plugin tree is what the generator emits
-        run: git status --porcelain -- plugins/hosts .claude-plugin && test -z "$(git status --porcelain -- plugins/hosts .claude-plugin)"
+      # The plugin tree and the standalone skills are committed because a marketplace install and
+      # `npx skills add` read them from the checkout. A source edit without a rebuild would ship the old
+      # protocol while looking current.
+      - name: the committed plugin tree and skills are what the generator emits
+        run: git status --porcelain -- plugins/hosts .claude-plugin skills && test -z "$(git status --porcelain -- plugins/hosts .claude-plugin skills)"
 
       # A known-vulnerable transitive dependency is a defect the suite cannot see.
       - run: npm audit --audit-level=high

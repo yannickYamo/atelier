@@ -1,9 +1,19 @@
 ---
-name: create
+name: atelier-create
 description: Build a writing skill from a folder of pieces written the way the user wants to write, their own or a style they admire. Use when the user wants a skill that writes like a set of examples.
 ---
 
 # Create a skill from writing you want to match
+
+## Before anything
+
+Atelier's guarantees are enforced by the `atelier` command, not by these instructions. Run
+`atelier --version` first. If it fails, stop, do not improvise the steps, and tell the user to install it:
+
+```bash
+git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link
+```
+
 
 The user gives a path to a folder of pieces written the way they want to write. You orchestrate the whole path and they never invoke an
 internal stage by hand.

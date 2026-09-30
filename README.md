@@ -78,7 +78,8 @@ cd atelier && npm install && npm run build && npm link
 ```
 
 Node 22 or later. In Claude Code: `/plugin marketplace add yannickYamo/atelier`, then
-`/plugin install atelier@atelier`. Steps that call a model need `ANTHROPIC_API_KEY` or any
+`/plugin install atelier@atelier`. For any agent that reads skills, `npx skills add yannickYamo/atelier`
+installs the four Atelier skills ([skills.sh](https://skills.sh)). Steps that call a model need `ANTHROPIC_API_KEY` or any
 OpenAI-compatible backend, and `atelier check` tests yours before anything is spent. Standards and outputs
 stay under `~/.atelier`, with no account and no telemetry. If you have no pieces to hand,
 [examples/blog](examples/blog/README.md) has a six-post corpus to try. [USAGE](docs/USAGE.md) has every command.

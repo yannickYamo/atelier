@@ -1,11 +1,19 @@
 ---
-name: ratify
+name: atelier-ratify
 description: Review and approve the rules Atelier proposed. Use when candidate rules are waiting for the user's decision.
-metadata:
-  internal: true
 ---
 
 # Ratification — this is where authority enters
+
+## Before anything
+
+Atelier's guarantees are enforced by the `atelier` command, not by these instructions. Run
+`atelier --version` first. If it fails, stop, do not improvise the steps, and tell the user to install it:
+
+```bash
+git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link
+```
+
 
 Nothing becomes part of the user's standard because a model proposed it or because you rendered it
 nicely. It becomes part of the standard when **the user says so**.
