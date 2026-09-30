@@ -138,7 +138,8 @@ describe('the commands no longer re-derive, and that is asserted where it could 
   });
 
   it('rollback REFUSES rather than installing an approximation it cannot reproduce', () => {
-    expect(src).toMatch(/getPackage\(L, sv\.materializedHash\)\s*\n\s*\?\? die\(/);
+    // Shared with `tend --auto` (rollbackTo): no package means a refusal, never a re-render.
+    expect(src).toMatch(/const pkg = store\.getPackage\(L, sv\.materializedHash\);\s*\n\s*if \(!pkg\) return \{ ok: false/);
   });
 
   it('rollback moves the active pointer only after the package is in hand', () => {

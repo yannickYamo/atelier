@@ -161,3 +161,38 @@ export function findRecurrences(input: {
   const weight = (r: Recurrence): number => (r.kind === 'GAP' || r.kind === 'MISSED_RULE' ? r.count * 3 : r.kind === 'BROKEN_DRAFT' ? r.broken : r.refused * 2);
   return out.sort((a, b) => weight(b) - weight(a));
 }
+
+/**
+ * HOW OFTEN EACH MEASURED RULE BREAKS, PER VERSION. Internal: the loop reads it, the person is not shown
+ * it. Counted on first drafts (`violatedBefore`), per SkillVersion under one standard: a version changes
+ * how the rules are carried, never the rules, so the same rule ids compare across versions. Versions in
+ * the order they were first used.
+ */
+export interface VersionBreakRates { readonly skillVersionHash: string; readonly firstUsed: string; readonly runs: number; readonly broken: Readonly<Record<string, number>> }
+export function ruleBreakRates(invocations: readonly InvocationRecord[], standardVersionHash?: string): VersionBreakRates[] {
+  const by = new Map<string, { firstUsed: string; runs: number; broken: Record<string, number> }>();
+  for (const i of invocations) {
+    if (standardVersionHash && i.standardVersionHash !== standardVersionHash) continue;
+    const v = by.get(i.skillVersionHash) ?? { firstUsed: i.at, runs: 0, broken: {} };
+    v.runs += 1; if (i.at < v.firstUsed) v.firstUsed = i.at;
+    for (const id of i.repair?.violatedBefore ?? []) v.broken[id] = (v.broken[id] ?? 0) + 1;
+    by.set(i.skillVersionHash, v);
+  }
+  return [...by.entries()].map(([skillVersionHash, v]) => ({ skillVersionHash, ...v })).sort((a, b) => a.firstUsed.localeCompare(b.firstUsed));
+}
+
+/** The fewest uses of each version before their break rates are compared, and the rise that counts. */
+export const REGRESSION_MIN_RUNS = 3;
+export const REGRESSION_MIN_RISE = 0.25;
+
+/**
+ * Rules the `current` version breaks clearly more often than `previous` did: at least REGRESSION_MIN_RUNS
+ * uses of each, and a rise of at least REGRESSION_MIN_RISE in the share of first drafts that break it.
+ */
+export function regressedRules(rates: readonly VersionBreakRates[], current: string, previous: string): { requirementId: string; before: number; after: number }[] {
+  const a = rates.find((r) => r.skillVersionHash === previous); const b = rates.find((r) => r.skillVersionHash === current);
+  if (!a || !b || a.runs < REGRESSION_MIN_RUNS || b.runs < REGRESSION_MIN_RUNS) return [];
+  const ids = new Set([...Object.keys(a.broken), ...Object.keys(b.broken)]);
+  return [...ids].map((id) => ({ requirementId: id, before: (a.broken[id] ?? 0) / a.runs, after: (b.broken[id] ?? 0) / b.runs }))
+    .filter((x) => x.after - x.before >= REGRESSION_MIN_RISE).sort((x, y) => (y.after - y.before) - (x.after - x.before));
+}

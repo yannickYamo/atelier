@@ -13,7 +13,7 @@
 import type { StoredSignal } from '../observers/selection.js';
 import type { Voice } from '../compiler/voice.js';
 import type { ContrastPair } from '../compiler/contrast-examples.js';
-import type { Recurrence } from '../mining/recurrence.js';
+import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
@@ -161,7 +161,11 @@ export function setVoice(l: StoreLayout, voice: Voice | null): void {
 }
 
 /** The last `atelier mine` report, so `--add <n>` names the item the owner read. */
-export interface MiningReport { readonly at: string; readonly standardVersionHash?: string; readonly items: readonly Recurrence[] }
+export interface MiningReport {
+  readonly at: string; readonly standardVersionHash?: string; readonly items: readonly Recurrence[];
+  /** internal: each measured rule's first-draft break rate per skill version (core/mining/recurrence.ts) */
+  readonly breakRates?: readonly VersionBreakRates[];
+}
 export function getMining(l: StoreLayout): MiningReport | null {
   const p = join(dirs(l).base, 'mine.json');
   return existsSync(p) ? readJson<MiningReport>(p, { what: 'the last mining report' }) : null;
