@@ -105,7 +105,10 @@ describe('the contrast pass proposes a connective floor only where it separates,
     const read = [0, 1, 2, 3].map(author);
     const same = read.map((p) => p.text);
     const rules = deriveContrastRules(read, [], same, 'MACHINE_DISCOVERED');
-    expect(rules.filter((r) => ['TERM_RATE', 'RATIO', 'DISTRIBUTION'].includes(r.requirement.measurement!.observer))).toEqual([]);
+    expect(rules.filter((r) => ['TERM_RATE', 'RATIO'].includes(r.requirement.measurement!.observer))).toEqual([]);
+    // The sentence mix is the author's own rhythm, read off their pieces: proposed either way, claiming no gap.
+    const mix = rules.find((r) => r.requirement.measurement!.observer === 'DISTRIBUTION');
+    expect(mix?.requirement.statement).toMatch(/^Mix sentence lengths as I do/);
   });
 });
 
