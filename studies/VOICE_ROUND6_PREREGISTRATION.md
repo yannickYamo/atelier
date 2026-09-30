@@ -6,7 +6,7 @@ follows a disappointing result (position paper §8b.6); a failure is reported as
 
 ## What is being confirmed
 
-Commit de80739 and after: a catalogue of the model's machine-writing moves held to each author's rate,
+Commit 00ceee7 and after: a catalogue of the model's machine-writing moves held to each author's rate,
 the contrast move counted in every spelling, a per-skill tell lexicon learned from the skill's own
 drafts, repair that refuses a displaced or slotted sentence alone and retries, two drafts by default
 ranked by machine moves, register counted on contractible forms. Nothing is tuned to one author: every
