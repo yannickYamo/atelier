@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor, claimInstrumentOf } from '../checks.js';
-import { refineToStandard, checkDraftAsync, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraftAsync, enforceClaims, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -355,7 +355,8 @@ interface DraftContext { readonly name: string; readonly std: Standard; readonly
  * CHECKED BEFORE IT IS DELIVERED. Every measured rule is counted on the draft, and only the spans that
  * break a REQUIRED one are rewritten, at most twice (plus one ACCURACY pass first), each rewrite kept only
  * if it breaks nothing that held. Then, where the taste reader has earned it, the passages it quotes as
- * missing a VETO rule are rewritten and kept only if the reader confirms them.
+ * missing a VETO rule are rewritten and kept only if the reader confirms them. An invented claim is cut
+ * in code at every step, never reworded, and the report is counted on the text that ships.
  */
 function refineDraft(c: DraftContext & { readonly client: InferenceClient; readonly budget: Budget }) {
   return async (draft: string) => {
@@ -370,12 +371,20 @@ function refineDraft(c: DraftContext & { readonly client: InferenceClient; reado
       return { output: r.output, repair: r.repair };
     }
     taste.taken = t.readings;
-    if (!t.targeted.length) return { output: r.output, repair: r.repair };
+    if (!t.targeted.length || t.output === r.output) return { output: r.output, repair: r.repair };
+    // THE REPORT IS THE DELIVERED TEXT'S. The taste rewrite changed the text after the counted checks
+    // read it, so the text is held to the claim floor again and every figure below is counted on it.
+    const final = await enforceClaims(c.name, c.std, t.output, c.checks);
     const fixed = { targeted: t.targeted, fixed: t.fixed, why: t.why };
-    return { output: t.output, repair: r.repair ? { ...r.repair, taste: fixed }
-      : { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, taste: fixed, why: t.why } };
+    const cut = [...(r.repair?.storiesCut ?? []), ...final.cut];
+    const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: t.why };
+    return { output: final.text, repair: { ...base, violatedAfter: brokenIn(final.report), taste: fixed, ...(cut.length ? { storiesCut: cut } : {}) } };
   };
 }
+
+/** The REQUIRED rules a report finds broken. */
+const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
+  r.checked.filter((x) => x.materiality === 'REQUIRED' && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
 
 /**
  * SEVERAL DRAFTS, THE BEST BY COUNT (`draftOrder`): the fewest REQUIRED rules broken, then the fewest

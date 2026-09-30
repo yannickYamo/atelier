@@ -123,7 +123,7 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     }
     // A MIX OF SENTENCE LENGTHS IS THE AUTHOR'S RHYTHM, AND IT INSTRUCTS when their unread work bears it
     // out, like any count. Held only as a way to choose between drafts, it never moved a draft: in a
-    // rewrite toward the company's voice every version kept the source's short sentences (a median of 11 words
+    // rewrite toward the company blog's voice every version kept the source's short sentences (a median of 11 words
     // against the company's 15). The observer points repair at the sentences in the overfull band and names the
     // band to rewrite them into (../observers/balance.ts, DISTRIBUTION).
     const lexicon = p.measurement.observer === 'LEXICON';

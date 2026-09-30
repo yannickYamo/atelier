@@ -12,7 +12,7 @@ import { findPattern, patternRate, fragmentShare, deltaReference, styleDistanceD
 import { deriveContrastRules } from '../core/observers/contrast.js';
 import { measure } from '../core/observers/registry.js';
 import { unsourcedClaims } from '../core/loop/claims.js';
-import { checkDraft } from '../core/loop/run-repair.js';
+import { checkDraft, CLAIM_SLOT } from '../core/loop/run-repair.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import * as store from '../core/state/store.js';
 import { withDetails } from './fixtures.js';
@@ -135,7 +135,7 @@ describe('through the binary: material, and several drafts chosen by count', () 
   });
   afterAll(() => { backend.kill(); });
 
-  it('an invented story becomes a placeholder; material added to the skill is served and stored', () => {
+  it('an invented story becomes a slot, in code; material added to the skill is served and stored', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-ag-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-ag-proj-'));
     const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
     const run = (...a: string[]): string => execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env });
@@ -144,7 +144,8 @@ describe('through the binary: material, and several drafts chosen by count', () 
     run('build', '--name', 'inc');
     const be = ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
     const out = run('invoke', '--skill', 'inc', 'write it', '--drafts', '2', '--placeholders', ...be);
-    expect(out).toContain('[your story: a time a loop broke production]');
+    expect(out).toContain(CLAIM_SLOT);
+    expect(out).not.toContain('broke production');
     expect(withDetails(out)).toMatch(/wrote 2 drafts and kept one/);
     const [rec] = store.listInvocations({ root: data, skillName: 'inc' });
     expect(rec.repair?.violatedBefore).toEqual(['UNSOURCED']);

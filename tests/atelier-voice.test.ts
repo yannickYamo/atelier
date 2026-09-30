@@ -192,7 +192,7 @@ describe('round 5 design: describe the voice, guard the edges, never displace', 
     const { refineToStandard, checkDraft: check } = await import('../core/loop/run-repair.js');
     const std = { standardVersionHash: 's', requirements: [] } as unknown as StandardVersion;
     const draft = 'Review matters. Two years ago I shipped a migration that broke billing for a week. Tests would have caught it.';
-    expect(check('x', std, draft).checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans[0].why).toMatch(/rewrite the span without it/);
+    expect(check('x', std, draft).checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans[0].why).toMatch(/the sentence is cut/);
     expect(check('x', std, draft, { placeholders: true }).checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans[0].why).toMatch(/placeholder/);
     const client = { complete: async () => ({ json: { replacements: [{ id: 1, text: 'Migrations are where this bites.' }] }, cost: { basis: 'API_METERED', billingUsd: 0 } }) } as never;
     const r = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'x', std, draft, 2, {});

@@ -1,6 +1,6 @@
 # How Atelier compares
 
-**Against a strong model, against skill and prompt optimizers, against style checkers, and against fine-tuning. The [README](../README.md) has the one-table version.**
+**Against a strong model, against voice tools, against skill and prompt optimizers, against style checkers, and against fine-tuning. The [README](../README.md) has the one-table version.**
 
 
 **Against a strong model, on its own or with your examples pasted in:**
@@ -20,13 +20,15 @@
 
 | | what it optimizes | where the objective comes from | who can change the objective | runs its own loop |
 |---|---|---|---|---|
-| [GEPA](https://arxiv.org/abs/2507.19457) | prompt text, by reflecting on rollouts | a metric you supply | the metric's author | yes, given the metric |
+| [GEPA](https://arxiv.org/abs/2507.19457) | any text artifact (prompts, code, skills since its `optimize_anything` API), by reflecting on rollouts | a metric you supply | the metric's author | yes, given the metric |
 | [SkillOpt](https://arxiv.org/abs/2605.23904) | a skill file, through trajectory-driven edits | a validation gate you supply | the gate's author | yes |
-| SSO (arXiv:2607.28777) | a skill, without labels | its own judge's win margin | the judge | yes, scored by its own judge |
-| EvoSkill (arXiv:2603.02766) | a set of skills, from execution failures | the task's success signal | whoever owns the task | yes |
+| [SSO](https://arxiv.org/abs/2607.28777) | a skill, without labels | its own judge's win margin | the judge | yes, scored by its own judge |
+| [EvoSkill](https://arxiv.org/abs/2603.02766) | a set of skills, from execution failures | the task's success signal | whoever owns the task | yes |
 | **Atelier** | **how your standard is carried, never the standard** | **your work, approved by you rule by rule** | **only you** | **yes, below your standard** |
 
-Each of them needs a score someone else wrote, or lets its own judge decide. Taste has no such score.
+Each of them needs a score someone else wrote, or lets its own judge decide. Scores for taste do exist
+(a judge picking the real piece out of a lineup, an authorship-verification model), but they are proxies
+someone else owns, and Atelier never lets one set the standard.
 Atelier borrows two ideas from their search, a reflective choice among legal changes and a Pareto screen
 over your measured rules, and applies them to how your rules are carried, never to their text.
 
@@ -35,9 +37,23 @@ change installs only when your measured rules improve and none regresses beyond 
 count reads are listed, not guarded. Atelier hasn't been benchmarked against these systems on a shared
 task yet. The difference is in the architecture, and you can check it in the code.
 
-**Against style checkers:** Vale, proselint, Acrolinx and Writer hold copy to rules someone wrote down.
-Atelier reads the rules off your own work, checks them on pieces it never read, and has you approve them.
-Its checker is the last step, not the first.
+**Against voice tools that learn from your samples** (Every's Spiral, Writer's voice, Jasper IQ, Typeface,
+Lex, Claude Styles, Noren): learning a voice from samples is now common, and several check or score every
+draft. Noren cites examples from your writing for each pattern it finds; Spiral checks each draft with a
+judge that tries to pick it out of your real pieces, and feeds the judge's reasons back into its style
+engine. What none of them does, as far as their public material shows (September 2026): count each rule
+against a plain model's rate, confirm it on pieces it never read, freeze the approved standard as a hashed
+version only you can change, and cut invented stories and figures by checking them against what you
+supplied. Grammarly's fact checker checks against the web, not against your material.
+
+**Against style checkers:** Vale, proselint and Markup AI (formerly Acrolinx) hold copy to rules someone
+wrote down, and Vale keeps them versioned in git, as Atelier does its standard. Atelier reads the rules off
+your own work, checks them on pieces it never read, and has you approve them. Its checker is the last step,
+not the first.
+
+**Against grounding checkers** such as [MiniCheck](https://arxiv.org/abs/2404.10774): checking claims
+against a source with a small model is established. Atelier applies it to a person's own material, and
+deletes what fails rather than flagging it.
 
 **Against fine-tuning:** weights can't be diffed against what you meant. A standard can, and it moves to
 another model tomorrow without retraining.
