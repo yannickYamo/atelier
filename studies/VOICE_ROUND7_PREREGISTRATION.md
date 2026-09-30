@@ -6,7 +6,7 @@
 
 Round 6 (VOICE_ROUND6_PREREGISTRATION.md) failed its gate narrowly: machine-writing moves 0.26 per 1,000
 words against a bar of 0.22, one invented story, stylometry 0.005 below RAW. Each miss traced to an
-enforcement defect, fixed without changing the design (commits b9105c5, and after):
+enforcement defect, fixed without changing the design (commits e631338, and after):
 
 - a pooled cap let a long piece spend the author's small budget on moves they never make; families the
   author never uses are now banned, the rest held to their rate;

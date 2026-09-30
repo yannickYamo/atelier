@@ -14,7 +14,7 @@ Four blind rounds on one public author's corpus (20 Substack posts) found:
 - the rebuilt skill (21 required rules) was ranked fourth of five and read as a template;
 - every repair pass that banned a tell displaced it onto a sibling at least once.
 
-The design under test (commit ee0c17c): a grounded persona with frequencies, whole pieces spanning the
+The design under test (commit 24d9d5f): a grounded persona with frequencies, whole pieces spanning the
 author's modes, reading rules required only when nearly always followed, weak signature bands, a
 register rule, a displacement guard, invented stories cut rather than slotted. Nothing in it is tuned to
 this author: every threshold is derived from whatever corpus a skill is built on.
