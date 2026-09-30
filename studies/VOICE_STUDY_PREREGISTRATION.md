@@ -20,8 +20,8 @@ pieces pasted into the prompt, **without changing or inventing a claim**?
 
 ## The author
 
-**a company blog** (the company's site): full essays, free to read, a company writing as "we". The corpus
-is its product, engineering-practice and quality essays (22, fetched from `<public RSS feed>`
+**A public company blog**: full essays, free to read, a company writing as "we". The corpus
+is its product, engineering-practice and quality essays (22, fetched from its public RSS feed
 and hashed here), excluding customer case studies, funding announcements, post-mortems and stubs.
 
 - Three essays **outside** the corpus are set aside as the readers' reference (below).
@@ -43,7 +43,7 @@ rule is chosen by hand.
 
 **Rhythm (decided 2026-09-30, in the product, not for this study).** The sentence-mix rule is read off
 the author's own pieces, with a tolerance of their 80th-percentile piece (about 12 to 14% of sentences on
-the company blog and on a technical author), and instructs when their unread work bears it out. A flat 12% was considered
+the company blog and on the technical author), and instructs when their unread work bears it out. A flat 12% was considered
 and rejected: only 11 of the company's 16 essays sit within it, so the rule would reject the company's own writing
 and discovery would drop it. The skill in this study is built with that rule as shipped.
 
@@ -64,7 +64,7 @@ letter is which; a blind guessed right significantly above chance is reported as
 ## Readers
 
 **Three**: the owner and two people the owner names. Each first reads the three reference essays, then
-ranks each brief's three pieces by how much they sound like the company blog wrote them, with no model help, and
+ranks each brief's three pieces by how much they sound like the company wrote them, with no model help, and
 marks sentences that read machine-written. All forms are handed in before any key is opened.
 
 **CONFIRM (readers):** the two outside readers, named here.
@@ -75,7 +75,9 @@ A **win** is a read (one reader, one brief) in which ATELIER is ranked first. Th
 
 **Voice is shown if both hold:**
 1. ATELIER is first in at least **13 of 24** reads. Against a chance rate of one in three, that has
-   p = 0.028 (`binomialUpperTailP(13, 24, 1/3)`, core/stats). Power: 0.79 if ATELIER truly wins 60% of reads.
+   p = 0.028 (`binomialUpperTailP(13, 24, 1/3)`, core/stats). Power, if ATELIER truly wins 60% of reads: 0.79 for
+   this condition alone, 0.63 with the next one too (simulated); the chance both hold when ATELIER wins one
+   read in three is 0.014.
 2. At least **2 of the 3 readers** rank ATELIER first in at least 5 of their 8 briefs, so one reader
    cannot carry the result.
 
@@ -96,7 +98,7 @@ invented claim in ATELIER fails the study whatever the ranks.
 
 | Result | What follows |
 |---|---|
-| Voice shown and the guard holds | Atelier 1.0 as a voice engine with a guard; the README says so, with this study |
+| Voice shown and the guard holds | Atelier 1.0 as a voice engine with a guard; the README cites this study |
 | Guard holds, voice not shown | Atelier 1.0 as a guard; voice listed as tested and not shown; no further voice round |
 | The guard fails | recorded; fixed as a defect before any release claims the guard |
 

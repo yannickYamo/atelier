@@ -17,10 +17,11 @@
 // A claim is supported when the person supplied it: their material, or the task they typed. A figure
 // is supported when that exact number appears there as a whole number, or when the sentence links a
 // source the person supplied (a link the draft made up supports nothing). A story is supported when most of its content words appear in one passage of the material.
-// Unsupported claims are never rewritten into other claims. By default the repair cuts each one, keeping
-// the point it made, and the output lists where the person's own story would fit; with `placeholders`
-// the repair leaves a bracketed slot saying what belongs there instead. Each claim's `why` says which,
-// because it is the instruction the repair model reads.
+// Unsupported claims are never rewritten: the loop deletes each flagged unit in code (./run-repair.ts,
+// enforceClaims), or leaves a bracketed slot when the person asked for slots, and lists what it cut.
+//
+//   EVIDENCE    a first person gathering evidence with nothing shown ("I checked our logs and…", "we
+//               tested this", "a customer told me…"), undated and unnumbered but a claim all the same
 
 import { sentencesOf, wordsOf, type Sentence } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
@@ -84,6 +85,19 @@ const PARTICULAR_TIME = /\b(?:years? ago|months? ago|weeks? ago|days? ago|last (
  * from a memory.
  */
 const ANECDOTE = /\b(?:I|we)\b[^.!?]{0,20}?\b(?:had|watched|saw|asked|let|gave|told|paired|coached|helped|reviewed)\b (?:an? |my |one |the |our )?(?:agent|model|team|colleague|engineer|intern|junior|senior|client|customer|manager|startup|developer|contractor)s?\b/i;
+/**
+ * EVIDENCE CLAIMED, NOTHING SHOWN. "I checked our logs and most failures came from retries", "we tested
+ * this internally", "a customer told me it changed how they work": no date, no figure, no name, and still a
+ * claim that something was looked at and found. A model writes these to sound grounded, and the checks
+ * above passed every one of them. A first person doing a verb of gathering evidence counts when it is a
+ * verb only evidence takes (tested, measured, surveyed…) or when what was examined is named (logs,
+ * tickets, the data, customers…). A view ("I think", "in my experience") is not evidence and stays.
+ */
+const EVIDENCE_ACT = /\b(?:I|we|my team|our team)(?:['’]ve| have| had)?\b[^.!?]{0,15}?\b(?:tested|measured|surveyed|interviewed|audited|benchmarked|polled|asked around|ran the numbers|crunched the numbers)\b/i;
+const EVIDENCE_LOOK = /\b(?:I|we|my team|our team)(?:['’]ve| have| had)?\b[^.!?]{0,15}?\b(?:checked|looked (?:at|into|through)|reviewed|pulled|analy[sz]ed|went through|dug into|combed through|counted|tracked|traced|compared|talked to|spoke (?:to|with)|asked|saw|seen|noticed)\b[^.!?]{0,40}?\b(?:logs?|data|tickets?|numbers|metrics|dashboards?|analytics|customers?|users?|clients?|teams?|engineers?|results?|incidents?|feedback|interviews?|surveys?|codebase|repos?|pull requests|PRs|production|support queue|churn|usage|traces)\b/i;
+/** "We should have tested", "I'd check", "we need to measure": what one would or should do, not what was done. */
+const NOT_DONE = /\b(?:I|we|my team|our team)(?:['’]d|['’]ll)?\s+(?:should|could|would|might|must|will|can|may|need to|want to|plan to|have to|never)\b|\b(?:I|we)['’](?:d|ll)\b/i;
+const REPORTED_TO_US = /\b(?:a|one|some|several|many|most|our|the) (?:customers?|users?|clients?|readers?|engineers?|developers?|people|teams?|prospects?|buyers?)\b[^.!?]{0,20}?\b(?:told (?:me|us)|tell (?:me|us)|said to (?:me|us)|wrote to (?:me|us)|emailed (?:me|us)|keep telling (?:me|us))\b/i;
 /** SOMEONE ELSE'S STORY, TOLD AS KNOWN FIRST-HAND: "a team I worked with", "teams I've talked to have". */
 const SECOND_HAND = /\b(?:(?:a|one|the|several|many|most|some) )?(?:teams?|clients?|compan(?:y|ies)|customers?|colleagues?|friends?|engineers?|managers?|startups?|leads?|CTOs?|orgs?|organi[sz]ations?) (?:I|we)(?:['’]ve| have)? (?:worked with|know|knew|advised|talked to|spoke (?:to|with)|met|coached|consulted (?:for|with)|spent time with)\b/i;
 /**
@@ -105,13 +119,13 @@ export interface Claim extends Span { readonly kind: 'EXPERIENCE' | 'FIGURE' | '
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
 const numbersIn = (s: string): string[] => (s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, ''));
 
-/** What the repair is told to do with each kind of claim: cut it (the default), or leave a slot. */
+/** What the person is told about each kind of claim: it is cut (the default), or a slot is left. */
 const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot: string }>> = {
-  EXPERIENCE: { cut: 'a first-person story that is not in your material or your request: rewrite the span without it, keeping the point it made, and do not invent another',
+  EXPERIENCE: { cut: 'a first-person story or claim of evidence that is not in your material or your request: the sentence is cut; if it is yours, add it to your material (atelier material)',
     slot: 'a first-person story that is not in your material or your request; replace it with a placeholder like [your story: a time you ...]' },
-  SOURCE: { cut: 'a quotation from someone unnamed, not in your material or your request: make the point in your own words without the attribution, or cut it',
+  SOURCE: { cut: 'a quotation from someone unnamed, not in your material or your request: the sentence is cut; if it is yours, add it to your material (atelier material)',
     slot: 'a quotation from someone unnamed, not in your material or your request; replace it with a placeholder like [source: who said this]' },
-  FIGURE: { cut: 'a figure presented as a finding, not in your material or your request: say it without the number, or cut the claim',
+  FIGURE: { cut: 'a figure presented as a finding, not in your material or your request: the sentence is cut; if it is yours, add it to your material (atelier material)',
     slot: 'a figure presented as a finding, not in your material or your request; replace the number with a placeholder like [figure: what it measures, and its source]' },
 };
 
@@ -133,7 +147,8 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
   const ss = claimUnitsOf(text);
   let inStory = false;
   for (const s of ss) {
-    const opens = (FIRST_PERSON_PAST.test(s.text) && PARTICULAR_TIME.test(s.text)) || ANECDOTE.test(s.text) || SECOND_HAND.test(s.text);
+    const opens = (FIRST_PERSON_PAST.test(s.text) && PARTICULAR_TIME.test(s.text)) || ANECDOTE.test(s.text) || SECOND_HAND.test(s.text)
+      || ((EVIDENCE_ACT.test(s.text) || EVIDENCE_LOOK.test(s.text)) && !NOT_DONE.test(s.text)) || REPORTED_TO_US.test(s.text);
     if (ANONYMOUS_SOURCE.test(s.text) && !storySupported(s.text)) {
       out.push({ ...s, kind: 'SOURCE', why: why('SOURCE') });
       inStory = false;
