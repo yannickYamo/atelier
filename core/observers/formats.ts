@@ -35,6 +35,13 @@ export interface FormatProfile {
   readonly words?: readonly [number, number];
   /** every specific must trace to the person's material or task: nothing passes as "public" */
   readonly strictSpecifics: boolean;
+  /**
+   * What happens to a specific the claim check cannot trace. `cut` (the default) for writing published
+   * under the person's name, where an untraced story or figure is invented. `list` where specifics are
+   * technical knowledge the reader checks, not claims about the person: an assistant's answer names
+   * versions, costs and time estimates the person never supplied, and cutting them took the answer apart.
+   */
+  readonly claims?: 'cut' | 'list';
 }
 
 export const FORMATS: Readonly<Record<string, FormatProfile>> = {
@@ -46,6 +53,7 @@ export const FORMATS: Readonly<Record<string, FormatProfile>> = {
   'white-paper': { id: 'white-paper', label: 'a white paper', words: [2000, 12000], strictSpecifics: true },
   'financial-report': { id: 'financial-report', label: 'a financial report', strictSpecifics: true },
   'contract': { id: 'contract', label: 'a contract', strictSpecifics: true },
+  'assistant-reply': { id: 'assistant-reply', label: 'an assistant reply', strictSpecifics: false, claims: 'list' },
 };
 
 /** The profile a class names, if it is a known format. Unknown classes carry none: nothing is assumed. */

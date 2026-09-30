@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor, claimInstrumentOf } from '../checks.js';
-import { refineToStandard, checkDraftAsync, enforceClaims, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -215,7 +215,7 @@ export async function invoke(): Promise<void> {
     std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L) }) : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
-      return (r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.spans ?? []).map((sp) => sp.text);
+      return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts));
 
   reportDrift(report, L, sv, rec);
@@ -378,7 +378,9 @@ function refineDraft(c: DraftContext & { readonly client: InferenceClient; reado
     const fixed = { targeted: t.targeted, fixed: t.fixed, why: t.why };
     const cut = [...(r.repair?.storiesCut ?? []), ...final.cut];
     const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: t.why };
-    return { output: final.text, repair: { ...base, violatedAfter: brokenIn(final.report), taste: fixed, ...(cut.length ? { storiesCut: cut } : {}) } };
+    const toCheck = [...new Set([...(r.repair?.claimsToCheck ?? []), ...final.listed, ...listedClaims(final.report)])];
+    return { output: final.text, repair: { ...base, violatedAfter: brokenIn(final.report), taste: fixed, ...(cut.length ? { storiesCut: cut } : {}),
+      claimsToCheck: toCheck.length ? toCheck : undefined } };
   };
 }
 
@@ -515,8 +517,10 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   if (r) {
     report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
+    const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
+    if (heavy) report.say(`Warning: ${heavy}.`);
     if (r.violatedAfter.length) report.say(`Still broken after repair: ${r.violatedAfter.join(', ')}. ${r.why}`);
-    else report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
+    else if (!heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);
@@ -534,6 +538,10 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
       const line = `(invented-claim check: ${n})`;
       if (alarming) report.say(line); else report.detail(line);
     }
+  }
+  if (r?.claimsToCheck?.length) {
+    report.say(`${r.claimsToCheck.length} specific(s) are not in your material: left in for you to check before you use this (listed in the details).`);
+    for (const c of r.claimsToCheck) report.detail(`    check: "${c.slice(0, 160)}"`);
   }
   if (r?.storiesCut?.length) {
     report.say(`Cut ${r.storiesCut.length} invented stor(ies), quotation(s) or figure(s); your own would fit where they were (listed in the details).`);

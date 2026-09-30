@@ -588,6 +588,8 @@ export interface RepairRecord {
   readonly integrityReverted?: readonly string[];
   /** invented stories or figures the repair cut (generation's default): where a story of the person's own would fit */
   readonly storiesCut?: readonly string[];
+  /** specifics a `list` format left in for the person to check (core/observers/formats.ts, `claims`) */
+  readonly claimsToCheck?: readonly string[];
   /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
   readonly revertedRules?: readonly string[];
   /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */

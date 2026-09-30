@@ -33,7 +33,7 @@
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { sha, die, flag, argv, positional, clientFor, proposerModel, loadSession, saveSession, authoredIdAllocator, type ProposalSet, type ProposedRule } from '../runtime.js';
-import { groundedInUserText } from '../../core/ratification/grounding.js';
+import { groundedInUserText, uncarriedSections } from '../../core/ratification/grounding.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
 import { spend, type Budget } from '../../core/inference/client.js';
@@ -207,6 +207,13 @@ export async function skill(): Promise<void> {
     if (!p.grounded) console.log('      ^ MY READING — these words are not in what you said. It needs your decision.');
   });
 
+  // What was said and became no rule: listed, so a dropped rule is seen before anything binds.
+  const dropped = uncarriedSections(prompt ?? '', pset.rules);
+  if (dropped.length) {
+    console.log(`\nNot carried by any rule above (${dropped.length}): say it again, or add it with \`atelier amend\` after accepting:`);
+    for (const d of dropped) console.log(`  - "${d}"`);
+  }
+
   const invented = pset.rules.filter((p) => !p.grounded);
   const mine = pset.rules.length - invented.length;
   console.log(`\n${mine} of these ${mine === 1 ? 'is' : 'are'} yours, in your own words.`
@@ -256,6 +263,18 @@ export async function skill(): Promise<void> {
   // governs, not a claim about the standard, and the person has just seen it in the proposal.
   process.env.ATELIER_ORCHESTRATED = '1';
   if (!argv.includes('--work-type')) { argv.push('--work-type', workType); }
+  // REPLIES ARE CHECKED AS REPLIES. A skill for answers (a coding assistant, support, review comments)
+  // names versions, costs and estimates the person never supplied; cutting each as invented took a
+  // technical answer apart. Its specifics are listed for the reader to check (formats.ts, assistant-reply).
+  if (!flag('--class') && isReplyWork(workType)) {
+    argv.push('--class', 'assistant-reply');
+    console.log(`Checked as assistant replies: specifics not in your material are listed for you to check, not cut. `
+      + '(`--class none` to cut them instead.)');
+  }
   ratifyClose();
   await build(flag('--name') ?? basename(process.cwd()));
 }
+
+/** Work that is a reply to someone: an assistant's answers, support replies, review comments. */
+export const isReplyWork = (workType: string): boolean =>
+  /\b(repl(?:y|ies)|answers?|assistant|chat|support|review comments?|code reviews?)\b/i.test(workType);
