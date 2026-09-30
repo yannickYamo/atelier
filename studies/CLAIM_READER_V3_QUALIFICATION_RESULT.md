@@ -1,7 +1,7 @@
 # Result: qualifying the claim reader, version 3
 
 Pre-registration: [CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md](CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md),
-sealed in `6d022b5` and merged to `main` before any output. Instrument `a173339d` (reader `claude-haiku-4-5`,
+sealed in `a59f986` and merged to `main` before any output. Instrument `a173339d` (reader `claude-haiku-4-5`,
 decision version 3) and harness sha256 `b36a546b…`, both checked unchanged before the run. Pieces: 30
 Lenny's Newsletter product essays no study had used; 25 TEST. Spent: $7.98 of the $8 cap.
 
