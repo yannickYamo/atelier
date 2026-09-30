@@ -227,8 +227,8 @@ const main = async (): Promise<void> => {
       }
       // THE SIX VERBS A SKILL IS LIVED WITH, IN THE ORDER IT IS LIVED, THEN EVERY COMMAND ON ONE LINE:
       // AGENTS.md promises --help lists every command, and a newcomer should not have to read forty.
-      console.log('atelier: your standard, learned from your work, kept in every draft.\n');
-      console.log('  atelier new <folder> "<what it is for>"      create a skill from your best work');
+      console.log('atelier: a writing standard learned from the pieces you choose, kept in every draft.\n');
+      console.log('  atelier new <folder> "<what it is for>"      create a skill from writing you want to match');
       console.log('  atelier invoke --skill <name> "<task>"       write with it (or /<name> in Claude Code)');
       console.log('  atelier verify --skill <name> <file>         check any text (exit 1 = a REQUIRED rule broken)');
       console.log('  atelier material --skill <name> <notes.md>   your real stories and figures, so none are invented');
