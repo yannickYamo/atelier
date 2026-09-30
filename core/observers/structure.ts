@@ -118,7 +118,10 @@ function edgeObserver(id: 'OPENING' | 'CLOSING'): Observer {
       const hits = findTerms(para.text, list(p, 'avoid')).map((s) => ({ ...s, start: s.start + para.start, end: s.end + para.start,
         why: `${where} uses "${s.text}"` }));
       const lo = num(p, 'minWords'); const hi = num(p, 'maxWords');
-      const long = hi !== null && words > hi; const short = lo !== null && words < lo;
+      // A MINIMUM IS FOR A PIECE LONG ENOUGH TO HAVE AN OPENING. In a two-line answer the first paragraph is
+      // the answer: "Run `npm ci`, then retry." failed an opening of 7 to 50 words for being correct and
+      // brief. The minimum holds only when the whole text is at least four times it; the maximum always.
+      const long = hi !== null && words > hi; const short = lo !== null && words < lo && wordsOf(text).length >= lo * 4;
       const problems = [...hits.map((h) => `"${h.text}"`), long ? `${words} words (at most ${hi})` : '', short ? `${words} words (at least ${lo})` : ''].filter(Boolean);
       // The value counts what is wrong, so less is better: each banned phrase, plus the words outside the band.
       const off = hits.length + (long ? words - (hi ?? 0) : 0) + (short ? (lo ?? 0) - words : 0);
@@ -172,5 +175,88 @@ export const HEADINGS: Observer = {
     const detail = `${hs.length} heading(s)${words >= 300 ? `, ${rate} per 1,000 words` : ''}`;
     if (!spans.length && !rateBad) return { verdict: 'MET', spans: [], value: spans.length, detail };
     return { verdict: 'VIOLATED', spans, value: spans.length, detail: `${detail}; ${spans.length} heading(s) break the rule${rateBad ? `; ${rate} per 1,000 words is outside ${lo1k ?? 0}–${hi1k ?? '∞'}` : ''}` };
+  },
+};
+
+/**
+ * WHAT A PIECE MUST CONTAIN. Every other observer bans or caps: a phrase, a length, a rate. A standard for
+ * a report, a contract, a template or an answer also says what has to be there: a Recommendation section
+ * before the Bets, a figure in every kill criterion, a last line that is the next step. Those were only
+ * read by the taste reader, which reports and never enforces. This counts them.
+ *
+ *   sections=a|b|c   those headings present, in that order
+ *   in=first|last|<heading>   where the rest applies: the first or last prose paragraph, or that section
+ *   any=x|y   at least `min` (default 1) mentions of any of these phrases
+ *   figure=1   at least one figure
+ *   starts=x|y   the scope's first words are one of these (list markers and emphasis set aside)
+ */
+export const PRESENCE: Observer = {
+  id: 'PRESENCE',
+  describe: (p) => {
+    const sections = list(p, 'sections'); const scope = list(p, 'in')[0]?.toLowerCase(); const any = list(p, 'any'); const starts = list(p, 'starts');
+    const where = !scope ? 'the text' : scope === 'first' ? 'the opening paragraph' : scope === 'last' ? 'the last paragraph' : `the "${scope}" section`;
+    const needs = [
+      sections.length ? `sections ${sections.map((s) => `"${s}"`).join(', ')}, in that order` : '',
+      any.length ? `${where} mentions ${num(p, 'min') && (num(p, 'min') ?? 1) > 1 ? `at least ${num(p, 'min')} of ` : ''}${any.map((a) => `"${a}"`).join(' or ')}` : '',
+      num(p, 'figure') ? `${where} carries a figure` : '',
+      starts.length ? `${where} starts with ${starts.map((a) => `"${a}"`).join(' or ')}` : '',
+    ].filter(Boolean);
+    return needs.join('; ');
+  },
+  validate: (p) => (list(p, 'sections').length || list(p, 'any').length || num(p, 'figure') || list(p, 'starts').length
+    ? null : 'needs sections, any, figure or starts'),
+  observe(text, p) {
+    if (!text.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
+    const problems: string[] = []; const spans: Span[] = [];
+    const heads = headingsOf(text);
+    const paras = paragraphsOf(text);
+    const lastPara = paras.at(-1);
+    // Sections present, in order.
+    const sections = list(p, 'sections');
+    if (sections.length) {
+      const at = sections.map((s) => heads.findIndex((h) => h.text.toLowerCase().includes(s.toLowerCase())));
+      const missing = sections.filter((_, i) => at[i] === -1);
+      const found = at.filter((i) => i !== -1);
+      const ordered = found.every((x, i) => i === 0 || x > found[i - 1]);
+      if (missing.length) problems.push(`no ${missing.map((m) => `"${m}"`).join(', ')} section`);
+      if (!ordered) problems.push(`sections out of order (${sections.join(' before ')})`);
+      if ((missing.length || !ordered) && lastPara) spans.push({ start: lastPara.start, end: lastPara.end, text: lastPara.text,
+        why: missing.length ? `add the ${missing.map((m) => `"${m}"`).join(', ')} section(s)` : `put the sections in the order ${sections.join(', ')}` });
+    }
+    // The scope the other checks read.
+    const scopeName = list(p, 'in')[0]?.toLowerCase();
+    let scope: { start: number; end: number; text: string } | null = { start: 0, end: text.length, text };
+    if (scopeName === 'first') scope = paras[0] ?? null;
+    else if (scopeName === 'last') scope = lastPara ?? null;
+    else if (scopeName) {
+      const i = heads.findIndex((h) => h.text.toLowerCase().includes(scopeName));
+      if (i === -1) { scope = null; problems.push(`no "${scopeName}" section`); }
+      else {
+        const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level);
+        const start = heads[i].end; const end = next ? next.start : text.length;
+        scope = { start, end, text: text.slice(start, end) };
+      }
+    }
+    if (scope) {
+      const why: string[] = [];
+      const any = list(p, 'any'); const min = num(p, 'min') ?? 1;
+      if (any.length) {
+        const n = any.reduce((k, a) => k + findTerms(scope.text, [a]).length, 0);
+        if (n < min) why.push(`${n} of the ${min} mention(s) of ${any.map((a) => `"${a}"`).join(' or ')} it needs`);
+      }
+      if (num(p, 'figure') && !/\d/.test(scope.text)) why.push('no figure');
+      const starts = list(p, 'starts');
+      if (starts.length) {
+        const opening = scope.text.trim().replace(/^(?:[-*+]|\d+[.)])\s+/, '').replace(/^[*_#>\s]+/, '').toLowerCase();
+        if (!starts.some((s) => opening.startsWith(s.toLowerCase()))) why.push(`does not start with ${starts.map((s) => `"${s}"`).join(' or ')}`);
+      }
+      if (why.length) {
+        problems.push(...why);
+        spans.push({ start: scope.start, end: scope.end, text: scope.text, why: why.join('; ') });
+      }
+    }
+    return problems.length
+      ? { verdict: 'VIOLATED', spans, value: problems.length, detail: problems.join('; ') }
+      : { verdict: 'MET', spans: [], value: 0, detail: 'everything it must contain is there' };
   },
 };

@@ -34,6 +34,7 @@ import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
 import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
+import { exportSkill } from './commands/export.js';
 import { reference } from './commands/reference.js';
 import { record } from './commands/record.js';
 import { fix } from './commands/fix.js';
@@ -78,6 +79,7 @@ export const COMMANDS: readonly string[] = [
   'build',
   'carriers',
   'check',
+  'export',
   'compare',
   'confirm',
   'create',
@@ -157,6 +159,7 @@ const main = async (): Promise<void> => {
     case 'improve': return improve();
     case 'feedback': { feedback(); return; }
     case 'check': return check();
+    case 'export': { exportSkill(); return; }
     case 'profiles': { profiles(); return; }
     case 'carriers': { carriers(); return; }
     case 'skill': return skill();

@@ -7,7 +7,7 @@
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, resolve, basename, dirname } from 'node:path';
-import { planImport, MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
+import { planImport, MIN_GOLDEN_CHARS, MIN_ANSWER_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { reserve, type Reservation } from '../../core/golden/reservation.js';
 import { describeGoldenEvidence, clusterAssignment, type GoldenUnit } from '../../core/golden/golden-unit.js';
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
@@ -180,9 +180,9 @@ export function intake(path: string, workType: string): void {
   const classified = read
     .filter((r) => !inPackage(r.file) || /(^|\/)SKILL\.md$/i.test(r.file))
     .map((r) => ({ ...r, kind: classify(r.file) }));
-  const thinGoldens = classified.filter((r) => r.kind === 'GOLDEN' && r.text.trim().length < MIN_GOLDEN_CHARS);
+  const thinGoldens = classified.filter((r) => r.kind === 'GOLDEN' && r.text.trim().length < minCharsNow());
   if (thinGoldens.length) {
-    console.log(`\nToo short to read as finished work (${MIN_GOLDEN_CHARS}+ characters), left out:`);
+    console.log(`\nToo short to read as finished work (${minCharsNow()}+ characters), left out:`);
     for (const t of thinGoldens) console.log(`  ${t.file}  (${t.text.trim().length} chars)`);
   }
   const usableRead = classified.filter((r) => !thinGoldens.includes(r));
@@ -240,6 +240,7 @@ export function intake(path: string, workType: string): void {
   }
   const plan = planImport(material, {
     reserved: reservation?.reserved.map((u) => u.unitId) ?? [],
+    minChars: minCharsNow(),
     ...(heldOut === undefined ? {} : { heldOut }),
   });
   const heldActual = plan.goldens.filter((g) => g.role === 'HELD_OUT').length;
@@ -388,4 +389,9 @@ function reportProvenance(aiAssisted: boolean | null): void {
     console.log('\n  provenance: AI-ASSISTED, declared. Recorded on the evidence, and it travels with');
     console.log('  every result derived from this corpus.\n');
   }
+}
+
+/** The shortest piece that counts as an example: an answer can be one line, finished writing cannot. */
+function minCharsNow(): number {
+  return loadSession().intent?.mode === 'RESPOND' ? MIN_ANSWER_CHARS : MIN_GOLDEN_CHARS;
 }

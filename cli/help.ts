@@ -49,6 +49,7 @@ export const USAGE: Readonly<Record<string, string>> = {
   fix: 'atelier fix "<what was wrong>" [--pick a|b|same] [--reflect] [--floor-cap <usd>]\n  Correct the latest output. Repairs the implementation, or asks whether the standard should change. --reflect lets a model choose the change by reading your complaint, instead of the fixed ordering (recorded, so atelier optimize --report can compare the two). With an earned regression floor, a counted win is confirmed on its tasks (up to --floor-cap) and may install itself.',
   check: 'atelier check [--role discovery|target] [--no-negative-probe]\n  Verify the configured model backend actually works, and record what was measured.',
   profiles: 'atelier profiles\n  Every backend checked so far.',
+  export: 'atelier export --skill <name> [--out <file>]\n  The skill as one file, its examples inlined: for an agent or a system prompt with no access to the skill folder.',
   carriers: 'atelier carriers [--skill <name>] [--host codex]\n  Which parts of a skill reach the model on each host.',
   plan: 'atelier plan --skill <name> [--json]\n  Every rule and the mechanism that carries it.',
   contract: 'atelier contract --skill <name> [--bare] [--cap <usd>]\n  Test the skill against no skill at all.',

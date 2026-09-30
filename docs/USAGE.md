@@ -136,6 +136,12 @@ For answers rather than published writing (a coding assistant, support replies, 
 versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
 you to check, not cut. Everywhere else an invented story, claim of evidence or quotation is cut.
 
+A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
+"PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`
+holds a template's sections in order ([MEASURED-RULES](MEASURED-RULES.md)). To use a skill where there is
+no skill folder (a system prompt, another tool), `atelier export --skill <name> --out skill.md` writes it
+as one file with its examples inlined.
+
 The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always

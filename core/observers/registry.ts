@@ -17,7 +17,7 @@
 
 import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
-import { OPENING, CLOSING, HEADINGS } from './structure.js';
+import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
 
@@ -228,6 +228,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   TERM_RATE, RATIO, DISTRIBUTION, RHYTHM,
   // ── Position: the opening, the close, the headings (see ./structure.ts) ────────────────────────
   OPENING, CLOSING, HEADINGS,
+  // ── What must be there: sections, mentions, figures, how the close starts (./structure.ts) ────
+  PRESENCE,
   FEATURE,
 };
 
