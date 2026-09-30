@@ -274,3 +274,14 @@ describe('a rewrite that keeps its source is reported as a restyle', () => {
     expect(sentencesKept('Completely new prose about something else, written from notes and nothing more than that.', source)).toBe(0);
   });
 });
+
+describe('the tell floor needs no plain drafts', () => {
+  it('with no drafts at all, an author who never writes an em dash still gets it banned, and no gap rule is claimed', () => {
+    const piece = (i: number): { id: string; text: string } => ({ id: `n${i}.md`, text: `This is piece ${i}, and it runs long enough to count, with commas, colons: and full stops. `.repeat(20) });
+    const rules = deriveContrastRules([0, 1, 2, 3].map(piece), [4, 5].map(piece), [], 'MACHINE_DISCOVERED');
+    const tell = rules.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.includes('MACHINE_TELL'));
+    expect(tell?.requirement.measurement?.params.never).toEqual(expect.arrayContaining(['EM_DASH', 'STACCATO_RUN']));
+    // nothing that would claim the model does something the author does not
+    expect(rules.filter((r) => r.requirement.measurement?.observer === 'DISTRIBUTION')).toEqual([]);
+  });
+});

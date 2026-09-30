@@ -346,30 +346,38 @@ export async function discover(): Promise<void> {
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.
   rmSync(runFile('signals.json'), { force: true });
+  // THE PLAIN DRAFTS ARE OPTIONAL; THE TELL FLOOR IS NOT. Rules that compare the author with the model
+  // need its drafts; the machine-tell floor, register and contrastive verdicts are measured on the author's
+  // pieces alone. A comparison that failed once dropped all of them, and a skill shipped with no floor
+  // against em dashes for an author who never writes one.
+  const read = openItems.filter((i) => readIds.has(i.id));
+  let drafts: string[] = [];
   if (!argv.includes('--no-contrast')) {
     try {
-      const read = openItems.filter((i) => readIds.has(i.id));
-      const drafts = await contrastDrafts(read, ev.corpusHash, contrastForm(read, declaredClass(s)));
-      const contrast = deriveContrastRules(read, openItems.filter((i) => heldIds.has(i.id)), drafts, sourceProvenance());
-      // THE SIGNALS. Counted features that separate this author from the model over many drafts, but not
-      // draft by draft: kept with the skill to choose between drafts and to profile one, never proposed.
-      const signals = signalsOf(judgeCountedFeatures(read.map((i) => i.text), openItems.filter((i) => heldIds.has(i.id)).map((i) => i.text), drafts));
-      writeAtomic(runFile('signals.json'), JSON.stringify(signals, null, 1));
-      if (signals.length) {
-        console.log(`${signals.length} signal(s) of your style, used to choose between drafts (not rules): ${signals.map((x) => featureOf(x.id)?.label ?? x.id).join('; ')}.`);
-      }
-      if (contrast.length) {
-        console.log(`${contrast.length} rule(s) from comparing your writing with ${drafts.length} plain drafts by the model: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
-        proposals = [...proposals, ...contrast.map((c) => c.requirement)];
-        proposalMeta = { ...proposalMeta, ...Object.fromEntries(contrast.map((c) => [c.requirement.requirementId, {
-          framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance } satisfies ProposalMeta])) };
-        // An addition to what is already saved, not a second save of the run.
-        saveSession({ ...loadSession(), proposals, proposalMeta });
-      }
+      drafts = await contrastDrafts(read, ev.corpusHash, contrastForm(read, declaredClass(s)));
     } catch (e) {
       // Optional, and never allowed to cost the discovery already paid for.
-      console.log(`(the comparison with the model's own drafts did not run: ${(e as Error).message.split('\n')[0]})`);
+      console.log(`(the model's plain drafts could not be written: ${(e as Error).message.split('\n')[0]}; rules measured on your pieces alone are still proposed)`);
     }
+  }
+  const contrast = deriveContrastRules(read, heldItems, drafts, sourceProvenance());
+  if (drafts.length >= 2) {
+    // THE SIGNALS. Counted features that separate this author from the model over many drafts, but not
+    // draft by draft: kept with the skill to choose between drafts and to profile one, never proposed.
+    const signals = signalsOf(judgeCountedFeatures(read.map((i) => i.text), heldItems.map((i) => i.text), drafts));
+    writeAtomic(runFile('signals.json'), JSON.stringify(signals, null, 1));
+    if (signals.length) {
+      console.log(`${signals.length} signal(s) of your style, used to choose between drafts (not rules): ${signals.map((x) => featureOf(x.id)?.label ?? x.id).join('; ')}.`);
+    }
+  }
+  if (contrast.length) {
+    const from = drafts.length >= 2 ? `from comparing your writing with ${drafts.length} plain drafts by the model` : 'measured on your pieces alone (no plain drafts to compare with)';
+    console.log(`${contrast.length} rule(s) ${from}: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
+    proposals = [...proposals, ...contrast.map((c) => c.requirement)];
+    proposalMeta = { ...proposalMeta, ...Object.fromEntries(contrast.map((c) => [c.requirement.requirementId, {
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance } satisfies ProposalMeta])) };
+    // An addition to what is already saved, not a second save of the run.
+    saveSession({ ...loadSession(), proposals, proposalMeta });
   }
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {
@@ -449,16 +457,24 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // Five: fewer and a style distance cannot tell the model's own drafts from the author's (measured).
   const topics = contrastTopics(read, 5);
   console.log(`Asking the model for ${topics.length} plain drafts on your topics, to see its habits against yours…`);
+  // Room for the author's length: a fixed 4,000 tokens truncated every draft of a 2,400-word author, and
+  // the whole comparison was lost. One draft that fails costs that draft, not the comparison.
+  const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(form.words * 2.2) + 500));
   const drafts = await mapLimit(topics, topics.length, async (topic) => {
-    const r = await spend(budget, 0.1, async () => {
-      const x = await client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
-        userMessage: `Write ${form.label} titled "${topic}". About ${form.words} words. Output only the piece.`,
-        toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
-        schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens: 4000 });
-      return { value: x, cost: x.cost };
-    });
-    const piece: unknown = (r.json as { piece?: unknown } | null)?.piece;
-    return typeof piece === 'string' ? piece : '';
+    try {
+      const r = await spend(budget, 0.1, async () => {
+        const x = await client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
+          userMessage: `Write ${form.label} titled "${topic}". About ${form.words} words. Output only the piece.`,
+          toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
+          schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens });
+        return { value: x, cost: x.cost };
+      });
+      const piece: unknown = (r.json as { piece?: unknown } | null)?.piece;
+      return typeof piece === 'string' ? piece : '';
+    } catch (e) {
+      console.log(`(one plain draft could not be written: ${(e as Error).message.split('\n')[0]})`);
+      return '';
+    }
   });
   const kept = drafts.filter((d) => d.trim());
   writeAtomic(path, JSON.stringify({ corpusHash, key, drafts: kept }, null, 1));
