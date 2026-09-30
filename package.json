@@ -1,7 +1,7 @@
 {
   "name": "@yannickyamo/atelier",
   "version": "0.5.0",
-  "description": "Turn expert judgment into an executable AI skill. A master's standard, executed by other hands.",
+  "description": "Reproduce a writing taste at scale: learn a standard from the writing you choose, approve it once, and hold every AI draft to it.",
   "type": "module",
   "bin": {
     "atelier": "./dist/cli/atelier.mjs"

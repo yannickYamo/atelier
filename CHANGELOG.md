@@ -8,6 +8,17 @@ a run in progress may not be.
 
 ## [Unreleased] — voice defaults
 
+### Changed: the README, written by Atelier
+
+- **Taste at scale, not only your own.** The README says what Atelier is for: a writing standard learned
+  from the pieces you choose (yours, your team's, or a style you admire), approved once, and held on every
+  draft. It lists what it can write, and says which uses are tested (blog posts, code review) and which are
+  built and not yet validated (contracts and reports, support replies).
+- **Written with its own skill.** The prose is an `atelier invoke` with a technical author's voice skill, over
+  a fact sheet bound as material ($0.69). It cut five sentences it could not trace to the facts; badges,
+  commands, the table and links were added by hand, and the whole passes that skill's checks.
+- The package and plugin descriptions say the same.
+
 ### Changed: the repository's history, rewritten to leave the tested authors unnamed
 
 On 2026-09-30 every commit was rewritten to describe the public authors used in tests rather than name
