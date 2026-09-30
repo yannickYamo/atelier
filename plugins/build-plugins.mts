@@ -125,6 +125,6 @@ writeFileSync(join(REPO, '.claude-plugin', 'marketplace.json'), `${JSON.stringif
   owner: { name: 'Yannick Maurice' },
   description: 'Atelier: a standard you ratify, compiled into a skill any model can run.',
   plugins: [{ name: 'atelier', source: './plugins/hosts/claude-code', version: VERSION,
-    description: 'Turn your own work into a reusable skill you own. Portable across hosts.' }],
+    description: 'Learn a writing standard from the pieces you choose, approve it once, and hold every draft to it. Portable across hosts.' }],
 }, null, 2)}\n`);
 console.log(`built .claude-plugin/marketplace.json`);
