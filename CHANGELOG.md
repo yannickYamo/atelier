@@ -10,6 +10,14 @@ a run in progress may not be.
 
 ### Added
 
+- **`atelier score`**: one deterministic number in [0, 1] for how well a text meets a skill's ratified
+  standard, with no model call: `(0.4·required + 0.3·claims + 0.1·format + 0.2·range)` over the components
+  that apply (REQUIRED measured rules held, invented specifics by the pattern claim check, the FORMAT line,
+  the in-range share on the active fidelity profile). `--json` gives the components and every rule's line.
+- **`bench/compare/`**: one task interface for answer arms (no skill, a skill file in the system prompt, the
+  Atelier runtime), train/validation/test splits with a sealed test hash, a GEPA adapter and a SkillOpt
+  environment that refuse the sealed split, both scored by the benchmark's own judge or by `atelier score`,
+  and an offline smoke against local fake models. No results yet: the comparison itself is a paid run.
 - **`atelier qualify --skill <name>`.** Measures the style detector and every steering feature of the active
   profile on the skill's own data (the pieces discovery read and the drafts it wrote), with one piece, one
   topic and one generating model held out at a time, and stores the result with the skill, keyed by the

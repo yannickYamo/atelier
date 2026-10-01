@@ -1,0 +1,4 @@
+# The GEPA adapter (gepa_adapter.py), as installed and smoke-tested with Python 3.12.3.
+# gepa is the only dependency: compare_common.py makes every model call with the standard library, and the
+# reflection model is handed to GEPA as a callable, so GEPA's optional litellm extra is not needed.
+gepa==0.1.4

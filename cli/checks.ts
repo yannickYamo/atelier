@@ -87,6 +87,11 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly task?: string;
   /** the context judge, when the caller already made one (invoke asks it about the request first) */
   readonly judge?: ContextJudge;
+  /**
+   * No model, whatever the environment says: the pattern claim check (`--claims pattern` semantics) and no
+   * context judge. `atelier score` needs this, so the same text scores the same on every machine.
+   */
+  readonly offline?: boolean;
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
@@ -96,10 +101,12 @@ export function checksFor(L: store.StoreLayout, opts: {
   const material = [opts.material, ...standardStatements(L)].filter(Boolean).join('\n\n');
   // The format the text is: the one declared for it, or the class the standard was built from.
   const format = formatOf(flag('--class') ?? store.getDocClass(L));
-  const judge = opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
+  const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
+  const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
+    : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false));
   return { material, guardClaims, placeholders, format, ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
-    ...(guardClaims ? { claimSensor: claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false) } : {}) };
+    ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }
 
 /** The statements of the active skill's approved rules, or none when the skill is not built yet. */
