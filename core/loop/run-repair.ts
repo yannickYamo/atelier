@@ -7,7 +7,7 @@
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
-import { verifyText, type VerifyReport } from '../observers/verify.js';
+import { verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { unsourcedClaims, claimUnitsOf } from './claims.js';
 import { derivedFromKnown } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
@@ -174,9 +174,18 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const pubLine = pub.length ? [{ requirementId: PUBLIC_FACTS, statement: 'Specifics stated as general knowledge: check them before you publish.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...pub], value: pub.length, detail: `${pub.length} public fact(s) to check [${pubBy}]` } }] : [];
-  return { ...report, checked: [...report.checked, line, ...checkLine, ...readerLine, ...pubLine, ...fmtLines],
-    failed: report.failed || toCut.length > 0 || (fmt?.hard.length ?? 0) > 0 };
+  // FAILS CLOSED. A qualified reader that could not run leaves the pattern check, which catches a fraction
+  // of what the reader does. In writing that is not a check of invented claims at the level the standard was
+  // promised, and it is not reported as one: the run fails until it is read again. Answers list by design.
+  const unread = !listOnly && opts.claimSensor?.degraded && opts.claimSensor.qualified ? [{ requirementId: UNREAD, materiality: 'REQUIRED', phase: 'ACCURACY' as const,
+    statement: 'The qualified claim reader read this text.',
+    result: { verdict: 'VIOLATED' as const, spans: [], value: null, detail: 'the claim reader could not run, so this text was checked by the pattern check only: run it again, or check its specifics yourself' } }] : [];
+  return { ...report, checked: [...report.checked, line, ...checkLine, ...readerLine, ...pubLine, ...fmtLines, ...unread],
+    failed: report.failed || toCut.length > 0 || (fmt?.hard.length ?? 0) > 0 || unread.length > 0 };
 }
+
+/** The line that fails a writing check whose qualified claim reader could not run. */
+export const UNREAD = 'UNSOURCED·unread';
 
 /** The report with each waived rule shown as not applicable, with its reason, and `failed` recomputed. */
 function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>): VerifyReport {
@@ -227,28 +236,36 @@ export interface ClaimMemory {
   demote(sentences: readonly string[]): void;
   /** every sentence demoted so far, in order */
   listed(): string[];
+  /**
+   * hold these demoted sentences as UNCONFIRMED: never cut, and while they stay in the text, a failure of
+   * the claim floor (`INCONCLUSIVE`) rather than a pass
+   */
+  doubt(sentences: readonly string[]): void;
 }
 export function claimMemory(): ClaimMemory {
   const key = (t: string): string => t.replace(/\s+/g, ' ').trim().toLowerCase();
   const passed = new Set<string>();
   const demoted = new Map<string, string>();
+  const doubted: string[] = [];
   return {
     demote(sentences) { for (const t of sentences) demoted.set(key(t), t.trim().slice(0, 160)); },
+    doubt(sentences) { doubted.push(...sentences); },
     listed() { return [...demoted.values()]; },
-    apply(text, report) {
-      const line = report.checked.find((c) => c.requirementId === 'UNSOURCED');
-      if (!line) return report;
-      const flagged = new Set(line.result.spans.map((sp) => key(sp.text)));
-      const kept = line.result.spans.filter((sp) => !passed.has(key(sp.text)) && !demoted.has(key(sp.text)));
-      for (const u of claimUnitsOf(text)) { const k = key(u.text); if (k && !flagged.has(k)) passed.add(k); }
-      if (kept.length === line.result.spans.length) return report;
-      const settled = line.result.spans.length - kept.length;
-      const checked = report.checked.map((c) => (c !== line ? c : { ...c, result: { ...c.result, spans: kept, value: kept.length,
-        verdict: kept.length ? 'VIOLATED' as const : 'MET' as const,
-        detail: `${c.result.detail}; ${settled} sentence(s) already passed or listed for you to check kept that verdict` } }));
-      return { ...report, checked, failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED') };
-    },
+    apply(text, report) { return withInconclusive(settle(text, report), text, doubted); },
   };
+  function settle(text: string, report: VerifyReport): VerifyReport {
+    const line = report.checked.find((c) => c.requirementId === 'UNSOURCED');
+    if (!line) return report;
+    const flagged = new Set(line.result.spans.map((sp) => key(sp.text)));
+    const kept = line.result.spans.filter((sp) => !passed.has(key(sp.text)) && !demoted.has(key(sp.text)));
+    for (const u of claimUnitsOf(text)) { const k = key(u.text); if (k && !flagged.has(k)) passed.add(k); }
+    if (kept.length === line.result.spans.length) return report;
+    const settled = line.result.spans.length - kept.length;
+    const checked = report.checked.map((c) => (c !== line ? c : { ...c, result: { ...c.result, spans: kept, value: kept.length,
+      verdict: kept.length ? 'VIOLATED' as const : 'MET' as const,
+      detail: `${c.result.detail}; ${settled} sentence(s) already passed or listed for you to check kept that verdict` } }));
+    return { ...report, checked, failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED') };
+  }
 }
 
 /**
@@ -267,7 +284,10 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
   for (let round = 0; round < 3; round++) {
     let spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
     if (!spans.length) break;
-    assertMayCut(report.checked.find((c) => c.requirementId === 'UNSOURCED')?.authority ?? 'unqualified-reader');
+    const authority = report.checked.find((c) => c.requirementId === 'UNSOURCED')?.authority ?? 'unqualified-reader';
+    // An owner's override fails the check on what the unqualified reader finds; it never deletes (./cut-authority.ts).
+    if (authority === 'owner-override') break;
+    assertMayCut(authority);
     // THE BALANCE. A third or more of the text flagged (at least three sentences) is the check misreading
     // general knowledge far more often than a draft that invented a third of itself. Then only what is
     // unambiguously invented is cut: a story told as lived, a claim of evidence, a quotation or an
@@ -275,7 +295,13 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
     const units = claimUnitsOf(text).length;
     if (spans.length >= 3 && units && spans.length / units >= 1 / 3) {
       const lived = (sp: object): boolean => { const k = (sp as { kind?: string }).kind; return k === 'EXPERIENCE' || k === 'SOURCE'; };
-      memory.demote(spans.filter((sp) => !lived(sp)).map((sp) => sp.text));
+      const unsure = spans.filter((sp) => !lived(sp)).map((sp) => sp.text);
+      memory.demote(unsure);
+      // LISTED IS NOT PASSED. Where the format lists specifics by design (an answer), the list is the verdict.
+      // In published writing it is not: a heavy flag rate means the check could not tell general knowledge
+      // from invention, and an invented figure listed behind a "holds" line ships as if checked. Those
+      // sentences stay a failure of the claim floor until the person confirms them or binds their material.
+      if (opts.format?.claims !== 'list') memory.doubt(unsure);
       report = memory.apply(text, report);
       spans = spans.filter(lived);
       if (!spans.length) break;
@@ -289,6 +315,26 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
     text = next; report = memory.apply(text, await checkDraftAsync(skill, v, text, opts));
   }
   return { text, report, cut: cut.reverse(), listed: memory.listed() };
+}
+
+/** The id of the line that holds claims the check could neither clear nor cut. */
+export const INCONCLUSIVE = 'UNSOURCED·inconclusive';
+
+/**
+ * The report with one REQUIRED line for the flagged sentences still in the text that were listed, not
+ * cut, because too much was flagged to cut. It fails the check: not a pass, not a cut, a question for
+ * the person. Absent when there are none.
+ */
+export function withInconclusive(report: VerifyReport, text: string, sentences: readonly string[]): VerifyReport {
+  const norm = (t: string): string => t.replace(/\s+/g, ' ').trim();
+  const here = norm(text);
+  const still = [...new Set(sentences.map(norm))].filter((t) => t && here.includes(t));
+  if (!still.length) return report;
+  const spans = still.map((t) => { const at = text.indexOf(t); return { start: Math.max(0, at), end: Math.max(0, at) + t.length, text: t,
+    why: 'one of many specifics flagged at once: the check could not tell general knowledge from invention, so it is neither cut nor passed. Confirm it, or bind your material' }; });
+  const line: RuleCheck = { requirementId: INCONCLUSIVE, statement: 'Specifics the claim check could neither clear nor cut: yours to confirm before this is used.',
+    materiality: 'REQUIRED', phase: 'ACCURACY', result: { verdict: 'VIOLATED', spans, value: spans.length, detail: `${spans.length} specific(s) unconfirmed` } };
+  return { ...report, checked: [...report.checked.filter((c) => c.requirementId !== INCONCLUSIVE), line], failed: true };
 }
 
 /**
@@ -407,7 +453,7 @@ export function heavyCut(draft: string, cut: readonly string[]): string | null {
 }
 
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
-const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED') });
+const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED' && c.requirementId !== INCONCLUSIVE && c.requirementId !== UNREAD) });
 
 export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,

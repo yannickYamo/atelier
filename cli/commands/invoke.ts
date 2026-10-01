@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
-import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -238,9 +238,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (lengthLine) withheld.push(lengthLine.trim());
   // AND ITS FORMAT, WHEN IT STATES ONE. "Return only the code block" met a learned "end every piece with a
   // line starting Next:" and lost in 3 of 3 trials. The request is the one thing in the room written today:
-  // the skill's presentation rules are withheld from the prompt and from the count for this run, and named.
+  // when it asks for a SHAPE (code, JSON, a number, one line, yes or no, a list), the skill's presentation
+  // rules are withheld from the prompt and from the count for this run, and named.
+  // A BARE request is not a shape. "Return only the post" asks for no preamble, not for a post without the
+  // author's paragraphs: read as a shape, it switched off every pace and rhythm rule on exactly the long
+  // pieces those rules exist for. Then the standard stays whole and only the wrapping is dropped.
   const formatAsked = intent?.format ?? requestedFormat(asked);
-  if (formatAsked && std) {
+  const shape = formatAsked ? formatShape(formatAsked) : null;
+  if (formatAsked && shape === 'SHAPE' && std) {
     const p = presentationRules(std.requirements);
     for (const q of p.measured) waived.set(q.requirementId, `the request states its own format ("${formatAsked}")`);
     withheld.push(...p.prose.map((q) => q.statement));
@@ -250,7 +255,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     ...(waived.size ? { waived } : {}) };
   const servedForRun = withheld.length ? withoutRules(servedText, withheld) : servedText;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
-  const taskForRun = formatAsked ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)` : task;
+  const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
+    : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
@@ -579,8 +585,11 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
-    if (r.violatedAfter.length) report.say(`Still broken after repair: ${r.violatedAfter.join(', ')}. ${r.why}`);
-    else if (!heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
+    const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
+    const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
+    if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
+    if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
+    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);
@@ -709,6 +718,16 @@ export function requestedLength(task: string): 'LONG' | 'SHORT' | null {
 export function requestedFormat(task: string): string | null {
   const m = /\b(?:(?:return|give me|reply with|respond with|output|answer with)\s+(?:only|just)\b[^.?!\n]{0,40}|only (?:the|a|one)\s+(?:code|code block|number|json|sql|command|answer|list|diff|function)\b|just (?:the|a)\s+(?:code|number|json|command|answer|diff)\b|no (?:explanation|prose|commentary|preamble|extra text)\b|json only\b|yes or no\b|one[- ]line answer\b)/i.exec(task);
   return m ? m[0].trim() : null;
+}
+
+/**
+ * WHAT KIND OF FORMAT A REQUEST STATES. A SHAPE is an output that is not a piece of prose in the author's
+ * presentation: code, JSON, SQL, a command, a diff, a number, one line, yes or no, a list or table. Anything
+ * else the request says about its format ("return only the post", "no preamble", "just the text") is BARE:
+ * it removes what wraps the piece, and the piece keeps the standard.
+ */
+export function formatShape(words: string): 'SHAPE' | 'BARE' {
+  return /\b(?:code|snippet|json|sql|yaml|csv|command|diff|patch|function|number|figure|yes or no|yes\/no|one[- ]line|single line|one sentence|list|bullets?|table|regex)\b/i.test(words) ? 'SHAPE' : 'BARE';
 }
 
 /** Observers whose rules shape how an output is presented, not what it says. */

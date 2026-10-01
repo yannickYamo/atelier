@@ -66,24 +66,24 @@ describe('selection: only what separates this author from the model, and holds, 
     expect(b[0]).toBeLessThan(10); expect(b[1]).toBeGreaterThan(30);
   });
   it('RULE when single drafts fall outside the band; SIGNAL when only the distributions differ; nothing when neither', () => {
-    const rule = judgeFeature('x', { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2] });
+    const rule = judgeFeature('x', { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2, 1, 2, 1, 2] });
     expect(rule).toMatchObject({ kept: true, role: 'RULE' });
-    const signal = judgeFeature('x', { read: [2, 10, 3, 9, 4, 8, 5, 7], held: [6, 7], model: [2, 3, 3, 4, 2, 3] });
+    const signal = judgeFeature('x', { read: [2, 10, 3, 9, 4, 8, 5, 7], held: [6, 7], model: [2, 3, 3, 4, 2, 3, 3, 4] });
     expect(signal).toMatchObject({ kept: true, role: 'SIGNAL' });
-    const noise = judgeFeature('x', { read: [1, 5, 2, 4, 3], held: [3, 2], model: [1, 5, 2, 4] });
+    const noise = judgeFeature('x', { read: [1, 5, 2, 4, 3], held: [3, 2], model: [1, 5, 2, 4, 3, 1, 5, 2] });
     expect(noise).toMatchObject({ kept: false, role: null });
     expect(noise.why).toMatch(/does not separate/);
   });
   it('a feature the author\'s held-back pieces break is not kept', () => {
-    expect(judgeFeature('x', { read: [10, 11, 12, 10, 11], held: [30, 40], model: [1, 2, 1, 2] }).why).toMatch(/held-back pieces fall outside/);
+    expect(judgeFeature('x', { read: [10, 11, 12, 10, 11], held: [30, 40], model: [1, 2, 1, 2, 1, 2, 1, 2] }).why).toMatch(/held-back pieces fall outside/);
   });
   it('the strongest few are proposed; the rest are shown, not proposed', () => {
-    const samples = new Map(Array.from({ length: 5 }, (_, i) => [`f${i}`, { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2] }]));
+    const samples = new Map(Array.from({ length: 5 }, (_, i) => [`f${i}`, { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2, 1, 2, 1, 2] }]));
     const v = selectFeatures(samples, 2);
     expect(v.filter((x) => x.kept)).toHaveLength(2);
     expect(v.filter((x) => x.why.includes('beyond the 2 strongest'))).toHaveLength(3);
   });
-  it('a signal scores closeness to the author\'s typical value; a profile reports per layer', () => {
+  it('a signal scores distance outside the author\'s range, zero inside it; a profile reports per layer', () => {
     const signals = [{ id: 'colon', band: [70, 110] as const, authorMedian: 90, modelMedian: 0, auc: 0.9 }];
     expect(signalDistance(colonHeavy(1), signals)!).toBeLessThan(signalDistance(plain(1), signals)!);
     const p = profileOf(plain(1), [{ id: 'colon', band: [20, 60] }]);
@@ -96,7 +96,7 @@ describe('discovery proposes a counted feature only when it tells single drafts 
   it('colon-heavy author, colon-free model: a FEATURE rule, with both numbers', () => {
     const read = [1, 2, 3, 4, 5].map((i) => ({ id: `r${i}`, text: colonHeavy(i) }));
     const held = [6, 7].map((i) => ({ id: `h${i}`, text: colonHeavy(i) }));
-    const drafts = [1, 2, 3, 4].map(plain);
+    const drafts = [1, 2, 3, 4, 5, 6, 7, 8].map(plain);
     const props = deriveContrastRules(read, held, drafts, 'EXPERT_AUTHORED' as never);
     const colon = props.find((p) => p.requirement.measurement?.observer === 'FEATURE' && (p.requirement.measurement.params.feature as string[])[0] === 'colon');
     expect(colon?.requirement.statement).toMatch(/^Keep colons within my range/);
@@ -223,7 +223,7 @@ describe('a FEATURE rule is suggested as preferred, never a zero-width band, spe
   const byId = (rs: Requirement[], id: string): Requirement | undefined => rs.find((r) => (r.measurement!.params.feature as string[])[0] === id);
 
   it('suggest() never makes a FEATURE rule required, however well it held, and says why', () => {
-    const r = byId(featureRules([1, 2, 3, 4, 5].map(colonHeavy), [6, 7].map(colonHeavy), [1, 2, 3, 4].map(plain)), 'colon')!;
+    const r = byId(featureRules([1, 2, 3, 4, 5].map(colonHeavy), [6, 7].map(colonHeavy), [1, 2, 3, 4, 5, 6, 7, 8].map(plain)), 'colon')!;
     expect(r.measurement!.params).toMatchObject({ minValue: expect.any(Number), maxValue: expect.any(Number) });
     const s = suggest(r, { framings: [], heldOut: null, needs: null, inSample: { applicable: 2, present: 2, independent: true } }, 'GUARD');
     expect(s).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
@@ -233,7 +233,7 @@ describe('a FEATURE rule is suggested as preferred, never a zero-width band, spe
     expect(suggest(cap, { framings: [], heldOut: null, needs: null, inSample: { applicable: 2, present: 2, independent: true } }, 'GUARD').materiality).toBe('REQUIRED');
   });
   it('an author who never links, against a model that does: a cap at zero, never a band around it', () => {
-    const rs = featureRules([1, 2, 3, 4, 5].map(plain), [6, 7].map(plain), [1, 2, 3, 4].map(linky));
+    const rs = featureRules([1, 2, 3, 4, 5].map(plain), [6, 7].map(plain), [1, 2, 3, 4, 5, 6, 7, 8].map(linky));
     const link = byId(rs, 'link')!;
     expect(link.measurement!.params.minValue).toBeUndefined();
     expect(link.measurement!.params.maxValue).toBeGreaterThanOrEqual(0);
@@ -245,17 +245,17 @@ describe('a FEATURE rule is suggested as preferred, never a zero-width band, spe
   });
   it('an author who links more than the model gets no floor on links: a floor would ask for sources nobody supplied', () => {
     expect(FEATURES.filter((f) => f.specifics).map((f) => f.id).sort()).toEqual(['link', 'names', 'numbers', 'quoted']);
-    const rs = featureRules([1, 2, 3, 4, 5].map(linky), [6, 7].map(linky), [1, 2, 3, 4].map(plain));
+    const rs = featureRules([1, 2, 3, 4, 5].map(linky), [6, 7].map(linky), [1, 2, 3, 4, 5, 6, 7, 8].map(plain));
     expect(byId(rs, 'link')).toBeUndefined();
-    expect(judgeFeature('link', { read: [5, 6, 7, 5, 6], held: [6, 6], model: [0, 0, 0, 0] })).toMatchObject({ kept: true, role: 'RULE' });
+    expect(judgeFeature('link', { read: [5, 6, 7, 5, 6], held: [6, 6], model: [0, 0, 0, 0, 0, 0, 0, 0] })).toMatchObject({ kept: true, role: 'RULE' });
   });
   it('a band whose read pieces all sit at one value is flagged flat; a real band is not', () => {
     expect(judgeFeature('x', { read: [0, 0, 0, 0, 0], held: [0, 0], model: [3, 4, 5, 3] }).flat).toBe(true);
-    expect(judgeFeature('x', { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2] }).flat).toBeUndefined();
+    expect(judgeFeature('x', { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2, 1, 2, 1, 2] }).flat).toBeUndefined();
   });
   it('rules and signals are capped separately: strong rules no longer crowd out every signal', () => {
-    const rule = { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2] };
-    const signal = { read: [2, 10, 3, 9, 4, 8, 5, 7], held: [6, 7], model: [2, 3, 3, 4, 2, 3] };
+    const rule = { read: [10, 11, 12, 10, 11], held: [11, 12], model: [1, 2, 1, 2, 1, 2, 1, 2] };
+    const signal = { read: [2, 10, 3, 9, 4, 8, 5, 7], held: [6, 7], model: [2, 3, 3, 4, 2, 3, 3, 4] };
     const samples = new Map([
       ...Array.from({ length: 9 }, (_, i) => [`rule${i}`, rule] as const),
       ...Array.from({ length: 3 }, (_, i) => [`signal${i}`, signal] as const),
@@ -510,7 +510,7 @@ describe('through the binary: contrast drafts by class, stale signals, and a res
     expect(cached.drafts.length).toBeGreaterThan(0);
     expect(new Set(cached.drafts)).toEqual(new Set(['LINKEDIN-SHAPED']));
     // Pieces of 75 words: inside LinkedIn's band (60 to 600), so the drafts are asked for at 80.
-    expect(cached.key).toMatch(/\|scripted\|a LinkedIn post\|80$/);
+    expect(cached.key).toMatch(/\|scripted\|a LinkedIn post\|80\|12\|with-examples$/);
   }, 120_000);
 
   it('without a class, "a piece" at the corpus median; never "a blog post, about 900 words"', async () => {

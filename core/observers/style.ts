@@ -267,4 +267,18 @@ export function styleDistanceDocs(text: string, ref: DeltaReference): { author: 
   return { author: Math.round(avg(ref.authorDocs) * 1000) / 1000, model: Math.round(avg(ref.modelDocs) * 1000) / 1000 };
 }
 
+/**
+ * HOW FAR THE AUTHOR'S OWN PIECES SIT FROM THE MODEL, AS A MARGIN. For each of the author's pieces in the
+ * reference, its mean Delta to the model's drafts minus its mean Delta to the author's other pieces: the
+ * same margin `styleDistanceDocs` gives a new text, measured on the author. A draft whose margin is above the
+ * author's own 90th percentile is closer to the author's average than the author's pieces ever are: that is
+ * how an imitation reads, regressed to the mean, and it earns no more than the author's own pieces do.
+ */
+export function authorSelfMargins(ref: DeltaReference): number[] {
+  const d = (a: readonly number[], b: readonly number[]): number => a.reduce((s0, v, i) => s0 + Math.abs(v - b[i]), 0) / Math.max(1, a.length);
+  const avg = (doc: readonly number[], docs: readonly (readonly number[])[]): number => docs.reduce((s0, x) => s0 + d(doc, x), 0) / Math.max(1, docs.length);
+  if (ref.authorDocs.length < 2 || !ref.modelDocs.length) return [];
+  return ref.authorDocs.map((doc, i) => avg(doc, ref.modelDocs) - avg(doc, ref.authorDocs.filter((_, j) => j !== i)));
+}
+
 export const perPieceP = (texts: readonly string[], f: (t: string) => number, q: number): number => quantile(texts.map(f), q);
