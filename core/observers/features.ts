@@ -93,14 +93,16 @@ const cv = (xs: readonly number[]): number | null => {
  * PARAGRAPHS, PROSE ONLY. Paragraph pace is what a skill was found to miss: it matched an author's
  * punctuation and missed that they write one-line paragraphs between long ones, or never do. A list item
  * is not a paragraph (it is short by design and would make every listy draft look terse), so only prose
- * blocks are read, the way ./text.ts cuts them. Under four paragraphs a percentile or a share is one or
- * two paragraphs talking, so the text is too short.
+ * blocks are read, the way ./text.ts cuts them.
+ * A TEXT IS LONG ENOUGH, NOT ITS PARAGRAPH COUNT. Gated on four paragraphs, a 250-word wall of a single
+ * paragraph measured nothing, and that wall is the commonest way a model's draft misses an author who
+ * breaks often: the miss was invisible to the very feature meant to see it. So the gate is the text's
+ * length (MIN_WORDS of prose, as for every rate here): one 250-word paragraph is a paragraph of 250 words.
  */
-const MIN_PARAGRAPHS = 4;
 interface ParagraphShape { readonly words: number; readonly sentences: number }
 const paragraphShape = (f: (ps: readonly ParagraphShape[]) => number) => (text: string): number | null => {
   const ps = paragraphsOf(text).map((p) => ({ words: wordsOf(p.text).length, sentences: p.sentences })).filter((p) => p.words > 0);
-  return ps.length < MIN_PARAGRAPHS ? null : r3(f(ps));
+  return !ps.length || proseWordCount(text) < MIN_WORDS ? null : r3(f(ps));
 };
 
 /**

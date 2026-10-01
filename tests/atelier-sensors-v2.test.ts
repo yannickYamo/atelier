@@ -49,7 +49,7 @@ const SENT = 'The crew hauled the nets aboard and sorted the catch by size befor
 const paragraphs = (sentencesEach: readonly number[]): string =>
   sentencesEach.map((n) => Array.from({ length: n }, () => SENT).join(' ')).join('\n\n');
 const longParas = paragraphs([4, 4, 4, 4, 4]);
-const oneLiners = paragraphs([1, 1, 1, 1, 1, 1]);
+const oneLiners = paragraphs(Array.from({ length: 12 }, () => 1)); // 168 words: long enough to measure
 const threeParas = paragraphs([4, 4, 4]);
 
 describe('paragraph pace, prose paragraphs only', () => {
@@ -69,13 +69,18 @@ describe('paragraph pace, prose paragraphs only', () => {
     expect(measure('sentencesPerParagraph', longParas)).toBe(4);
     expect(measure('sentencesPerParagraph', oneLiners)).toBe(1);
   });
-  it('null under four paragraphs, and list items are not paragraphs', () => {
+  it('null under 150 prose words; one long paragraph is measured as one long paragraph; list items are not paragraphs', () => {
+    const wall = paragraphs([12]);
     const listy = `${threeParas}\n\n${Array.from({ length: 10 }, () => `- ${SENT}`).join('\n')}`;
     for (const id of ['paragraphP10', 'paragraphP50', 'paragraphP90', 'oneSentenceParagraph', 'sentencesPerParagraph']) {
-      expect(measure(id, threeParas), id).toBeNull();
-      expect(measure(id, listy), id).toBeNull();
       expect(measure(id, 'Too short.'), id).toBeNull();
+      expect(measure(id, paragraphs([2, 2])), id).toBeNull();
     }
+    // the wall a model writes for an author who breaks often: measured, not skipped
+    expect(measure('paragraphP50', wall)).toBe(168);
+    expect(measure('sentencesPerParagraph', wall)).toBe(12);
+    // ten list items beside three prose paragraphs leave the paragraph lengths alone
+    expect(measure('paragraphP50', listy)).toBe(measure('paragraphP50', threeParas));
   });
 });
 
