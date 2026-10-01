@@ -23,6 +23,8 @@ import { extract } from '../../core/intake/extract.js';
 
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { buildProfile } from '../../core/fidelity/profile.js';
+import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
 import { formatOf } from '../../core/observers/formats.js';
@@ -346,6 +348,7 @@ export async function discover(): Promise<void> {
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.
   rmSync(runFile('signals.json'), { force: true });
+  rmSync(runFile('fidelity.json'), { force: true }); rmSync(runFile('retrieval.json'), { force: true });
   // THE PLAIN DRAFTS ARE OPTIONAL; THE TELL FLOOR IS NOT. Rules that compare the author with the model
   // need its drafts; the machine-tell floor, register and contrastive verdicts are measured on the author's
   // pieces alone. A comparison that failed once dropped all of them, and a skill shipped with no floor
@@ -370,6 +373,17 @@ export async function discover(): Promise<void> {
       console.log(`${signals.length} signal(s) of your style, used to choose between drafts (not rules): ${signals.map((x) => featureOf(x.id)?.label ?? x.id).join('; ')}.`);
     }
   }
+  // THE FIDELITY PROFILE (core/fidelity/profile.ts): every counted feature's band on the author's pieces,
+  // per length class where there are enough of them, its role, and a stylometric detector when there are
+  // drafts enough to train one. Installed by build with the skill; it steers drafts and is recorded with
+  // every output. Built from what this step already holds, so it costs nothing more.
+  const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash });
+  writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
+  // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
+  // served to the writer, they would be compared with outputs written from them.
+  writeAtomic(runFile('retrieval.json'), JSON.stringify(buildRetrievalIndex(read)));
+  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').length;
+  console.log(`Fidelity profile: ${profile.bands.filter((b) => b.cls === 'all').length} feature(s) measured on your pieces, ${steering} of them steer drafts${profile.detector ? `; a style detector trained against ${profile.detector.trainedOn.model} model drafts` : ''}.`);
   if (contrast.length) {
     const from = drafts.length >= 2 ? `from comparing your writing with ${drafts.length} plain drafts by the model` : 'measured on your pieces alone (no plain drafts to compare with)';
     console.log(`${contrast.length} rule(s) ${from}: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);

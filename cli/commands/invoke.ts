@@ -7,6 +7,13 @@
 import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
+import { featureOf } from '../../core/observers/features.js';
+import { verifyText } from '../../core/observers/verify.js';
+import { readFidelity } from '../../core/fidelity/profile.js';
+import { editTowardRange } from '../../core/fidelity/structural.js';
+import type { FidelityProfile, FidelityReading, FidelityRecord } from '../../core/fidelity/types.js';
+import type { RepairRecord } from '../../core/state/canonical-state.js';
+import { releaseFor, implementationBlock } from '../fidelity.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -143,7 +150,13 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
  * or stale artefact is caught here, deterministically, before any model is asked anything.
  */
 /** One draft's counts, as `invoke --drafts N` ranks them. */
-export interface DraftScore { readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number }
+export interface DraftScore {
+  readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number;
+  /** steering features outside the author's range, and how far in total (core/fidelity/profile.ts); 0 without a profile */
+  readonly outside?: number; readonly outsideBy?: number;
+  /** the style detector's P(model-written), when the skill has one: a tie-breaker, never more */
+  readonly detector?: number | null;
+}
 
 /**
  * THE ORDER DRAFTS ARE CHOSEN IN. REQUIRED rules first: the owner said an output breaking one is worse,
@@ -155,7 +168,14 @@ export interface DraftScore { readonly req: number; readonly taste: number; read
  */
 export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   a.req - b.req || a.taste - b.taste || a.tells - b.tells || a.all - b.all
-  || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style;
+  // THE AUTHOR'S RANGE, AFTER THE RULES. How many steering features fall outside the range the author's own
+  // pieces span, then by how much: never a pull toward their average (core/fidelity/types.ts).
+  || (a.outside ?? 0) - (b.outside ?? 0) || (a.outsideBy ?? 0) - (b.outsideBy ?? 0)
+  || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style
+  // The detector is a monitor: it only breaks what is left, and only on a clear difference.
+  || detectorTie(a.detector ?? null, b.detector ?? null);
+
+const detectorTie = (a: number | null, b: number | null): number => (a !== null && b !== null && Math.abs(a - b) >= 0.1 ? a - b : 0);
 
 export async function invoke(): Promise<void> {
   // FOR A PROGRAM, THE ANSWER ALONE ON STDOUT. The report, notices and cost were printed around the answer,
@@ -196,12 +216,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A skill built from someone's corpus writes TWO drafts by default and keeps the better one: the
   // author's habits and the machine-writing count choose between drafts and nothing else can use them.
   // `--drafts 1` turns this off.
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', store.getVoice(L)?.pieces?.length ? 2 : 1)));
+  // THE IMPLEMENTATION RELEASE (cli/fidelity.ts): how many drafts, how many structural edits, which of the
+  // author's passages and which experience notes are served. Below the standard, recorded with the output.
+  const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv) : null;
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', fid ? fid.release.settings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
+  const editBudget = fid && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', fid.release.settings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)),
-    maxCalls: numericFlag('--max-calls', nDrafts + 4 + (taste?.callsFor(nDrafts) ?? 0)) };
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4)),
+    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (taste?.callsFor(nDrafts) ?? 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -253,25 +277,29 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   }
   const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}) };
-  const servedForRun = withheld.length ? withoutRules(servedText, withheld) : servedText;
+  const impl = fid ? implementationBlock(fid.release, fid.index, asked) : { text: '', retrieved: [] };
+  const trace: FidelityTrace = { drafts: [], edits: [] };
+  const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
     : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? refineDraft({ client, budget, name, std, checks, taste }) : null,
-    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L) }) : null,
+    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace } : null) : null,
+    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace }) : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
-    } : null, settingsFor(checks, taste, nDrafts));
+    } : null, settingsFor(checks, taste, nDrafts),
+    fid && std ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld)) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
   reportChecks(report, rec, std, checks);
   if (taste) await taste.report(report, rec, name);
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
+  reportFidelity(report, rec);
   reportRestyle(report, rec.output, material);
   const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
   if (machine === 'answer') process.stdout.write(`${rec.output}\n`);
@@ -280,6 +308,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       output: rec.output, invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       withheld: rec.delivery.withheldRules ?? [], report: report.lines,
+      ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
+        outside: rec.fidelity.reading?.outside.map((o) => o.id) ?? [], detector: rec.fidelity.reading?.detector?.p ?? null,
+        edits: rec.fidelity.edits ?? [], applicability: rec.fidelity.applicability ?? [] } } : {}),
     }, null, 1)}\n`);
   }
 }
@@ -456,21 +487,106 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals> }) {
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace }) {
   return { n: c.n, choose: async (drafts: readonly string[]) => {
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
     const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
-    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals), taste: tasteMissed[i] }));
+    const readings = c.profile ? drafts.map((d) => readFidelity(d, c.profile!)) : [];
+    c.trace.drafts.push(...readings);
+    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals, readings[i] ?? null), taste: tasteMissed[i] }));
     scored.sort(draftOrder);
     const best = scored[0];
-    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${c.signals.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    const range = readings[best.i] ? `, ${readings[best.i].inBand} of ${readings[best.i].measured} measured features in your range` : '';
+    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${range}${c.signals.length && !readings.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } };
 }
 
+/** What the inner loop saw, gathered during the run and written with the record. */
+interface FidelityTrace { drafts: FidelityReading[]; edits: { target: string; kept: boolean; why: string }[] }
+
+/**
+ * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
+ * redrafted for form against the worst band still outside the author's range, at most `editBudget` times,
+ * each redraft kept only if it moved the target, kept the meaning, and broke nothing the standard checks:
+ * no REQUIRED rule newly broken, and no claim newly flagged.
+ */
+function withEdits(refine: (draft: string) => Promise<{ output: string; repair: RepairRecord | null }>,
+  e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace } | null) {
+  if (!e) return refine;
+  return async (draft: string) => {
+    const r = await refine(draft);
+    const breaksNothing = async (before: string, after: string): Promise<boolean> => {
+      const [b, a] = await Promise.all([checkDraftAsync(e.name, e.std, before, e.checks), checkDraftAsync(e.name, e.std, after, e.checks)]);
+      const flagged = (x: typeof b): Set<string> => new Set(x.checked.filter((c) => c.requirementId.startsWith('UNSOURCED')).flatMap((c) => c.result.spans.map((sp) => sp.text.trim())));
+      const before_ = flagged(b);
+      return brokenIn(a).every((id) => brokenIn(b).includes(id)) && [...flagged(a)].every((t) => before_.has(t));
+    };
+    let edited: Awaited<ReturnType<typeof editTowardRange>>;
+    try { edited = await editTowardRange(e.client, e.budget, r.output, e.profile, e.editBudget, breaksNothing); } catch (err) {
+      e.trace.edits.push({ target: '-', kept: false, why: `the structural edit could not run (${(err as Error).message.split('\n')[0]})` });
+      return r;
+    }
+    e.trace.edits.push(...edited.edits);
+    if (edited.text === r.output) return r;
+    // The draft the model wrote is kept in the record whether or not a rule was repaired, so a comparison of
+    // drafts (core/fidelity/experience.ts) reads the text the reading was taken on.
+    const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: 'every REQUIRED measured rule holds' };
+    return { output: edited.text, repair: { ...base, why: `${base.why}; ${edited.edits.filter((x) => x.kept).length} structural edit(s) toward your range` } };
+  };
+}
+
+/** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
+function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
+  applicability: FidelityRecord['applicability']): FidelityRecord {
+  return {
+    release: fid.release.id, profileHash: fid.profile.hash,
+    // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
+    seed: 0,
+    reading: readFidelity(output, fid.profile),
+    ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
+    ...(trace.edits.length ? { edits: trace.edits } : {}),
+    ...(retrieved.length ? { retrieved: [...retrieved] } : {}),
+    applicability,
+  };
+}
+
+/**
+ * THE APPLICABILITY MANIFEST: every requirement of the standard, and what it was to this output. WAIVED,
+ * with the reason, when this run withheld it (a request's own shape, material not bound); NOT_APPLICABLE
+ * when its measurement says the text is outside what it can judge (too short, no such section); APPLIED
+ * otherwise, served and, where it carries a measurement, checked. A study that finds a rule missing from
+ * this list, or waived without a reason, has found a confound.
+ */
+export function applicability(name: string, std: Standard, output: string, waived: ReadonlyMap<string, string>, withheld: readonly string[]): NonNullable<FidelityRecord['applicability']> {
+  const v = verifyText(name, std, output);
+  const verdict = new Map(v.checked.map((c) => [c.requirementId, c.result.verdict]));
+  const conditional = new Map(v.conditional.map((c) => [c.requirementId, c.appliesWhen]));
+  return std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED').map((q) => {
+    const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld from this run\'s prompt' : null);
+    if (why) return { requirementId: q.requirementId, status: 'WAIVED' as const, why };
+    if (verdict.get(q.requirementId) === 'NOT_APPLICABLE') return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: 'outside what its measurement can judge in this text' };
+    const cond = conditional.get(q.requirementId);
+    return { requirementId: q.requirementId, status: 'APPLIED' as const, ...(cond ? { why: `served; applies when ${cond}` } : {}) };
+  });
+}
+
+/** One line on where the output landed against the author's range; the rest is in the details file. */
+function reportFidelity(report: RunReport, rec: Invocation): void {
+  const f = rec.fidelity;
+  if (!f?.reading) return;
+  const kept = (f.edits ?? []).filter((e) => e.kept).length;
+  const out = f.reading.outside.slice(0, 3).map((o) => featureOf(o.id)?.label ?? o.id);
+  report.say(`In your range on ${f.reading.inBand} of ${f.reading.measured} measured features${out.length ? `; furthest outside: ${out.join('; ')}` : ''}${kept ? ` (${kept} structural edit(s) kept)` : ''}.`);
+  report.detail(`implementation release ${f.release ?? 'none'} · profile ${f.profileHash ?? 'none'}${f.reading.detector ? ` · style detector ${f.reading.detector.version}: P(model-written) ${f.reading.detector.p}` : ''}`);
+  for (const e of f.edits ?? []) report.detail(`    structural edit (${e.target}): ${e.kept ? 'kept' : 'not kept'}, ${e.why}`);
+  for (const a of f.applicability ?? []) if (a.status !== 'APPLIED') report.detail(`    ${a.requirementId}: ${a.status.toLowerCase().replace('_', ' ')}${a.why ? `, ${a.why}` : ''}`);
+}
+
 /** One draft's counts. An unread signal distance is null: unknown is not "on target", so it ranks last. */
-function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standard, draft: string, signals: ReturnType<typeof store.getSignals>): Omit<DraftScore, 'taste'> {
+function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standard, draft: string, signals: ReturnType<typeof store.getSignals>, reading: FidelityReading | null = null): Omit<DraftScore, 'taste'> {
   const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
   return {
+    ...(reading ? { outside: reading.outside.length, outsideBy: Math.round(reading.outside.reduce((n, o) => n + o.distance, 0) * 1000) / 1000, detector: reading.detector?.p ?? null } : {}),
     req: r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length,
     all: r.checked.filter((c) => c.result.verdict === 'VIOLATED' && c.requirementId !== PUBLIC_FACTS).length,
     tells: r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0),
