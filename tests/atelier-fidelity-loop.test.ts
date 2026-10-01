@@ -104,6 +104,17 @@ describe('the first release costs what 0.7 did: the loop is opt-in until a study
   });
 });
 
+describe('a length class steers only on its own evidence', () => {
+  it('a feature that separates the author from the model overall, with no model draft of that length, is only monitored in that class', () => {
+    const read = Array.from({ length: 8 }, (_, k) => ({ id: `r${k}`, text: authorPiece(k) }));
+    const held = Array.from({ length: 3 }, (_, k) => ({ id: `h${k}`, text: authorPiece(k + 8) }));
+    const longWall = (k: number): string => Array.from({ length: 110 }, (_, i) => sentence(k + i)).join(' ');   // a 'long' draft
+    const p = buildProfile({ read, held, model: Array.from({ length: 10 }, (_, k) => longWall(k)), corpusHash: 'c' });
+    expect(p.bands.find((b) => b.id === 'paragraphP50' && b.cls === 'all')?.role).toBe('SIGNAL');
+    expect(p.bands.find((b) => b.id === 'paragraphP50' && b.cls === 'medium')?.role).toBe('MONITOR');
+  });
+});
+
 describe('the draft order: rules first, then the author\'s range, then the supplied facts, the detector last', () => {
   const base: DraftScore = { req: 0, taste: 0, tells: 0, all: 0, signal: null, style: 0 };
   it('a draft with fewer features outside the range wins, whatever its signal distance', () => {

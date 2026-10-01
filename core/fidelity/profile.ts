@@ -67,9 +67,17 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
     const proposable = verdict.kept && verdict.role === 'RULE' ? { proposable: true as const } : {};
     bands.push({ id: f.id, cls: 'all', band, median: r3(quantile(pooled, 0.5)), spread: r3(sd(pooled)), n: pooled.length, role, auc: verdict.auc, ...proposable });
     for (const cls of CONTEXT_CLASSES) {
-      const inClass = vals(readTexts.filter((t) => classOf.get(t) === cls).map((t) => f.measure(t)));
+      const readIn = readTexts.filter((t) => classOf.get(t) === cls).map((t) => f.measure(t));
+      const inClass = vals(readIn);
       const b = inClass.length >= CLASS_MIN_PIECES ? bandOf(inClass) : null;
-      if (b) bands.push({ id: f.id, cls, band: b, median: r3(quantile(inClass, 0.5)), spread: r3(sd(inClass)), n: inClass.length, role, auc: verdict.auc, ...proposable });
+      if (!b) continue;
+      // QUALIFIED IN ITS OWN CLASS. A class band inherited the pooled verdict, so a feature that separates the
+      // author from the model on long pieces steered short ones on no evidence. It steers only if selection
+      // passes on that class's own pieces, held-back pieces and model drafts; otherwise it is monitored.
+      const inCls = (texts: readonly string[]): (number | null)[] => texts.filter((t) => contextClassOf(proseWords(t)) === cls).map((t) => f.measure(t));
+      const own = judgeFeature(f.id, { read: readIn, held: inCls(heldTexts), model: inCls(input.model) });
+      const clsRole: FeatureBand['role'] = role === 'RULE' ? 'RULE' : own.kept ? 'SIGNAL' : 'MONITOR';
+      bands.push({ id: f.id, cls, band: b, median: r3(quantile(inClass, 0.5)), spread: r3(sd(inClass)), n: inClass.length, role: clsRole, auc: own.auc, ...proposable });
     }
   }
   const detector = detectorFor(input.read, input.model);
