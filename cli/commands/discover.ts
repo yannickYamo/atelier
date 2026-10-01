@@ -24,12 +24,13 @@ import { extract } from '../../core/intake/extract.js';
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
+import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf } from '../../core/fidelity/types.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
 import { formatOf } from '../../core/observers/formats.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
-import { quantile, wordsOf } from '../../core/observers/text.js';
+import { quantile, wordsOf, proseRegions } from '../../core/observers/text.js';
 import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
@@ -460,9 +461,17 @@ export function contrastForm(read: readonly { text: string }[], cls: string | nu
  */
 async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string, form: { label: string; words: number }): Promise<ContrastDrafts> {
   const path = runFile('contrast-drafts.json');
-  const { client, binding } = clientAndBinding('target');
-  // Keyed by corpus, model AND form: another model's habits, or another kind of piece, is another comparison.
-  const key = `${corpusHash}|${binding.requestedModel}|${form.label}|${form.words}|${Math.floor(numericFlag('--contrast-drafts', 12))}|with-examples`;
+  // SEVERAL FAMILIES, WHEN ASKED. A detector trained against one model family does not recognise another's
+  // imitations (held-out generator AUCs 0.37, 0.49, 0.73 in one study). `--contrast-models a,b` writes the drafts
+  // in turn with each model on this backend (a gateway serving several families), and records which wrote which.
+  const models = (flag('--contrast-models') ?? '').split(',').map((m) => m.trim()).filter(Boolean);
+  const writers = (models.length ? models : [undefined]).map((m) => clientAndBinding('target', m));
+  // LENGTHS THE AUTHOR HAS BANDS FOR. A length-class band steers only if it qualifies on that class's own
+  // drafts (core/fidelity/profile.ts), so drafts are written at the median length of every class with enough
+  // of the author's pieces, in turn; with one such class, all at the corpus's length as before.
+  const lengths = classLengths(read, form.words);
+  // Keyed by corpus, models, form and lengths: another model's habits, or another kind of piece, is another comparison.
+  const key = `${corpusHash}|${writers.map((w) => w.binding.requestedModel).join('+')}|${form.label}|${lengths.join('/')}|${Math.floor(numericFlag('--contrast-drafts', 12))}|with-examples`;
   if (existsSync(path)) {
     const cached = readJson<ContrastCache>(path, { what: 'the contrast drafts' });
     if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return contrastOf(cached);
@@ -479,7 +488,7 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   console.log(`Asking the model for ${topics.length} drafts on your topics, half of them with your pieces as examples, to see its habits against yours…`);
   // Room for the author's length: a fixed 4,000 tokens truncated every draft of a 2,400-word author, and
   // the whole comparison was lost. One draft that fails costs that draft, not the comparison.
-  const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(form.words * 2.2) + 500));
+  const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(Math.max(...lengths) * 2.2) + 500));
   const examplesFor = (i: number): string => {
     const others = read.filter((_, j) => j !== i % read.length).slice(0, 2)
       .map((p) => p.text.split(/\s+/).slice(0, 1200).join(' '));
@@ -488,8 +497,8 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   const drafts = await mapLimit(topics.map((t, i) => ({ t, i })), Math.min(6, topics.length), async ({ t: topic, i }) => {
     try {
       const r = await spend(budget, 0.15, async () => {
-        const x = await client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
-          userMessage: `Write ${form.label} titled "${topic}". About ${form.words} words. Output only the piece.${i % 2 ? examplesFor(i) : ''}`,
+        const x = await writers[i % writers.length].client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
+          userMessage: `Write ${form.label} titled "${topic}". About ${lengths[Math.floor(i / writers.length) % lengths.length]} words. Output only the piece.${i % 2 ? examplesFor(i) : ''}`,
           toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
           schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens });
         return { value: x, cost: x.cost };
@@ -504,10 +513,25 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // WHO WROTE EACH DRAFT, AND ON WHOSE TOPIC. A detector trained against one model family is valid for that
   // family only, so the generator is recorded per draft; the piece whose title a draft took is its source,
   // so `atelier qualify` can hold a piece out with the drafts written on it.
-  const kept = drafts.flatMap((d, i) => (d.trim() ? [{ text: d, generator: binding.requestedModel, source: read[i % read.length]?.id ?? null }] : []));
+  const kept = drafts.flatMap((d, i) => (d.trim() ? [{ text: d, generator: writers[i % writers.length].binding.requestedModel, source: read[i % read.length]?.id ?? null }] : []));
   const cache: ContrastCache = { corpusHash, key, drafts: kept.map((k) => k.text), meta: kept.map((k) => ({ generator: k.generator, source: k.source })) };
   writeAtomic(path, JSON.stringify(cache, null, 1));
   return contrastOf(cache);
+}
+
+/**
+ * The lengths to write contrast drafts at: the median prose length of each length class holding at least
+ * CLASS_MIN_PIECES of the pieces read, in class order; the corpus's own length when fewer than two classes do.
+ */
+export function classLengths(read: readonly { text: string }[], fallback: number): number[] {
+  const byClass = new Map<string, number[]>();
+  for (const p of read) {
+    const w = wordsOf(proseRegions(p.text).map((r) => r.text).join('\n\n')).length;
+    const c = contextClassOf(w);
+    byClass.set(c, [...(byClass.get(c) ?? []), w]);
+  }
+  const lengths = CONTEXT_CLASSES.flatMap((c) => { const ws = byClass.get(c) ?? []; return ws.length >= CLASS_MIN_PIECES ? [Math.round(quantile(ws, 0.5))] : []; });
+  return lengths.length >= 2 ? lengths : [fallback];
 }
 
 /** The cache file of the contrast drafts. `meta` is absent in caches written before it was recorded. */
