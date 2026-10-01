@@ -94,7 +94,7 @@ describe('atelier score: through the binary, with no backend', () => {
 
   const run = (data: string, proj: string, ...args: string[]): { out: string; status: number } => {
     // No provider flags and no keys: score must never need a backend.
-    const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN; delete env.ATELIER_CLAIMS_MODEL; delete env.ATELIER_CLAIMS;
     try {
       return { out: execFileSync('node', [CLI, ...args], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }), status: 0 };

@@ -27,6 +27,12 @@ The Atelier skill is built by each version under test from the same 12 answers i
 `--accept`. The previous release is built the same way in a worktree, and judged in the same session: the
 benchmark's judge moves about 0.1 between sessions on identical answers, so only side-by-side counts.
 
+## Head to head with the skill optimizers
+
+[`compare/`](compare/README.md) runs the same answer tasks through six arms (no skill, the hand-written
+skill, the Atelier plug-in and runtime, a GEPA-optimized and a SkillOpt-optimized skill) with one writer and
+one token limit, a sealed test split, and two evaluators: the benchmark's judge and `atelier score`.
+
 ## The claim reader, at its production settings
 
 `claims/reread.mjs` re-reads the drafts the claim reader's qualification study stored (48 clean, 46 with a

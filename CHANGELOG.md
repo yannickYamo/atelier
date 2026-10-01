@@ -6,6 +6,19 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## [Unreleased]
+
+### Added
+
+- **`atelier score`**: one deterministic number in [0, 1] for how well a text meets a skill's ratified
+  standard, with no model call: `(0.4·required + 0.3·claims + 0.1·format + 0.2·range)` over the components
+  that apply (REQUIRED measured rules held, invented specifics by the pattern claim check, the FORMAT line,
+  the in-range share on the active fidelity profile). `--json` gives the components and every rule's line.
+- **`bench/compare/`**: one task interface for answer arms (no skill, a skill file in the system prompt, the
+  Atelier runtime), train/validation/test splits with a sealed test hash, a GEPA adapter and a SkillOpt
+  environment that refuse the sealed split, both scored by the benchmark's own judge or by `atelier score`,
+  and an offline smoke against local fake models. No results yet: the comparison itself is a paid run.
+
 ## [0.8.0] — 2026-10-01 (taste as a range: a closed loop below the standard)
 
 Outside studies of 0.7 found the explicit layer of taste reproduced at the author's level and the implicit
