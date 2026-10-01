@@ -139,6 +139,11 @@ const PARKED: Readonly<Record<string, string>> = {
     + 'cases would invent a CLI surface for data that does not exist yet, and the protocol it serves '
     + 'says explicitly to stop after building the instrument. 24 polarity fixtures pin it in both '
     + 'directions, including the exact output the old endpoint scored perfect and this one fails.',
+  'core/loop/fact-ledger.ts':
+    'A sensor built ahead of the loop that steers on it: coverage of the facts the person supplied, per '
+    + '100 words, against the author\'s own density. Wiring it means the invocation loop scoring drafts '
+    + 'on it, which is a change to generation and runs the benchmark before it merges (CONTRIBUTING, '
+    + 'decision 0006); until then it is pinned by its own tests and reachable from no command.',
   'core/ratification/boundary-answer.ts':
     'Wireable and not yet decided. It fits `atelier confirm --rule <id> --applies-when <condition>` '
     + 'almost exactly, which would give the CLI a scoping act distinct from the authority act it has '
