@@ -157,6 +157,20 @@ const PARKED: Readonly<Record<string, string>> = {
     'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
     + 'because it is a record rather than a component: testing an instrument whose construct was not '
     + 'established would assert behaviour nobody is entitled to rely on.',
+  'core/fidelity/types.ts':
+    'The shapes the fidelity loop shares (bands, the detector model, readings, implementation releases). '
+    + 'Parked with the loop it describes: the detector and its qualification below are built and tested, '
+    + 'and nothing steers by them until a qualification on outside data passes.',
+  'core/fidelity/stylometry.ts':
+    'A stylometric detector (function-word and character-trigram rates, logistic regression, Platt '
+    + 'calibration on grouped held-out folds). A MONITOR by its own contract, and not yet qualified: it '
+    + 'is run by bench/fidelity/qualify.mjs on a reviewer\'s data and wired into no command until it clears '
+    + 'core/fidelity/qualify.ts on texts it never saw.',
+  'core/fidelity/qualify.ts':
+    'The bars a sensor must clear before it may steer (source, topic and generator held out; pooled AUC '
+    + 'with a seeded bootstrap interval). Run by bench/fidelity/qualify.mjs, deliberately reachable from no '
+    + 'CLI verb for the same reason as core/stats/sign-test.ts: a user command that computes qualification '
+    + 'statistics is an invitation to peeking.',
     'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',

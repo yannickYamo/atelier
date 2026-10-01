@@ -13,7 +13,8 @@
 // Cluster bootstrap, stratified resampling and multiplicity corrections are absent on purpose. Each
 // would be added when a study needs it, the way the optimizer interface is being shaped by a working
 // instance rather than by imagination. Generality invented ahead of a use is generality nobody has
-// checked.
+// checked. Stratified resampling arrived that way: the detector's qualification (../fidelity/qualify.ts)
+// needed it, and calls `drawWithReplacement` once per class.
 //
 // ─── WHY RESAMPLING GENERATIONS WOULD BE WRONG ─────────────────────────────────────────────────
 //
@@ -64,6 +65,15 @@ export function seededShuffle<T>(xs: readonly T[], seed: number): T[] {
 }
 
 export const DEFAULT_RESAMPLES = 10_000;
+
+/**
+ * One bootstrap draw: as many elements as `xs` holds, each drawn at random WITH REPLACEMENT by `rnd`.
+ * The one statement of resampling outside `pairedBootstrap`; a stratified bootstrap calls it once per
+ * stratum (../fidelity/qualify.ts resamples author and model scores separately), so class sizes hold.
+ */
+export function drawWithReplacement<T>(xs: readonly T[], rnd: () => number): T[] {
+  return xs.map(() => xs[Math.floor(rnd() * xs.length)]);
+}
 
 /**
  * Paired context bootstrap. Resamples CONTEXTS with replacement; never generations.
