@@ -4,8 +4,10 @@
 // writeAtomic, every read through readJson with the path in its error, and everything append-only
 // except one pointer.
 //
-//   profile.json            the author's bands and detector (FidelityProfile), rebuilt at build time
-//   retrieval.json          the TF-IDF index over the author's passages, checked against its hash on read
+//   profile.json            the latest author's bands and detector (FidelityProfile), rebuilt at build time
+//   profiles/<hash>.json    every profile a release has named, kept, so a rollback serves the one it names
+//   retrieval.json          the latest TF-IDF index over the author's passages, checked against its hash on read
+//   retrieval/<hash>.json   every index a release has named, kept for the same reason
 //   releases/<id>.json      implementation releases, content-addressed and never overwritten
 //   active.json             the ONLY mutable file: which release is serving. Rollback moves it to the parent.
 //
@@ -32,16 +34,21 @@ const base = (l: StoreLayout): string => {
 };
 const releasesDir = (l: StoreLayout): string => join(base(l), 'releases');
 
-export function getProfile(l: StoreLayout): FidelityProfile | null {
-  const p = join(base(l), 'profile.json');
-  return existsSync(p) ? readJson<FidelityProfile>(p, { what: 'the fidelity profile', requireKeys: ['bands', 'hash'] }) : null;
+/** The latest profile, or the one with this hash (what a release names). */
+export function getProfile(l: StoreLayout, hash?: string): FidelityProfile | null {
+  const p = hash ? join(base(l), 'profiles', `${hash}.json`) : join(base(l), 'profile.json');
+  const found = existsSync(p) ? readJson<FidelityProfile>(p, { what: 'the fidelity profile', requireKeys: ['bands', 'hash'] }) : null;
+  if (found && hash && found.hash !== hash) throw new Error(`STORE: profile file ${p} names itself ${found.hash}, not ${hash}. It is not served.`);
+  return found;
 }
 export function setProfile(l: StoreLayout, profile: FidelityProfile): void {
   writeAtomic(join(base(l), 'profile.json'), JSON.stringify(profile, null, 1));
+  writeAtomic(join(base(l), 'profiles', `${profile.hash}.json`), JSON.stringify(profile));
 }
 
-export function getRetrievalIndex(l: StoreLayout): RetrievalIndex | null {
-  const p = join(base(l), 'retrieval.json');
+/** The latest index, or the one with this hash (what a release names). */
+export function getRetrievalIndex(l: StoreLayout, hash?: string): RetrievalIndex | null {
+  const p = hash ? join(base(l), 'retrieval', `${hash}.json`) : join(base(l), 'retrieval.json');
   if (!existsSync(p)) return null;
   const index = readJson<RetrievalIndex>(p, { what: 'the retrieval index', requireKeys: ['passages', 'df', 'hash'] });
   if (passagesHash(index.passages) !== index.hash) {
@@ -51,6 +58,7 @@ export function getRetrievalIndex(l: StoreLayout): RetrievalIndex | null {
 }
 export function setRetrievalIndex(l: StoreLayout, index: RetrievalIndex): void {
   writeAtomic(join(base(l), 'retrieval.json'), JSON.stringify(index));
+  writeAtomic(join(base(l), 'retrieval', `${index.hash}.json`), JSON.stringify(index));
 }
 
 const checked = (r: ImplementationRelease, where: string): ImplementationRelease => {
@@ -133,6 +141,9 @@ export function getActiveRelease(l: StoreLayout): { readonly release: Implementa
 export function rollbackRelease(l: StoreLayout): ImplementationRelease | null {
   const active = getActiveRelease(l);
   if (!active?.release.parent) return null;
+  // NEVER ACROSS A STANDARD. What the loop learned under one standard says nothing about another; a release
+  // line starts again at each new standard, so its root has no parent to roll back to.
+  if (active.chain[1] && active.chain[1].standardVersionHash !== active.release.standardVersionHash) return null;
   setActiveRelease(l, active.release.parent);
   return active.chain[1];
 }

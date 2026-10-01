@@ -23,13 +23,29 @@ import { createHash } from 'node:crypto';
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 /**
- * The profile discovery wrote, with the role of every feature the ratified standard holds as a FEATURE rule
- * set to RULE (the owner's ratification decides that, not the selection), and its hash recomputed.
+ * THE OWNER'S RULINGS DECIDE WHAT STEERS. The profile discovery wrote, with:
+ *   - every feature the ratified standard holds as a FEATURE rule set to RULE, with the band the owner
+ *     ratified (a ruling that changed the range is the range);
+ *   - every feature selection was strong enough to propose as a rule, and the owner did not adopt (rejected,
+ *     or never ratified), set to MONITOR: a rule the owner turned down must not steer drafts anyway.
+ * Its hash is recomputed.
  */
 export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): FidelityProfile {
-  const ruled = new Set(v.requirements.flatMap((q) => (q.authority !== 'EXPERT_REJECTED' && q.measurement?.observer === 'FEATURE'
-    ? [(q.measurement.params.feature as readonly string[] | undefined)?.[0] ?? ''] : [])));
-  const bands = p.bands.map((b) => (ruled.has(b.id) ? { ...b, role: 'RULE' as const } : b));
+  const ruled = new Map<string, readonly [number, number] | null>();
+  for (const q of v.requirements) {
+    if (q.authority === 'EXPERT_REJECTED' || q.measurement?.observer !== 'FEATURE') continue;
+    const id = (q.measurement.params.feature as readonly string[] | undefined)?.[0];
+    if (!id) continue;
+    const lo = q.measurement.params.minValue; const hi = q.measurement.params.maxValue;
+    ruled.set(id, typeof lo === 'number' || typeof hi === 'number' ? [typeof lo === 'number' ? lo : -Infinity, typeof hi === 'number' ? hi : Infinity] : null);
+  }
+  const bands = p.bands.map((b) => {
+    if (ruled.has(b.id)) {
+      const r = ruled.get(b.id);
+      return { ...b, role: 'RULE' as const, ...(r ? { band: [Math.max(r[0], -1e9), Math.min(r[1], 1e9)] as const } : {}) };
+    }
+    return b.proposable ? { ...b, role: 'MONITOR' as const } : b;
+  });
   const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
@@ -46,12 +62,15 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   fstore.setProfile(L, profile);
   const index = existsSync(indexFile) ? readJson<RetrievalIndex>(indexFile, { what: 'the retrieval index' }) : null;
   if (index) fstore.setRetrievalIndex(L, index);
-  const parent = fstore.getActiveRelease(L)?.release ?? null;
+  // A NEW STANDARD STARTS A NEW LINE. Settings and notes earned under one standard are not evidence about
+  // another: under a changed standard the first release is a root, with the first settings for this profile.
+  const prior = fstore.getActiveRelease(L)?.release ?? null;
+  const parent = prior?.standardVersionHash === v.standardVersionHash ? prior : null;
   const release = fstore.putRelease(L, makeRelease({
     parent: parent?.id ?? null, standardVersionHash: v.standardVersionHash, skillVersionHash,
     // A rebuild keeps the settings and notes the loop had earned; a first build starts from the defaults.
     settings: parent?.settings ?? firstSettings(profile, index !== null),
-    notes: parent?.standardVersionHash === v.standardVersionHash ? parent.notes : [],
+    notes: parent?.notes ?? [],
     profileHash: profile.hash, retrievalHash: index?.hash ?? null,
     createdAt: new Date().toISOString(), why: parent ? `rebuilt as skill version ${skillVersionHash}` : 'the first release, built with the skill',
   }));
@@ -80,9 +99,11 @@ export const MIN_STEERING = 3;
  * Null when the skill has no profile.
  */
 export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string }): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null } | null {
-  const profile = fstore.getProfile(L);
   const active = fstore.getActiveRelease(L)?.release ?? null;
-  if (!profile || !active) return null;
+  if (!active) return null;
+  // The profile and index the release names, not whichever was built last: a rollback serves what it says.
+  const profile = active.profileHash ? fstore.getProfile(L, active.profileHash) ?? fstore.getProfile(L) : fstore.getProfile(L);
+  if (!profile || (active.profileHash && profile.hash !== active.profileHash)) return null;
   // A NEW STANDARD IS A NEW SKILL. What the loop learned under one standard says nothing about another.
   if (active.standardVersionHash !== sv.standardVersionHash) return null;
   let release = active;
@@ -94,7 +115,7 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
     if (store.getActive(L) === sv.skillVersionHash) fstore.setActiveRelease(L, release.id);
   }
   assertSameStandard(release, sv.standardVersionHash);
-  const index = release.retrievalHash ? fstore.getRetrievalIndex(L) : null;
+  const index = release.retrievalHash ? fstore.getRetrievalIndex(L, release.retrievalHash) ?? fstore.getRetrievalIndex(L) : null;
   return { release, profile, index: index?.hash === release.retrievalHash ? index : null };
 }
 

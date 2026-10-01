@@ -30,12 +30,13 @@ import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding } from '
 export async function fidelity(): Promise<void> {
   const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
-  const profile = fstore.getProfile(L) ?? die(`"${name}" has no fidelity profile: it is built at discovery from a corpus (atelier new <folder>), and a skill written from stated rules has no author's range to steer toward.`);
-  const active = fstore.getActiveRelease(L);
+  const activeNow = fstore.getActiveRelease(L);
+  const profile = (activeNow?.release.profileHash ? fstore.getProfile(L, activeNow.release.profileHash) : null) ?? fstore.getProfile(L) ?? die(`"${name}" has no fidelity profile: it is built at discovery from a corpus (atelier new <folder>), and a skill written from stated rules has no author's range to steer toward.`);
+  const active = activeNow;
   const read = flag('--read');
   if (read) { readOne(readFileSync(read, 'utf8'), profile); return; }
   if (argv.includes('--rollback')) {
-    const back = fstore.rollbackRelease(L) ?? die('the active release has no parent to roll back to.');
+    const back = fstore.rollbackRelease(L) ?? die('nothing to roll back to: the active release is the first of its line (a new standard starts a new line).');
     console.log(`Active implementation release is now ${back.id} (${back.why}).`);
     return;
   }
@@ -46,7 +47,10 @@ export async function fidelity(): Promise<void> {
     console.log(`New implementation release ${r.id} (parent ${from.id}): ${describeSettings(r.settings)}.`);
     return;
   }
-  const records = store.listInvocations(L).flatMap((r) => (r.fidelity?.reading ? [{ ...r, reading: r.fidelity.reading }] : []));
+  // ONLY WHAT THIS STANDARD AND THIS PROFILE PRODUCED. Outputs under an earlier standard, or read against an
+  // earlier profile, are about another target.
+  const records = store.listInvocations(L).flatMap((r) => (r.fidelity?.reading && r.standardVersionHash === from.standardVersionHash && r.fidelity.profileHash === profile.hash
+    ? [{ ...r, reading: r.fidelity.reading }] : []));
   if (argv.includes('--distill')) { await distill(L, from, records); return; }
   const outcomes = outcomesOf(records, (id) => fstore.getRelease(L, id)?.settings ?? null);
   if (argv.includes('--next')) {
@@ -122,8 +126,9 @@ export function outcomesOf(records: readonly InvocationRecord[], settingsFor: (r
   for (const r of records) if (r.fidelity?.release) by.set(r.fidelity.release, [...(by.get(r.fidelity.release) ?? []), r]);
   return [...by.entries()].map(([releaseId, rs]) => {
     const shares = rs.flatMap((r) => (r.fidelity?.reading ? [inBandShare(r.fidelity.reading)] : [])).filter((x): x is number => x !== null);
-    const invented = rs.reduce((n, r) => n + (r.repair?.storiesCut?.length ?? 0) + (r.repair?.violatedAfter.filter((v) => v.startsWith('UNSOURCED')).length ?? 0), 0);
-    const settings = settingsFor(releaseId) ?? settingsOf(rs[0]);
+    // A reader outage (UNSOURCED·unread) is not an invented claim; an unconfirmed one is counted.
+    const invented = rs.reduce((n, r) => n + (r.repair?.storiesCut?.length ?? 0) + (r.repair?.violatedAfter.filter((v) => v.startsWith('UNSOURCED') && v !== 'UNSOURCED·unread').length ?? 0), 0);
+    const settings = settingsFor(releaseId) ?? rs[0].fidelity?.settings ?? settingsOf(rs[0]);
     return { releaseId, settings, n: rs.length, meanInBandShare: shares.length ? shares.reduce((a, b) => a + b, 0) / shares.length : 0, inventedPerOutput: invented / rs.length, costPerOutput: 0 };
   });
 }
@@ -151,10 +156,10 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
   const out: Record<string, number> = { ...base };
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
-    if (!['drafts', 'editBudget', 'retrievalK', 'notesCap', 'temperature'].includes(k)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap or temperature.`);
+    if (!['drafts', 'editBudget', 'retrievalK', 'notesCap'].includes(k)) die(`unknown setting "${k}": drafts, editBudget, retrievalK or notesCap.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
-    out[k] = k === 'temperature' ? n : Math.floor(n);
+    out[k] = Math.floor(n);
   }
   if (out.drafts < 1) die('drafts must be at least 1.');
   return out as unknown as ImplementationSettings;

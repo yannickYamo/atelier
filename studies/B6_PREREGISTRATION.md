@@ -32,7 +32,7 @@ fallback, and which was used is recorded.
 |---|---|
 | plain | the model with the brief |
 | pasted | the model with the brief and four of the author's training pieces |
-| open | Atelier as 0.7 ran it: one draft, no fidelity loop (`--no-fidelity --drafts 1`) |
+| open | Atelier as 0.7 ran it: no fidelity loop, 0.7's two drafts (`--no-fidelity --drafts 2`) |
 | loop | Atelier 0.8 with its implementation release (four drafts, structural edits, retrieval) |
 
 The skill for `open` and `loop` is built from the training pieces only, its suggested rulings accepted as
@@ -44,8 +44,11 @@ a stated limit).
 The loop steers by the skill's profile, built from the training pieces. The evaluator is built apart:
 
 - bands over every counted feature from the **validation** pieces;
-- a stylometric detector trained on the validation pieces against the `plain` and `pasted` outputs of the
-  **validation** briefs, never on any test output, never with the skill's own detector.
+- a stylometric detector trained on the validation pieces against imitations of the **validation** briefs
+  written by a different model (`B6_EVAL_MODEL`, half of them with the author's pieces pasted in), never on
+  any test output, never with the skill's own detector, and never on the `plain` or `pasted` arms it is then
+  used to compare (a detector trained on the comparator's own distribution would favour whatever is not it).
+  If those imitations are missing the run falls back to the plain and pasted outputs and the result says so.
 
 ## 5. Endpoints and bars (per register)
 
@@ -63,8 +66,9 @@ standard alone already did.
 
 ## 6. Decision
 
-The claim holds when the human read passes in at least four registers with none below 0.50, and every
-counted bar holds in those registers. Anything else is reported as the result, at the same size: which
+The claim holds when, in at least four confirmatory registers, the human read passes and every counted bar
+holds, and no register's read is below 0.50. `bench/b6/run.mjs score` computes exactly this from the labels
+and `results.json`; a counted bar with missing data does not pass. Anything else is reported as the result, at the same size: which
 endpoints held, in which registers, and by how much.
 
 ## 7. Limits stated now

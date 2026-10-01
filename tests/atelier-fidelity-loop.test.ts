@@ -12,7 +12,11 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { formatShape, draftOrder, applicability, type DraftScore } from '../cli/commands/invoke.js';
+import { formatShape, draftOrder, applicability, editKeepsStandard, type DraftScore } from '../cli/commands/invoke.js';
+import * as fstore from '../core/state/fidelity-store.js';
+import { makeRelease } from '../core/fidelity/release.js';
+import { DEFAULT_SETTINGS } from '../core/fidelity/types.js';
+import type { VerifyReport } from '../core/observers/verify.js';
 import { buildProfile, readFidelity, inBandShare } from '../core/fidelity/profile.js';
 import { editTarget, editInstruction, movedTarget, contentKept, editTowardRange, EDITABLE } from '../core/fidelity/structural.js';
 import { ratifiedProfile, firstSettings } from '../cli/fidelity.js';
@@ -115,7 +119,7 @@ describe('the draft order: rules first, then the author\'s range, then the suppl
   });
   it('the detector breaks only what is left, and only on a clear difference', () => {
     expect(draftOrder({ ...base, detector: 0.2 }, { ...base, detector: 0.8 })).toBeLessThan(0);
-    expect(draftOrder({ ...base, detector: 0.50 }, { ...base, detector: 0.55 })).toBe(0);
+    expect(draftOrder({ ...base, detector: 0.51 }, { ...base, detector: 0.54 })).toBe(0);
     expect(draftOrder({ ...base, outside: 0, detector: 0.9 }, { ...base, outside: 1, detector: 0.1 })).toBeLessThan(0);
   });
 });
@@ -318,3 +322,73 @@ describe('through the binary: discovery builds the profile, invoke steers and re
 
 // keep the Requirement import honest for readers of this file
 export type { Requirement };
+
+// ── what the review of 0.8 found, pinned ───────────────────────────────────────────────────────────
+describe('the owner\'s rulings decide what steers', () => {
+  const band = (id: string, extra: Partial<FeatureBand> = {}): FeatureBand => ({ id, cls: 'all', band: [10, 20], median: 15, spread: 2, n: 8, role: 'SIGNAL', auc: 0.95, ...extra });
+  const p: FidelityProfile = { version: 1, corpusHash: 'c', detector: null, hash: 'h', bands: [band('paragraphP50', { proposable: true }), band('colon', { proposable: true }), band('sentenceCv')] };
+  it('a feature proposed as a rule and not adopted is only monitored; one never proposed still steers', () => {
+    const r = ratifiedProfile(p, { requirements: [] } as unknown as StandardVersion);
+    expect(r.bands.find((b) => b.id === 'paragraphP50')?.role).toBe('MONITOR');
+    expect(r.bands.find((b) => b.id === 'sentenceCv')?.role).toBe('SIGNAL');
+  });
+  it('a rejected FEATURE rule is monitored; a ratified one is a RULE with the band the owner ratified', () => {
+    const v = { requirements: [
+      { requirementId: 'c1', authority: 'EXPERT_REJECTED', measurement: { observer: 'FEATURE', params: { feature: ['colon'], maxValue: 5 } } },
+      { requirementId: 'c2', authority: 'USER_ADOPTED', measurement: { observer: 'FEATURE', params: { feature: ['paragraphP50'], minValue: 12, maxValue: 30 } } },
+    ] } as unknown as StandardVersion;
+    const r = ratifiedProfile(p, v);
+    expect(r.bands.find((b) => b.id === 'colon')?.role).toBe('MONITOR');
+    expect(r.bands.find((b) => b.id === 'paragraphP50')).toMatchObject({ role: 'RULE', band: [12, 30] });
+  });
+});
+
+describe('a structural edit is held to the terms of a repair', () => {
+  const line = (id: string, verdict: 'MET' | 'VIOLATED', spans: string[] = [], materiality = 'REQUIRED') => ({ requirementId: id, statement: id, materiality,
+    result: { verdict, value: spans.length, detail: '', spans: spans.map((t) => ({ start: 0, end: t.length, text: t, why: '' })) } });
+  const rep = (...checked: ReturnType<typeof line>[]): VerifyReport => ({ skill: 's', standardVersionHash: 'h', checked, unchecked: [], conditional: [], failed: false });
+  it('refuses a rule already broken now broken in more places (the em dash an edit adds)', () => {
+    expect(editKeepsStandard(rep(line('c1', 'VIOLATED', ['—'])), rep(line('c1', 'VIOLATED', ['—', '—'])))).toBe(false);
+  });
+  it('refuses a PREFERRED rule that held and now breaks', () => {
+    expect(editKeepsStandard(rep(line('p3', 'MET', [], 'PREFERRED')), rep(line('p3', 'VIOLATED', ['x'], 'PREFERRED')))).toBe(false);
+  });
+  it('refuses a newly flagged claim', () => {
+    expect(editKeepsStandard(rep(line('UNSOURCED', 'MET')), rep(line('UNSOURCED', 'VIOLATED', ['It cost 4,000 dollars.'])))).toBe(false);
+  });
+  it('keeps an edit that changed nothing the standard counts', () => {
+    expect(editKeepsStandard(rep(line('c1', 'VIOLATED', ['—'])), rep(line('c1', 'VIOLATED', ['—'])))).toBe(true);
+  });
+});
+
+describe('a release line never crosses a standard', () => {
+  it('rollback stops at the first release under the current standard', () => {
+    const L = { root: mkdtempSync(join(tmpdir(), 'atelier-rel-')), skillName: 'x' };
+    const mk = (parent: string | null, std: string, why: string) => fstore.putRelease(L, makeRelease({ parent, standardVersionHash: std, skillVersionHash: 's', settings: DEFAULT_SETTINGS,
+      notes: [], profileHash: null, retrievalHash: null, createdAt: '2026-10-01T00:00:00Z', why }));
+    const old = mk(null, 'std-old', 'old');
+    const root = mk(old.id, 'std-new', 'new root');   // as a release written before 0.8's fix might be chained
+    const child = mk(root.id, 'std-new', 'child');
+    fstore.setActiveRelease(L, child.id);
+    expect(fstore.rollbackRelease(L)?.id).toBe(root.id);
+    expect(fstore.rollbackRelease(L)).toBeNull();
+    expect(fstore.getActiveRelease(L)?.release.id).toBe(root.id);
+  });
+  it('a profile and an index are kept by hash, so a release is served what it names', () => {
+    const L = { root: mkdtempSync(join(tmpdir(), 'atelier-prof-')), skillName: 'x' };
+    const p1: FidelityProfile = { version: 1, corpusHash: 'a', detector: null, hash: 'p1', bands: [] };
+    const p2: FidelityProfile = { ...p1, hash: 'p2' };
+    fstore.setProfile(L, p1); fstore.setProfile(L, p2);
+    expect(fstore.getProfile(L)?.hash).toBe('p2');
+    expect(fstore.getProfile(L, 'p1')?.hash).toBe('p1');
+  });
+});
+
+describe('the detector tie is transitive', () => {
+  const base: DraftScore = { req: 0, taste: 0, tells: 0, all: 0, signal: null, style: 0 };
+  it('bucketed to tenths: 0.00, 0.08 and 0.16 order consistently', () => {
+    const xs = [0.16, 0.0, 0.08].map((d) => ({ ...base, detector: d }));
+    const sorted = [...xs].sort(draftOrder).map((x) => x.detector);
+    expect(sorted).toEqual([...[...xs].reverse()].sort(draftOrder).map((x) => x.detector));
+  });
+});

@@ -28,6 +28,7 @@ import { judgeFeature, bandOf, distanceFromBand } from '../observers/selection.j
 import { quantile, wordsOf, proseRegions } from '../observers/text.js';
 import { trainDetector, scoreDetector } from './stylometry.js';
 import { authorFactDensity } from '../loop/fact-ledger.js';
+import { buildRetrievalIndex, retrieve } from './retrieval.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass, type DetectorModel, type FeatureBand, type FidelityProfile, type FidelityReading } from './types.js';
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
@@ -63,29 +64,34 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
     const pooled = vals(read);
     const band = bandOf(pooled);
     if (!band) continue;
-    bands.push({ id: f.id, cls: 'all', band, median: r3(quantile(pooled, 0.5)), spread: r3(sd(pooled)), n: pooled.length, role, auc: verdict.auc });
+    const proposable = verdict.kept && verdict.role === 'RULE' ? { proposable: true as const } : {};
+    bands.push({ id: f.id, cls: 'all', band, median: r3(quantile(pooled, 0.5)), spread: r3(sd(pooled)), n: pooled.length, role, auc: verdict.auc, ...proposable });
     for (const cls of CONTEXT_CLASSES) {
       const inClass = vals(readTexts.filter((t) => classOf.get(t) === cls).map((t) => f.measure(t)));
       const b = inClass.length >= CLASS_MIN_PIECES ? bandOf(inClass) : null;
-      if (b) bands.push({ id: f.id, cls, band: b, median: r3(quantile(inClass, 0.5)), spread: r3(sd(inClass)), n: inClass.length, role, auc: verdict.auc });
+      if (b) bands.push({ id: f.id, cls, band: b, median: r3(quantile(inClass, 0.5)), spread: r3(sd(inClass)), n: inClass.length, role, auc: verdict.auc, ...proposable });
     }
   }
-  const detector = detectorFor([...input.read, ...input.held], input.model);
+  const detector = detectorFor(input.read, input.model);
   const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 
 /**
- * The detector, trained on the author's pieces (one group per piece, so cross-validation never scores a
- * piece it trained on) against the model's drafts. Null when there are too few long-enough texts, or when
- * training fails: the detector is a monitor, and a skill without one still works.
+ * The detector, trained on the pieces READ (the held-back ones stay unseen by every instrument) against the
+ * model's drafts. Grouped so cross-validation never scores a text whose twin it trained on: each draft joins
+ * the group of the author piece it is closest to (its topic came from one, and the pasted ones copied some),
+ * so a piece and the drafts made from it fall in one fold. Null when there are too few long-enough texts, or
+ * when training fails: the detector is a monitor, and a skill without one still works.
  */
 function detectorFor(author: readonly { id: string; text: string }[], model: readonly string[]): DetectorModel | null {
   const longA = author.filter((p) => proseWords(p.text) >= 100);
   const longM = model.filter((t) => proseWords(t) >= 100);
   if (longA.length < 4 || longM.length < 4) return null;
+  const index = buildRetrievalIndex(longA);
+  const groupOf = (t: string): string => { const hit = retrieve(index, t, 1)[0]; return hit === undefined ? 'm:none' : `t:${index.passages[hit].piece}`; };
   try {
-    return trainDetector(longA.map((p) => ({ text: p.text, group: `a:${p.id}` })), longM.map((t, i) => ({ text: t, group: `m:${i}` })));
+    return trainDetector(longA.map((p) => ({ text: p.text, group: `t:${p.id}` })), longM.map((t) => ({ text: t, group: groupOf(t) })));
   } catch { return null; }
 }
 

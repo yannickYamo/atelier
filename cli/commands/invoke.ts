@@ -5,14 +5,15 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
+import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
-import { verifyText } from '../../core/observers/verify.js';
+import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { editTowardRange } from '../../core/fidelity/structural.js';
-import type { FidelityProfile, FidelityReading, FidelityRecord } from '../../core/fidelity/types.js';
+import type { FidelityProfile, FidelityReading, FidelityRecord, ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -182,7 +183,8 @@ export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   // The detector is a monitor: it only breaks what is left, and only on a clear difference.
   || detectorTie(a.detector ?? null, b.detector ?? null);
 
-const detectorTie = (a: number | null, b: number | null): number => (a !== null && b !== null && Math.abs(a - b) >= 0.1 ? a - b : 0);
+// Bucketed to tenths so the order stays transitive: a threshold on the difference made 0.00 ≈ 0.08 ≈ 0.16 with 0.00 < 0.16.
+const detectorTie = (a: number | null, b: number | null): number => (a !== null && b !== null ? Math.round(a * 10) - Math.round(b * 10) : 0);
 
 export async function invoke(): Promise<void> {
   // FOR A PROGRAM, THE ANSWER ALONE ON STDOUT. The report, notices and cost were printed around the answer,
@@ -232,7 +234,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4)),
-    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (taste?.callsFor(nDrafts) ?? 0)) };
+    // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
+    // budget is not silently starved by the rewrites before it.
+    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -285,6 +289,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}) };
   const impl = fid ? implementationBlock(fid.release, fid.index, asked) : { text: '', retrieved: [] };
+  // A run whose flags changed what the release would have done is recorded with the settings that ran and
+  // no release: credited to the release, it would make the settings search compare arms that never ran.
+  const overridden = flag('--drafts') !== undefined || flag('--edits') !== undefined || argv.includes('--no-repair');
   const trace: FidelityTrace = { drafts: [], edits: [] };
   // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
   const ledger = factLedger(materialText);
@@ -295,13 +302,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace } : null) : null,
+    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
     std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger }) : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts),
-    fid && std ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger) : null);
+    // A structured output is JSON, not prose: no reading of it means anything against a prose range.
+    fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
+      { ...fid.release.settings, drafts: nDrafts, editBudget }, overridden) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
@@ -517,20 +526,28 @@ interface FidelityTrace { drafts: FidelityReading[]; edits: { target: string; ke
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
- * redrafted for form against the worst band still outside the author's range, at most `editBudget` times,
- * each redraft kept only if it moved the target, kept the meaning, and broke nothing the standard checks:
- * no REQUIRED rule newly broken, and no claim newly flagged.
+ * redrafted for form against the worst band still outside the author's range, at most `editBudget` times.
+ * A redraft is held to the same terms as a span repair (core/loop/repair.ts, `regressions`): no rule of the
+ * standard broken that was not, none broken in more places, no claim flagged that was not. And the report
+ * that ships is counted again on the text that ships.
+ *
+ * Not run when the claim reader has degraded (a redraft would be checked for invented claims by the weaker
+ * pattern check only), nor when the taste reader holds VETO (its readings, recorded and calibrated on, would
+ * describe a text that is no longer the output, and a redraft could undo what its own repair fixed).
  */
 function withEdits(refine: (draft: string) => Promise<{ output: string; repair: RepairRecord | null }>,
-  e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace } | null) {
+  e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace; taste: TasteSession | null } | null) {
   if (!e) return refine;
   return async (draft: string) => {
     const r = await refine(draft);
+    const reader = e.checks.claimSensor;
+    if (e.taste?.acts) { e.trace.edits.push({ target: '-', kept: false, why: 'not tried: the taste reader holds VETO on this skill, and an edit would change the text it read' }); return r; }
+    if (reader?.degraded) { e.trace.edits.push({ target: '-', kept: false, why: 'not tried: the claim reader could not run, so a redraft could not be checked for invented claims' }); return r; }
     const breaksNothing = async (before: string, after: string): Promise<boolean> => {
-      const [b, a] = await Promise.all([checkDraftAsync(e.name, e.std, before, e.checks), checkDraftAsync(e.name, e.std, after, e.checks)]);
-      const flagged = (x: typeof b): Set<string> => new Set(x.checked.filter((c) => c.requirementId.startsWith('UNSOURCED')).flatMap((c) => c.result.spans.map((sp) => sp.text.trim())));
-      const before_ = flagged(b);
-      return brokenIn(a).every((id) => brokenIn(b).includes(id)) && [...flagged(a)].every((t) => before_.has(t));
+      const b = await checkDraftAsync(e.name, e.std, before, e.checks);
+      const a = await checkDraftAsync(e.name, e.std, after, e.checks);
+      if (reader?.degraded) return false;
+      return editKeepsStandard(b, a);
     };
     let edited: Awaited<ReturnType<typeof editTowardRange>>;
     try { edited = await editTowardRange(e.client, e.budget, r.output, e.profile, e.editBudget, breaksNothing); } catch (err) {
@@ -539,19 +556,36 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
     }
     e.trace.edits.push(...edited.edits);
     if (edited.text === r.output) return r;
+    // THE REPORT IS THE DELIVERED TEXT'S, as after every rewrite: recounted on the edited text.
+    const final = await checkDraftAsync(e.name, e.std, edited.text, e.checks);
+    const stillListed = (r.repair?.claimsToCheck ?? []).filter((c) => edited.text.includes(c.slice(0, 60)));
+    const toCheck = [...new Set([...stillListed, ...listedClaims(final)])];
     // The draft the model wrote is kept in the record whether or not a rule was repaired, so a comparison of
     // drafts (core/fidelity/experience.ts) reads the text the reading was taken on.
     const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: 'every REQUIRED measured rule holds' };
-    return { output: edited.text, repair: { ...base, why: `${base.why}; ${edited.edits.filter((x) => x.kept).length} structural edit(s) toward your range` } };
+    const { claimsToCheck: _old, ...rest } = base;
+    return { output: edited.text, repair: { ...rest, violatedAfter: brokenIn(final),
+      ...(toCheck.length ? { claimsToCheck: toCheck } : {}),
+      why: `${base.why}; ${edited.edits.filter((x) => x.kept).length} structural edit(s) toward your range` } };
   };
+}
+
+/**
+ * Whether an edit kept the standard, on the same terms as a span repair: nothing that held now broken, nothing
+ * broken in more places (core/loop/repair.ts, `regressions`), and no claim flagged that was not flagged before.
+ */
+export function editKeepsStandard(before: VerifyReport, after: VerifyReport): boolean {
+  const flagged = (x: VerifyReport): Set<string> => new Set(x.checked.filter((c) => c.requirementId.startsWith('UNSOURCED')).flatMap((c) => c.result.spans.map((sp) => sp.text.trim())));
+  const was = flagged(before);
+  return regressions(before, after).length === 0 && [...flagged(after)].every((t) => was.has(t));
 }
 
 /** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
-  applicability: FidelityRecord['applicability'], ledger: readonly Fact[]): FidelityRecord {
+  applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean): FidelityRecord {
   const cov = ledger.length ? factCoverage(output, ledger) : null;
   return {
-    release: fid.release.id, profileHash: fid.profile.hash,
+    release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
     seed: 0,
     reading: readFidelity(output, fid.profile),

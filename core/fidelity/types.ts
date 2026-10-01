@@ -47,6 +47,11 @@ export interface FeatureBand {
   readonly role: 'RULE' | 'SIGNAL' | 'MONITOR';
   /** separation from the model's plain drafts on the pieces it was selected on (AUC, author above model) */
   readonly auc: number | null;
+  /**
+   * Selection found it strong enough to propose as a rule to the owner. Such a feature steers only if the
+   * owner ratified it (then as RULE, with the ratified band); rejected or not adopted, it is only monitored.
+   */
+  readonly proposable?: true;
 }
 
 /**
@@ -159,7 +164,10 @@ export interface ImplementationRelease {
 
 /** Recorded with every invocation: enough to replay how the output was steered. */
 export interface FidelityRecord {
+  /** the release that steered, or null when the run overrode its settings (then it is not that release's evidence) */
   readonly release: string | null;
+  /** the settings that actually ran */
+  readonly settings?: ImplementationSettings;
   readonly profileHash: string | null;
   readonly seed: number;
   readonly reading: FidelityReading | null;
