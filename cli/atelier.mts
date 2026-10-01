@@ -42,6 +42,7 @@ import { fix } from './commands/fix.js';
 import { newSkill } from './commands/new.js';
 import { review } from './commands/review.js';
 import { verify } from './commands/verify.js';
+import { score } from './commands/score.js';
 import { mcp } from './commands/mcp.js';
 import { material } from './commands/material.js';
 import { existsSync } from 'node:fs';
@@ -67,6 +68,7 @@ export const COMMANDS: readonly string[] = [
   'new',
   'review',
   'verify',
+  'score',
   'mcp',
   'material',
   'abort',
@@ -127,6 +129,7 @@ const main = async (): Promise<void> => {
     case 'new': return newSkill();
     case 'review': { await review(); return; }
     case 'verify': return verify();
+    case 'score': return score();
     case 'mcp': return mcp();
     case 'material': { material(); return; }
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
