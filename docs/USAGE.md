@@ -127,6 +127,14 @@ atelier fix "the close was a summary, not a turn"        # correct it in your wo
 atelier tend --skill posts --auto                        # look after it, from cron
 ```
 
+**Build with the model you will run it on.** A skill is built against the model you configure: it asks that
+model for drafts on your topics and learns where its habits differ from yours. Claude, GPT, Grok through an
+OpenAI-compatible endpoint, or an open model through Ollama all work. Most of what steers a draft is your own
+range, read off your pieces, and holds on any model. The style detector does not: it learns one model's
+habits, and a detector trained on one model family does not recognise another family's. Run the skill on a
+different model and the detector's readings stop meaning much (the run says so); rebuild the skill with that
+model to retrain it.
+
 One standard describes one format, read off your pieces of that format: build a LinkedIn skill from your
 LinkedIn posts, with `--class linkedin-post`, and it also holds each post to what LinkedIn fixes
 ([FORMATS.md](FORMATS.md)).

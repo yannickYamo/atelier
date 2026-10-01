@@ -16,6 +16,7 @@ import { editTowardRange } from '../../core/fidelity/structural.js';
 import type { FidelityProfile, FidelityReading, FidelityRecord, ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
+import * as fstore from '../../core/state/fidelity-store.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -363,7 +364,10 @@ function checkedBinding(L: store.StoreLayout, sv: SkillVersion): ReturnType<type
   }
   if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
     console.log(`\nRunning on a new runtime binding — ${describeBinding(binding)}.`);
-    console.log(`Observations from here are recorded against this binding and are not evidence about the other one.\n`);
+    console.log(`Observations from here are recorded against this binding and are not evidence about the other one.`);
+    // The style detector learned the habits of the model the skill was built with; another family's are not its.
+    if (fstore.getProfile(L)?.detector) console.log(`The style detector was trained on the model this skill was built with, so its readings on this one mean little. Rebuild the skill with this model to retrain it.`);
+    console.log('');
     // Recorded now, not when the run completes: the next invoke on this binding is a configuration the
     // person already said yes to, and must not be refused again.
     store.recordBinding(L, sv.skillVersionHash, binding);

@@ -69,6 +69,13 @@ reviewer with `bench/b6/run.mjs`.
   out) and `bench/b6/run.mjs` (split, build, generate, evaluate with an evaluator kept apart from the steering,
   a masked blind-read packet, and the pre-registered decision).
 
+### Known limits
+
+- **The style detector is tied to the model the skill was built with.** It learns that model's habits, and an
+  outside study found a detector trained on one model family does not recognise another family's imitations.
+  The author's range, which does most of the steering, holds on any model. Running a skill on another model
+  says so; rebuild with that model to retrain the detector.
+
 ### Cost
 
 A writing skill now costs about twice what it did per output (four drafts and up to two edits).
