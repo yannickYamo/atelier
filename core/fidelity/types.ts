@@ -138,7 +138,16 @@ export interface ImplementationSettings {
   readonly temperature?: number;
 }
 
-export const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 };
+/**
+ * THE DEFAULT IS 0.7'S COST. B6 ran the full loop against 0.7's settings and it did not move the author's range
+ * (20 structural edits tried, none kept; in range 0.733 against 0.738) at 3.3 times the cost. Until a study shows
+ * it pays, the loop is opt-in (decision 0007): two drafts, no edits, the author's closest passages retrieved,
+ * no experience notes.
+ */
+export const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 2, editBudget: 0, retrievalK: 3, notesCap: 0 };
+
+/** The full loop, opt-in: `invoke --fidelity`, or `atelier fidelity --set drafts=4,editBudget=2,notesCap=6`. */
+export const LOOP_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 };
 
 /**
  * AN IMPLEMENTATION RELEASE: everything below the standard that shaped an output, frozen and hashed.

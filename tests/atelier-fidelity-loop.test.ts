@@ -92,14 +92,12 @@ describe('the profile: the author\'s range per feature, its role, and where a te
   });
 });
 
-describe('the first release costs more only where there is a range to steer toward', () => {
+describe('the first release costs what 0.7 did: the loop is opt-in until a study shows it pays', () => {
   const band = (id: string, role: FeatureBand['role']): FeatureBand => ({ id, cls: 'all', band: [1, 2], median: 1.5, spread: 0.2, n: 8, role, auc: 0.9 });
   const p = (roles: FeatureBand['role'][]): FidelityProfile => ({ version: 1, corpusHash: 'c', detector: null, hash: 'h', bands: roles.map((r, i) => band(`f${i}`, r)) });
-  it('three steering features or more: four drafts and structural edits', () => {
-    expect(firstSettings(p(['SIGNAL', 'SIGNAL', 'RULE']), true)).toMatchObject({ drafts: 4, editBudget: 2, retrievalK: 3 });
-  });
-  it('fewer (short answers, replies): two drafts and no edits, as before the loop', () => {
-    expect(firstSettings(p(['SIGNAL', 'MONITOR', 'MONITOR']), true)).toMatchObject({ drafts: 2, editBudget: 0 });
+  it('two drafts, no edits, no notes, retrieval on, however much there is to steer', () => {
+    expect(firstSettings(p(['SIGNAL', 'SIGNAL', 'RULE']), true)).toEqual({ drafts: 2, editBudget: 0, retrievalK: 3, notesCap: 0 });
+    expect(firstSettings(p(['MONITOR']), true)).toEqual({ drafts: 2, editBudget: 0, retrievalK: 3, notesCap: 0 });
   });
   it('no retrieval without an index', () => {
     expect(firstSettings(p(['SIGNAL', 'SIGNAL', 'SIGNAL']), false).retrievalK).toBe(0);
@@ -282,13 +280,14 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const out = run('new', join(proj, 'posts'), 'write a post like these', '--name', 'posts', '--accept', '--no-ai-assist');
     expect(out).not.toMatch(/^EXIT:/);
     expect(out).toMatch(/Fidelity profile: \d+ feature\(s\) measured on your pieces, \d+ of them steer drafts/);
-    expect(out).toMatch(/Implementation release [0-9a-f]{16}: 4 drafts, up to 2 structural edit\(s\)/);
+    expect(out).toMatch(/Implementation release [0-9a-f]{16}: 2 drafts, up to 0 structural edit\(s\)/);
   }, 120_000);
 
   it('invoke writes four drafts, keeps a structural edit toward the range, and records the reading, the edits and the manifest', () => {
-    const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write about the cache incident');
+    const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', '--fidelity', 'write about the cache incident');
     const j = JSON.parse(out) as { output: string; fidelity: { release: string; inBand: number; measured: number; edits: { target: string; kept: boolean }[]; applicability: { status: string }[] } };
-    expect(j.fidelity.release).toMatch(/^[0-9a-f]{16}$/);
+    // --fidelity overrides the release's settings for this run, so the run is not that release's evidence
+    expect(j.fidelity.release).toBeNull();
     expect(j.fidelity.edits.some((e) => e.kept)).toBe(true);
     expect(j.output).toBe(split);
     expect(j.fidelity.applicability.length).toBeGreaterThan(0);
@@ -304,12 +303,12 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   it('fidelity reports the profile and the release; --set makes a child release; --rollback returns to the parent', () => {
     const page = run('fidelity', '--skill', 'posts');
     expect(page).toMatch(/Fidelity profile [0-9a-f]{16}/);
-    expect(page).toMatch(/Active implementation release [0-9a-f]{16}: 4 draft\(s\)/);
+    expect(page).toMatch(/Active implementation release [0-9a-f]{16}: 2 draft\(s\)/);
     expect(page).toMatch(/1 output\(s\) recorded with a reading/);
     const set = run('fidelity', '--skill', 'posts', '--set', 'drafts=2,editBudget=1');
     expect(set).toMatch(/New implementation release [0-9a-f]{16} \(parent [0-9a-f]{16}\): 2 draft\(s\), 1 structural edit\(s\)/);
     expect(run('fidelity', '--skill', 'posts', '--rollback')).toMatch(/Active implementation release is now [0-9a-f]{16}/);
-    expect(run('fidelity', '--skill', 'posts')).toMatch(/Active implementation release [0-9a-f]{16}: 4 draft\(s\)/);
+    expect(run('fidelity', '--skill', 'posts')).toMatch(/Active implementation release [0-9a-f]{16}: 2 draft\(s\)/);
   }, 120_000);
 
   it('fidelity --read places one file against the range, offline', () => {

@@ -13,7 +13,7 @@ import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { editTowardRange } from '../../core/fidelity/structural.js';
-import type { FidelityProfile, FidelityReading, FidelityRecord, ImplementationSettings } from '../../core/fidelity/types.js';
+import { LOOP_SETTINGS, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import * as fstore from '../../core/state/fidelity-store.js';
@@ -229,8 +229,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // THE IMPLEMENTATION RELEASE (cli/fidelity.ts): how many drafts, how many structural edits, which of the
   // author's passages and which experience notes are served. Below the standard, recorded with the output.
   const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv) : null;
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', fid ? fid.release.settings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
-  const editBudget = fid && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', fid.release.settings.editBudget))) : 0;
+  // `--fidelity` runs the full loop for this run (LOOP_SETTINGS), over whatever the release says.
+  const runSettings = fid ? (argv.includes('--fidelity') ? { ...fid.release.settings, ...LOOP_SETTINGS } : fid.release.settings) : null;
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
+  const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
@@ -289,10 +291,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   }
   const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}) };
-  const impl = fid ? implementationBlock(fid.release, fid.index, asked) : { text: '', retrieved: [] };
+  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: runSettings }, fid.index, asked) : { text: '', retrieved: [] };
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
   // no release: credited to the release, it would make the settings search compare arms that never ran.
-  const overridden = flag('--drafts') !== undefined || flag('--edits') !== undefined || argv.includes('--no-repair');
+  const overridden = flag('--drafts') !== undefined || flag('--edits') !== undefined || argv.includes('--no-repair') || argv.includes('--fidelity');
   const trace: FidelityTrace = { drafts: [], edits: [] };
   // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
   const ledger = factLedger(materialText);
@@ -311,7 +313,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     } : null, settingsFor(checks, taste, nDrafts),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
-      { ...fid.release.settings, drafts: nDrafts, editBudget }, overridden) : null);
+      { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget }, overridden) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);

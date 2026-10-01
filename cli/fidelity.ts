@@ -79,19 +79,12 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
 }
 
 /**
- * THE FIRST RELEASE'S SETTINGS. Four drafts and structural edits cost about twice what two drafts do, and
- * they buy something only where there is a range to steer toward: a skill whose pieces are too short for the
- * counted features (one-line answers, most replies) gets 0.7's two drafts and no edits. Retrieval only with
- * an index to retrieve from.
+ * THE FIRST RELEASE'S SETTINGS: 0.7's cost (DEFAULT_SETTINGS, ../core/fidelity/types.ts), whatever the profile
+ * holds; the loop is opt-in until a study shows it pays. Retrieval only with an index to retrieve from.
  */
-export function firstSettings(profile: FidelityProfile, hasIndex: boolean): ImplementationSettings {
-  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').length;
-  const base = steering >= MIN_STEERING ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, drafts: 2, editBudget: 0 };
-  return hasIndex ? base : { ...base, retrievalK: 0 };
+export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): ImplementationSettings {
+  return hasIndex ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, retrievalK: 0 };
 }
-
-/** Below this many steering features, the loop has too little to steer by to be worth its drafts. */
-export const MIN_STEERING = 3;
 
 /**
  * AT INVOKE. The release that steers this run: the active one, carried to the served skill version as a
