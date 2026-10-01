@@ -6,6 +6,36 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## Unreleased
+
+### Added
+
+- **`atelier qualify --skill <name>`.** Measures the style detector and every steering feature of the active
+  profile on the skill's own data (the pieces discovery read and the drafts it wrote), with one piece, one
+  topic and one generating model held out at a time, and stores the result with the skill, keyed by the
+  profile. Topic labels come from each piece's front matter (`topic: …`) or `--topics <file>`; a topic is
+  never defaulted to the source, and without labels the topic hold-out is NOT RUN and nothing qualifies.
+- **A detector names the models it is valid for.** Discovery records which model wrote each contrast draft;
+  the detector carries them as `families`, every reading records them, and `atelier fidelity` prints
+  "valid for: …". A detector does not generalise across model families (held-out generator AUCs of 0.37,
+  0.49 and 0.73 in one measurement). Drafts cached before this are one generator, `unknown`.
+
+### Fixed: the B6 harness
+
+- `prepare` copies every validation, test and training text into the work directory and records its
+  sha256; every later step checks them and refuses on any change, naming the file.
+- The evaluator's model is refused when it is the writer, in any case or as a prefix alias, both as set
+  and as recorded on the outputs.
+- An evaluator detector with a cross-validated AUC under 0.65 (or none) decides no bar: the detector bar is
+  null and `results.json` says why. Grounded fact coverage is reported per arm beside the author's density.
+- `build` and `generate` refuse to start with a writer that has no price, unless `B6_PRICE_IN` and
+  `B6_PRICE_OUT` give one (the default writer has no entry in the price table, and none is invented).
+- `generate --briefs` and `--shard k/n` split a run across processes in one work directory; an output is
+  claimed, written under a temporary name and renamed, so two writers never share one.
+- `blind --readers r1,r2,r3` writes one packet and one labels file per reader, orders balanced across
+  readers; `score` refuses any design that is not the pre-registered one (a missing reader, a duplicate or
+  empty judgment, an unjudged pair, unbalanced orders). `bench/b6/selftest.mjs` fires each refusal offline.
+
 ## [0.8.0] — 2026-10-01 (taste as a range: a closed loop below the standard)
 
 Outside studies of 0.7 found the explicit layer of taste reproduced at the author's level and the implicit

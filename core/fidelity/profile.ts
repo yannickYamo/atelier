@@ -49,6 +49,8 @@ export interface ProfileInput {
   /** ids of features the ratified standard holds as FEATURE rules */
   readonly ruled?: ReadonlySet<string>;
   readonly corpusHash: string;
+  /** the model ids that wrote `model`; recorded on the detector as the families it is valid for */
+  readonly modelFamilies?: readonly string[];
 }
 
 /** The author's fidelity profile. Deterministic: the same pieces and drafts give the same profile and hash. */
@@ -72,7 +74,9 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
       if (b) bands.push({ id: f.id, cls, band: b, median: r3(quantile(inClass, 0.5)), spread: r3(sd(inClass)), n: inClass.length, role, auc: verdict.auc, ...proposable });
     }
   }
-  const detector = detectorFor(input.read, input.model);
+  const trained = detectorFor(input.read, input.model);
+  const families = [...new Set(input.modelFamilies ?? [])].filter(Boolean).sort();
+  const detector = trained && families.length ? { ...trained, families } : trained;
   const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
@@ -129,7 +133,8 @@ export function readFidelity(text: string, profile: FidelityProfile): FidelityRe
   outside.sort((a, b) => b.distance - a.distance || a.id.localeCompare(b.id));
   const scored = profile.detector ? scoreDetector(profile.detector, text) : null;
   return { cls, bandsFrom: from, values, inBand, measured, outside,
-    detector: scored && profile.detector ? { p: r3(scored.p), version: profile.detector.version } : null };
+    detector: scored && profile.detector
+      ? { p: r3(scored.p), version: profile.detector.version, ...(profile.detector.families ? { families: profile.detector.families } : {}) } : null };
 }
 
 /** The share of steering bands a reading is inside, or null when none measured. */

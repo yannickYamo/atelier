@@ -89,6 +89,9 @@ npm run acceptance:carriers -- --host codex
 | C69 | drift alarms on sustained bias only | CUSUM never fires on one outlier; a new binding starts a new series; spread collapse is flagged (`tests/atelier-outer-loop.test.ts`) |
 | C70 | every run says what applied | the applicability manifest lists each requirement as applied, not applicable, or waived with a reason (`tests/atelier-fidelity-loop.test.ts`) |
 | C71 | the journey, through the binary | discovery builds the profile, build installs a release, invoke writes four drafts, keeps an edit and records it, `fidelity` reads it back (`tests/atelier-fidelity-loop.test.ts`) |
+| C72 | a topic is never guessed | `qualifyAll` with `requireTopics` refuses the topic hold-out when any text lacks a real label (NOT RUN, missing labels) and the instrument cannot qualify; `atelier qualify` reads labels from front matter or `--topics`, never from the source (`tests/atelier-qualify.test.ts`) |
+| C73 | a detector says which models it is valid for | discovery records the generator per draft; the detector carries `families`, every reading records them, `atelier fidelity` prints "valid for"; an old cache is one generator, `unknown` (`tests/atelier-qualify.test.ts`) |
+| C74 | the B6 harness refuses an impossible result | tampered or missing text, evaluator model equal to the writer (or a prefix alias), an unpriced writer, a detector with cvAuc under 0.65 deciding a bar, a missing reader, a duplicate or empty judgment, unbalanced orders (`bench/b6/selftest.mjs`, run from `tests/atelier-qualify.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 
