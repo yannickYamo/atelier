@@ -244,7 +244,7 @@ describe('a FEATURE rule is suggested as preferred, never a zero-width band, spe
     }
   });
   it('an author who links more than the model gets no floor on links: a floor would ask for sources nobody supplied', () => {
-    expect(FEATURES.filter((f) => f.specifics).map((f) => f.id).sort()).toEqual(['link', 'names', 'numbers', 'quoted']);
+    expect(FEATURES.filter((f) => f.specifics).map((f) => f.id).sort()).toEqual(['link', 'names', 'numbers', 'quoted', 'specificsDensity']);
     const rs = featureRules([1, 2, 3, 4, 5].map(linky), [6, 7].map(linky), [1, 2, 3, 4].map(plain));
     expect(byId(rs, 'link')).toBeUndefined();
     expect(judgeFeature('link', { read: [5, 6, 7, 5, 6], held: [6, 6], model: [0, 0, 0, 0] })).toMatchObject({ kept: true, role: 'RULE' });
