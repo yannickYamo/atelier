@@ -29,6 +29,7 @@ import { quantile, wordsOf, proseRegions } from '../observers/text.js';
 import { trainDetector, scoreDetector } from './stylometry.js';
 import { authorFactDensity } from '../loop/fact-ledger.js';
 import { buildRetrievalIndex, retrieve } from './retrieval.js';
+import { effectMatrix } from './operators.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass, type DetectorModel, type FeatureBand, type FidelityProfile, type FidelityReading } from './types.js';
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
@@ -81,7 +82,9 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
     }
   }
   const detector = detectorFor(input.read, input.model);
-  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts) };
+  // THE EFFECT MATRIX: what each operator does to each banded feature, on text like this model's (no model call).
+  const effects = input.model.length ? effectMatrix(input.model, [...new Set(bands.map((b) => b.id))]) : undefined;
+  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts), ...(effects ? { effects } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 

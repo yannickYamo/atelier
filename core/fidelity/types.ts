@@ -105,6 +105,11 @@ export interface FidelityProfile {
    * reaches by using the facts it was GIVEN, never by producing specific-looking text
    */
   readonly factDensity?: number | null;
+  /**
+   * What each deterministic operator (./operators.ts) does to each feature, measured on the model's own drafts
+   * at discovery: operator id → feature id → mean change per application and how many applications.
+   */
+  readonly effects?: Readonly<Record<string, Readonly<Record<string, { readonly mean: number; readonly n: number }>>>>;
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }
@@ -182,8 +187,12 @@ export interface FidelityRecord {
   readonly reading: FidelityReading | null;
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
-  /** paragraph-level redrafts made against a band, and whether each was kept */
-  readonly edits?: readonly { readonly target: string; readonly kept: boolean; readonly why: string }[];
+  /**
+   * every application of an actuator against a band (./structural.ts), kept or not: which actuator, the target
+   * feature, its value before and after, and why it was kept or refused
+   */
+  readonly edits?: readonly { readonly target: string; readonly kept: boolean; readonly why: string;
+    readonly actuator?: string; readonly before?: number | null; readonly after?: number | null }[];
   /** the passages retrieved for this request, by index into the author's passages */
   readonly retrieved?: readonly number[];
   /** how many of the facts the request and the bound material supplied the output used, and its density per 100 words */

@@ -12,7 +12,7 @@ import { featureOf } from '../../core/observers/features.js';
 import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
-import { editTowardRange } from '../../core/fidelity/structural.js';
+import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
@@ -527,8 +527,11 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
   } };
 }
 
+/** Deterministic operator applications tried per output when the loop runs: free, so bounded only to bound time. */
+const OPERATOR_TRIES = 24;
+
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { drafts: FidelityReading[]; edits: { target: string; kept: boolean; why: string }[] }
+interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[] }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -555,12 +558,15 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
       if (reader?.degraded) return false;
       return editKeepsStandard(b, a);
     };
-    let edited: Awaited<ReturnType<typeof editTowardRange>>;
-    try { edited = await editTowardRange(e.client, e.budget, r.output, e.profile, e.editBudget, breaksNothing); } catch (err) {
+    let edited: Awaited<ReturnType<typeof steerTowardRange>>;
+    // Deterministic operators are free and tried first, up to OPERATOR_TRIES; the edit budget is the number of
+    // one-sentence model rewrites for over-articulation.
+    try { edited = await steerTowardRange(e.client, e.budget, r.output, e.profile, { operators: OPERATOR_TRIES, sentences: e.editBudget }, breaksNothing); } catch (err) {
       e.trace.edits.push({ target: '-', kept: false, why: `the structural edit could not run (${(err as Error).message.split('\n')[0]})` });
       return r;
     }
-    e.trace.edits.push(...edited.edits);
+    e.trace.edits.push(...edited.applications);
+    const keptN = edited.applications.filter((x) => x.kept).length;
     if (edited.text === r.output) return r;
     // THE REPORT IS THE DELIVERED TEXT'S, as after every rewrite: recounted on the edited text.
     const final = await checkDraftAsync(e.name, e.std, edited.text, e.checks);
@@ -572,7 +578,7 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
     const { claimsToCheck: _old, ...rest } = base;
     return { output: edited.text, repair: { ...rest, violatedAfter: brokenIn(final),
       ...(toCheck.length ? { claimsToCheck: toCheck } : {}),
-      why: `${base.why}; ${edited.edits.filter((x) => x.kept).length} structural edit(s) toward your range` } };
+      why: `${base.why}; ${keptN} structural edit(s) toward your range` } };
   };
 }
 
@@ -632,7 +638,7 @@ function reportFidelity(report: RunReport, rec: Invocation): void {
   report.say(`In your range on ${f.reading.inBand} of ${f.reading.measured} measured features${out.length ? `; furthest outside: ${out.join('; ')}` : ''}${kept ? ` (${kept} structural edit(s) kept)` : ''}.`);
   if (f.coverage) report.detail(`used ${f.coverage.used} of the ${f.coverage.supplied} fact(s) you supplied: ${f.coverage.per100} specifics per 100 words${f.coverage.authorPer100 !== null ? ` (your pieces carry ${f.coverage.authorPer100})` : ''}`);
   report.detail(`implementation release ${f.release ?? 'none'} · profile ${f.profileHash ?? 'none'}${f.reading.detector ? ` · style detector ${f.reading.detector.version}: P(model-written) ${f.reading.detector.p}` : ''}`);
-  for (const e of f.edits ?? []) report.detail(`    structural edit (${e.target}): ${e.kept ? 'kept' : 'not kept'}, ${e.why}`);
+  for (const e of f.edits ?? []) report.detail(`    ${e.actuator ?? 'edit'} on ${e.target}${e.before !== undefined ? ` (${e.before ?? '-'} to ${e.after ?? '-'})` : ''}: ${e.kept ? 'kept' : 'not kept'}, ${e.why}`);
   for (const a of f.applicability ?? []) if (a.status !== 'APPLIED') report.detail(`    ${a.requirementId}: ${a.status.toLowerCase().replace('_', ' ')}${a.why ? `, ${a.why}` : ''}`);
 }
 

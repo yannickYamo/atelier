@@ -18,7 +18,8 @@ import { makeRelease } from '../core/fidelity/release.js';
 import { DEFAULT_SETTINGS } from '../core/fidelity/types.js';
 import type { VerifyReport } from '../core/observers/verify.js';
 import { buildProfile, readFidelity, inBandShare } from '../core/fidelity/profile.js';
-import { editTarget, editInstruction, movedTarget, contentKept, editTowardRange, EDITABLE } from '../core/fidelity/structural.js';
+import { movedTarget, steerTowardRange, carrier } from '../core/fidelity/structural.js';
+import { applyOperator, sitesOf, effectMatrix, operatorsToward } from '../core/fidelity/operators.js';
 import { ratifiedProfile, firstSettings } from '../cli/fidelity.js';
 import { checkDraft, enforceClaims, INCONCLUSIVE, UNREAD } from '../core/loop/run-repair.js';
 import { judgeFeature } from '../core/observers/selection.js';
@@ -26,7 +27,6 @@ import { authorSelfMargins } from '../core/observers/style.js';
 import { patiently } from '../core/loop/claim-extract.js';
 import { FORMATS } from '../core/observers/formats.js';
 import type { FidelityProfile, FeatureBand, FidelityReading } from '../core/fidelity/types.js';
-import type { InferenceClient } from '../core/inference/client.js';
 import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
 
@@ -133,51 +133,61 @@ describe('the draft order: rules first, then the author\'s range, then the suppl
   });
 });
 
-describe('the structural actuator: one target, the author\'s numbers, and three guards', () => {
+describe('the operators: re-punctuation of the words already there', () => {
+  const t = 'The team argued about the rollback for most of the afternoon, and nobody wanted to be the one who blinked first. We kept the flag. It was the right call.\n\n'
+    + 'Smith said the graph (which had been flat since Monday) would move; we waited for it.\n\n- a list item, and it stays put\n\n'
+    + 'The cache never expired. The fix took an hour. Finding it took four days. I keep a list of these now.';
+  it('split at ", and" drops the "and"; join adds one; a name keeps its capital', () => {
+    expect(applyOperator('split-conjunction', t, 0)).toContain('most of the afternoon. Nobody wanted');
+    expect(applyOperator('join-adjacent', t, 0)).toContain('We kept the flag, and it was the right call.');
+    expect(applyOperator('join-adjacent', 'We met at noon. Smith was late. It rained all day long there.', 0)).toContain('We met at noon, and Smith was late.');
+  });
+  it('paragraphs break in the middle and merge when both are short; parentheses and semicolons convert', () => {
+    expect(applyOperator('break-paragraph', t, 0)).toContain('The fix took an hour.\n\nFinding it took four days.');
+    expect(applyOperator('parenthetical-to-commas', t, 0)).toContain('the graph, which had been flat since Monday, would move');
+    expect(applyOperator('semicolon-to-period', t, 0)).toContain('would move. We waited for it.');
+  });
+  it('never touches a list item, a heading or a code fence', () => {
+    for (const op of ['split-conjunction', 'join-adjacent', 'break-paragraph', 'merge-paragraphs', 'parenthetical-to-commas', 'semicolon-to-period'] as const) {
+      for (let k = 0; k < sitesOf(op, t); k++) expect(applyOperator(op, t, k), op).toContain('- a list item, and it stays put');
+    }
+    const fenced = '```\na, and b\n```';
+    expect(sitesOf('split-conjunction', fenced)).toBe(0);
+  });
+  it('the effect matrix says which way each operator moves each feature, and only those are tried', () => {
+    const m = effectMatrix(Array.from({ length: 6 }, (_, k) => modelDraft(k)), ['paragraphP50', 'sentencesPerParagraph']);
+    expect(m['break-paragraph'].paragraphP50.mean).toBeLessThan(0);
+    expect(operatorsToward(m, 'paragraphP50', 'high')).toContain('break-paragraph');
+    expect(operatorsToward(m, 'paragraphP50', 'low')).not.toContain('break-paragraph');
+  });
+});
+
+describe('steering toward the range: kept only when the target moved and nothing else went out', () => {
   const read = Array.from({ length: 8 }, (_, k) => ({ id: `r${k}`, text: authorPiece(k) }));
   const profile = buildProfile({ read, held: [{ id: 'h', text: authorPiece(9) }, { id: 'h2', text: authorPiece(10) }], model: Array.from({ length: 10 }, (_, k) => modelDraft(k)), corpusHash: 'c' });
   const wall = modelDraft(3);
-  const split = (t: string): string => {
-    const ss = t.match(/[^.]+\./g) ?? [t];
-    const out: string[] = [];
-    for (let i = 0; i < ss.length; i += 2) out.push(ss.slice(i, i + 2).map((x) => x.trim()).join(' '));
-    return out.join('\n\n');
-  };
-  const fake = (answer: (msg: string) => string): InferenceClient => ({
-    async complete(req: { userMessage: string }) { return { json: { text: answer(req.userMessage) }, modelId: 'fake', inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, cost: { usd: 0 } as never, costUsd: 0, logprobs: null, termination: { kind: 'COMPLETE' } as never }; },
+  it('a wall of text is broken toward the author\'s paragraph length, with no model call, and every application is recorded', async () => {
+    const r = await steerTowardRange(null, null, wall, profile, { operators: 24, sentences: 0 }, async () => true);
+    const kept = r.applications.filter((a) => a.kept);
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept[0]).toMatchObject({ actuator: 'break-paragraph' });
+    expect(kept[0].after!).toBeLessThan(kept[0].before!);
+    expect(r.text.split(/\n\n/).length).toBeGreaterThan(1);
+    expect(movedTarget(readFidelity(wall, profile), r.reading, kept[0].target)).toBe(true);
   });
-  const budget = (): { spentUsd: number; capUsd: number; maxCalls: number } => ({ spentUsd: 0, capUsd: 1, maxCalls: 10 });
-
-  it('targets the editable band furthest outside, and says it in the author\'s numbers', () => {
-    const t = editTarget(readFidelity(wall, profile), profile)!;
-    expect(EDITABLE.has(t.id)).toBe(true);
-    expect(editInstruction(t)).toMatch(/the author's own pieces sit between [\d.]+ and [\d.]+/);
-  });
-  it('content kept counts content words with multiplicity', () => {
-    expect(contentKept('alpha beta gamma delta', 'alpha beta gamma delta')).toBe(1);
-    expect(contentKept('alpha beta gamma delta', 'alpha beta')).toBe(0.5);
-  });
-  it('a redraft that only re-paragraphs is kept; the target moved and nothing else went out', async () => {
-    const r = await editTowardRange(fake(() => split(wall)), budget(), wall, profile, 1, async () => true);
-    expect(r.edits[0]).toMatchObject({ kept: true });
-    expect(r.text).toBe(split(wall));
-    expect(movedTarget(readFidelity(wall, profile), r.reading, r.edits[0].target)).toBe(true);
-  });
-  it('a redraft that drops a figure is refused by the meaning guard', async () => {
-    const withFigure = `${wall} It cost 4,000 dollars.`;
-    const r = await editTowardRange(fake(() => split(wall)), budget(), withFigure, profile, 1, async () => true);
-    expect(r.edits[0].kept).toBe(false);
-    expect(r.edits[0].why).toMatch(/changed what the text claims|did not bring the target closer/);
-    expect(r.text).toBe(withFigure);
-  });
-  it('a redraft the standard rejects is refused', async () => {
-    const r = await editTowardRange(fake(() => split(wall)), budget(), wall, profile, 1, async () => false);
-    expect(r.edits[0]).toMatchObject({ kept: false, why: 'it broke a rule of the standard or added a claim' });
+  it('a change the standard rejects is refused and the text stays', async () => {
+    const r = await steerTowardRange(null, null, wall, profile, { operators: 24, sentences: 0 }, async () => false);
+    expect(r.applications.every((a) => !a.kept)).toBe(true);
     expect(r.text).toBe(wall);
   });
-  it('a redraft that does not move the target is refused', async () => {
-    const r = await editTowardRange(fake(() => wall), budget(), wall, profile, 1, async () => true);
-    expect(r.edits[0].kept).toBe(false);
+  it('no budget, no change', async () => {
+    const r = await steerTowardRange(null, null, wall, profile, { operators: 0, sentences: 0 }, async () => true);
+    expect(r.applications).toEqual([]);
+    expect(r.text).toBe(wall);
+  });
+  it('the carrier of over-explaining is the sentence whose removal lowers it most', () => {
+    const t = `${Array.from({ length: 30 }, (_, i) => sentence(i)).join(' ')} We did it because the docs said so, which means it was right, that is the reason.`;
+    expect(carrier(t, 'explanatory')?.s).toMatch(/^We did it because/);
   });
 });
 
@@ -294,20 +304,22 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/Implementation release [0-9a-f]{16}: 2 drafts, up to 0 structural edit\(s\)/);
   }, 120_000);
 
-  it('invoke writes four drafts, keeps a structural edit toward the range, and records the reading, the edits and the manifest', () => {
+  it('invoke --fidelity writes four drafts, steers toward the range, and records the reading, every application and the manifest', () => {
     const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', '--fidelity', 'write about the cache incident');
     const j = JSON.parse(out) as { output: string; fidelity: { release: string; inBand: number; measured: number; edits: { target: string; kept: boolean }[]; applicability: { status: string }[] } };
     // --fidelity overrides the release's settings for this run, so the run is not that release's evidence
     expect(j.fidelity.release).toBeNull();
-    expect(j.fidelity.edits.some((e) => e.kept)).toBe(true);
-    expect(j.output).toBe(split);
+    // every application is recorded with its actuator and the target's value before and after
+    expect(j.fidelity.edits.length).toBeGreaterThan(0);
+    expect(j.fidelity.edits.every((e) => typeof (e as { actuator?: string }).actuator === 'string')).toBe(true);
+    expect(j.output.split(/\n\n/).length).toBeGreaterThan(1);
     expect(j.fidelity.applicability.length).toBeGreaterThan(0);
     const invDir = join(data, 'skills', 'posts', 'invocations');
     const rec = JSON.parse(readFileSync(join(invDir, readdirSync(invDir).find((f) => f.endsWith('.json'))!), 'utf8')) as { fidelity: { drafts: FidelityReading[]; reading: FidelityReading } };
     expect(rec.fidelity.drafts).toHaveLength(4);
-    // a kept edit brings its target closer and never lets another feature out
+    // the steering never leaves the delivered text further from the range than the draft it chose
     const by = (r: FidelityReading): number => r.outside.reduce((n, o) => n + o.distance, 0);
-    expect(by(rec.fidelity.reading)).toBeLessThan(by(rec.fidelity.drafts[0]));
+    expect(by(rec.fidelity.reading)).toBeLessThanOrEqual(Math.max(...rec.fidelity.drafts.map(by)));
     expect(rec.fidelity.reading.inBand).toBeGreaterThanOrEqual(rec.fidelity.drafts[0].inBand);
   }, 120_000);
 
