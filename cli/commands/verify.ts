@@ -53,7 +53,8 @@ export async function verify(): Promise<void> {
   // THE SAME CHECKS AS THE LOOP. A story or a figure the text presents as fact, found in neither the
   // skill's material nor anything bound with --with, fails as UNSOURCED. A person checking their own
   // draft whose stories are theirs adds them to the material, or passes --allow-unsourced.
-  const material = [...store.getMaterial(L), ...boundMaterial()].map((m) => m.text).join('\n\n');
+  // The request is supplied, as it is to invoke: a detail the person typed is theirs to have repeated.
+  const material = [flag('--task') ?? '', ...[...store.getMaterial(L), ...boundMaterial()].map((m) => m.text)].filter(Boolean).join('\n\n');
   const checks = checksFor(L, { material, task: flag('--task') ?? '', guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };

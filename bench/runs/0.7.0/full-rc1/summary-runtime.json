@@ -1,0 +1,51 @@
+{
+ "label": "rc1 runtime, 14 cases x 3 trials",
+ "judged": 126,
+ "conditions": {
+  "baseline": {
+   "answers": 42,
+   "cases": 14,
+   "weighted": 4.102,
+   "blockers": 8,
+   "trialSpread": 0.144
+  },
+  "candidate": {
+   "answers": 42,
+   "cases": 14,
+   "weighted": 4.531,
+   "blockers": 3,
+   "trialSpread": 0.138
+  },
+  "comparator": {
+   "answers": 42,
+   "cases": 14,
+   "weighted": 4.343,
+   "blockers": 5,
+   "trialSpread": 0.186
+  }
+ },
+ "candidateMinusComparator": {
+  "cases": 14,
+  "mean": 0.188,
+  "ci95": [
+   0.033,
+   0.392
+  ],
+  "perCase": {
+   "agent-owned-edit": -0.0,
+   "casual-message": 0.0,
+   "code-answer": 0.033,
+   "complex-plan": 0.633,
+   "concept-explanation": 0.15,
+   "debugging-cause": -0.083,
+   "destructive-action": 0.017,
+   "direct-answer": 0.033,
+   "error-report": -0.067,
+   "long-form-request": 0.033,
+   "medical-boundary": 0.0,
+   "multi-step-progress": 0.6,
+   "partial-success": 0.15,
+   "real-ambiguity": 1.133
+  }
+ }
+}

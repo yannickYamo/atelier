@@ -77,6 +77,20 @@ const seeded = async (): Promise<{ data: string; proj: string }> => {
   return { data, proj };
 };
 
+describe('invoke for a script: the answer alone on stdout', () => {
+  it('--answer-only prints only the piece; --json prints one parseable record of the run', async () => {
+    const { data, proj } = await seeded();
+    await setByTool({ emit_piece: { piece: 'the scripted answer' } });
+    // execFileSync returns stdout only: the run report must have gone to stderr
+    expect(run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write it', '--answer-only').trim()).toBe('the scripted answer');
+    const out = run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write it', '--json');
+    const record = JSON.parse(out) as { output: string; invocationId: string; rulesBroken: unknown[]; cut: unknown[] };
+    expect(record.output).toBe('the scripted answer');
+    expect(record.invocationId).toBeTruthy();
+    expect(Array.isArray(record.rulesBroken) && Array.isArray(record.cut)).toBe(true);
+  });
+});
+
 describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner active AND installed', () => {
   it('the full two-phase loop, with the standard hash immovable', async () => {
     const { data, proj } = await seeded();

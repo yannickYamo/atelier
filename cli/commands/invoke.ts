@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { checksFor, claimInstrumentOf, contextJudgeFor } from '../checks.js';
+import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -158,6 +158,16 @@ export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style;
 
 export async function invoke(): Promise<void> {
+  // FOR A PROGRAM, THE ANSWER ALONE ON STDOUT. The report, notices and cost were printed around the answer,
+  // so a caller could not take the answer cleanly. With --answer-only or --json every line a person reads
+  // goes to stderr, and stdout carries the answer, or one JSON object, and nothing else.
+  const machine = argv.includes('--json') ? 'json' as const : argv.includes('--answer-only') ? 'answer' as const : null;
+  const log = console.log;
+  if (machine) console.log = (...a: unknown[]) => { console.error(...a); };
+  try { await invokeRun(machine); } finally { console.log = log; }
+}
+
+async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const asked = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
@@ -219,15 +229,17 @@ export async function invoke(): Promise<void> {
   // run about 100 words" and lost; so did "one line, please" against a long one. The learned length is
   // withheld from this run's prompt when the request asks for detail or brevity, and said in the record.
   // Read by the context judge when there is one (core/loop/context-judge.ts); the word patterns are the floor.
-  const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor() : undefined;
+  // On the run's own budget, so its calls count against the cap the person set.
+  const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor(budget) : undefined;
   const intent = judge ? await judge.requestIntent(asked) : null;
-  const lengthAsked = intent ? intent.length : requestedLength(asked);
-  const lengthLine = lengthAsked ? servedText.split('\n').find((l) => l.trim().startsWith('My pieces of this kind run about ')) : undefined;
+  // The judge's reading and the word pattern together: either one finding a stated length or format counts.
+  const lengthAsked = intent?.length ?? requestedLength(asked);
+  const lengthLine = lengthAsked ? servedText.split('\n').find((l) => /^My (?:pieces of this kind|answers usually) run about /.test(l.trim())) : undefined;
   if (lengthLine) withheld.push(lengthLine.trim());
   // AND ITS FORMAT, WHEN IT STATES ONE. "Return only the code block" met a learned "end every piece with a
   // line starting Next:" and lost in 3 of 3 trials. The request is the one thing in the room written today:
   // the skill's presentation rules are withheld from the prompt and from the count for this run, and named.
-  const formatAsked = intent ? intent.format : requestedFormat(asked);
+  const formatAsked = intent?.format ?? requestedFormat(asked);
   if (formatAsked && std) {
     const p = presentationRules(std.requirements);
     for (const q of p.measured) waived.set(q.requirementId, `the request states its own format ("${formatAsked}")`);
@@ -250,12 +262,20 @@ export async function invoke(): Promise<void> {
     } : null, settingsFor(checks, taste, nDrafts));
 
   reportDrift(report, L, sv, rec);
-  console.log(`\n${rec.output}\n`);
+  if (!machine) console.log(`\n${rec.output}\n`);
   reportChecks(report, rec, std, checks);
   if (taste) await taste.report(report, rec, name);
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportRestyle(report, rec.output, material);
-  finish(report, { rec, sv, name, task, budget, spentBefore });
+  const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
+  if (machine === 'answer') process.stdout.write(`${rec.output}\n`);
+  if (machine === 'json') {
+    process.stdout.write(`${JSON.stringify({
+      output: rec.output, invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
+      rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
+      withheld: rec.delivery.withheldRules ?? [], report: report.lines,
+    }, null, 1)}\n`);
+  }
 }
 
 /**
@@ -464,6 +484,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     tasteVeto: [...(taste?.veto ?? [])].sort(),
     learnedTellsHash: sha(JSON.stringify(checks.learnedTells ?? [])),
     formatProfile: checks.format?.id ?? null,
+    contextJudge: checks.judge ? `${process.env.ATELIER_CLAIMS_MODEL ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
     flags: { drafts: nDrafts, noTaste: argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') },
@@ -474,7 +495,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
  * THE WHOLE COST, and the record. The writer's budget and the claim reader's are separate meters; what
  * this run spent on either is the process total since generation began.
  */
-function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name: string; task: string; budget: Budget; spentBefore: number }): void {
+function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name: string; task: string; budget: Budget; spentBefore: number }): number {
   const spent = Math.max(r.budget.spentUsd, processSpentUsd() - r.spentBefore);
   const reader = spent - r.budget.spentUsd;
   report.detail(`invocation ${r.rec.invocationId}  ·  SkillVersion ${r.sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
@@ -482,6 +503,7 @@ function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name:
   const details = runFile('last-invocation.txt');
   report.write(details);
   console.log(`$${spent.toFixed(2)} · everything this run checked: ${details} · not right? atelier fix "<what was wrong>"`);
+  return spent;
 }
 
 // ── WHAT A RUN SAYS, AND WHERE ──────────────────────────────────────────────────────────────────
@@ -498,10 +520,12 @@ type Standard = NonNullable<ReturnType<typeof store.getStandard>>;
 
 /** The run's report: `say` is read now and kept; `detail` is kept for the file only. */
 class RunReport {
-  private readonly lines: string[] = [];
-  say(line: string): void { console.log(line); this.lines.push(line); }
-  detail(line: string): void { this.lines.push(line); }
-  write(path: string): void { writeAtomic(path, `${this.lines.join('\n')}\n`); }
+  private readonly kept: string[] = [];
+  /** everything the run said and kept, for --json */
+  get lines(): readonly string[] { return this.kept; }
+  say(line: string): void { console.log(line); this.kept.push(line); }
+  detail(line: string): void { this.kept.push(line); }
+  write(path: string): void { writeAtomic(path, `${this.kept.join('\n')}\n`); }
 }
 
 /** The rules that cannot fire on this invocation because material they need is not bound. */

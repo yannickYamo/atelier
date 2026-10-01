@@ -9,6 +9,7 @@ import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
+import type { Budget } from '../core/inference/client.js';
 import { flag, providerFor, clientAndBinding, DATA } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf } from '../core/observers/formats.js';
@@ -58,7 +59,7 @@ export function claimSensorFor(material: string, task: string, placeholders: boo
  * backend, for the questions that need reading. None offline (`--claims pattern`, no key, no model on a
  * non-Anthropic backend): then the word patterns decide, as they did before.
  */
-export function contextJudgeFor(): ContextJudge | undefined {
+export function contextJudgeFor(budget?: Budget): ContextJudge | undefined {
   const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
   if (mode === 'pattern') return undefined;
   const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
@@ -66,7 +67,8 @@ export function contextJudgeFor(): ContextJudge | undefined {
   if (!named && provider !== 'anthropic') return undefined;
   if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return undefined;
   const model = named ?? CLAIMS_MODEL_DEFAULT;
-  return modelJudge(clientAndBinding('discovery', model).client, { spentUsd: 0, capUsd: 0.2, maxCalls: 40 });
+  // The run's budget when there is one (invoke); a check with no run of its own gets a small cap of its own.
+  return modelJudge(clientAndBinding('discovery', model).client, budget ?? { spentUsd: 0, capUsd: 0.2, maxCalls: 40 });
 }
 
 /**

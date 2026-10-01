@@ -40,6 +40,24 @@ to catch what `tsc` cannot: a floating promise, an `any` that escaped a `JSON.pa
 rethrown without its cause. Where a rule is off, `eslint.config.js` says why — a disabled rule with
 no reason is indistinguishable from one nobody understood.
 
+## How a change is judged (decision [0006](docs/decisions/0006-release-contract.md))
+
+Four outside rounds in one week went in circles: each fix passed the test written for the report that
+found it, and broke something no test measured. So:
+
+1. **A change to generation, checking, repair or compiling runs the benchmark before it merges.** The
+   small bench (the claim battery and the 14 coding cases, one trial) before merge; the full bench, side by
+   side with the previous release in one judging session, before a release. A change that fails a blocking
+   metric does not merge, however good its unit tests look.
+2. **Fix classes, not probes.** A reported failure joins the battery as a class, with both polarities (what
+   must be caught, what must survive), before it is fixed.
+3. **No instrument acts without a qualification.** A new model reader starts report-only, is recorded on
+   every run, and may cut or gate only through `core/loop/cut-authority.ts` once it is measured.
+4. **Conflicting goals are settled in the release contract,** not in code comments. A fix that moves a
+   balance changes the contract first.
+5. **Numbers in the README and CHANGELOG come from bench artifacts,** or are removed.
+6. **A release note says what improved, what held, and what got worse.**
+
 ## What this repository is careful about
 
 Atelier compiles an expert's ratified standard into a skill. Three rules hold the whole design

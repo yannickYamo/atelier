@@ -10,7 +10,8 @@ import type { StandardVersion, RepairRecord } from '../state/canonical-state.js'
 import { verifyText, type VerifyReport } from '../observers/verify.js';
 import { unsourcedClaims, claimUnitsOf } from './claims.js';
 import { derivedFromKnown } from './derived.js';
-import { answerWorkClaims, answerSentences } from './answer-claims.js';
+import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
+import { assertMayCut, type CutAuthority } from './cut-authority.js';
 import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
@@ -143,12 +144,18 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // answer's claim that the assistant did or saw something, a result figure, or an identifier from the
   // person's environment that the request did not give is cut (./answer-claims.ts); the rest is listed.
   const listOnly = opts.format?.claims === 'list';
-  const workClaims = listOnly ? answerWorkClaims(text, opts.material ?? '', claims, opts.judge?.workClaims(answerSentences(text)) ?? null) : [];
+  const workClaims = listOnly ? answerWorkClaims(text, opts.material ?? '', claims) : [];
+  const judgeFlags = listOnly ? judgedOnly(text, opts.judge?.workClaims(answerSentences(text)) ?? null, workClaims) : [];
   const toCut = listOnly ? workClaims : claims;
-  const toList = listOnly ? claims.filter((c) => !workClaims.some((w) => w.start === c.start)) : [];
+  const toList = listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];
   const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
+  // Which instrument found what may be cut: the patterns decide an answer's work claims; otherwise the
+  // gating reading's instrument, qualified or not (./cut-authority.ts refuses the ones that may not cut).
+  // The sensor says which instrument gates: 'pattern' for the pattern check, or a reader that degraded to it.
+  const authority: CutAuthority = listOnly || !gating || reading?.gate || !opts.claimSensor || opts.claimSensor.gate === 'pattern' ? 'pattern'
+    : opts.claimSensor?.qualified ? 'qualified-reader' : process.env.ATELIER_CLAIMS_GATE === 'reader' ? 'owner-override' : 'unqualified-reader';
   const line = { requirementId: 'UNSOURCED', statement: listOnly ? 'Never claim work done, a result seen, or a detail of the person\'s own system that the request did not give.' : statement,
-    materiality: 'REQUIRED', phase: 'ACCURACY' as const,
+    materiality: 'REQUIRED', phase: 'ACCURACY' as const, authority,
     result: { verdict: toCut.length ? 'VIOLATED' as const : 'MET' as const, spans: [...toCut], value: toCut.length,
       detail: `${toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
   const checkLine = toList.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: 'Specifics not in the material supplied: listed for you to check, never cut in this format.',
@@ -260,6 +267,7 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
   for (let round = 0; round < 3; round++) {
     let spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
     if (!spans.length) break;
+    assertMayCut(report.checked.find((c) => c.requirementId === 'UNSOURCED')?.authority ?? 'unqualified-reader');
     // THE BALANCE. A third or more of the text flagged (at least three sentences) is the check misreading
     // general knowledge far more often than a draft that invented a third of itself. Then only what is
     // unambiguously invented is cut: a story told as lived, a claim of evidence, a quotation or an
@@ -292,7 +300,9 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
  */
 export function brokenByCut(before: string, after: string, opts: { readonly structureOnly?: boolean } = {}): string | null {
   const count = (t: string, re: RegExp): number => (t.match(re) ?? []).length;
-  const EMPTY_ITEM = /^[ \t]*(?:\d+[.)]|[-*+])[ \t]*$/gm;
+  // A marker alone on its line inside a list (next to another item). A bare "102." answering "17 times 6"
+  // is an answer, not an empty item.
+  const EMPTY_ITEM = /(?:^[ \t]*(?:\d+[.)]|[-*+])[ \t]+\S[^\n]*\n)[ \t]*(?:\d+[.)]|[-*+])[ \t]*$|^[ \t]*(?:\d+[.)]|[-*+])[ \t]*\n[ \t]*(?:\d+[.)]|[-*+])[ \t]/gm;
   const DANGLING = /^[^\n#|>`]*\S:[ \t]*\n(?:[ \t]*\n)*(?=#|$(?![\s\S]))/gm;
   if (count(after, EMPTY_ITEM) > count(before, EMPTY_ITEM)) return 'an empty list item';
   if (count(after, DANGLING) > count(before, DANGLING)) return 'a label with nothing under it';
@@ -425,7 +435,10 @@ export async function refineToStandard(
   const cutSafely = async (t: string, known: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> => {
     const e = await enforceClaims(skill, v, t, opts, known, memory);
     listedHere.push(...e.listed);
-    const dangling = e.cut.length ? await danglingJudged(t, e.text, e.cut, opts.judge) : [];
+    // Found by the pattern (may be cut with its parent) or by the judge (may only be redrafted).
+    const patternDangling = e.cut.length ? danglingAfterCut(t, e.text, e.cut) : [];
+    const judgedDangling = e.cut.length && opts.judge ? await danglingJudged(t, e.text, e.cut, opts.judge) : [];
+    const dangling = [...new Set([...patternDangling, ...judgedDangling])];
     const broke = e.cut.length ? brokenByCut(t, e.text) ?? (dangling.length ? `${dangling.length} sentence(s) pointing at cut text` : null) : null;
     if (!broke) return e;
     const redrafted = await redraft(t, e.cut, dangling);
@@ -438,13 +451,19 @@ export async function refineToStandard(
     }
     // Only sentences left pointing at nothing, and no redraft to be had: they go with their parent, when
     // that leaves the text whole. An invented claim is not shipped to spare a sentence that means nothing.
-    if (dangling.length && !brokenByCut(t, e.text)) {
+    if (patternDangling.length && !brokenByCut(t, e.text)) {
+      assertMayCut('pattern');
       let withParents = e.text;
-      for (const d of dangling) { const at = withParents.indexOf(d); if (at !== -1) withParents = cutClaim(withParents, at, at + d.length); }
+      for (const d of patternDangling) { const at = withParents.indexOf(d); if (at !== -1) withParents = cutClaim(withParents, at, at + d.length); }
       if (!brokenByCut(t, withParents)) {
-        notes.push(`${dangling.length} sentence(s) that pointed at cut text were cut with it`);
-        return { text: withParents, report: await check(withParents), cut: [...e.cut, ...dangling] };
+        notes.push(`${patternDangling.length} sentence(s) that pointed at cut text were cut with it`);
+        return { text: withParents, report: await check(withParents), cut: [...e.cut, ...patternDangling] };
       }
+    }
+    // Only the judge saw a dangling sentence and no redraft could be had: the cut stands, the sentence is said.
+    if (!brokenByCut(t, e.text) && judgedDangling.length && !patternDangling.length) {
+      notes.push(`${judgedDangling.length} sentence(s) may point at cut text (read by the context judge, not measured): check them`);
+      return e;
     }
     notes.push(`the ${e.cut.length} flagged claim(s) were not cut: cutting them left ${broke}. Check them before you use this`);
     listedHere.push(...e.cut); keptUncut = true;

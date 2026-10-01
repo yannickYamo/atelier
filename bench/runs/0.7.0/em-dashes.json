@@ -1,0 +1,41 @@
+{
+ "note": "answers containing an em dash; the 12 example answers contain none",
+ "arms": {
+  "no skill (full-rc1)": {
+   "answers": 42,
+   "withEmDash": 33
+  },
+  "0650801 runtime (full-rc1)": {
+   "answers": 42,
+   "withEmDash": 5
+  },
+  "0650801 plug-in (full-rc1)": {
+   "answers": 42,
+   "withEmDash": 14
+  },
+  "0.7.0 rc1 runtime (full-rc1)": {
+   "answers": 42,
+   "withEmDash": 15
+  },
+  "0.7.0 rc1 plug-in (full-rc1)": {
+   "answers": 42,
+   "withEmDash": 15
+  },
+  "0.7.0 runtime (small-before-tells)": {
+   "answers": 14,
+   "withEmDash": 6
+  },
+  "0.7.0 plug-in (small-before-tells)": {
+   "answers": 14,
+   "withEmDash": 6
+  },
+  "0.7.0 runtime (small)": {
+   "answers": 14,
+   "withEmDash": 0
+  },
+  "0.7.0 plug-in (small)": {
+   "answers": 14,
+   "withEmDash": 1
+  }
+ }
+}

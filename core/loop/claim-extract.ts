@@ -536,7 +536,9 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
               stableBlock: EXTRACT_SYSTEM, variableBlock: context,
               userMessage: `THE DRAFT, sentence by sentence:\n<draft>\n${numbered(text)}\n</draft>`,
               toolName: 'emit_specifics', toolDescription: 'Return every specific the draft asserts, with where it comes from.',
-              schema: EXTRACT_SCHEMA, maxTokens: 8000, temperature: 0,
+              // 16,000: at temperature 0 the reader lists every specific, and a piece naming 25 people ran past 8,000,
+              // which degraded the whole run to the pattern check (measured, bench/claims).
+              schema: EXTRACT_SCHEMA, maxTokens: 16000, temperature: 0,
             });
             return { value: x, cost: x.cost };
           });

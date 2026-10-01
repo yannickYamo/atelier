@@ -499,6 +499,11 @@ export interface InvocationSettings {
   readonly learnedTellsHash: string;
   /** the format profile the text was checked as, when one applied */
   readonly formatProfile: string | null;
+  /**
+   * The context judge that read this run (core/loop/context-judge.ts), or null: every instrument that ran is
+   * recorded, whether or not it may act. It may list and report; it may not cut (core/loop/cut-authority.ts).
+   */
+  readonly contextJudge?: string | null;
   readonly maxTokens: number;
   readonly temperature?: number;
   readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean };

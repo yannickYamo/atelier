@@ -6,6 +6,58 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## [0.7.0] — 2026-09-30 (only a measured instrument may cut; every release measured before it ships)
+
+### Changed: what may delete text
+
+- **Only a measured instrument may cut** (`core/loop/cut-authority.ts`). The qualified claim reader, a
+  word pattern, or an owner override may delete a sentence; an unqualified reader and the context judge
+  may only list what they find. The repair loop asserts this before every cut, and each finding carries
+  the instrument that made it.
+- **The context judge reports, it never decides.** It reads whether an answer claims work it did not do
+  and lists that for the person to check; the run records which model read it (`contextJudge` in the
+  run's settings). Claims of work done and results seen are cut on word patterns alone.
+- **Identifiers are narrower.** A common script (`build`, `test`), a common branch (`main`, `staging`)
+  or a path on its own is no longer treated as a made-up detail of the person's system; a specific name
+  beside a word like "table" or "branch" still is. "102." is an answer, not an empty list item.
+- **Short pieces get the machine-tell floor.** A corpus of answers or replies under 150 words had no
+  piece long enough for the rate check, so the rule against machine-writing moves was never proposed, and
+  an answer skill built from examples with no em dash shipped answers with them (15 of 42 on the coding
+  benchmark). A move the author never makes is checked at any length, so a short piece without one now
+  counts as meeting the rule, and the floor is proposed. Long-form corpora are unchanged.
+- **Answers do the work.** The compiled line for answers tells the model to do what the request allows,
+  report only what tools returned, and ask only for a decision that is the person's to make, never for
+  what it could find itself.
+
+### Added
+
+- **`atelier invoke --json` and `--answer-only`**: the answer alone on stdout, or the answer with its
+  cost, broken rules, cuts and items to check as JSON, for a script or another agent.
+- **The release contract** ([decision 0006](docs/decisions/0006-release-contract.md)): the numbers that
+  block a release, measured side by side with the previous release, and the measurable form of the
+  project's target. `bench/` produces those numbers from a pinned outside benchmark.
+- A pre-registration draft for the cross-domain blind read the target needs
+  ([studies/CROSS_DOMAIN_PREREGISTRATION.md](studies/CROSS_DOMAIN_PREREGISTRATION.md)).
+
+### Measured (bench/runs/0.7.0/)
+
+- **Coding answers** (the 14 cases of an outside benchmark, one trial, judged in one session beside the
+  answers of 0650801, the last build an outside test measured, before 0.6.0; `bench/runs/0.7.0/small/`):
+  the runtime scored 4.39 against 4.13 for 0650801 and 3.99 with no skill (difference
+  +0.26, 95% CI +0.07 to +0.51, bootstrap by case), with 1 blocking finding
+  against 2. The plug-in held level: 4.52 against 4.57 (-0.05, -0.29 to +0.16).
+  The runtime's answers carried no em dash (0 of 14, against 15 of 42 before the short-piece fix).
+  The one blocking finding: asked to fix a typo in a file it could not see, the runtime asked which typo
+  instead of saying what it would search for. Open.
+- **Against the hand-written skill tuned for that benchmark** (first candidate, three trials,
+  `bench/runs/0.7.0/full-rc1/`): the plug-in scored 4.53 against 4.35 (+0.18, -0.03 to +0.41),
+  with 1 blocking finding against 4, and a lower spread between trials (0.18 against 0.33).
+
+- **The claim reader at its production settings** (temperature 0, one and two reads), on the drafts of its
+  qualification study: all 46 planted inventions caught (95% CI 0.923 to 1); 39 of 48 clean drafts left
+  alone (0.674 to 0.911), against 41 of 48 when qualified (paired McNemar p = 0.69, no detectable change).
+  The reader's output limit was raised after a 25-name piece ran past it.
+
 ## [0.6.0] — 2026-09-30 (outside the blog: answers, code review, reports)
 
 ### Fixed: an outside re-test of the runtime (all five blockers, three of its five follow-ups)

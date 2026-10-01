@@ -29,7 +29,7 @@ So the standard has to live outside the model, be approved by a person, and be c
 1. It reads the examples and proposes rules with evidence.
 2. You approve the standard once. Required rules instruct the model; the rest guide it by example.
 3. Every output is checked. Counted rules get measured: machine-writing tells, lengths, phrases, and what a piece must contain - sections in order, a figure where one is required, an answer that ends on its next step.
-4. A small model lists every specific claim, and code checks each one against what you supplied. In published writing, an invented story, quotation or claim of evidence is deleted, never reworded. In answers, specifics are listed for you to check, never cut. A figure computed from your own figures counts as yours.
+4. A small model lists every specific claim, and code checks each one against what you supplied. In published writing, an invented story, quotation or claim of evidence is deleted, never reworded. In answers, general knowledge is listed for you to check; a claim of work the agent never did, or a detail of your system you never gave it, is cut. A figure computed from your own figures counts as yours.
 5. Only what broke is rewritten. A cut that would leave a fragment is redrafted once, or not made, and the check says so.
 
 That asymmetry in step 4 matters more than it looks. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
@@ -40,13 +40,13 @@ That asymmetry in step 4 matters more than it looks. Deleting an invented anecdo
 
 Building a skill works outside writing. In an outside test, Atelier built a skill from 12 example coding-assistant answers in 90 seconds for $0.41. On the benchmark of a popular hand-written skill tuned for it, the Atelier skill used as a plug-in scored 4.51 against 4.32, ahead in three separate judge runs, with the lowest spread between trials (0.34 against 0.59). A 90-second artifact beating a hand-tuned one on its own eval is the result I care about most.
 
-The runtime isn't there yet. Run through `atelier invoke`, the same skill first scored 3.21, below no skill at all: the claim check cut correct sentences and some answers went out with empty bullets. After the first round of fixes it reached 4.26 against the hand-written skill's 4.32. A re-test then found four regressions, which 0.6.0 fixes and nobody has re-measured yet. Until someone does, the plug-in is the path I'd use for answers.
+The runtime has caught up. Run through `atelier invoke`, the same skill first scored 3.21, below no skill at all: the claim check cut correct sentences and some answers went out with empty bullets. In 0.7.0 only a measured instrument may delete text. The benchmark's own judge read its 14 cases in one session, beside the build an outside test last measured. The runtime scored 4.39 against 4.13 (95% CI for the gap +0.07 to +0.51) and 3.99 with no skill, and the plug-in held level. One answer still asked which typo to fix when it could have said where it would look. Every score and summary is in [bench/runs](https://github.com/yannickYamo/atelier/tree/main/bench/runs/0.7.0), and [decision 0006](docs/decisions/0006-release-contract.md) says which numbers stop a release.
 
 The invented-claim check is the piece I trust most. On product essays no test had used, it caught all 45 planted inventions it read, and left 41 of 48 clean drafts alone. A pattern check on the same material caught 11 of 46.
 
 The counted guarantees hold where prompting doesn't. In the outside blog test, every Atelier post had no em dashes, no invisible characters and no copied six-word runs, and all its required rules held in 7 of 9 posts, against 2 of 9 for a prompt with the author's essays pasted in.
 
-Voice is close, not settled. On one brief written five times, a blind judge scored Atelier 7.2 and a fresh call with the author's essays pasted in 7.4. Across five briefs, Atelier's post came first in 3 of 4 groups, with the fewest unsupported claims and the tightest spread (13.4 a post, standard deviation 1.6, against 14.0 and 3.5). A long single chat does drift; a fresh call with fixed context doesn't, with or without Atelier. Two of our studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size.
+Voice is close, not settled. On one brief written five times, a blind judge scored Atelier 7.2 and a fresh call with the author's essays pasted in 7.4. Across five briefs, Atelier's posts had the fewest unsupported claims and the tightest spread (13.4 a post, standard deviation 1.6, against 14.0 and 3.5). A long single chat does drift; a fresh call with fixed context doesn't, with or without Atelier. Two of our studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size.
 
 ## How it compares
 

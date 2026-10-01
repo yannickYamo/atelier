@@ -1,0 +1,51 @@
+{
+ "label": "rc1 plugin, 14 cases x 3 trials",
+ "judged": 126,
+ "conditions": {
+  "baseline": {
+   "answers": 42,
+   "cases": 14,
+   "weighted": 4.03,
+   "blockers": 8,
+   "trialSpread": 0.183
+  },
+  "candidate": {
+   "answers": 42,
+   "cases": 14,
+   "weighted": 4.471,
+   "blockers": 2,
+   "trialSpread": 0.165
+  },
+  "comparator": {
+   "answers": 42,
+   "cases": 14,
+   "weighted": 4.525,
+   "blockers": 0,
+   "trialSpread": 0.136
+  }
+ },
+ "candidateMinusComparator": {
+  "cases": 14,
+  "mean": -0.054,
+  "ci95": [
+   -0.155,
+   0.052
+  ],
+  "perCase": {
+   "agent-owned-edit": -0.25,
+   "casual-message": 0.0,
+   "code-answer": 0.0,
+   "complex-plan": -0.067,
+   "concept-explanation": 0.417,
+   "debugging-cause": -0.4,
+   "destructive-action": -0.033,
+   "direct-answer": 0.167,
+   "error-report": -0.367,
+   "long-form-request": -0.033,
+   "medical-boundary": -0.067,
+   "multi-step-progress": 0.017,
+   "partial-success": -0.067,
+   "real-ambiguity": -0.067
+  }
+ }
+}
