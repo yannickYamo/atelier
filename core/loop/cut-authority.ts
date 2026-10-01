@@ -11,14 +11,18 @@ export type CutAuthority =
   | 'qualified-reader'
   /** the deterministic patterns: a fact in code, the same answer every time */
   | 'pattern'
-  /** an unqualified reader the owner told to gate anyway (ATELIER_CLAIMS_GATE=reader), said on every run */
+  /**
+   * an unqualified reader the owner told to gate anyway (ATELIER_CLAIMS_GATE=reader), said on every run. It
+   * FAILS the check on what it finds, so the owner sees it; it does not delete. An override is a decision
+   * about what counts as a failure, not a measurement, and only a measurement may delete.
+   */
   | 'owner-override'
   /** a reader nobody has measured at the version that ran */
   | 'unqualified-reader'
   /** the context judge (./context-judge.ts): not measured; it may flag, never cut */
   | 'context-judge';
 
-const MAY_CUT: ReadonlySet<CutAuthority> = new Set<CutAuthority>(['qualified-reader', 'pattern', 'owner-override']);
+const MAY_CUT: ReadonlySet<CutAuthority> = new Set<CutAuthority>(['qualified-reader', 'pattern']);
 
 /** Whether `authority` may delete text. */
 export const mayCut = (authority: CutAuthority): boolean => MAY_CUT.has(authority);

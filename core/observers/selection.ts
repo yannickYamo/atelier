@@ -21,8 +21,10 @@
 //   SIGNAL   the author's distribution and the model's differ (the AUC says so), but the author's own
 //            range is wide enough that most single drafts sit inside it. Held to a band, it would pass
 //            nearly everything; proposed as a rule, it would be a rule that checks nothing. It goes into
-//            the profile, the choice between drafts and the optimizer's objectives: pulled toward the
-//            author's typical value, never a gate.
+//            the profile, the choice between drafts and the optimizer's objectives: held inside the
+//            author's range, never pulled toward their typical value, and never a gate. Imitations already
+//            sit nearer an author's average than the author's own pieces do; a pull toward the median makes
+//            a draft more typical than the author, which is how an imitation reads.
 //
 // Deterministic, no model call. The pieces and drafts are whatever discovery already has.
 
@@ -53,7 +55,7 @@ export interface FeatureVerdict {
   readonly why: string;
 }
 
-export const SELECTION = { minAucDistance: 0.25, minHeldIn: 0.8, minModelOut: 0.6, minRead: 4, minHeld: 2, minModel: 3, widen: 0.25 } as const;
+export const SELECTION = { minAucDistance: 0.25, minHeldIn: 0.8, minModelOut: 0.6, minRead: 4, minHeld: 2, minModel: 8, widen: 0.25 } as const;
 
 /** A band this narrow is the padding `bandOf` puts around one value near 0, not a range the author writes in. */
 const FLAT_WIDTH = 0.002;
@@ -79,13 +81,16 @@ export function bandOf(read: readonly number[]): readonly [number, number] | nul
 export function judgeFeature(id: string, s: FeatureSample): FeatureVerdict {
   const read = vals(s.read); const held = vals(s.held); const model = vals(s.model);
   const band = bandOf(read);
-  const auc = aucOf([...read, ...held], model);
+  // SELECTED ON WHAT WAS READ, VALIDATED ON WHAT WAS NOT. The held-back pieces are the test that the band
+  // holds on writing nobody looked at; pooling them into the separation or the median made them part of
+  // the selection, and a test the selection has seen is no longer a test.
+  const auc = aucOf(read, model);
   const inBand = (x: number): boolean => band !== null && x >= band[0] && x <= band[1];
   const heldIn = held.length ? r3(held.filter(inBand).length / held.length) : null;
   const modelOut = model.length && band ? r3(model.filter((x) => !inBand(x)).length / model.length) : null;
   const med = (xs: number[]): number | null => (xs.length ? r3(quantile(xs, 0.5)) : null);
   const flat = band !== null && band[1] - band[0] <= FLAT_WIDTH;
-  const base = { id, auc, band, heldIn, modelOut, authorMedian: med([...read, ...held]), modelMedian: med(model), ...(flat ? { flat: true as const } : {}) };
+  const base = { id, auc, band, heldIn, modelOut, authorMedian: med(read), modelMedian: med(model), ...(flat ? { flat: true as const } : {}) };
   const no = (why: string): FeatureVerdict => ({ ...base, kept: false, role: null, why });
   if (read.length < SELECTION.minRead || held.length < SELECTION.minHeld || model.length < SELECTION.minModel) {
     return no(`too few measurable texts (read ${read.length}, held back ${held.length}, model ${model.length})`);
@@ -132,14 +137,15 @@ export const signalsOf = (verdicts: readonly FeatureVerdict[]): StoredSignal[] =
     ? [{ id: v.id, band: v.band, authorMedian: v.authorMedian, modelMedian: v.modelMedian, auc: v.auc }] : []));
 
 /**
- * How far a draft sits from the author on their signals: the mean distance from their typical value in
- * band-widths, over the signals that measured. Lower is closer. Null when none measured. Used to choose
+ * How far a draft sits outside the author's range on their signals: the mean distance outside each band, in
+ * band-widths, over the signals that measured. Zero anywhere inside the range: the target is the author's
+ * range, not their median (see SIGNAL above). Lower is closer. Null when none measured. Used to choose
  * between drafts, never to fail one.
  */
 export function signalDistance(text: string, signals: readonly StoredSignal[]): number | null {
   const ds = signals.flatMap((s) => {
     const v = featureOf(s.id)?.measure(text) ?? null;
-    return v === null ? [] : [Math.abs(v - s.authorMedian) / Math.max(s.band[1] - s.band[0], 0.001)];
+    return v === null ? [] : [distanceFromBand(v, s.band)];
   });
   return ds.length ? r3(ds.reduce((a, b) => a + b, 0) / ds.length) : null;
 }

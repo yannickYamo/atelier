@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import type { FidelityRecord } from '../../core/fidelity/types.js';
 import { mapLimitSettled } from '../../core/inference/concurrency.js';
 import { resolve, basename } from 'node:path';
 import type { Budget, InferenceClient } from '../../core/inference/client.js';
@@ -352,6 +353,8 @@ export async function runOnce(
   claimGuard: ((text: string) => Promise<readonly string[]>) | null = null,
   /** what `invoke` was configured with beyond the binding (see InvocationSettings); null elsewhere */
   settings: InvocationSettings | null = null,
+  /** how the output was steered toward the author's range, read on the delivered text (cli/fidelity.ts); null elsewhere */
+  fidelity: ((output: string) => FidelityRecord) | null = null,
 ): Promise<InvocationRecord> {
   // PARSED HERE, AND A BROKEN CONTRACT STOPS THE RUN. Falling back to free text on a malformed schema
   // would produce an output nobody constrained, recorded as a normal invocation.
@@ -423,7 +426,8 @@ export async function runOnce(
     ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
       ...(failures.length ? { written: written.length, failed: failures } : {}),
       ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),
-    ...(settings ? { settings } : {}) };
+    ...(settings ? { settings } : {}),
+    ...(fidelity ? { fidelity: fidelity(output) } : {}) };
   assertRequestBound(rec.request, task);
   // Persisted through the ONE shared function — the host surface records through the same one, so
   // evidence cannot differ in shape by which surface witnessed it.

@@ -166,6 +166,24 @@ export interface QualifiedReader { readonly model: string; readonly version: str
  * (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md). The list is updated by the study that measures the
  * pair, never to make a reader gate.
  */
+/**
+ * A RATE LIMIT IS WAITED OUT, NOT TAKEN AS A VERDICT. A reader that fails degrades the whole run to the
+ * pattern check, which catches a fraction of what the reader does; a 429 or an overloaded backend is the
+ * commonest failure and the one most likely to clear. The provider's own client retries quickly; this
+ * waits longer, twice, before the failure stands. The wait is ATELIER_RETRY_BASE_MS (default 5 s), then
+ * four times that.
+ */
+export async function patiently<T>(f: () => Promise<T>): Promise<T> {
+  const base = Number(process.env.ATELIER_RETRY_BASE_MS ?? 5000);
+  for (let attempt = 0; ; attempt++) {
+    try { return await f(); } catch (e) {
+      const m = (e as Error).message ?? '';
+      if (attempt >= 2 || !/\b(?:429|529|rate limit|overloaded|too many requests)\b/i.test(m)) throw e;
+      await new Promise((ok) => setTimeout(ok, base * (attempt === 0 ? 1 : 4)));
+    }
+  }
+}
+
 export const QUALIFIED_READERS: readonly QualifiedReader[] = [
   { model: 'claude-haiku-4-5', version: '0279163b' },
   { model: 'claude-haiku-4-5', version: 'a173339d' },
@@ -547,7 +565,7 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
           return asSpecifics(raw) ?? [];
         };
         const each: ExtractedSpecific[][] = [];
-        for (let i = 0; i < reads; i++) each.push(await readOnce());
+        for (let i = 0; i < reads; i++) each.push(await patiently(readOnce));
         cache.set(k, resolve(text, each));
         toDisk(text, each);
       } catch (e) {

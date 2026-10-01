@@ -45,8 +45,13 @@ const BY_PATTERN: Readonly<Record<PatternId, Dimension>> = {
   MACHINE_TELL: 'REGISTER', DASH_ASIDE: 'PACE', BOLD_SPAN: 'STRUCTURE', ONE_LINE_PARAGRAPH: 'PACE',
 };
 
-/** A counted feature (../observers/features.ts) sorts by the layer of the text it measures. */
-const BY_LAYER: Readonly<Record<Layer, Dimension>> = { 1: 'VOCABULARY', 2: 'PACE', 3: 'STRUCTURE', 4: 'VOCABULARY', 7: 'REGISTER', 9: 'PACE', 10: 'STRUCTURE' };
+/**
+ * A counted feature (../observers/features.ts) sorts by the layer of the text it measures. Movement (6) is
+ * how an argument travels, so ARGUMENT; specifics (8) are what a reader could check, so EVIDENCE.
+ */
+const BY_LAYER: Readonly<Record<Layer, Dimension>> = {
+  1: 'VOCABULARY', 2: 'PACE', 3: 'STRUCTURE', 4: 'VOCABULARY', 6: 'ARGUMENT', 7: 'REGISTER', 8: 'EVIDENCE', 9: 'PACE', 10: 'STRUCTURE',
+};
 
 /** Checked in order; the first match wins, so the more specific kinds come first. */
 const BY_WORDS: readonly [Dimension, RegExp][] = [

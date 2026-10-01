@@ -19,7 +19,7 @@ import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
-import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, type PatternId } from './style.js';
+import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
   readonly start: number; readonly end: number; readonly text: string; readonly why: string;
@@ -220,8 +220,14 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const ref = { words, mean: nums(p, 'mean') ?? [], sd: nums(p, 'sd') ?? [], authorDocs: chunk(nums(p, 'authorDocs') ?? []), modelDocs: chunk(nums(p, 'modelDocs') ?? []) };
       const d = styleDistanceDocs(text, ref);
       const closer = d.author < d.model;
-      return { verdict: closer ? 'MET' : 'VIOLATED', spans: [], value: Math.round((d.model - d.author) * 1000) / 1000,
-        detail: `distance to the author ${d.author}, to the model ${d.model}: ${closer ? 'closer to the author' : 'closer to the model'}` };
+      // A CEILING AT THE AUTHOR'S OWN MARGIN. Higher used to be better without limit, which rewards a draft
+      // for being more typical of the author than any piece they wrote (see authorSelfMargins).
+      const own = authorSelfMargins(ref);
+      const ceiling = own.length >= 3 ? quantile(own, 0.9) : null;
+      const raw = d.model - d.author;
+      const over = ceiling !== null && raw > ceiling;
+      return { verdict: closer ? 'MET' : 'VIOLATED', spans: [], value: Math.round((over ? ceiling : raw) * 1000) / 1000,
+        detail: `distance to the author ${d.author}, to the model ${d.model}: ${closer ? 'closer to the author' : 'closer to the model'}${over ? '; closer to your average than your own pieces sit, so it scores as your own pieces do and no higher' : ''}` };
     },
   },
   // ── Proportions: rates with floors, ratios between word lists, the mix of sentence lengths ────

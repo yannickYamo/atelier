@@ -20,6 +20,7 @@ import type { Prerequisite } from './prerequisite.js';
 // This one says why an INVOCATION was made (organic use, dev probe, stress probe). They share no
 // values. An inline `import()` was hiding the collision at the one place both are in scope.
 import type { Provenance as InvocationProvenance } from '../fidelity/provenance.js';
+import type { FidelityRecord } from '../fidelity/types.js';
 import { createHash } from 'node:crypto';
 
 /**
@@ -570,6 +571,12 @@ export interface InvocationRecord {
     readonly unchosen?: readonly string[]; readonly unchosenTruncated?: boolean };
   /** what the run was configured with beyond the binding, so a study arm can be re-run from its record */
   readonly settings?: InvocationSettings;
+  /**
+   * How the output was steered toward the author's range, and where it landed (../fidelity/types.ts): the
+   * implementation release, every draft's reading, the structural edits tried, the passages retrieved, and
+   * each requirement's applicability. Absent for a skill with no fidelity profile.
+   */
+  readonly fidelity?: FidelityRecord;
 }
 
 export interface RepairPair {

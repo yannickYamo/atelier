@@ -26,6 +26,7 @@ import { buildProposal, renderProposal, unconfirmedIn } from '../../core/compile
 import { defaultPlan, maintenanceMap, describeMaintenance } from '../../core/coverage/observation.js';
 import { planImprovement, describeImprovement, type UndoRecord } from '../../core/compiler/apply.js';
 import type { AdaptedComponent } from '../../core/intake/package.js';
+import { installFidelity } from '../fidelity.js';
 import * as store from '../../core/state/store.js';
 import { extract } from '../../core/intake/extract.js';
 
@@ -245,6 +246,10 @@ export async function build(nameArg?: string): Promise<void> {
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, voice); store.setDocClass(L, docClass); store.setContrast(L, contrast);
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
+  // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward
+  // the author's range, below the standard and never able to move it.
+  const release = installFidelity(L, v, skill.skillVersionHash);
+  if (release) console.log(`Implementation release ${release.id}: ${release.settings.drafts} drafts, up to ${release.settings.editBudget} structural edit(s)${release.retrievalHash ? `, ${release.settings.retrievalK} of your passages retrieved per request` : ''}.`);
 
   // ── IMPROVE: WRITE INTO THE USER'S OWN SKILL ───────────────────────────────────────────────
   //

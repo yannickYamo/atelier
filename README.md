@@ -30,7 +30,7 @@ So the standard has to live outside the model, be approved by a person, and be c
 2. You approve the standard once. Required rules instruct the model; the rest guide it by example.
 3. Every output is checked. Counted rules get measured: machine-writing tells, lengths, phrases, and what a piece must contain - sections in order, a figure where one is required, an answer that ends on its next step.
 4. A small model lists every specific claim, and code checks each one against what you supplied. In published writing, an invented story, quotation or claim of evidence is deleted, never reworded. In answers, general knowledge is listed for you to check; a claim of work the agent never did, or a detail of your system you never gave it, is cut. A figure computed from your own figures counts as yours.
-5. Only what broke is rewritten. A cut that would leave a fragment is redrafted once, or not made, and the check says so.
+5. Only what broke is rewritten, and then the form is steered toward your range. Four drafts are written, and the one that lands most of its measured features inside the range your own pieces span is kept: paragraph length, sentence rhythm, punctuation. Where it is still outside, its form is redrafted without changing what it says. The target is your range, never your average, because an imitation is already closer to your average than you are.
 
 That asymmetry in step 4 matters more than it looks. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
 
@@ -47,6 +47,8 @@ The invented-claim check is the piece I trust most. On product essays no test ha
 The counted guarantees hold where prompting doesn't. In the outside blog test, every Atelier post had no em dashes, no invisible characters and no copied six-word runs, and all its required rules held in 7 of 9 posts, against 2 of 9 for a prompt with the author's essays pasted in.
 
 Voice is close, not settled. On one brief written five times, a blind judge scored Atelier 7.2 and a fresh call with the author's essays pasted in 7.4. Across five briefs, Atelier's posts had the fewest unsupported claims and the tightest spread (13.4 a post, standard deviation 1.6, against 14.0 and 3.5). A long single chat does drift; a fresh call with fixed context doesn't, with or without Atelier. Two of our studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size.
+
+That gap is what 0.8 goes after. The outside studies found the author's punctuation and tells reproduced and the pace missed: paragraph length, how the sentences sound, the fingerprint a detector reads. So 0.8 measures those against the author's own range and closes the loop on them, and every output says which release shaped it and where it landed. It isn't measured yet. An independent reviewer runs [B6](studies/B6_PREREGISTRATION.md) on their own corpora and key, with the bars written down before the first draft. Until that comes back, the earlier numbers are the ones that count.
 
 ## How it compares
 

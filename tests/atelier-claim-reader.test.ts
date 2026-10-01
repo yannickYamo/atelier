@@ -578,13 +578,27 @@ describe('the audit of the invented-claim check', () => {
         },
         when: [{ contains: '[1] The review took 95 minutes.', answer: { nothing: true } }],
       });
-      const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' },
+      // A qualified reader (the model and prompt version a qualification result stands behind) cuts.
+      const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'claude-haiku-4-5' },
         'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
       const j = JSON.parse(r.out) as { output: string; repair: { storiesCut?: string[]; violatedAfter: string[] } };
       expect(j.output).not.toContain('95 minutes');
       expect(j.output).not.toContain('94 minutes');
       expect(j.repair.storiesCut?.join(' ')).toContain('94 minutes');
       expect(j.repair.violatedAfter).toEqual([]);
+    });
+
+    it('4: an owner override makes an unqualified reader fail the check, never delete', async () => {
+      const { run, file } = setup('The review took 94 minutes. The team shipped the fix the same day.');
+      await script({ byTool: { emit_specifics: { specifics: [{ sentence: 1, text: '94 minutes', kind: 'FIGURE', attributed: false, source: 'NONE', support: '' }] } } });
+      const r = run({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'my-small-model', ATELIER_CLAIMS_GATE: 'reader' },
+        'verify', '--skill', 'house', file, '--repair', '--json', ...remote());
+      // It exits 1 (a REQUIRED rule fails), so stderr follows the JSON object: read the object alone.
+      expect(r.code).toBe(1);
+      const j = JSON.parse(r.out.slice(0, r.out.indexOf('\n}') + 2)) as { output: string; repair: { storiesCut?: string[]; violatedAfter: string[] } };
+      expect(j.output).toContain('94 minutes');
+      expect(j.repair.storiesCut ?? []).toEqual([]);
+      expect(j.repair.violatedAfter).toContain('UNSOURCED');
     });
   });
 });

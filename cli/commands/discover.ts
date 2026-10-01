@@ -23,6 +23,8 @@ import { extract } from '../../core/intake/extract.js';
 
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { buildProfile } from '../../core/fidelity/profile.js';
+import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
 import { formatOf } from '../../core/observers/formats.js';
@@ -346,6 +348,7 @@ export async function discover(): Promise<void> {
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.
   rmSync(runFile('signals.json'), { force: true });
+  rmSync(runFile('fidelity.json'), { force: true }); rmSync(runFile('retrieval.json'), { force: true });
   // THE PLAIN DRAFTS ARE OPTIONAL; THE TELL FLOOR IS NOT. Rules that compare the author with the model
   // need its drafts; the machine-tell floor, register and contrastive verdicts are measured on the author's
   // pieces alone. A comparison that failed once dropped all of them, and a skill shipped with no floor
@@ -370,6 +373,17 @@ export async function discover(): Promise<void> {
       console.log(`${signals.length} signal(s) of your style, used to choose between drafts (not rules): ${signals.map((x) => featureOf(x.id)?.label ?? x.id).join('; ')}.`);
     }
   }
+  // THE FIDELITY PROFILE (core/fidelity/profile.ts): every counted feature's band on the author's pieces,
+  // per length class where there are enough of them, its role, and a stylometric detector when there are
+  // drafts enough to train one. Installed by build with the skill; it steers drafts and is recorded with
+  // every output. Built from what this step already holds, so it costs nothing more.
+  const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash });
+  writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
+  // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
+  // served to the writer, they would be compared with outputs written from them.
+  writeAtomic(runFile('retrieval.json'), JSON.stringify(buildRetrievalIndex(read)));
+  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').length;
+  console.log(`Fidelity profile: ${profile.bands.filter((b) => b.cls === 'all').length} feature(s) measured on your pieces, ${steering} of them steer drafts${profile.detector ? `; a style detector trained against ${profile.detector.trainedOn.model} model drafts` : ''}.`);
   if (contrast.length) {
     const from = drafts.length >= 2 ? `from comparing your writing with ${drafts.length} plain drafts by the model` : 'measured on your pieces alone (no plain drafts to compare with)';
     console.log(`${contrast.length} rule(s) ${from}: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
@@ -448,23 +462,34 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   const path = runFile('contrast-drafts.json');
   const { client, binding } = clientAndBinding('target');
   // Keyed by corpus, model AND form: another model's habits, or another kind of piece, is another comparison.
-  const key = `${corpusHash}|${binding.requestedModel}|${form.label}|${form.words}`;
+  const key = `${corpusHash}|${binding.requestedModel}|${form.label}|${form.words}|${Math.floor(numericFlag('--contrast-drafts', 12))}|with-examples`;
   if (existsSync(path)) {
     const cached = readJson<{ corpusHash: string; key?: string; drafts: string[] }>(path, { what: 'the contrast drafts' });
     if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return cached.drafts;
   }
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', 1.5), maxCalls: 6 };
-  // Five: fewer and a style distance cannot tell the model's own drafts from the author's (measured).
-  const topics = contrastTopics(read, 5);
-  console.log(`Asking the model for ${topics.length} plain drafts on your topics, to see its habits against yours…`);
+  // TWELVE, HALF OF THEM IMITATIONS. Five plain drafts let a feature qualify on three or four model values,
+  // which is how a feature that merely ranks one draft oddly passed as taste. And a plain draft is the weak
+  // adversary: what has to separate an author from the model is what still separates them when the model is
+  // shown their own pieces, the way a person would ask it. So every other draft is written with two of the
+  // author's other pieces pasted in as examples (never the piece whose topic it takes).
+  const n = Math.max(4, Math.floor(numericFlag('--contrast-drafts', 12)));
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', 3), maxCalls: n + 2 };
+  const base = contrastTopics(read, read.length);
+  const topics = Array.from({ length: Math.min(n, Math.max(base.length, 1) * 3) }, (_, i) => base[i % base.length] ?? 'a piece on your usual subject');
+  console.log(`Asking the model for ${topics.length} drafts on your topics, half of them with your pieces as examples, to see its habits against yours…`);
   // Room for the author's length: a fixed 4,000 tokens truncated every draft of a 2,400-word author, and
   // the whole comparison was lost. One draft that fails costs that draft, not the comparison.
   const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(form.words * 2.2) + 500));
-  const drafts = await mapLimit(topics, topics.length, async (topic) => {
+  const examplesFor = (i: number): string => {
+    const others = read.filter((_, j) => j !== i % read.length).slice(0, 2)
+      .map((p) => p.text.split(/\s+/).slice(0, 1200).join(' '));
+    return others.length ? `\n\nHere are pieces by the author, to write in their style:\n\n${others.map((t) => `<example>\n${t}\n</example>`).join('\n\n')}` : '';
+  };
+  const drafts = await mapLimit(topics.map((t, i) => ({ t, i })), Math.min(6, topics.length), async ({ t: topic, i }) => {
     try {
-      const r = await spend(budget, 0.1, async () => {
+      const r = await spend(budget, 0.15, async () => {
         const x = await client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
-          userMessage: `Write ${form.label} titled "${topic}". About ${form.words} words. Output only the piece.`,
+          userMessage: `Write ${form.label} titled "${topic}". About ${form.words} words. Output only the piece.${i % 2 ? examplesFor(i) : ''}`,
           toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
           schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens });
         return { value: x, cost: x.cost };

@@ -8,7 +8,7 @@
 // wording counted as known, and a stated rule that became no rule shown before anything binds.
 
 import { describe, it, expect } from 'vitest';
-import { enforceClaims, claimMemory, heavyCut, refineToStandard, checkDraft } from '../core/loop/run-repair.js';
+import { enforceClaims, claimMemory, heavyCut, refineToStandard, checkDraft, INCONCLUSIVE } from '../core/loop/run-repair.js';
 import { FORMATS } from '../core/observers/formats.js';
 import { isReplyWork } from '../cli/commands/skill.js';
 import { modelSensor, READER_VERSION } from '../core/loop/claim-extract.js';
@@ -50,7 +50,7 @@ describe('one verdict per sentence for the whole run', () => {
   it('polarity: with no memory, the same drifting reader cascades, which is the defect', async () => {
     const sensor = modelSensor(driftingReader(['claim to be unsigned', 'controls the alg header', 'skips the signature']),
       { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5', { material: '', task: '', placeholders: false, qualifiedReaders });
-    const forgetful = { apply: (_t: string, report: VerifyReport) => report, demote: () => undefined, listed: () => [] };
+    const forgetful = { apply: (_t: string, report: VerifyReport) => report, demote: () => undefined, doubt: () => undefined, listed: () => [] };
     const r = await enforceClaims('d', v, ANSWER, { claimSensor: sensor }, undefined, forgetful);
     expect(r.cut.length).toBe(3);
   });
@@ -147,7 +147,16 @@ describe('the balance: when the check flags much of a draft, only the unambiguou
     expect(r.text).toContain('73% of teams');
     expect(r.text).toContain('41% of outages');
     expect(r.listed.join(' ')).toContain('73%');
-    expect(r.report.failed).toBe(false);
+    // LISTED IS NOT PASSED in published writing: the figures nobody confirmed fail the claim floor.
+    const unsure = r.report.checked.find((c) => c.requirementId === INCONCLUSIVE);
+    expect(unsure?.result.verdict).toBe('VIOLATED');
+    expect(unsure?.result.spans.map((sp) => sp.text).join(' ')).toContain('41% of outages');
+    expect(r.report.failed).toBe(true);
+  });
+
+  it('polarity: in an answer, where specifics are listed by design, the list is the verdict', async () => {
+    const r = await enforceClaims('d', v, draft, { material: '', format: FORMATS['assistant-reply'] });
+    expect(r.report.checked.some((c) => c.requirementId === INCONCLUSIVE)).toBe(false);
   });
 
   it('a draft with only a few flags is still cut in full, figures included', async () => {

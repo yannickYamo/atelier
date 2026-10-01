@@ -3,8 +3,8 @@
 // Taste lives at several depths, and the shallow ones are cheap to count and easy to fake. The patterns in
 // ./style.ts are the constructions that were known to matter before any author was read. This registry
 // is the other half: a wide set of plain, deterministic features across the layers of a text
-// (punctuation, sentence shape, page furniture, wording, stance, sound, unevenness), none of which is
-// assumed to matter. Which of them carry THIS author's taste is decided by ./selection.ts, from their
+// (punctuation, sentence shape, page furniture, wording, movement, specifics, stance, sound, unevenness),
+// none of which is assumed to matter. Which of them carry THIS author's taste is decided by ./selection.ts, from their
 // own pieces against the model's own drafts: most features separate nobody, and a feature that does not
 // separate is not taste and is never proposed.
 //
@@ -12,14 +12,15 @@
 // number to mean anything. No feature calls a model. The FEATURE observer holds a text to the band the
 // selection read off the author's pieces, both sides: a floor with no ceiling is how a model overshoots.
 
-import { wordsOf, proseRegions, proseSentencesOf, quantile } from './text.js';
+import { wordsOf, proseRegions, proseSentencesOf, paragraphsOf, quantile } from './text.js';
+import { bagOf, paceSteps, callbackShare } from './pace.js';
 import type { Observer } from './registry.js';
 
 /** The layers of a text a feature belongs to. Numbered as in docs/FORMATS.md. */
-export type Layer = 1 | 2 | 3 | 4 | 7 | 9 | 10;
+export type Layer = 1 | 2 | 3 | 4 | 6 | 7 | 8 | 9 | 10;
 export const LAYER_LABEL: Readonly<Record<Layer, string>> = {
   1: 'punctuation and typography', 2: 'sentence architecture', 3: 'page and document', 4: 'lexicon and wording',
-  7: 'narrator and stance', 9: 'sound', 10: 'irregularity',
+  6: 'argument and movement', 7: 'narrator and stance', 8: 'content and specifics', 9: 'sound', 10: 'irregularity',
 };
 
 export interface Feature {
@@ -81,6 +82,87 @@ const perPage1000 = (c: (page: { body: string; fences: number }) => number) => (
   return n < MIN_WORDS ? null : r3((c(pageOf(text)) / n) * 1000);
 };
 const lengths = (text: string): number[] => proseSentencesOf(text).map((s) => s.words).filter((w) => w > 0);
+
+/** Spread over mean (population standard deviation), or null when the mean is 0 and the ratio means nothing. */
+const cv = (xs: readonly number[]): number | null => {
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return m === 0 ? null : Math.sqrt(xs.reduce((n, x) => n + (x - m) ** 2, 0) / xs.length) / m;
+};
+
+/**
+ * PARAGRAPHS, PROSE ONLY. Paragraph pace is what a skill was found to miss: it matched an author's
+ * punctuation and missed that they write one-line paragraphs between long ones, or never do. A list item
+ * is not a paragraph (it is short by design and would make every listy draft look terse), so only prose
+ * blocks are read, the way ./text.ts cuts them.
+ * A TEXT IS LONG ENOUGH, NOT ITS PARAGRAPH COUNT. Gated on four paragraphs, a 250-word wall of a single
+ * paragraph measured nothing, and that wall is the commonest way a model's draft misses an author who
+ * breaks often: the miss was invisible to the very feature meant to see it. So the gate is the text's
+ * length (MIN_WORDS of prose, as for every rate here): one 250-word paragraph is a paragraph of 250 words.
+ */
+interface ParagraphShape { readonly words: number; readonly sentences: number }
+const paragraphShape = (f: (ps: readonly ParagraphShape[]) => number) => (text: string): number | null => {
+  const ps = paragraphsOf(text).map((p) => ({ words: wordsOf(p.text).length, sentences: p.sentences })).filter((p) => p.words > 0);
+  return !ps.length || proseWordCount(text) < MIN_WORDS ? null : r3(f(ps));
+};
+
+/**
+ * MOVEMENT, read lexically (./pace.ts). Twelve sentences give eleven steps, the fewest that say anything
+ * about a mean and its spread; a callback needs room for a return at least five sentences back and a run
+ * after it, so it waits for fifteen. Fewer than six informative steps (pairs where both sentences have
+ * content words) is too few to average, however many sentences there are.
+ */
+const MIN_PACE_SENTENCES = 12;
+const MIN_CALLBACK_SENTENCES = 15;
+const stepsOf = (text: string): number[] | null => {
+  const bags = proseSentencesOf(text).map((s) => bagOf(s.text));
+  if (bags.length < MIN_PACE_SENTENCES) return null;
+  const st = paceSteps(bags);
+  return st.length < 6 ? null : st;
+};
+
+// ── Over-articulation ─────────────────────────────────────────────────────────────────────────────
+// Model imitations explain and contrast where authors assert and narrate: they overuse "than", "that's",
+// "isn't", "not", "let's", "because". Each list below is a proxy for one habit, counted as words, and
+// written out so a reader can see exactly what was counted. Overlaps are deliberate and harmless: "rather
+// than" counts as a comparison and as a contrast, "that's why" as a contraction and as an explanation,
+// because each feature is judged on its own against the author.
+
+/** Comparison: "than", alone. "More X than Y" is how a draft argues against something nobody said. */
+const THAN = /\bthan\b/gi;
+/** Negation: not, never, no, cannot, and every n't form (isn't, don't, can't, won't…). */
+const NEGATION = /\b(?:not|never|no|cannot)\b|\b\w+n['’]t\b/gi;
+/** "That's": the pointing-back contraction an explaining voice leans on ("that's the point", "that's why"). */
+const THATS = /\bthat['’]s\b/gi;
+/** The reader taken along as company: "let's", "let me", "let us". */
+const LET_US = /\blet(?:['’]s\b|\s+(?:me|us)\b)/gi;
+/**
+ * Explanation, the connectives that give a reason or restate one: because, since, so that, which means,
+ * that's why, this is why, the reason, in other words, and "that is," with its comma (the restating use,
+ * not "that is true"). "Since" is counted in its temporal sense too: telling the two apart needs a parser,
+ * and the causal sense is the common one in argument.
+ */
+const EXPLANATORY = /\b(?:because|since|so that|which means|that['’]s why|this is why|the reason|in other words)\b|\bthat is,/gi;
+/**
+ * Contrast: but, however, instead, rather than, whereas, yet, although. "Not X but Y" counts once, through
+ * its "but"; its "not" is NEGATION's, which is a different habit.
+ */
+const CONTRASTIVE = /\b(?:but|however|instead|rather than|whereas|yet|although)\b/gi;
+
+/**
+ * SPECIFICS ON THE PAGE: money, percentages, years, digits with a unit or a counted noun ("94 minutes",
+ * "1,200 customers"), capitalised names of two or more words mid-sentence, and quotations of two or more
+ * words (one quoted word is a scare quote, not a source). One pattern read left to right, so "12%" is one
+ * specific, not a number and a percentage. This measures how dense the writing is in things a reader could
+ * check; ../loop/fact-ledger.ts asks the other question, whether those things were supplied.
+ */
+const SPECIFIC = new RegExp([
+  /[$€£]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:k|m|bn|million|billion|thousand)\b)?/.source,
+  /\b\d[\d,]*(?:\.\d+)?\s?(?:%|percent\b|per cent\b)/.source,
+  /\b(?:1[89]|20)\d\d\b/.source,
+  /\b\d[\d,]*(?:\.\d+)?\s?(?!(?:of|and|or|to|in|the|a|an|is|are|was|were|for|on|at|by|with)\b)[a-z]+\b/.source,
+  /(?<=[a-z0-9,;:] )[A-Z][\w'’-]*(?: [A-Z][\w'’-]*)+/.source,
+  /["“][^"”\n]*?\S\s+\S[^"”\n]*?["”]/.source,
+].join('|'), 'g');
 
 const syllables = (w: string): number => {
   const x = w.toLowerCase().replace(/[^a-z]/g, '');
@@ -163,6 +245,14 @@ export const FEATURES: readonly Feature[] = [
     for (let i = 0; i < l.length; i++) { den += (l[i] - m) ** 2; if (i > 0) num += (l[i] - m) * (l[i - 1] - m); }
     return den === 0 ? null : r3(num / den);
   } },
+  // How far sentence length swings around its own mean, scaled so a writer of long sentences and one of
+  // short sentences are compared on unevenness alone. The percentiles above say where the ends are; this
+  // says how often the writer goes there.
+  { id: 'sentenceCv', layer: 2, label: 'how much your sentence lengths vary (coefficient of variation)', unit: 'value', measure: (t) => {
+    const l = lengths(t);
+    const v = l.length < 10 ? null : cv(l);
+    return v === null ? null : r3(v);
+  } },
   { id: 'openerConjunction', layer: 2, label: 'sentences opening on And, But, So, Or or Yet', unit: 'share', measure: sentenceShare((s) => /^(?:and|but|so|or|yet)\b/i.test(s)) },
   { id: 'openerSelf', layer: 2, label: 'sentences opening on I or We', unit: 'share', measure: sentenceShare((s) => /^(?:i|we)\b/i.test(s)) },
   { id: 'openerDeictic', layer: 2, label: 'sentences opening on The, This, That, It, These or There', unit: 'share', measure: sentenceShare((s) => /^(?:the|this|that|it|these|there)\b/i.test(s)) },
@@ -175,6 +265,12 @@ export const FEATURES: readonly Feature[] = [
   { id: 'link', layer: 3, label: 'links', unit: 'per1000', specifics: true, measure: perPage1000(({ body }) => count(body, /\]\(https?:\/\/|(?<!\()https?:\/\/\S+/g)) },
   { id: 'codeBlock', layer: 3, label: 'code blocks', unit: 'per1000', measure: perPage1000(({ fences }) => fences) },
   { id: 'blockquote', layer: 3, label: 'block quotations', unit: 'per1000', measure: perPage1000(({ body }) => count(body, /^>\s*\S/gm)) },
+  // Paragraph pace, prose paragraphs only (`paragraphShape`), in words and sentences.
+  { id: 'paragraphP10', layer: 3, label: 'the length of your short paragraphs (10th percentile, words)', unit: 'value', measure: paragraphShape((ps) => quantile(ps.map((p) => p.words), 0.1)) },
+  { id: 'paragraphP50', layer: 3, label: 'the length of your typical paragraph (median, words)', unit: 'value', measure: paragraphShape((ps) => quantile(ps.map((p) => p.words), 0.5)) },
+  { id: 'paragraphP90', layer: 3, label: 'the length of your long paragraphs (90th percentile, words)', unit: 'value', measure: paragraphShape((ps) => quantile(ps.map((p) => p.words), 0.9)) },
+  { id: 'oneSentenceParagraph', layer: 3, label: 'paragraphs of a single sentence', unit: 'share', measure: paragraphShape((ps) => ps.filter((p) => p.sentences === 1).length / ps.length) },
+  { id: 'sentencesPerParagraph', layer: 3, label: 'sentences per paragraph (mean)', unit: 'value', measure: paragraphShape((ps) => ps.reduce((n, p) => n + p.sentences, 0) / ps.length) },
   // ── 4. lexicon and wording ────────────────────────────────────────────────────────────────────
   { id: 'lexicalDiversity', layer: 4, label: 'lexical diversity (MTLD)', unit: 'value', measure: (text) => {
     const w = wordsOf(prose(text)).map((x) => x.toLowerCase());
@@ -190,9 +286,38 @@ export const FEATURES: readonly Feature[] = [
   { id: 'firmModal', layer: 4, label: 'firm modals (must, should, need to)', unit: 'per1000', measure: per1000((p) => count(p, /\b(?:must|should|need to|needs to)\b/gi)) },
   { id: 'numbers', layer: 4, label: 'figures written in digits', unit: 'per1000', specifics: true, measure: per1000((p) => count(p, /\b\d[\d,.]*%?/g)) },
   { id: 'names', layer: 4, label: 'names mid-sentence (people, products, organisations)', unit: 'per1000', specifics: true, measure: per1000((p) => count(p, /(?<=[a-z,;:] )[A-Z][a-z]+(?:[A-Z][a-z]+)*\b/g)) },
+  // Over-articulation (the lists above, each documented where it is defined).
+  { id: 'than', layer: 4, label: '"than" (comparisons)', unit: 'per1000', measure: per1000((p) => count(p, THAN)) },
+  { id: 'negation', layer: 4, label: 'negations (not, never, no, and the n\'t forms)', unit: 'per1000', measure: per1000((p) => count(p, NEGATION)) },
+  { id: 'thatsContraction', layer: 4, label: '"that\'s"', unit: 'per1000', measure: per1000((p) => count(p, THATS)) },
+  { id: 'letUs', layer: 4, label: '"let\'s", "let me" and "let us"', unit: 'per1000', measure: per1000((p) => count(p, LET_US)) },
+  { id: 'explanatory', layer: 4, label: 'explaining connectives (because, since, which means, in other words…)', unit: 'per1000', measure: per1000((p) => count(p, EXPLANATORY)) },
+  { id: 'contrastive', layer: 4, label: 'contrasting connectives (but, however, instead, rather than, yet…)', unit: 'per1000', measure: per1000((p) => count(p, CONTRASTIVE)) },
   { id: 'discourse', layer: 4, label: 'spoken discourse markers opening a sentence (so, now, look, okay, well)', unit: 'share', measure: sentenceShare((s) => DISCOURSE.test(s)) },
+  // ── 6. argument and movement ──────────────────────────────────────────────────────────────────
+  // A lexical proxy for semantic pace (./pace.ts): how far each sentence's content words move from the last.
+  { id: 'paceStep', layer: 6, label: 'how far each sentence moves from the one before (1 minus word overlap, mean)', unit: 'value', measure: (t) => {
+    const st = stepsOf(t);
+    return st ? r3(st.reduce((a, b) => a + b, 0) / st.length) : null;
+  } },
+  // Whether the moves come evenly (every sentence drifts a little) or in bursts (stay, stay, jump).
+  { id: 'paceBurstiness', layer: 6, label: 'how unevenly the text moves (variation in step size)', unit: 'value', measure: (t) => {
+    const st = stepsOf(t); const v = st ? cv(st) : null;
+    return v === null ? null : r3(v);
+  } },
+  { id: 'callbacks', layer: 6, label: 'sentences that return to a topic left at least five sentences earlier', unit: 'share', measure: (t) => {
+    const ss = proseSentencesOf(t);
+    return ss.length < MIN_CALLBACK_SENTENCES ? null : r3(callbackShare(ss.map((s) => bagOf(s.text))));
+  } },
   // ── 7. narrator and stance ────────────────────────────────────────────────────────────────────
   { id: 'imperative', layer: 7, label: 'sentences that tell the reader what to do', unit: 'share', measure: sentenceShare((s) => IMPERATIVES.has((s.split(/\s+/)[0] ?? '').toLowerCase().replace(/[^a-z']/g, ''))) },
+  // ── 8. content and specifics ──────────────────────────────────────────────────────────────────
+  // Only ever a cap (`specifics`): a floor would reward invented figures. Coverage of what the person
+  // supplied is ../loop/fact-ledger.ts's measure, not this count's.
+  { id: 'specificsDensity', layer: 8, label: 'specifics (figures, dates, names, quotations) per 100 words', unit: 'value', specifics: true, measure: (text) => {
+    const p = prose(text); const n = wordsOf(p).length;
+    return n < MIN_WORDS ? null : r3((count(p, SPECIFIC) / n) * 100);
+  } },
   // ── 9. sound ──────────────────────────────────────────────────────────────────────────────────
   { id: 'readingEase', layer: 9, label: 'reading ease (Flesch)', unit: 'value', measure: (text) => {
     const w = wordsOf(prose(text)); const l = lengths(text);

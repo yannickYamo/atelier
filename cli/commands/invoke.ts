@@ -5,8 +5,18 @@
 // command file reads as one job rather than as a slice of everything.
 
 import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
-import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS } from '../../core/loop/run-repair.js';
+import { regressions } from '../../core/loop/repair.js';
+import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
+import { featureOf } from '../../core/observers/features.js';
+import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
+import { readFidelity } from '../../core/fidelity/profile.js';
+import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
+import { editTowardRange } from '../../core/fidelity/structural.js';
+import type { FidelityProfile, FidelityReading, FidelityRecord, ImplementationSettings } from '../../core/fidelity/types.js';
+import type { RepairRecord } from '../../core/state/canonical-state.js';
+import { releaseFor, implementationBlock } from '../fidelity.js';
+import * as fstore from '../../core/state/fidelity-store.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -143,7 +153,15 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
  * or stale artefact is caught here, deterministically, before any model is asked anything.
  */
 /** One draft's counts, as `invoke --drafts N` ranks them. */
-export interface DraftScore { readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number }
+export interface DraftScore {
+  readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number;
+  /** steering features outside the author's range, and how far in total (core/fidelity/profile.ts); 0 without a profile */
+  readonly outside?: number; readonly outsideBy?: number;
+  /** the style detector's P(model-written), when the skill has one: a tie-breaker, never more */
+  readonly detector?: number | null;
+  /** how many of the facts the person supplied the draft uses (../../core/loop/fact-ledger.ts): only supplied facts count */
+  readonly facts?: number;
+}
 
 /**
  * THE ORDER DRAFTS ARE CHOSEN IN. REQUIRED rules first: the owner said an output breaking one is worse,
@@ -155,7 +173,19 @@ export interface DraftScore { readonly req: number; readonly taste: number; read
  */
 export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   a.req - b.req || a.taste - b.taste || a.tells - b.tells || a.all - b.all
-  || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style;
+  // THE AUTHOR'S RANGE, AFTER THE RULES. How many steering features fall outside the range the author's own
+  // pieces span, then by how much: never a pull toward their average (core/fidelity/types.ts).
+  || (a.outside ?? 0) - (b.outside ?? 0) || (a.outsideBy ?? 0) - (b.outsideBy ?? 0)
+  // THE PERSON'S FACTS USED. Real writing carries more specifics than an imitation written from the same
+  // facts; the way to that density is using what was supplied, so only ledger facts count. Specific-looking
+  // text that was not supplied earns nothing here and is the claim floor's to cut.
+  || (b.facts ?? 0) - (a.facts ?? 0)
+  || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style
+  // The detector is a monitor: it only breaks what is left, and only on a clear difference.
+  || detectorTie(a.detector ?? null, b.detector ?? null);
+
+// Bucketed to tenths so the order stays transitive: a threshold on the difference made 0.00 ≈ 0.08 ≈ 0.16 with 0.00 < 0.16.
+const detectorTie = (a: number | null, b: number | null): number => (a !== null && b !== null ? Math.round(a * 10) - Math.round(b * 10) : 0);
 
 export async function invoke(): Promise<void> {
   // FOR A PROGRAM, THE ANSWER ALONE ON STDOUT. The report, notices and cost were printed around the answer,
@@ -196,12 +226,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A skill built from someone's corpus writes TWO drafts by default and keeps the better one: the
   // author's habits and the machine-writing count choose between drafts and nothing else can use them.
   // `--drafts 1` turns this off.
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', store.getVoice(L)?.pieces?.length ? 2 : 1)));
+  // THE IMPLEMENTATION RELEASE (cli/fidelity.ts): how many drafts, how many structural edits, which of the
+  // author's passages and which experience notes are served. Below the standard, recorded with the output.
+  const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv) : null;
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', fid ? fid.release.settings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
+  const editBudget = fid && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', fid.release.settings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.4)),
-    maxCalls: numericFlag('--max-calls', nDrafts + 4 + (taste?.callsFor(nDrafts) ?? 0)) };
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4)),
+    // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
+    // budget is not silently starved by the rewrites before it.
+    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -238,9 +274,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (lengthLine) withheld.push(lengthLine.trim());
   // AND ITS FORMAT, WHEN IT STATES ONE. "Return only the code block" met a learned "end every piece with a
   // line starting Next:" and lost in 3 of 3 trials. The request is the one thing in the room written today:
-  // the skill's presentation rules are withheld from the prompt and from the count for this run, and named.
+  // when it asks for a SHAPE (code, JSON, a number, one line, yes or no, a list), the skill's presentation
+  // rules are withheld from the prompt and from the count for this run, and named.
+  // A BARE request is not a shape. "Return only the post" asks for no preamble, not for a post without the
+  // author's paragraphs: read as a shape, it switched off every pace and rhythm rule on exactly the long
+  // pieces those rules exist for. Then the standard stays whole and only the wrapping is dropped.
   const formatAsked = intent?.format ?? requestedFormat(asked);
-  if (formatAsked && std) {
+  const shape = formatAsked ? formatShape(formatAsked) : null;
+  if (formatAsked && shape === 'SHAPE' && std) {
     const p = presentationRules(std.requirements);
     for (const q of p.measured) waived.set(q.requirementId, `the request states its own format ("${formatAsked}")`);
     withheld.push(...p.prose.map((q) => q.statement));
@@ -248,24 +289,36 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   }
   const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}) };
-  const servedForRun = withheld.length ? withoutRules(servedText, withheld) : servedText;
+  const impl = fid ? implementationBlock(fid.release, fid.index, asked) : { text: '', retrieved: [] };
+  // A run whose flags changed what the release would have done is recorded with the settings that ran and
+  // no release: credited to the release, it would make the settings search compare arms that never ran.
+  const overridden = flag('--drafts') !== undefined || flag('--edits') !== undefined || argv.includes('--no-repair');
+  const trace: FidelityTrace = { drafts: [], edits: [] };
+  // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
+  const ledger = factLedger(materialText);
+  const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
-  const taskForRun = formatAsked ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)` : task;
+  const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
+    : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? refineDraft({ client, budget, name, std, checks, taste }) : null,
-    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L) }) : null,
+    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
+    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger }) : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
-    } : null, settingsFor(checks, taste, nDrafts));
+    } : null, settingsFor(checks, taste, nDrafts),
+    // A structured output is JSON, not prose: no reading of it means anything against a prose range.
+    fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
+      { ...fid.release.settings, drafts: nDrafts, editBudget }, overridden) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
   reportChecks(report, rec, std, checks);
   if (taste) await taste.report(report, rec, name);
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
+  reportFidelity(report, rec);
   reportRestyle(report, rec.output, material);
   const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
   if (machine === 'answer') process.stdout.write(`${rec.output}\n`);
@@ -274,6 +327,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       output: rec.output, invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       withheld: rec.delivery.withheldRules ?? [], report: report.lines,
+      ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
+        outside: rec.fidelity.reading?.outside.map((o) => o.id) ?? [], detector: rec.fidelity.reading?.detector?.p ?? null,
+        edits: rec.fidelity.edits ?? [], applicability: rec.fidelity.applicability ?? [] } } : {}),
     }, null, 1)}\n`);
   }
 }
@@ -308,7 +364,10 @@ function checkedBinding(L: store.StoreLayout, sv: SkillVersion): ReturnType<type
   }
   if (verdict.kind === 'TARGET_BINDING_MISMATCH') {
     console.log(`\nRunning on a new runtime binding — ${describeBinding(binding)}.`);
-    console.log(`Observations from here are recorded against this binding and are not evidence about the other one.\n`);
+    console.log(`Observations from here are recorded against this binding and are not evidence about the other one.`);
+    // The style detector learned the habits of the model the skill was built with; another family's are not its.
+    if (fstore.getProfile(L)?.detector) console.log(`The style detector was trained on the model this skill was built with, so its readings on this one mean little. Rebuild the skill with this model to retrain it.`);
+    console.log('');
     // Recorded now, not when the run completes: the next invoke on this binding is a configuration the
     // person already said yes to, and must not be refused again.
     store.recordBinding(L, sv.skillVersionHash, binding);
@@ -450,21 +509,136 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals> }) {
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[] }) {
   return { n: c.n, choose: async (drafts: readonly string[]) => {
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
     const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
-    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals), taste: tasteMissed[i] }));
+    const profile = c.profile;
+    const readings = profile ? drafts.map((d) => readFidelity(d, profile)) : [];
+    c.trace.drafts.push(...readings);
+    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals, readings[i] ?? null),
+      ...(c.ledger.length ? { facts: factCoverage(d, c.ledger).used.length } : {}), taste: tasteMissed[i] }));
     scored.sort(draftOrder);
     const best = scored[0];
-    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${c.signals.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    const range = readings[best.i] ? `, ${readings[best.i].inBand} of ${readings[best.i].measured} measured features in your range` : '';
+    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${range}${c.signals.length && !readings.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } };
 }
 
+/** What the inner loop saw, gathered during the run and written with the record. */
+interface FidelityTrace { drafts: FidelityReading[]; edits: { target: string; kept: boolean; why: string }[] }
+
+/**
+ * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
+ * redrafted for form against the worst band still outside the author's range, at most `editBudget` times.
+ * A redraft is held to the same terms as a span repair (core/loop/repair.ts, `regressions`): no rule of the
+ * standard broken that was not, none broken in more places, no claim flagged that was not. And the report
+ * that ships is counted again on the text that ships.
+ *
+ * Not run when the claim reader has degraded (a redraft would be checked for invented claims by the weaker
+ * pattern check only), nor when the taste reader holds VETO (its readings, recorded and calibrated on, would
+ * describe a text that is no longer the output, and a redraft could undo what its own repair fixed).
+ */
+function withEdits(refine: (draft: string) => Promise<{ output: string; repair: RepairRecord | null }>,
+  e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace; taste: TasteSession | null } | null) {
+  if (!e) return refine;
+  return async (draft: string) => {
+    const r = await refine(draft);
+    const reader = e.checks.claimSensor;
+    if (e.taste?.acts) { e.trace.edits.push({ target: '-', kept: false, why: 'not tried: the taste reader holds VETO on this skill, and an edit would change the text it read' }); return r; }
+    if (reader?.degraded) { e.trace.edits.push({ target: '-', kept: false, why: 'not tried: the claim reader could not run, so a redraft could not be checked for invented claims' }); return r; }
+    const breaksNothing = async (before: string, after: string): Promise<boolean> => {
+      const b = await checkDraftAsync(e.name, e.std, before, e.checks);
+      const a = await checkDraftAsync(e.name, e.std, after, e.checks);
+      if (reader?.degraded) return false;
+      return editKeepsStandard(b, a);
+    };
+    let edited: Awaited<ReturnType<typeof editTowardRange>>;
+    try { edited = await editTowardRange(e.client, e.budget, r.output, e.profile, e.editBudget, breaksNothing); } catch (err) {
+      e.trace.edits.push({ target: '-', kept: false, why: `the structural edit could not run (${(err as Error).message.split('\n')[0]})` });
+      return r;
+    }
+    e.trace.edits.push(...edited.edits);
+    if (edited.text === r.output) return r;
+    // THE REPORT IS THE DELIVERED TEXT'S, as after every rewrite: recounted on the edited text.
+    const final = await checkDraftAsync(e.name, e.std, edited.text, e.checks);
+    const stillListed = (r.repair?.claimsToCheck ?? []).filter((c) => edited.text.includes(c.slice(0, 60)));
+    const toCheck = [...new Set([...stillListed, ...listedClaims(final)])];
+    // The draft the model wrote is kept in the record whether or not a rule was repaired, so a comparison of
+    // drafts (core/fidelity/experience.ts) reads the text the reading was taken on.
+    const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: 'every REQUIRED measured rule holds' };
+    const { claimsToCheck: _old, ...rest } = base;
+    return { output: edited.text, repair: { ...rest, violatedAfter: brokenIn(final),
+      ...(toCheck.length ? { claimsToCheck: toCheck } : {}),
+      why: `${base.why}; ${edited.edits.filter((x) => x.kept).length} structural edit(s) toward your range` } };
+  };
+}
+
+/**
+ * Whether an edit kept the standard, on the same terms as a span repair: nothing that held now broken, nothing
+ * broken in more places (core/loop/repair.ts, `regressions`), and no claim flagged that was not flagged before.
+ */
+export function editKeepsStandard(before: VerifyReport, after: VerifyReport): boolean {
+  const flagged = (x: VerifyReport): Set<string> => new Set(x.checked.filter((c) => c.requirementId.startsWith('UNSOURCED')).flatMap((c) => c.result.spans.map((sp) => sp.text.trim())));
+  const was = flagged(before);
+  return regressions(before, after).length === 0 && [...flagged(after)].every((t) => was.has(t));
+}
+
+/** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
+function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
+  applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean): FidelityRecord {
+  const cov = ledger.length ? factCoverage(output, ledger) : null;
+  return {
+    release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
+    // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
+    seed: 0,
+    reading: readFidelity(output, fid.profile),
+    ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
+    ...(trace.edits.length ? { edits: trace.edits } : {}),
+    ...(retrieved.length ? { retrieved: [...retrieved] } : {}),
+    ...(cov ? { coverage: { supplied: ledger.length, used: cov.used.length, per100: cov.per100, authorPer100: fid.profile.factDensity ?? null } } : {}),
+    applicability,
+  };
+}
+
+/**
+ * THE APPLICABILITY MANIFEST: every requirement of the standard, and what it was to this output. WAIVED,
+ * with the reason, when this run withheld it (a request's own shape, material not bound); NOT_APPLICABLE
+ * when its measurement says the text is outside what it can judge (too short, no such section); APPLIED
+ * otherwise, served and, where it carries a measurement, checked. A study that finds a rule missing from
+ * this list, or waived without a reason, has found a confound.
+ */
+export function applicability(name: string, std: Standard, output: string, waived: ReadonlyMap<string, string>, withheld: readonly string[]): NonNullable<FidelityRecord['applicability']> {
+  const v = verifyText(name, std, output);
+  const verdict = new Map(v.checked.map((c) => [c.requirementId, c.result.verdict]));
+  const conditional = new Map(v.conditional.map((c) => [c.requirementId, c.appliesWhen]));
+  return std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED').map((q) => {
+    const why = waived.get(q.requirementId) ?? (withheld.includes(q.statement) ? 'withheld from this run\'s prompt' : null);
+    if (why) return { requirementId: q.requirementId, status: 'WAIVED' as const, why };
+    if (verdict.get(q.requirementId) === 'NOT_APPLICABLE') return { requirementId: q.requirementId, status: 'NOT_APPLICABLE' as const, why: 'outside what its measurement can judge in this text' };
+    const cond = conditional.get(q.requirementId);
+    return { requirementId: q.requirementId, status: 'APPLIED' as const, ...(cond ? { why: `served; applies when ${cond}` } : {}) };
+  });
+}
+
+/** One line on where the output landed against the author's range; the rest is in the details file. */
+function reportFidelity(report: RunReport, rec: Invocation): void {
+  const f = rec.fidelity;
+  if (!f?.reading) return;
+  const kept = (f.edits ?? []).filter((e) => e.kept).length;
+  const out = f.reading.outside.slice(0, 3).map((o) => featureOf(o.id)?.label ?? o.id);
+  report.say(`In your range on ${f.reading.inBand} of ${f.reading.measured} measured features${out.length ? `; furthest outside: ${out.join('; ')}` : ''}${kept ? ` (${kept} structural edit(s) kept)` : ''}.`);
+  if (f.coverage) report.detail(`used ${f.coverage.used} of the ${f.coverage.supplied} fact(s) you supplied: ${f.coverage.per100} specifics per 100 words${f.coverage.authorPer100 !== null ? ` (your pieces carry ${f.coverage.authorPer100})` : ''}`);
+  report.detail(`implementation release ${f.release ?? 'none'} · profile ${f.profileHash ?? 'none'}${f.reading.detector ? ` · style detector ${f.reading.detector.version}: P(model-written) ${f.reading.detector.p}` : ''}`);
+  for (const e of f.edits ?? []) report.detail(`    structural edit (${e.target}): ${e.kept ? 'kept' : 'not kept'}, ${e.why}`);
+  for (const a of f.applicability ?? []) if (a.status !== 'APPLIED') report.detail(`    ${a.requirementId}: ${a.status.toLowerCase().replace('_', ' ')}${a.why ? `, ${a.why}` : ''}`);
+}
+
 /** One draft's counts. An unread signal distance is null: unknown is not "on target", so it ranks last. */
-function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standard, draft: string, signals: ReturnType<typeof store.getSignals>): Omit<DraftScore, 'taste'> {
+function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standard, draft: string, signals: ReturnType<typeof store.getSignals>, reading: FidelityReading | null = null): Omit<DraftScore, 'taste'> {
   const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
   return {
+    ...(reading ? { outside: reading.outside.length, outsideBy: Math.round(reading.outside.reduce((n, o) => n + o.distance, 0) * 1000) / 1000, detector: reading.detector?.p ?? null } : {}),
     req: r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length,
     all: r.checked.filter((c) => c.result.verdict === 'VIOLATED' && c.requirementId !== PUBLIC_FACTS).length,
     tells: r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0),
@@ -579,8 +753,11 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
-    if (r.violatedAfter.length) report.say(`Still broken after repair: ${r.violatedAfter.join(', ')}. ${r.why}`);
-    else if (!heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
+    const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
+    const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
+    if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
+    if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
+    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);
@@ -709,6 +886,16 @@ export function requestedLength(task: string): 'LONG' | 'SHORT' | null {
 export function requestedFormat(task: string): string | null {
   const m = /\b(?:(?:return|give me|reply with|respond with|output|answer with)\s+(?:only|just)\b[^.?!\n]{0,40}|only (?:the|a|one)\s+(?:code|code block|number|json|sql|command|answer|list|diff|function)\b|just (?:the|a)\s+(?:code|number|json|command|answer|diff)\b|no (?:explanation|prose|commentary|preamble|extra text)\b|json only\b|yes or no\b|one[- ]line answer\b)/i.exec(task);
   return m ? m[0].trim() : null;
+}
+
+/**
+ * WHAT KIND OF FORMAT A REQUEST STATES. A SHAPE is an output that is not a piece of prose in the author's
+ * presentation: code, JSON, SQL, a command, a diff, a number, one line, yes or no, a list or table. Anything
+ * else the request says about its format ("return only the post", "no preamble", "just the text") is BARE:
+ * it removes what wraps the piece, and the piece keeps the standard.
+ */
+export function formatShape(words: string): 'SHAPE' | 'BARE' {
+  return /\b(?:code|snippet|json|sql|yaml|csv|command|diff|patch|function|number|figure|yes or no|yes\/no|one[- ]line|single line|one sentence|list|bullets?|table|regex)\b/i.test(words) ? 'SHAPE' : 'BARE';
 }
 
 /** Observers whose rules shape how an output is presented, not what it says. */

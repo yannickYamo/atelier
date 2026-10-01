@@ -200,8 +200,8 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
 describe('who may delete text (cut-authority)', () => {
   it('a measured instrument may cut; the context judge and an unqualified reader may not', async () => {
     const { mayCut, assertMayCut } = await import('../core/loop/cut-authority.js');
-    for (const a of ['qualified-reader', 'pattern', 'owner-override'] as const) expect(mayCut(a), a).toBe(true);
-    for (const a of ['context-judge', 'unqualified-reader'] as const) expect(() => { assertMayCut(a); }).toThrow(/may list what it finds, never cut it/);
+    for (const a of ['qualified-reader', 'pattern'] as const) expect(mayCut(a), a).toBe(true);
+    for (const a of ['context-judge', 'unqualified-reader', 'owner-override'] as const) expect(() => { assertMayCut(a); }).toThrow(/may list what it finds, never cut it/);
   });
   it('every claim line names the instrument that found it', () => {
     const r = checkDraft('d', v, 'In 2021 I watched 40% of launches slip.', { material: '' });
