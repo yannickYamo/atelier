@@ -40,14 +40,16 @@ describe('P0-2: an answer may not make up the person\'s system or its own work',
     expect(cut('Run `npm install jsonwebtoken@latest`, then rerun the tests.', 'Upgrade jsonwebtoken.')).toBe(false);
     expect(cut('Open `src/auth.ts` and replace verifyToken.', 'My src/auth.ts verifyToken fails.')).toBe(false);
   });
-  it('the context judge, when there is one, decides work done; a claim it did not mark is not cut on the pattern', async () => {
+  it('the context judge may flag work done, never cut it: its flags are listed; the patterns alone cut (cut-authority)', async () => {
     const judge: ContextJudge = { requestIntent: () => Promise.resolve(null), standsAlone: () => Promise.resolve(null),
       readAnswer: () => Promise.resolve(), workClaims: () => new Set([0]) };
-    const t = 'I restarted the worker and the queue drained.';
+    const t = 'The queue drained after the restart.';
     const r = await checkDraftAsync('d', v, t, { material: 'The queue is stuck.', ...answers, judge });
-    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('VIOLATED');
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result.verdict).toBe('MET');
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED·check')?.result.spans[0].why).toMatch(/context judge, not measured/);
+    // polarity: a pattern-found work claim is still cut, whatever the judge says
     const none: ContextJudge = { ...judge, workClaims: () => new Set() };
-    expect((await checkDraftAsync('d', v, 'Checked: the header is set.', { material: 'x', ...answers, judge: none })).failed).toBe(false);
+    expect((await checkDraftAsync('d', v, 'Checked: the header is set.', { material: 'x', ...answers, judge: none })).failed).toBe(true);
   });
 });
 
@@ -182,12 +184,73 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
   it('answers: the length is a default the request overrides, and the line against invention names results and systems', async () => {
     const m = await md('answers');
     expect(m).toContain('unless the request asks for more or less');
-    expect(m).toMatch(/Never state a result, file, command or\s+system detail the request did not give/);
+    expect(m).toMatch(/Do the work the request asks for instead of\s+handing it back/);
+    expect(m).toMatch(/Never describe a step you did\s+not take or a result you did not see/);
+    expect(m).toMatch(/Ask only for a decision that is\s+the person's to make/);
+    expect(m).not.toContain('ask instead');
     expect(m).not.toContain('a story of mine you were not given');
   });
   it('polarity: writing keeps the essay wording', async () => {
     const m = await md('writing');
     expect(m).toContain('My pieces of this kind run about 100 words.');
     expect(m).toContain('a story of mine you were not given is not yours to tell');
+  });
+});
+
+describe('who may delete text (cut-authority)', () => {
+  it('a measured instrument may cut; the context judge and an unqualified reader may not', async () => {
+    const { mayCut, assertMayCut } = await import('../core/loop/cut-authority.js');
+    for (const a of ['qualified-reader', 'pattern', 'owner-override'] as const) expect(mayCut(a), a).toBe(true);
+    for (const a of ['context-judge', 'unqualified-reader'] as const) expect(() => { assertMayCut(a); }).toThrow(/may list what it finds, never cut it/);
+  });
+  it('every claim line names the instrument that found it', () => {
+    const r = checkDraft('d', v, 'In 2021 I watched 40% of launches slip.', { material: '' });
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.authority).toBe('pattern');
+  });
+});
+
+describe('an ordinary command is not the person\'s system', () => {
+  it('`npm run build` and a path stay in; a project-specific script the request never gave is cut', () => {
+    expect(cut('Run `npm run build`, then open `src/index.ts`.', 'The build fails.')).toBe(false);
+    expect(cut('Then run `npm run migrate:down` to roll it back.', 'Roll back the release.')).toBe(true);
+    expect(cut('Then run `npm run migrate:down` to roll it back.', 'Our rollback is npm run migrate:down.')).toBe(false);
+  });
+});
+
+describe('measured on the coding benchmark (bench/runs): the classes it found', () => {
+  it('a generic name beside "branch" is not the person\'s system; a specific one is', () => {
+    expect(cut('Updating your feature branch with the latest `main`: rebase it onto `main`.', 'Explain rebase vs merge.')).toBe(false);
+    expect(cut('Deploy to the `staging` service first.', 'Deploy it.')).toBe(false);
+    expect(cut('Drop the old `orders_legacy` table.', 'Deploy it to production.')).toBe(true);
+  });
+  it('a bare answer number is not an empty list item', async () => {
+    const { brokenByCut } = await import('../core/loop/run-repair.js');
+    expect(brokenByCut('17 times 6 is 102. Next: nothing.', '102.\n\n17 times 6 is 102.')).toBeNull();
+    expect(brokenByCut('Steps:\n\n1. One.\n2. Two.\n3. Three.', 'Steps:\n\n1. One.\n2.\n3. Three.')).toBe('an empty list item');
+  });
+});
+
+describe('short pieces still get the machine-tell floor (bench/runs/0.7.0: em dashes in answers)', () => {
+  const short = (i: number, s: string): { id: string; text: string } => ({ id: `a${i}`, text: s });
+  const plain = ['Yes. Run the migration first, then restart the worker.', 'It is 102. Ten sixes and seven sixes.',
+    'The test fails because the fixture is stale. Regenerate it and run again.', 'No. The flag only affects the dev build.',
+    'Two options: keep the cache or drop it. Dropping it costs a cold start.'];
+
+  it('a corpus of answers under 150 words, none with an em dash, gets the rule, and a short answer with one breaks it', async () => {
+    const { deriveContrastRules } = await import('../core/observers/contrast.js');
+    const { measure } = await import('../core/observers/registry.js');
+    const rules = deriveContrastRules(plain.slice(0, 3).map((t, i) => short(i, t)), plain.slice(3).map((t, i) => short(i + 3, t)), [], 'DISCOVERED' as never);
+    const tell = rules.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
+    expect(tell, 'no machine-tell rule proposed for short pieces').toBeTruthy();
+    expect(measure('It is 102 — ten sixes and seven sixes.', tell!.requirement.measurement!).verdict).toBe('VIOLATED');
+    expect(measure('It is 102. Ten sixes and seven sixes.', tell!.requirement.measurement!).verdict).not.toBe('VIOLATED');
+  });
+
+  it('polarity: an author whose short answers use em dashes is not banned from them', async () => {
+    const { deriveContrastRules } = await import('../core/observers/contrast.js');
+    const dashed = plain.map((t) => t.replace('. ', ' — '));
+    const rules = deriveContrastRules(dashed.slice(0, 3).map((t, i) => short(i, t)), dashed.slice(3).map((t, i) => short(i + 3, t)), [], 'DISCOVERED' as never);
+    const tell = rules.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
+    expect((tell?.requirement.measurement?.params.never as string[] | undefined) ?? []).not.toContain('EM_DASH');
   });
 });

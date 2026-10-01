@@ -1,0 +1,51 @@
+{
+ "reader": "claude-haiku-4-5 a173339d",
+ "temperature": 0,
+ "reads": 2,
+ "spentUsd": 2.936,
+ "specificity": {
+  "stored": {
+   "x": 41,
+   "n": 48,
+   "rate": 0.854,
+   "ci95": [
+    0.722,
+    0.939
+   ]
+  },
+  "now": {
+   "x": 39,
+   "n": 48,
+   "rate": 0.813,
+   "ci95": [
+    0.674,
+    0.911
+   ]
+  },
+  "mcnemarP": 0.6875
+ },
+ "sensitivity": {
+  "stored": {
+   "x": 46,
+   "n": 46,
+   "rate": 1,
+   "ci95": [
+    0.923,
+    1.0
+   ]
+  },
+  "now": {
+   "x": 46,
+   "n": 46,
+   "rate": 1,
+   "ci95": [
+    0.923,
+    1.0
+   ]
+  },
+  "mcnemarP": 1
+ },
+ "readerFailed": 0,
+ "missedNow": [],
+ "drafts": "claim reader v3 qualification drafts (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md): 48 clean, 46 planted"
+}

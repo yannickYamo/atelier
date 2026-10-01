@@ -16,7 +16,7 @@
 import { judgeCountedFeatures } from './selection.js';
 import { featureOf } from './features.js';
 import type { Measurement, Requirement } from '../state/canonical-state.js';
-import { measure, findTerms } from './registry.js';
+import { measure, findTerms, type ObserverResult } from './registry.js';
 import { RATIO_MIN_EVENTS, lengthMix, mixDistance, bandLabel, DISTRIBUTION_MIN_SENTENCES, unitLengths, coefficientOfVariation, RHYTHM_MIN_UNITS, type RhythmUnit } from './balance.js';
 import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, deltaReference, styleDistanceDocs, proseWords, perPieceP, type PatternId } from './style.js';
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
@@ -115,8 +115,18 @@ export function deriveContrastRules(
     // of those applies either, there is no evidence the author meets it, and it is not proposed.
     let independent = held.length > 0;
     let on = checkOn;
-    let rs = on.map((t) => measure(t, measurement));
-    if (!rs.some((x) => x.verdict !== 'NOT_APPLICABLE')) { on = authorTexts; rs = on.map((t) => measure(t, measurement)); independent = false; }
+    // A BAN APPLIES AT ANY LENGTH. The rate observer checks a move the author never makes even under 150
+    // words, and a short piece without one meets that part (registry.ts, PATTERN_RATE). Read as "not
+    // applicable" here, a corpus of short pieces (answers, support replies) had no piece to check the
+    // rule on, so the machine-tell floor was never proposed, and an answer skill shipped em dashes its
+    // author never writes.
+    const bans = ((measurement.params.never as readonly string[] | undefined) ?? []).length > 0;
+    const measureOn = (t: string): ObserverResult => {
+      const x = measure(t, measurement);
+      return bans && x.verdict === 'NOT_APPLICABLE' ? { ...x, verdict: 'MET' } : x;
+    };
+    let rs = on.map(measureOn);
+    if (!rs.some((x) => x.verdict !== 'NOT_APPLICABLE')) { on = authorTexts; rs = on.map(measureOn); independent = false; }
     const applicable = rs.filter((x) => x.verdict !== 'NOT_APPLICABLE').length;
     const present = rs.filter((x, i) => x.verdict === 'MET' || (x.verdict === 'VIOLATED' && tolerated(on[i]))).length;
     if (!applicable || present / applicable < 0.8) return;

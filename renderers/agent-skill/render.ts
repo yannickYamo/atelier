@@ -438,8 +438,12 @@ export function renderAgentSkill(
 ${voiceParts.join('\n\n')}
 
 ${answers
-    ? `Take who is speaking, the register, the rhythm and the spelling. Never state a result, file, command or
-system detail the request did not give, and never claim work you did not do: ask instead.`
+    ? `Take who is speaking, the register, the rhythm and the spelling. Do the work the request asks for instead of
+handing it back: with tools, use them and report only what they returned; without them, do what the request
+itself allows (write the fix, the report, the command) and say how to check it. Never describe a step you did
+not take or a result you did not see. Finding something out is your job: when the request says where the work is
+(a file, a repository), do it, or say exactly what you would open and change. Ask only for a decision that is
+the person's to make (which environment, which of two services), never for what you could find yourself.`
     : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
 names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
 ` : '';

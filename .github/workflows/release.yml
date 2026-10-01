@@ -8,7 +8,8 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  # write: the job creates the GitHub release for the tag.
+  contents: write
   # npm provenance. Worth having on a package by an unknown author that reads a private corpus and
   # holds a credential: it lets an installer verify the tarball was built from this commit, in this
   # workflow, rather than uploaded by hand.
@@ -17,6 +18,9 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      # a step's `if` cannot read secrets directly, only the job's env
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
@@ -38,6 +42,21 @@ jobs:
           test "$TAG" = "$PKG" || {
             echo "tag $GITHUB_REF_NAME does not match package.json version $PKG"; exit 1; }
 
-      - run: npm publish --provenance --access public
+      # The GitHub release is the release of record: notes are the tag's own CHANGELOG section.
+      - name: release notes from the CHANGELOG
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          awk -v v="$V" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no CHANGELOG section for $V"; exit 1; }
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Atelier ${GITHUB_REF_NAME#v}" --notes-file notes.md --verify-tag
+
+      # npm only when a token is configured: without one the release stops at GitHub, on purpose,
+      # rather than failing after the release above was made.
+      - name: npm publish
+        if: ${{ env.HAS_NPM_TOKEN == 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public

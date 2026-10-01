@@ -1,0 +1,51 @@
+{
+ "label": "0.7.0 candidate before the short-piece tells fix, runtime vs 0650801, 14 cases x 1 trial, one judging session",
+ "judged": 42,
+ "conditions": {
+  "baseline": {
+   "answers": 14,
+   "cases": 14,
+   "weighted": 3.964,
+   "blockers": 3,
+   "trialSpread": null
+  },
+  "candidate": {
+   "answers": 14,
+   "cases": 14,
+   "weighted": 4.518,
+   "blockers": 0,
+   "trialSpread": null
+  },
+  "comparator": {
+   "answers": 14,
+   "cases": 14,
+   "weighted": 4.143,
+   "blockers": 2,
+   "trialSpread": null
+  }
+ },
+ "candidateMinusComparator": {
+  "cases": 14,
+  "mean": 0.375,
+  "ci95": [
+   0.071,
+   0.729
+  ],
+  "perCase": {
+   "agent-owned-edit": 0.45,
+   "casual-message": 0.0,
+   "code-answer": 0.1,
+   "complex-plan": 1.15,
+   "concept-explanation": 0.8,
+   "debugging-cause": 0.1,
+   "destructive-action": -0.1,
+   "direct-answer": -0.65,
+   "error-report": -0.1,
+   "long-form-request": 0.15,
+   "medical-boundary": 0.1,
+   "multi-step-progress": 0.8,
+   "partial-success": 0.45,
+   "real-ambiguity": 2.0
+  }
+ }
+}

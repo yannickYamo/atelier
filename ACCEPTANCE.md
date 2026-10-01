@@ -61,7 +61,7 @@ npm run acceptance:carriers -- --host codex
 | C41 | the claim check gives one verdict per sentence per run | a sentence the reader passed is not cut on a later re-read; polarity: without the memory a drifting reader cascades (`tests/atelier-claim-cascade.test.ts`) |
 | C42 | a heavy cut is balanced and said | a third or more flagged: only lived, evidence and quoted claims cut, figures listed; never reported as "every rule holds" (`tests/atelier-claim-cascade.test.ts`) |
 | C43 | answers are checked as answers | `--mode respond` records `assistant-reply`; general knowledge in an answer is listed, never cut (`tests/atelier-phase-a.test.ts`, `tests/atelier-fix-first.test.ts`) |
-| C44 | an answer may not make up the person's system or its own work | work done, result figures and identifiers the request never gave are cut; general commands and given paths stay (`tests/atelier-fix-first.test.ts`) |
+| C44 | an answer may not make up the person's system or its own work | work done, result figures and a specific identifier the request never gave are cut, on word patterns; common scripts and branch names, paths alone and given paths stay (`tests/atelier-fix-first.test.ts`) |
 | C45 | a derived figure is the person's; a source beside it is not | one operation on two known figures is listed with its arithmetic; a sentence that also attributes stays flagged as SOURCE (`tests/atelier-phase-a.test.ts`) |
 | C46 | never a fragment for a pass | a cut that breaks structure is redrafted once; the redraft must keep every sentence it was not asked to change; else the text ships uncut and the check fails (`tests/atelier-phase-a.test.ts`, `tests/atelier-fix-first.test.ts`) |
 | C47 | nothing points at cut text | a sentence that followed a cut one and points back is redrafted or cut with it (`tests/atelier-fix-first.test.ts`) |
@@ -71,10 +71,14 @@ npm run acceptance:carriers -- --host codex
 | C51 | the request sets its own length and format | an explicit length or format withholds the learned length and the presentation rules for that run, from the prompt and the count, and says so (`tests/atelier-phase-b.test.ts`, `tests/atelier-fix-first.test.ts`) |
 | C52 | a respond skill keeps its one-line examples | driven through the real `new --mode respond`: a 45-character answer is kept; polarity: as writing it is left out (`tests/atelier-new-journey.test.ts`) |
 | C53 | nothing is asked that needs material nobody gave | rules waiting for material are withheld from the run's prompt and named in its record (`tests/atelier-phase-a.test.ts`) |
-| C54 | a small model answers what needs context, and code decides | the context judge's answers are validated (the request's own words, indexes in range); on any failure the word patterns decide (`tests/atelier-fix-first.test.ts`) |
+| C54 | a small model answers what needs context, and code decides | the context judge's answers are validated (the request's own words, indexes in range); on any failure the word patterns decide; what it reads as claimed work is listed, never cut, and the run records which model read it (`tests/atelier-fix-first.test.ts`) |
 | C55 | self-improvement can undo itself | `tend --auto` rolls back an install of its own that made a rule break clearly more often; never a person's promotion (`tests/atelier-break-rates.test.ts`) |
 | C56 | a skill as one file | `atelier export` writes the skill with its examples inlined (`tests/atelier-phase-b.test.ts`) |
 | C57 | a skill for answers is compiled in the words of answers | the length is a default the request overrides; the line against invention names results, files and commands (`tests/atelier-fix-first.test.ts`) |
+| C58 | only a measured instrument cuts | `assertMayCut` throws for the context judge and an unqualified reader before any deletion; every claim finding carries its instrument (`tests/atelier-fix-first.test.ts`) |
+| C59 | an answer does the work it can | the compiled answer line forbids handing back what the agent could find, and allows asking only for a decision that is the person's (`tests/atelier-fix-first.test.ts`) |
+| C60 | invoke for a script | `--answer-only` prints the answer alone and `--json` one record of the run, with the report on stderr (`tests/atelier-fix-loop.test.ts`) |
+| C61 | a release is measured before it ships | `bench/` reproduces each number in the CHANGELOG from its files in `bench/runs/<version>/`, side by side with the previous release (decision 0006) |
 
 ## CLAUDE CODE, live session, human
 

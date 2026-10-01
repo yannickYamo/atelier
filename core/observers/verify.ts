@@ -8,6 +8,7 @@
 import { measure, observerFor, type ObserverResult } from './registry.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
+import type { CutAuthority } from '../loop/cut-authority.js';
 
 export interface RuleCheck {
   readonly requirementId: string;
@@ -20,6 +21,8 @@ export interface RuleCheck {
   readonly pattern?: string;
   /** ACCURACY rules are repaired before STYLE ones; unset reads as STYLE */
   readonly phase?: 'ACCURACY' | 'STYLE';
+  /** for the invented-claim line: which instrument found its spans, which decides whether they may be cut (run-repair.ts, cutBy) */
+  readonly authority?: CutAuthority;
 }
 
 export interface VerifyReport {
