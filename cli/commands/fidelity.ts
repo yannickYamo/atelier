@@ -99,6 +99,15 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
     console.log('\nBy release:');
     for (const o of outcomes) console.log(`  ${o.releaseId}: ${o.n} output(s), ${Math.round(o.meanInBandShare * 100)}% of measured features in range, ${o.inventedPerOutput.toFixed(2)} invented claim(s) cut or unconfirmed per output (${describeSettings(o.settings)})`);
   }
+  // WHAT TO READ, CHOSEN BY COUNT. Argument, stance and content (the layers no count reaches) are judged by
+  // the owner reading outputs; the outputs worth that reading are the ones the counts say sit furthest from
+  // the author, not a model's pick. Label them with: atelier taste --skill <name> --calibrate
+  const worth = [...records].sort((a, b) => b.reading.outside.length - a.reading.outside.length
+    || (b.reading.detector?.p ?? 0) - (a.reading.detector?.p ?? 0)).slice(0, 5).filter((r) => r.reading.outside.length);
+  if (worth.length) {
+    console.log('\nWorth your reading (furthest from your range):');
+    for (const r of worth) console.log(`  ${r.invocationId}  ${r.reading.outside.length} feature(s) outside${r.reading.detector ? `, detector ${r.reading.detector.p}` : ''}  "${r.input.split('\n')[0].slice(0, 60)}"`);
+  }
   const next = nextSettings(active.settings, outcomes);
   console.log(next ? `\nNext to try: ${describeSettings(next.settings)} (${next.why}). Apply with: atelier fidelity --skill ${L.skillName} --next`
     : '\nNo settings change to propose yet: each setting needs 20 outputs before it can be compared.');
