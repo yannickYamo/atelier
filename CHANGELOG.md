@@ -42,7 +42,8 @@ reviewer with `bench/b6/run.mjs`.
 
 - **A fidelity profile per skill**, built at discovery at no extra cost: every counted feature's band on the
   author's pieces, per length class where there are enough, its role (RULE, SIGNAL or MONITOR), and a
-  stylometric detector trained against the model's drafts.
+  stylometric detector trained against the model's drafts. A feature offered to the owner as a rule steers
+  only if the owner ratified it, with the band they ratified; rejected, it is only monitored.
 - **New sensors**: paragraph length (10th, 50th, 90th percentile), one-sentence paragraphs, sentences per
   paragraph, sentence-length variation, the over-articulation imitations show ("than", negation, "that's",
   "let's", explanatory and contrastive connectives), a lexical measure of how far each sentence moves from
@@ -51,7 +52,9 @@ reviewer with `bench/b6/run.mjs`.
   lands the most measured features inside the author's range, then uses the most of the facts supplied. The
   chosen draft is redrafted for form against the band furthest outside, at most twice, each redraft kept only
   if it moved the target, kept every figure, negation, qualifier and name and 85% of the content words, and
-  broke nothing the standard checks. A skill too short to steer keeps two drafts and no edits.
+  made nothing the standard counts worse, on the same terms as a repair; the report is recounted on the text
+  that ships. No edit runs while the claim reader is down or the taste reader holds VETO. A skill too short
+  to steer keeps two drafts and no edits.
 - **Implementation releases.** Drafts, edit budget, the author's passages retrieved for each request, and
   experience notes are a hashed release with a parent, recorded on every output.
 - **`atelier fidelity`**: the profile, drift alarms per feature and length class (EWMA and CUSUM, never on one

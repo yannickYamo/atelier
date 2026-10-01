@@ -21,9 +21,11 @@ rewrites spans. The layers it lost were exactly the ones nothing measured or mov
    percentile of the author's pieces, widened), per length class where there are enough pieces. Drafts are
    chosen by how many steering features fall inside, then by how far outside the rest sit. A pull toward the
    median was removed, and style distance is capped at the author's own margin.
-2. **Roles, decided by evidence.** A feature the owner ratified is a RULE. One that separates the author from
-   the model's drafts (half of them written with the author's pieces pasted in) and holds on held-back pieces
-   is a SIGNAL and steers. Everything else is a MONITOR: recorded, estimated, never steering.
+2. **Roles, decided by evidence and by the owner.** A feature the owner ratified is a RULE, with the band they
+   ratified. One that separates the author from the model's drafts (half of them written with the author's
+   pieces pasted in) and holds on held-back pieces is a SIGNAL and steers, unless it was strong enough to be
+   offered to the owner as a rule and they did not adopt it: then, like everything else, it is a MONITOR,
+   recorded and estimated, never steering.
 3. **A second actuator for form.** After the counted checks, the band furthest outside among those a change
    of form can move is named in the author's numbers and the text is redrafted once for it. The redraft is
    kept only if it moved the target without pushing another feature out, kept every figure, negation,
