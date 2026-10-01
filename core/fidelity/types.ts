@@ -95,6 +95,11 @@ export interface FidelityProfile {
   readonly corpusHash: string;
   readonly bands: readonly FeatureBand[];
   readonly detector: DetectorModel | null;
+  /**
+   * specifics per 100 words in the author's own pieces (median; ../loop/fact-ledger.ts): the density a draft
+   * reaches by using the facts it was GIVEN, never by producing specific-looking text
+   */
+  readonly factDensity?: number | null;
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }
@@ -164,6 +169,8 @@ export interface FidelityRecord {
   readonly edits?: readonly { readonly target: string; readonly kept: boolean; readonly why: string }[];
   /** the passages retrieved for this request, by index into the author's passages */
   readonly retrieved?: readonly number[];
+  /** how many of the facts the request and the bound material supplied the output used, and its density per 100 words */
+  readonly coverage?: { readonly supplied: number; readonly used: number; readonly per100: number; readonly authorPer100: number | null };
   /** each requirement: applied to this output, not applicable to it, or waived with the reason */
   readonly applicability?: readonly { readonly requirementId: string; readonly status: 'APPLIED' | 'NOT_APPLICABLE' | 'WAIVED'; readonly why?: string }[];
 }

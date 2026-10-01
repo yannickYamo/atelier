@@ -10,6 +10,7 @@ import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
+import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { editTowardRange } from '../../core/fidelity/structural.js';
 import type { FidelityProfile, FidelityReading, FidelityRecord } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
@@ -156,6 +157,8 @@ export interface DraftScore {
   readonly outside?: number; readonly outsideBy?: number;
   /** the style detector's P(model-written), when the skill has one: a tie-breaker, never more */
   readonly detector?: number | null;
+  /** how many of the facts the person supplied the draft uses (../../core/loop/fact-ledger.ts): only supplied facts count */
+  readonly facts?: number;
 }
 
 /**
@@ -171,6 +174,10 @@ export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   // THE AUTHOR'S RANGE, AFTER THE RULES. How many steering features fall outside the range the author's own
   // pieces span, then by how much: never a pull toward their average (core/fidelity/types.ts).
   || (a.outside ?? 0) - (b.outside ?? 0) || (a.outsideBy ?? 0) - (b.outsideBy ?? 0)
+  // THE PERSON'S FACTS USED. Real writing carries more specifics than an imitation written from the same
+  // facts; the way to that density is using what was supplied, so only ledger facts count. Specific-looking
+  // text that was not supplied earns nothing here and is the claim floor's to cut.
+  || (b.facts ?? 0) - (a.facts ?? 0)
   || (a.signal ?? Infinity) - (b.signal ?? Infinity) || b.style - a.style
   // The detector is a monitor: it only breaks what is left, and only on a clear difference.
   || detectorTie(a.detector ?? null, b.detector ?? null);
@@ -279,6 +286,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     ...(waived.size ? { waived } : {}) };
   const impl = fid ? implementationBlock(fid.release, fid.index, asked) : { text: '', retrieved: [] };
   const trace: FidelityTrace = { drafts: [], edits: [] };
+  // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
+  const ledger = factLedger(materialText);
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
@@ -287,12 +296,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace } : null) : null,
-    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace }) : null,
+    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger }) : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts),
-    fid && std ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld)) : null);
+    fid && std ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
@@ -487,13 +496,15 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace }) {
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[] }) {
   return { n: c.n, choose: async (drafts: readonly string[]) => {
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
     const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
-    const readings = c.profile ? drafts.map((d) => readFidelity(d, c.profile!)) : [];
+    const profile = c.profile;
+    const readings = profile ? drafts.map((d) => readFidelity(d, profile)) : [];
     c.trace.drafts.push(...readings);
-    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals, readings[i] ?? null), taste: tasteMissed[i] }));
+    const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals, readings[i] ?? null),
+      ...(c.ledger.length ? { facts: factCoverage(d, c.ledger).used.length } : {}), taste: tasteMissed[i] }));
     scored.sort(draftOrder);
     const best = scored[0];
     const range = readings[best.i] ? `, ${readings[best.i].inBand} of ${readings[best.i].measured} measured features in your range` : '';
@@ -537,7 +548,8 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
 
 /** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
-  applicability: FidelityRecord['applicability']): FidelityRecord {
+  applicability: FidelityRecord['applicability'], ledger: readonly Fact[]): FidelityRecord {
+  const cov = ledger.length ? factCoverage(output, ledger) : null;
   return {
     release: fid.release.id, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
@@ -546,6 +558,7 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
     ...(trace.edits.length ? { edits: trace.edits } : {}),
     ...(retrieved.length ? { retrieved: [...retrieved] } : {}),
+    ...(cov ? { coverage: { supplied: ledger.length, used: cov.used.length, per100: cov.per100, authorPer100: fid.profile.factDensity ?? null } } : {}),
     applicability,
   };
 }
@@ -577,6 +590,7 @@ function reportFidelity(report: RunReport, rec: Invocation): void {
   const kept = (f.edits ?? []).filter((e) => e.kept).length;
   const out = f.reading.outside.slice(0, 3).map((o) => featureOf(o.id)?.label ?? o.id);
   report.say(`In your range on ${f.reading.inBand} of ${f.reading.measured} measured features${out.length ? `; furthest outside: ${out.join('; ')}` : ''}${kept ? ` (${kept} structural edit(s) kept)` : ''}.`);
+  if (f.coverage) report.detail(`used ${f.coverage.used} of the ${f.coverage.supplied} fact(s) you supplied: ${f.coverage.per100} specifics per 100 words${f.coverage.authorPer100 !== null ? ` (your pieces carry ${f.coverage.authorPer100})` : ''}`);
   report.detail(`implementation release ${f.release ?? 'none'} · profile ${f.profileHash ?? 'none'}${f.reading.detector ? ` · style detector ${f.reading.detector.version}: P(model-written) ${f.reading.detector.p}` : ''}`);
   for (const e of f.edits ?? []) report.detail(`    structural edit (${e.target}): ${e.kept ? 'kept' : 'not kept'}, ${e.why}`);
   for (const a of f.applicability ?? []) if (a.status !== 'APPLIED') report.detail(`    ${a.requirementId}: ${a.status.toLowerCase().replace('_', ' ')}${a.why ? `, ${a.why}` : ''}`);

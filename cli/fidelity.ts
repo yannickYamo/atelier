@@ -9,7 +9,7 @@
 // every change below the standard is a new release with a parent.
 
 import { existsSync } from 'node:fs';
-import * as store from '../core/state/store.js';
+import type * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
 import { retrieve, renderRetrieved, type RetrievalIndex } from '../core/fidelity/retrieval.js';
@@ -28,9 +28,9 @@ const sha = (s: string): string => createHash('sha256').update(s).digest('hex').
  */
 export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): FidelityProfile {
   const ruled = new Set(v.requirements.flatMap((q) => (q.authority !== 'EXPERT_REJECTED' && q.measurement?.observer === 'FEATURE'
-    ? [String((q.measurement.params.feature as readonly string[] | undefined)?.[0] ?? '')] : [])));
+    ? [(q.measurement.params.feature as readonly string[] | undefined)?.[0] ?? ''] : [])));
   const bands = p.bands.map((b) => (ruled.has(b.id) ? { ...b, role: 'RULE' as const } : b));
-  const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector };
+  const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 
@@ -51,7 +51,7 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
     parent: parent?.id ?? null, standardVersionHash: v.standardVersionHash, skillVersionHash,
     // A rebuild keeps the settings and notes the loop had earned; a first build starts from the defaults.
     settings: parent?.settings ?? (index ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, retrievalK: 0 }),
-    notes: parent && parent.standardVersionHash === v.standardVersionHash ? parent.notes : [],
+    notes: parent?.standardVersionHash === v.standardVersionHash ? parent.notes : [],
     profileHash: profile.hash, retrievalHash: index?.hash ?? null,
     createdAt: new Date().toISOString(), why: parent ? `rebuilt as skill version ${skillVersionHash}` : 'the first release, built with the skill',
   }));
@@ -78,7 +78,7 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   }
   assertSameStandard(release, sv.standardVersionHash);
   const index = release.retrievalHash ? fstore.getRetrievalIndex(L) : null;
-  return { release, profile, index: index && index.hash === release.retrievalHash ? index : null };
+  return { release, profile, index: index?.hash === release.retrievalHash ? index : null };
 }
 
 const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> => {

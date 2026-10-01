@@ -27,6 +27,7 @@ import { FEATURES, featureOf } from '../observers/features.js';
 import { judgeFeature, bandOf, distanceFromBand } from '../observers/selection.js';
 import { quantile, wordsOf, proseRegions } from '../observers/text.js';
 import { trainDetector, scoreDetector } from './stylometry.js';
+import { authorFactDensity } from '../loop/fact-ledger.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass, type DetectorModel, type FeatureBand, type FidelityProfile, type FidelityReading } from './types.js';
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
@@ -70,7 +71,7 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
     }
   }
   const detector = detectorFor([...input.read, ...input.held], input.model);
-  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector };
+  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 

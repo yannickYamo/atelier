@@ -46,7 +46,7 @@ export async function fidelity(): Promise<void> {
     console.log(`New implementation release ${r.id} (parent ${from.id}): ${describeSettings(r.settings)}.`);
     return;
   }
-  const records = store.listInvocations(L).filter((r) => r.fidelity?.reading);
+  const records = store.listInvocations(L).flatMap((r) => (r.fidelity?.reading ? [{ ...r, reading: r.fidelity.reading }] : []));
   if (argv.includes('--distill')) { await distill(L, from, records); return; }
   const outcomes = outcomesOf(records, (id) => fstore.getRelease(L, id)?.settings ?? null);
   if (argv.includes('--next')) {
@@ -73,7 +73,7 @@ function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.get
 
 /** The status page: the profile, drift alarms per feature, the releases and how each did, the next settings to try. */
 function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fstore.getProfile>>, active: NonNullable<ReturnType<typeof fstore.getActiveRelease>>['release'],
-  records: readonly InvocationRecord[], outcomes: readonly ReleaseOutcome[]): void {
+  records: readonly Read[], outcomes: readonly ReleaseOutcome[]): void {
   const pooled = profile.bands.filter((b) => b.cls === 'all');
   const byLayer = new Map<string, { steer: number; all: number }>();
   for (const b of pooled) {
@@ -92,7 +92,7 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
   console.log(`\nActive implementation release ${active.id}: ${describeSettings(active.settings)}; ${active.notes.length} experience note(s); ${active.why}.`);
   console.log(`\n${records.length} output(s) recorded with a reading.`);
   if (records.length) {
-    const series: FidelityObservation[] = records.map((r) => ({ at: r.at, binding: r.observedRuntime.bindingHash, cls: r.fidelity!.reading!.cls, values: r.fidelity!.reading!.values }));
+    const series: FidelityObservation[] = records.map((r) => ({ at: r.at, binding: r.observedRuntime.bindingHash, cls: r.reading.cls, values: r.reading.values }));
     for (const line of describeEstimate(estimate(series, profile.bands))) console.log(`  ${line}`);
   }
   if (outcomes.length) {
@@ -104,12 +104,15 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
     : '\nNo settings change to propose yet: each setting needs 20 outputs before it can be compared.');
 }
 
+/** A record with the reading of its delivered output. */
+type Read = InvocationRecord & { readonly reading: NonNullable<NonNullable<InvocationRecord['fidelity']>['reading']> };
+
 /** Per release: outputs, mean in-band share, invented claims per output. Cost is not on the record, so it is not compared. */
 export function outcomesOf(records: readonly InvocationRecord[], settingsFor: (releaseId: string) => ImplementationSettings | null = () => null): ReleaseOutcome[] {
   const by = new Map<string, InvocationRecord[]>();
   for (const r of records) if (r.fidelity?.release) by.set(r.fidelity.release, [...(by.get(r.fidelity.release) ?? []), r]);
   return [...by.entries()].map(([releaseId, rs]) => {
-    const shares = rs.map((r) => inBandShare(r.fidelity!.reading!)).filter((x): x is number => x !== null);
+    const shares = rs.flatMap((r) => (r.fidelity?.reading ? [inBandShare(r.fidelity.reading)] : [])).filter((x): x is number => x !== null);
     const invented = rs.reduce((n, r) => n + (r.repair?.storiesCut?.length ?? 0) + (r.repair?.violatedAfter.filter((v) => v.startsWith('UNSOURCED')).length ?? 0), 0);
     const settings = settingsFor(releaseId) ?? settingsOf(rs[0]);
     return { releaseId, settings, n: rs.length, meanInBandShare: shares.length ? shares.reduce((a, b) => a + b, 0) / shares.length : 0, inventedPerOutput: invented / rs.length, costPerOutput: 0 };

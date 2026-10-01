@@ -125,7 +125,7 @@ export async function editTowardRange(
     const t = editTarget(reading, profile, tried);
     if (!t) break;
     tried.add(t.id);
-    let redraft: string | null = null;
+    let redraft: string | null;
     try {
       const res = await spend(budget, 0.05, async () => {
         const x = await client.complete({ stableBlock: EDIT_SYSTEM, variableBlock: '',
