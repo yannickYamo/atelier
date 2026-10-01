@@ -157,7 +157,14 @@ const PARKED: Readonly<Record<string, string>> = {
     'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
     + 'because it is a record rather than a component: testing an instrument whose construct was not '
     + 'established would assert behaviour nobody is entitled to rely on.',
-    'core/coverage/abstraction-check.ts':
+    // THE OUTER FIDELITY LOOP, BUILT AHEAD OF ITS WIRING. Shared types, the estimator, retrieval,
+  // experience notes, releases and their store land first as pure, tested modules; `invoke` and
+  // `status` adopt them in the change that wires the loop, and that change removes these entries.
+  ...Object.fromEntries(['core/fidelity/types.ts', 'core/fidelity/estimator.ts', 'core/fidelity/retrieval.ts',
+    'core/fidelity/experience.ts', 'core/fidelity/release.ts', 'core/state/fidelity-store.ts'].map((f) => [f,
+    'THE OUTER FIDELITY LOOP, PARKED UNTIL IT IS WIRED: built and tested ahead of the change that serves its '
+    + 'releases from `invoke` and prints its estimate in `status`. Nothing here may steer an output before then.'])),
+  'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
 };
