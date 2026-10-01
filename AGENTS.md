@@ -39,6 +39,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 | to correct the skill | `atelier fix "<what was wrong, in their words>"` |
 | to see where a skill stands | `atelier status --skill <name>` |
 | an agent to check its own output | `atelier mcp` is an MCP server with `atelier_verify`, `atelier_rules`, `atelier_list_skills` |
+| where outputs sit against the author's range, and the releases that steer them | `atelier fidelity --skill <name>` (`--read <file>` for one text, `--rollback` to undo a release) |
 
 `atelier --help` lists everything; `atelier <command> --help` explains one command.
 

@@ -6,6 +6,72 @@ This project is pre-1.0. **Until 1.0, a minor version may change the on-disk sta
 `$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
 a run in progress may not be.
 
+## [0.8.0] — 2026-10-01 (taste as a range: a closed loop below the standard)
+
+Outside studies of 0.7 found the explicit layer of taste reproduced at the author's level and the implicit
+layer missed: paragraph pace, how sentences sound, the fingerprint a detector reads. This release closes the
+loop on those layers, below the standard and never able to move it ([decision 0007](docs/decisions/0007-taste-as-a-range.md)).
+Nothing in it is measured yet: [B6](studies/B6_PREREGISTRATION.md) is the study, run by an independent
+reviewer with `bench/b6/run.mjs`.
+
+### Fixed: the floor
+
+- **A request's format no longer switches the standard off.** "Return only the post" read as a format and
+  withheld every pace and rhythm rule, on exactly the pieces those rules exist for. Now only a shape (code,
+  JSON, a number, one line, yes or no, a list) withholds presentation rules; a bare request drops the
+  preamble and keeps the standard.
+- **Unconfirmed is not passed.** When a third or more of a piece was flagged, figures were listed and the
+  claim line read as met, so an invented figure could ship behind "every rule holds". In writing they now
+  fail the check (`UNSOURCED·inconclusive`) until the person confirms them or binds their material. Answers,
+  which list specifics by design, are unchanged.
+- **The claim reader waits out a rate limit and fails closed.** A 429 or an overloaded backend is retried
+  with a longer wait; if the qualified reader still cannot run on writing, the check fails
+  (`UNSOURCED·unread`) instead of passing on the weaker pattern check.
+- **An owner's override fails the check, never deletes.** `ATELIER_CLAIMS_GATE=reader` makes an unqualified
+  reader's findings a failure the owner sees; only a measured instrument cuts.
+- **Feature selection no longer sees its own test.** Separation and the median come from the pieces read;
+  the held-back pieces only test the band. A feature needs at least 8 model drafts to qualify, and discovery
+  now writes 12, half of them with two of the author's pieces pasted in (the stronger adversary).
+- **The target is the range, not the mean.** A signal scores distance outside the author's band (zero
+  inside), and style distance is capped at the author's own margin: a draft more typical of the author than
+  any piece they wrote earns nothing more.
+- **Paragraph features measure a wall of text.** They needed four paragraphs, so a 250-word single
+  paragraph (the commonest way a model misses an author who breaks often) measured nothing.
+
+### Added: the loop
+
+- **A fidelity profile per skill**, built at discovery at no extra cost: every counted feature's band on the
+  author's pieces, per length class where there are enough, its role (RULE, SIGNAL or MONITOR), and a
+  stylometric detector trained against the model's drafts.
+- **New sensors**: paragraph length (10th, 50th, 90th percentile), one-sentence paragraphs, sentences per
+  paragraph, sentence-length variation, the over-articulation imitations show ("than", negation, "that's",
+  "let's", explanatory and contrastive connectives), a lexical measure of how far each sentence moves from
+  the last and of returns to earlier topics, and specifics density (only ever a cap).
+- **The inner loop.** A writing skill writes four drafts and keeps the one that breaks the fewest rules, then
+  lands the most measured features inside the author's range, then uses the most of the facts supplied. The
+  chosen draft is redrafted for form against the band furthest outside, at most twice, each redraft kept only
+  if it moved the target, kept every figure, negation, qualifier and name and 85% of the content words, and
+  broke nothing the standard checks. A skill too short to steer keeps two drafts and no edits.
+- **Implementation releases.** Drafts, edit budget, the author's passages retrieved for each request, and
+  experience notes are a hashed release with a parent, recorded on every output.
+- **`atelier fidelity`**: the profile, drift alarms per feature and length class (EWMA and CUSUM, never on one
+  output), outcomes by release, the next settings to try (`--next`), settings by hand (`--set`), experience
+  notes from compared drafts (`--distill`, one model call), `--rollback`, `--read <file>` offline, and the
+  outputs worth the owner's reading, chosen by count.
+- **Every run records** the release, every draft's reading, the edits tried, the passages retrieved, the
+  facts used, and an applicability manifest: each requirement applied, not applicable, or waived with a reason.
+- **Grounded fact coverage** (`core/loop/fact-ledger.ts`): the facts the request and material supplied, and
+  how many an output uses, against the author's own density.
+- **The study kit**: `bench/fidelity/qualify.mjs` (a sensor qualified with sources, topics and generators held
+  out) and `bench/b6/run.mjs` (split, build, generate, evaluate with an evaluator kept apart from the steering,
+  a masked blind-read packet, and the pre-registered decision).
+
+### Cost
+
+A writing skill now costs about twice what it did per output (four drafts and up to two edits).
+`atelier fidelity --skill <name> --set drafts=2,editBudget=0` restores 0.7's settings for that skill; B6
+measures whether the loop is worth it.
+
 ## [0.7.0] — 2026-09-30 (only a measured instrument may cut; every release measured before it ships)
 
 ### Changed: what may delete text

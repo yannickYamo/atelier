@@ -9,7 +9,7 @@
 // every change below the standard is a new release with a parent.
 
 import { existsSync } from 'node:fs';
-import type * as store from '../core/state/store.js';
+import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
 import { retrieve, renderRetrieved, type RetrievalIndex } from '../core/fidelity/retrieval.js';
@@ -50,7 +50,7 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   const release = fstore.putRelease(L, makeRelease({
     parent: parent?.id ?? null, standardVersionHash: v.standardVersionHash, skillVersionHash,
     // A rebuild keeps the settings and notes the loop had earned; a first build starts from the defaults.
-    settings: parent?.settings ?? (index ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, retrievalK: 0 }),
+    settings: parent?.settings ?? firstSettings(profile, index !== null),
     notes: parent?.standardVersionHash === v.standardVersionHash ? parent.notes : [],
     profileHash: profile.hash, retrievalHash: index?.hash ?? null,
     createdAt: new Date().toISOString(), why: parent ? `rebuilt as skill version ${skillVersionHash}` : 'the first release, built with the skill',
@@ -58,6 +58,21 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   fstore.setActiveRelease(L, release.id);
   return release;
 }
+
+/**
+ * THE FIRST RELEASE'S SETTINGS. Four drafts and structural edits cost about twice what two drafts do, and
+ * they buy something only where there is a range to steer toward: a skill whose pieces are too short for the
+ * counted features (one-line answers, most replies) gets 0.7's two drafts and no edits. Retrieval only with
+ * an index to retrieve from.
+ */
+export function firstSettings(profile: FidelityProfile, hasIndex: boolean): ImplementationSettings {
+  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').length;
+  const base = steering >= MIN_STEERING ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, drafts: 2, editBudget: 0 };
+  return hasIndex ? base : { ...base, retrievalK: 0 };
+}
+
+/** Below this many steering features, the loop has too little to steer by to be worth its drafts. */
+export const MIN_STEERING = 3;
 
 /**
  * AT INVOKE. The release that steers this run: the active one, carried to the served skill version as a
@@ -74,7 +89,9 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   if (active.skillVersionHash !== sv.skillVersionHash) {
     release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id, skillVersionHash: sv.skillVersionHash,
       createdAt: new Date().toISOString(), why: `carried to skill version ${sv.skillVersionHash}` }));
-    fstore.setActiveRelease(L, release.id);
+    // A CANDIDATE RUN STEERS, IT DOES NOT ADOPT. Trying a version that is not active (`invoke --candidate`)
+    // runs under a release made for it, and leaves the active release where it was.
+    if (store.getActive(L) === sv.skillVersionHash) fstore.setActiveRelease(L, release.id);
   }
   assertSameStandard(release, sv.standardVersionHash);
   const index = release.retrievalHash ? fstore.getRetrievalIndex(L) : null;

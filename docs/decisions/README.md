@@ -10,3 +10,5 @@ comments say what is true now and link here for how it got that way.
 | [0003](0003-authority-by-measurement.md) | An instrument earns the right to block by measurement |
 | [0004](0004-search-under-a-fixed-standard.md) | How a GEPA-class search would work here (designed, not built) |
 | [0005](0005-forced-tool-choice.md) | Forced tool choice where a model accepts it |
+| [0006](0006-release-contract.md) | The release contract, and the moat it answers to (proposed, awaits the owner's signature) |
+| [0007](0007-taste-as-a-range.md) | Taste as a range: the fidelity loop below the standard |

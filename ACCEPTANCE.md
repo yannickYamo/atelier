@@ -79,6 +79,16 @@ npm run acceptance:carriers -- --host codex
 | C59 | an answer does the work it can | the compiled answer line forbids handing back what the agent could find, and allows asking only for a decision that is the person's (`tests/atelier-fix-first.test.ts`) |
 | C60 | invoke for a script | `--answer-only` prints the answer alone and `--json` one record of the run, with the report on stderr (`tests/atelier-fix-loop.test.ts`) |
 | C61 | a release is measured before it ships | `bench/` reproduces each number in the CHANGELOG from its files in `bench/runs/<version>/`, side by side with the previous release (decision 0006) |
+| C62 | a request's format never switches the standard off | only a shape (code, JSON, a number, one line, yes or no, a list) withholds presentation rules; "return only the post" keeps them (`tests/atelier-fidelity-loop.test.ts`) |
+| C63 | unconfirmed is not passed | in writing, figures listed under a heavy flag rate fail `UNSOURCED·inconclusive`; polarity: an answer lists them and passes (`tests/atelier-claim-cascade.test.ts`) |
+| C64 | the claim floor fails closed | a qualified reader that degraded fails a writing check (`UNSOURCED·unread`); a rate limit is retried first; an owner override fails, never cuts (`tests/atelier-fidelity-loop.test.ts`, `tests/atelier-claim-reader.test.ts`) |
+| C65 | selection never sees its test | separation and median from the pieces read; at least 8 model drafts (`tests/atelier-fidelity-loop.test.ts`, `tests/atelier-taste-features.test.ts`) |
+| C66 | the target is the range | draft order counts features outside the author's band, a specifics feature only from above, the detector last and only on a clear difference (`tests/atelier-fidelity-loop.test.ts`) |
+| C67 | a structural edit changes form, never content | kept only if the target moved, no other feature went out, the integrity guard held, 85% of content words stayed, and the standard broke nothing; four refusal cases (`tests/atelier-fidelity-loop.test.ts`) |
+| C68 | everything below the standard is a release | hashed, with a parent, recorded on every output; `--set` makes a child, `--rollback` returns to the parent; a release never crosses a change of standard (`tests/atelier-outer-loop.test.ts`, `tests/atelier-fidelity-loop.test.ts`) |
+| C69 | drift alarms on sustained bias only | CUSUM never fires on one outlier; a new binding starts a new series; spread collapse is flagged (`tests/atelier-outer-loop.test.ts`) |
+| C70 | every run says what applied | the applicability manifest lists each requirement as applied, not applicable, or waived with a reason (`tests/atelier-fidelity-loop.test.ts`) |
+| C71 | the journey, through the binary | discovery builds the profile, build installs a release, invoke writes four drafts, keeps an edit and records it, `fidelity` reads it back (`tests/atelier-fidelity-loop.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 

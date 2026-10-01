@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path';
 import { formatShape, draftOrder, applicability, type DraftScore } from '../cli/commands/invoke.js';
 import { buildProfile, readFidelity, inBandShare } from '../core/fidelity/profile.js';
 import { editTarget, editInstruction, movedTarget, contentKept, editTowardRange, EDITABLE } from '../core/fidelity/structural.js';
-import { ratifiedProfile } from '../cli/fidelity.js';
+import { ratifiedProfile, firstSettings } from '../cli/fidelity.js';
 import { checkDraft, enforceClaims, INCONCLUSIVE, UNREAD } from '../core/loop/run-repair.js';
 import { judgeFeature } from '../core/observers/selection.js';
 import { authorSelfMargins } from '../core/observers/style.js';
@@ -85,6 +85,20 @@ describe('the profile: the author\'s range per feature, its role, and where a te
     const r = readFidelity(authorPiece(1), p);
     expect(r.outside).toEqual([]);
     expect(r.inBand).toBe(r.measured);
+  });
+});
+
+describe('the first release costs more only where there is a range to steer toward', () => {
+  const band = (id: string, role: FeatureBand['role']): FeatureBand => ({ id, cls: 'all', band: [1, 2], median: 1.5, spread: 0.2, n: 8, role, auc: 0.9 });
+  const p = (roles: FeatureBand['role'][]): FidelityProfile => ({ version: 1, corpusHash: 'c', detector: null, hash: 'h', bands: roles.map((r, i) => band(`f${i}`, r)) });
+  it('three steering features or more: four drafts and structural edits', () => {
+    expect(firstSettings(p(['SIGNAL', 'SIGNAL', 'RULE']), true)).toMatchObject({ drafts: 4, editBudget: 2, retrievalK: 3 });
+  });
+  it('fewer (short answers, replies): two drafts and no edits, as before the loop', () => {
+    expect(firstSettings(p(['SIGNAL', 'MONITOR', 'MONITOR']), true)).toMatchObject({ drafts: 2, editBudget: 0 });
+  });
+  it('no retrieval without an index', () => {
+    expect(firstSettings(p(['SIGNAL', 'SIGNAL', 'SIGNAL']), false).retrievalK).toBe(0);
   });
 });
 
