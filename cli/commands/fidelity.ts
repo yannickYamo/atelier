@@ -25,6 +25,7 @@ import { DEFAULT_SETTINGS, type ImplementationSettings } from '../../core/fideli
 import type { Budget } from '../../core/inference/client.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { releaseWithSettings } from '../fidelity.js';
+import { familiesOf } from './qualify.js';
 import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding } from '../runtime.js';
 
 export async function fidelity(): Promise<void> {
@@ -72,7 +73,7 @@ function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.get
     const out = r.outside.find((o) => o.id === b.id);
     console.log(`  ${out ? (out.direction === 'high' ? 'HIGH' : 'LOW ') : 'ok  '}  ${featureOf(b.id)?.label ?? b.id}: ${round(v)} (yours ${round(b.band[0])} to ${round(b.band[1])})`);
   }
-  if (r.detector) console.log(`Style detector ${r.detector.version}: P(model-written) ${r.detector.p}. A monitor, never a requirement.`);
+  if (r.detector) console.log(`Style detector ${r.detector.version}: P(model-written) ${r.detector.p}. A monitor, never a requirement; valid for: ${familiesOf(profile)}.`);
 }
 
 /** The status page: the profile, drift alarms per feature, the releases and how each did, the next settings to try. */
@@ -92,6 +93,11 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
   if (profile.detector) {
     const w = topWeights(profile.detector, 5);
     console.log(`Style detector ${profile.detector.version} (a monitor): cross-validated AUC ${profile.detector.cvAuc ?? 'not computed'}; the model leans on ${w.model.map((x) => x.feature.replace(/^[wc]:/, '')).join(', ')}.`);
+    // A detector does not carry across model families: it is valid only for the ones it was trained against.
+    console.log(`  valid for: ${familiesOf(profile)}`);
+    const q = fstore.getQualification(L, profile.hash);
+    console.log(q ? `  qualified: ${q.instruments.filter((x) => x.result.passes).length} of ${q.instruments.length} instrument(s) hold out of sample (${q.measuredAt.slice(0, 10)})`
+      : `  not qualified yet: atelier qualify --skill ${L.skillName}`);
   }
   console.log(`\nActive implementation release ${active.id}: ${describeSettings(active.settings)}; ${active.notes.length} experience note(s); ${active.why}.`);
   console.log(`\n${records.length} output(s) recorded with a reading.`);

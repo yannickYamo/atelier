@@ -10,6 +10,9 @@
 //   retrieval/<hash>.json   every index a release has named, kept for the same reason
 //   releases/<id>.json      implementation releases, content-addressed and never overwritten
 //   active.json             the ONLY mutable file: which release is serving. Rollback moves it to the parent.
+//   qualifications/<profile hash>.json
+//                           what `atelier qualify` measured for the instruments of that profile, keyed by
+//                           the profile it qualified: a result is about one detector and one band set
 //
 // A release file is checked on the way out as well as on the way in: an id that does not match the
 // recomputed hash means someone edited a file that names itself by its content, and serving it would
@@ -21,6 +24,7 @@ import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
 import type { StoreLayout } from './store.js';
 import type { FidelityProfile, ImplementationRelease } from '../fidelity/types.js';
+import type { QualifyResult } from '../fidelity/qualify.js';
 import type { RetrievalIndex } from '../fidelity/retrieval.js';
 import { passagesHash } from '../fidelity/retrieval.js';
 import { releaseId, canonicalJson } from '../fidelity/release.js';
@@ -146,4 +150,48 @@ export function rollbackRelease(l: StoreLayout): ImplementationRelease | null {
   if (active.chain[1] && active.chain[1].standardVersionHash !== active.release.standardVersionHash) return null;
   setActiveRelease(l, active.release.parent);
   return active.chain[1];
+}
+
+/** One instrument's qualification: the detector, or one steering feature of the profile. */
+export interface InstrumentQualification {
+  readonly instrument: string;
+  readonly kind: 'detector' | 'feature';
+  readonly label: string;
+  readonly result: QualifyResult;
+  readonly verdict: string;
+}
+
+/** What `atelier qualify` measured for one profile's instruments, on the data it names. */
+export interface Qualification {
+  readonly profileHash: string;
+  readonly measuredAt: string;
+  readonly data: {
+    readonly itemsHash: string;
+    readonly author: number;
+    readonly model: number;
+    readonly generators: readonly string[];
+    readonly topicsLabelled: boolean;
+  };
+  readonly seed: number;
+  readonly resamples: number;
+  readonly instruments: readonly InstrumentQualification[];
+}
+
+const qualificationPath = (l: StoreLayout, profileHash: string): string => {
+  if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
+  return join(base(l), 'qualifications', `${profileHash}.json`);
+};
+
+/** The qualification measured for the profile with this hash, or null when none was. */
+export function getQualification(l: StoreLayout, profileHash: string): Qualification | null {
+  const p = qualificationPath(l, profileHash);
+  if (!existsSync(p)) return null;
+  const q = readJson<Qualification>(p, { what: 'the qualification', requireKeys: ['profileHash', 'instruments'] });
+  if (q.profileHash !== profileHash) throw new Error(`STORE: qualification file ${p} is for profile ${q.profileHash}, not ${profileHash}. It is not served.`);
+  return q;
+}
+
+/** Store a qualification under the hash of the profile it measured. A later measurement replaces it. */
+export function setQualification(l: StoreLayout, q: Qualification): void {
+  writeAtomic(qualificationPath(l, q.profileHash), JSON.stringify(q, null, 1));
 }

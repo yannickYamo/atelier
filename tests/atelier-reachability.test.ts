@@ -157,11 +157,6 @@ const PARKED: Readonly<Record<string, string>> = {
     'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
     + 'because it is a record rather than a component: testing an instrument whose construct was not '
     + 'established would assert behaviour nobody is entitled to rely on.',
-  'core/fidelity/qualify.ts':
-    'The bars a sensor must clear before it may steer (source, topic and generator held out; pooled AUC '
-    + 'with a seeded bootstrap interval). Run by bench/fidelity/qualify.mjs, deliberately reachable from no '
-    + 'CLI verb for the same reason as core/stats/sign-test.ts: a user command that computes qualification '
-    + 'statistics is an invitation to peeking.',
   'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',

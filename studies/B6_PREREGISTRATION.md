@@ -24,7 +24,9 @@ the reviewer has), from one source each, with consent for this use. At least 36 
 confirmatory result (15 test, 6 validation, at least 15 training); fewer is exploratory and reported as such.
 `prepare` splits each corpus once with a recorded seed. A human-written brief per validation and test piece
 is preferred (`<register>/briefs/<piece>.md`); a generated brief (title, length, the piece's facts) is the
-fallback, and which was used is recorded.
+fallback, and which was used is recorded. `prepare` copies every validation, test and training text into the
+work directory and records each file's sha256 in `plan.json`; every later step checks them and refuses on
+any mismatch, naming the file, so a text changed after the seal cannot be measured.
 
 ## 3. Arms (one writer model for all, `B6_MODEL`)
 
@@ -49,26 +51,37 @@ The loop steers by the skill's profile, built from the training pieces. The eval
   any test output, never with the skill's own detector, and never on the `plain` or `pasted` arms it is then
   used to compare (a detector trained on the comparator's own distribution would favour whatever is not it).
   If those imitations are missing the run falls back to the plain and pasted outputs and the result says so.
+- `B6_EVAL_MODEL` is never the writer: `generate` and `evaluate` refuse when it equals `B6_MODEL` (in any
+  case, or when one id is a prefix alias of the other), and `evaluate` refuses when the recorded outputs show
+  the same model on both sides.
+- The evaluator's detector decides the detector bar only if it separates its own validation material: a
+  cross-validated AUC of at least 0.65. Below that, or with none, the detector bar is null (never a pass) and
+  `results.json` says why; the detector AUCs are still reported.
 
 ## 5. Endpoints and bars (per register)
 
 | endpoint | bar for `loop` |
 |---|---|
 | in-band share on the evaluator's bands, test outputs | within 5 points of the real test pieces' own share, and at least 5 points above `open` |
-| detector AUC, real test pieces vs the arm (P(model) as the score) | upper 95% bound below `pasted`'s point estimate |
+| detector AUC, real test pieces vs the arm (P(model) as the score) | upper 95% bound below `pasted`'s point estimate; null when the evaluator's detector is not fit (section 4) |
 | specifics outside the brief's facts, per output | no more than `pasted` |
 | manifest gaps (a rule waived without a reason) | zero |
 | run-to-run spread (length CV over 3 repeats of 5 briefs) | no higher than `pasted` |
-| blind human read (the cross-domain study, section 4: 3 readers, both orders, masked) | at least 0.60 for `loop`, with the brief-bootstrap lower bound above 0.50 |
+| blind human read (the cross-domain study, section 4: masked; at least 3 readers, each judging every pair once, one packet per reader in a reader-specific seeded order, the A/B order balanced across readers on every pair) | at least 0.60 for `loop`, with the brief-bootstrap lower bound above 0.50 |
 
 The ablation (`open` vs `loop`) is reported for every endpoint, so it is clear what the loop did and what the
-standard alone already did.
+standard alone already did. Grounded fact coverage (the brief's facts an output uses per 100 words) is
+reported per arm beside the author's own density on the validation pieces, next to the specifics outside the
+brief; it is not a counted bar.
 
 ## 6. Decision
 
 The claim holds when, in at least four confirmatory registers, the human read passes and every counted bar
 holds, and no register's read is below 0.50. `bench/b6/run.mjs score` computes exactly this from the labels
-and `results.json`; a counted bar with missing data does not pass. Anything else is reported as the result, at the same size: which
+and `results.json`; a counted bar with missing data does not pass. It first checks that the labels are the
+design above: the number of distinct readers (`--readers-required`, 3), exactly one judgment per reader per
+pair, every pair judged by every reader, orders balanced; an incomplete or unbalanced design is refused with
+what is wrong, never scored on what is there. Anything else is reported as the result, at the same size: which
 endpoints held, in which registers, and by how much.
 
 ## 7. Limits stated now

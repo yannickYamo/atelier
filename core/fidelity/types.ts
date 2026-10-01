@@ -77,6 +77,12 @@ export interface DetectorModel {
   readonly trainedOn: { readonly author: number; readonly model: number };
   /** cross-validated AUC with sources held out (null when too few texts to fold) */
   readonly cvAuc: number | null;
+  /**
+   * The model ids whose drafts it was trained against. A detector does not carry across model families
+   * (held-out generator AUCs of 0.37, 0.49 and 0.73 in one measurement), so it is valid only for these.
+   * Absent on a detector trained before they were recorded: then nobody knows what it is valid for.
+   */
+  readonly families?: readonly string[];
 }
 
 /** Where one text sits: the class, every feature's value, how many of the steering bands it is inside. */
@@ -91,7 +97,7 @@ export interface FidelityReading {
   /** ids outside their band, worst first, with the distance in band-widths */
   readonly outside: readonly { readonly id: string; readonly distance: number; readonly direction: 'low' | 'high' }[];
   /** the detector's reading, when the skill has one: P(model-written), and which detector */
-  readonly detector: { readonly p: number; readonly version: string } | null;
+  readonly detector: { readonly p: number; readonly version: string; readonly families?: readonly string[] } | null;
 }
 
 /** The author's fidelity profile, stored with the skill at build time. */

@@ -354,10 +354,10 @@ export async function discover(): Promise<void> {
   // pieces alone. A comparison that failed once dropped all of them, and a skill shipped with no floor
   // against em dashes for an author who never writes one.
   const read = openItems.filter((i) => readIds.has(i.id));
-  let drafts: string[] = [];
+  let drafts: string[] = []; let generators: string[] = [];
   if (!argv.includes('--no-contrast')) {
     try {
-      drafts = await contrastDrafts(read, ev.corpusHash, contrastForm(read, declaredClass(s)));
+      ({ drafts, generators } = await contrastDrafts(read, ev.corpusHash, contrastForm(read, declaredClass(s))));
     } catch (e) {
       // Optional, and never allowed to cost the discovery already paid for.
       console.log(`(the model's plain drafts could not be written: ${(e as Error).message.split('\n')[0]}; rules measured on your pieces alone are still proposed)`);
@@ -377,7 +377,7 @@ export async function discover(): Promise<void> {
   // per length class where there are enough of them, its role, and a stylometric detector when there are
   // drafts enough to train one. Installed by build with the skill; it steers drafts and is recorded with
   // every output. Built from what this step already holds, so it costs nothing more.
-  const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash });
+  const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash, modelFamilies: generators });
   writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
   // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
   // served to the writer, they would be compared with outputs written from them.
@@ -458,14 +458,14 @@ export function contrastForm(read: readonly { text: string }[], cls: string | nu
  * Plain drafts by the model that will serve the skill, on the author's own titles, no skill applied.
  * Kept per corpus so continuing or re-running discovery does not pay for them twice.
  */
-async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string, form: { label: string; words: number }): Promise<string[]> {
+async function contrastDrafts(read: readonly { id: string; text: string }[], corpusHash: string, form: { label: string; words: number }): Promise<ContrastDrafts> {
   const path = runFile('contrast-drafts.json');
   const { client, binding } = clientAndBinding('target');
   // Keyed by corpus, model AND form: another model's habits, or another kind of piece, is another comparison.
   const key = `${corpusHash}|${binding.requestedModel}|${form.label}|${form.words}|${Math.floor(numericFlag('--contrast-drafts', 12))}|with-examples`;
   if (existsSync(path)) {
-    const cached = readJson<{ corpusHash: string; key?: string; drafts: string[] }>(path, { what: 'the contrast drafts' });
-    if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return cached.drafts;
+    const cached = readJson<ContrastCache>(path, { what: 'the contrast drafts' });
+    if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return contrastOf(cached);
   }
   // TWELVE, HALF OF THEM IMITATIONS. Five plain drafts let a feature qualify on three or four model values,
   // which is how a feature that merely ranks one draft oddly passed as taste. And a plain draft is the weak
@@ -501,7 +501,36 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
       return '';
     }
   });
-  const kept = drafts.filter((d) => d.trim());
-  writeAtomic(path, JSON.stringify({ corpusHash, key, drafts: kept }, null, 1));
-  return kept;
+  // WHO WROTE EACH DRAFT, AND ON WHOSE TOPIC. A detector trained against one model family is valid for that
+  // family only, so the generator is recorded per draft; the piece whose title a draft took is its source,
+  // so `atelier qualify` can hold a piece out with the drafts written on it.
+  const kept = drafts.flatMap((d, i) => (d.trim() ? [{ text: d, generator: binding.requestedModel, source: read[i % read.length]?.id ?? null }] : []));
+  const cache: ContrastCache = { corpusHash, key, drafts: kept.map((k) => k.text), meta: kept.map((k) => ({ generator: k.generator, source: k.source })) };
+  writeAtomic(path, JSON.stringify(cache, null, 1));
+  return contrastOf(cache);
+}
+
+/** The cache file of the contrast drafts. `meta` is absent in caches written before it was recorded. */
+export interface ContrastCache {
+  readonly corpusHash: string;
+  readonly key?: string;
+  readonly drafts: readonly string[];
+  /** per draft, in order: the model that wrote it and the id of the piece whose topic it took */
+  readonly meta?: readonly { readonly generator: string; readonly source: string | null }[];
+}
+
+export interface ContrastDrafts {
+  readonly drafts: string[];
+  readonly generators: string[];
+  readonly sources: (string | null)[];
+}
+
+/** UNKNOWN IS ONE GENERATOR. A cache written before generators were recorded reads as one generator, 'unknown'. */
+export function contrastOf(c: ContrastCache): ContrastDrafts {
+  const meta = c.meta?.length === c.drafts.length ? c.meta : null;
+  return {
+    drafts: [...c.drafts],
+    generators: c.drafts.map((_, i) => meta?.[i]?.generator ?? 'unknown'),
+    sources: c.drafts.map((_, i) => meta?.[i]?.source ?? null),
+  };
 }
