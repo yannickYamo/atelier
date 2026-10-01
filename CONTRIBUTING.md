@@ -20,8 +20,9 @@ is a local convenience, not an extra check.)
 A dated CHANGELOG section means shipped, so the section is dated by the release, not before it.
 1. `npm run preflight` — green or stop.
 2. Move Unreleased to `## [x.y.z] — <date>`; bump `package.json` to match.
-3. `git tag vx.y.z && git push --tags` — release.yml publishes with provenance (needs the
-   `NPM_TOKEN` repository secret), or `npm login && npm publish` locally.
+3. `git tag vx.y.z && git push --tags`. release.yml re-runs the checks, then creates the GitHub release
+   with the version's CHANGELOG section as its notes. It also publishes to npm with provenance, but only
+   when the `NPM_TOKEN` repository secret is set; without it the release stops at GitHub.
 4. Add the npm install line to README **after** `npm view @yannickyamo/atelier` returns a version.
 npm run build         # what a user installs
 ```
