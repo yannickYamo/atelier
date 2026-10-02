@@ -11,7 +11,7 @@ import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loo
 import { featureOf } from '../core/observers/features.js';
 import { overlapIndex } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
-import { QUALIFIED_READERS } from '../core/loop/claim-extract.js';
+import { QUALIFIED_READERS, DISPUTED_WHY } from '../core/loop/claim-extract.js';
 import type { EvalSummary } from '../core/eval/summary.js';
 import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
@@ -50,7 +50,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // own gate below. A structured output is held by its contract, not by prose rules.
   const req = x.contract ? [] : (final?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict !== 'NOT_APPLICABLE'
     && !waived.has(c.requirementId) && !c.requirementId.startsWith('UNSOURCED'));
-  const broken = req.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ id: c.requirementId, detail: c.result.detail.slice(0, 80) }));
+  const broken = req.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ id: c.requirementId, detail: c.result.detail.slice(0, 80), label: shortLabel(c.statement) }));
   // THE CLAIM GATE, counted on the delivered text: spans still flagged on the gating line, spans unconfirmed,
   // whether the qualified reader could run; cut from the repair record.
   const line = (id: string): RuleCheck | undefined => final?.checked.find((c) => c.requirementId === id);
@@ -59,8 +59,10 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const state: EvalSummary['gates']['claims']['state'] = x.claimsOff ? 'off' : x.contract ? 'checked' : (!std || !final || unread) ? 'not-checked' : 'checked';
   const counts = x.contract ? { delivered: 0, unconfirmed: 0, cut: 0, listed: 0 } : {
     delivered: spans('UNSOURCED'), unconfirmed: spans(INCONCLUSIVE), cut: rec.repair?.storiesCut?.length ?? 0,
-    listed: spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS),
+    listed: spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS) - disputedIn(line(PUBLIC_FACTS)), disputed: disputedIn(line(PUBLIC_FACTS)),
   };
+  // The reader's repeatability on this very text (two reads, ./claim-extract.ts): served from the run's cache.
+  const agreement = x.contract || state !== 'checked' ? null : x.sensor?.reading(rec.output)?.agreement ?? null;
   // The measured rates belong to one model at one prompt version, and only when it is the one deciding (not in an
   // answer, where patterns decide what is cut): no borrowed rates for an unqualified reader or the pattern check.
   const version = x.sensor?.version ?? null;
@@ -73,7 +75,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const formatLine = line('FORMAT');
 
   const reasons: string[] = [];
-  if (broken.length) reasons.push(`${broken.length} required rule${broken.length === 1 ? '' : 's'} broken (${broken.map((b) => b.id).join(', ')})`);
+  if (broken.length) reasons.push(`${broken.length} required rule${broken.length === 1 ? '' : 's'} broken (${broken.map((b) => `${b.id} "${b.label}"`).join(', ')})`);
   if (state === 'off') reasons.push('invented claims not checked: turned off for this run (--allow-unsourced)');
   if (state === 'not-checked') reasons.push(std ? 'invented claims not checked: the claim reader could not run' : 'no standard to check against');
   if (state === 'checked' && counts.delivered) reasons.push(`${counts.delivered} invented claim(s) delivered`);
@@ -108,7 +110,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     result: { conformant: reasons.length === 0, reasons },
     gates: {
       required: { held: req.length - broken.length, applicable: req.length, broken, ...(x.contract ? { contract: true } : {}) },
-      claims: { state, ...counts, instrument: x.sensor?.instrument ?? null, answers: x.answers,
+      claims: { state, ...counts, agreement, instrument: x.sensor?.instrument ?? null, answers: x.answers,
         measured: q?.measured ? { caught: q.measured.caught, planted: q.measured.planted, leftAlone: q.measured.leftAlone, clean: q.measured.clean, on: q.measured.on } : null },
       copying: longest === null ? null : { longest, limit: COPY_LIMIT },
       format: { kind: x.format.shape === 'SHAPE' ? 'shape' : x.format.shape === 'BARE' ? 'bare' : 'none', words: x.format.words, withheld: x.format.withheld,
@@ -126,4 +128,18 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     },
     notMeasured,
   };
+}
+
+/** Flags on the public-facts line that only one of the two reads raised. */
+function disputedIn(l: RuleCheck | undefined): number {
+  if (l?.result.verdict !== 'VIOLATED') return 0;
+  return l.result.spans.filter((sp) => (sp as { why?: string }).why === DISPUTED_WHY).length;
+}
+
+/** A rule's statement cut to a short label at a word boundary: enough to say what the rule is. */
+export function shortLabel(statement: string, max = 48): string {
+  const s = statement.replace(/\s+/g, ' ').trim().replace(/[.:]$/, '');
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2)).replace(/[,;:]$/, '')}…`;
 }
