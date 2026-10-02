@@ -30,6 +30,8 @@ import { taste } from './commands/taste.js';
 import { tells } from './commands/tells.js';
 import { tend, skillDashboard } from './commands/tend.js';
 import { fidelity } from './commands/fidelity.js';
+import { report as reportRun, rate } from './commands/report.js';
+import { evaluate } from './commands/eval.js';
 import { qualify } from './commands/qualify.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
@@ -101,6 +103,9 @@ export const COMMANDS: readonly string[] = [
   'taste',
   'tend',
   'fidelity',
+  'report',
+  'rate',
+  'eval',
   'qualify',
   'tells',
   'optimize',
@@ -153,6 +158,9 @@ const main = async (): Promise<void> => {
     case 'tells': { await tells(); return; }
     case 'tend': { await tend(); return; }
     case 'fidelity': { await fidelity(); return; }
+    case 'report': { reportRun(); return; }
+    case 'rate': { rate(); return; }
+    case 'eval': { evaluate(); return; }
     case 'qualify': { qualify(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }

@@ -16,6 +16,9 @@ import { steerTowardRange, type Application } from '../../core/fidelity/structur
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
+import { buildRunEval } from '../eval-run.js';
+import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
+import { putEval } from '../../core/state/eval-store.js';
 import { retrieve, renderRetrieved } from '../../core/fidelity/retrieval.js';
 import { spendOneWithResult, type DraftVariant, type Written } from './improve.js';
 import { planSections, sectionBlock, joinSections, MAX_SECTIONS, type SectionPlan } from '../../core/fidelity/sections.js';
@@ -201,6 +204,7 @@ export async function invoke(): Promise<void> {
 }
 
 async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
+  const started = Date.now();
   const name = assertSkillName(flag('--skill') ?? argv[1] ?? die('usage: atelier invoke --skill <name> "<your task>"'));
   const asked = flag('--task') ?? positional([name])
     ?? die('give it something to write: atelier invoke --skill <name> "<your task>"');
@@ -289,8 +293,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // pieces those rules exist for. Then the standard stays whole and only the wrapping is dropped.
   const formatAsked = intent?.format ?? requestedFormat(asked);
   const shape = formatAsked ? formatShape(formatAsked) : null;
+  let presentationWithheld = 0;
   if (formatAsked && shape === 'SHAPE' && std) {
     const p = presentationRules(std.requirements);
+    presentationWithheld = p.measured.length + p.prose.length;
     for (const q of p.measured) waived.set(q.requirementId, `the request states its own format ("${formatAsked}")`);
     withheld.push(...p.prose.map((q) => q.statement));
     report.say(`The request states its own format ("${formatAsked}"): ${p.measured.length + p.prose.length} presentation rule(s) withheld for this run.`);
@@ -347,17 +353,27 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
   reportChecks(report, rec, std, checks);
-  if (taste) await taste.report(report, rec, name);
+  const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
   reportRestyle(report, rec.output, material);
   const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
+  // THE EVALUATION OF THIS RUN (core/eval/summary.ts): stored beside the record, carried by --json, and drawn as
+  // the panel on a terminal (or with --panel); --quiet leaves it out of the terminal, never out of the record.
+  const evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
+    answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
+    format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
+    durationMs: Date.now() - started, drafts: nDrafts,
+    applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []) });
+  putEval(L, evaluation);
+  const showPanel = !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY));
+  if (showPanel) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
   if (machine === 'answer') process.stdout.write(`${rec.output}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
       output: rec.output, invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
-      withheld: rec.delivery.withheldRules ?? [], report: report.lines,
+      withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
         outside: rec.fidelity.reading?.outside.map((o) => o.id) ?? [], detector: rec.fidelity.reading?.detector?.p ?? null,
         edits: rec.fidelity.edits ?? [], applicability: rec.fidelity.applicability ?? [] } } : {}),
@@ -484,8 +500,8 @@ class TasteSession {
   }
 
   /** Recorded on every output, said in one line. */
-  async report(report: RunReport, rec: Invocation, name: string): Promise<void> {
-    await reportTaste(report, { L: this.L, std: this.std, rec, asked: this.asked, budget: this.meter, tasteOn: true,
+  async report(report: RunReport, rec: Invocation, name: string): Promise<TasteMonitor | null> {
+    return reportTaste(report, { L: this.L, std: this.std, rec, asked: this.asked, budget: this.meter, tasteOn: true,
       tasteTaken: this.taken, readings: this.readings, tasteNotes: this.notes, permissions: { veto: this.veto }, waiting: this.waiting, name });
   }
 }
@@ -876,9 +892,11 @@ interface TasteContext {
  * The taste reader: recorded on every output, said in one line. A rule waiting for material is reported
  * as waiting, never as missed. The reader never costs the person their output: a failure is said.
  */
-async function reportTaste(report: RunReport, t: TasteContext): Promise<void> {
+type TasteMonitor = NonNullable<EvalSummary['monitors']['taste']>;
+
+async function reportTaste(report: RunReport, t: TasteContext): Promise<TasteMonitor | null> {
   for (const n of t.tasteNotes) report.say(`(${n}.)`);
-  if (!t.tasteOn || !t.std) return;
+  if (!t.tasteOn || !t.std) return null;
   const rules = new Map(t.std.requirements.map((q) => [q.requirementId, q]));
   try {
     const taken = t.tasteTaken ?? t.readings.get(t.rec.output) ?? null;
@@ -886,14 +904,20 @@ async function reportTaste(report: RunReport, t: TasteContext): Promise<void> {
     // A held-back reading shows nothing that names a rule, the taste repair included.
     if (t.rec.repair?.taste) report.say(held ? 'taste repair: details held back with the reading.' : `taste repair: ${t.rec.repair.taste.why}.`);
     report.detail(describeTaste(read, rules, t.permissions?.veto ?? earned.veto, held, t.waiting));
-    if (held) return;
+    // A held-back reading is blind on purpose: nothing about it is shown, the panel included.
+    if (held) return null;
     const missed = read.filter((x) => x.verdict === 'MISSED' && !t.waiting.has(x.requirementId)).length;
     const waiting = read.filter((x) => t.waiting.has(x.requirementId)).length;
     const status = t.permissions?.veto.size ? 'it acts on the rules your labels gave it' : `reporting only until you label it: atelier taste --skill ${t.name} --calibrate`;
     report.say(`Taste reader: ${missed} of ${read.length} reading-based rule(s) read as missed${waiting ? `, ${waiting} waiting for your material` : ''} (${status}).`);
+    const trials = earned.pooled.trials;
+    return { followed: read.filter((x) => x.verdict === 'FOLLOWED' && !t.waiting.has(x.requirementId)).length, missed,
+      unclear: read.filter((x) => x.verdict === 'UNCLEAR' && !t.waiting.has(x.requirementId)).length, waiting,
+      labelled: trials ? { right: earned.pooled.confirmed, of: trials } : null, acts: Boolean(t.permissions?.veto.size) };
   } catch (e) {
     if (t.rec.repair?.taste) report.say(`taste repair: ${t.rec.repair.taste.why}.`);
     report.say(`(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`);
+    return null;
   }
 }
 

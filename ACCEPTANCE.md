@@ -99,6 +99,9 @@ npm run acceptance:carriers -- --host codex
 | C79 | every application is recorded | actuator, target, value before and after, kept or not, for operators and sentence rewrites (`tests/atelier-fidelity-loop.test.ts`) |
 | C80 | drafts made to differ, and long form by section | each draft's temperature recorded; `--sections` plans, writes each section, joins with headings when the author uses them, and records the plan (`tests/atelier-fidelity-loop.test.ts`) |
 | C81 | a text is scored against the standard without a model | `atelier score` is deterministic and offline; a broken REQUIRED rule or an invented figure lowers it (`tests/atelier-score.test.ts`) |
+| C82 | every run is evaluated, with one binary result | the panel puts CONFORMANT or NOT CONFORMANT first; a broken required rule is a FAIL under a NOT CONFORMANT, never a PASS; a claim check that could not run is a FAIL; no overall score (`tests/atelier-eval-panel.test.ts`) |
+| C83 | every instrument says how it was validated | the claim reader with its measured rates and population; the detector and the taste reader as monitors, "not validated" until they are; a not-measured line on every run; fidelity beside the held-back baseline and its n (`tests/atelier-eval-panel.test.ts`) |
+| C84 | evaluation over runs, and satisfaction from a person | `atelier report` reads the stored evaluation and trace; `atelier rate` records yes or no with a reason; `atelier eval` gives rates per release with N and a Wilson interval (`tests/atelier-fidelity-loop.test.ts`, `tests/atelier-eval-panel.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 

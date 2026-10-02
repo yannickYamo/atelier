@@ -63,6 +63,26 @@ here is compared with an optimizer yet; the kit to do it is.
   valid for, more than one family. Every application of every actuator is recorded with the feature before and
   after, so a study can attribute movement to operators, rewrites, selection or retrieval.
 
+### Added: an evaluation of every run
+
+- **One binary result, then the evidence, on every run.** After `invoke`, a short panel (on a terminal, or with
+  `--panel`; `--quiet` leaves it out; always in `--json` as `eval`) says CONFORMANT or NOT CONFORMANT, then:
+  - **gates**, binary: required rules held, invented claims (the claim reader shown with the rates it was measured
+    at, and where), copying, format, applicability;
+  - **fidelity**, descriptive: features in the author's range beside the author's own held-back pieces read the
+    same way, with their n (pieces the bands were built from would be a circular baseline);
+  - **monitors**, never gating: the style detector and the taste reader, each with how it has been validated, or
+    "not validated";
+  - **not measured**, on every run.
+  No overall score: gates, fidelity and monitors are different kinds of evidence. A claim check that could not
+  run is a FAIL, never a pass. The evaluation is stored beside the run record, written once.
+- **`atelier report <run>`**: the panel and the trace, component by component (drafts and selection, the claim
+  check, repair, steering, retrieval, release, applicability), read from the record.
+- **`atelier rate <run> yes|no "why"`**: would you ship it as is? The one satisfaction measure, given by a person.
+- **`atelier eval --skill <name>`**: per release, the conformant share and the share you would ship, each with its
+  N and a 95% Wilson interval; cost and time; failures by kind (rules broken, reasons, complaints from `fix`,
+  why runs were not shipped); and the unrated runs worth reading, chosen by count.
+
 ### Added: instruments
 
 - **`atelier score`**: one deterministic number in [0, 1] for how well a text meets a skill's ratified

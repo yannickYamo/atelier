@@ -92,7 +92,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label',
 ];
 
 export const argv = process.argv.slice(2);
@@ -163,6 +163,8 @@ export const flag = (f: string): string | undefined => {
  * `skip` removes tokens the command has already claimed — the skill name, typically — so the task is
  * what is genuinely left over.
  */
+/** Every positional argument after the command, flag values excluded. */
+export const positionals = (): readonly string[] => parsed.positionals;
 export const positional = (skip: readonly string[] = []): string | undefined =>
   parsed.positionals.find((a) => !skip.includes(a));
 

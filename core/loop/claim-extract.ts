@@ -149,7 +149,14 @@ export const DECISION_VERSION = 3;
 export const READER_VERSION = sha(`${EXTRACT_SYSTEM}|${JSON.stringify(EXTRACT_SCHEMA)}|decision ${DECISION_VERSION}`).slice(0, 8);
 
 /** A reader, named the way a qualification result names it: the model, and the READER_VERSION it measured. */
-export interface QualifiedReader { readonly model: string; readonly version: string }
+export interface QualifiedReader {
+  readonly model: string; readonly version: string;
+  /**
+   * What it was measured at, for anyone shown its verdict: planted inventions caught of those planted, clean
+   * drafts left alone of those read, and the population (the rates hold there, not everywhere).
+   */
+  readonly measured?: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string; readonly record: string };
+}
 /**
  * ONLY A MEASURED INSTRUMENT MAY CUT. A reader in this list met the qualification battery's bar
  * (studies/): its sensitivity and specificity were measured on technical and marketing writing, for that
@@ -185,8 +192,11 @@ export async function patiently<T>(f: () => Promise<T>): Promise<T> {
 }
 
 export const QUALIFIED_READERS: readonly QualifiedReader[] = [
-  { model: 'claude-haiku-4-5', version: '0279163b' },
-  { model: 'claude-haiku-4-5', version: 'a173339d' },
+  { model: 'claude-haiku-4-5', version: '0279163b',
+    measured: { caught: 35, planted: 35, leftAlone: 35, clean: 38, on: 'technical and marketing pieces', record: 'studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md' } },
+  // Re-measured at its production settings (temperature 0, two reads) in 0.7.0: bench/runs/0.7.0/claims.
+  { model: 'claude-haiku-4-5', version: 'a173339d',
+    measured: { caught: 46, planted: 46, leftAlone: 39, clean: 48, on: 'product essays', record: 'bench/runs/0.7.0/claims' } },
 ];
 /** Is this model, at this reader version, one a qualification result stands behind? */
 export const isQualified = (model: string, version = READER_VERSION, list: readonly QualifiedReader[] = QUALIFIED_READERS): boolean =>

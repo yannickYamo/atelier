@@ -88,7 +88,11 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
   const detector = trained && families.length ? { ...trained, families } : trained;
   // THE EFFECT MATRIX: what each operator does to each banded feature, on text like this model's (no model call).
   const effects = input.model.length ? effectMatrix(input.model, [...new Set(bands.map((b) => b.id))]) : undefined;
-  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts), ...(effects ? { effects } : {}) };
+  // THE BASELINE, OUT OF SAMPLE: the held-back pieces read against bands they did not build.
+  const probe = { version: 1 as const, corpusHash: input.corpusHash, bands, detector: null, hash: '' };
+  const held = heldTexts.map((t) => readFidelity(t, probe)).filter((r) => r.measured > 0);
+  const baseline = held.length ? { medianInBand: quantile(held.map((r) => r.inBand), 0.5), medianMeasured: quantile(held.map((r) => r.measured), 0.5), n: held.length } : undefined;
+  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts), ...(effects ? { effects } : {}), ...(baseline ? { baseline } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 

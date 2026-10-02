@@ -367,6 +367,27 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('fidelity', '--skill', 'posts')).toMatch(/Active implementation release [0-9a-f]{16}: 2 draft\(s\)/);
   }, 120_000);
 
+  it('every run is evaluated: the panel with --panel, an eval object in --json, and report, rate and eval read it back', () => {
+    const shown = run('invoke', '--skill', 'posts', '--no-taste', '--panel', 'write a short note about the rollback');
+    expect(shown).toMatch(/── Atelier · posts · release [0-9a-f]{8}/);
+    expect(shown).toMatch(/ {2}RESULT {2}(CONFORMANT|NOT CONFORMANT)/);
+    expect(shown).toMatch(/GATES {2}binary, every run/);
+    expect(shown).toMatch(/not measured: /);
+    const j = JSON.parse(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write a short note about the flag')) as { invocationId: string; eval: { schema: number; result: { conformant: boolean } } };
+    expect(j.eval.schema).toBe(1);
+    expect(typeof j.eval.result.conformant).toBe('boolean');
+    const rep = run('report', j.invocationId);
+    expect(rep).toMatch(/RESULT/);
+    expect(rep).toMatch(/TRACE\n {2}request/);
+    expect(rep).toMatch(/ {2}repair|claim check|delivered/);
+    expect(run('rate', j.invocationId, 'no', 'the opening was too long')).toMatch(/Recorded: no, you would not ship/);
+    const ev = run('eval', '--skill', 'posts');
+    expect(ev).toMatch(/evaluated run\(s\) of "posts", 1 rated by you/);
+    expect(ev).toMatch(/would ship {5}0% \(0\/1, 95% 0%–\d+%\)/);
+    expect(ev).toMatch(/not shipped because: "the opening was too long"/);
+    expect(run('rate', j.invocationId, 'maybe')).toMatch(/answer yes or no/);
+  }, 180_000);
+
   it('fidelity --read places one file against the range, offline', () => {
     const f = join(proj, 'one.md'); writeFileSync(f, wall);
     const out = run('fidelity', '--skill', 'posts', '--read', f);

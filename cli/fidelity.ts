@@ -46,7 +46,7 @@ export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): Fidelit
     }
     return b.proposable ? { ...b, role: 'MONITOR' as const } : b;
   });
-  const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null, ...(p.effects ? { effects: p.effects } : {}) };
+  const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null, ...(p.effects ? { effects: p.effects } : {}), ...(p.baseline ? { baseline: p.baseline } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 

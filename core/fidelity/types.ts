@@ -116,6 +116,11 @@ export interface FidelityProfile {
    * at discovery: operator id → feature id → mean change per application and how many applications.
    */
   readonly effects?: Readonly<Record<string, Readonly<Record<string, { readonly mean: number; readonly n: number }>>>>;
+  /**
+   * WHERE THE AUTHOR'S OWN UNSEEN PIECES LAND: the held-back pieces, which built no band, read against the bands.
+   * The baseline an output's in-range count is shown beside; the pieces the bands came from would be circular.
+   */
+  readonly baseline?: { readonly medianInBand: number; readonly medianMeasured: number; readonly n: number };
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }
