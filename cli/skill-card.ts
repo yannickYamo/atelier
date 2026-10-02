@@ -6,6 +6,8 @@
 
 import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
+import * as vstore from '../core/state/voice-store.js';
+import { featureTrait, split } from '../core/voice/transfer.js';
 import { putSkillCard, getSkillCard } from '../core/state/eval-store.js';
 import { isGeneralScope } from '../core/state/canonical-state.js';
 import { QUALIFIED_READERS } from '../core/loop/claim-extract.js';
@@ -45,6 +47,10 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
     layers.set(layer, b.role === 'MONITOR' ? { ...x, monitored: x.monitored + 1 } : { ...x, steering: x.steering + 1 });
   }
   const qual = profile ? fstore.getQualification(L, profile.hash) : null;
+  // The voice layer exists only where the owner declared the corpus's register, under this standard.
+  const policy = vstore.getPolicy(L);
+  const traits = [...live.map((q) => q.requirementId), ...pooled.filter((b) => b.role !== 'MONITOR').map((b) => featureTrait(b.id))];
+  const transfer = policy?.standardVersionHash === std.standardVersionHash ? split(policy, traits) : null;
   const rulesRead = tasteRules(std);
   const perms = rulesRead.length ? tastePermissions(rulesRead, store.readEvents(L), readerModel()) : null;
   const card: SkillCard = {
@@ -71,10 +77,14 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
     release: active ? { id: active.id, drafts: active.settings.drafts, editBudget: active.settings.editBudget, retrievalK: active.settings.retrievalK,
       notesCap: active.settings.notesCap, loop: active.settings.editBudget > 0 || Boolean(active.settings.diversity) } : null,
     taste: rulesRead.length ? { rules: rulesRead.length, validated: (perms?.veto.size ?? 0) > 0, labelled: perms?.pooled.trials ?? 0 } : null,
+    ...(policy && transfer ? { voice: { registers: policy.corpusRegisters, carried: transfer.carried.length,
+      invariant: transfer.carried.filter((t) => policy.states[t].kind === 'invariant').length, unknown: transfer.unknown.length,
+      pairs: vstore.getBank(L)?.pairs.length ?? null, mode: active?.settings.voice ?? 'off' } } : {}),
     notMeasured: [
       rulesRead.length ? 'the reading-based rules, until the taste reader is validated by your labels' : 'argument, stance and content',
       profile ? `voice beyond the ${pooled.length} counted features` : 'your range (built without a corpus: no profile)',
       ...(profile?.detector ? ['whether the detector holds for model families it was not trained on'] : []),
+      ...(policy && transfer ? ['fidelity in another register: not measurable from this corpus, your policy is applied'] : []),
     ],
     next: [`atelier invoke --skill ${L.skillName} "<task>"`, `atelier report <run>`, `atelier rate <run> yes|no`, `atelier eval --skill ${L.skillName}`,
       ...(profile ? [`atelier qualify --skill ${L.skillName}`] : []), ...(rulesRead.length ? [`atelier taste --skill ${L.skillName} --calibrate`] : [])],

@@ -75,7 +75,8 @@ const idf = (index: RetrievalIndex, term: string): number => {
   return d === undefined ? 0 : Math.log((index.passages.length + 1) / (d + 1)) + 1;
 };
 
-function vectorOf(index: RetrievalIndex, text: string): Map<string, number> {
+/** A text as TF-IDF weights against this index: what `retrieve` and the register monitor compare. */
+export function vectorOf(index: RetrievalIndex, text: string): Map<string, number> {
   const tf = new Map<string, number>();
   for (const t of termsOf(text)) tf.set(t, (tf.get(t) ?? 0) + 1);
   const v = new Map<string, number>();
@@ -83,7 +84,7 @@ function vectorOf(index: RetrievalIndex, text: string): Map<string, number> {
   return v;
 }
 
-const cosine = (a: Map<string, number>, b: Map<string, number>): number => {
+export const cosine = (a: Map<string, number>, b: Map<string, number>): number => {
   let dot = 0; let na = 0; let nb = 0;
   for (const [t, w] of a) { na += w * w; const o = b.get(t); if (o !== undefined) dot += w * o; }
   for (const w of b.values()) nb += w * w;

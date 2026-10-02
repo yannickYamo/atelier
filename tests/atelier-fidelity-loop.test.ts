@@ -416,6 +416,29 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/in range on \d+ of \d+ steering features/);
     expect(out).toMatch(/HIGH {2}.*paragraph/);
   }, 60_000);
+  it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {
+    expect(run('voice', 'status', '--skill', 'posts')).toMatch(/no register declared, so nothing of the voice layer runs/);
+    const before = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');
+    expect(before).not.toMatch(/VOICE {2}below the standard/);
+    expect(run('voice', 'register', '--skill', 'posts', 'blog post')).toMatch(/written in one register: post\.\nOne register: nothing can be shown to transfer/);
+    // in register: nothing is withheld, and the panel says which register
+    expect(run('invoke', '--skill', 'posts', 'Write a blog post about the outage', '--panel')).toMatch(/register {10}in register \(post\)/);
+    // out of register: every rule is withheld until the owner marks one
+    const out = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');
+    expect(out).not.toMatch(/^EXIT:/);
+    expect(out).toMatch(/out of register \(contract vs post\): 0 trait\(s\) carried by your policy, \d+ unknown/);
+    expect(out).toMatch(/voice pass {8}off/);
+    const trait = /^ {2}(\S+)\s+unknown: not carried/m.exec(run('voice', 'status', '--skill', 'posts'))![1];
+    expect(run('voice', 'transfer', '--skill', 'posts', '--add', trait)).toMatch(/1 trait\(s\) now carry .* The standard is unchanged\./);
+    expect(run('voice', 'status', '--skill', 'posts')).toMatch(/carries: your ruling/);
+    expect(run('voice', 'transfer', '--skill', 'posts', '--add', 'nope')).toMatch(/is not a rule of this standard or a steering feature/);
+    // the card says it, live
+    expect(run('report', '--skill', 'posts')).toMatch(/VOICE {2}written in: post\n {4}out of register {3}1 trait\(s\) carry \(0 measured across registers, 1 by your ruling\)/);
+    // the voice pass is refused without a bank, and a bank whose pairs fail their checks is not stored
+    expect(run('invoke', '--skill', 'posts', 'Write a blog post', '--voice', 'incontext')).toMatch(/needs a pair bank of at least 12 pairs/);
+    expect(run('fidelity', '--skill', 'posts', '--set', 'voice=incontext')).toMatch(/the voice pass on \(in-context pairs\)/);
+    expect(run('fidelity', '--skill', 'posts', '--rollback')).toMatch(/Active implementation release is now/);
+  }, 180_000);
 });
 
 // keep the Requirement import honest for readers of this file

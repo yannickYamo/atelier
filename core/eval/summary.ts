@@ -67,6 +67,15 @@ export interface EvalSummary {
     readonly taste: { readonly followed: number; readonly missed: number; readonly unclear: number; readonly waiting: number;
       readonly labelled: { readonly right: number; readonly of: number } | null; readonly acts: boolean } | null;
   };
+  /** the register decision and the voice pass, for a skill whose owner declared the corpus's register */
+  readonly voice?: {
+    readonly mode: 'off' | 'incontext';
+    readonly register: { readonly status: 'in' | 'out' | 'assumed-in'; readonly request: string | null; readonly corpus: readonly string[];
+      readonly distance: { readonly value: number; readonly threshold: number; readonly inside: boolean } | null };
+    readonly carried: number; readonly notCarried: number;
+    readonly passed: number; readonly refused: number;
+    readonly bank: string | null; readonly note: string | null;
+  };
   readonly notMeasured: readonly string[];
 }
 
@@ -114,6 +123,14 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     if (fi.outside.length) out.push(`    ${pad('furthest outside', 18)}${fi.outside.slice(0, 3).map((o) => `${o.label} ${o.value === null ? '' : fmt(o.value)}${o.band ? ` (yours ${fmt(o.band[0])} to ${fmt(o.band[1])})` : ''}`).join(' · ')}`);
     if (fi.facts) out.push(`    ${pad('facts used', 18)}${fi.facts.used} of ${fi.facts.supplied} supplied`);
     if (fi.edits.tried) out.push(`    ${pad('steering', 18)}${fi.edits.kept} of ${fi.edits.tried} change(s) kept`);
+  }
+  if (e.voice) {
+    const v = e.voice; const r = v.register;
+    out.push('');
+    out.push('  VOICE  below the standard · the register is declared, never detected');
+    out.push(`    ${pad('register', 18)}${r.status === 'out' ? `out of register (${r.request} vs ${r.corpus.join(', ')}): ${v.carried} trait(s) carried by your policy, ${v.notCarried} unknown, not carried`
+      : r.status === 'in' ? `in register (${r.request})` : `taken to be in register (${r.corpus.join(', ')}): the request names no document type`}${r.distance ? ` · lexical distance ${fmt(r.distance.value)} (your pieces: up to ${fmt(r.distance.threshold)}), a monitor` : ''}`);
+    out.push(`    ${pad('voice pass', 18)}${v.mode === 'off' ? 'off' : `in-context pairs${v.bank ? ` (bank ${v.bank.slice(0, 8)})` : ''}: ${v.passed} paragraph(s) rewritten, ${v.refused} refused and kept as written`}${v.note ? ` · ${v.note}` : ''}`);
   }
   const m = e.monitors;
   if (m.detector || m.taste) {

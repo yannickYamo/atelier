@@ -150,6 +150,34 @@ holds a template's sections in order ([MEASURED-RULES](MEASURED-RULES.md)). To u
 no skill folder (a system prompt, another tool), `atelier export --skill <name> --out skill.md` writes it
 as one file with its examples inlined.
 
+### Voice, and other registers (opt-in)
+
+A skill built from blog posts is evidence about blog posts. Ask it for a contract and nothing in the corpus
+says which of your habits belong there. So the voice layer starts from a declaration, and does nothing until
+you make one:
+
+```bash
+atelier voice register --skill posts post            # the register your pieces are written in
+atelier voice transfer --skill posts --add c3        # this rule carries to any register (your ruling)
+atelier voice pairs --skill posts                    # build the pair bank: one model call per paragraph
+atelier fidelity --skill posts --set voice=incontext # turn the voice pass on
+atelier voice status --skill posts                   # registers, what carries, the bank, the mode
+```
+
+- **In register**, the whole standard applies, as before. With the voice pass on, each paragraph is rewritten
+  from pairs of the same content said plainly and as you wrote it, and a rewrite is kept only if it changes no
+  fact, no claim's strength and no more than its length allows, and lifts nothing of yours. The assembled text
+  is then checked in full; if anything got worse the pass is undone.
+- **Out of register** (`invoke --register contract`, or a request that names another document type), only the
+  rules and features you marked to carry are applied. The rest are withheld for that run and named on the
+  panel. The voice pass never runs out of register.
+- With pieces in several registers (`atelier voice register --skill posts --corpus <dir>`, each piece naming
+  its own with `register: speech` in its front matter), a steering feature that holds still between them is
+  marked as measured. Rules are never measured: you mark them.
+
+None of this moves the standard, and none of it is on by default. Whether the voice pass moves your voice has
+not been measured; that takes a blind read by people ([decision 0009](decisions/0009-voice-below-the-standard.md)).
+
 The sentence you give `new` sets how rules are weighed: writing new work, holding copy to a standard
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always

@@ -76,6 +76,10 @@ npm run acceptance:carriers -- --host codex
 | C56 | a skill as one file | `atelier export` writes the skill with its examples inlined (`tests/atelier-phase-b.test.ts`) |
 | C57 | a skill for answers is compiled in the words of answers | the length is a default the request overrides; the line against invention names results, files and commands (`tests/atelier-fix-first.test.ts`) |
 | C58 | only a measured instrument cuts | `assertMayCut` throws for the context judge and an unqualified reader before any deletion; every claim finding carries its instrument (`tests/atelier-fix-first.test.ts`) |
+| C60 | transfer is a policy, never a finding | a one-register corpus yields only `unknown`; a feature is `invariant` only when the bootstrap interval between two registers sits within a quarter of the author's own spread; the owner's ruling is `owner-transfer` (`tests/atelier-voice-layer.test.ts`) |
+| C61 | the register is declared | `--register` or a document type named in the request decides; a request naming none is taken to be in register and recorded as assumed; the lexical distance is recorded and never decides |
+| C62 | a voice rewrite changes no fact | a paragraph that loses or adds a figure, name or date, drops a qualifier, adds a negation, lifts 12 words of the author's or leaves the length band is refused whole and the content paragraph kept; one that changes only phrasing is kept |
+| C63 | the voice layer is off until asked for | no policy, no gate: `DEFAULT_SETTINGS` carries no voice mode, and a release without one hashes as it did in 1.0 |
 | C59 | an answer does the work it can | the compiled answer line forbids handing back what the agent could find, and allows asking only for a decision that is the person's (`tests/atelier-fix-first.test.ts`) |
 | C60 | invoke for a script | `--answer-only` prints the answer alone and `--json` one record of the run, with the report on stderr (`tests/atelier-fix-loop.test.ts`) |
 | C61 | a release is measured before it ships | `bench/` reproduces each number in the CHANGELOG from its files in `bench/runs/<version>/`, side by side with the previous release (decision 0006) |

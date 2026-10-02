@@ -103,6 +103,8 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     'argument, stance and content (read by the taste reader, a monitor)',
     fidelity ? `voice beyond the ${fidelity.measured} counted features` : 'your range (this skill has no fidelity profile: build it from a corpus)',
   ];
+  const vr = rec.fidelity?.voice ?? null;
+  if (vr?.register.status === 'out') notMeasured.push('fidelity in another register: not measurable from this corpus, your policy was applied');
   return {
     schema: 1, invocationId: rec.invocationId, skill: x.L.skillName, skillVersion: rec.skillVersionHash, at: rec.at,
     release: rec.fidelity?.release ?? null, model: rec.observedRuntime.resolvedModel ?? rec.runtimeBinding.requestedModel ?? null,
@@ -126,6 +128,10 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       detector: reading?.detector ? { p: reading.detector.p, families: reading.detector.families ?? [], qualified: detectorQ ? detectorQ.result.passes : null } : null,
       taste: x.taste,
     },
+    ...(vr ? { voice: { mode: vr.mode, register: { status: vr.register.status, request: vr.register.request, corpus: vr.register.corpus, distance: vr.register.distance },
+      carried: vr.carried.length, notCarried: vr.notCarried.length,
+      passed: (vr.paragraphs ?? []).filter((p) => p.kept).length, refused: (vr.paragraphs ?? []).filter((p) => !p.kept && p.check !== 'not-tried').length,
+      bank: vr.bank ?? null, note: vr.note ?? null } } : {}),
     notMeasured,
   };
 }
