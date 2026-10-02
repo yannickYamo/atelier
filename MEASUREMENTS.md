@@ -8,7 +8,7 @@ without a reader knowing exactly what stands behind it.
 The rule for this repository is: **no test asserts any number on this page, and no behaviour depends
 on one.** They are here as the reasons a design is shaped the way it is, not as evidence for a claim
 about how well it works. Where a number would otherwise decide something, the code takes the
-conservative branch instead — see the `UNKNOWN` capability value, the `OBSERVE` gate posture, and
+conservative branch instead: see the `UNKNOWN` capability value, the `OBSERVE` gate posture, and
 the refusal in `core/fidelity/graded-readout.ts` to treat a rate as a result.
 
 ## What each number came from
