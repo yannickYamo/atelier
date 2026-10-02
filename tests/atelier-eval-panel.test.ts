@@ -121,7 +121,7 @@ describe('the verdict is counted on the delivered text, and can never say CONFOR
     observedRuntime: { resolvedModel: 'claude-opus-5' }, runtimeBinding: { requestedModel: 'claude-opus-5' } } as unknown as InvocationRecord;
   const line = (id: string, verdict: 'MET' | 'VIOLATED', spans = 0, materiality = 'REQUIRED') => ({ requirementId: id, statement: id, materiality,
     result: { verdict, value: spans, detail: `${id} detail`, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: `s${i}`, why: '' })) } });
-  const report = (...checked: ReturnType<typeof line>[]): VerifyReport => ({ skill: 'posts', standardVersionHash: 'h', checked, unchecked: [], conditional: [], failed: false }) as unknown as VerifyReport;
+  const report = (...checked: ReturnType<typeof line>[]): VerifyReport => ({ skill: 'posts', standardVersionHash: 'h', checked, unchecked: [], conditional: [], failed: false });
   const std = { standardVersionHash: 'h', requirements: [] } as never;
   const sensor = (instrument: string, qualified = true) => ({ instrument, version: 'a173339d', qualified, gate: qualified ? 'reader' : 'pattern', degraded: false }) as never;
   const input = (over: Partial<RunEvalInput>): RunEvalInput => ({ L, rec, std, sensor: sensor('claim reader (claude-haiku-4-5, prompt a173339d)'), claimsOff: false, answers: false, profile: null,
