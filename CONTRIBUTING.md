@@ -10,7 +10,7 @@ npm run typecheck     # tsc, strict plus four flags beyond it
 npm run lint          # type-aware eslint; `npm run lint:fix` for the mechanical half
 npm test              # the whole suite, offline, about a minute
 
-Before citing any gate in a commit message, run `npm run preflight` — typecheck, lint, test and
+Before citing any gate in a commit message, run `npm run preflight`: typecheck, lint, test and
 build in one command, no pipes, non-zero on any failure. Three ad-hoc shell checks lied in one
 session; the script is the mechanism that replaced the habit. (It aggregates the CI steps above; it
 is a local convenience, not an extra check.)
@@ -18,7 +18,7 @@ is a local convenience, not an extra check.)
 ## Releasing (maintainer)
 
 A dated CHANGELOG section means shipped, so the section is dated by the release, not before it.
-1. `npm run preflight` — green or stop.
+1. `npm run preflight`: green or stop.
 2. Move Unreleased to `## [x.y.z] — <date>`; bump `package.json` to match.
 3. `git tag vx.y.z && git push --tags`. release.yml re-runs the checks, then creates the GitHub release
    with the version's CHANGELOG section as its notes. It also publishes to npm with provenance, but only
@@ -38,7 +38,7 @@ changes to [`CHANGELOG.md`](CHANGELOG.md).
 
 The lint is type-aware, so it needs the TypeScript project and takes a few seconds. It is configured
 to catch what `tsc` cannot: a floating promise, an `any` that escaped a `JSON.parse`, a caught error
-rethrown without its cause. Where a rule is off, `eslint.config.js` says why — a disabled rule with
+rethrown without its cause. Where a rule is off, `eslint.config.js` says why: a disabled rule with
 no reason is indistinguishable from one nobody understood.
 
 ## How a change is judged (decision [0006](docs/decisions/0006-release-contract.md))

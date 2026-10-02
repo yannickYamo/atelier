@@ -1,7 +1,7 @@
 # Product metrics
 
-**How easy the first run is, measured at each release. A number only moves here when it was measured,
-and each says how.**
+**How easy the first run is, last measured across 0.4.0 and 0.5.0. A number only moves here when it was
+measured, and each says how.**
 
 ## Measured offline, the same way before and after
 
@@ -25,7 +25,7 @@ person sees.
 | First run on a gateway without the default reading model | fails | proceeds, and says so (tested offline) |
 
 The 0.4.0 column comes from a first run of the shipped CLI by an outside tester, following the README.
-The 0.5.0 column is filled by the same run before release.
+The real-model run has not been repeated, so those 0.5.0 cells stay unmeasured rather than estimated.
 
 ## Tracked on real use
 
