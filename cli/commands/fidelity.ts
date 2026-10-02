@@ -90,6 +90,7 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
   for (const [layer, x] of byLayer) console.log(`  ${layer}: ${x.steer} steer, ${x.all - x.steer} monitored`);
   const classes = [...new Set(profile.bands.map((b) => b.cls).filter((c) => c !== 'all'))];
   if (classes.length) console.log(`  bands of their own for: ${classes.join(', ')} pieces (the rest read against the pooled range)`);
+  if (!profile.effects) console.log('  no operator effects measured: this profile predates them, so --fidelity runs no operators. Rebuild the skill to measure them.');
   if (profile.detector) {
     const w = topWeights(profile.detector, 5);
     console.log(`Style detector ${profile.detector.version} (a monitor): cross-validated AUC ${profile.detector.cvAuc ?? 'not computed'}; the model leans on ${w.model.map((x) => x.feature.replace(/^[wc]:/, '')).join(', ')}.`);

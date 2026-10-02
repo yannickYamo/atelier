@@ -127,9 +127,20 @@ export function releaseChain(l: StoreLayout, id: string): ImplementationRelease[
 }
 
 /** Point the skill at a stored release. Activation points at history; it does not create it. */
-export function setActiveRelease(l: StoreLayout, id: string): void {
+/**
+ * Point the skill at a release. `by` says how it got there when a person chose it ('rollback'), so a migration
+ * that moves automatic settings never undoes a choice.
+ */
+export function setActiveRelease(l: StoreLayout, id: string, by?: 'rollback'): void {
   releaseChain(l, id);
-  writeAtomic(join(base(l), 'active.json'), JSON.stringify({ releaseId: id, at: new Date().toISOString() }, null, 1));
+  writeAtomic(join(base(l), 'active.json'), JSON.stringify({ releaseId: id, at: new Date().toISOString(), ...(by ? { by } : {}) }, null, 1));
+}
+
+/** How the active release was set, when a person chose it. */
+export function activeSetBy(l: StoreLayout): 'rollback' | null {
+  const p = join(base(l), 'active.json');
+  if (!existsSync(p)) return null;
+  return readJson<{ by?: string }>(p, { what: 'the active release pointer' }).by === 'rollback' ? 'rollback' : null;
 }
 
 /** The serving release and its parents (newest first), or null when none was ever activated. */
@@ -148,7 +159,7 @@ export function rollbackRelease(l: StoreLayout): ImplementationRelease | null {
   // NEVER ACROSS A STANDARD. What the loop learned under one standard says nothing about another; a release
   // line starts again at each new standard, so its root has no parent to roll back to.
   if (active.chain[1] && active.chain[1].standardVersionHash !== active.release.standardVersionHash) return null;
-  setActiveRelease(l, active.release.parent);
+  setActiveRelease(l, active.release.parent, 'rollback');
   return active.chain[1];
 }
 

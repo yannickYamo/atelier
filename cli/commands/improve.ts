@@ -283,7 +283,7 @@ export async function spendOneWithResult(
   note = '',
   /** this draft's own variation (a temperature, more reference material), when drafts are made to differ */
   variant: DraftVariant = {},
-): Promise<{ piece: string; reportedModel: string | null; schemaSent: Record<string, unknown>; servedTask: string }> {
+): Promise<{ piece: string; reportedModel: string | null; schemaSent: Record<string, unknown>; servedTask: string; temperatureSent: number | null }> {
   const schema = contract?.schema ?? FREE_TEXT_SCHEMA;
   // CAPTURED FROM THE REQUEST OBJECT, not copied from the argument. A proof built from the same
   // variable the caller passed in would agree with itself no matter what was actually transmitted.
@@ -308,7 +308,7 @@ export async function spendOneWithResult(
   const piece = contract
     ? JSON.stringify(r.json ?? null, null, 2)
     : asText((r.json as { piece?: unknown } | null)?.piece);
-  return { piece, reportedModel: r.modelId || null, schemaSent: schema, servedTask };
+  return { piece, reportedModel: r.modelId || null, schemaSent: schema, servedTask, temperatureSent: r.temperatureSent ?? null };
 }
 
 
@@ -351,7 +351,7 @@ export async function runOnce(
    */
   refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
   /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
-  select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } | Promise<{ index: number; why: string }>;
+  select: { readonly n: number; readonly choose: (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => { index: number; why: string } | Promise<{ index: number; why: string }>;
     /** draft i's own variation, when drafts are made to differ (core/fidelity/types.ts, `diversity`) */
     readonly variant?: (i: number) => DraftVariant;
     /** how draft i is written, when not in one call (long form by section, core/fidelity/sections.ts) */
@@ -388,14 +388,16 @@ export async function runOnce(
     const v = n > 1 ? select?.variant?.(i) ?? {} : {};
     return select?.write && contract === null ? select.write(i, v) : spendOneWithResult(client, budget, servedText, task, contract, '', v);
   });
-  const written = settled.flatMap((x) => (x.ok ? [x.value] : []));
+  // Each draft that came back, with the index it was asked for: a variant recorded for draft i describes the
+  // i-th call, and the drafts that failed must not shift it onto another.
+  const written = settled.flatMap((x, i) => (x.ok ? [{ ...x.value, index: i }] : []));
   const failures = settled.flatMap((x) => (x.ok ? [] : [(x.error as Error).message?.split('\n')[0] ?? String(x.error)]));
   if (!written.length) {
     const first = settled.find((x) => !x.ok);
     throw first && !first.ok ? first.error : new Error('no draft was written');
   }
   if (failures.length) process.stderr.write(`atelier: ${failures.length} of ${n} draft call(s) failed (${failures[0]}); choosing among the ${written.length} that came back.\n`);
-  const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece))
+  const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece), written.map((w) => ({ index: w.index, temperatureSent: w.temperatureSent })))
     : { index: 0, why: n > 1 ? `the only draft of ${n} that came back` : '' };
   let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
   if (contract !== null && claimGuard) {

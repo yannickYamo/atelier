@@ -34,7 +34,7 @@ before any of them are used. This study measures both, once.
 
 - **Author pieces.** 40 DailyDoseOfDS newsletters, a house style from two authors, never used by any study
   (the claim reader's 25 are excluded). They were chosen by seeded hash (`sensor-qualification-2026-09-29`)
-  from the 52 unused ones with at least 500 words, and are copied to `~/atelier-sensors`.
+  from the 52 unused ones with at least 500 words, and are copied to `<a local folder>`.
 - **The split, by the same seed, before generation:**
   - INNER: 16 pieces (selection reads them);
   - INNER HELD: 8 (selection's own held-back check);

@@ -154,18 +154,21 @@ describe('experience notes', () => {
     expect(noteProblem('sentenceP10: wrote varied sentences')).toMatch(/not one of the operations/);
     expect(noteProblem('madeUp: split long sentences')).toMatch(/not a measured feature/);
     expect(noteProblem('paragraphP50: used three short paragraphs of 3 lines')).toMatch(/digit/);
-    expect(noteProblem('paragraphP50: used the quote from Smith early')).toMatch(/names/);
+    expect(noteProblem('paragraphP50: used the quote from Smith in short paragraphs')).toMatch(/names/);
+    expect(noteProblem('sentenceP10: used a question to open each piece')).toMatch(/construction/);   // a content rule, rephrased
+    expect(noteProblem('paragraphP50: dropped the conclusion; open with the result instead')).toMatch(/rule|clause/);
     expect(noteProblem('sentenceCv: shortened sentences, always after a long one')).toMatch(/rule/);
     expect(noteProblem(`sentenceCv: split ${Array.from({ length: 33 }, () => 'word').join(' ')}`)).toMatch(/words/);
-    const pairs = comparisonPairs([record('r1', [7, 4], [[], ['para.words']])]);
+    const pairs = comparisonPairs([record('r1', [7, 4], [[], ['sentenceP90', 'paragraphP50']])]);
     const notes = parseNotes({ notes: [
       { text: 'sentenceP90: lengthened one sentence after two short ones', features: ['para.words', 'invented'] },
+      { text: 'sentenceCv: split long sentences at their conjunctions' },   // a real feature, but not one these drafts differed on
       { text: 'sentenceP90: lengthened one sentence after two short ones' },
       'paragraphP50: shortened paragraphs where the material was thin',
       { text: 'Use two examples.' }, { text: 'colon: used Jones as the example' }, { text: 'Never hedge.' }, 7, null,
     ] }, pairs);
     expect(notes.map((n) => n.text)).toEqual(['sentenceP90: lengthened one sentence after two short ones', 'paragraphP50: shortened paragraphs where the material was thin']);
-    expect(notes[0].features).toEqual(['para.words']);
+    expect(notes[0].features).toEqual(['sentenceP90']);   // the note's own feature, recorded
     expect(notes[0].evidence).toEqual({ pairs: 1, gain: 3 });
     expect(notes[0].cls).toBe('medium');
     const many = parseNotes({ notes: Array.from({ length: 12 }, (_, i) => `paragraphP50: broke paragraphs in way ${'abcdefghijkl'[i]}`) }, pairs);
@@ -178,7 +181,7 @@ describe('experience notes', () => {
     const client: InferenceClient = { complete: (req) => { seen.push(req); return Promise.resolve(anInferenceResult({ json: { notes: [
       { text: 'sentenceP10: joined the shortest sentences to the one before them' }, { text: 'Winners cited four sources.' }] } })); } };
     const budget = { spentUsd: 0, capUsd: 1, maxCalls: 5 };
-    const pairs = comparisonPairs([record('r1', [7, 4]), record('r2', [8, 5, 2])]);
+    const pairs = comparisonPairs([record('r1', [7, 4], [[], ['sentenceP10']]), record('r2', [8, 5, 2])]);
     const notes = await distillNotes(client, budget, pairs);
     expect(seen).toHaveLength(1);
     expect(seen[0].temperature).toBe(0);

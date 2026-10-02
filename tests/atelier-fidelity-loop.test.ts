@@ -20,7 +20,9 @@ import type { VerifyReport } from '../core/observers/verify.js';
 import { buildProfile, readFidelity, inBandShare } from '../core/fidelity/profile.js';
 import { movedTarget, steerTowardRange, carrier } from '../core/fidelity/structural.js';
 import { parsePlan, sectionBlock, joinSections } from '../core/fidelity/sections.js';
-import { applyOperator, sitesOf, effectMatrix, operatorsToward } from '../core/fidelity/operators.js';
+import { applyOperator, sitesOf, effectMatrix, operatorsToward, keepsWords, OPERATOR_IDS } from '../core/fidelity/operators.js';
+import { draftPlan } from '../cli/commands/discover.js';
+import { bandsFor } from '../core/fidelity/profile.js';
 import { ratifiedProfile, firstSettings, releaseFor } from '../cli/fidelity.js';
 import { checkDraft, enforceClaims, INCONCLUSIVE, UNREAD } from '../core/loop/run-repair.js';
 import { judgeFeature } from '../core/observers/selection.js';
@@ -138,10 +140,11 @@ describe('the operators: re-punctuation of the words already there', () => {
   const t = 'The team argued about the rollback for most of the afternoon, and nobody wanted to be the one who blinked first. We kept the flag. It was the right call.\n\n'
     + 'Smith said the graph (which had been flat since Monday) would move; we waited for it.\n\n- a list item, and it stays put\n\n'
     + 'The cache never expired. The fix took an hour. Finding it took four days. I keep a list of these now.';
-  it('split at ", and" drops the "and"; join adds one; a name keeps its capital', () => {
+  it('split at ", and" drops the "and"; join adds one, never before a name', () => {
     expect(applyOperator('split-conjunction', t, 0)).toContain('most of the afternoon. Nobody wanted');
     expect(applyOperator('join-adjacent', t, 0)).toContain('We kept the flag, and it was the right call.');
-    expect(applyOperator('join-adjacent', 'We met at noon. Smith was late. It rained all day long there.', 0)).toContain('We met at noon, and Smith was late.');
+    // never joined before a word that might be a name: the next join is where a function word follows
+    expect(applyOperator('join-adjacent', 'We met at noon. Smith was late. It rained all day long there.', 0)).toBe('We met at noon. Smith was late, and it rained all day long there.');
   });
   it('paragraphs break in the middle and merge when both are short; parentheses and semicolons convert', () => {
     expect(applyOperator('break-paragraph', t, 0)).toContain('The fix took an hour.\n\nFinding it took four days.');
@@ -458,6 +461,78 @@ describe('upgrading from 0.8: a default nobody chose moves to 1.0\'s; a choice s
   it('settings someone chose by hand are kept', () => {
     const { L, r } = setup('settings set by hand: drafts=4,editBudget=2');
     expect(releaseFor(L, { skillVersionHash: 'sv1', standardVersionHash: 'std' })!.release.id).toBe(r.id);
+  });
+});
+
+// ── what the review of 1.0 found, pinned ───────────────────────────────────────────────────────────
+describe('a class band that did not qualify never hides a pooled band that did', () => {
+  it('with few drafts per class, a text in that class is still read against the pooled steering bands', () => {
+    const shortPiece = (k: number): string => Array.from({ length: 5 }, (_, p) => `${sentence(k + p)} ${sentence(k + p + 1)}`).join('\n\n');
+    const read = [...Array.from({ length: 7 }, (_, k) => ({ id: `s${k}`, text: shortPiece(k) })), ...Array.from({ length: 7 }, (_, k) => ({ id: `m${k}`, text: authorPiece(k) }))];
+    const held = [0, 1].map((k) => ({ id: `h${k}`, text: authorPiece(k + 20) }));
+    const p = buildProfile({ read, held, model: Array.from({ length: 12 }, (_, k) => modelDraft(k)), corpusHash: 'c' });
+    const r = readFidelity(modelDraft(30), p);
+    expect(r.measured).toBeGreaterThan(0);
+    expect(bandsFor(p, r.cls).bands.some((b) => b.role !== 'MONITOR')).toBe(true);
+  });
+});
+
+describe('the contrast design is crossed, not confounded', () => {
+  it('every writer and every length gets plain drafts and imitations', () => {
+    const plan = draftPlan(16, 2, [100, 400]);
+    for (const w of [0, 1]) for (const len of [100, 400]) {
+      const cell = plan.filter((x) => x.writer === w && x.length === len);
+      expect(cell.some((x) => x.pasted), `${w}/${len}`).toBe(true);
+      expect(cell.some((x) => !x.pasted), `${w}/${len}`).toBe(true);
+    }
+  });
+});
+
+describe('the operators never corrupt text (the review\'s cases)', () => {
+  const cases = [
+    'I met Mr. Smith there, and we talked about the project for a long while before lunch today.',
+    'Pick a language, e.g. Python, and then stick with it for at least a year or more of real work.',
+    'We need flour, sugar, eggs, butter, and salt from the shop on the corner before the guests arrive.',
+    'We moved the meeting to the third floor of the building, so that everyone could fit in the room.',
+    'Use `for (i = 0; i < n; i++)` to loop; it is simple. Tom &amp; Jerry left.',
+    'The plan worked (It ended. Mostly anyway.) and then we left early for home.',
+    'We left early. Rain fell. Why did we go? It was cold.',
+    'Read [the guide, and the notes for the whole team](http://x.y/a.b) before you start on the work today.',
+    '    indented code, and more code here for the block that should stay',
+    'line one of a hard-wrapped paragraph, and it continues\nonto line two of the same paragraph here.',
+  ];
+  it('every application keeps the words, and nothing lands in code, links, entities, lists or abbreviations', () => {
+    for (const t of cases) for (const op of OPERATOR_IDS) for (let k = 0; k < sitesOf(op, t); k++) {
+      const r = applyOperator(op, t, k)!;
+      expect(keepsWords(t, r), `${op} on ${t}`).toBe(true);
+      expect(r).not.toMatch(/Mr,|e\.g,|\bvs,|&amp\.|`for \(i = 0\. I|, and Rain|, and Why|flour, sugar, eggs, butter\. /);
+    }
+    expect(sitesOf('split-conjunction', cases[2])).toBe(0);   // a list is not a clause
+    expect(sitesOf('split-conjunction', cases[3])).toBe(0);   // "so that" is not a clause boundary
+    expect(sitesOf('parenthetical-to-commas', cases[5])).toBe(0);
+    expect(sitesOf('split-conjunction', cases[7])).toBe(0);   // inside a link
+    for (const op of OPERATOR_IDS) expect(sitesOf(op, cases[8]) + sitesOf(op, cases[9]), op).toBe(0);
+  });
+  it('keepsWords allows one "and" in or out, and nothing else', () => {
+    expect(keepsWords('A b, and c d.', 'A b. C d.')).toBe(true);
+    expect(keepsWords('A b. C d.', 'A b, and c d.')).toBe(true);
+    expect(keepsWords('A b c.', 'A b d.')).toBe(false);
+    expect(keepsWords('A b c.', 'A b.')).toBe(false);
+  });
+});
+
+describe('a rollback is a choice the upgrade never undoes', () => {
+  it('after rolling back to 0.8\'s loop settings, they stay', () => {
+    const L = { root: mkdtempSync(join(tmpdir(), 'atelier-rb-')), skillName: 'x' };
+    fstore.setProfile(L, { version: 1, corpusHash: 'c', detector: null, hash: 'ph', bands: [] });
+    const old = fstore.putRelease(L, makeRelease({ parent: null, standardVersionHash: 'std', skillVersionHash: 'sv1',
+      settings: { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 }, notes: [], profileHash: 'ph', retrievalHash: null, createdAt: '2026-10-01T00:00:00Z', why: 'the first release, built with the skill' }));
+    fstore.setActiveRelease(L, old.id);
+    writeFileSync(join(L.root, 'skills', 'x', 'active.json'), JSON.stringify({ skillVersionHash: 'sv1', at: '2026-10-01T00:00:00Z' }));
+    const moved = releaseFor(L, { skillVersionHash: 'sv1', standardVersionHash: 'std' })!.release;
+    expect(moved.settings.drafts).toBe(2);
+    expect(fstore.rollbackRelease(L)?.id).toBe(old.id);
+    expect(releaseFor(L, { skillVersionHash: 'sv1', standardVersionHash: 'std' })!.release.id).toBe(old.id);
   });
 });
 

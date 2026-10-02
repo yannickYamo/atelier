@@ -165,6 +165,9 @@ export function distillPrompt(pairs: readonly ComparisonPair[], max: number): st
     + 'Write notes about construction only, never about what is good in general, never naming a figure or a name.';
 }
 
+/** What a note's "how" must be about: the units of construction, never what a piece says. */
+const CONSTRUCTION = /\b(?:sentences?|paragraphs?|clauses?|commas?|breaks?|connectives?|conjunctions?|parenthes[ie]s|semicolons?|full stops?|lines?|supplied facts?|facts? from the material)\b/i;
+
 /** A note's grammar: a measured feature's id, a colon, an operation from the closed list, and how. */
 const NOTE_FORM = /^([A-Za-z][A-Za-z0-9]*):\s+([a-z]+)\b(.*)$/;
 
@@ -183,7 +186,12 @@ export function noteProblem(text: string): string | null {
   if (!OPERATIONS.includes(op)) return `"${op}" is not one of the operations (${OPERATIONS.join(', ')})`;
   if (wordsOf(`${op}${rest}`).length > MAX_NOTE_WORDS) return `over ${MAX_NOTE_WORDS} words`;
   if (/\d/.test(rest)) return 'carries a digit';
-  if (/\b(always|never|must|mustn['’]?t|should)\b/i.test(rest)) return 'states a rule';
+  if (/\b(always|never|ever|must|mustn['’]?t|should|instead|avoid|do not|don['’]t|open with|start with|begin with|end with)\b/i.test(rest)) return 'states a rule';
+  // ONE CLAUSE, ABOUT CONSTRUCTION. A second clause is where an instruction hides ("dropped the conclusion; open
+  // with the result instead"), and a note about content ("used a question to open each piece", "used humor") is
+  // a rule about what to write: the note must name what was built from (sentences, paragraphs, connectives).
+  if (/[;:]/.test(rest)) return 'more than one clause';
+  if (!CONSTRUCTION.test(rest)) return 'not about construction (name the sentences, paragraphs, clauses, connectives or supplied facts it changed)';
   if (/[—–]/.test(rest)) return 'carries a dash Atelier strips from its own text';
   // A capital after the operation is a name, a title or an acronym; each carries content across requests.
   const capital = rest.split(/\s+/).map((w) => w.replace(/^["'“‘(]+/, '').replace(/[.,;:!?)"'”’]+$/, ''))
@@ -215,9 +223,12 @@ export function parseNotes(raw: unknown, pairs: readonly ComparisonPair[]): Expe
     if (typeof o?.text !== 'string') continue;
     const text = o.text.replace(/\s+/g, ' ').trim();
     if (noteProblem(text) !== null || seen.has(normal(text))) continue;
+    // The feature the note names must be one the compared drafts differed on: a note about anything else is
+    // not what these comparisons showed. It is the note's feature, recorded as such.
+    const feature = /^([A-Za-z][A-Za-z0-9]*):/.exec(text)?.[1] ?? '';
+    if (!known.includes(feature)) continue;
     seen.add(normal(text));
-    const named = Array.isArray(o.features) ? (o.features as unknown[]).filter((f): f is string => typeof f === 'string' && known.includes(f)) : [];
-    out.push({ id: noteId(text), text, cls, features: named.length ? [...new Set(named)].sort() : known, evidence });
+    out.push({ id: noteId(text), text, cls, features: [feature], evidence });
   }
   return out;
 }

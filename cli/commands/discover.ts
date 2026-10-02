@@ -24,6 +24,7 @@ import { extract } from '../../core/intake/extract.js';
 import { deriveMeasuredRules } from '../../core/observers/derive.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
+import { SELECTION } from '../../core/observers/selection.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf } from '../../core/fidelity/types.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
@@ -471,7 +472,7 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // of the author's pieces, in turn; with one such class, all at the corpus's length as before.
   const lengths = classLengths(read, form.words);
   // Keyed by corpus, models, form and lengths: another model's habits, or another kind of piece, is another comparison.
-  const key = `${corpusHash}|${writers.map((w) => w.binding.requestedModel).join('+')}|${form.label}|${lengths.join('/')}|${Math.floor(numericFlag('--contrast-drafts', 12))}|with-examples`;
+  const key = `${corpusHash}|${writers.map((w) => w.binding.requestedModel).join('+')}|${form.label}|${lengths.join('/')}|${flag('--contrast-drafts') ?? 'auto'}|crossed`;
   if (existsSync(path)) {
     const cached = readJson<ContrastCache>(path, { what: 'the contrast drafts' });
     if ((cached.key ?? cached.corpusHash) === key && cached.drafts.length) return contrastOf(cached);
@@ -481,11 +482,22 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // adversary: what has to separate an author from the model is what still separates them when the model is
   // shown their own pieces, the way a person would ask it. So every other draft is written with two of the
   // author's other pieces pasted in as examples (never the piece whose topic it takes).
-  const n = Math.max(4, Math.floor(numericFlag('--contrast-drafts', 12)));
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', 3), maxCalls: n + 2 };
+  // ENOUGH, AND BALANCED. A length class qualifies a band only on at least SELECTION.minModel drafts of its own,
+  // and writer, length and examples are crossed (below), so the default grows with the classes and the models.
+  const W = writers.length; const Lg = lengths.length;
+  const n = flag('--contrast-drafts') !== undefined ? Math.max(4, Math.floor(numericFlag('--contrast-drafts', 12)))
+    : Math.min(32, Math.max(12, SELECTION.minModel * Lg, 2 * W * Lg));
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--contrast-cap', Math.max(3, 0.25 * n)), maxCalls: n + 2 };
   const base = contrastTopics(read, read.length);
-  const topics = Array.from({ length: Math.min(n, Math.max(base.length, 1) * 3) }, (_, i) => base[i % base.length] ?? 'a piece on your usual subject');
-  console.log(`Asking the model for ${topics.length} drafts on your topics, half of them with your pieces as examples, to see its habits against yours…`);
+  const topics = Array.from({ length: Math.min(n, Math.max(base.length, 1) * 3 * Math.max(1, W * Lg)) }, (_, i) => base[i % base.length] ?? 'a piece on your usual subject');
+  // CROSSED, NOT CONFOUNDED: draft i is written by writer i mod W, at length (i div W) mod Lg, with the author's
+  // pieces pasted in on alternate blocks of W×Lg drafts. Keyed on i % 2 alone, one length (or one model) got
+  // every pasted draft, and a class or a family then measured prompting instead of itself.
+  const plan = draftPlan(topics.length, W, lengths);
+  const writerOf = (i: number): number => plan[i].writer;
+  const lengthOf = (i: number): number => plan[i].length;
+  const pastedOf = (i: number): boolean => plan[i].pasted;
+  console.log(`Asking ${W > 1 ? `${W} models` : 'the model'} for ${topics.length} drafts on your topics${Lg > 1 ? ` at ${Lg} lengths` : ''}, half of them with your pieces as examples, to see its habits against yours…`);
   // Room for the author's length: a fixed 4,000 tokens truncated every draft of a 2,400-word author, and
   // the whole comparison was lost. One draft that fails costs that draft, not the comparison.
   const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(Math.max(...lengths) * 2.2) + 500));
@@ -497,8 +509,8 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   const drafts = await mapLimit(topics.map((t, i) => ({ t, i })), Math.min(6, topics.length), async ({ t: topic, i }) => {
     try {
       const r = await spend(budget, 0.15, async () => {
-        const x = await writers[i % writers.length].client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
-          userMessage: `Write ${form.label} titled "${topic}". About ${lengths[Math.floor(i / writers.length) % lengths.length]} words. Output only the piece.${i % 2 ? examplesFor(i) : ''}`,
+        const x = await writers[writerOf(i)].client.complete({ stableBlock: 'You are a writer. Write the piece you are asked for.', variableBlock: '',
+          userMessage: `Write ${form.label} titled "${topic}". About ${lengthOf(i)} words. Output only the piece.${pastedOf(i) ? examplesFor(i) : ''}`,
           toolName: 'emit_piece', toolDescription: 'Emit the finished piece.',
           schema: { type: 'object', properties: { piece: { type: 'string' } }, required: ['piece'], additionalProperties: false }, maxTokens });
         return { value: x, cost: x.cost };
@@ -513,10 +525,20 @@ async function contrastDrafts(read: readonly { id: string; text: string }[], cor
   // WHO WROTE EACH DRAFT, AND ON WHOSE TOPIC. A detector trained against one model family is valid for that
   // family only, so the generator is recorded per draft; the piece whose title a draft took is its source,
   // so `atelier qualify` can hold a piece out with the drafts written on it.
-  const kept = drafts.flatMap((d, i) => (d.trim() ? [{ text: d, generator: writers[i % writers.length].binding.requestedModel, source: read[i % read.length]?.id ?? null }] : []));
+  const kept = drafts.flatMap((d, i) => (d.trim() ? [{ text: d, generator: writers[writerOf(i)].binding.requestedModel, source: read[i % read.length]?.id ?? null }] : []));
   const cache: ContrastCache = { corpusHash, key, drafts: kept.map((k) => k.text), meta: kept.map((k) => ({ generator: k.generator, source: k.source })) };
   writeAtomic(path, JSON.stringify(cache, null, 1));
   return contrastOf(cache);
+}
+
+/**
+ * THE CONTRAST DESIGN, CROSSED: draft i is written by writer i mod W, at length (i div W) mod L, with the
+ * author's pieces pasted in on alternate blocks of W×L drafts, so every writer and every length gets plain
+ * drafts and imitations alike.
+ */
+export function draftPlan(n: number, writers: number, lengths: readonly number[]): { writer: number; length: number; pasted: boolean }[] {
+  const W = Math.max(1, writers); const Lg = Math.max(1, lengths.length);
+  return Array.from({ length: n }, (_, i) => ({ writer: i % W, length: lengths[Math.floor(i / W) % Lg], pasted: Math.floor(i / (W * Lg)) % 2 === 1 }));
 }
 
 /**

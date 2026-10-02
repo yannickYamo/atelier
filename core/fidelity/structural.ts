@@ -21,7 +21,7 @@ import { spend } from '../inference/client.js';
 import { featureOf } from '../observers/features.js';
 import { spanIntegrity } from '../loop/integrity.js';
 import { readFidelity } from './profile.js';
-import { applyOperator, operatorsToward, sitesOf, type OperatorId } from './operators.js';
+import { applyOperator, operatorsToward, sitesOf, keepsWords, proseSentences, type OperatorId } from './operators.js';
 import type { FidelityProfile, FidelityReading } from './types.js';
 
 /** What one application did: the actuator, the target, the feature before and after, and whether it was kept. */
@@ -67,24 +67,14 @@ Hard limits:
 
 const SCHEMA = { type: 'object', properties: { sentence: { type: 'string' } }, required: ['sentence'], additionalProperties: false } as const;
 
-/** The sentences of a text in order, with where each starts. */
-function sentencesWithAt(text: string): { s: string; at: number }[] {
-  const out: { s: string; at: number }[] = [];
-  const re = /[^.!?\n]+[.!?]+["”')\]]?/g;
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    const s = m[0].trim();
-    if (s.split(/\s+/).length >= 4) out.push({ s, at: text.indexOf(s, m.index) });
-  }
-  return out;
-}
-
 /** The sentence that carries most of `feature`: the one whose removal lowers it most. Null when none lowers it. */
 export function carrier(text: string, feature: string): { s: string; at: number } | null {
   const f = featureOf(feature);
   const base = f?.measure(text) ?? null;
   if (!f || base === null) return null;
   let best: { s: string; at: number; drop: number } | null = null;
-  for (const x of sentencesWithAt(text)) {
+  // Prose sentences only, split the way the operators split: never a heading, a list, a quotation or code.
+  for (const x of proseSentences(text).filter((y) => y.s.split(/\s+/).length >= 4)) {
     const v = f.measure(text.slice(0, x.at) + text.slice(x.at + x.s.length));
     if (v !== null && base - v > (best?.drop ?? 0)) best = { ...x, drop: base - v };
   }
@@ -112,6 +102,8 @@ export interface SteerOutcome { readonly text: string; readonly reading: Fidelit
 export async function steerTowardRange(
   client: InferenceClient | null, budget: Budget | null, text: string, profile: FidelityProfile, limits: SteerBudget,
   breaksNothing: (before: string, after: string) => Promise<boolean>,
+  /** the cheaper check for operator candidates (deterministic rules only); `breaksNothing` when absent */
+  screen?: (before: string, after: string) => Promise<boolean>,
 ): Promise<SteerOutcome> {
   let current = text; let reading = readFidelity(text, profile);
   const applications: Application[] = [];
@@ -136,8 +128,12 @@ export async function steerTowardRange(
         if (next === null || next === current) continue;
         ops -= 1;
         const after = readFidelity(next, profile);
+        // THE WORDS FIRST. An operator re-punctuates; anything else it did is a defect, refused before it is weighed.
+        if (!keepsWords(current, next) || !spanIntegrity(current, next, new Set(['and']), false).ok) { record(op, target.id, reading, after, false, 'it changed the words, so it is refused'); continue; }
         if (!movedTarget(reading, after, target.id)) { record(op, target.id, reading, after, false, 'it did not bring the target closer without pushing another feature out'); continue; }
-        if (!(await breaksNothing(current, next))) { record(op, target.id, reading, after, false, 'it broke a rule of the standard'); continue; }
+        // Screened by the deterministic checks only: an operator keeps every word, so it cannot add a claim, and a
+        // model read of every candidate would spend the claim reader's budget on texts never delivered.
+        if (!(await (screen ?? breaksNothing)(current, next))) { record(op, target.id, reading, after, false, 'it broke a rule of the standard'); continue; }
         record(op, target.id, reading, after, true, `${target.id} moved toward the author's range`);
         current = next; reading = after; moved = true;
       }

@@ -8,7 +8,8 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${OUT:-$PWD/small-bench}"
-MODEL="${BENCH_MODEL:-claude-opus-4-8}"
+# A priced model, so every --cap binds (a model missing from providers/pricing.ts is metered at nothing).
+MODEL="${BENCH_MODEL:-claude-opus-5}"
 : "${ANTHROPIC_API_KEY:?the small bench needs ANTHROPIC_API_KEY}"
 mkdir -p "$OUT/proj" "$OUT/data"
 [ -d "$OUT/i-have-adhd" ] || git clone -q https://github.com/ayghri/i-have-adhd "$OUT/i-have-adhd"

@@ -110,10 +110,23 @@ function detectorFor(author: readonly { id: string; text: string }[], model: rea
   } catch { return null; }
 }
 
-/** The bands a text of class `cls` is read against: the class's own where it has them, pooled otherwise. */
+/**
+ * The bands a text of class `cls` is read against, feature by feature: the class's own band where it has one
+ * that qualified in its class (or where neither it nor the pooled one steers), and the pooled band otherwise.
+ * A class band that did not qualify must not hide a pooled band that did: with a few drafts per class, every
+ * class band was monitored and a text in that class was read against no steering band at all.
+ */
 export function bandsFor(profile: FidelityProfile, cls: ContextClass): { from: ContextClass | 'all'; bands: FeatureBand[] } {
-  const own = profile.bands.filter((b) => b.cls === cls);
-  return own.length ? { from: cls, bands: own } : { from: 'all', bands: profile.bands.filter((b) => b.cls === 'all') };
+  const pooled = profile.bands.filter((b) => b.cls === 'all');
+  const own = new Map(profile.bands.filter((b) => b.cls === cls).map((b) => [b.id, b]));
+  let usedOwn = false;
+  const bands = pooled.map((p) => {
+    const o = own.get(p.id);
+    if (o && (o.role !== 'MONITOR' || p.role === 'MONITOR')) { usedOwn = true; return o; }
+    return p;
+  });
+  for (const [id, o] of own) if (!pooled.some((p) => p.id === id)) { usedOwn = true; bands.push(o); }
+  return { from: usedOwn ? cls : 'all', bands };
 }
 
 /** Steering bands only: a MONITOR band is recorded, never counted for or against a draft. */

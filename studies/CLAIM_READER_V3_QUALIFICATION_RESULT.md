@@ -3,7 +3,7 @@
 Pre-registration: [CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md](CLAIM_READER_V3_QUALIFICATION_PREREGISTRATION.md),
 sealed in `9104992` and merged to `main` before any output. Instrument `a173339d` (reader `claude-haiku-4-5`,
 decision version 3) and harness sha256 `b36a546b…`, both checked unchanged before the run. Pieces: 30
-Lenny's Newsletter product essays no study had used; 25 TEST. Spent: $7.98 of the $8 cap.
+product essays from a public newsletter no study had used; 25 TEST. Spent: $7.98 of the $8 cap.
 
 ## Verdict: PASS
 

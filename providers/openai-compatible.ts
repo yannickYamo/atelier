@@ -271,7 +271,7 @@ export class OpenAICompatibleInferenceClient implements InferenceClient {
       ? lp.map((t) => ({ token: t.token, logprob: t.logprob,
           top: (t.top_logprobs ?? []).map((a) => ({ token: a.token, logprob: a.logprob })) }))
       : null;
-    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs, termination };
+    return { json, modelId: res.model ?? this.cfg.modelId, ...usage, cost, costUsd: budgetUsd(cost), logprobs, termination, temperatureSent: req.temperature ?? this.cfg.temperature ?? null };
   }
 
   private async post(body: unknown, maxTokens: number): Promise<ChatResponse> {

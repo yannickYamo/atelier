@@ -6,7 +6,7 @@
 
 import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
-import { refineToStandard, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
 import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
@@ -239,7 +239,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
-  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4)),
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0))),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
@@ -303,13 +304,21 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieve(fid.index, asked, runSettings.retrievalK * nDrafts) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
   // no release: credited to the release, it would make the settings search compare arms that never ran.
-  const overridden = flag('--drafts') !== undefined || flag('--edits') !== undefined || argv.includes('--no-repair') || argv.includes('--fidelity');
+  // Compared, not inferred from flags: `--fidelity` on a release that already runs the loop overrides nothing,
+  // and `--sections` changes what ran though it changes no setting.
+  const ran = runSettings ? { ...runSettings, drafts: nDrafts, editBudget } : null;
+  const rel = fid?.release.settings;
+  const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
+    || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
+    || Boolean(ran.diversity) !== Boolean(rel.diversity);
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
+  // What each draft call was given, by the index it was asked for; the record keeps only the calls that came back
+  // (selectDraft), with the temperature the provider was actually sent.
+  const retrievedFor: number[][] = [];
   const variantOf = (i: number): DraftVariant => {
     const mine = pool.filter((_, j) => j % nDrafts === i).slice(0, runSettings?.retrievalK ?? 0);
-    const temperature = DIVERSITY_TEMPERATURES[i % DIVERSITY_TEMPERATURES.length];
-    trace.variants[i] = { temperature, retrieved: mine };
-    return { temperature, stableExtra: mine.length && fid?.index ? `\n\n${renderRetrieved(fid.index, mine)}` : '' };
+    retrievedFor[i] = mine;
+    return { temperature: DIVERSITY_TEMPERATURES[i % DIVERSITY_TEMPERATURES.length], stableExtra: mine.length && fid?.index ? `\n\n${renderRetrieved(fid.index, mine)}` : '' };
   };
   // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
   const ledger = factLedger(materialText);
@@ -324,8 +333,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf } : {}) }), sectionWriter)
+    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -531,8 +540,9 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant }) {
-  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[]) => {
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][] }) {
+  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
+    if (c.variant && written) c.trace.variants = written.map((w) => ({ index: w.index, temperature: w.temperatureSent, retrieved: c.retrievedFor?.[w.index] ?? [] }));
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
     const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
     const profile = c.profile;
@@ -551,7 +561,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
 const OPERATOR_TRIES = 24;
 
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { temperature: number; retrieved: number[] }[]; plan?: SectionPlan }
+interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -572,6 +582,8 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
     const reader = e.checks.claimSensor;
     if (e.taste?.acts) { e.trace.edits.push({ target: '-', kept: false, why: 'not tried: the taste reader holds VETO on this skill, and an edit would change the text it read' }); return r; }
     if (reader?.degraded) { e.trace.edits.push({ target: '-', kept: false, why: 'not tried: the claim reader could not run, so a redraft could not be checked for invented claims' }); return r; }
+    // A profile built before the operators has no effect matrix: nothing tells an operator which way it moves.
+    if (!e.profile.effects) e.trace.edits.push({ target: '-', kept: false, why: 'no operators: this skill\'s profile predates them; rebuild the skill to measure their effects' });
     const breaksNothing = async (before: string, after: string): Promise<boolean> => {
       const b = await checkDraftAsync(e.name, e.std, before, e.checks);
       const a = await checkDraftAsync(e.name, e.std, after, e.checks);
@@ -581,15 +593,26 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
     let edited: Awaited<ReturnType<typeof steerTowardRange>>;
     // Deterministic operators are free and tried first, up to OPERATOR_TRIES; the edit budget is the number of
     // one-sentence model rewrites for over-articulation.
-    try { edited = await steerTowardRange(e.client, e.budget, r.output, e.profile, { operators: OPERATOR_TRIES, sentences: e.editBudget }, breaksNothing); } catch (err) {
+    // Operator candidates are screened by the deterministic checks (no claim reader); the final text is read in full below.
+    const screen = (before: string, after: string): Promise<boolean> => {
+      const offline = { ...e.checks, claimSensor: undefined };
+      return Promise.resolve(editKeepsStandard(checkDraft(e.name, e.std, before, offline), checkDraft(e.name, e.std, after, offline)));
+    };
+    try { edited = await steerTowardRange(e.client, e.budget, r.output, e.profile, { operators: OPERATOR_TRIES, sentences: e.editBudget }, breaksNothing, screen); } catch (err) {
       e.trace.edits.push({ target: '-', kept: false, why: `the structural edit could not run (${(err as Error).message.split('\n')[0]})` });
       return r;
     }
     e.trace.edits.push(...edited.applications);
     const keptN = edited.applications.filter((x) => x.kept).length;
     if (edited.text === r.output) return r;
-    // THE REPORT IS THE DELIVERED TEXT'S, as after every rewrite: recounted on the edited text.
+    // THE REPORT IS THE DELIVERED TEXT'S, as after every rewrite: recounted on the edited text, with the full
+    // checks (the claim reader included). If that full read finds anything worse than before the steering, the
+    // steering is undone: the operators were screened by the deterministic checks only.
     const final = await checkDraftAsync(e.name, e.std, edited.text, e.checks);
+    if (!editKeepsStandard(await checkDraftAsync(e.name, e.std, r.output, e.checks), final) || reader?.degraded) {
+      e.trace.edits.push({ target: '-', kept: false, why: 'the steered text, read in full, was worse than before it; the text before steering was delivered' });
+      return r;
+    }
     const stillListed = (r.repair?.claimsToCheck ?? []).filter((c) => edited.text.includes(c.slice(0, 60)));
     const toCheck = [...new Set([...stillListed, ...listedClaims(final)])];
     // The draft the model wrote is kept in the record whether or not a rule was repaired, so a comparison of
@@ -626,7 +649,9 @@ function writeBySections(c: { client: InferenceClient; budget: Budget; servedTex
     const p = await plan;
     if (!p) return spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, '', v);
     const parts: Written[] = [];
-    for (let k = 0; k < p.sections.length; k++) parts.push(await spendOneWithResult(c.client, c.budget, `${c.servedText}${sectionBlock(p, k)}`, c.task, null, '', v));
+    // The section instruction rides in the user message: the served skill stays one cacheable block across
+    // sections, and the task the record binds stays the task asked.
+    for (let k = 0; k < p.sections.length; k++) parts.push(await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, sectionBlock(p, k).trim(), v));
     return { ...parts[parts.length - 1], piece: joinSections(p, parts.map((x) => x.piece)) };
   };
 }
@@ -648,7 +673,7 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
     ...(trace.edits.length ? { edits: trace.edits } : {}),
     ...(retrieved.length ? { retrieved: [...retrieved] } : {}),
-    ...(trace.variants.length ? { variants: trace.variants.filter(Boolean) } : {}),
+    ...(trace.variants.length ? { variants: trace.variants } : {}),
     ...(trace.plan ? { plan: trace.plan.sections.map((x) => x.title) } : {}),
     ...(cov ? { coverage: { supplied: ledger.length, used: cov.used.length, per100: cov.per100, authorPer100: fid.profile.factDensity ?? null } } : {}),
     applicability,

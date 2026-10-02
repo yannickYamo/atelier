@@ -104,14 +104,17 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   // makes opt-in. Where nobody chose those settings (no release in its line was set by hand or by the settings
   // search), the active skill moves to 1.0's default through a child release that says why; a setting a person
   // chose is never touched.
-  if (wasLoopByDefault(L, active) && store.getActive(L) === sv.skillVersionHash) {
+  const isActiveSkill = store.getActive(L) === sv.skillVersionHash;
+  if (wasLoopByDefault(L, active) && isActiveSkill) {
     release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id,
       settings: { ...DEFAULT_SETTINGS, retrievalK: active.settings.retrievalK }, createdAt: new Date().toISOString(),
       why: 'moved to the 1.0 default: the fidelity loop is opt-in until a study shows it pays (decision 0007)' }));
     fstore.setActiveRelease(L, release.id);
   }
   if (release.skillVersionHash !== sv.skillVersionHash) {
-    release = fstore.putRelease(L, makeRelease({ ...withoutId(release), parent: release.id, skillVersionHash: sv.skillVersionHash,
+    // A candidate carried from 0.8's automatic loop settings runs at 1.0's default too.
+    const carried = !isActiveSkill && wasLoopByDefault(L, release) ? { ...DEFAULT_SETTINGS, retrievalK: release.settings.retrievalK } : release.settings;
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(release), settings: carried, parent: release.id, skillVersionHash: sv.skillVersionHash,
       createdAt: new Date().toISOString(), why: `carried to skill version ${sv.skillVersionHash}` }));
     // A CANDIDATE RUN STEERS, IT DOES NOT ADOPT. Trying a version that is not active (`invoke --candidate`)
     // runs under a release made for it, and leaves the active release where it was.
@@ -126,6 +129,8 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
 function wasLoopByDefault(L: store.StoreLayout, r: ImplementationRelease): boolean {
   const s = r.settings;
   if (!(s.drafts === 4 && s.editBudget === 2 && s.notesCap === 6 && !s.diversity && r.notes.length === 0)) return false;
+  // A release a person rolled back to is a choice, however its settings look.
+  if (fstore.getActiveRelease(L)?.release.id === r.id && fstore.activeSetBy(L) === 'rollback') return false;
   return !fstore.releaseChain(L, r.id).some((x) => /^(settings set by hand|the settings search)/.test(x.why));
 }
 

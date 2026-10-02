@@ -65,5 +65,5 @@ With a writer this strong, the deep layers do not come out as rates a small mode
 
 ## Record
 
-Result file: `~/atelier-sensors/result/result.json`, sha256 prefix `56a4ebf0735b8140`. It holds every draft,
+Result file: `<a local folder>`, sha256 prefix `56a4ebf0735b8140`. It holds every draft,
 reading and verdict.

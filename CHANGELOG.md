@@ -21,12 +21,22 @@ here is compared with an optimizer yet; the kit to do it is.
   on, no notes (decision 0007). `invoke --fidelity` runs the full loop for one request;
   `atelier fidelity --set drafts=4,editBudget=2,notesCap=6,diversity=on` makes it a skill's default. A run
   whose flags override its release is recorded with no release, so it is never that release's evidence.
-- **Experience notes follow a grammar, not a denylist.** A note names one measured feature, one operation from
-  a closed list (split, joined, shortened, lengthened, merged, broke, used, dropped) and how. "Open with a
-  question." is refused: it would be a rule the owner never ratified.
+- **Experience notes follow a grammar, not a denylist.** A note names one measured feature the compared drafts
+  differed on, one operation from a closed list (split, joined, shortened, lengthened, merged, broke, used,
+  dropped), and how, in one clause about construction (sentences, paragraphs, clauses, connectives, supplied
+  facts). "Open with a question." and "used a question to open each piece" are refused: each would be a rule the
+  owner never ratified.
 - **A length-class band steers only on its own evidence.** It must pass selection on that class's own pieces,
   held-back pieces and model drafts; otherwise it is monitored. Discovery writes its drafts at the median length
   of every class the author has a band for.
+
+- **A 0.8 skill moves to the 1.0 default on its next run**, through a child release that says why, when nobody
+  chose its loop settings (no release in its line was set by hand or by the search, and it was not rolled back to).
+  A candidate carried from those settings runs at the default too.
+- **A length-class band that did not qualify never hides a pooled band that did**: a text is read against the
+  class's own band where it qualified and the pooled one otherwise.
+- **Discovery's drafts are crossed, not confounded**: every model and every length gets plain drafts and
+  imitations alike, and there are at least eight per length class.
 
 ### Added: actuators for the implicit layer
 
@@ -35,11 +45,18 @@ here is compared with an optimizer yet; the kit to do it is.
   words already there. At discovery each is applied to the model's own drafts and its effect on every feature
   is measured (the effect matrix); at invoke only an operator known to move the furthest-out feature toward the
   author's range is tried, and a change is kept only if it did and nothing else left its band. No model call.
+- **What an operator may touch.** Prose paragraphs only (never a list, heading, quotation, table, code, or a
+  hard-wrapped paragraph); inline code, links, URLs and entities are masked; an abbreviation ("Mr.", "e.g.") does
+  not end a sentence; a list is never split at its "and", nor a sentence at "so that"; a join never lower-cases
+  a word that might be a name. Every application must keep the words (one "and" aside) and pass the integrity
+  guard, and is screened by the deterministic checks; the delivered text is read in full once, and the steering
+  is undone if that read finds anything worse.
 - **A one-sentence rewrite for over-explaining** ("than", "that's", explanatory and contrastive connectives),
   which no re-punctuation reaches: the sentence that carries most of it is rewritten as a plain assertion under
   the span integrity guard every repair passes. These replace 0.8's whole-text redraft.
 - **Drafts that differ.** With the loop on, each draft is written at its own temperature (0.7, 0.9, 1.0) with
-  its own slice of the author's closest passages, so selection has variation to choose from. Recorded per draft.
+  its own slice of the author's closest passages, so selection has variation to choose from. Recorded per draft
+  that came back, with the temperature the provider was actually sent (none, for a model that refuses one).
 - **Long form by section** (`invoke --sections`): one plan, each section written with the whole standard, joined,
   then checked and steered as one piece. The plan is recorded.
 - **Several model families at discovery** (`--contrast-models a,b`), so the detector is trained against, and
@@ -593,7 +610,7 @@ the owner's go-ahead for about $5 (cap $8).
 - **The harness now tests what changed.** The sealed version is `a173339d` and the seed
   `claim-reader-v3-2026-09-29`. Excerpts keep their headings (39 of the 50 TEST excerpts carry one), and
   two plant kinds put the invention in a heading or a table.
-- **Corpus:** 30 Lenny's Newsletter product essays no study has used. How they were drawn was not
+- **Corpus:** 30 product essays from a public newsletter no study has used. How they were drawn was not
   recorded, so the exact set is sealed by hash instead.
 - Same floors: specificity ≥ 0.80, sensitivity ≥ 0.50.
 
