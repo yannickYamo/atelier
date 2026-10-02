@@ -4,10 +4,14 @@
 
 ## Now
 
-- **Voice at scale.** Blind tests on rewrites put Atelier first. The next study writes new pieces, not
-  rewrites, from a public corpus: Atelier against a plain prompt and against the essays pasted into the
-  prompt, same model, read blind by three people, with the pass rule sealed before any output
-  ([pre-registration](../studies/VOICE_STUDY_PREREGISTRATION.md)).
+Both items are tests, not features, and each result is published whichever way it comes out.
+
+- **Voice, read blind by people.** An independent reviewer runs the sealed study
+  ([B6](../studies/B6_PREREGISTRATION.md)) on their own corpora: plain prompting, pasted examples, and
+  Atelier with and without the loop. Until it is in, voice is not claimed.
+- **A head-to-head with GEPA and SkillOpt.** The same tasks, writer and budget for every arm, a sealed test
+  split, and two scores: the benchmark's own judge and Atelier's standard. The kit is in
+  [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare).
 
 ## Next
 
@@ -17,11 +21,11 @@
 
 ## Later
 
+- **Other domains, measured.** Contracts, financial reports and support replies run today and have been
+  only partly measured. The study is drafted in
+  [CROSS_DOMAIN_PREREGISTRATION](../studies/CROSS_DOMAIN_PREREGISTRATION.md).
 - **Search under a fixed standard**, designed in [decision 0004](decisions/0004-search-under-a-fixed-standard.md):
   GEPA-class search over how rules are carried, with a judge checked against people before it is trusted.
-  It needs the outside readers first.
-- **A head-to-head with GEPA** on a shared task, reported whichever way it comes out.
-- **Support replies** (respond mode): the machinery exists, with no evidence yet.
 
 ## Not doing
 
@@ -29,5 +33,4 @@
   ([0001](decisions/0001-standard-apart-from-implementation.md)).
 - **A judge that can promote a change on its own.** Judges may block, never approve
   ([0003](decisions/0003-authority-by-measurement.md)).
-- **Contract drafting as a use case.** The machinery supports it; nothing has validated it.
 - **A hosted service.** It runs locally, with no account and no telemetry.
