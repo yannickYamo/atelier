@@ -147,7 +147,16 @@ export interface ImplementationSettings {
   /** experience notes served (0: off) */
   readonly notesCap: number;
   readonly temperature?: number;
+  /**
+   * DRAFTS THAT DIFFER. Four drafts from one prompt barely differ on rhythm and pace (B6: four drafts 0.733 in
+   * range, two 0.738), so selection had nothing to choose from. With this on, draft i is written at
+   * DIVERSITY_TEMPERATURES[i] (cycled) and with its own slice of the retrieved passages.
+   */
+  readonly diversity?: boolean;
 }
+
+/** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
+export const DIVERSITY_TEMPERATURES: readonly number[] = [0.7, 0.9, 1.0];
 
 /**
  * THE DEFAULT IS 0.7'S COST. B6 ran the full loop against 0.7's settings and it did not move the author's range
@@ -158,7 +167,7 @@ export interface ImplementationSettings {
 export const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 2, editBudget: 0, retrievalK: 3, notesCap: 0 };
 
 /** The full loop, opt-in: `invoke --fidelity`, or `atelier fidelity --set drafts=4,editBudget=2,notesCap=6`. */
-export const LOOP_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 };
+export const LOOP_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6, diversity: true };
 
 /**
  * AN IMPLEMENTATION RELEASE: everything below the standard that shaped an output, frozen and hashed.
@@ -201,6 +210,8 @@ export interface FidelityRecord {
     readonly actuator?: string; readonly before?: number | null; readonly after?: number | null }[];
   /** the passages retrieved for this request, by index into the author's passages */
   readonly retrieved?: readonly number[];
+  /** per draft, when drafts were made to differ: the temperature it was written at and the passages it was given */
+  readonly variants?: readonly { readonly temperature: number; readonly retrieved: readonly number[] }[];
   /** how many of the facts the request and the bound material supplied the output used, and its density per 100 words */
   readonly coverage?: { readonly supplied: number; readonly used: number; readonly per100: number; readonly authorPer100: number | null };
   /** each requirement: applied to this output, not applicable to it, or waived with the reason */

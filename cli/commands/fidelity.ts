@@ -159,19 +159,25 @@ async function distill(L: store.StoreLayout, from: NonNullable<ReturnType<typeof
 }
 
 function parseSettings(spec: string, base: ImplementationSettings): ImplementationSettings {
-  const out: Record<string, number> = { ...base };
+  const counts: Record<string, number> = { drafts: base.drafts, editBudget: base.editBudget, retrievalK: base.retrievalK, notesCap: base.notesCap };
+  let diversity = base.diversity ?? false;
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
-    if (!['drafts', 'editBudget', 'retrievalK', 'notesCap'].includes(k)) die(`unknown setting "${k}": drafts, editBudget, retrievalK or notesCap.`);
+    if (k === 'diversity') {
+      if (!['0', '1', 'on', 'off', 'true', 'false'].includes(v)) die(`"diversity" is on or off, got "${v}".`);
+      diversity = ['1', 'on', 'true'].includes(v);
+      continue;
+    }
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap or diversity.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
-    out[k] = Math.floor(n);
+    counts[k] = Math.floor(n);
   }
-  if (out.drafts < 1) die('drafts must be at least 1.');
-  return out as unknown as ImplementationSettings;
+  if (counts.drafts < 1) die('drafts must be at least 1.');
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>
-  `${s.drafts} draft(s), ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.temperature !== undefined ? `, temperature ${s.temperature}` : ''}`;
+  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served`;
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));

@@ -13,9 +13,11 @@ import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
-import { LOOP_SETTINGS, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
+import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
+import { retrieve, renderRetrieved } from '../../core/fidelity/retrieval.js';
+import type { DraftVariant } from './improve.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -291,11 +293,21 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   }
   const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}) };
-  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: runSettings }, fid.index, asked) : { text: '', retrieved: [] };
+  // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
+  // the author's closest passages, so the shared block carries only the notes.
+  const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
+  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked) : { text: '', retrieved: [] };
+  const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieve(fid.index, asked, runSettings.retrievalK * nDrafts) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
   // no release: credited to the release, it would make the settings search compare arms that never ran.
   const overridden = flag('--drafts') !== undefined || flag('--edits') !== undefined || argv.includes('--no-repair') || argv.includes('--fidelity');
-  const trace: FidelityTrace = { drafts: [], edits: [] };
+  const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
+  const variantOf = (i: number): DraftVariant => {
+    const mine = pool.filter((_, j) => j % nDrafts === i).slice(0, runSettings?.retrievalK ?? 0);
+    const temperature = DIVERSITY_TEMPERATURES[i % DIVERSITY_TEMPERATURES.length];
+    trace.variants[i] = { temperature, retrieved: mine };
+    return { temperature, stableExtra: mine.length && fid?.index ? `\n\n${renderRetrieved(fid.index, mine)}` : '' };
+  };
   // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
   const ledger = factLedger(materialText);
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}`;
@@ -306,7 +318,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
-    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger }) : null,
+    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf } : {}) }) : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
@@ -511,8 +523,8 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[] }) {
-  return { n: c.n, choose: async (drafts: readonly string[]) => {
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant }) {
+  return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[]) => {
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
     const reports = await Promise.all(drafts.map((d) => checkDraftAsync(c.name, c.std, d, c.checks)));
     const profile = c.profile;
@@ -531,7 +543,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
 const OPERATOR_TRIES = 24;
 
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[] }
+interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { temperature: number; retrieved: number[] }[] }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -604,6 +616,7 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
     ...(trace.edits.length ? { edits: trace.edits } : {}),
     ...(retrieved.length ? { retrieved: [...retrieved] } : {}),
+    ...(trace.variants.length ? { variants: trace.variants.filter(Boolean) } : {}),
     ...(cov ? { coverage: { supplied: ledger.length, used: cov.used.length, per100: cov.per100, authorPer100: fid.profile.factDensity ?? null } } : {}),
     applicability,
   };

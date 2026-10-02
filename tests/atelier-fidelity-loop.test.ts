@@ -317,6 +317,8 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const invDir = join(data, 'skills', 'posts', 'invocations');
     const rec = JSON.parse(readFileSync(join(invDir, readdirSync(invDir).find((f) => f.endsWith('.json'))!), 'utf8')) as { fidelity: { drafts: FidelityReading[]; reading: FidelityReading } };
     expect(rec.fidelity.drafts).toHaveLength(4);
+    // --fidelity makes the drafts differ: each its own temperature, recorded
+    expect((rec.fidelity as { variants?: { temperature: number }[] }).variants?.map((v) => v.temperature)).toEqual([0.7, 0.9, 1.0, 0.7]);
     // the steering never leaves the delivered text further from the range than the draft it chose
     const by = (r: FidelityReading): number => r.outside.reduce((n, o) => n + o.distance, 0);
     expect(by(rec.fidelity.reading)).toBeLessThanOrEqual(Math.max(...rec.fidelity.drafts.map(by)));
