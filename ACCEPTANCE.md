@@ -80,6 +80,7 @@ npm run acceptance:carriers -- --host codex
 | C61 | the register is declared | `--register` or a document type named in the request decides; a request naming none is taken to be in register and recorded as assumed; the lexical distance is recorded and never decides |
 | C62 | a voice rewrite changes no fact | a paragraph that loses or adds a figure, name or date, drops a qualifier, adds a negation, lifts 12 words of the author's or leaves the length band is refused whole and the content paragraph kept; one that changes only phrasing is kept |
 | C63 | the voice layer is off until asked for | no policy, no gate: `DEFAULT_SETTINGS` carries no voice mode, and a release without one hashes as it did in 1.0 |
+| C64 | setup adds and never replaces | `atelier setup` adds one server entry to each agent's config and keeps every other key; an unparsable config is left alone and named; an existing `atelier` entry is kept (`tests/atelier-setup.test.ts`) |
 | C59 | an answer does the work it can | the compiled answer line forbids handing back what the agent could find, and allows asking only for a decision that is the person's (`tests/atelier-fix-first.test.ts`) |
 | C60 | invoke for a script | `--answer-only` prints the answer alone and `--json` one record of the run, with the report on stderr (`tests/atelier-fix-loop.test.ts`) |
 | C61 | a release is measured before it ships | `bench/` reproduces each number in the CHANGELOG from its files in `bench/runs/<version>/`, side by side with the previous release (decision 0006) |

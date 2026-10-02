@@ -12,6 +12,13 @@ standard. It installs the skill for Claude Code (`.claude/skills/<name>/`) or Co
 ## Set it up
 
 ```bash
+npm install -g @yannickyamo/atelier   # puts `atelier` on PATH
+atelier setup                         # adds the Atelier MCP server to the coding agents in this project
+```
+
+From source instead:
+
+```bash
 git clone https://github.com/yannickYamo/atelier && cd atelier
 npm install && npm run build
 npm link            # optional: puts `atelier` on PATH; otherwise use `node dist/cli/atelier.mjs`
@@ -38,7 +45,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 | their real stories and figures used | `atelier material --skill <name> <notes.md>`: anything invented is otherwise cut |
 | to correct the skill | `atelier fix "<what was wrong, in their words>"` |
 | to see where a skill stands | `atelier status --skill <name>` |
-| an agent to check its own output | `atelier mcp` is an MCP server with `atelier_verify`, `atelier_rules`, `atelier_list_skills` |
+| an agent to check its own output | `atelier setup` adds the MCP server (`atelier mcp`: `atelier_verify`, `atelier_rules`, `atelier_list_skills`, `atelier_skill_report`) to the agents in the project; `--dry-run` shows what it would write |
 | whether a run can ship, and why | `atelier report <run>` (the evaluation and the trace); ask the person, then `atelier rate <run> yes "why"` (or `no`); `atelier eval --skill <name>` over runs |
 | where outputs sit against the author's range, and the releases that steer them | `atelier fidelity --skill <name>` (`--read <file>` for one text, `--rollback` to undo a release) |
 | whether the skill's detector and steering features hold on texts they never saw | `atelier qualify --skill <name>` (topic labels in each piece's front matter, or `--topics <file>`) |

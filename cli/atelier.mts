@@ -34,6 +34,7 @@ import { report as reportRun, rate } from './commands/report.js';
 import { evaluate } from './commands/eval.js';
 import { qualify } from './commands/qualify.js';
 import { voice } from './commands/voice.js';
+import { setup } from './commands/setup.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
@@ -109,6 +110,7 @@ export const COMMANDS: readonly string[] = [
   'eval',
   'qualify',
   'voice',
+  'setup',
   'tells',
   'optimize',
   'judgements',
@@ -165,6 +167,7 @@ const main = async (): Promise<void> => {
     case 'eval': { evaluate(); return; }
     case 'qualify': { qualify(); return; }
     case 'voice': { await voice(); return; }
+    case 'setup': { setup(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
     case 'study': { study(); return; }
@@ -258,6 +261,7 @@ const main = async (): Promise<void> => {
       console.log('  atelier fix "<what was wrong>"               correct it in your own words');
       console.log('  atelier status --skill <name>                where it stands');
       console.log('');
+      console.log('  first time here: atelier setup   (gives your coding agents the Atelier MCP server)');
       console.log('  look after it: taste --skill <name> --calibrate · floor --skill <name> · tend --skill <name> --auto');
       console.log('  atelier <command> --help explains any command.');
       console.log(`  every command: ${known}`);

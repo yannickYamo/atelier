@@ -126,9 +126,13 @@ I haven't run Atelier head to head against GEPA or SkillOpt yet. The kit to do i
 ## Install
 
 ```bash
-git clone https://github.com/yannickYamo/atelier
-cd atelier && npm install && npm run build && npm link
+npm install -g @yannickyamo/atelier      # puts `atelier` on your PATH
+atelier setup                            # gives the coding agents in this project the Atelier MCP server
 ```
+
+Or with nothing installed: `npx @yannickyamo/atelier setup`. It finds Claude Code, Cursor, VS Code and Codex,
+adds one entry to each agent's config, and never replaces what is there. From source:
+`git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link`.
 
 Node 22 or later. In Claude Code: `/plugin marketplace add yannickYamo/atelier`, then
 `/plugin install atelier@atelier`. For any agent that reads skills, `npx skills add yannickYamo/atelier`

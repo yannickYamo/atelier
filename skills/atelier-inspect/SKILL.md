@@ -11,6 +11,8 @@ Atelier's guarantees are enforced by the `atelier` command, not by these instruc
 `atelier --version` first. If it fails, stop, do not improvise the steps, and tell the user to install it:
 
 ```bash
+npm install -g @yannickyamo/atelier
+# or from source:
 git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link
 ```
 
