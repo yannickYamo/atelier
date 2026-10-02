@@ -191,6 +191,12 @@ export interface InferenceResult {
    */
   readonly termination: InferenceTermination;
   /**
+   * The temperature this call was actually sent with, or null when none was (the provider default, or a model
+   * that refuses one). Recorded by a caller that varies temperature, so a record never claims a temperature the
+   * provider did not receive. Absent from a provider that does not say.
+   */
+  readonly temperatureSent?: number | null;
+  /**
    * The model the PROVIDER says answered, not the one we asked for. An alias resolves server-side,
    * and a binding that recorded the request would be recording our intent rather than what ran.
    */

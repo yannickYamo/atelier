@@ -229,18 +229,40 @@ function countOf(items: readonly QualifyItem[], idx: readonly number[]): { autho
   return { author: idx.length - model, model };
 }
 
+/** Whether an item carries a real topic label: present, not blank, and not the placeholder for a missing one. */
+export const hasTopic = (it: QualifyItem): boolean => typeof it.topic === 'string' && it.topic.trim() !== '' && it.topic !== '(none)';
+
 /**
  * Run every hold-out the data supports. One with fewer than 2 distinct values is skipped with the reason.
  * Qualifies only when at least one hold-out ran and every one that ran passes.
+ *
+ * `requireTopics`: the topic hold-out asks whether a sensor reads style or subject, and a text without a
+ * real topic label makes it measure something else (a missing topic is its own value, '(none)', which then
+ * groups every unlabelled text together). With it set, the topic hold-out runs only when every item has a
+ * real topic; otherwise it is NOT RUN (missing labels), and a sensor whose topic hold-out did not run
+ * cannot qualify.
  */
-export function qualifyAll(items: readonly QualifyItem[], sensor: Sensor, opts: { resamples?: number; seed?: number } = {}): QualifyResult {
+export function qualifyAll(items: readonly QualifyItem[], sensor: Sensor, opts: { resamples?: number; seed?: number; requireTopics?: boolean } = {}): QualifyResult {
   const results: HeldOutResult[] = []; const skipped: { holdOut: HoldOut; why: string }[] = [];
+  let topicMissing = false;
   for (const h of HOLD_OUTS) {
+    if (h === 'topic' && opts.requireTopics) {
+      const unlabelled = items.filter((it) => !hasTopic(it)).length;
+      if (unlabelled) {
+        topicMissing = true;
+        skipped.push({ holdOut: h, why: `NOT RUN (missing labels): ${unlabelled} of ${items.length} text(s) have no topic label` });
+        continue;
+      }
+    }
     const n = distinct(items, h);
-    if (n < 2) { skipped.push({ holdOut: h, why: `only ${n} distinct ${h}${n === 1 ? '' : 's'}; a hold-out needs at least 2` }); continue; }
+    if (n < 2) {
+      if (h === 'topic' && opts.requireTopics) topicMissing = true;
+      skipped.push({ holdOut: h, why: `only ${n} distinct ${h}${n === 1 ? '' : 's'}; a hold-out needs at least 2` });
+      continue;
+    }
     results.push(heldOutAuc(items, sensor, h, opts));
   }
-  return { results, skipped, passes: results.length > 0 && results.every((r) => r.passes), bars: QUALIFY_BARS };
+  return { results, skipped, passes: !topicMissing && results.length > 0 && results.every((r) => r.passes), bars: QUALIFY_BARS };
 }
 
 /**

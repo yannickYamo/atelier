@@ -157,11 +157,6 @@ const PARKED: Readonly<Record<string, string>> = {
     'DELIBERATELY DARK — FROZEN NEGATIVE EVIDENCE, same campaign as veto-contract. It has no test '
     + 'because it is a record rather than a component: testing an instrument whose construct was not '
     + 'established would assert behaviour nobody is entitled to rely on.',
-  'core/fidelity/qualify.ts':
-    'The bars a sensor must clear before it may steer (source, topic and generator held out; pooled AUC '
-    + 'with a seeded bootstrap interval). Run by bench/fidelity/qualify.mjs, deliberately reachable from no '
-    + 'CLI verb for the same reason as core/stats/sign-test.ts: a user command that computes qualification '
-    + 'statistics is an invitation to peeking.',
   'core/coverage/abstraction-check.ts':
     'A verdict type and an authority constant with no producer. The live coverage path reports weak '
     + 'support and blind spots without it. It is the smallest thing here and the least load-bearing.',
@@ -294,11 +289,6 @@ const PARKED_VALUES: Readonly<Record<string, string>> = {
     + 'no bundle to evaluate. This is the function a reader is most likely to mistake for wired.',
   'core/distinctiveness/floor.ts:explainFloor':
     'The one line a person reads from a floor result. Nothing produces a floor result to explain.',
-  'core/state/store.ts:getEvidence':
-    'The reader half of putEvidence. Evidence is written at build and never read back through the '
-    + 'store: the CLI carries it in the session instead. The asymmetry is the finding, and this is '
-    + 'listed rather than deleted because the store is a public surface and a write with no read is '
-    + 'the shape a later reader will need.',
   'core/measurement/longitudinal.ts:evidenceAcross':
     'Every requirement worst-evidenced first. The controller reads evidence one requirement at a '
     + 'time; the whole-standard view has no caller.',

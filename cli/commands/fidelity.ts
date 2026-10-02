@@ -25,6 +25,7 @@ import { DEFAULT_SETTINGS, type ImplementationSettings } from '../../core/fideli
 import type { Budget } from '../../core/inference/client.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { releaseWithSettings } from '../fidelity.js';
+import { familiesOf } from './qualify.js';
 import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding } from '../runtime.js';
 
 export async function fidelity(): Promise<void> {
@@ -72,7 +73,7 @@ function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.get
     const out = r.outside.find((o) => o.id === b.id);
     console.log(`  ${out ? (out.direction === 'high' ? 'HIGH' : 'LOW ') : 'ok  '}  ${featureOf(b.id)?.label ?? b.id}: ${round(v)} (yours ${round(b.band[0])} to ${round(b.band[1])})`);
   }
-  if (r.detector) console.log(`Style detector ${r.detector.version}: P(model-written) ${r.detector.p}. A monitor, never a requirement.`);
+  if (r.detector) console.log(`Style detector ${r.detector.version}: P(model-written) ${r.detector.p}. A monitor, never a requirement; valid for: ${familiesOf(profile)}.`);
 }
 
 /** The status page: the profile, drift alarms per feature, the releases and how each did, the next settings to try. */
@@ -89,9 +90,15 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
   for (const [layer, x] of byLayer) console.log(`  ${layer}: ${x.steer} steer, ${x.all - x.steer} monitored`);
   const classes = [...new Set(profile.bands.map((b) => b.cls).filter((c) => c !== 'all'))];
   if (classes.length) console.log(`  bands of their own for: ${classes.join(', ')} pieces (the rest read against the pooled range)`);
+  if (!profile.effects) console.log('  no operator effects measured: this profile predates them, so --fidelity runs no operators. Rebuild the skill to measure them.');
   if (profile.detector) {
     const w = topWeights(profile.detector, 5);
     console.log(`Style detector ${profile.detector.version} (a monitor): cross-validated AUC ${profile.detector.cvAuc ?? 'not computed'}; the model leans on ${w.model.map((x) => x.feature.replace(/^[wc]:/, '')).join(', ')}.`);
+    // A detector does not carry across model families: it is valid only for the ones it was trained against.
+    console.log(`  valid for: ${familiesOf(profile)}`);
+    const q = fstore.getQualification(L, profile.hash);
+    console.log(q ? `  qualified: ${q.instruments.filter((x) => x.result.passes).length} of ${q.instruments.length} instrument(s) hold out of sample (${q.measuredAt.slice(0, 10)})`
+      : `  not qualified yet: atelier qualify --skill ${L.skillName}`);
   }
   console.log(`\nActive implementation release ${active.id}: ${describeSettings(active.settings)}; ${active.notes.length} experience note(s); ${active.why}.`);
   console.log(`\n${records.length} output(s) recorded with a reading.`);
@@ -153,19 +160,25 @@ async function distill(L: store.StoreLayout, from: NonNullable<ReturnType<typeof
 }
 
 function parseSettings(spec: string, base: ImplementationSettings): ImplementationSettings {
-  const out: Record<string, number> = { ...base };
+  const counts: Record<string, number> = { drafts: base.drafts, editBudget: base.editBudget, retrievalK: base.retrievalK, notesCap: base.notesCap };
+  let diversity = base.diversity ?? false;
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
-    if (!['drafts', 'editBudget', 'retrievalK', 'notesCap'].includes(k)) die(`unknown setting "${k}": drafts, editBudget, retrievalK or notesCap.`);
+    if (k === 'diversity') {
+      if (!['0', '1', 'on', 'off', 'true', 'false'].includes(v)) die(`"diversity" is on or off, got "${v}".`);
+      diversity = ['1', 'on', 'true'].includes(v);
+      continue;
+    }
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap or diversity.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
-    out[k] = Math.floor(n);
+    counts[k] = Math.floor(n);
   }
-  if (out.drafts < 1) die('drafts must be at least 1.');
-  return out as unknown as ImplementationSettings;
+  if (counts.drafts < 1) die('drafts must be at least 1.');
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>
-  `${s.drafts} draft(s), ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.temperature !== undefined ? `, temperature ${s.temperature}` : ''}`;
+  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served`;
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));

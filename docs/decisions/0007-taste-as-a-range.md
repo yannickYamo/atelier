@@ -49,3 +49,21 @@ the generation cost of 0.7, which decision 0006 would block without evidence. B6
 `atelier fidelity --skill <name> --set drafts=2,editBudget=0` returns any skill to 0.7's cost. A skill too
 short to steer starts at 0.7's settings. Layers no count reaches (argument, stance, content) are left to the
 owner's reading, with the outputs worth reading chosen by the counts.
+
+## Amended 2026-10-02, for 1.0.0, after B6
+
+B6 ran the loop as decided above against 0.7's settings. It did not move the author's range: 20 whole-text
+redrafts tried, none kept; in range 0.733 against 0.738; at 3.3 times the cost. So:
+
+- **The loop is opt-in, pending evidence.** The default release is 0.7's: two drafts, no edits, retrieval on, no
+  notes. `invoke --fidelity` or a release with the loop's settings turns it on.
+- **The whole-text redraft (point 3) is replaced** by deterministic operators chosen by their measured effect on
+  the model's own drafts (an offline probe showed naive splitting moves the short-sentence percentile and the
+  variation the wrong way), and by a one-sentence rewrite for over-articulation. Each change is still kept only
+  if its target moved and nothing else left its band, and the standard broke nothing.
+- **Drafts are made to differ** when the loop runs (a temperature and a slice of the passages each): four drafts
+  from one prompt gave selection nothing to choose from.
+- **A length-class band must qualify in its own class**, and experience notes follow a grammar that names a
+  measured feature and a construction operation, so a note cannot carry an unratified rule.
+
+Whether any of this moves the implicit layer is for the next study to say. Until one does, voice is not claimed.

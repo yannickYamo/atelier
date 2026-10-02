@@ -8,9 +8,12 @@ import { buildRetrievalIndex, retrieve, renderRetrieved, MIN_PASSAGE_WORDS } fro
 import { comparisonPairs, distillPrompt, parseNotes, noteProblem, distillNotes, renderNotes, MIN_IN_BAND_GAP, MAX_NOTES, type ExperienceSource } from '../core/fidelity/experience.js';
 import { makeRelease, assertSameStandard, nextSettings, MIN_SAMPLES, StandardMoved, type ReleaseOutcome } from '../core/fidelity/release.js';
 import * as fstore from '../core/state/fidelity-store.js';
-import { DEFAULT_SETTINGS, type FeatureBand, type FidelityReading, type FidelityProfile, type ImplementationSettings } from '../core/fidelity/types.js';
+import { type FeatureBand, type FidelityReading, type FidelityProfile, type ImplementationSettings } from '../core/fidelity/types.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
 import { anInferenceResult } from './fixtures.js';
+
+// The release fixtures' settings, frozen: their pinned ids depend on these exact values.
+const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 };
 
 // ── estimator ─────────────────────────────────────────────────────────────────────────────────
 
@@ -144,25 +147,31 @@ describe('experience notes', () => {
     expect(distillPrompt(pairs, 4)).toContain('<winner>\ndraft 0 of r1');
   });
 
-  it('refuses digits, names, rule language and long notes; keeps construction notes once each', () => {
-    expect(noteProblem('Winners broke the argument into short paragraphs, each turning on one concrete detail from the material.')).toBeNull();
-    expect(noteProblem('Winners used 3 short paragraphs.')).toMatch(/digit/);
-    expect(noteProblem('Winners quoted Smith early on.')).toMatch(/names/);
-    expect(noteProblem('Winners always end on a short sentence.')).toMatch(/rule/);
-    expect(noteProblem('You must vary sentence length.')).toMatch(/rule/);
-    expect(noteProblem(Array.from({ length: 33 }, () => 'word').join(' '))).toMatch(/words/);
-    const pairs = comparisonPairs([record('r1', [7, 4], [[], ['para.words']])]);
+  it('a note is a measured feature, an operation from a closed list, and how; anything else is refused', () => {
+    expect(noteProblem('paragraphP50: broke the argument into short paragraphs, each on one detail from the material')).toBeNull();
+    expect(noteProblem('Open with a question.')).toMatch(/not of the form/);          // a new rule, never ratified
+    expect(noteProblem('sentenceP10: Start every paragraph short')).toMatch(/not of the form|operation/);
+    expect(noteProblem('sentenceP10: wrote varied sentences')).toMatch(/not one of the operations/);
+    expect(noteProblem('madeUp: split long sentences')).toMatch(/not a measured feature/);
+    expect(noteProblem('paragraphP50: used three short paragraphs of 3 lines')).toMatch(/digit/);
+    expect(noteProblem('paragraphP50: used the quote from Smith in short paragraphs')).toMatch(/names/);
+    expect(noteProblem('sentenceP10: used a question to open each piece')).toMatch(/construction/);   // a content rule, rephrased
+    expect(noteProblem('paragraphP50: dropped the conclusion; open with the result instead')).toMatch(/rule|clause/);
+    expect(noteProblem('sentenceCv: shortened sentences, always after a long one')).toMatch(/rule/);
+    expect(noteProblem(`sentenceCv: split ${Array.from({ length: 33 }, () => 'word').join(' ')}`)).toMatch(/words/);
+    const pairs = comparisonPairs([record('r1', [7, 4], [[], ['sentenceP90', 'paragraphP50']])]);
     const notes = parseNotes({ notes: [
-      { text: 'Winners let one sentence run long after two short ones.', features: ['para.words', 'invented'] },
-      { text: 'winners let one sentence run long after two short ones' },
-      'Winners kept paragraphs short where the material was thin.',
-      { text: 'Use 2 examples.' }, { text: 'Cite Jones.' }, { text: 'Never hedge.' }, 7, null,
+      { text: 'sentenceP90: lengthened one sentence after two short ones', features: ['para.words', 'invented'] },
+      { text: 'sentenceCv: split long sentences at their conjunctions' },   // a real feature, but not one these drafts differed on
+      { text: 'sentenceP90: lengthened one sentence after two short ones' },
+      'paragraphP50: shortened paragraphs where the material was thin',
+      { text: 'Use two examples.' }, { text: 'colon: used Jones as the example' }, { text: 'Never hedge.' }, 7, null,
     ] }, pairs);
-    expect(notes.map((n) => n.text)).toEqual(['Winners let one sentence run long after two short ones.', 'Winners kept paragraphs short where the material was thin.']);
-    expect(notes[0].features).toEqual(['para.words']);
+    expect(notes.map((n) => n.text)).toEqual(['sentenceP90: lengthened one sentence after two short ones', 'paragraphP50: shortened paragraphs where the material was thin']);
+    expect(notes[0].features).toEqual(['sentenceP90']);   // the note's own feature, recorded
     expect(notes[0].evidence).toEqual({ pairs: 1, gain: 3 });
     expect(notes[0].cls).toBe('medium');
-    const many = parseNotes({ notes: Array.from({ length: 12 }, (_, i) => `Winners varied paragraph openings in way ${'abcdefghijkl'[i]}.`) }, pairs);
+    const many = parseNotes({ notes: Array.from({ length: 12 }, (_, i) => `paragraphP50: broke paragraphs in way ${'abcdefghijkl'[i]}`) }, pairs);
     expect(many).toHaveLength(MAX_NOTES);
     expect(parseNotes('garbage', pairs)).toEqual([]);
   });
@@ -170,14 +179,14 @@ describe('experience notes', () => {
   it('distils with one call at temperature 0, and none when there is nothing to compare', async () => {
     const seen: InferenceRequest[] = [];
     const client: InferenceClient = { complete: (req) => { seen.push(req); return Promise.resolve(anInferenceResult({ json: { notes: [
-      { text: 'Winners opened on a specific from the material before any general point.' }, { text: 'Winners cited 4 sources.' }] } })); } };
+      { text: 'sentenceP10: joined the shortest sentences to the one before them' }, { text: 'Winners cited four sources.' }] } })); } };
     const budget = { spentUsd: 0, capUsd: 1, maxCalls: 5 };
-    const pairs = comparisonPairs([record('r1', [7, 4]), record('r2', [8, 5, 2])]);
+    const pairs = comparisonPairs([record('r1', [7, 4], [[], ['sentenceP10']]), record('r2', [8, 5, 2])]);
     const notes = await distillNotes(client, budget, pairs);
     expect(seen).toHaveLength(1);
     expect(seen[0].temperature).toBe(0);
     expect(seen[0].userMessage).toContain('<loser>');
-    expect(notes.map((n) => n.text)).toEqual(['Winners opened on a specific from the material before any general point.']);
+    expect(notes.map((n) => n.text)).toEqual(['sentenceP10: joined the shortest sentences to the one before them']);
     expect(await distillNotes(client, budget, [])).toEqual([]);
     expect(seen).toHaveLength(1);
     const block = renderNotes(notes);

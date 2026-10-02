@@ -451,7 +451,9 @@ describe('the audit of the invented-claim check', () => {
 
   describe('4. only a qualified instrument may cut', () => {
     it('production: the list holds the measured pairs, the shipped decision-3 reader among them (studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)', () => {
-      expect(QUALIFIED_READERS).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }, { model: 'claude-haiku-4-5', version: 'a173339d' }]);
+      expect(QUALIFIED_READERS.map(({ model, version }) => ({ model, version }))).toEqual([{ model: 'claude-haiku-4-5', version: '0279163b' }, { model: 'claude-haiku-4-5', version: 'a173339d' }]);
+      // each carries the rates it was measured at, and where, for anyone shown its verdict
+      expect(QUALIFIED_READERS.find((r) => r.version === 'a173339d')?.measured).toMatchObject({ caught: 46, planted: 46, leftAlone: 39, clean: 48 });
       expect(DECISION_VERSION).toBe(3);
       expect(READER_VERSION).toBe('a173339d');
       expect(isQualified('claude-haiku-4-5')).toBe(true);

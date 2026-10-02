@@ -2,9 +2,146 @@
 
 Notable changes to Atelier. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-This project is pre-1.0. **Until 1.0, a minor version may change the on-disk state format under
-`$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
-a run in progress may not be.
+**From 1.0 the on-disk state format under `$ATELIER_DATA` is stable within a major version:** a 1.x release
+reads every store a 1.0 release wrote. Before 1.0 a minor version could change it.
+
+## [1.0.0] — 2026-10-02 (what the evidence supports, and the instruments to test the rest)
+
+1.0 is the claim the evidence supports, stated plainly, and a stable state format. A skill Atelier builds from
+your examples holds a standard only you can change, and is ahead of plain prompting and of pasting your
+examples on every counted dimension measured: rules held, machine tells, invented specifics, copying, code
+house style, answer quality. Voice, the implicit fingerprint of an author, is not claimed: the 0.8 loop did not
+move it in B6 (20 whole-text edits tried, none kept; in range 0.733 against 0.738 for 0.7, at 3.3 times the
+cost), and this release replaces that actuator and keeps the loop opt-in until a study says otherwise. Nothing
+here is compared with an optimizer yet; the kit to do it is.
+
+### Changed
+
+- **The loop is opt-in; the default costs what 0.7 did.** A release starts at two drafts, no edits, retrieval
+  on, no notes (decision 0007). `invoke --fidelity` runs the full loop for one request;
+  `atelier fidelity --set drafts=4,editBudget=2,notesCap=6,diversity=on` makes it a skill's default. A run
+  whose flags override its release is recorded with no release, so it is never that release's evidence.
+- **Experience notes follow a grammar, not a denylist.** A note names one measured feature the compared drafts
+  differed on, one operation from a closed list (split, joined, shortened, lengthened, merged, broke, used,
+  dropped), and how, in one clause about construction (sentences, paragraphs, clauses, connectives, supplied
+  facts). "Open with a question." and "used a question to open each piece" are refused: each would be a rule the
+  owner never ratified.
+- **A length-class band steers only on its own evidence.** It must pass selection on that class's own pieces,
+  held-back pieces and model drafts; otherwise it is monitored. Discovery writes its drafts at the median length
+  of every class the author has a band for.
+
+- **A 0.8 skill moves to the 1.0 default on its next run**, through a child release that says why, when nobody
+  chose its loop settings (no release in its line was set by hand or by the search, and it was not rolled back to).
+  A candidate carried from those settings runs at the default too.
+- **A length-class band that did not qualify never hides a pooled band that did**: a text is read against the
+  class's own band where it qualified and the pooled one otherwise.
+- **Discovery's drafts are crossed, not confounded**: every model and every length gets plain drafts and
+  imitations alike, and there are at least eight per length class.
+
+### Added: actuators for the implicit layer
+
+- **Operators chosen by measured effect** (`core/fidelity/operators.ts`): split at a conjunction, join two short
+  sentences, break or merge paragraphs, parentheses to commas, a semicolon to a full stop. Each re-punctuates the
+  words already there. At discovery each is applied to the model's own drafts and its effect on every feature
+  is measured (the effect matrix); at invoke only an operator known to move the furthest-out feature toward the
+  author's range is tried, and a change is kept only if it did and nothing else left its band. No model call.
+- **What an operator may touch.** Prose paragraphs only (never a list, heading, quotation, table, code, or a
+  hard-wrapped paragraph); inline code, links, URLs and entities are masked; an abbreviation ("Mr.", "e.g.") does
+  not end a sentence; a list is never split at its "and", nor a sentence at "so that"; a join never lower-cases
+  a word that might be a name. Every application must keep the words (one "and" aside) and pass the integrity
+  guard, and is screened by the deterministic checks; the delivered text is read in full once, and the steering
+  is undone if that read finds anything worse.
+- **A one-sentence rewrite for over-explaining** ("than", "that's", explanatory and contrastive connectives),
+  which no re-punctuation reaches: the sentence that carries most of it is rewritten as a plain assertion under
+  the span integrity guard every repair passes. These replace 0.8's whole-text redraft.
+- **Drafts that differ.** With the loop on, each draft is written at its own temperature (0.7, 0.9, 1.0) with
+  its own slice of the author's closest passages, so selection has variation to choose from. Recorded per draft
+  that came back, with the temperature the provider was actually sent (none, for a model that refuses one).
+- **Long form by section** (`invoke --sections`): one plan, each section written with the whole standard, joined,
+  then checked and steered as one piece. The plan is recorded.
+- **Several model families at discovery** (`--contrast-models a,b`), so the detector is trained against, and
+  valid for, more than one family. Every application of every actuator is recorded with the feature before and
+  after, so a study can attribute movement to operators, rewrites, selection or retrieval.
+
+### Added: an evaluation of every run
+
+- **One binary result, then the evidence, on every run.** After `invoke`, a short panel (on a terminal, or with
+  `--panel`; `--quiet` leaves it out; always in `--json` as `eval`) says CONFORMANT or NOT CONFORMANT, then:
+  - **gates**, binary: required rules held, invented claims (the claim reader shown with the rates it was measured
+    at, and where), copying, format, applicability;
+  - **fidelity**, descriptive: features in the author's range beside the author's own held-back pieces read the
+    same way, with their n (pieces the bands were built from would be a circular baseline);
+  - **monitors**, never gating: the style detector and the taste reader, each with how it has been validated, or
+    "not validated";
+  - **not measured**, on every run.
+  No overall score: gates, fidelity and monitors are different kinds of evidence. A claim check that could not
+  run is a FAIL, never a pass. The evaluation is stored beside the run record, written once.
+- **The verdict is counted on what ships.** Every gate is read from one full check of the delivered text, as
+  `verify` runs it: a run with `--no-repair` is still checked, a broken REQUIRED format or learned-phrase line
+  counts, invented claims are counted span by span, and `--allow-unsourced` or a claim check that could not run is
+  NOT CONFORMANT. A structured output is held by its contract. The claim reader's measured rates are shown only
+  when that model at that prompt version is the one deciding. Building the evaluation never costs the output: if
+  it fails, the run is delivered and says so.
+- **The baseline is out of sample**: the author's reserved pieces, which nothing read, kept as feature values
+  only and recounted with the ratified roles the run is read with.
+- **The skill's own evaluation, the moment it is built.** `atelier new … --accept` and every `build` (the
+  improve-in-place path included) end with the skill's card: your rules (counted and read), the invented-claim
+  check with the rates it was measured at, your range with its baseline, the style detector and what it is valid
+  for, the release, and what is not measured. Stored with the version, read live (a new release or a
+  qualification shows at once) by `atelier report --skill <name> [--json]` and the MCP tool
+  `atelier_skill_report`, for an agent to read before it tells you a run can ship. Never served to the model that
+  writes: a measure written toward stops measuring.
+- **`atelier report <run>`**: the panel and the trace, component by component (drafts and selection, the claim
+  check, repair, steering, retrieval, release, applicability), read from the record.
+- **`atelier rate <run> yes|no "why"`**: would you ship it as is? The one satisfaction measure, given by a person.
+- **`atelier eval --skill <name>`**: per release, the conformant share and the share you would ship, each with its
+  N and a 95% Wilson interval; cost and time; failures by kind (rules broken, reasons, complaints from `fix`,
+  why runs were not shipped); and the unrated runs worth reading, chosen by count.
+
+### Added: instruments
+
+- **The writing-task family is runnable**: `bench/compare/tasks/from-b6.mjs` turns a B6 plan's sealed briefs into
+  comparison tasks, so the same arms and adapters run on writing.
+- Operators never touch a quotation; experience notes stored under 0.8 are held to the new grammar before they
+  are served; a B6 evaluator detector trained on the comparator arms decides no bar.
+
+- **`atelier score`**: one deterministic number in [0, 1] for how well a text meets a skill's ratified
+  standard, with no model call: `(0.4·required + 0.3·claims + 0.1·format + 0.2·range)` over the components
+  that apply (REQUIRED measured rules held, invented specifics by the pattern claim check, the FORMAT line,
+  the in-range share on the active fidelity profile). `--json` gives the components and every rule's line.
+- **`bench/compare/`**: one task interface for answer arms (no skill, a skill file in the system prompt, the
+  Atelier runtime), train/validation/test splits with a sealed test hash, a GEPA adapter and a SkillOpt
+  environment that refuse the sealed split, both scored by the benchmark's own judge or by `atelier score`,
+  and an offline smoke against local fake models. No results yet: the comparison itself is a paid run.
+- **`atelier qualify --skill <name>`.** Measures the style detector and every steering feature of the active
+  profile on the skill's own data (the pieces discovery read and the drafts it wrote), with one piece, one
+  topic and one generating model held out at a time, and stores the result with the skill, keyed by the
+  profile. Topic labels come from each piece's front matter (`topic: …`) or `--topics <file>`; a topic is
+  never defaulted to the source, and without labels the topic hold-out is NOT RUN and nothing qualifies.
+- **A detector names the models it is valid for.** Discovery records which model wrote each contrast draft;
+  the detector carries them as `families`, every reading records them, and `atelier fidelity` prints
+  "valid for: …". A detector does not generalise across model families (held-out generator AUCs of 0.37,
+  0.49 and 0.73 in one measurement). Drafts cached before this are one generator, `unknown`.
+- **The small bench in CI** (`.github/workflows/bench.yml`, `bench/small/run.sh`): the 14 coding cases, one trial,
+  no skill against an Atelier skill this build makes, on any change to generation, checking, repair, compilation
+  or fidelity. It runs where the repository has an `ANTHROPIC_API_KEY` secret and is skipped, never failed,
+  where it has none.
+
+### Fixed: the B6 harness
+
+- `prepare` copies every validation, test and training text into the work directory and records its
+  sha256; every later step checks them and refuses on any change, naming the file.
+- The evaluator's model is refused when it is the writer, in any case or as a prefix alias, both as set
+  and as recorded on the outputs.
+- An evaluator detector with a cross-validated AUC under 0.65 (or none) decides no bar: the detector bar is
+  null and `results.json` says why. Grounded fact coverage is reported per arm beside the author's density.
+- `build` and `generate` refuse to start with a writer that has no price, unless `B6_PRICE_IN` and
+  `B6_PRICE_OUT` give one (the default writer has no entry in the price table, and none is invented).
+- `generate --briefs` and `--shard k/n` split a run across processes in one work directory; an output is
+  claimed, written under a temporary name and renamed, so two writers never share one.
+- `blind --readers r1,r2,r3` writes one packet and one labels file per reader, orders balanced across
+  readers; `score` refuses any design that is not the pre-registered one (a missing reader, a duplicate or
+  empty judgment, an unjudged pair, unbalanced orders). `bench/b6/selftest.mjs` fires each refusal offline.
 
 ## [0.8.0] — 2026-10-01 (taste as a range: a closed loop below the standard)
 
@@ -513,7 +650,7 @@ the owner's go-ahead for about $5 (cap $8).
 - **The harness now tests what changed.** The sealed version is `a173339d` and the seed
   `claim-reader-v3-2026-09-29`. Excerpts keep their headings (39 of the 50 TEST excerpts carry one), and
   two plant kinds put the invention in a heading or a table.
-- **Corpus:** 30 Lenny's Newsletter product essays no study has used. How they were drawn was not
+- **Corpus:** 30 product essays from a public newsletter no study has used. How they were drawn was not
   recorded, so the exact set is sealed by hash instead.
 - Same floors: specificity ≥ 0.80, sensitivity ≥ 0.50.
 

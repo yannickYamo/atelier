@@ -510,7 +510,7 @@ describe('through the binary: contrast drafts by class, stale signals, and a res
     expect(cached.drafts.length).toBeGreaterThan(0);
     expect(new Set(cached.drafts)).toEqual(new Set(['LINKEDIN-SHAPED']));
     // Pieces of 75 words: inside LinkedIn's band (60 to 600), so the drafts are asked for at 80.
-    expect(cached.key).toMatch(/\|scripted\|a LinkedIn post\|80\|12\|with-examples$/);
+    expect(cached.key).toMatch(/\|scripted\|a LinkedIn post\|80\|auto\|crossed$/);
   }, 120_000);
 
   it('without a class, "a piece" at the corpus median; never "a blog post, about 900 words"', async () => {

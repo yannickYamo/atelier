@@ -58,8 +58,8 @@ verdict.
 
 ## Materials: pieces no study has used
 
-- **30 Lenny's Newsletter product essays**, staged on 2026-09-29 at `~/atelier-claims-v3/essays` from the 349
-  in `~/Product_Knowledge/02-newsletters`. No record was kept of how the 30 were drawn, so the draw cannot be
+- **30 product essays from a public newsletter**, staged on 2026-09-29 in a local folder from the 349
+  in a local archive of that newsletter. No record was kept of how the 30 were drawn, so the draw cannot be
   re-run; what is sealed instead is the exact set. The sha256 over the sorted list of each file's sha256 and
   name is **`5b0dfcdd99656609c3754adba3ea0d8f43b54b7306b9ab30a45a3129fcdba73c`**.
 - None of the 30 file names appears in any earlier study's corpus (version 1, version 2, the sensor
@@ -88,8 +88,8 @@ check's rates on the same drafts.
 Hard cap: **$8** (`--cap 8`). Estimated: about $5.
 
 ```
-node studies/harness/claim-qualification.mjs --corpus ~/atelier-claims-v3/essays \
-  --out ~/atelier-claims-v3/test --only test --cap 8
+node studies/harness/claim-qualification.mjs --corpus <essays-folder> \
+  --out <out-folder> --only test --cap 8
 ```
 
 ## Limits

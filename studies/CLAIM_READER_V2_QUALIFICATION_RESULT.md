@@ -50,7 +50,7 @@ The three false flags on clean drafts:
 
 ## Record
 
-- TEST result: `~/atelier-claims-v2/test/result.json`, sha256 prefix `a5d0bc88d93c922d`. It holds every draft,
+- TEST result: `<a local folder>`, sha256 prefix `a5d0bc88d93c922d`. It holds every draft,
   plant, and the reader's typed specifics.
-- The pieces: `~/atelier-claims-v2/newsletters` (a copy), the owner's private marketing pages and
-  `~/atelier-b2-study/corpus`.
+- The pieces: `<a local folder>` (a copy), the owner's private marketing pages and
+  `<a local folder>`.

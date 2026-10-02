@@ -7,5 +7,5 @@ E2 round 4 "too little" -> UNCERTAIN ($0.0350): DEFECT FOUND - diagnoser is stat
 E2 round 5 'p12 too little' -> IMPLEMENTATION_MISS ($0.0287). Candidate minted p12 PROSE->SELF_CHECK; task re-run; blinded pair presented for fix-level pick.
 pi2 = 58596240fe2a4884 (p12 PROSE->SELF_CHECK), REPAIR_PROPOSED pending; A/B pair presented; pick via resume path.
 fix-level pick: "same" ("those are both very good and on par with what i will write and following my voice an dhappit"). Settling via resume path.
-Phase 2: 32/32 generations clean (16 tasks x pi1/pi2). Pairs assembled to ~/atelier-moat-pairs/Txx/{A,B}.md, no provenance in files. MOAT_BLIND_KEY.json written to studies/ (uncommitted until results). Key sha256 published to expert BEFORE first label: 9836b199bff0da5a72cccd4a3515064f1686d9f4a3707bc9129840031e64b801. Awaiting 16 labels + recognizedOriginal declaration.
+Phase 2: 32/32 generations clean (16 tasks x pi1/pi2). Pairs assembled to <a local folder> no provenance in files. MOAT_BLIND_KEY.json written to studies/ (uncommitted until results). Key sha256 published to expert BEFORE first label: 9836b199bff0da5a72cccd4a3515064f1686d9f4a3707bc9129840031e64b801. Awaiting 16 labels + recognizedOriginal declaration.
 Labeling surface published privately to the expert (blinded, A/B only, no provenance in page or data). Expert labels pending.

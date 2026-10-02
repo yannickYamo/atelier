@@ -1,0 +1,25 @@
+# The offline smoke: one epoch, the whole 2-task training split in one step, against
+# bench/compare/smoke/fake-openai.mjs. Exercises the pipeline, not the optimizer's quality.
+_base_: default.yaml
+
+model:
+  optimizer: fake-optimizer
+  target: fake-writer
+
+train:
+  num_epochs: 1
+  train_size: 2
+  batch_size: 2
+
+gradient:
+  minibatch_size: 1
+  merge_batch_size: 2
+  analyst_workers: 1
+
+optimizer:
+  learning_rate: 1
+  min_learning_rate: 1
+  lr_scheduler: constant
+
+env:
+  workers: 1

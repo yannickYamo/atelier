@@ -30,6 +30,9 @@ import { taste } from './commands/taste.js';
 import { tells } from './commands/tells.js';
 import { tend, skillDashboard } from './commands/tend.js';
 import { fidelity } from './commands/fidelity.js';
+import { report as reportRun, rate } from './commands/report.js';
+import { evaluate } from './commands/eval.js';
+import { qualify } from './commands/qualify.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
@@ -42,6 +45,7 @@ import { fix } from './commands/fix.js';
 import { newSkill } from './commands/new.js';
 import { review } from './commands/review.js';
 import { verify } from './commands/verify.js';
+import { score } from './commands/score.js';
 import { mcp } from './commands/mcp.js';
 import { material } from './commands/material.js';
 import { existsSync } from 'node:fs';
@@ -67,6 +71,7 @@ export const COMMANDS: readonly string[] = [
   'new',
   'review',
   'verify',
+  'score',
   'mcp',
   'material',
   'abort',
@@ -98,6 +103,10 @@ export const COMMANDS: readonly string[] = [
   'taste',
   'tend',
   'fidelity',
+  'report',
+  'rate',
+  'eval',
+  'qualify',
   'tells',
   'optimize',
   'judgements',
@@ -127,6 +136,7 @@ const main = async (): Promise<void> => {
     case 'new': return newSkill();
     case 'review': { await review(); return; }
     case 'verify': return verify();
+    case 'score': return score();
     case 'mcp': return mcp();
     case 'material': { material(); return; }
     case 'create': return create(argv[1] ?? die('usage: atelier create <path-to-your-work>'));
@@ -148,6 +158,10 @@ const main = async (): Promise<void> => {
     case 'tells': { await tells(); return; }
     case 'tend': { await tend(); return; }
     case 'fidelity': { await fidelity(); return; }
+    case 'report': { reportRun(); return; }
+    case 'rate': { rate(); return; }
+    case 'eval': { evaluate(); return; }
+    case 'qualify': { qualify(); return; }
     case 'rollback': { rollback(); return; }
     case 'revert': { revert(); return; }
     case 'study': { study(); return; }

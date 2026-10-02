@@ -13,7 +13,8 @@ import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
 import { retrieve, renderRetrieved, type RetrievalIndex } from '../core/fidelity/retrieval.js';
-import { renderNotes } from '../core/fidelity/experience.js';
+import { renderNotes, noteProblem } from '../core/fidelity/experience.js';
+import { baselineOf } from '../core/fidelity/profile.js';
 import { DEFAULT_SETTINGS, type FidelityProfile, type ImplementationRelease, type ImplementationSettings } from '../core/fidelity/types.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { readJson } from '../core/state/read-json.js';
@@ -46,7 +47,11 @@ export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): Fidelit
     }
     return b.proposable ? { ...b, role: 'MONITOR' as const } : b;
   });
-  const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null };
+  // The baseline recounted with these roles: read with other roles than the run, it compared unlike counts.
+  const draft = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null,
+    ...(p.effects ? { effects: p.effects } : {}), ...(p.unseen ? { unseen: p.unseen } : {}), hash: '' };
+  const baseline = baselineOf(draft);
+  const { hash: _h, ...body } = { ...draft, ...(baseline ? { baseline } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 
@@ -79,19 +84,12 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
 }
 
 /**
- * THE FIRST RELEASE'S SETTINGS. Four drafts and structural edits cost about twice what two drafts do, and
- * they buy something only where there is a range to steer toward: a skill whose pieces are too short for the
- * counted features (one-line answers, most replies) gets 0.7's two drafts and no edits. Retrieval only with
- * an index to retrieve from.
+ * THE FIRST RELEASE'S SETTINGS: 0.7's cost (DEFAULT_SETTINGS, ../core/fidelity/types.ts), whatever the profile
+ * holds; the loop is opt-in until a study shows it pays. Retrieval only with an index to retrieve from.
  */
-export function firstSettings(profile: FidelityProfile, hasIndex: boolean): ImplementationSettings {
-  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').length;
-  const base = steering >= MIN_STEERING ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, drafts: 2, editBudget: 0 };
-  return hasIndex ? base : { ...base, retrievalK: 0 };
+export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): ImplementationSettings {
+  return hasIndex ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, retrievalK: 0 };
 }
-
-/** Below this many steering features, the loop has too little to steer by to be worth its drafts. */
-export const MIN_STEERING = 3;
 
 /**
  * AT INVOKE. The release that steers this run: the active one, carried to the served skill version as a
@@ -107,8 +105,21 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   // A NEW STANDARD IS A NEW SKILL. What the loop learned under one standard says nothing about another.
   if (active.standardVersionHash !== sv.standardVersionHash) return null;
   let release = active;
-  if (active.skillVersionHash !== sv.skillVersionHash) {
-    release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id, skillVersionHash: sv.skillVersionHash,
+  // 0.8'S DEFAULT IS NOT A CHOICE. A skill built under 0.8 got the full loop as its first release, which 1.0
+  // makes opt-in. Where nobody chose those settings (no release in its line was set by hand or by the settings
+  // search), the active skill moves to 1.0's default through a child release that says why; a setting a person
+  // chose is never touched.
+  const isActiveSkill = store.getActive(L) === sv.skillVersionHash;
+  if (wasLoopByDefault(L, active) && isActiveSkill) {
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id,
+      settings: { ...DEFAULT_SETTINGS, retrievalK: active.settings.retrievalK }, createdAt: new Date().toISOString(),
+      why: 'moved to the 1.0 default: the fidelity loop is opt-in until a study shows it pays (decision 0007)' }));
+    fstore.setActiveRelease(L, release.id);
+  }
+  if (release.skillVersionHash !== sv.skillVersionHash) {
+    // A candidate carried from 0.8's automatic loop settings runs at 1.0's default too.
+    const carried = !isActiveSkill && wasLoopByDefault(L, release) ? { ...DEFAULT_SETTINGS, retrievalK: release.settings.retrievalK } : release.settings;
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(release), settings: carried, parent: release.id, skillVersionHash: sv.skillVersionHash,
       createdAt: new Date().toISOString(), why: `carried to skill version ${sv.skillVersionHash}` }));
     // A CANDIDATE RUN STEERS, IT DOES NOT ADOPT. Trying a version that is not active (`invoke --candidate`)
     // runs under a release made for it, and leaves the active release where it was.
@@ -117,6 +128,15 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   assertSameStandard(release, sv.standardVersionHash);
   const index = release.retrievalHash ? fstore.getRetrievalIndex(L, release.retrievalHash) ?? fstore.getRetrievalIndex(L) : null;
   return { release, profile, index: index?.hash === release.retrievalHash ? index : null };
+}
+
+/** Whether a release still carries 0.8's automatic loop settings, never chosen by a person or the search. */
+function wasLoopByDefault(L: store.StoreLayout, r: ImplementationRelease): boolean {
+  const s = r.settings;
+  if (!(s.drafts === 4 && s.editBudget === 2 && s.notesCap === 6 && !s.diversity && r.notes.length === 0)) return false;
+  // A release a person rolled back to is a choice, however its settings look.
+  if (fstore.getActiveRelease(L)?.release.id === r.id && fstore.activeSetBy(L) === 'rollback') return false;
+  return !fstore.releaseChain(L, r.id).some((x) => /^(settings set by hand|the settings search)/.test(x.why));
 }
 
 const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> => {
@@ -131,7 +151,9 @@ const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> 
 export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string): { text: string; retrieved: number[] } {
   const retrieved = index && release.settings.retrievalK > 0 ? retrieve(index, task, release.settings.retrievalK) : [];
   const parts = [retrieved.length && index ? renderRetrieved(index, retrieved) : '',
-    release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.slice(0, release.settings.notesCap)) : ''].filter(Boolean);
+    // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
+    // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
+    release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : ''].filter(Boolean);
   return { text: parts.length ? `\n\n${parts.join('\n\n')}` : '', retrieved };
 }
 

@@ -1,0 +1,58 @@
+# SkillOpt config for the compare benchmark (bench/compare in the Atelier repository).
+# NOTE: `_base_` is a string path, not a list.
+_base_: ../_base_/default.yaml
+
+# Both roles on an OpenAI-compatible endpoint, read from the environment:
+#   OPTIMIZER_OPENAI_COMPATIBLE_BASE_URL / _API_KEY   the optimizer (reflection, merge, rank)
+#   TARGET_OPENAI_COMPATIBLE_BASE_URL / _API_KEY      the target: the same writer every other arm uses
+# Set the two model ids with --cfg-options model.optimizer=<id> model.target=<id>.
+model:
+  optimizer_backend: openai_compatible
+  target_backend: openai_compatible
+  optimizer: set-with-cfg-options
+  target: set-with-cfg-options
+  reasoning_effort: ""
+
+# The fixed budget: 3 epochs over the training split, 8 tasks per step.
+train:
+  num_epochs: 3
+  batch_size: 8
+  accumulation: 1
+  seed: 42
+
+gradient:
+  minibatch_size: 4
+  merge_batch_size: 4
+  analyst_workers: 4
+
+optimizer:
+  learning_rate: 4
+  min_learning_rate: 2
+  lr_scheduler: cosine
+  lr_control_mode: fixed
+  skill_update_mode: patch
+
+# The validation split gates each step. The test split is never given to SkillOpt: it is answered with
+# bench/compare/run.mjs --arm skill:<out_root>/best_skill.md and judged there, beside every other arm.
+evaluation:
+  use_gate: true
+  sel_env_num: 0
+  test_env_num: 0
+  eval_test: false
+
+env:
+  name: atelier_compare
+  split_mode: split_dir
+  split_dir: ""            # prepare_split.py output
+  sealed_file: ""          # SEALED.json from tasks/split.mjs (required)
+  skill_init: ""           # the seed skill file
+  evaluator: ""            # ihaveadhd | atelier
+  pass_threshold: 0.8      # a score at or above it counts as a success for reflection
+  ihaveadhd_dir: ""        # ihaveadhd: the clone at the pinned commit; the judge model from JUDGE_* (compare_common.py)
+  atelier_cli: ""          # atelier: dist/cli/atelier.mjs of the Atelier checkout
+  atelier_data: ""         # atelier: the ATELIER_DATA holding the built skill
+  atelier_skill: ""        # atelier: its name
+  workers: 4
+  max_completion_tokens: 4096
+  limit: 0
+  out_root: ""

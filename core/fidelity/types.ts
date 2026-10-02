@@ -77,6 +77,12 @@ export interface DetectorModel {
   readonly trainedOn: { readonly author: number; readonly model: number };
   /** cross-validated AUC with sources held out (null when too few texts to fold) */
   readonly cvAuc: number | null;
+  /**
+   * The model ids whose drafts it was trained against. A detector does not carry across model families
+   * (held-out generator AUCs of 0.37, 0.49 and 0.73 in one measurement), so it is valid only for these.
+   * Absent on a detector trained before they were recorded: then nobody knows what it is valid for.
+   */
+  readonly families?: readonly string[];
 }
 
 /** Where one text sits: the class, every feature's value, how many of the steering bands it is inside. */
@@ -91,7 +97,7 @@ export interface FidelityReading {
   /** ids outside their band, worst first, with the distance in band-widths */
   readonly outside: readonly { readonly id: string; readonly distance: number; readonly direction: 'low' | 'high' }[];
   /** the detector's reading, when the skill has one: P(model-written), and which detector */
-  readonly detector: { readonly p: number; readonly version: string } | null;
+  readonly detector: { readonly p: number; readonly version: string; readonly families?: readonly string[] } | null;
 }
 
 /** The author's fidelity profile, stored with the skill at build time. */
@@ -105,6 +111,18 @@ export interface FidelityProfile {
    * reaches by using the facts it was GIVEN, never by producing specific-looking text
    */
   readonly factDensity?: number | null;
+  /**
+   * What each deterministic operator (./operators.ts) does to each feature, measured on the model's own drafts
+   * at discovery: operator id → feature id → mean change per application and how many applications.
+   */
+  readonly effects?: Readonly<Record<string, Readonly<Record<string, { readonly mean: number; readonly n: number }>>>>;
+  /**
+   * WHERE THE AUTHOR'S OWN UNSEEN PIECES LAND: the reserved pieces (held back before anything read them, so no
+   * band, role or selection was decided on them) read against the bands. The baseline a run is shown beside.
+   */
+  readonly baseline?: { readonly medianInBand: number; readonly medianMeasured: number; readonly n: number };
+  /** the reserved pieces' feature values (never their text), so the baseline is recounted with any roles */
+  readonly unseen?: readonly { readonly cls: ContextClass; readonly values: Readonly<Record<string, number | null>> }[];
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }
@@ -136,9 +154,27 @@ export interface ImplementationSettings {
   /** experience notes served (0: off) */
   readonly notesCap: number;
   readonly temperature?: number;
+  /**
+   * DRAFTS THAT DIFFER. Four drafts from one prompt barely differ on rhythm and pace (B6: four drafts 0.733 in
+   * range, two 0.738), so selection had nothing to choose from. With this on, draft i is written at
+   * DIVERSITY_TEMPERATURES[i] (cycled) and with its own slice of the retrieved passages.
+   */
+  readonly diversity?: boolean;
 }
 
-export const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 };
+/** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
+export const DIVERSITY_TEMPERATURES: readonly number[] = [0.7, 0.9, 1.0];
+
+/**
+ * THE DEFAULT IS 0.7'S COST. B6 ran the full loop against 0.7's settings and it did not move the author's range
+ * (20 structural edits tried, none kept; in range 0.733 against 0.738) at 3.3 times the cost. Until a study shows
+ * it pays, the loop is opt-in (decision 0007): two drafts, no edits, the author's closest passages retrieved,
+ * no experience notes.
+ */
+export const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 2, editBudget: 0, retrievalK: 3, notesCap: 0 };
+
+/** The full loop, opt-in: `invoke --fidelity`, or `atelier fidelity --set drafts=4,editBudget=2,notesCap=6`. */
+export const LOOP_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6, diversity: true };
 
 /**
  * AN IMPLEMENTATION RELEASE: everything below the standard that shaped an output, frozen and hashed.
@@ -173,10 +209,18 @@ export interface FidelityRecord {
   readonly reading: FidelityReading | null;
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
-  /** paragraph-level redrafts made against a band, and whether each was kept */
-  readonly edits?: readonly { readonly target: string; readonly kept: boolean; readonly why: string }[];
+  /**
+   * every application of an actuator against a band (./structural.ts), kept or not: which actuator, the target
+   * feature, its value before and after, and why it was kept or refused
+   */
+  readonly edits?: readonly { readonly target: string; readonly kept: boolean; readonly why: string;
+    readonly actuator?: string; readonly before?: number | null; readonly after?: number | null }[];
   /** the passages retrieved for this request, by index into the author's passages */
   readonly retrieved?: readonly number[];
+  /** the section titles, when the piece was written section by section (./sections.ts) */
+  readonly plan?: readonly string[];
+  /** per draft, when drafts were made to differ: the temperature it was written at and the passages it was given */
+  readonly variants?: readonly { readonly index: number; readonly temperature: number | null; readonly retrieved: readonly number[] }[];
   /** how many of the facts the request and the bound material supplied the output used, and its density per 100 words */
   readonly coverage?: { readonly supplied: number; readonly used: number; readonly per100: number; readonly authorPer100: number | null };
   /** each requirement: applied to this output, not applicable to it, or waived with the reason */
