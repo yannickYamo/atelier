@@ -5,7 +5,7 @@ Notable changes to Atelier. Format follows [Keep a Changelog](https://keepachang
 **From 1.0 the on-disk state format under `$ATELIER_DATA` is stable within a major version:** a 1.x release
 reads every store a 1.0 release wrote. Before 1.0 a minor version could change it.
 
-## [Unreleased]
+## [1.1.0] — 2026-10-02 (install from npm; the voice layer, off by default)
 
 ### Added: install from npm, and one command to set up
 
