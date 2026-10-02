@@ -1,0 +1,115 @@
+{
+ "standardVersionHash": "8963008822170556",
+ "evidenceId": null,
+ "workType": "writing",
+ "requirements": [
+  {
+   "requirementId": "x1",
+   "statement": "Open with the incident, before any explanation.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_ADDED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null
+  },
+  {
+   "requirementId": "x2",
+   "statement": "Keep paragraphs to four sentences at most.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_ADDED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 4
+    }
+   }
+  },
+  {
+   "requirementId": "x3",
+   "statement": "Never use an em dash.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_ADDED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "PATTERN_RATE",
+    "params": {
+     "pattern": [
+      "EM_DASH"
+     ],
+     "maxPer1000": 0,
+     "prefer": [
+      " - "
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x4",
+   "statement": "Say use, never leverage or utilize.",
+   "appliesWhen": "GENERAL",
+   "kind": "BOUNDARY",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_ADDED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "REQUIRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "LEXICON",
+    "params": {
+     "terms": [
+      "leverage=>use",
+      "utilize"
+     ]
+    }
+   }
+  },
+  {
+   "requirementId": "x5",
+   "statement": "Keep sentences short.",
+   "appliesWhen": "GENERAL",
+   "kind": "GENERATIVE",
+   "authority": "EXPERT_AUTHORED",
+   "provenance": "EXPERT_ADDED",
+   "evidence": null,
+   "evidenceItemId": null,
+   "wouldBeAbsentIf": null,
+   "materiality": "PREFERRED",
+   "realizationTolerance": null,
+   "outputShape": null,
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 15,
+     "p90Max": 28
+    }
+   }
+  }
+ ],
+ "authorityState": "RATIFIED",
+ "mintedAt": "2026-10-02T16:04:46.863Z",
+ "supersedes": null,
+ "reason": null
+}

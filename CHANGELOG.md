@@ -21,6 +21,13 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **B6 harness:** the `loop` arm passes `--fidelity`. Since 1.0 the default release costs what 0.7 did, so an
   arm that passed nothing ran the same as `open`.
 
+### Added
+
+- **1.0 is the floor** ([decision 0008](docs/decisions/0008-one-point-zero-is-the-floor.md)). A store written by
+  this build is kept as a fixture and read by every later build, which must give the same verdict per rule and
+  the same exit code, keep the standard's hash, keep every command, option and MCP tool, and keep the default
+  release settings. Later work is added beside 1.0 and is off by default.
+
 ## [1.0.0] — 2026-10-02 (what the evidence supports, and the instruments to test the rest)
 
 1.0 is the claim the evidence supports, stated plainly, and a stable state format. A skill Atelier builds from

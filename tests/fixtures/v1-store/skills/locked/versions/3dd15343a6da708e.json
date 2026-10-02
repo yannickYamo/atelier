@@ -1,0 +1,9 @@
+{
+ "skillVersionHash": "3dd15343a6da708e",
+ "skillName": "locked",
+ "standardVersionHash": "8963008822170556",
+ "architectureHash": "529d6bb75992b3e1",
+ "materializedHash": "1d282154f2bc01d6",
+ "builtAt": "2026-10-02T16:04:46.975Z",
+ "description": "Applies a compiled standard (writing)"
+}
