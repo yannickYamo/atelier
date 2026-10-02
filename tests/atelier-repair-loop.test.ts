@@ -138,7 +138,7 @@ describe('atelier mcp: the checker as a tool any agent can call', () => {
     ].map((m) => JSON.stringify(m)).join('\n');
     const out = execFileSync('node', [CLIP, 'mcp'], { encoding: 'utf8', cwd: proj, env, input }).trim().split('\n').map((l) => JSON.parse(l) as { id: number; result: { tools?: { name: string }[]; content?: { text: string }[]; isError?: boolean } });
     expect(out.map((o) => o.id)).toEqual([1, 2, 3, 4]);
-    expect(out[1].result.tools?.map((t) => t.name)).toEqual(['atelier_list_skills', 'atelier_rules', 'atelier_verify']);
+    expect(out[1].result.tools?.map((t) => t.name)).toEqual(['atelier_list_skills', 'atelier_rules', 'atelier_verify', 'atelier_skill_report']);
     expect(out[2].result.content?.[0].text).toMatch(/"failed":true/);
     expect(out[3].result.isError).toBe(true);
   });

@@ -85,7 +85,12 @@ describe('atelier new: a folder and a sentence', () => {
     // accepting records, builds and says so briefly: the screen is not printed a second time
     expect(second).toMatch(/Your changes: p2 → REQUIRED — instructs/);
     expect(second).not.toMatch(/Shown to the model as examples/);
-    expect(second.split(/\s+/).length, second).toBeLessThan(300);
+    // ...and then the skill's evaluation card, which is the point of the build's last screen (cli/skill-card.ts)
+    expect(second).toMatch(/── Atelier · skill voice · version [0-9a-f]{8}/);
+    expect(second).toMatch(/EVERY OUTPUT IS CHECKED BY/);
+    expect(second).toMatch(/not measured: /);
+    const card = /── Atelier · skill [\s\S]*?\n {2}next: .*(?:\n {22}.*)*/.exec(second)?.[0] ?? '';
+    expect(second.replace(card, '').split(/\s+/).length, second).toBeLessThan(300);
     const md = readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8');
     expect(md).toMatch(/Lead with the decision/);
     // the rule that needs material says so in the skill a host reads

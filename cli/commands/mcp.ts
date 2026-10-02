@@ -11,10 +11,16 @@
 //   atelier_list_skills   the skills built on this machine, with what each is for
 //   atelier_rules         a skill's standard: every rule, its weight, and how it is checked
 //   atelier_verify        any text against a skill's measured rules, with the spans that broke one
+//   atelier_skill_report  a skill's evaluation: what every output is checked by and how far each check can be
+//                         trusted (the card printed when it was built), and, given a run, that run's evaluation
 //
 // Nothing here can change a standard. The calling agent does the rewriting; this says what to rewrite.
 
 import { checksFor } from '../checks.js';
+import { skillCardFor } from '../skill-card.js';
+import { renderSkillCard } from '../../core/eval/skill-card.js';
+import { renderPanel } from '../../core/eval/summary.js';
+import { getEval } from '../../core/state/eval-store.js';
 import { createInterface } from 'node:readline';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -44,6 +50,10 @@ const TOOLS = [
       taste: { type: 'boolean', description: 'also read the rules no count can check (argument, figure, register…); calls a model' },
       task: { type: 'string', description: 'the task the text was written for, so conditional rules are judged against it' } },
     required: ['skill', 'text'], additionalProperties: false } },
+  { name: 'atelier_skill_report', description: "How an Atelier skill is evaluated: the owner's rules (counted or only read), the invented-claim check with the rates it was measured at, the author's range with its out-of-sample baseline, the style detector and the model families it is valid for, and what is not measured. Given a run id, that run's evaluation instead: CONFORMANT or NOT CONFORMANT with the gates that decided it. Read this before telling the person a run can ship.",
+    inputSchema: { type: 'object', properties: { skill: { type: 'string' },
+      run: { type: 'string', description: 'an invocation id: return that run\'s evaluation rather than the skill\'s card' } },
+    required: ['skill'], additionalProperties: false } },
 ] as const;
 
 const standardOf = (skill: string): StandardVersion => {
@@ -71,6 +81,16 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     return { text: rows.length ? rows.join('\n') : 'No skills are built on this machine yet.', isError: false };
   }
   const skill = typeof args.skill === 'string' ? args.skill : '';
+  if (name === 'atelier_skill_report') {
+    standardOf(skill);
+    const L: store.StoreLayout = { root: DATA, skillName: skill };
+    if (typeof args.run === 'string' && args.run) {
+      const e = getEval(L, args.run);
+      return e ? { isError: false, text: `${renderPanel(e)}\n\n${JSON.stringify(e)}` } : { isError: true, text: `no evaluation recorded for run ${args.run} of "${skill}".` };
+    }
+    const card = skillCardFor(L);
+    return card ? { isError: false, text: `${renderSkillCard(card)}\n\n${JSON.stringify(card)}` } : { isError: true, text: `no built skill called "${skill}".` };
+  }
   if (name === 'atelier_rules') {
     const v = standardOf(skill);
     const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');

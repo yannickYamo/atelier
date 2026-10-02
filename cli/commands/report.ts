@@ -1,6 +1,7 @@
 // cli/commands/report.ts — ONE RUN, COMPONENT BY COMPONENT, AND HOW A PERSON JUDGED IT.
 //
 //   atelier report <invocation> [--skill <name>] [--json]    the panel and the trace of one run
+//   atelier report --skill <name> [--json]                    the skill's evaluation card: what every output is checked by
 //   atelier rate <invocation> yes|no ["why"] [--skill <name>] would you ship this as is? (user satisfaction)
 //
 // The trace is the run's record laid out per component (drafts, selection, the claim check, repair, steering,
@@ -16,6 +17,8 @@ import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { getEval, putRating } from '../../core/state/eval-store.js';
 import { renderPanel } from '../../core/eval/summary.js';
+import { renderSkillCard } from '../../core/eval/skill-card.js';
+import { skillCardFor } from '../skill-card.js';
 import { featureOf } from '../../core/observers/features.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { DATA, die, argv, flag, positional, positionals } from '../runtime.js';
@@ -34,7 +37,14 @@ function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
 }
 
 export function report(): void {
-  const id = positional([]) ?? die('usage: atelier report <invocation> [--skill <name>] [--json]');
+  const id = positional([]);
+  // NO RUN NAMED: THE SKILL ITSELF. What every output of it is checked by, as recorded when it was built.
+  if (!id) {
+    const name = flag('--skill') ?? die('usage: atelier report <invocation> | atelier report --skill <name> [--json]');
+    const card = skillCardFor({ root: DATA, skillName: name }) ?? die(`no built skill called "${name}".`);
+    console.log(argv.includes('--json') ? JSON.stringify(card, null, 1) : renderSkillCard(card, process.stdout.columns || 110));
+    return;
+  }
   const { L, rec } = locate(id);
   const e = getEval(L, rec.invocationId);
   if (argv.includes('--json')) { console.log(JSON.stringify({ eval: e, trace: traceOf(rec) }, null, 1)); return; }

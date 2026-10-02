@@ -289,11 +289,6 @@ const PARKED_VALUES: Readonly<Record<string, string>> = {
     + 'no bundle to evaluate. This is the function a reader is most likely to mistake for wired.',
   'core/distinctiveness/floor.ts:explainFloor':
     'The one line a person reads from a floor result. Nothing produces a floor result to explain.',
-  'core/state/store.ts:getEvidence':
-    'The reader half of putEvidence. Evidence is written at build and never read back through the '
-    + 'store: the CLI carries it in the session instead. The asymmetry is the finding, and this is '
-    + 'listed rather than deleted because the store is a public surface and a write with no read is '
-    + 'the shape a later reader will need.',
   'core/measurement/longitudinal.ts:evidenceAcross':
     'Every requirement worst-evidenced first. The controller reads evidence one requirement at a '
     + 'time; the whole-standard view has no caller.',

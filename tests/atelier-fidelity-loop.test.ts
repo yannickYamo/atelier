@@ -323,7 +323,23 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).not.toMatch(/^EXIT:/);
     expect(out).toMatch(/Fidelity profile: \d+ feature\(s\) measured on your pieces, \d+ of them steer drafts/);
     expect(out).toMatch(/Implementation release [0-9a-f]{16}: 2 drafts, up to 0 structural edit\(s\)/);
+    // the skill's evaluation, printed the moment it is built
+    expect(out).toMatch(/── Atelier · skill posts · version [0-9a-f]{8} · standard [0-9a-f]{8}/);
+    expect(out).toMatch(/EVERY OUTPUT IS CHECKED BY\n {4}your rules/);
+    expect(out).toMatch(/YOUR RANGE {2}descriptive/);
+    expect(out).toMatch(/baseline {10}your held-back pieces sit in range on a median/);
+    expect(out).toMatch(/not measured: /);
   }, 120_000);
+
+  it('the card is recorded with the skill: report --skill reads it back, the same in JSON', () => {
+    const text = run('report', '--skill', 'posts');
+    expect(text).toMatch(/── Atelier · skill posts/);
+    const card = JSON.parse(run('report', '--skill', 'posts', '--json')) as { schema: number; rules: { total: number }; fidelity: { steering: number; baseline: unknown } | null; next: string[] };
+    expect(card.schema).toBe(1);
+    expect(card.rules.total).toBeGreaterThan(0);
+    expect(card.fidelity?.baseline).toBeTruthy();
+    expect(card.next).toContain('atelier eval --skill posts');
+  }, 60_000);
 
   it('invoke --fidelity writes four drafts, steers toward the range, and records the reading, every application and the manifest', () => {
     const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', '--fidelity', 'write about the cache incident');

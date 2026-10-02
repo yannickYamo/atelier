@@ -11,6 +11,7 @@ import { writeAtomic } from './fs-atomic.js';
 import { readJson } from './read-json.js';
 import type { StoreLayout } from './store.js';
 import type { EvalSummary } from '../eval/summary.js';
+import type { SkillCard } from '../eval/skill-card.js';
 
 const base = (l: StoreLayout): string => {
   const name = l.skillName;
@@ -36,7 +37,7 @@ export function getEval(l: StoreLayout, invocationId: string): EvalSummary | nul
 export function listEvals(l: StoreLayout): EvalSummary[] {
   const d = join(base(l), 'evals');
   if (!existsSync(d)) return [];
-  return readdirSync(d).filter((f) => f.endsWith('.json')).map((f) => readJson<EvalSummary>(join(d, f), { what: 'a run evaluation' }))
+  return readdirSync(d).filter((f) => f.endsWith('.json') && !f.startsWith('skill-')).map((f) => readJson<EvalSummary>(join(d, f), { what: 'a run evaluation' }))
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
@@ -57,4 +58,16 @@ export function latestRatings(l: StoreLayout): Rating[] {
     if (!had || had.at <= r.at) by.set(r.invocationId, r);
   }
   return [...by.values()];
+}
+
+/** The skill's evaluation card for one skill version, written once at build (../eval/skill-card.ts). */
+export function putSkillCard(l: StoreLayout, c: SkillCard): void {
+  const p = join(base(l), 'evals', `skill-${safeId(c.skillVersion)}.json`);
+  if (existsSync(p)) return;
+  writeAtomic(p, JSON.stringify(c, null, 1));
+}
+/** The card of `skillVersion`, or null. */
+export function getSkillCard(l: StoreLayout, skillVersion: string): SkillCard | null {
+  const p = join(base(l), 'evals', `skill-${safeId(skillVersion)}.json`);
+  return existsSync(p) ? readJson<SkillCard>(p, { what: 'a skill evaluation card', requireKeys: ['schema', 'rules'] }) : null;
 }
