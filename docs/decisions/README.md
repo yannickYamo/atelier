@@ -12,3 +12,4 @@ comments say what is true now and link here for how it got that way.
 | [0005](0005-forced-tool-choice.md) | Forced tool choice where a model accepts it |
 | [0006](0006-release-contract.md) | The release contract, and the moat it answers to (proposed, awaits the owner's signature) |
 | [0007](0007-taste-as-a-range.md) | Taste as a range: the fidelity loop below the standard |
+| [0008](0008-one-point-zero-is-the-floor.md) | 1.0 is the floor: later work is added beside it, never in place of it |
