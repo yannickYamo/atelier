@@ -23,6 +23,8 @@ export interface EvalSummary {
   readonly schema: 1;
   readonly invocationId: string;
   readonly skill: string;
+  /** the skill version that ran: the cohort for a skill with no release */
+  readonly skillVersion?: string;
   readonly at: string;
   readonly release: string | null;
   readonly model: string | null;
@@ -31,7 +33,8 @@ export interface EvalSummary {
   readonly durationMs: number;
   readonly result: { readonly conformant: boolean; readonly reasons: readonly string[] };
   readonly gates: {
-    readonly required: { readonly held: number; readonly applicable: number; readonly broken: readonly { readonly id: string; readonly detail: string }[] };
+    /** `contract`: a structured output, held by its output contract rather than by prose rules */
+    readonly required: { readonly held: number; readonly applicable: number; readonly broken: readonly { readonly id: string; readonly detail: string }[]; readonly contract?: boolean };
     readonly claims: {
       readonly state: 'checked' | 'not-checked' | 'off';
       /** invented claims still in the delivered text, and the unconfirmed ones (listed, neither cut nor passed) */
@@ -42,7 +45,8 @@ export interface EvalSummary {
       readonly answers: boolean;
     };
     readonly copying: { readonly longest: number; readonly limit: number } | null;
-    readonly format: { readonly kind: 'none' | 'shape' | 'bare'; readonly words: string | null; readonly withheld: number };
+    /** `held`: the format's hard limits (the FORMAT line) held; null when the skill measures no format */
+    readonly format: { readonly kind: 'none' | 'shape' | 'bare'; readonly words: string | null; readonly withheld: number; readonly held?: boolean | null };
     readonly applicability: { readonly applied: number; readonly notApplicable: number; readonly waived: readonly { readonly id: string; readonly why: string }[] };
   };
   readonly fidelity: {
@@ -82,7 +86,8 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   out.push('  GATES  binary, every run');
   const g = e.gates;
   const req = g.required;
-  out.push(`  ${tag(req.broken.length === 0)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id} (${b.detail})`).join(', ')}` : ''}`);
+  if (req.contract) out.push(`  ${tag(null)}  ${pad('required rules', 17)}a structured output: held by its output contract, not by prose rules`);
+  else out.push(`  ${tag(req.broken.length === 0)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id} (${b.detail})`).join(', ')}` : ''}`);
   const cl = g.claims;
   const reader = cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone, on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
   if (cl.state === 'off') out.push(`  ${tag(null)}  ${pad('invented claims', 17)}not checked: turned off for this run (--allow-unsourced)`);
@@ -90,14 +95,14 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   else out.push(`  ${tag(cl.delivered === 0 && cl.unconfirmed === 0)}  ${pad('invented claims', 17)}${cl.delivered} delivered · ${cl.cut} cut${cl.unconfirmed ? ` · ${cl.unconfirmed} unconfirmed` : ''}${cl.listed ? ` · ${cl.listed} listed to check` : ''}${cl.answers ? ' · answers: work and results by pattern' : ''}${reader}`);
   if (g.copying) out.push(`  ${tag(g.copying.longest < g.copying.limit)}  ${pad('copying', 17)}longest run shared with your pieces: ${g.copying.longest} words (limit ${g.copying.limit})`);
   const f = g.format;
-  out.push(`  ${tag(true)}  ${pad('format', 17)}${f.kind === 'shape' ? `the request's own shape ("${f.words}"): ${f.withheld} presentation rule(s) withheld, by design` : f.kind === 'bare' ? `bare request ("${f.words}"): standard applied in full` : 'no format stated: standard applied in full'}`);
+  out.push(`  ${tag(f.held ?? true)}  ${pad('format', 17)}${f.kind === 'shape' ? `the request's own shape ("${f.words}"): ${f.withheld} presentation rule(s) withheld, by design` : f.kind === 'bare' ? `bare request ("${f.words}"): standard applied in full` : 'no format stated: standard applied in full'}${f.held === false ? ' · the format\'s hard limits are broken' : ''}`);
   const a = g.applicability;
-  out.push(`  ${tag(true)}  ${pad('applicability', 17)}${a.applied} applied · ${a.notApplicable} not applicable · ${a.waived.length} waived${a.waived.length ? `, each with a reason (${[...new Set(a.waived.map((w) => w.why))].slice(0, 2).join('; ')})` : ''}`);
+  out.push(`  ${c('2', 'INFO')}  ${pad('applicability', 17)}${a.applied} applied · ${a.notApplicable} not applicable · ${a.waived.length} waived${a.waived.length ? `, each with a reason (${[...new Set(a.waived.map((w) => w.why))].slice(0, 2).join('; ')})` : ''}`);
   if (e.fidelity) {
     const fi = e.fidelity;
     out.push('');
     out.push(`  FIDELITY  descriptive · bands from ${fi.pieces} of your pieces${fi.profile ? ` (profile ${fi.profile.slice(0, 8)})` : ''}`);
-    out.push(`    ${pad('in your range', 18)}${fi.inBand} of ${fi.measured} steering features${fi.baseline ? ` · your held-back pieces: median ${fmt(fi.baseline.medianInBand)} of ${fmt(fi.baseline.medianMeasured)} (n=${fi.baseline.n})` : ''}`);
+    out.push(`    ${pad('in your range', 18)}${fi.inBand} of ${fi.measured} steering features${fi.baseline ? ` · your reserved pieces: median ${fmt(fi.baseline.medianInBand)} of ${fmt(fi.baseline.medianMeasured)} (n=${fi.baseline.n})` : ' · no reserved pieces to compare with'}`);
     if (fi.outside.length) out.push(`    ${pad('furthest outside', 18)}${fi.outside.slice(0, 3).map((o) => `${o.label} ${o.value === null ? '' : fmt(o.value)}${o.band ? ` (yours ${fmt(o.band[0])} to ${fmt(o.band[1])})` : ''}`).join(' · ')}`);
     if (fi.facts) out.push(`    ${pad('facts used', 18)}${fi.facts.used} of ${fi.facts.supplied} supplied`);
     if (fi.edits.tried) out.push(`    ${pad('steering', 18)}${fi.edits.kept} of ${fi.edits.tried} change(s) kept`);
@@ -106,7 +111,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   if (m.detector || m.taste) {
     out.push('');
     out.push('  MONITORS  shown only, never gate');
-    if (m.detector) out.push(`    ${pad('style detector', 18)}P(model-written) ${m.detector.p}${m.detector.families.length ? ` · valid for ${m.detector.families.join(', ')}` : ''} · ${m.detector.qualified === true ? 'qualified on held-out pieces and topics' : m.detector.qualified === false ? 'did not qualify on held-out data' : 'not qualified yet (atelier qualify)'}`);
+    if (m.detector) out.push(`    ${pad('style detector', 18)}P(model-written) ${m.detector.p}${m.detector.families.length ? ` · valid for ${m.detector.families.join(', ')}` : ''} · ${m.detector.qualified === true ? 'qualified on the hold-outs atelier qualify could run' : m.detector.qualified === false ? 'did not qualify on held-out data' : 'not qualified yet (atelier qualify)'}`);
     if (m.taste) {
       const t = m.taste;
       const lab = t.labelled ? `its misses right on ${t.labelled.right} of ${t.labelled.of} labelled` : 'not validated: label it with atelier taste --calibrate';

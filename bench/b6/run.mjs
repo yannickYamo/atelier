@@ -311,7 +311,9 @@ function evaluate() {
     const detectorWhy = !detector ? 'no evaluator detector: it needs 4 validation pieces and 4 imitations of at least 100 prose words'
       : detector.cvAuc === null ? 'the evaluator detector has no cross-validated AUC (too few groups to fold), so it is not shown to separate anything'
         : detector.cvAuc < MIN_EVAL_CV_AUC ? `the evaluator detector's cross-validated AUC is ${detector.cvAuc}, below ${MIN_EVAL_CV_AUC}: it does not separate the author from imitations on its own material`
-          : null;
+          // Trained on the comparator arms' own outputs, it would favour whatever is not them: it decides nothing.
+          : detectorBias ? `the evaluator detector was ${detectorBias.split(':')[0]} (no imitations by another model), so its bar would favour the loop`
+            : null;
     const real = r.test.map(realOf);
     const realP = detector ? real.map((t) => scoreDetector(detector, t)?.p).filter((x) => x !== undefined) : [];
     const authorDensity = authorFactDensity(val.map((x) => x.text));

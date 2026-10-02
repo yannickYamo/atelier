@@ -360,14 +360,24 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
   // THE EVALUATION OF THIS RUN (core/eval/summary.ts): stored beside the record, carried by --json, and drawn as
   // the panel on a terminal (or with --panel); --quiet leaves it out of the terminal, never out of the record.
-  const evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
-    answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
-    format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
-    durationMs: Date.now() - started, drafts: nDrafts,
-    applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []) });
-  putEval(L, evaluation);
-  const showPanel = !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY));
-  if (showPanel) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
+  // FAULT-ISOLATED: the evaluation never costs the person a paid output. If it cannot be built, the run is
+  // delivered as it stands and says so.
+  let evaluation: EvalSummary | null = null;
+  try {
+    // The full check of the delivered text, as `verify` runs it: the verdict is counted on what ships, whatever
+    // repair did or did not record (--no-repair records nothing). The claim reader reads it from cache.
+    const finalReport = std && contractFile === null ? await checkDraftAsync(name, std, rec.output, checks).catch(() => null) : null;
+    evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
+      answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
+      format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
+      durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
+      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []) });
+  } catch (e) {
+    report.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`);
+  }
+  if (evaluation) putEval(L, evaluation);
+  const showPanel = evaluation && !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY));
+  if (showPanel && evaluation) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
   if (machine === 'answer') process.stdout.write(`${rec.output}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({

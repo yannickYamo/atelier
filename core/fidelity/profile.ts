@@ -52,6 +52,8 @@ export interface ProfileInput {
   readonly corpusHash: string;
   /** the model ids that wrote `model`; recorded on the detector as the families it is valid for */
   readonly modelFamilies?: readonly string[];
+  /** the author's reserved pieces (held back before anything read them): only their feature values are kept */
+  readonly unseen?: readonly string[];
 }
 
 /** The author's fidelity profile. Deterministic: the same pieces and drafts give the same profile and hash. */
@@ -88,11 +90,14 @@ export function buildProfile(input: ProfileInput): FidelityProfile {
   const detector = trained && families.length ? { ...trained, families } : trained;
   // THE EFFECT MATRIX: what each operator does to each banded feature, on text like this model's (no model call).
   const effects = input.model.length ? effectMatrix(input.model, [...new Set(bands.map((b) => b.id))]) : undefined;
-  // THE BASELINE, OUT OF SAMPLE: the held-back pieces read against bands they did not build.
-  const probe = { version: 1 as const, corpusHash: input.corpusHash, bands, detector: null, hash: '' };
-  const held = heldTexts.map((t) => readFidelity(t, probe)).filter((r) => r.measured > 0);
-  const baseline = held.length ? { medianInBand: quantile(held.map((r) => r.inBand), 0.5), medianMeasured: quantile(held.map((r) => r.measured), 0.5), n: held.length } : undefined;
-  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts), ...(effects ? { effects } : {}), ...(baseline ? { baseline } : {}) };
+  // THE BASELINE'S PIECES: the reserved ones, as feature values only (never their text). The held-back pieces
+  // cannot serve: selection kept a feature only where they fell inside its band, so they would sit near the
+  // ceiling by construction.
+  const unseen = (input.unseen ?? []).map((t) => ({ cls: contextClassOf(proseWords(t)), values: valuesOf(t) }));
+  const probe: FidelityProfile = { version: 1, corpusHash: input.corpusHash, bands, detector: null, hash: '', unseen };
+  const baseline = baselineOf(probe);
+  const body = { version: 1 as const, corpusHash: input.corpusHash, bands, detector, factDensity: authorFactDensity(readTexts),
+    ...(effects ? { effects } : {}), ...(unseen.length ? { unseen } : {}), ...(baseline ? { baseline } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 
@@ -143,6 +148,23 @@ const steers = (b: FeatureBand): boolean => b.role !== 'MONITOR';
  */
 export function readFidelity(text: string, profile: FidelityProfile): FidelityReading {
   const cls = contextClassOf(proseWords(text));
+  const values = valuesOf(text);
+  const r = readValues(values, cls, profile);
+  const scored = profile.detector ? scoreDetector(profile.detector, text) : null;
+  return { ...r, detector: scored && profile.detector
+    ? { p: r3(scored.p), version: profile.detector.version, ...(profile.detector.families ? { families: profile.detector.families } : {}) } : null };
+}
+
+/** Every registered feature's value on a text. */
+export function valuesOf(text: string): Record<string, number | null> {
+  return Object.fromEntries(FEATURES.map((f) => [f.id, f.measure(text)]));
+}
+
+/**
+ * A reading from feature values alone (no text, no detector): the same counting `readFidelity` does. What lets a
+ * baseline be recounted with the roles of the profile a run is read with, from numbers stored at discovery.
+ */
+export function readValues(all: Readonly<Record<string, number | null>>, cls: ContextClass, profile: FidelityProfile): Omit<FidelityReading, 'detector'> {
   const { from, bands } = bandsFor(profile, cls);
   const values: Record<string, number | null> = {};
   const outside: { id: string; distance: number; direction: 'low' | 'high' }[] = [];
@@ -150,7 +172,7 @@ export function readFidelity(text: string, profile: FidelityProfile): FidelityRe
   for (const b of bands) {
     const f = featureOf(b.id);
     if (!f) continue;
-    const v = f.measure(text);
+    const v = all[b.id] ?? null;
     values[b.id] = v;
     if (v === null || !steers(b)) continue;
     measured += 1;
@@ -159,10 +181,16 @@ export function readFidelity(text: string, profile: FidelityProfile): FidelityRe
     else inBand += 1;
   }
   outside.sort((a, b) => b.distance - a.distance || a.id.localeCompare(b.id));
-  const scored = profile.detector ? scoreDetector(profile.detector, text) : null;
-  return { cls, bandsFrom: from, values, inBand, measured, outside,
-    detector: scored && profile.detector
-      ? { p: r3(scored.p), version: profile.detector.version, ...(profile.detector.families ? { families: profile.detector.families } : {}) } : null };
+  return { cls, bandsFrom: from, values, inBand, measured, outside };
+}
+
+/**
+ * THE BASELINE, OUT OF SAMPLE: the author's reserved pieces (held back before anything read them, so no band,
+ * role or selection was decided on them) read against `profile` with its own roles. Null without such pieces.
+ */
+export function baselineOf(profile: FidelityProfile): FidelityProfile['baseline'] {
+  const rs = (profile.unseen ?? []).map((u) => readValues(u.values, u.cls, profile)).filter((r) => r.measured > 0);
+  return rs.length ? { medianInBand: quantile(rs.map((r) => r.inBand), 0.5), medianMeasured: quantile(rs.map((r) => r.measured), 0.5), n: rs.length } : undefined;
 }
 
 /** The share of steering bands a reading is inside, or null when none measured. */

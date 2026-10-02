@@ -18,18 +18,21 @@ import { readerModel } from './commands/taste.js';
 import type { SkillCard } from '../core/eval/skill-card.js';
 
 /** The card for the skill's active version (or `skillVersion`), built from its stored state and stored once. */
-export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; skillVersion?: string } = {}): SkillCard | null {
+export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; skillVersion?: string; persist?: boolean } = {}): SkillCard | null {
   const sv = opts.skillVersion ?? store.getActive(L);
   const version = sv ? store.getSkillVersion(L, sv) : null;
   const std = version ? store.getStandard(L, version.standardVersionHash) : null;
   if (!sv || !version || !std) return null;
+  // LIVE, NOT FROZEN. What can change after the build (the release, a qualification, the taste labels, which
+  // claim reader would run) is read now; the stored card supplies only when it was built and what was held back.
   const stored = getSkillCard(L, sv);
-  if (stored) return stored;
   const live = std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED' && q.materiality !== 'INCIDENTAL');
   const evidence = store.getEvidence(L);
   // The claim check as it would run now: instrument, qualification and the rates it was measured at.
   const sensor = claimSensorFor('', '', false);
-  const measured = sensor.version ? QUALIFIED_READERS.find((r) => r.version === sensor.version && r.measured)?.measured ?? null : null;
+  // The measured rates belong to one model at one prompt version, and only when it is the one deciding.
+  const measured = sensor.qualified && sensor.gate === 'reader' && sensor.version
+    ? QUALIFIED_READERS.find((r) => r.version === sensor.version && r.measured && sensor.instrument.includes(r.model))?.measured ?? null : null;
   const cls = store.getDocClass(L);
   const answers = cls ? (FORMATS as Record<string, { claims?: string } | undefined>)[cls]?.claims === 'list' : false;
   const active = fstore.getActiveRelease(L)?.release ?? null;
@@ -45,8 +48,10 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
   const rulesRead = tasteRules(std);
   const perms = rulesRead.length ? tastePermissions(rulesRead, store.readEvents(L), readerModel()) : null;
   const card: SkillCard = {
-    schema: 1, skill: L.skillName, skillVersion: sv, standardVersion: std.standardVersionHash, builtAt: new Date().toISOString(),
-    corpus: evidence ? { pieces: evidence.items.length, heldBack: opts.heldBack ?? 0 } : null,
+    schema: 1, skill: L.skillName, skillVersion: sv, standardVersion: std.standardVersionHash,
+    builtAt: stored?.builtAt ?? (opts.persist ? new Date().toISOString() : null),
+    corpus: evidence ? (() => { const held = opts.heldBack ?? stored?.corpus?.heldBack ?? 0; return { pieces: Math.max(0, evidence.items.length - held), heldBack: held }; })() : null,
+    copying: (store.getVoice(L)?.pieces?.length ?? 0) + (store.getVoice(L)?.passages?.length ?? 0) > 0,
     rules: {
       total: live.length, required: live.filter((q) => q.materiality === 'REQUIRED').length,
       counted: live.filter((q) => q.measurement).length, read: live.filter((q) => !q.measurement).length,
@@ -74,6 +79,7 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
     next: [`atelier invoke --skill ${L.skillName} "<task>"`, `atelier report <run>`, `atelier rate <run> yes|no`, `atelier eval --skill ${L.skillName}`,
       ...(profile ? [`atelier qualify --skill ${L.skillName}`] : []), ...(rulesRead.length ? [`atelier taste --skill ${L.skillName} --calibrate`] : [])],
   };
-  putSkillCard(L, card);
+  // Stored once, at build: reading a card never writes one.
+  if (opts.persist) putSkillCard(L, card);
   return card;
 }

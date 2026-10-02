@@ -327,7 +327,8 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/── Atelier · skill posts · version [0-9a-f]{8} · standard [0-9a-f]{8}/);
     expect(out).toMatch(/EVERY OUTPUT IS CHECKED BY\n {4}your rules/);
     expect(out).toMatch(/YOUR RANGE {2}descriptive/);
-    expect(out).toMatch(/baseline {10}your held-back pieces sit in range on a median/);
+    // the baseline is the reserved pieces, which nothing read: out of sample
+    expect(out).toMatch(/baseline {10}your reserved pieces sit in range on a median [0-9.]+ of [0-9.]+ \(n=\d+\)/);
     expect(out).toMatch(/not measured: /);
   }, 120_000);
 
@@ -339,6 +340,11 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(card.rules.total).toBeGreaterThan(0);
     expect(card.fidelity?.baseline).toBeTruthy();
     expect(card.next).toContain('atelier eval --skill posts');
+    // live, not frozen: a new release shows on the next read, and is gone again after a rollback
+    run('fidelity', '--skill', 'posts', '--set', 'drafts=3');
+    expect((JSON.parse(run('report', '--skill', 'posts', '--json')) as { release: { drafts: number } }).release.drafts).toBe(3);
+    run('fidelity', '--skill', 'posts', '--rollback');
+    expect((JSON.parse(run('report', '--skill', 'posts', '--json')) as { release: { drafts: number }; builtAt: string | null }).release.drafts).toBe(2);
   }, 60_000);
 
   it('invoke --fidelity writes four drafts, steers toward the range, and records the reading, every application and the manifest', () => {
@@ -555,6 +561,27 @@ describe('the operators never corrupt text (the review\'s cases)', () => {
     expect(keepsWords('A b. C d.', 'A b, and c d.')).toBe(true);
     expect(keepsWords('A b c.', 'A b d.')).toBe(false);
     expect(keepsWords('A b c.', 'A b.')).toBe(false);
+  });
+  it('a quotation is someone\'s words: nothing lands inside one', () => {
+    const t = 'He said "stop; now, and then wait for the next one" and left the room after that long day.';
+    expect(sitesOf('semicolon-to-period', t)).toBe(0);
+    expect(sitesOf('split-conjunction', t)).toBe(0);
+  });
+});
+
+describe('the baseline is out of sample and read with the run\'s roles', () => {
+  it('it comes from the reserved pieces, and ratification recounts it with the ratified roles', () => {
+    const read = Array.from({ length: 8 }, (_, k) => ({ id: `r${k}`, text: authorPiece(k) }));
+    const held = [0, 1].map((k) => ({ id: `h${k}`, text: authorPiece(k + 20) }));
+    const unseen = [0, 1, 2].map((k) => authorPiece(k + 40));
+    const p = buildProfile({ read, held, model: Array.from({ length: 10 }, (_, k) => modelDraft(k)), corpusHash: 'c', unseen });
+    expect(p.baseline?.n).toBe(3);
+    expect(buildProfile({ read, held, model: Array.from({ length: 10 }, (_, k) => modelDraft(k)), corpusHash: 'c' }).baseline).toBeUndefined();
+    // reject every proposable feature: fewer steer, and the baseline is recounted on what still does
+    const proposed = p.bands.filter((b) => b.cls === 'all' && b.proposable).map((b) => b.id);
+    const r = ratifiedProfile(p, { requirements: [] } as unknown as StandardVersion);
+    if (proposed.length) expect(r.baseline?.medianMeasured).toBeLessThan(p.baseline!.medianMeasured);
+    expect(r.baseline?.n).toBe(3);
   });
 });
 

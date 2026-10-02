@@ -379,7 +379,9 @@ export async function discover(): Promise<void> {
   // per length class where there are enough of them, its role, and a stylometric detector when there are
   // drafts enough to train one. Installed by build with the skill; it steers drafts and is recorded with
   // every output. Built from what this step already holds, so it costs nothing more.
-  const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash, modelFamilies: generators });
+  // The reserved pieces give the baseline as feature values only: nothing reads their text for any decision.
+  const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash, modelFamilies: generators,
+    unseen: items.filter((i) => reservedIds.has(i.id)).map((i) => i.text) });
   writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
   // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
   // served to the writer, they would be compared with outputs written from them.

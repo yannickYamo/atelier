@@ -102,6 +102,8 @@ npm run acceptance:carriers -- --host codex
 | C82 | every run is evaluated, with one binary result | the panel puts CONFORMANT or NOT CONFORMANT first; a broken required rule is a FAIL under a NOT CONFORMANT, never a PASS; a claim check that could not run is a FAIL; no overall score (`tests/atelier-eval-panel.test.ts`) |
 | C83 | every instrument says how it was validated | the claim reader with its measured rates and population; the detector and the taste reader as monitors, "not validated" until they are; a not-measured line on every run; fidelity beside the held-back baseline and its n (`tests/atelier-eval-panel.test.ts`) |
 | C84 | evaluation over runs, and satisfaction from a person | `atelier report` reads the stored evaluation and trace; `atelier rate` records yes or no with a reason; `atelier eval` gives rates per release with N and a Wilson interval (`tests/atelier-fidelity-loop.test.ts`, `tests/atelier-eval-panel.test.ts`) |
+| C85 | a skill's evaluation, when it is built and whenever it is asked for | `new … --accept` and `build` print the card; `report --skill` and the MCP tool read it live; it is stored once and never served to the writing model (`tests/atelier-fidelity-loop.test.ts`, `tests/atelier-repair-loop.test.ts`) |
+| C86 | the verdict cannot say CONFORMANT wrongly | counted on the full check of the delivered text: --no-repair, a broken FORMAT or learned line, claims off, a reader down, unconfirmed specifics; no borrowed reader rates; a contract held by its contract (`tests/atelier-eval-panel.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 

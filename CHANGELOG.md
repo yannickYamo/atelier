@@ -76,6 +76,21 @@ here is compared with an optimizer yet; the kit to do it is.
   - **not measured**, on every run.
   No overall score: gates, fidelity and monitors are different kinds of evidence. A claim check that could not
   run is a FAIL, never a pass. The evaluation is stored beside the run record, written once.
+- **The verdict is counted on what ships.** Every gate is read from one full check of the delivered text, as
+  `verify` runs it: a run with `--no-repair` is still checked, a broken REQUIRED format or learned-phrase line
+  counts, invented claims are counted span by span, and `--allow-unsourced` or a claim check that could not run is
+  NOT CONFORMANT. A structured output is held by its contract. The claim reader's measured rates are shown only
+  when that model at that prompt version is the one deciding. Building the evaluation never costs the output: if
+  it fails, the run is delivered and says so.
+- **The baseline is out of sample**: the author's reserved pieces, which nothing read, kept as feature values
+  only and recounted with the ratified roles the run is read with.
+- **The skill's own evaluation, the moment it is built.** `atelier new … --accept` and every `build` (the
+  improve-in-place path included) end with the skill's card: your rules (counted and read), the invented-claim
+  check with the rates it was measured at, your range with its baseline, the style detector and what it is valid
+  for, the release, and what is not measured. Stored with the version, read live (a new release or a
+  qualification shows at once) by `atelier report --skill <name> [--json]` and the MCP tool
+  `atelier_skill_report`, for an agent to read before it tells you a run can ship. Never served to the model that
+  writes: a measure written toward stops measuring.
 - **`atelier report <run>`**: the panel and the trace, component by component (drafts and selection, the claim
   check, repair, steering, retrieval, release, applicability), read from the record.
 - **`atelier rate <run> yes|no "why"`**: would you ship it as is? The one satisfaction measure, given by a person.
@@ -84,6 +99,11 @@ here is compared with an optimizer yet; the kit to do it is.
   why runs were not shipped); and the unrated runs worth reading, chosen by count.
 
 ### Added: instruments
+
+- **The writing-task family is runnable**: `bench/compare/tasks/from-b6.mjs` turns a B6 plan's sealed briefs into
+  comparison tasks, so the same arms and adapters run on writing.
+- Operators never touch a quotation; experience notes stored under 0.8 are held to the new grammar before they
+  are served; a B6 evaluator detector trained on the comparator arms decides no bar.
 
 - **`atelier score`**: one deterministic number in [0, 1] for how well a text meets a skill's ratified
   standard, with no model call: `(0.4·required + 0.3·claims + 0.1·format + 0.2·range)` over the components

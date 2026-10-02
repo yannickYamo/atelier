@@ -117,10 +117,12 @@ export interface FidelityProfile {
    */
   readonly effects?: Readonly<Record<string, Readonly<Record<string, { readonly mean: number; readonly n: number }>>>>;
   /**
-   * WHERE THE AUTHOR'S OWN UNSEEN PIECES LAND: the held-back pieces, which built no band, read against the bands.
-   * The baseline an output's in-range count is shown beside; the pieces the bands came from would be circular.
+   * WHERE THE AUTHOR'S OWN UNSEEN PIECES LAND: the reserved pieces (held back before anything read them, so no
+   * band, role or selection was decided on them) read against the bands. The baseline a run is shown beside.
    */
   readonly baseline?: { readonly medianInBand: number; readonly medianMeasured: number; readonly n: number };
+  /** the reserved pieces' feature values (never their text), so the baseline is recounted with any roles */
+  readonly unseen?: readonly { readonly cls: ContextClass; readonly values: Readonly<Record<string, number | null>> }[];
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }

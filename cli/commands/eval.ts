@@ -28,10 +28,16 @@ export function evaluate(): void {
   const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const evals = listEvals(L);
-  const ratings = latestRatings(L);
+  const evaluated = new Set(evals.map((e) => e.invocationId));
+  // Ratings of runs with no evaluation (before 1.0) are left out of every count here, and those runs are named.
+  const ratings = latestRatings(L).filter((r) => evaluated.has(r.invocationId));
+  const unevaluated = store.listInvocations(L).filter((r) => !evaluated.has(r.invocationId)).length;
   const byRun = new Map(ratings.map((r) => [r.invocationId, r]));
+  // THE COHORT: a release where there is one; else the skill version (a skill built without a corpus has no
+  // release). Never pooled across either.
+  const cohortOf = (e: EvalSummary): string => e.release ?? `version:${e.skillVersion ?? 'unknown'}`;
   const cohorts = new Map<string, EvalSummary[]>();
-  for (const e of evals) cohorts.set(e.release ?? '(no release)', [...(cohorts.get(e.release ?? '(no release)') ?? []), e]);
+  for (const e of evals) cohorts.set(cohortOf(e), [...(cohorts.get(cohortOf(e)) ?? []), e]);
   const summary = [...cohorts.entries()].map(([release, es]) => {
     const rated = es.filter((e) => byRun.has(e.invocationId));
     const yes = rated.filter((e) => byRun.get(e.invocationId)?.ship).length;
@@ -60,9 +66,9 @@ export function evaluate(): void {
     return;
   }
   if (!evals.length) { console.log(`No evaluated runs of "${name}" yet: every run from Atelier 1.0 records one (atelier invoke --skill ${name} "<task>").`); return; }
-  console.log(`${evals.length} evaluated run(s) of "${name}", ${ratings.length} rated by you.`);
+  console.log(`${evals.length} evaluated run(s) of "${name}", ${ratings.length} rated by you.${unevaluated ? ` ${unevaluated} earlier run(s) ran before evaluations were kept and are not counted.` : ''}`);
   for (const c of summary) {
-    console.log(`\n  ${c.release.startsWith("(") ? "runs with no release (they overrode it)" : `release ${c.release.slice(0, 8)}`} · ${c.runs} run(s)${c.runs < MIN_TREND ? ` (fewer than ${MIN_TREND}: read the rates as anecdotes)` : ''}`);
+    console.log(`\n  ${c.release.startsWith('version:') ? `skill version ${c.release.slice(8, 16)} (no release: built without a corpus, or a run overrode it)` : `release ${c.release.slice(0, 8)}`} · ${c.runs} run(s)${c.runs < MIN_TREND ? ` (fewer than ${MIN_TREND}: read the rates as anecdotes)` : ''}`);
     console.log(`    conformant     ${rate(c.conformant, c.runs)}`);
     console.log(`    would ship     ${c.rated ? rate(c.wouldShip, c.rated) : `not rated yet: atelier rate <run> yes|no`}`);
     console.log(`    cost           median $${c.cost.p50.toFixed(2)} · 90th $${c.cost.p90.toFixed(2)}`);

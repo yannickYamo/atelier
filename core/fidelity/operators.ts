@@ -14,7 +14,7 @@
 //
 // WHAT AN OPERATOR MAY TOUCH. Only prose paragraphs: never a heading, a list, a quotation, a table, a code
 // fence, an indented code block, or a paragraph hard-wrapped over several lines. Inside a paragraph, inline
-// code, links, bare URLs and HTML entities are masked before anything is matched, so no split, join or
+// code, links, bare URLs, HTML entities and quotations are masked before anything is matched, so no split, join or
 // re-punctuation lands inside them; an abbreviation ("Mr.", "e.g.", "vs.", "U.S.") does not end a sentence.
 // Every operator keeps every word except a dropped "and" at a split and an added "and" at a join; the caller
 // checks that (`keepsWords`) and the integrity guard on every application.
@@ -45,7 +45,9 @@ const joinBlocks = (bs: readonly Block[]): string => bs.map((b) => b.text).join(
 /** The paragraph with inline code, links, URLs and entities blanked to private-use characters of the same length. */
 function masked(p: string): string {
   const blank = (m: string): string => ''.repeat(m.length);
-  return p.replace(/`[^`\n]*`/g, blank).replace(/\[[^\]\n]*\]\([^)\n]*\)/g, blank).replace(/\bhttps?:\/\/\S+/g, blank).replace(/&[a-z]+;|&#\d+;/gi, blank);
+  // A quotation is someone's words: no split, join or re-punctuation lands inside one.
+  return p.replace(/`[^`\n]*`/g, blank).replace(/\[[^\]\n]*\]\([^)\n]*\)/g, blank).replace(/\bhttps?:\/\/\S+/g, blank).replace(/&[a-z]+;|&#\d+;/gi, blank)
+    .replace(/"[^"\n]{1,300}"|“[^”\n]{1,300}”/g, blank);
 }
 
 /** Abbreviations that end with a full stop without ending a sentence. */

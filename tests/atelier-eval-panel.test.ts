@@ -45,9 +45,9 @@ describe('the panel', () => {
     expect(p).toMatch(/standard applied in full/);
     expect(p).toMatch(/6 waived|1 waived, each with a reason \(the material it needs is not bound\)/);
   });
-  it('fidelity is descriptive, with the held-back baseline and its n; never a percentage', () => {
+  it('fidelity is descriptive, with the reserved-piece baseline and its n; never a percentage', () => {
     const p = flat(renderPanel(base));
-    expect(p).toMatch(/in your range {5}7 of 9 steering features · your held-back pieces: median 8 of 9 \(n=3\)/);
+    expect(p).toMatch(/in your range {5}7 of 9 steering features · your reserved pieces: median 8 of 9 \(n=3\)/);
     expect(p).not.toMatch(/\d+%/);
   });
   it('monitors are apart and say how they are validated; nothing adds up to a score', () => {
@@ -107,5 +107,61 @@ describe('the evaluation and rating stores', () => {
     putRating(L, { invocationId: base.invocationId, ship: true, why: null, at: '2026-10-02T00:00:02Z', release: null });
     expect(latestRatings(L)).toEqual([expect.objectContaining({ ship: true })]);
     expect(() => { putRating(L, { invocationId: '../x', ship: true, why: null, at: 'a', release: null }); }).toThrow(/not an invocation id/);
+  });
+});
+
+// ── what the gap analysis found, pinned ───────────────────────────────────────────────────────────
+import { buildRunEval, type RunEvalInput } from '../cli/eval-run.js';
+import type { VerifyReport } from '../core/observers/verify.js';
+import type { InvocationRecord } from '../core/state/canonical-state.js';
+
+describe('the verdict is counted on the delivered text, and can never say CONFORMANT wrongly', () => {
+  const L = { root: mkdtempSync(join(tmpdir(), 'atelier-rv-')), skillName: 'posts' };
+  const rec = { invocationId: 'i0000000002', skillVersionHash: 'sv1', at: '2026-10-02T00:00:00Z', output: 'I pulled our last 200 tickets and 63% were about billing.',
+    observedRuntime: { resolvedModel: 'claude-opus-5' }, runtimeBinding: { requestedModel: 'claude-opus-5' } } as unknown as InvocationRecord;
+  const line = (id: string, verdict: 'MET' | 'VIOLATED', spans = 0, materiality = 'REQUIRED') => ({ requirementId: id, statement: id, materiality,
+    result: { verdict, value: spans, detail: `${id} detail`, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: `s${i}`, why: '' })) } });
+  const report = (...checked: ReturnType<typeof line>[]): VerifyReport => ({ skill: 'posts', standardVersionHash: 'h', checked, unchecked: [], conditional: [], failed: false }) as unknown as VerifyReport;
+  const std = { standardVersionHash: 'h', requirements: [] } as never;
+  const sensor = (instrument: string, qualified = true) => ({ instrument, version: 'a173339d', qualified, gate: qualified ? 'reader' : 'pattern', degraded: false }) as never;
+  const input = (over: Partial<RunEvalInput>): RunEvalInput => ({ L, rec, std, sensor: sensor('claim reader (claude-haiku-4-5, prompt a173339d)'), claimsOff: false, answers: false, profile: null,
+    format: { words: null, shape: null, withheld: 0 }, taste: null, costUsd: 0.1, durationMs: 1000, drafts: 2, applicability: [], contract: false,
+    report: report(line('c1', 'MET'), line('UNSOURCED', 'MET')), ...over });
+
+  it('a clean delivered text, read by the qualified reader: CONFORMANT, with its measured rates', () => {
+    const e = buildRunEval(input({}));
+    expect(e.result.conformant).toBe(true);
+    expect(e.gates.claims.measured).toMatchObject({ caught: 46, planted: 46 });
+  });
+  it('invented claims still in the text (--no-repair, nothing recorded): counted on the text, NOT CONFORMANT', () => {
+    const e = buildRunEval(input({ report: report(line('c1', 'MET'), line('UNSOURCED', 'VIOLATED', 2)) }));
+    expect(e.gates.claims.delivered).toBe(2);
+    expect(e.result.conformant).toBe(false);
+  });
+  it('a broken REQUIRED FORMAT or learned-phrase line counts, and the format row fails', () => {
+    const e = buildRunEval(input({ report: report(line('c1', 'MET'), line('FORMAT', 'VIOLATED', 1), line('c2·learned', 'VIOLATED', 1), line('UNSOURCED', 'MET')) }));
+    expect(e.gates.required.broken.map((b) => b.id)).toEqual(['FORMAT', 'c2·learned']);
+    expect(e.gates.format.held).toBe(false);
+    expect(e.result.conformant).toBe(false);
+  });
+  it('claims turned off, a check that could not run, or a reader that degraded: NOT CONFORMANT', () => {
+    expect(buildRunEval(input({ claimsOff: true })).result.reasons.join()).toMatch(/turned off/);
+    expect(buildRunEval(input({ report: null })).gates.claims.state).toBe('not-checked');
+    expect(buildRunEval(input({ report: report(line('UNSOURCED', 'MET'), line('UNSOURCED·unread', 'VIOLATED')) })).result.conformant).toBe(false);
+  });
+  it('unconfirmed specifics are counted from their own line, not from the whole listed set', () => {
+    const e = buildRunEval(input({ report: report(line('UNSOURCED', 'MET'), line('UNSOURCED·inconclusive', 'VIOLATED', 3), line('UNSOURCED·check', 'VIOLATED', 5, 'PREFERRED')) }));
+    expect(e.gates.claims).toMatchObject({ unconfirmed: 3, listed: 5 });
+    expect(e.result.conformant).toBe(false);
+  });
+  it('no borrowed rates: an unqualified reader, another model, or an answer shows none', () => {
+    expect(buildRunEval(input({ sensor: sensor('claim reader (my-small-model, prompt a173339d)', false) })).gates.claims.measured).toBeNull();
+    expect(buildRunEval(input({ sensor: sensor('claim reader (other-model, prompt a173339d)') })).gates.claims.measured).toBeNull();
+    expect(buildRunEval(input({ answers: true })).gates.claims.measured).toBeNull();
+  });
+  it('a structured output is held by its contract: no prose rules counted against JSON', () => {
+    const e = buildRunEval(input({ contract: true, report: null }));
+    expect(e.gates.required.contract).toBe(true);
+    expect(e.result.conformant).toBe(true);
   });
 });

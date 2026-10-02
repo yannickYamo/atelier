@@ -183,6 +183,13 @@ different comparison (training a model), not this one (instructing a fixed model
 ## The writing-task family
 
 The same interface carries writing: a task is a brief in `prompt` and the author's facts in `material`.
+The tasks come from a B6 plan, which already seals a brief for every validation and test piece:
+
+```bash
+node bench/compare/tasks/from-b6.mjs b6/plan.json --split validation --register blog --out work/blog-val.jsonl
+node bench/compare/tasks/from-b6.mjs b6/plan.json --split test --register blog --out work/blog-test.jsonl
+```
+
 There is no outside judge with criteria for these, so the optimizers search with the standard's metric
 (`--evaluator atelier`, `atelier score` against the skill built from the author's training pieces, with the
 material passed so used facts are not counted as invented), and the arms are compared on the sealed test

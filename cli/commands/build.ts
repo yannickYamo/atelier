@@ -311,6 +311,7 @@ export async function build(nameArg?: string): Promise<void> {
         (id) => byId.get(id)?.statement ?? id));
     }
   }
+    showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0);
     return;
   }
 
@@ -324,9 +325,16 @@ export async function build(nameArg?: string): Promise<void> {
   saveSession({ ...s, skillName: name });
   reportInstalled(host, inst.installedAt, name, v, arch, pkg.packageHash);
   reportObservedBoundaries(arch, v, name);
-  // THE SKILL'S EVALUATION (cli/skill-card.ts): what every output will be checked by and how far each check can
-  // be trusted, printed now and stored with this version (atelier report --skill <name>; the MCP tool).
-  const card = skillCardFor(L, { heldBack: s.reservation?.reserved.length ?? 0, skillVersion: skill.skillVersionHash });
+  showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0);
+}
+
+/**
+ * THE SKILL'S EVALUATION (cli/skill-card.ts): what every output will be checked by and how far each check can be
+ * trusted, printed now and stored with this version (atelier report --skill <name>; the MCP tool). On every
+ * build path, the one that writes into the person's own skill included.
+ */
+function showSkillCard(L: store.StoreLayout, skillVersion: string, heldBack: number): void {
+  const card = skillCardFor(L, { heldBack, skillVersion, persist: true });
   if (card && !argv.includes('--quiet')) console.log(`\n${renderSkillCard(card, process.stdout.columns || 110)}\n`);
 }
 

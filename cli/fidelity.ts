@@ -13,7 +13,8 @@ import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
 import { makeRelease, assertSameStandard } from '../core/fidelity/release.js';
 import { retrieve, renderRetrieved, type RetrievalIndex } from '../core/fidelity/retrieval.js';
-import { renderNotes } from '../core/fidelity/experience.js';
+import { renderNotes, noteProblem } from '../core/fidelity/experience.js';
+import { baselineOf } from '../core/fidelity/profile.js';
 import { DEFAULT_SETTINGS, type FidelityProfile, type ImplementationRelease, type ImplementationSettings } from '../core/fidelity/types.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { readJson } from '../core/state/read-json.js';
@@ -46,7 +47,11 @@ export function ratifiedProfile(p: FidelityProfile, v: StandardVersion): Fidelit
     }
     return b.proposable ? { ...b, role: 'MONITOR' as const } : b;
   });
-  const body = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null, ...(p.effects ? { effects: p.effects } : {}), ...(p.baseline ? { baseline: p.baseline } : {}) };
+  // The baseline recounted with these roles: read with other roles than the run, it compared unlike counts.
+  const draft = { version: p.version, corpusHash: p.corpusHash, bands, detector: p.detector, factDensity: p.factDensity ?? null,
+    ...(p.effects ? { effects: p.effects } : {}), ...(p.unseen ? { unseen: p.unseen } : {}), hash: '' };
+  const baseline = baselineOf(draft);
+  const { hash: _h, ...body } = { ...draft, ...(baseline ? { baseline } : {}) };
   return { ...body, hash: sha(JSON.stringify(body)) };
 }
 
@@ -146,7 +151,9 @@ const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> 
 export function implementationBlock(release: ImplementationRelease, index: RetrievalIndex | null, task: string): { text: string; retrieved: number[] } {
   const retrieved = index && release.settings.retrievalK > 0 ? retrieve(index, task, release.settings.retrievalK) : [];
   const parts = [retrieved.length && index ? renderRetrieved(index, retrieved) : '',
-    release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.slice(0, release.settings.notesCap)) : ''].filter(Boolean);
+    // Every stored note is held to today's grammar before it is served: a note distilled under 0.8 that the
+    // grammar now refuses is never served (core/fidelity/experience.ts, noteProblem).
+    release.settings.notesCap > 0 && release.notes.length ? renderNotes(release.notes.filter((n) => noteProblem(n.text) === null).slice(0, release.settings.notesCap)) : ''].filter(Boolean);
   return { text: parts.length ? `\n\n${parts.join('\n\n')}` : '', retrieved };
 }
 
