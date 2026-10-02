@@ -15,6 +15,9 @@
 // paragraph length. Bands are estimated per context class where the author has enough pieces in that
 // class, and pooled otherwise; the class is decided from the request and the output's length alone.
 
+import type { RegisterDecision } from '../voice/register.js';
+import type { VoiceParagraph } from '../voice/pass.js';
+
 /** The context classes a band can be conditioned on. Length is the only axis with enough data per author. */
 export type ContextClass = 'short' | 'medium' | 'long' | 'longform';
 export const CONTEXT_CLASSES: readonly ContextClass[] = ['short', 'medium', 'long', 'longform'];
@@ -160,6 +163,12 @@ export interface ImplementationSettings {
    * DIVERSITY_TEMPERATURES[i] (cycled) and with its own slice of the retrieved passages.
    */
   readonly diversity?: boolean;
+  /**
+   * THE VOICE PASS (../voice/pass.ts), opt-in: after the standard's checks, each prose paragraph is rewritten
+   * in the author's voice from pairs in the skill's bank and kept only if the voice integrity gate passes.
+   * Absent: off, which is what every release before it has.
+   */
+  readonly voice?: 'incontext';
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
@@ -225,4 +234,22 @@ export interface FidelityRecord {
   readonly coverage?: { readonly supplied: number; readonly used: number; readonly per100: number; readonly authorPer100: number | null };
   /** each requirement: applied to this output, not applicable to it, or waived with the reason */
   readonly applicability?: readonly { readonly requirementId: string; readonly status: 'APPLIED' | 'NOT_APPLICABLE' | 'WAIVED'; readonly why?: string }[];
+  /** the register decision and the voice pass, when the skill's owner declared the corpus's register */
+  readonly voice?: VoiceRecord;
+}
+
+/** What the voice layer did on one run (../voice): enough to replay which traits were applied and which paragraphs changed. */
+export interface VoiceRecord {
+  /** the transfer policy applied, by hash */
+  readonly policy: string;
+  readonly register: RegisterDecision;
+  /** traits applied out of register because the policy carries them, and traits withheld because it does not */
+  readonly carried: readonly string[];
+  readonly notCarried: readonly string[];
+  readonly mode: 'off' | 'incontext';
+  /** the pair bank the examples came from */
+  readonly bank?: string;
+  readonly paragraphs?: readonly VoiceParagraph[];
+  /** why the pass did not run, or why its result was not delivered */
+  readonly note?: string;
 }

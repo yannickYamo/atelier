@@ -37,6 +37,9 @@ export interface SkillCard {
   } | null;
   readonly release: { readonly id: string; readonly drafts: number; readonly editBudget: number; readonly retrievalK: number; readonly notesCap: number; readonly loop: boolean } | null;
   readonly taste: { readonly rules: number; readonly validated: boolean; readonly labelled: number } | null;
+  /** the voice layer, for a skill whose owner declared the corpus's register */
+  readonly voice?: { readonly registers: readonly string[]; readonly carried: number; readonly invariant: number; readonly unknown: number;
+    readonly pairs: number | null; readonly mode: 'off' | 'incontext' };
   readonly notMeasured: readonly string[];
   readonly next: readonly string[];
 }
@@ -71,6 +74,12 @@ export function renderSkillCard(c: SkillCard, width = 110): string {
   }
   if (c.release) out.push(`\n  RELEASE ${c.release.id.slice(0, 8)}  ${c.release.drafts} drafts · ${c.release.editBudget} sentence rewrite(s) · ${c.release.retrievalK} passage(s) retrieved · ${c.release.notesCap} note(s)${c.release.loop ? '' : ' · the full loop is opt-in (--fidelity)'}`);
   if (c.taste?.rules) out.push(`  TASTE READER  ${c.taste.rules} rule(s) only a reading can check · ${c.taste.validated ? 'validated by your labels' : `not validated: ${c.taste.labelled} label(s) so far (atelier taste --skill ${c.skill} --calibrate)`}`);
+  if (c.voice) {
+    const v = c.voice;
+    out.push(`  VOICE  written in: ${v.registers.join(', ')}`);
+    out.push(`    ${pad('out of register', 18)}${v.carried} trait(s) carry (${v.invariant} measured across registers, ${v.carried - v.invariant} by your ruling), ${v.unknown} do not`);
+    out.push(`    ${pad('voice pass', 18)}${v.mode === 'incontext' ? 'on' : 'off'}${v.pairs === null ? ' · no pair bank (atelier voice pairs)' : ` · ${v.pairs} pair(s) in the bank`}`);
+  }
   out.push('');
   out.push(`  not measured: ${c.notMeasured.join('; ')}`);
   out.push(`  next: ${c.next.join(' · ')}`);

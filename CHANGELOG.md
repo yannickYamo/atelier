@@ -5,6 +5,30 @@ Notable changes to Atelier. Format follows [Keep a Changelog](https://keepachang
 **From 1.0 the on-disk state format under `$ATELIER_DATA` is stable within a major version:** a 1.x release
 reads every store a 1.0 release wrote. Before 1.0 a minor version could change it.
 
+## [Unreleased]
+
+### Added: the voice layer, below the standard and off by default
+
+Nothing here runs until the owner declares the register their pieces are written in, and the voice pass is a
+setting nobody has on. Whether it moves an author's voice is not measured and not claimed
+([decision 0009](docs/decisions/0009-voice-below-the-standard.md)).
+
+- **Transfer is a policy.** Each rule and steering feature is `invariant` (measured: its median holds still
+  between two or more of the author's registers), `owner-transfer` (the owner's ruling) or `unknown`. One
+  register can show nothing, so everything starts `unknown`. `atelier voice register`, `atelier voice transfer`.
+- **The register of a request is declared.** `invoke --register <name>`, or a document type named in the
+  request. Out of register, only the traits the policy carries are applied; the rest are withheld for the run
+  and named. A lexical distance from the author's pieces is recorded as a monitor and never decides.
+- **A pair bank** (`atelier voice pairs`): each of the author's paragraphs beside the same facts in plain
+  English, kept only when both sides carry the same facts. Built from the pieces discovery read, never the
+  reserved ones.
+- **The voice pass** (`atelier fidelity --set voice=incontext`, or `invoke --voice incontext`): after the
+  standard's checks, each paragraph is rewritten from the nearest pairs and gated alone on facts, claim
+  strength, length and copying. The assembled text is read in full and the pass undone if anything got worse.
+  Never run out of register.
+- **The panel and the skill card** carry a VOICE section: the register decision, what carried, paragraphs
+  rewritten and refused.
+
 ## [1.0.1] — 2026-10-02 (one claim verdict per run)
 
 ### Fixed

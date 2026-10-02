@@ -23,6 +23,11 @@ import { retrieve, renderRetrieved } from '../../core/fidelity/retrieval.js';
 import { spendOneWithResult, type DraftVariant, type Written } from './improve.js';
 import { planSections, sectionBlock, joinSections, MAX_SECTIONS, type SectionPlan } from '../../core/fidelity/sections.js';
 import * as fstore from '../../core/state/fidelity-store.js';
+import * as vstore from '../../core/state/voice-store.js';
+import { decideRegister, registerDistance, registerThreshold, type RegisterDecision } from '../../core/voice/register.js';
+import { featureTrait, split, type TransferPolicy } from '../../core/voice/transfer.js';
+import { voicePass, MAX_PARAGRAPHS, type VoiceParagraph } from '../../core/voice/pass.js';
+import { MIN_PAIRS, type PairBank } from '../../core/voice/pairs.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -238,18 +243,33 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const fid = std && !argv.includes('--no-fidelity') ? releaseFor(L, sv) : null;
   // `--fidelity` runs the full loop for this run (LOOP_SETTINGS), over whatever the release says.
   const runSettings = fid ? (argv.includes('--fidelity') ? { ...fid.release.settings, ...LOOP_SETTINGS } : fid.release.settings) : null;
+  // THE VOICE LAYER (core/voice), only for a skill whose owner declared the corpus's register under this
+  // standard (`atelier voice register`). Without that policy nothing below runs and the skill is as it was.
+  const storedPolicy = fid && std ? vstore.getPolicy(L) : null;
+  const policy = storedPolicy?.standardVersionHash === std?.standardVersionHash ? storedPolicy : null;
+  const register = policy ? decideRegister(policy.corpusRegisters, asked, flag('--register')) : null;
+  if (flag('--register') && !policy) die(`--register needs the corpus's own register first: atelier voice register --skill ${name} <register>`);
+  const voiceFlag = flag('--voice');
+  if (voiceFlag && !['incontext', 'off'].includes(voiceFlag)) die(`--voice is incontext or off, got "${voiceFlag}".`);
+  const voiceMode: 'incontext' | 'off' = voiceFlag ? (voiceFlag === 'incontext' ? 'incontext' : 'off') : runSettings?.voice ?? 'off';
+  const bank = voiceMode === 'incontext' && fid ? vstore.getBank(L) : null;
+  if (voiceFlag === 'incontext' && !policy) die(`the voice pass needs the corpus's register declared first: atelier voice register --skill ${name} <register>`);
+  if (voiceFlag === 'incontext' && (!bank || bank.pairs.length < MIN_PAIRS)) die(`the voice pass needs a pair bank of at least ${MIN_PAIRS} pairs: atelier voice pairs --skill ${name}`);
+  // Never out of register: pairs carry the whole voice of the register they were written in.
+  const voiceRuns = voiceMode === 'incontext' && policy !== null && register?.status !== 'out' && bank !== null && bank.pairs.length >= MIN_PAIRS
+    && contractFile === null && !argv.includes('--no-repair');
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0))),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0)),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
-      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0)) };
+      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -273,6 +293,18 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
   const waived = new Map<string, string>();
   for (const q of std?.requirements ?? []) if (waiting.has(q.requirementId)) waived.set(q.requirementId, 'the material it needs is not bound');
+  // OUT OF REGISTER, ONLY WHAT THE OWNER'S POLICY CARRIES (core/voice/transfer.ts). A rule learned from blog
+  // posts is evidence about blog posts: asked for a contract, a rule whose transfer is unknown is withheld from
+  // the prompt and from the count for this run, and named. Nothing is waived in register.
+  const traits = std && policy && register?.status === 'out' ? split(policy, std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED').map((q) => q.requirementId)) : null;
+  if (traits && std && register) {
+    for (const q of std.requirements) {
+      if (!traits.unknown.includes(q.requirementId) || waived.has(q.requirementId)) continue;
+      waived.set(q.requirementId, `out of register (${register.request} vs ${register.corpus.join(', ')}): not marked to carry`);
+      withheld.push(q.statement);
+    }
+    report.say(`Out of register (${register.request}; your pieces are ${register.corpus.join(', ')}): ${traits.carried.length} rule(s) carried by your policy, ${traits.unknown.length} withheld. Mark what should carry with: atelier voice transfer --skill ${name} --add <rule id>`);
+  }
   // THE REQUEST SETS THE LENGTH WHEN IT SAYS ONE. "I want a detailed explanation" met a learned "my pieces
   // run about 100 words" and lost; so did "one line, please" against a long one. The learned length is
   // withheld from this run's prompt when the request asks for detail or brevity, and said in the record.
@@ -316,8 +348,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rel = fid?.release.settings;
   const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
     || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
-    || Boolean(ran.diversity) !== Boolean(rel.diversity);
+    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off');
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
+  // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
+  const steerProfile = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
   // What each draft call was given, by the index it was asked for; the record keeps only the calls that came back
   // (selectDraft), with the temperature the provider was actually sent.
   const retrievedFor: number[][] = [];
@@ -344,8 +378,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null)) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
+    std && !argv.includes('--no-repair') ? keepDelivered(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
+      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null)) : null,
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -353,7 +388,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     } : null, settingsFor(checks, taste, nDrafts),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
-      { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget }, overridden) : null);
+      { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }) }, overridden,
+      policy && register ? { L, policy, register, traits, mode: voiceMode,
+        note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
+          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
@@ -595,7 +633,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
 const OPERATOR_TRIES = 24;
 
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
+interface FidelityTrace { voice?: { bank: string; paragraphs: readonly VoiceParagraph[]; note?: string }; drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -663,6 +701,49 @@ function withEdits(refine: (draft: string) => Promise<Delivered>,
 }
 
 /**
+ * THE VOICE PASS, LAST (core/voice/pass.ts). After the counted checks and any steering, each prose paragraph is
+ * rewritten in the author's voice from the skill's pair bank, gated alone (facts, strength, length, copying),
+ * and the assembled text is read again in full: if anything in the standard got worse, or a claim is flagged
+ * that was not, the whole pass is undone and the text before it is delivered. Not run where an edit is not
+ * (the taste reader holds VETO, or the claim reader could not run).
+ */
+function withVoice(refine: (draft: string) => Promise<Delivered>,
+  v: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; bank: PairBank; copied: ReturnType<typeof overlapIndex> | null; trace: FidelityTrace; taste: TasteSession | null } | null) {
+  if (!v) return refine;
+  return async (draft: string) => {
+    const r = await refine(draft);
+    const notRun = (note: string): Delivered => { v.trace.voice = { bank: v.bank.hash, paragraphs: [], note }; return r; };
+    if (v.taste?.acts) return notRun('not run: the taste reader holds VETO on this skill, and a rewrite would change the text it read');
+    if (v.checks.claimSensor?.degraded) return notRun('not run: the claim reader could not run, so a rewrite could not be checked for invented claims');
+    let passed: Awaited<ReturnType<typeof voicePass>>;
+    try { passed = await voicePass(v.client, v.budget, r.output, v.bank, v.copied); } catch (err) {
+      return notRun(`could not run (${(err as Error).message.split('\n')[0]})`);
+    }
+    v.trace.voice = { bank: v.bank.hash, paragraphs: passed.paragraphs };
+    if (passed.text === r.output) return r;
+    const final = await checkDraftAsync(v.name, v.std, passed.text, v.checks);
+    if (!editKeepsStandard(await checkDraftAsync(v.name, v.std, r.output, v.checks), final) || v.checks.claimSensor?.degraded) {
+      v.trace.voice = { bank: v.bank.hash, note: 'undone: the rewritten text, read in full, was worse than before it; the text before the voice pass was delivered',
+        paragraphs: passed.paragraphs.map((p) => (p.kept ? { ...p, kept: false, why: 'undone with the pass: the assembled text did not keep the standard' } : p)) };
+      return r;
+    }
+    const keptN = passed.paragraphs.filter((p) => p.kept).length;
+    const stillListed = (r.repair?.claimsToCheck ?? []).filter((c) => passed.text.includes(c.slice(0, 60)));
+    const toCheck = [...new Set([...stillListed, ...listedClaims(final)])];
+    const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: 'every REQUIRED measured rule holds' };
+    const { claimsToCheck: _old, ...rest } = base;
+    return { output: passed.text, report: final, repair: { ...rest, violatedAfter: brokenIn(final),
+      ...(toCheck.length ? { claimsToCheck: toCheck } : {}),
+      why: `${base.why}; ${keptN} paragraph(s) rewritten in your voice` } };
+  };
+}
+
+/** The profile with every steering feature the policy does not carry set to MONITOR: read, never steered by. */
+function carriedProfile(p: FidelityProfile, policy: TransferPolicy): FidelityProfile {
+  return { ...p, bands: p.bands.map((b) => (b.role !== 'MONITOR' && policy.states[featureTrait(b.id)] === undefined ? { ...b, role: 'MONITOR' as const } : b)) };
+}
+
+/**
  * Whether an edit kept the standard, on the same terms as a span repair: nothing that held now broken, nothing
  * broken in more places (core/loop/repair.ts, `regressions`), and no claim flagged that was not flagged before.
  */
@@ -700,8 +781,17 @@ function withSections<T extends object>(select: T, write: ((i: number, v: DraftV
 
 /** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
-  applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean): FidelityRecord {
+  applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean,
+  voice: { L: store.StoreLayout; policy: TransferPolicy; register: RegisterDecision; traits: { carried: string[]; unknown: string[] } | null; mode: 'off' | 'incontext'; note: string | null } | null = null): FidelityRecord {
   const cov = ledger.length ? factCoverage(output, ledger) : null;
+  // The lexical distance is a monitor, read on the delivered text against the corpus's own threshold (computed
+  // once per retrieval index and kept).
+  let distance: RegisterDecision['distance'] = null;
+  if (voice && fid.index) {
+    let t = vstore.getThreshold(voice.L, fid.index.hash);
+    if (!t) { t = { threshold: registerThreshold(fid.index) }; vstore.setThreshold(voice.L, fid.index.hash, t.threshold); }
+    distance = registerDistance(fid.index, output, t.threshold);
+  }
   return {
     release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
@@ -714,6 +804,9 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     ...(trace.plan ? { plan: trace.plan.sections.map((x) => x.title) } : {}),
     ...(cov ? { coverage: { supplied: ledger.length, used: cov.used.length, per100: cov.per100, authorPer100: fid.profile.factDensity ?? null } } : {}),
     applicability,
+    ...(voice ? { voice: { policy: voice.policy.hash, register: { ...voice.register, distance }, carried: voice.traits?.carried ?? [], notCarried: voice.traits?.unknown ?? [],
+      mode: voice.mode, ...(trace.voice ? { bank: trace.voice.bank, paragraphs: trace.voice.paragraphs } : {}),
+      ...(trace.voice?.note ?? voice.note ? { note: trace.voice?.note ?? voice.note ?? undefined } : {}) } } : {}),
   };
 }
 
