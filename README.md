@@ -30,7 +30,7 @@ So the standard has to live outside the model, be approved by a person, and be c
 2. You approve the standard once. Required rules instruct the model; the rest guide it by example.
 3. Every output is checked. Counted rules get measured: machine-writing tells, lengths, phrases, and what a piece must contain - sections in order, a figure where one is required, an answer that ends on its next step.
 4. A small model lists every specific claim, and code checks each one against what you supplied. In published writing, an invented story, quotation or claim of evidence is deleted, never reworded. In answers, general knowledge is listed for you to check; a claim of work the agent never did, or a detail of your system you never gave it, is cut. A figure computed from your own figures counts as yours.
-5. Only what broke is rewritten, and then the form is steered toward your range. Four drafts are written, and the one that lands most of its measured features inside the range your own pieces span is kept: paragraph length, sentence rhythm, punctuation. Where it is still outside, its form is redrafted without changing what it says. The target is your range, never your average, because an imitation is already closer to your average than you are.
+5. Only what broke is rewritten. A cut that would leave a fragment is redrafted once, or not made, and the check says so. Two drafts are written, and the one that lands more of its measured features inside the range your own pieces span is kept: paragraph length, sentence rhythm, punctuation. The target is your range, never your average, because an imitation is already closer to your average than you are. A fuller loop that steers pace and rhythm is there behind `--fidelity`, off by default until a study shows it pays.
 
 That asymmetry in step 4 matters more than it looks. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
 
@@ -48,7 +48,7 @@ The counted guarantees hold where prompting doesn't. In the outside blog test, e
 
 Voice is close, not settled. On one brief written five times, a blind judge scored Atelier 7.2 and a fresh call with the author's essays pasted in 7.4. Across five briefs, Atelier's posts had the fewest unsupported claims and the tightest spread (13.4 a post, standard deviation 1.6, against 14.0 and 3.5). A long single chat does drift; a fresh call with fixed context doesn't, with or without Atelier. Two of our studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size.
 
-That gap is what 0.8 goes after. The outside studies found the author's punctuation and tells reproduced and the pace missed: paragraph length, how the sentences sound, the fingerprint a detector reads. So 0.8 measures those against the author's own range and closes the loop on them, and every output says which release shaped it and where it landed. It isn't measured yet. An independent reviewer runs [B6](studies/B6_PREREGISTRATION.md) on their own corpora and key, with the bars written down before the first draft. Until that comes back, the earlier numbers are the ones that count.
+The pace is still the gap, and I'm not claiming it. An independent reviewer ran the 0.8 loop on their own corpora, and it didn't move the author's range: the whole-text edits it tried were all refused by its own guards, at about three times the cost. So 1.0 keeps that loop off by default and replaces the part that failed. The new version changes punctuation and sentence breaks only where it has measured that the change moves the feature that is out, and rewrites one over-explaining sentence at a time. Whether that works is for the next study to say. Voice isn't part of the 1.0 claim; the counted guarantees are.
 
 ## How it compares
 
@@ -57,6 +57,8 @@ That gap is what 0.8 goes after. The outside studies found the author's punctuat
 A strong model with your examples pasted in re-guesses the objective from those examples on every run, and nothing checks what comes out. Voice tools like Spiral, Writer and Jasper infer the voice from samples on the vendor's side, which means it changes when the vendor re-reads or its judge feeds back. Style checkers like Vale and Markup AI enforce faithfully, but the rules are ones somebody wrote by hand. Prompt optimizers - GEPA, SkillOpt, SSO, EvoSkill - optimize hard against a metric or judge somebody else wrote.
 
 Atelier: the examples you chose, approved by you rule by rule, checked on every output, changed only by you.
+
+I haven't run Atelier head to head against GEPA or SkillOpt yet. The kit to do it fairly is in [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare): the same tasks, writer and budget for every arm, a sealed test split, and two scores, the benchmark's own judge and Atelier's standard. The result goes here whichever way it comes out. Contracts, financial reports and support replies have been only partly measured so far.
 
 | | Where the standard comes from | Who can move it |
 |---|---|---|

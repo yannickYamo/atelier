@@ -1,0 +1,40 @@
+name: Small bench
+
+# Decision 0006: a change to generation, checking, repair, compilation or fidelity runs the small bench before
+# it merges. It spends real model credit, so it runs only where the repository has an ANTHROPIC_API_KEY secret;
+# without one the job is skipped, never failed. Its artifacts are what the change's numbers come from.
+on:
+  pull_request:
+    paths: ['core/**', 'cli/**', 'renderers/**', 'providers/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  small-bench:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        if: env.HAS_KEY == 'true'
+      - uses: actions/setup-node@v5
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm run build
+        if: env.HAS_KEY == 'true'
+      - run: bench/small/run.sh
+        if: env.HAS_KEY == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OUT: ${{ github.workspace }}/small-bench
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          name: small-bench
+          path: small-bench/*.jsonl
+      - run: echo "No ANTHROPIC_API_KEY secret in this repository; the small bench is skipped, as decision 0006 allows only with the reason recorded."
+        if: env.HAS_KEY != 'true'

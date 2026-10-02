@@ -92,6 +92,13 @@ npm run acceptance:carriers -- --host codex
 | C72 | a topic is never guessed | `qualifyAll` with `requireTopics` refuses the topic hold-out when any text lacks a real label (NOT RUN, missing labels) and the instrument cannot qualify; `atelier qualify` reads labels from front matter or `--topics`, never from the source (`tests/atelier-qualify.test.ts`) |
 | C73 | a detector says which models it is valid for | discovery records the generator per draft; the detector carries `families`, every reading records them, `atelier fidelity` prints "valid for"; an old cache is one generator, `unknown` (`tests/atelier-qualify.test.ts`) |
 | C74 | the B6 harness refuses an impossible result | tampered or missing text, evaluator model equal to the writer (or a prefix alias), an unpriced writer, a detector with cvAuc under 0.65 deciding a bar, a missing reader, a duplicate or empty judgment, unbalanced orders (`bench/b6/selftest.mjs`, run from `tests/atelier-qualify.test.ts`) |
+| C75 | the default costs what 0.7 did | a first release is two drafts, no edits, no notes; `--fidelity` turns the loop on for one run and is recorded with no release (`tests/atelier-fidelity-loop.test.ts`) |
+| C76 | a note cannot carry a rule | an experience note must name a measured feature and a construction operation; "Open with a question." is refused (`tests/atelier-outer-loop.test.ts`) |
+| C77 | a class band steers only on its own evidence | with no model draft of that length it is monitored, though the pooled band steers (`tests/atelier-fidelity-loop.test.ts`) |
+| C78 | an operator is tried only where its measured effect points | the effect matrix is built on the model's drafts; an operator never touches a list, heading or code fence; a change the standard rejects is refused (`tests/atelier-fidelity-loop.test.ts`) |
+| C79 | every application is recorded | actuator, target, value before and after, kept or not, for operators and sentence rewrites (`tests/atelier-fidelity-loop.test.ts`) |
+| C80 | drafts made to differ, and long form by section | each draft's temperature recorded; `--sections` plans, writes each section, joins with headings when the author uses them, and records the plan (`tests/atelier-fidelity-loop.test.ts`) |
+| C81 | a text is scored against the standard without a model | `atelier score` is deterministic and offline; a broken REQUIRED rule or an invented figure lowers it (`tests/atelier-score.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 

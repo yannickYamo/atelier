@@ -2,13 +2,51 @@
 
 Notable changes to Atelier. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-This project is pre-1.0. **Until 1.0, a minor version may change the on-disk state format under
-`$ATELIER_DATA`.** A standard already minted is content-addressed and readable across such a change;
-a run in progress may not be.
+**From 1.0 the on-disk state format under `$ATELIER_DATA` is stable within a major version:** a 1.x release
+reads every store a 1.0 release wrote. Before 1.0 a minor version could change it.
 
-## Unreleased
+## [1.0.0] — 2026-10-02 (what the evidence supports, and the instruments to test the rest)
 
-### Added
+1.0 is the claim the evidence supports, stated plainly, and a stable state format. A skill Atelier builds from
+your examples holds a standard only you can change, and is ahead of plain prompting and of pasting your
+examples on every counted dimension measured: rules held, machine tells, invented specifics, copying, code
+house style, answer quality. Voice, the implicit fingerprint of an author, is not claimed: the 0.8 loop did not
+move it in B6 (20 whole-text edits tried, none kept; in range 0.733 against 0.738 for 0.7, at 3.3 times the
+cost), and this release replaces that actuator and keeps the loop opt-in until a study says otherwise. Nothing
+here is compared with an optimizer yet; the kit to do it is.
+
+### Changed
+
+- **The loop is opt-in; the default costs what 0.7 did.** A release starts at two drafts, no edits, retrieval
+  on, no notes (decision 0007). `invoke --fidelity` runs the full loop for one request;
+  `atelier fidelity --set drafts=4,editBudget=2,notesCap=6,diversity=on` makes it a skill's default. A run
+  whose flags override its release is recorded with no release, so it is never that release's evidence.
+- **Experience notes follow a grammar, not a denylist.** A note names one measured feature, one operation from
+  a closed list (split, joined, shortened, lengthened, merged, broke, used, dropped) and how. "Open with a
+  question." is refused: it would be a rule the owner never ratified.
+- **A length-class band steers only on its own evidence.** It must pass selection on that class's own pieces,
+  held-back pieces and model drafts; otherwise it is monitored. Discovery writes its drafts at the median length
+  of every class the author has a band for.
+
+### Added: actuators for the implicit layer
+
+- **Operators chosen by measured effect** (`core/fidelity/operators.ts`): split at a conjunction, join two short
+  sentences, break or merge paragraphs, parentheses to commas, a semicolon to a full stop. Each re-punctuates the
+  words already there. At discovery each is applied to the model's own drafts and its effect on every feature
+  is measured (the effect matrix); at invoke only an operator known to move the furthest-out feature toward the
+  author's range is tried, and a change is kept only if it did and nothing else left its band. No model call.
+- **A one-sentence rewrite for over-explaining** ("than", "that's", explanatory and contrastive connectives),
+  which no re-punctuation reaches: the sentence that carries most of it is rewritten as a plain assertion under
+  the span integrity guard every repair passes. These replace 0.8's whole-text redraft.
+- **Drafts that differ.** With the loop on, each draft is written at its own temperature (0.7, 0.9, 1.0) with
+  its own slice of the author's closest passages, so selection has variation to choose from. Recorded per draft.
+- **Long form by section** (`invoke --sections`): one plan, each section written with the whole standard, joined,
+  then checked and steered as one piece. The plan is recorded.
+- **Several model families at discovery** (`--contrast-models a,b`), so the detector is trained against, and
+  valid for, more than one family. Every application of every actuator is recorded with the feature before and
+  after, so a study can attribute movement to operators, rewrites, selection or retrieval.
+
+### Added: instruments
 
 - **`atelier score`**: one deterministic number in [0, 1] for how well a text meets a skill's ratified
   standard, with no model call: `(0.4·required + 0.3·claims + 0.1·format + 0.2·range)` over the components
@@ -27,6 +65,10 @@ a run in progress may not be.
   the detector carries them as `families`, every reading records them, and `atelier fidelity` prints
   "valid for: …". A detector does not generalise across model families (held-out generator AUCs of 0.37,
   0.49 and 0.73 in one measurement). Drafts cached before this are one generator, `unknown`.
+- **The small bench in CI** (`.github/workflows/bench.yml`, `bench/small/run.sh`): the 14 coding cases, one trial,
+  no skill against an Atelier skill this build makes, on any change to generation, checking, repair, compilation
+  or fidelity. It runs where the repository has an `ANTHROPIC_API_KEY` secret and is skipped, never failed,
+  where it has none.
 
 ### Fixed: the B6 harness
 
