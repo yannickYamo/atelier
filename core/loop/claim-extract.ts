@@ -53,7 +53,15 @@ export interface ClaimReading {
    * PREFERRED, and `gate` as `UNSOURCED`, REQUIRED. Absent, this reading gates.
    */
   readonly gate?: ClaimReading;
+  /**
+   * With two reads: how many flags both raised, of how many either raised. The reader's repeatability on this
+   * very text, shown beside its verdict: a flag only one read raised is listed as disputed, never cut.
+   */
+  readonly agreement?: { readonly both: number; readonly either: number };
 }
+
+/** The reason a flag carries when only one of two reads raised it: listed as disputed, never cut. */
+export const DISPUTED_WHY = 'flagged on one of two reads: check it before you publish';
 
 /**
  * THE SEAM THE CHECK READS THROUGH. `read` is async (it may call a model) and fills a cache; `reading`
@@ -524,8 +532,8 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
     const both = new Set(b.claims.map(at));
     const agreed = a.claims.filter((c) => both.has(at(c)));
     const disputed = [...a.claims, ...b.claims].filter((c, i, all) => !agreed.some((x) => at(x) === at(c)) && all.findIndex((y) => at(y) === at(c)) === i);
-    return { ...a, claims: agreed, publicFacts: [...a.publicFacts,
-      ...disputed.map((c) => ({ start: c.start, end: c.end, text: c.text, why: 'flagged on one of two reads: check it before you publish' }))] };
+    return { ...a, claims: agreed, agreement: { both: agreed.length, either: agreed.length + disputed.length }, publicFacts: [...a.publicFacts,
+      ...disputed.map((c) => ({ start: c.start, end: c.end, text: c.text, why: DISPUTED_WHY }))] };
   };
   const fallback = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the claim reader could not run)');
   const gatePattern = patternSensor(ctx.material, ctx.placeholders, 'pattern check (the gate: the claim reader is not qualified)');

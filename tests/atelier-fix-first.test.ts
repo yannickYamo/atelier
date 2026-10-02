@@ -107,12 +107,14 @@ describe('P1-1: two reads, and only what both raise is acted on', () => {
     const r = s.reading('The review took 94 minutes.');
     expect(r?.claims).toHaveLength(0);
     expect(r?.publicFacts[0].why).toMatch(/one of two reads/);
+    expect(r?.agreement).toEqual({ both: 0, either: 1 });
   });
   it('polarity: a flag both reads raise is acted on', async () => {
     const s = modelSensor(reads([flag('94 minutes'), flag('94 minutes')]), { spentUsd: 0, capUsd: 1 }, 'claude-haiku-4-5',
       { material: '', task: '', placeholders: false, qualifiedReaders, reads: 2 });
     await s.read('The review took 94 minutes.');
     expect(s.reading('The review took 94 minutes.')?.claims).toHaveLength(1);
+    expect(s.reading('The review took 94 minutes.')?.agreement).toEqual({ both: 1, either: 1 });
   });
 });
 

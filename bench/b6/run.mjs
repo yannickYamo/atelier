@@ -265,8 +265,9 @@ async function generate() {
       } else {
         const proj = join(work, x.reg, 'proj');
         const env = { ...process.env, ATELIER_DATA: join(work, x.reg, 'data'), ATELIER_PROJECT_DIR: proj };
-        // `open` is Atelier as 0.7 ran it: no fidelity loop, and 0.7's two drafts.
-        const extra = x.arm === 'open' ? ['--no-fidelity', '--drafts', '2'] : [];
+        // `open` is Atelier as 0.7 ran it: no fidelity loop, and 0.7's two drafts. `loop` asks for the loop by
+        // name: since 1.0 the default release is 0.7's cost, so an arm that passes nothing is the open arm again.
+        const extra = x.arm === 'open' ? ['--no-fidelity', '--drafts', '2'] : ['--fidelity'];
         const raw = execFileSync('node', [CLI, 'invoke', '--skill', `b6-${x.reg}`, '--json', '--no-taste', '--model', MODEL, ...priceFlags(w), ...extra, brief], { cwd: proj, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
         const j = JSON.parse(raw); text = j.output; cost = j.costUsd ?? 0;
         meta = { invocationId: j.invocationId, rulesBroken: j.rulesBroken, cut: j.cut, toCheck: j.toCheck, fidelity: j.fidelity ?? null };

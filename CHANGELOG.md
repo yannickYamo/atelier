@@ -5,6 +5,22 @@ Notable changes to Atelier. Format follows [Keep a Changelog](https://keepachang
 **From 1.0 the on-disk state format under `$ATELIER_DATA` is stable within a major version:** a 1.x release
 reads every store a 1.0 release wrote. Before 1.0 a minor version could change it.
 
+## [1.0.1] — 2026-10-02 (one claim verdict per run)
+
+### Fixed
+
+- **One claim verdict per run.** The panel read the delivered text again for invented claims, and a fresh read is
+  another sample of a reader that varies: in a live run the report line said every REQUIRED rule held while the
+  panel listed 5 invented claims, and repeated reads of the same text flagged 7, 2 and 5. The panel now uses the
+  report the repair counted on the text it delivered (two reads, each sentence's verdict held for the run). A
+  fresh read happens only when no repair ran (`--no-repair`) or the text changed after it.
+- **A flag only one of the two reads raised is shown as disputed,** beside the claims delivered and cut, listed
+  for you to check and never a failure. Before, it was counted with the public facts.
+- **The claim reader's repeatability is on the panel:** "reads agreed on 1 of 3 flags" for this text.
+- **A broken rule is named by what it is:** `c9 "Keep every paragraph under four sentences, so…"`, not `c9` alone.
+- **B6 harness:** the `loop` arm passes `--fidelity`. Since 1.0 the default release costs what 0.7 did, so an
+  arm that passed nothing ran the same as `open`.
+
 ## [1.0.0] — 2026-10-02 (what the evidence supports, and the instruments to test the rest)
 
 1.0 is the claim the evidence supports, stated plainly, and a stable state format. A skill Atelier builds from

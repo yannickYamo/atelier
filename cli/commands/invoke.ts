@@ -336,10 +336,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
   const sectionWriter = argv.includes('--sections') && contractFile === null
     ? writeBySections({ client, budget, servedText: servedForRun, task: taskForRun, trace }) : null;
+  // ONE CLAIM VERDICT PER RUN. The report the repair counted on the text it delivered (two reads agreed, and each
+  // sentence's verdict held for the run by claimMemory) is the one the panel shows: a fresh read of the same text
+  // is another sample of a noisy reader, and two samples of one run disagreed (7, 2 and 5 flags in a live test).
+  let delivered: Delivered | null = null;
+  const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
+    std && !argv.includes('--no-repair') ? keepDelivered(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
@@ -366,7 +371,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   try {
     // The full check of the delivered text, as `verify` runs it: the verdict is counted on what ships, whatever
     // repair did or did not record (--no-repair records nothing). The claim reader reads it from cache.
-    const finalReport = std && contractFile === null ? await checkDraftAsync(name, std, rec.output, checks).catch(() => null) : null;
+    // Read fresh only when no repair ran (--no-repair) or the text changed after it.
+    const kept = delivered as Delivered | null;
+    const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
+      : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
       answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
@@ -529,29 +537,29 @@ function refineDraft(c: DraftContext & { readonly client: InferenceClient; reado
   return async (draft: string) => {
     const r = await refineToStandard(c.client, c.budget, c.name, c.std, draft, 2, c.checks);
     const taste = c.taste;
-    if (!taste?.acts) return { output: r.output, repair: r.repair };
+    if (!taste?.acts) return { output: r.output, repair: r.repair, report: r.report };
     let t: Awaited<ReturnType<typeof refineTaste>>;
     try {
       t = await refineTaste(c.client, taste.client(), c.budget, c.name, c.std, r.output, await taste.read(r.output), taste.veto, taste.asked, c.checks, await taste.applies());
     } catch (e) {
       taste.notes.push(`the taste reader could not run before delivery (${(e as Error).message.split('\n')[0]}); delivered as the counted checks left it`);
-      return { output: r.output, repair: r.repair };
+      return { output: r.output, repair: r.repair, report: r.report };
     }
     taste.taken = t.readings;
-    if (!t.targeted.length || t.output === r.output) return { output: r.output, repair: r.repair };
+    if (!t.targeted.length || t.output === r.output) return { output: r.output, repair: r.repair, report: r.report };
     // THE REPORT IS THE DELIVERED TEXT'S. The taste rewrite changed the text after the counted checks
     // read it, so the text is held to the claim floor again and every figure below is counted on it.
     const final = await enforceClaims(c.name, c.std, t.output, c.checks);
     // A cut that breaks the tasted text: deliver the draft the counted checks already cleared instead.
     if (final.cut.length && brokenByCut(t.output, final.text)) {
       taste.notes.push('the taste rewrite added claims that could not be cut without breaking it; delivered as the counted checks left it');
-      return { output: r.output, repair: r.repair };
+      return { output: r.output, repair: r.repair, report: r.report };
     }
     const fixed = { targeted: t.targeted, fixed: t.fixed, why: t.why };
     const cut = [...(r.repair?.storiesCut ?? []), ...final.cut];
     const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: t.why };
     const toCheck = [...new Set([...(r.repair?.claimsToCheck ?? []), ...final.listed, ...listedClaims(final.report)])];
-    return { output: final.text, repair: { ...base, violatedAfter: brokenIn(final.report), taste: fixed, ...(cut.length ? { storiesCut: cut } : {}),
+    return { output: final.text, report: final.report, repair: { ...base, violatedAfter: brokenIn(final.report), taste: fixed, ...(cut.length ? { storiesCut: cut } : {}),
       claimsToCheck: toCheck.length ? toCheck : undefined } };
   };
 }
@@ -600,7 +608,10 @@ interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { tar
  * pattern check only), nor when the taste reader holds VETO (its readings, recorded and calibrated on, would
  * describe a text that is no longer the output, and a redraft could undo what its own repair fixed).
  */
-function withEdits(refine: (draft: string) => Promise<{ output: string; repair: RepairRecord | null }>,
+/** What a refine step delivers: the text, its repair record, and the report counted on that very text. */
+interface Delivered { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
+
+function withEdits(refine: (draft: string) => Promise<Delivered>,
   e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace; taste: TasteSession | null } | null) {
   if (!e) return refine;
   return async (draft: string) => {
@@ -645,7 +656,7 @@ function withEdits(refine: (draft: string) => Promise<{ output: string; repair: 
     // drafts (core/fidelity/experience.ts) reads the text the reading was taken on.
     const base = r.repair ?? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft, why: 'every REQUIRED measured rule holds' };
     const { claimsToCheck: _old, ...rest } = base;
-    return { output: edited.text, repair: { ...rest, violatedAfter: brokenIn(final),
+    return { output: edited.text, report: final, repair: { ...rest, violatedAfter: brokenIn(final),
       ...(toCheck.length ? { claimsToCheck: toCheck } : {}),
       why: `${base.why}; ${keptN} structural edit(s) toward your range` } };
   };

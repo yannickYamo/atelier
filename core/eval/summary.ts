@@ -34,11 +34,15 @@ export interface EvalSummary {
   readonly result: { readonly conformant: boolean; readonly reasons: readonly string[] };
   readonly gates: {
     /** `contract`: a structured output, held by its output contract rather than by prose rules */
-    readonly required: { readonly held: number; readonly applicable: number; readonly broken: readonly { readonly id: string; readonly detail: string }[]; readonly contract?: boolean };
+    readonly required: { readonly held: number; readonly applicable: number; readonly broken: readonly { readonly id: string; readonly detail: string; /** the rule, in short: what c9 is */ readonly label?: string }[]; readonly contract?: boolean };
     readonly claims: {
       readonly state: 'checked' | 'not-checked' | 'off';
       /** invented claims still in the delivered text, and the unconfirmed ones (listed, neither cut nor passed) */
       readonly delivered: number; readonly unconfirmed: number; readonly cut: number; readonly listed: number;
+      /** flagged on one of two reads only: listed for the person to check, never cut and never a failure */
+      readonly disputed?: number;
+      /** the claim reader's repeatability on this text: flags both reads raised, of the flags either raised */
+      readonly agreement?: { readonly both: number; readonly either: number } | null;
       readonly instrument: string | null;
       readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null;
       /** for answers: work and result claims are decided by patterns, other specifics are listed */
@@ -68,6 +72,10 @@ export interface EvalSummary {
 
 /** The escape character colour codes start with. */
 const ESC = String.fromCharCode(27);
+/** The two reads' agreement on this text, said plainly. */
+export const agreementOf = (a: { both: number; either: number }): string =>
+  a.either === 0 ? 'both reads flagged nothing' : `reads agreed on ${a.both} of ${a.either} flag${a.either === 1 ? '' : 's'}`;
+
 const pad = (s: string, n: number): string => (s.length >= n ? s : s + ' '.repeat(n - s.length));
 const fmt = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 const secs = (ms: number): string => (ms >= 10000 ? `${Math.round(ms / 1000)} s` : `${(ms / 1000).toFixed(1)} s`);
@@ -87,12 +95,12 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   const g = e.gates;
   const req = g.required;
   if (req.contract) out.push(`  ${tag(null)}  ${pad('required rules', 17)}a structured output: held by its output contract, not by prose rules`);
-  else out.push(`  ${tag(req.broken.length === 0)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id} (${b.detail})`).join(', ')}` : ''}`);
+  else out.push(`  ${tag(req.broken.length === 0)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id}${b.label ? ` "${b.label}"` : ''} (${b.detail})`).join(', ')}` : ''}`);
   const cl = g.claims;
   const reader = cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone, on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
   if (cl.state === 'off') out.push(`  ${tag(null)}  ${pad('invented claims', 17)}not checked: turned off for this run (--allow-unsourced)`);
   else if (cl.state === 'not-checked') out.push(`  ${tag(false)}  ${pad('invented claims', 17)}not checked: the claim reader could not run, so this is not a pass`);
-  else out.push(`  ${tag(cl.delivered === 0 && cl.unconfirmed === 0)}  ${pad('invented claims', 17)}${cl.delivered} delivered · ${cl.cut} cut${cl.unconfirmed ? ` · ${cl.unconfirmed} unconfirmed` : ''}${cl.listed ? ` · ${cl.listed} listed to check` : ''}${cl.answers ? ' · answers: work and results by pattern' : ''}${reader}`);
+  else out.push(`  ${tag(cl.delivered === 0 && cl.unconfirmed === 0)}  ${pad('invented claims', 17)}${cl.delivered} delivered · ${cl.cut} cut${cl.unconfirmed ? ` · ${cl.unconfirmed} unconfirmed` : ''}${cl.disputed ? ` · ${cl.disputed} disputed (one of two reads flagged it: check before you publish)` : ''}${cl.listed ? ` · ${cl.listed} listed to check` : ''}${cl.agreement ? ` · ${agreementOf(cl.agreement)}` : ''}${cl.answers ? ' · answers: work and results by pattern' : ''}${reader}`);
   if (g.copying) out.push(`  ${tag(g.copying.longest < g.copying.limit)}  ${pad('copying', 17)}longest run shared with your pieces: ${g.copying.longest} words (limit ${g.copying.limit})`);
   const f = g.format;
   out.push(`  ${tag(f.held ?? true)}  ${pad('format', 17)}${f.kind === 'shape' ? `the request's own shape ("${f.words}"): ${f.withheld} presentation rule(s) withheld, by design` : f.kind === 'bare' ? `bare request ("${f.words}"): standard applied in full` : 'no format stated: standard applied in full'}${f.held === false ? ' · the format\'s hard limits are broken' : ''}`);

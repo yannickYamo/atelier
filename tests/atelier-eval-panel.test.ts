@@ -112,6 +112,7 @@ describe('the evaluation and rating stores', () => {
 
 // ── what the gap analysis found, pinned ───────────────────────────────────────────────────────────
 import { buildRunEval, type RunEvalInput } from '../cli/eval-run.js';
+import { DISPUTED_WHY } from '../core/loop/claim-extract.js';
 import type { VerifyReport } from '../core/observers/verify.js';
 import type { InvocationRecord } from '../core/state/canonical-state.js';
 
@@ -123,7 +124,8 @@ describe('the verdict is counted on the delivered text, and can never say CONFOR
     result: { verdict, value: spans, detail: `${id} detail`, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: `s${i}`, why: '' })) } });
   const report = (...checked: ReturnType<typeof line>[]): VerifyReport => ({ skill: 'posts', standardVersionHash: 'h', checked, unchecked: [], conditional: [], failed: false });
   const std = { standardVersionHash: 'h', requirements: [] } as never;
-  const sensor = (instrument: string, qualified = true) => ({ instrument, version: 'a173339d', qualified, gate: qualified ? 'reader' : 'pattern', degraded: false }) as never;
+  const sensor = (instrument: string, qualified = true, agreement?: { both: number; either: number }) => ({ instrument, version: 'a173339d', qualified, gate: qualified ? 'reader' : 'pattern', degraded: false,
+    reading: () => (agreement ? { claims: [], publicFacts: [], instrument, agreement } : undefined) }) as never;
   const input = (over: Partial<RunEvalInput>): RunEvalInput => ({ L, rec, std, sensor: sensor('claim reader (claude-haiku-4-5, prompt a173339d)'), claimsOff: false, answers: false, profile: null,
     format: { words: null, shape: null, withheld: 0 }, taste: null, costUsd: 0.1, durationMs: 1000, drafts: 2, applicability: [], contract: false,
     report: report(line('c1', 'MET'), line('UNSOURCED', 'MET')), ...over });
@@ -163,5 +165,23 @@ describe('the verdict is counted on the delivered text, and can never say CONFOR
     const e = buildRunEval(input({ contract: true, report: null }));
     expect(e.gates.required.contract).toBe(true);
     expect(e.result.conformant).toBe(true);
+  });
+  it('one claim verdict: a flag only one read raised is disputed, listed apart, never a failure; the reads\' agreement is shown', () => {
+    const disputed = { requirementId: 'UNSOURCED·public', statement: 'public', materiality: 'PREFERRED',
+      result: { verdict: 'VIOLATED' as const, value: 3, detail: '', spans: [
+        { start: 0, end: 1, text: 'a', why: DISPUTED_WHY }, { start: 2, end: 3, text: 'b', why: DISPUTED_WHY }, { start: 4, end: 5, text: 'c', why: 'general knowledge' }] } };
+    const e = buildRunEval(input({ sensor: sensor('claim reader (claude-haiku-4-5, prompt a173339d)', true, { both: 1, either: 3 }),
+      report: report(line('c1', 'MET'), line('UNSOURCED', 'MET'), disputed) }));
+    expect(e.gates.claims).toMatchObject({ delivered: 0, disputed: 2, listed: 1, agreement: { both: 1, either: 3 } });
+    expect(e.result.conformant).toBe(true);
+    const p = flat(renderPanel(e));
+    expect(p).toMatch(/PASS {2}invented claims {2}0 delivered · 0 cut.+2 disputed \(one of two reads flagged it: check before you publish\).+1 listed to check.+reads agreed on 1 of 3 flags/);
+  });
+  it('a broken rule is named by what it is, not only its id', () => {
+    const c9 = { ...line('c9', 'VIOLATED', 1), statement: 'Keep every paragraph under four sentences, so a reader can scan the piece on a phone.' };
+    const e = buildRunEval(input({ report: report(c9, line('UNSOURCED', 'MET')) }));
+    expect(e.gates.required.broken[0].label).toBe('Keep every paragraph under four sentences, so…');
+    expect(e.result.reasons[0]).toMatch(/c9 "Keep every paragraph under four sentences/);
+    expect(flat(renderPanel(e))).toMatch(/broken c9 "Keep every paragraph/);
   });
 });
