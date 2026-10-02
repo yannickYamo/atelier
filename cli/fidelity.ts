@@ -100,8 +100,18 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   // A NEW STANDARD IS A NEW SKILL. What the loop learned under one standard says nothing about another.
   if (active.standardVersionHash !== sv.standardVersionHash) return null;
   let release = active;
-  if (active.skillVersionHash !== sv.skillVersionHash) {
-    release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id, skillVersionHash: sv.skillVersionHash,
+  // 0.8'S DEFAULT IS NOT A CHOICE. A skill built under 0.8 got the full loop as its first release, which 1.0
+  // makes opt-in. Where nobody chose those settings (no release in its line was set by hand or by the settings
+  // search), the active skill moves to 1.0's default through a child release that says why; a setting a person
+  // chose is never touched.
+  if (wasLoopByDefault(L, active) && store.getActive(L) === sv.skillVersionHash) {
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(active), parent: active.id,
+      settings: { ...DEFAULT_SETTINGS, retrievalK: active.settings.retrievalK }, createdAt: new Date().toISOString(),
+      why: 'moved to the 1.0 default: the fidelity loop is opt-in until a study shows it pays (decision 0007)' }));
+    fstore.setActiveRelease(L, release.id);
+  }
+  if (release.skillVersionHash !== sv.skillVersionHash) {
+    release = fstore.putRelease(L, makeRelease({ ...withoutId(release), parent: release.id, skillVersionHash: sv.skillVersionHash,
       createdAt: new Date().toISOString(), why: `carried to skill version ${sv.skillVersionHash}` }));
     // A CANDIDATE RUN STEERS, IT DOES NOT ADOPT. Trying a version that is not active (`invoke --candidate`)
     // runs under a release made for it, and leaves the active release where it was.
@@ -110,6 +120,13 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   assertSameStandard(release, sv.standardVersionHash);
   const index = release.retrievalHash ? fstore.getRetrievalIndex(L, release.retrievalHash) ?? fstore.getRetrievalIndex(L) : null;
   return { release, profile, index: index?.hash === release.retrievalHash ? index : null };
+}
+
+/** Whether a release still carries 0.8's automatic loop settings, never chosen by a person or the search. */
+function wasLoopByDefault(L: store.StoreLayout, r: ImplementationRelease): boolean {
+  const s = r.settings;
+  if (!(s.drafts === 4 && s.editBudget === 2 && s.notesCap === 6 && !s.diversity && r.notes.length === 0)) return false;
+  return !fstore.releaseChain(L, r.id).some((x) => /^(settings set by hand|the settings search)/.test(x.why));
 }
 
 const withoutId = (r: ImplementationRelease): Omit<ImplementationRelease, 'id'> => {

@@ -21,7 +21,7 @@ import { buildProfile, readFidelity, inBandShare } from '../core/fidelity/profil
 import { movedTarget, steerTowardRange, carrier } from '../core/fidelity/structural.js';
 import { parsePlan, sectionBlock, joinSections } from '../core/fidelity/sections.js';
 import { applyOperator, sitesOf, effectMatrix, operatorsToward } from '../core/fidelity/operators.js';
-import { ratifiedProfile, firstSettings } from '../cli/fidelity.js';
+import { ratifiedProfile, firstSettings, releaseFor } from '../cli/fidelity.js';
 import { checkDraft, enforceClaims, INCONCLUSIVE, UNREAD } from '../core/loop/run-repair.js';
 import { judgeFeature } from '../core/observers/selection.js';
 import { authorSelfMargins } from '../core/observers/style.js';
@@ -433,6 +433,31 @@ describe('a release line never crosses a standard', () => {
     fstore.setProfile(L, p1); fstore.setProfile(L, p2);
     expect(fstore.getProfile(L)?.hash).toBe('p2');
     expect(fstore.getProfile(L, 'p1')?.hash).toBe('p1');
+  });
+});
+
+describe('upgrading from 0.8: a default nobody chose moves to 1.0\'s; a choice stays', () => {
+  const setup = (why: string) => {
+    const L = { root: mkdtempSync(join(tmpdir(), 'atelier-up-')), skillName: 'x' };
+    const profile: FidelityProfile = { version: 1, corpusHash: 'c', detector: null, hash: 'ph', bands: [] };
+    fstore.setProfile(L, profile);
+    const r = fstore.putRelease(L, makeRelease({ parent: null, standardVersionHash: 'std', skillVersionHash: 'sv1',
+      settings: { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 }, notes: [], profileHash: 'ph', retrievalHash: null, createdAt: '2026-10-01T00:00:00Z', why }));
+    fstore.setActiveRelease(L, r.id);
+    // the skill's active version, as a built skill's store records it (the version body is not needed here)
+    writeFileSync(join(L.root, 'skills', 'x', 'active.json'), JSON.stringify({ skillVersionHash: 'sv1', at: '2026-10-01T00:00:00Z' }));
+    return { L, r };
+  };
+  it('0.8\'s automatic first release becomes a child release with 1.0\'s default, saying why', () => {
+    const { L, r } = setup('the first release, built with the skill');
+    const got = releaseFor(L, { skillVersionHash: 'sv1', standardVersionHash: 'std' })!;
+    expect(got.release.settings).toMatchObject({ drafts: 2, editBudget: 0, notesCap: 0 });
+    expect(got.release.parent).toBe(r.id);
+    expect(got.release.why).toMatch(/opt-in/);
+  });
+  it('settings someone chose by hand are kept', () => {
+    const { L, r } = setup('settings set by hand: drafts=4,editBudget=2');
+    expect(releaseFor(L, { skillVersionHash: 'sv1', standardVersionHash: 'std' })!.release.id).toBe(r.id);
   });
 });
 
