@@ -7,6 +7,15 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added: install from npm, and one command to set up
+
+- **`atelier setup`** (`npx @yannickyamo/atelier setup` with nothing installed) finds the coding agents in a
+  project (Claude Code, Cursor, VS Code, Codex) and adds the Atelier MCP server to each one's config. It adds
+  one entry and never replaces what is there: a config it cannot parse is left alone and named, and an
+  `atelier` entry already present is kept as it is. `--dry-run` says what it would write.
+- **`npm install -g @yannickyamo/atelier`** is the install the README, the skills and the plugin's own check
+  name first; building from source is still documented beside it.
+
 ### Added: the voice layer, below the standard and off by default
 
 Nothing here runs until the owner declares the register their pieces are written in, and the voice pass is a

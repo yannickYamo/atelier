@@ -13,9 +13,24 @@ Both items are tests, not features, and each result is published whichever way i
   split, and two scores: the benchmark's own judge and Atelier's standard. The kit is in
   [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare).
 
-## Next
+## Next: easier to install and to use where work happens
 
-- **npm install.** `npx @yannickyamo/atelier new ./posts "…"` in place of clone and build.
+In this order, each one usable on its own.
+
+1. **npm and one-command setup.** `npx @yannickyamo/atelier setup` finds the coding agents in a project and
+   gives each the Atelier MCP server; `npm install -g @yannickyamo/atelier` replaces clone, build and link.
+   Built; it ships with the next tagged release.
+2. **A check on pull requests.** `atelier verify` as a GitHub Action on docs, release notes and changelogs:
+   a broken REQUIRED rule fails the check, and the run's panel is the comment.
+3. **Ready-made standards.** A few public standards (a changelog, a code review, a support reply), each with
+   its skill card and one command to install it, from authors who agreed to be listed.
+4. **A standard shared by a team.** One approved standard, used by everyone on the team and checked in CI.
+
+Also next:
+
+- **The voice layer, measured.** Transfer between registers and the in-context voice pass are built and off
+  by default ([decision 0009](decisions/0009-voice-below-the-standard.md)). They stay off until a blind read
+  by people says the pass helps.
 - **A skill looked after for weeks.** The loop that tends a skill is built and tested offline, and has
   never run on a live skill over time.
 
