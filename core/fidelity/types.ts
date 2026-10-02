@@ -210,6 +210,8 @@ export interface FidelityRecord {
     readonly actuator?: string; readonly before?: number | null; readonly after?: number | null }[];
   /** the passages retrieved for this request, by index into the author's passages */
   readonly retrieved?: readonly number[];
+  /** the section titles, when the piece was written section by section (./sections.ts) */
+  readonly plan?: readonly string[];
   /** per draft, when drafts were made to differ: the temperature it was written at and the passages it was given */
   readonly variants?: readonly { readonly temperature: number; readonly retrieved: readonly number[] }[];
   /** how many of the facts the request and the bound material supplied the output used, and its density per 100 words */

@@ -8,10 +8,12 @@ import { buildRetrievalIndex, retrieve, renderRetrieved, MIN_PASSAGE_WORDS } fro
 import { comparisonPairs, distillPrompt, parseNotes, noteProblem, distillNotes, renderNotes, MIN_IN_BAND_GAP, MAX_NOTES, type ExperienceSource } from '../core/fidelity/experience.js';
 import { makeRelease, assertSameStandard, nextSettings, MIN_SAMPLES, StandardMoved, type ReleaseOutcome } from '../core/fidelity/release.js';
 import * as fstore from '../core/state/fidelity-store.js';
-// The release fixtures were written with the full-loop settings; their pinned ids depend on them.
-import { LOOP_SETTINGS as DEFAULT_SETTINGS, type FeatureBand, type FidelityReading, type FidelityProfile, type ImplementationSettings } from '../core/fidelity/types.js';
+import { type FeatureBand, type FidelityReading, type FidelityProfile, type ImplementationSettings } from '../core/fidelity/types.js';
 import type { InferenceClient, InferenceRequest } from '../core/inference/client.js';
 import { anInferenceResult } from './fixtures.js';
+
+// The release fixtures' settings, frozen: their pinned ids depend on these exact values.
+const DEFAULT_SETTINGS: ImplementationSettings = { drafts: 4, editBudget: 2, retrievalK: 3, notesCap: 6 };
 
 // ── estimator ─────────────────────────────────────────────────────────────────────────────────
 

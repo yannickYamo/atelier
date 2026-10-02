@@ -270,6 +270,9 @@ export function unchosenDrafts(pieces: readonly string[], chosen: number, cap = 
   return { texts, truncated };
 }
 
+/** What writing one draft returns: the piece, who answered, the schema sent, and the task as served. */
+export type Written = Awaited<ReturnType<typeof spendOneWithResult>>;
+
 /** One draft's variation: the temperature it is written at, and reference material only it is given. */
 export interface DraftVariant { readonly temperature?: number; readonly stableExtra?: string }
 
@@ -350,7 +353,9 @@ export async function runOnce(
   /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
   select: { readonly n: number; readonly choose: (drafts: readonly string[]) => { index: number; why: string } | Promise<{ index: number; why: string }>;
     /** draft i's own variation, when drafts are made to differ (core/fidelity/types.ts, `diversity`) */
-    readonly variant?: (i: number) => DraftVariant } | null = null,
+    readonly variant?: (i: number) => DraftVariant;
+    /** how draft i is written, when not in one call (long form by section, core/fidelity/sections.ts) */
+    readonly write?: (i: number, variant: DraftVariant) => Promise<Written> } | null = null,
   /**
    * THE INVENTED-CLAIM CHECK FOR A STRUCTURED OUTPUT. A contract-shaped answer is never span-rewritten,
    * which used to mean it was never checked for invented claims at all: a report or a contract, the
@@ -379,7 +384,10 @@ export async function runOnce(
   // A FAILED DRAFT CALL COSTS THAT DRAFT, NOT THE RUN. With several drafts, the ones that came back are
   // kept and the choice is made among them; the failure is said and recorded. Only when none came back
   // is there nothing to deliver, and the first error is what the person sees.
-  const settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, (i) => spendOneWithResult(client, budget, servedText, task, contract, '', n > 1 ? select?.variant?.(i) ?? {} : {}));
+  const settled = await mapLimitSettled(Array.from({ length: n }, (_, i) => i), n, (i) => {
+    const v = n > 1 ? select?.variant?.(i) ?? {} : {};
+    return select?.write && contract === null ? select.write(i, v) : spendOneWithResult(client, budget, servedText, task, contract, '', v);
+  });
   const written = settled.flatMap((x) => (x.ok ? [x.value] : []));
   const failures = settled.flatMap((x) => (x.ok ? [] : [(x.error as Error).message?.split('\n')[0] ?? String(x.error)]));
   if (!written.length) {

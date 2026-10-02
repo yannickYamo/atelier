@@ -19,6 +19,7 @@ import { DEFAULT_SETTINGS } from '../core/fidelity/types.js';
 import type { VerifyReport } from '../core/observers/verify.js';
 import { buildProfile, readFidelity, inBandShare } from '../core/fidelity/profile.js';
 import { movedTarget, steerTowardRange, carrier } from '../core/fidelity/structural.js';
+import { parsePlan, sectionBlock, joinSections } from '../core/fidelity/sections.js';
 import { applyOperator, sitesOf, effectMatrix, operatorsToward } from '../core/fidelity/operators.js';
 import { ratifiedProfile, firstSettings } from '../cli/fidelity.js';
 import { checkDraft, enforceClaims, INCONCLUSIVE, UNREAD } from '../core/loop/run-repair.js';
@@ -191,6 +192,22 @@ describe('steering toward the range: kept only when the target moved and nothing
   });
 });
 
+describe('long form by section: a plan, one section at a time, joined', () => {
+  it('a plan is 2 to 9 sections with a title and what each covers; anything else is refused', () => {
+    expect(parsePlan({ sections: [{ title: 'A', covers: 'x' }, { title: 'B', covers: 'y' }], headings: false })?.sections).toHaveLength(2);
+    expect(parsePlan({ sections: [{ title: 'A', covers: 'x' }], headings: false })).toBeNull();
+    expect(parsePlan({ sections: Array.from({ length: 10 }, (_, i) => ({ title: `S${i}`, covers: 'x' })), headings: false })).toBeNull();
+    expect(parsePlan({ sections: [{ title: '', covers: 'x' }, { title: 'B', covers: 'y' }], headings: false })).toBeNull();
+  });
+  it('each section is told the whole plan and to write only its own; headings only when the author uses them', () => {
+    const plan = { sections: [{ title: 'Start', covers: 'the setup' }, { title: 'End', covers: 'the result' }], headings: false };
+    expect(sectionBlock(plan, 1)).toMatch(/Write section 2 of 2 only: "End"/);
+    expect(sectionBlock(plan, 1)).toContain('1. Start: the setup');
+    expect(joinSections(plan, ['one', 'two'])).toBe('one\n\ntwo');
+    expect(joinSections({ ...plan, headings: true }, ['one', 'two'])).toBe('## Start\n\none\n\n## End\n\ntwo');
+  });
+});
+
 describe('the applicability manifest: every requirement, and what it was to this output', () => {
   const std = { standardVersionHash: 's', requirements: [
     { requirementId: 'a', statement: 'Lead with the decision.', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', materiality: 'REQUIRED' },
@@ -284,6 +301,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
       emit_observation: { applicable: true, present: true, why: 'seen' },
       emit_piece: { piece: wall },
       emit_text: { text: split },
+      emit_plan: { sections: [{ title: 'What happened', covers: 'the incident' }, { title: 'What we changed', covers: 'the fix' }], headings: true },
     } }) });
     const dir = join(proj, 'posts'); mkdirSync(dir, { recursive: true });
     for (let k = 0; k < 12; k++) writeFileSync(join(dir, `post-${k}.md`), authorPiece(k));
@@ -325,11 +343,21 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(rec.fidelity.reading.inBand).toBeGreaterThanOrEqual(rec.fidelity.drafts[0].inBand);
   }, 120_000);
 
+  it('invoke --sections plans the piece, writes it section by section, and records the plan', () => {
+    const out = run('invoke', '--skill', 'posts', '--no-taste', '--json', '--sections', 'write the long version of the cache incident');
+    const j = JSON.parse(out) as { output: string };
+    expect(j.output).toMatch(/^## What happened\n\n[\s\S]*\n\n## What we changed\n\n/);
+    const invDir = join(data, 'skills', 'posts', 'invocations');
+    const latest = readdirSync(invDir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(invDir, f), 'utf8')) as { at: string; fidelity?: { plan?: string[] } })
+      .sort((a, b) => a.at.localeCompare(b.at)).pop();
+    expect(latest?.fidelity?.plan).toEqual(['What happened', 'What we changed']);
+  }, 120_000);
+
   it('fidelity reports the profile and the release; --set makes a child release; --rollback returns to the parent', () => {
     const page = run('fidelity', '--skill', 'posts');
     expect(page).toMatch(/Fidelity profile [0-9a-f]{16}/);
     expect(page).toMatch(/Active implementation release [0-9a-f]{16}: 2 draft\(s\)/);
-    expect(page).toMatch(/1 output\(s\) recorded with a reading/);
+    expect(page).toMatch(/2 output\(s\) recorded with a reading/);   // the --fidelity run and the --sections run
     const set = run('fidelity', '--skill', 'posts', '--set', 'drafts=2,editBudget=1');
     expect(set).toMatch(/New implementation release [0-9a-f]{16} \(parent [0-9a-f]{16}\): 2 draft\(s\), 1 structural edit\(s\)/);
     expect(run('fidelity', '--skill', 'posts', '--rollback')).toMatch(/Active implementation release is now [0-9a-f]{16}/);

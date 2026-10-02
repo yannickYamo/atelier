@@ -17,7 +17,8 @@ import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type Fidel
 import type { RepairRecord } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { retrieve, renderRetrieved } from '../../core/fidelity/retrieval.js';
-import type { DraftVariant } from './improve.js';
+import { spendOneWithResult, type DraftVariant, type Written } from './improve.js';
+import { planSections, sectionBlock, joinSections, MAX_SECTIONS, type SectionPlan } from '../../core/fidelity/sections.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -241,7 +242,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4)),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
-    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)) };
+    // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
+    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
+      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -314,11 +317,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
     : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
+  // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
+  // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
+  const sectionWriter = argv.includes('--sections') && contractFile === null
+    ? writeBySections({ client, budget, servedText: servedForRun, task: taskForRun, trace }) : null;
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && editBudget ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null) : null,
-    std && nDrafts > 1 ? selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf } : {}) }) : null,
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: fid?.profile ?? null, trace, ledger, ...(diverse ? { variant: variantOf } : {}) }), sectionWriter)
+      : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
@@ -543,7 +551,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
 const OPERATOR_TRIES = 24;
 
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { temperature: number; retrieved: number[] }[] }
+interface FidelityTrace { drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { temperature: number; retrieved: number[] }[]; plan?: SectionPlan }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -604,6 +612,30 @@ export function editKeepsStandard(before: VerifyReport, after: VerifyReport): bo
   return regressions(before, after).length === 0 && [...flagged(after)].every((t) => was.has(t));
 }
 
+/**
+ * Each draft written section by section on one shared plan: the plan is made once, at the first draft. If the
+ * plan cannot be made, the draft is written whole, and the record says so.
+ */
+function writeBySections(c: { client: InferenceClient; budget: Budget; servedText: string; task: string; trace: FidelityTrace }) {
+  let plan: Promise<SectionPlan | null> | null = null;
+  return async (_i: number, v: DraftVariant): Promise<Written> => {
+    plan ??= planSections(c.client, c.budget, c.servedText, c.task).then((p) => { c.trace.plan = p; return p; }, (e: unknown) => {
+      c.trace.edits.push({ target: '-', kept: false, why: `written whole: the section plan could not be made (${(e as Error).message.split('\n')[0]})` });
+      return null;
+    });
+    const p = await plan;
+    if (!p) return spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, '', v);
+    const parts: Written[] = [];
+    for (let k = 0; k < p.sections.length; k++) parts.push(await spendOneWithResult(c.client, c.budget, `${c.servedText}${sectionBlock(p, k)}`, c.task, null, '', v));
+    return { ...parts[parts.length - 1], piece: joinSections(p, parts.map((x) => x.piece)) };
+  };
+}
+
+/** A selection that writes its drafts by section when a section writer is given. */
+function withSections<T extends object>(select: T, write: ((i: number, v: DraftVariant) => Promise<Written>) | null): T {
+  return write ? { ...select, write } : select;
+}
+
 /** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
   applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean): FidelityRecord {
@@ -617,6 +649,7 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     ...(trace.edits.length ? { edits: trace.edits } : {}),
     ...(retrieved.length ? { retrieved: [...retrieved] } : {}),
     ...(trace.variants.length ? { variants: trace.variants.filter(Boolean) } : {}),
+    ...(trace.plan ? { plan: trace.plan.sections.map((x) => x.title) } : {}),
     ...(cov ? { coverage: { supplied: ledger.length, used: cov.used.length, per100: cov.per100, authorPer100: fid.profile.factDensity ?? null } } : {}),
     applicability,
   };
