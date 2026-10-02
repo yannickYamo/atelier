@@ -11,7 +11,8 @@ set -euo pipefail
 if ! atelier --version >/dev/null 2>&1; then
   echo "Atelier: 'atelier' is not on PATH or will not run. The protocol guarantees (ratification-before-build," >&2
   echo "corpus-freeze, reveal-after-preference) are enforced by that binary, not by instructions." >&2
-  echo "Install it first:  git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link" >&2
+  echo "Install it first:  npm install -g @yannickyamo/atelier" >&2
+  echo "or from source:    git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link" >&2
   exit 2
 fi
 exit 0
