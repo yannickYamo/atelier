@@ -722,7 +722,7 @@ Product behaviour changed only where a fix is named here.
 - **The README is under 1,000 words** (from about 2,900). The detail moved, none of it removed:
   [USAGE](docs/USAGE.md), [COMPARISON](docs/COMPARISON.md), [RESULTS](docs/RESULTS.md) (wins and
   failures side by side, with populations), [LESSONS](docs/LESSONS.md),
-  [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md), [decisions/](docs/decisions/README.md) (five records,
+  [decisions/](docs/decisions/README.md) (five records,
   including the design of a search that cannot move the standard), a public [ROADMAP](docs/ROADMAP.md)
   with what is not being built, and [PRODUCT-METRICS](docs/PRODUCT-METRICS.md).
 - **An example to run:** [examples/blog](examples/blog/README.md), six synthetic posts, declared AI-written.
