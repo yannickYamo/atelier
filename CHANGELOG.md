@@ -23,6 +23,14 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   in proportion to how much likelier it is the author's than the model's (the style detector's density ratio),
   seeded and recorded, instead of the most typical one. Decision 0010.
 
+- **Plan-first generation** (`invoke --structure plan`), opt-in: `atelier fidelity --read-structure-from <folder>`
+  reads how the author's pieces are built, one move per paragraph (claim, explain, example, evidence, story,
+  concession, definition, instruction, question, turn, summary; two reads, kept where they agree). Each draft is then
+  written against its own skeleton of moves, sampled from the author's chain with the pieces nearest the request
+  counted more; the delivered text is read back and the panel says how much of its skeleton it followed. The
+  structure reader is under a sealed qualification (studies/STRUCTURE_READER_PREREGISTRATION.md); until it passes,
+  its features steer nothing.
+
 ### Fixed
 
 - **The taste reader ran on no current model.** A model that refuses forced tool choice and temperature, one 400 at

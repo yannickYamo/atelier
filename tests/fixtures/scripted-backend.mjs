@@ -51,6 +51,12 @@ const server = createServer((req, res) => {
     }
     const hit = when.find((w) => body.includes(w.contains));
     if (hit) answer = hit.answer;
+    // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`
+    // answers with one label per "[n]" the request carries, cycling through the moves given.
+    if (answer && Array.isArray(answer.labelAll)) {
+      const n = Math.max(0, ...[...body.matchAll(/\[(\d+)\] /g)].map((m) => Number(m[1])));
+      answer = { labels: Array.from({ length: n }, (_, i) => ({ n: i + 1, move: answer.labelAll[i % answer.labelAll.length] })) };
+    }
     res.end(JSON.stringify({
       choices: [{ finish_reason: 'stop', message: { tool_calls: [{ function: { arguments: JSON.stringify(answer) } }] } }],
       usage: { prompt_tokens: 10, completion_tokens: 10 },

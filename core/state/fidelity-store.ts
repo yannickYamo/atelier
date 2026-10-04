@@ -30,6 +30,8 @@ import type { FidelityProfile, ImplementationRelease } from '../fidelity/types.j
 import type { QualifyResult } from '../fidelity/qualify.js';
 import type { RetrievalIndex } from '../fidelity/retrieval.js';
 import type { TypicalityCalibration } from '../fidelity/typicality.js';
+import type { StructureMove } from '../structure/moves.js';
+import type { MoveChain } from '../structure/skeleton.js';
 import { passagesHash } from '../fidelity/retrieval.js';
 import { releaseId, canonicalJson } from '../fidelity/release.js';
 
@@ -224,4 +226,24 @@ export function getTypicality(l: StoreLayout, profileHash: string): TypicalityCa
 }
 export function setTypicality(l: StoreLayout, profileHash: string, cal: TypicalityCalibration): void {
   writeAtomic(typicalityPath(l, profileHash), JSON.stringify(cal));
+}
+
+/** The author's pieces as read by the structure reader, and the chain of moves sampled from (../structure/skeleton.ts). */
+export interface AuthorStructure {
+  readonly version: 1;
+  readonly reader: string;
+  readonly pieces: readonly { readonly id: string; readonly moves: readonly (StructureMove | null)[]; readonly kappa: number | null }[];
+  readonly chain: MoveChain;
+  readonly at: string;
+}
+
+/** The author's structure read for the profile with this hash, or null. */
+export function getStructure(l: StoreLayout, profileHash: string): AuthorStructure | null {
+  if (!/^[0-9a-f]+$/.test(profileHash)) return null;
+  const p = join(base(l), 'structure', `${profileHash}.json`);
+  return existsSync(p) ? readJson<AuthorStructure>(p, { what: "the author's structure", requireKeys: ['pieces', 'chain'] }) : null;
+}
+export function setStructure(l: StoreLayout, profileHash: string, s: AuthorStructure): void {
+  if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
+  writeAtomic(join(base(l), 'structure', `${profileHash}.json`), JSON.stringify(s));
 }

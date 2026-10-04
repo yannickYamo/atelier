@@ -65,6 +65,8 @@ export interface EvalSummary {
     readonly typicality?: { readonly p: number; readonly distance: number } | null;
     /** the rounds written toward a typicality target (`invoke --until-typical`) */
     readonly shape?: { readonly target: number; readonly authorTarget?: number; readonly written: number; readonly kept: number; readonly p: number; readonly author?: number | null } | null;
+    /** plan-first: the skeleton's length, and the share of it the delivered text followed */
+    readonly structure?: { readonly moves: number; readonly followed: number | null } | null;
     /** a draft drawn among tied ones by density ratio */
     readonly sampled?: { readonly among: number } | null;
   } | null;
@@ -134,6 +136,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
       const toward = [fi.shape.target ? `${Math.round(fi.shape.target * 100)}% typical` : '', fi.shape.authorTarget ? `P(yours) ${fi.shape.authorTarget}` : ''].filter(Boolean).join(' and ');
       out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);
     }
+    if (fi.structure) out.push(`    ${pad('structure plan', 18)}${fi.structure.moves} moves from your own pieces${fi.structure.followed === null ? '' : `; the text followed ${Math.round(fi.structure.followed * 100)}% of them`}`);
     if (fi.sampled) out.push(`    ${pad('draft drawn', 18)}from ${fi.sampled.among} tied drafts, in proportion to how likely each is yours`);
   }
   if (e.voice) {

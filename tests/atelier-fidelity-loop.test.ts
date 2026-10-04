@@ -440,6 +440,29 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--shape-rounds', '0')).toMatch(/--shape-rounds must be at least 1/);
   }, 180_000);
 
+  it('plan-first: the author\'s structure is read once, each draft gets its own skeleton, and the delivered text is read against it', async () => {
+    const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['post-0.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+      emit_factors: { factors: [factor('Say what happened before why.')] }, emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }] },
+      emit_observation: { applicable: true, present: true, why: 'seen' }, emit_piece: { piece: split }, emit_text: { text: split },
+      emit_plan: { sections: [{ title: 'What happened', covers: 'the incident' }, { title: 'What we changed', covers: 'the fix' }], headings: true },
+      emit_labels: { labelAll: ['STORY', 'CLAIM', 'EXAMPLE', 'TURN'] },
+    } }) });
+    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan')).toMatch(/--structure plan needs your pieces read for structure first/);
+    const readOut = run('fidelity', '--skill', 'posts', '--read-structure-from', join(proj, 'posts'), '--cap', '1');
+    expect(readOut).not.toMatch(/^EXIT:/);
+    expect(readOut).toMatch(/Read \d+ piece\(s\) \(reader [0-9a-f]{8}\); the two reads agreed at a median kappa of 1/);
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--structure', 'plan', '--drafts', '2', '--panel', '--json');
+    expect(out).not.toMatch(/^EXIT:/);
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { plans: string[][]; read: (string | null)[] | null; followed: number | null } } };
+    expect(rec.fidelity.structure?.plans).toHaveLength(2);
+    expect(rec.fidelity.structure?.plans[0][0]).toBe('STORY');
+    expect(rec.fidelity.structure?.read?.length).toBeGreaterThan(3);
+    expect(typeof rec.fidelity.structure?.followed).toBe('number');
+    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan', '--sections')).toMatch(/use one/);
+  }, 180_000);
+
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {
     expect(run('voice', 'status', '--skill', 'posts')).toMatch(/no register declared, so nothing of the voice layer runs/);
     const before = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');

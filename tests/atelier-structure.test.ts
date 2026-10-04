@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { canonicalMove, checkLabels, readStructure, STRUCTURE_MOVES, type StructureMove } from '../core/structure/moves.js';
 import { structureFeatures, entropyRate, transitions } from '../core/structure/features.js';
 import { cohenKappa } from '../core/stats/agreement.js';
+import { chainOf, sampleSkeleton, skeletonBlock, typicalLength, followed } from '../core/structure/skeleton.js';
 import { unmetered, type InferenceClient } from '../core/inference/client.js';
 
 describe('labels', () => {
@@ -64,5 +65,35 @@ describe('read twice, kept where both agree', () => {
   });
   it('a text of fewer than four paragraphs is not read', async () => {
     expect(await readStructure(scripted([]), { spentUsd: 0, capUsd: 1, maxCalls: 4 }, `${para(1)}\n\n${para(2)}`)).toBeNull();
+  });
+});
+
+describe('the skeleton: a shape sampled from the author\'s own chain', () => {
+  const author: (StructureMove | null)[][] = [
+    ['STORY', 'CLAIM', 'EXAMPLE', 'CONCESSION', 'TURN', 'CLAIM'],
+    ['STORY', 'CLAIM', 'EVIDENCE', 'EXPLAIN', 'TURN', 'CLAIM', 'EXAMPLE'],
+    ['QUESTION', 'STORY', 'CLAIM', 'EXAMPLE', 'TURN', 'CLAIM'],
+    ['STORY', 'CLAIM', 'EXAMPLE', 'CONCESSION', 'CLAIM'],
+  ];
+  it('a sampled skeleton starts and moves the way the author does, and replays for a seed', () => {
+    const chain = chainOf(author);
+    const runs = Array.from({ length: 300 }, (_, k) => sampleSkeleton(chain, 6, k + 1));
+    expect(runs.filter((r) => r[0] === 'STORY').length / runs.length).toBeGreaterThan(0.6);
+    const afterStory = runs.flatMap((r) => r.slice(1).filter((_, i) => r[i] === 'STORY'));
+    expect(afterStory.filter((m) => m === 'CLAIM').length / afterStory.length).toBeGreaterThan(0.7);
+    expect(sampleSkeleton(chain, 6, 42)).toEqual(sampleSkeleton(chain, 6, 42));
+    expect(typicalLength(chain)).toBe(6);
+  });
+  it('nearer pieces count more, and the instruction carries moves, not content', () => {
+    const near = chainOf(author, [10, 1, 1, 1]);
+    expect(near.transitions[STRUCTURE_MOVES.indexOf('EXAMPLE')][STRUCTURE_MOVES.indexOf('CONCESSION')]).toBeGreaterThan(
+      chainOf(author).transitions[STRUCTURE_MOVES.indexOf('EXAMPLE')][STRUCTURE_MOVES.indexOf('CONCESSION')]);
+    const block = skeletonBlock(['STORY', 'CLAIM']);
+    expect(block).toMatch(/1\. STORY: tell what happened/);
+    expect(block).toMatch(/without inventing one/);
+  });
+  it('adherence is the share of positions that match, over the longer of the two', () => {
+    expect(followed(['STORY', 'CLAIM', 'TURN'], ['STORY', 'CLAIM', 'EXAMPLE'])).toBeCloseTo(2 / 3, 3);
+    expect(followed(['STORY', 'CLAIM'], ['STORY', 'CLAIM', null, 'TURN'])).toBe(0.5);
   });
 });

@@ -29,9 +29,12 @@ import { calibrateTypicality, standardise, typicalityOf, MAX_UNMEASURED, type Ty
 import { readJson } from '../../core/state/read-json.js';
 import { basename } from 'node:path';
 import { closeness } from '../../core/fidelity/twosample.js';
+import { readStructure, STRUCTURE_READER_VERSION, type StructureMove } from '../../core/structure/moves.js';
+import { structureFeatures, STRUCTURE_FEATURES } from '../../core/structure/features.js';
+import { chainOf, typicalLength } from '../../core/structure/skeleton.js';
 import { join } from 'node:path';
 import { familiesOf } from './qualify.js';
-import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding, runFile, loadSession } from '../runtime.js';
+import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding, clientFor, runFile, loadSession } from '../runtime.js';
 
 export async function fidelity(): Promise<void> {
   const name = skillArg();
@@ -43,6 +46,8 @@ export async function fidelity(): Promise<void> {
   if (read) { readOne(readFileSync(read, 'utf8'), profile, fstore.getTypicality(L, profile.hash)); return; }
   const calibrateDir = flag('--calibrate-from');
   if (calibrateDir) { calibrate(L, profile.hash, calibrateDir); return; }
+  const structureDir = flag('--read-structure-from');
+  if (structureDir) { await readAuthorStructure(L, profile.hash, structureDir); return; }
   if (argv.includes('--rollback')) {
     const back = fstore.rollbackRelease(L) ?? die('nothing to roll back to: the active release is the first of its line (a new standard starts a new line).');
     console.log(`Active implementation release is now ${back.id} (${back.why}).`);
@@ -215,17 +220,7 @@ const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) 
 function calibrate(L: store.StoreLayout, profileHash: string, dir: string): void {
   const profile = fstore.getProfile(L, profileHash) ?? die('the active profile is not stored.');
   if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${dir} is not a folder.`);
-  // THE RESERVED PIECES STAY UNSEEN. Where this project's run recorded which of its pieces were reserved, those are
-  // left out by file name: they are the blind comparison, and a reference that holds them has seen it.
-  const reserved = new Set<string>();
-  const pathsFile = runFile('corpus-paths.json');
-  if (existsSync(pathsFile)) {
-    const ids = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
-    for (const f of readJson<{ id: string; path: string }[]>(pathsFile, { kind: 'array', what: 'the corpus path list' })) if (ids.has(f.id)) reserved.add(basename(f.path));
-  }
-  const names = readdirSync(dir).filter((f) => /\.(md|markdown|txt)$/i.test(f) && !reserved.has(f)).sort();
-  if (reserved.size) console.log(`Left out ${readdirSync(dir).filter((f) => reserved.has(f)).length} reserved piece(s): they stay the blind comparison.`);
-  const pieces = names.map((f) => readFileSync(join(dir, f), 'utf8'));
+  const pieces = ownPieces(dir).map((p) => p.text);
   const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id);
   const cal = calibrateTypicality(pieces, steering) ?? die(`no calibration from ${pieces.length} piece(s) over ${steering.length} steering feature(s): it needs at least 6 pieces and 2 features that vary across them.`);
   fstore.setTypicality(L, profileHash, cal);
@@ -253,3 +248,56 @@ function reportCloseness(L: store.StoreLayout, profileHash: string, records: rea
   const ps = free.flatMap((r) => (r.reading.typicality?.calibration === cal.hash ? [r.reading.typicality.p] : []));
   if (ps.length) console.log(`  typical of you, per output: median ${Math.round([...ps].sort((a, b) => a - b)[Math.floor(ps.length / 2)] * 100)}% over ${ps.length} output(s)`);
 }
+
+/**
+ * THE AUTHOR'S PIECES IN A FOLDER, LESS THE RESERVED ONES. Where this project's run recorded which of its pieces were
+ * reserved, those are left out by file name: they are the blind comparison, and a reference that holds them has seen
+ * it. Each piece carries its corpus id where the run knows it, so the retrieval index can find it again.
+ */
+function ownPieces(dir: string): { id: string; text: string }[] {
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${dir} is not a folder.`);
+  const reserved = new Set<string>(); const idOf = new Map<string, string>();
+  const pathsFile = runFile('corpus-paths.json');
+  if (existsSync(pathsFile)) {
+    const ids = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
+    for (const f of readJson<{ id: string; path: string }[]>(pathsFile, { kind: 'array', what: 'the corpus path list' })) {
+      idOf.set(basename(f.path), f.id);
+      if (ids.has(f.id)) reserved.add(basename(f.path));
+    }
+  }
+  const all = readdirSync(dir).filter((f) => /\.(md|markdown|txt)$/i.test(f)).sort();
+  const kept = all.filter((f) => !reserved.has(f));
+  if (kept.length < all.length) console.log(`Left out ${all.length - kept.length} reserved piece(s): they stay the blind comparison.`);
+  return kept.map((f) => ({ id: idOf.get(f) ?? f, text: readFileSync(join(dir, f), 'utf8') }));
+}
+
+/**
+ * READ HOW THE AUTHOR BUILDS A PIECE, ONCE. Every piece is read by the structure reader (two small-model reads per
+ * piece, metered against --cap), and the chain of moves plan-first generation samples from is stored with the profile.
+ */
+async function readAuthorStructure(L: store.StoreLayout, profileHash: string, dir: string): Promise<void> {
+  const pieces = ownPieces(dir);
+  if (pieces.length < 4) die(`${pieces.length} piece(s): reading a structure needs at least 4.`);
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: pieces.length * 2 + 2 };
+  console.log(`Reading the structure of ${pieces.length} piece(s), two reads each by ${structureModel()}: roughly $${(pieces.length * 0.02).toFixed(2)}; the cap is $${budget.capUsd.toFixed(2)}.`);
+  const client = clientFor(structureModel());
+  const read: { id: string; moves: readonly (StructureMove | null)[]; kappa: number | null }[] = [];
+  for (const p of pieces) {
+    const r = await readStructure(client, budget, p.text).catch((e: unknown) => { console.log(`  ${p.id}: not read (${(e as Error).message.split('\n')[0]})`); return null; });
+    if (r) read.push({ id: p.id, moves: r.moves, kappa: r.kappa });
+  }
+  if (read.length < 4) die(`only ${read.length} piece(s) could be read; nothing stored. $${budget.spentUsd.toFixed(2)} spent.`);
+  const chain = chainOf(read.map((r) => r.moves));
+  fstore.setStructure(L, profileHash, { version: 1, reader: STRUCTURE_READER_VERSION, pieces: read, chain, at: new Date().toISOString() });
+  const kappas = read.map((r) => r.kappa).filter((k): k is number => k !== null).sort((a, b) => a - b);
+  console.log(`Read ${read.length} piece(s) (reader ${STRUCTURE_READER_VERSION}); the two reads agreed at a median kappa of ${kappas[Math.floor(kappas.length / 2)] ?? 'n/a'}. $${budget.spentUsd.toFixed(2)} spent.`);
+  const feats = read.map((r) => structureFeatures(r.moves));
+  for (const f of STRUCTURE_FEATURES) {
+    const xs = feats.map((v) => v[f.id]).filter((x): x is number => x !== null).sort((a, b) => a - b);
+    if (xs.length) console.log(`  ${f.label}: median ${round(xs[Math.floor(xs.length / 2)])}`);
+  }
+  console.log(`A piece of yours runs about ${typicalLength(chain)} labelled paragraphs. Plan-first generation: atelier invoke --skill ${L.skillName} --structure plan "<task>"`);
+}
+
+/** The structure reader's model: the one it was qualified with, unless one is named. */
+export const structureModel = (): string => process.env.ATELIER_STRUCTURE_MODEL ?? 'claude-haiku-4-5';

@@ -17,6 +17,7 @@
 
 import type { RegisterDecision } from '../voice/register.js';
 import type { Typicality } from './typicality.js';
+import type { StructureMove } from '../structure/moves.js';
 import type { VoiceParagraph } from '../voice/pass.js';
 
 /** The context classes a band can be conditioned on. Length is the only axis with enough data per author. */
@@ -232,6 +233,11 @@ export interface FidelityRecord {
    */
   readonly shape?: { readonly target: number; readonly authorTarget?: number;
     readonly rounds: readonly { readonly round: number; readonly draft?: string; readonly p: number; readonly author?: number | null; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
+  /**
+   * plan-first generation (`invoke --structure plan`): the skeleton each draft was written against, the delivered
+   * text's moves as the structure reader read them, and the share of positions that followed the plan
+   */
+  readonly structure?: { readonly plans: readonly (readonly StructureMove[])[]; readonly read: readonly (StructureMove | null)[] | null; readonly followed: number | null; readonly note?: string };
   /** a draft drawn among the tied ones by density ratio (`selection: 'sample'`): how many, their weights, the seed */
   readonly sampled?: { readonly among: number; readonly weights: readonly number[]; readonly seed: number; readonly chosen: number };
   /**

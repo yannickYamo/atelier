@@ -119,11 +119,6 @@ describe('a decision that is not an approval is still a decision', () => {
 // deliberate state — but "is anything dark that nobody decided to park". A module may leave the
 // codebase or leave this list; it may not leave silently.
 const PARKED: Readonly<Record<string, string>> = {
-  'core/structure/moves.ts':
-    'A CANDIDATE INSTRUMENT UNDER ITS SEALED QUALIFICATION (studies/STRUCTURE_READER_PREREGISTRATION.md): read by '
-    + 'the studies/harness runner only, wired into no command until it passes; plan-first generation wires it then.',
-  'core/structure/features.ts': 'The structure reader\'s features, parked with it (core/structure/moves.ts) until it qualifies.',
-  'core/stats/agreement.ts': 'Cohen\'s kappa for the structure reader\'s two reads, parked with it until it qualifies.',
   'core/taste/moves.ts':
     'A CANDIDATE INSTRUMENT THAT FAILED ITS QUALIFICATION (studies/SENSOR_QUALIFICATION_RESULT.md): one '
     + 'feature reliable, kept and replicating against a floor of two. Kept for the next attempt and for the '
@@ -264,6 +259,9 @@ describe('the census: nothing is dark by accident', () => {
 // cannot be dark in the way a function can.
 
 const PARKED_VALUES: Readonly<Record<string, string>> = {
+  'core/structure/features.ts:structureSamples':
+    'Feature samples for selection, used by the structure reader\'s qualification harness (studies/harness/'
+    + 'structure-qualification.mjs). Wired into discovery only if the reader qualifies.',
   'core/convergence/state-machine.ts:PHASES':
     'The ordered phase list. The machine branches on phases individually; this is the enumeration a '
     + 'caller would iterate, and no caller iterates them yet.',
