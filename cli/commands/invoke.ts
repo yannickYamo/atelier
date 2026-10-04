@@ -28,7 +28,8 @@ import { decideRegister, registerDistance, registerThreshold, type RegisterDecis
 import { featureTrait, split, type TransferPolicy } from '../../core/voice/transfer.js';
 import { voicePass, MAX_PARAGRAPHS, type VoiceParagraph } from '../../core/voice/pass.js';
 import { MIN_PAIRS, type PairBank } from '../../core/voice/pairs.js';
-import { typicalityOf, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
+import { typicalityOf, typicalityInContext, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
+import { valuesOf } from '../../core/fidelity/profile.js';
 import { densityRatio, drawIndex, seedOf } from '../../core/fidelity/sampling.js';
 import { scoreDetector } from '../../core/fidelity/stylometry.js';
 import { chainOf, sampleSkeleton, skeletonBlock, typicalLength, followed, NEAR_WEIGHT } from '../../core/structure/skeleton.js';
@@ -428,7 +429,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         ...(sampling ? { selection: 'sample' as const } : { selection: undefined }) }, overridden,
       policy && register ? { L, policy, register, traits, mode: voiceMode,
         note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
-          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null) : null);
+          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, asked) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
@@ -883,6 +884,17 @@ function withStructureRead(refine: (draft: string) => Promise<Delivered>, s: { b
   };
 }
 
+/**
+ * HOW TYPICAL OF YOU, ON THIS KIND OF SUBJECT (core/fidelity/typicality.ts, `typicalityInContext`): the author's
+ * pieces nearest the request (the retrieval index's top passages) count NEAR_WEIGHT times in the reference.
+ */
+function contextTypicality(output: string, fid: NonNullable<ReturnType<typeof releaseFor>>, asked: string): ReturnType<typeof typicalityOf> {
+  const cal = fid.typicality;
+  if (!cal) return null;
+  const near = new Set(fid.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : []);
+  return near.size ? typicalityInContext(valuesOf(output), cal, (id) => (near.has(id) ? NEAR_WEIGHT : 1)) : typicalityOf(output, cal);
+}
+
 /** The profile with every steering feature the policy does not carry set to MONITOR: read, never steered by. */
 function carriedProfile(p: FidelityProfile, policy: TransferPolicy): FidelityProfile {
   return { ...p, bands: p.bands.map((b) => (b.role !== 'MONITOR' && policy.states[featureTrait(b.id)] === undefined ? { ...b, role: 'MONITOR' as const } : b)) };
@@ -927,7 +939,8 @@ function withSections<T extends object>(select: T, write: ((i: number, v: DraftV
 /** The fidelity record of one run: the release, the readings, the edits, the passages and the applicability manifest. */
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
   applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean,
-  voice: { L: store.StoreLayout; policy: TransferPolicy; register: RegisterDecision; traits: { carried: string[]; unknown: string[] } | null; mode: 'off' | 'incontext'; note: string | null } | null = null): FidelityRecord {
+  voice: { L: store.StoreLayout; policy: TransferPolicy; register: RegisterDecision; traits: { carried: string[]; unknown: string[] } | null; mode: 'off' | 'incontext'; note: string | null } | null = null,
+  asked = ''): FidelityRecord {
   const cov = ledger.length ? factCoverage(output, ledger) : null;
   // The lexical distance is a monitor, read on the delivered text against the corpus's own threshold (computed
   // once per retrieval index and kept).
@@ -941,7 +954,7 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
     seed: 0,
-    reading: { ...readFidelity(output, fid.profile), ...(fid.typicality ? { typicality: typicalityOf(output, fid.typicality) } : {}) },
+    reading: { ...readFidelity(output, fid.profile), ...(fid.typicality ? { typicality: contextTypicality(output, fid, asked) } : {}) },
     ...(trace.shape ? { shape: trace.shape } : {}),
     ...(trace.sampled ? { sampled: trace.sampled } : {}),
     ...(trace.structure ? { structure: trace.structure } : {}),

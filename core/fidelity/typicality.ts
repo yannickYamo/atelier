@@ -40,6 +40,10 @@ export interface TypicalityCalibration {
   readonly shrinkage: number;
   /** each piece's leave-one-out distance from the others, ascending: the conformal reference */
   readonly scores: readonly number[];
+  /** each piece's leave-one-out distance, in the order of `vectors` (and `ids`): what a weighted p-value weighs */
+  readonly loo?: readonly number[];
+  /** each piece's id, in the order of `vectors`, when the caller knew it: how a request's nearest pieces are found */
+  readonly ids?: readonly string[];
   /** the standardised vectors of the author's pieces: the reference sample for a two-sample test (./twosample.ts) */
   readonly vectors: readonly (readonly number[])[];
   readonly hash: string;
@@ -51,6 +55,8 @@ export interface Typicality {
   readonly distance: number;
   /** the calibration it was read against */
   readonly calibration: string;
+  /** read against the author's pieces weighted toward those nearest the request (`typicalityInContext`) */
+  readonly weighted?: true;
 }
 
 const r4 = (x: number): number => Math.round(x * 10000) / 10000;
@@ -78,11 +84,11 @@ const measured = (v: number | null | undefined): v is number => typeof v === 'nu
  * exchangeable draws, 14% to 20% of them fell at or below 0.1. Recomputing the centre, the scale and the
  * covariance inside each leave-one-out fold scores every piece as a new text is scored.
  */
-export function calibrateFromValues(rows: readonly Readonly<Record<string, number | null | undefined>>[], only?: readonly string[]): TypicalityCalibration | null {
+export function calibrateFromValues(rows: readonly Readonly<Record<string, number | null | undefined>>[], only?: readonly string[], ids?: readonly string[]): TypicalityCalibration | null {
   if (rows.length < MIN_CALIBRATION_PIECES) return null;
-  const ids = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((id) => !only || only.includes(id)).sort();
+  const featureIds = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((id) => !only || only.includes(id)).sort();
   const features: string[] = []; const center: number[] = []; const scale: number[] = [];
-  for (const id of ids) {
+  for (const id of featureIds) {
     const xs = rows.map((v) => v[id]).filter(measured);
     if (xs.length < MIN_COVERAGE * rows.length) continue;
     const { m, s } = meanSd(xs);
@@ -91,19 +97,20 @@ export function calibrateFromValues(rows: readonly Readonly<Record<string, numbe
   }
   if (features.length < 2) return null;
   try {
-    const scores = rows.map((x, i) => {
+    const loo = rows.map((x, i) => {
       const rest = rows.filter((_, j) => j !== i);
       const c = features.map((f) => { const xs = rest.map((v) => v[f]).filter(measured); return xs.length ? meanSd(xs) : { m: 0, s: 1 }; });
       const cs = c.map((x2) => x2.m); const ss = c.map((x2) => (x2.s > 1e-9 ? x2.s : 1));
       const vs = rest.map((v) => standardise(v, features, cs, ss));
       const { cov } = shrunkCovariance(vs);
       return mahalanobis(standardise(x, features, cs, ss), colMeans(vs), invert(cov));
-    }).sort((a, b) => a - b);
+    });
+    const scores = [...loo].sort((a, b) => a - b);
     const vectors = rows.map((v) => standardise(v, features, center, scale));
     const { cov, shrinkage } = shrunkCovariance(vectors);
     const precision = invert(cov);
     const body = { version: 1 as const, features, center, scale, precision: precision.map((r) => r.map(r4)),
-      shrinkage: r4(shrinkage), scores: scores.map(r4), vectors: vectors.map((r) => r.map(r4)) };
+      shrinkage: r4(shrinkage), scores: scores.map(r4), loo: loo.map(r4), ...(ids?.length === rows.length ? { ids: [...ids] } : {}), vectors: vectors.map((r) => r.map(r4)) };
     return { ...body, hash: createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16) };
   } catch {
     // A covariance that cannot be inverted even shrunk (every feature constant once a piece is left out): no
@@ -120,8 +127,8 @@ export function calibrateFromValues(rows: readonly Readonly<Record<string, numbe
  * model's wall of text read as typical as some of the author's own pieces. A distance over the features that
  * separate the two has the power to tell them apart; one over everything spends it on noise.
  */
-export const calibrateTypicality = (pieces: readonly string[], only?: readonly string[]): TypicalityCalibration | null =>
-  calibrateFromValues(pieces.map(valuesOf), only);
+export const calibrateTypicality = (pieces: readonly string[], only?: readonly string[], ids?: readonly string[]): TypicalityCalibration | null =>
+  calibrateFromValues(pieces.map(valuesOf), only, ids);
 
 /**
  * The same calibration over fewer features: the ones the owner's rulings left steering. The pieces' values are
@@ -131,7 +138,7 @@ export function restrictCalibration(cal: TypicalityCalibration, ids: readonly st
   const keep = cal.features.filter((f) => ids.includes(f));
   if (keep.length === cal.features.length) return cal;
   const rows = cal.vectors.map((v) => Object.fromEntries(cal.features.map((f, j) => [f, v[j] * cal.scale[j] + cal.center[j]])));
-  return calibrateFromValues(rows, keep);
+  return calibrateFromValues(rows, keep, cal.ids);
 }
 
 /** Beyond this share of the calibration's features left unmeasured, a text has too little to place: no reading. */
@@ -150,3 +157,26 @@ export function typicalityOfValues(values: Readonly<Record<string, number | null
 
 /** How typical a text is of the author, or null when it measures too few of the calibration's features. */
 export const typicalityOf = (text: string, cal: TypicalityCalibration): Typicality | null => typicalityOfValues(valuesOf(text), cal);
+
+/**
+ * TYPICAL OF HOW THE AUTHOR WRITES ON THIS KIND OF SUBJECT. A weighted conformal p-value (Tibshirani, Barber,
+ * Candès and Ramdas, 2019, conformal prediction under covariate shift): each of the author's pieces counts in
+ * proportion to its weight, here larger for the pieces nearest the request, and the new text counts with the
+ * weight of the nearest:
+ *
+ *   p = (w_new + Σ w_i · 1[d_i ≥ d(x)]) / (w_new + Σ w_i)
+ *
+ * With every weight equal it is the plain p-value. Null when the calibration does not know its pieces' ids, or
+ * the text measures too few features.
+ */
+export function typicalityInContext(values: Readonly<Record<string, number | null | undefined>>, cal: TypicalityCalibration, weightOf: (id: string) => number): Typicality | null {
+  const plain = typicalityOfValues(values, cal);
+  const ids = cal.ids; const loo = cal.loo;
+  if (!plain || !ids || ids.length !== loo?.length) return plain;
+  const w = ids.map((id) => Math.max(0, weightOf(id)));
+  const total = w.reduce((a, b) => a + b, 0);
+  if (!(total > 0)) return plain;
+  const wNew = Math.max(...w);
+  const atLeast = loo.reduce((s, d, i) => s + (d >= plain.distance ? w[i] : 0), 0);
+  return { ...plain, p: r4((wNew + atLeast) / (wNew + total)), weighted: true };
+}

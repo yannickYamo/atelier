@@ -220,9 +220,9 @@ const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) 
 function calibrate(L: store.StoreLayout, profileHash: string, dir: string): void {
   const profile = fstore.getProfile(L, profileHash) ?? die('the active profile is not stored.');
   if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${dir} is not a folder.`);
-  const pieces = ownPieces(dir).map((p) => p.text);
+  const own = ownPieces(dir); const pieces = own.map((p) => p.text);
   const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id);
-  const cal = calibrateTypicality(pieces, steering) ?? die(`no calibration from ${pieces.length} piece(s) over ${steering.length} steering feature(s): it needs at least 6 pieces and 2 features that vary across them.`);
+  const cal = calibrateTypicality(pieces, steering, own.map((p) => p.id)) ?? die(`no calibration from ${pieces.length} piece(s) over ${steering.length} steering feature(s): it needs at least 6 pieces and 2 features that vary across them.`);
   fstore.setTypicality(L, profileHash, cal);
   console.log(`Typicality calibrated on ${pieces.length} piece(s) over ${cal.features.length} feature(s) (calibration ${cal.hash}, shrinkage ${cal.shrinkage}). Every output is now read for how typical of you it is.`);
 }

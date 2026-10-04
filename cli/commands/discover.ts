@@ -386,7 +386,7 @@ export async function discover(): Promise<void> {
   writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
   // HOW TYPICAL OF THE AUTHOR A TEXT IS (core/fidelity/typicality.ts), calibrated on the pieces read: never the
   // held-back or reserved ones, which stay the blind comparison.
-  const typicality = calibrateTypicality(read.map((i) => i.text), profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id));
+  const typicality = calibrateTypicality(read.map((i) => i.text), profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id), read.map((i) => i.id));
   if (typicality) writeAtomic(runFile('typicality.json'), JSON.stringify(typicality));
   // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
   // served to the writer, they would be compared with outputs written from them.

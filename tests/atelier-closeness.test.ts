@@ -6,7 +6,7 @@
 // tells two separable ones, a kernel test agrees, and the Vendi score counts distinct texts.
 import { describe, it, expect } from 'vitest';
 import { shrunkCovariance, invert, mahalanobis, vendi, mmdTest, colMeans } from '../core/stats/multivariate.js';
-import { calibrateTypicality, calibrateFromValues, restrictCalibration, typicalityOf, typicalityOfValues, standardise } from '../core/fidelity/typicality.js';
+import { calibrateTypicality, calibrateFromValues, restrictCalibration, typicalityOf, typicalityOfValues, typicalityInContext, standardise } from '../core/fidelity/typicality.js';
 import { c2st, closeness, vendiAtEqualSize } from '../core/fidelity/twosample.js';
 import { mulberry32 } from '../core/fidelity/qualify.js';
 import { valuesOf } from '../core/fidelity/profile.js';
@@ -130,5 +130,28 @@ describe('found by the gap analysis', () => {
     expect(fewer.features).toEqual(['paragraphP50', 'paragraphSpread']);
     expect(fewer.scores).toHaveLength(12);
     expect(restrictCalibration(cal, cal.features)).toBe(cal);
+  });
+});
+
+describe('typical in context: a weighted conformal p-value', () => {
+  const pieces = Array.from({ length: 12 }, (_, k) => authorPiece(k));
+  const ids = pieces.map((_, k) => `p${k}`);
+  const steering = ['paragraphP50', 'paragraphP90', 'sentencesPerParagraph', 'paragraphSpread'];
+  const cal = calibrateTypicality(pieces, steering, ids)!;
+  it('with equal weights it is the plain p-value', () => {
+    const v = valuesOf(authorPiece(30));
+    expect(typicalityInContext(v, cal, () => 1)?.p).toBeCloseTo(typicalityOfValues(v, cal)!.p, 9);
+  });
+  it('weighting the pieces nearest the request moves it, and is said', () => {
+    const v = valuesOf(authorPiece(30));
+    const plain = typicalityOfValues(v, cal)!;
+    const far = [...cal.loo!.keys()].sort((a, b) => cal.loo![b] - cal.loo![a]).slice(0, 3).map((k) => ids[k]);
+    const weighted = typicalityInContext(v, cal, (id) => (far.includes(id) ? 10 : 1))!;
+    expect(weighted.weighted).toBe(true);
+    expect(weighted.p).not.toBeCloseTo(plain.p, 3);
+  });
+  it('a calibration that does not know its pieces falls back to the plain p-value', () => {
+    const anon = calibrateTypicality(pieces, steering)!;
+    expect(typicalityInContext(valuesOf(authorPiece(30)), anon, () => 5)?.weighted).toBeUndefined();
   });
 });

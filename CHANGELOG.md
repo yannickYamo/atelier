@@ -13,6 +13,9 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   author from the model: a shrinkage Mahalanobis distance, turned into a conformal p-value against the author's
   own pieces. The panel says "as typical as N% of your own pieces". Calibrated at discovery from the pieces read;
   `atelier fidelity --skill <name> --calibrate-from <folder>` calibrates a skill built before.
+- **Typical of you on this kind of subject.** The per-run reading is a weighted conformal p-value: the author's pieces
+  nearest the request count more in the reference, so a post about a failure is read against how the author writes
+  about failures. With equal weights it is the plain p-value.
 - **Can the outputs be told apart from the author?** `atelier fidelity --skill <name> --typicality`: a held-out
   classifier's AUC (0.5 means it cannot), a kernel two-sample test, and how varied each side is at equal size.
 - **`invoke --until-typical <share>` and `--until-author <p>`** write more rounds (up to `--shape-rounds`, default 3)
