@@ -27,6 +27,7 @@ import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf } from '../../core/fidelity/types.js';
 import { buildRetrievalIndex } from '../../core/fidelity/retrieval.js';
+import { calibrateTypicality } from '../../core/fidelity/typicality.js';
 import { judgeCountedFeatures, signalsOf } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
 import { formatOf } from '../../core/observers/formats.js';
@@ -350,7 +351,7 @@ export async function discover(): Promise<void> {
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.
   rmSync(runFile('signals.json'), { force: true });
-  rmSync(runFile('fidelity.json'), { force: true }); rmSync(runFile('retrieval.json'), { force: true });
+  rmSync(runFile('fidelity.json'), { force: true }); rmSync(runFile('retrieval.json'), { force: true }); rmSync(runFile('typicality.json'), { force: true });
   // THE PLAIN DRAFTS ARE OPTIONAL; THE TELL FLOOR IS NOT. Rules that compare the author with the model
   // need its drafts; the machine-tell floor, register and contrastive verdicts are measured on the author's
   // pieces alone. A comparison that failed once dropped all of them, and a skill shipped with no floor
@@ -383,6 +384,10 @@ export async function discover(): Promise<void> {
   const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash, modelFamilies: generators,
     unseen: items.filter((i) => reservedIds.has(i.id)).map((i) => i.text) });
   writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
+  // HOW TYPICAL OF THE AUTHOR A TEXT IS (core/fidelity/typicality.ts), calibrated on the pieces read: never the
+  // held-back or reserved ones, which stay the blind comparison.
+  const typicality = calibrateTypicality(read.map((i) => i.text), profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id), read.map((i) => i.id));
+  if (typicality) writeAtomic(runFile('typicality.json'), JSON.stringify(typicality));
   // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
   // served to the writer, they would be compared with outputs written from them.
   writeAtomic(runFile('retrieval.json'), JSON.stringify(buildRetrievalIndex(read)));

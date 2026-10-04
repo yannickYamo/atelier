@@ -416,6 +416,89 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/in range on \d+ of \d+ steering features/);
     expect(out).toMatch(/HIGH {2}.*paragraph/);
   }, 60_000);
+  it('every run says how typical of you it is; --until-typical writes more rounds toward a target and keeps the best', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
+    expect(out).not.toMatch(/^EXIT:/);
+    expect(out).toMatch(/typical of you {4}as typical as \d+% of your own pieces/);
+    expect(out).toMatch(/shape rounds {6}3 written toward 99% typical; kept round \d/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--until-typical', '2')).toMatch(/--until-typical takes a share between 0 and 1/);
+    const report = run('fidelity', '--skill', 'posts', '--typicality');
+    expect(report).toMatch(/output\(s\) against \d+ of your pieces/);
+  }, 180_000);
+
+  it('--until-author steers on the style detector, and --select sample draws a tied draft and records the draw', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-author', '0.99', '--shape-rounds', '1', '--select', 'sample', '--drafts', '3', '--panel', '--json');
+    expect(out).not.toMatch(/^EXIT:/);
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { shape?: { authorTarget?: number; rounds: { author?: number | null }[] }; settings?: { selection?: string } } };
+    expect(rec.fidelity.shape?.authorTarget).toBe(0.99);
+    expect(rec.fidelity.shape?.rounds.length).toBe(2);
+    expect(typeof rec.fidelity.shape?.rounds[0].author).toBe('number');
+    expect(rec.fidelity.settings?.selection).toBe('sample');
+    expect(run('invoke', '--skill', 'posts', 'x', '--select', 'random')).toMatch(/--select is sample or best/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--no-repair')).toMatch(/--no-repair turns the checks off/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--shape-rounds', '0')).toMatch(/--shape-rounds must be at least 1/);
+  }, 180_000);
+
+  it('--context local holds drafts to the range on the request\'s subject, records the target or says why there is none, and is a setting', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the cache that never expired and the rollback', '--context', 'local', '--panel', '--json');
+    expect(out).not.toMatch(/^EXIT:/);
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { settings?: { context?: string }; context?: { lambda: number; nEff: number }; reading: { bandsFrom: string } } };
+    expect(rec.fidelity.settings?.context).toBe('local');
+    if (rec.fidelity.context) {
+      expect(rec.fidelity.reading.bandsFrom).toBe('local');
+      expect(rec.fidelity.context.lambda).toBeCloseTo(rec.fidelity.context.nEff / (rec.fidelity.context.nEff + 6), 2);
+      expect(out).toMatch(/range for subject\s+moved \d+% toward your pieces nearest this request/);
+    } else {
+      expect(out).toMatch(/near too few of your pieces to set a range of its own/);
+    }
+    expect(run('invoke', '--skill', 'posts', 'x', '--context', 'global')).toMatch(/--context is local or off/);
+    expect(run('fidelity', '--skill', 'posts', '--set', 'context=near')).toMatch(/"context" is local or off/);
+  }, 180_000);
+
+  it('plan-first: the author\'s structure is read once, each draft gets its own skeleton, and the delivered text is read against it', async () => {
+    const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['post-0.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+      emit_factors: { factors: [factor('Say what happened before why.')] }, emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }] },
+      emit_observation: { applicable: true, present: true, why: 'seen' }, emit_piece: { piece: split }, emit_text: { text: split },
+      emit_plan: { sections: [{ title: 'What happened', covers: 'the incident' }, { title: 'What we changed', covers: 'the fix' }], headings: true },
+      emit_labels: { labelAll: ['STORY', 'CLAIM', 'EXAMPLE', 'TURN'] },
+    } }) });
+    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan')).toMatch(/--structure plan needs your pieces read for structure first/);
+    const readOut = run('fidelity', '--skill', 'posts', '--read-structure-from', join(proj, 'posts'), '--cap', '1');
+    expect(readOut).not.toMatch(/^EXIT:/);
+    expect(readOut).toMatch(/Read \d+ piece\(s\) \(reader [0-9a-f]{8}\); the two reads agreed at a median kappa of 1/);
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--structure', 'plan', '--drafts', '2', '--panel', '--json');
+    expect(out).not.toMatch(/^EXIT:/);
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { plans: string[][]; read: (string | null)[] | null; followed: number | null } } };
+    expect(rec.fidelity.structure?.plans).toHaveLength(2);
+    expect(rec.fidelity.structure?.plans[0][0]).toBe('STORY');
+    expect(rec.fidelity.structure?.read?.length).toBeGreaterThan(3);
+    expect(typeof rec.fidelity.structure?.followed).toBe('number');
+    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan', '--sections')).toMatch(/use one/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan', '--no-repair')).toMatch(/drop one of them/);
+    // a request that states its own length gets no skeleton, and says so
+    const short = run('invoke', '--skill', 'posts', 'In one line, what broke?', '--structure', 'plan', '--json');
+    const sj = JSON.parse(short.slice(short.indexOf('{'))) as { invocationId: string };
+    const srec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${sj.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { note?: string; plans: unknown[] } } };
+    expect(srec.fidelity.structure?.note).toMatch(/asks for something short, or states its own format/);
+  }, 180_000);
+
+  it('amending a rule keeps the author: a new release line carries the profile, the passages and the calibration', () => {
+    const before = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    expect(before).toMatch(/FIDELITY {2}descriptive/);
+    const plan = run('plan', '--skill', 'posts');
+    const rule = /^\s{2}(c\d+|p\d+|m\d+)\b/m.exec(plan)?.[1] ?? 'p1';
+    expect(run('amend', '--skill', 'posts', '--rule', rule, '--materiality', 'PREFERRED', '--reason', 'test: an owner reweighs a rule')).not.toMatch(/^EXIT:/);
+    const after = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    expect(after).not.toMatch(/^EXIT:/);
+    expect(after).toMatch(/FIDELITY {2}descriptive/);
+    expect(after).toMatch(/typical of you/);
+    expect(run('fidelity', '--skill', 'posts')).toMatch(/the first release under standard [0-9a-f]+: your profile and passages carried/);
+  }, 180_000);
+
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {
     expect(run('voice', 'status', '--skill', 'posts')).toMatch(/no register declared, so nothing of the voice layer runs/);
     const before = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');

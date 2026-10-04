@@ -150,6 +150,21 @@ holds a template's sections in order ([MEASURED-RULES](MEASURED-RULES.md)). To u
 no skill folder (a system prompt, another tool), `atelier export --skill <name> --out skill.md` writes it
 as one file with its examples inlined.
 
+### How close to you, measured
+
+Every run's panel says how typical of you the output is: "as typical as 35% of your own pieces". It reads the
+output as one point over the features that separate you from the model, and compares its distance with your own
+pieces' distances from each other. `atelier fidelity --skill <name> --typicality` asks the question over all your
+runs: can a classifier tell your outputs from your pieces (an AUC of 0.5 means it cannot), and are your outputs as
+varied as you are. `invoke --until-typical 0.3` writes more rounds until an output is at least that typical, and
+never trades a REQUIRED rule for it. `--until-author 0.5` does the same on the style detector: more rounds until it
+reads the output as yours at least half the time. `--select sample` draws among drafts the rules cannot separate by
+how likely each is yours, instead of always taking the most typical one, so your outputs keep your spread.
+`--context local` holds drafts to your range on the request's subject: your pieces nearest the request set it,
+pulled toward your usual range when few are near, and your ratified rules never move. A sealed offline test found
+it told your pieces from the model's no better than the usual range ([result](../studies/CONTEXT_BANDS_RESULT.md)),
+so it is off unless you ask for it.
+
 ### Voice, and other registers (opt-in)
 
 A skill built from blog posts is evidence about blog posts. Ask it for a contract and nothing in the corpus

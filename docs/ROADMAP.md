@@ -31,6 +31,12 @@ Also next:
 - **The voice layer, measured.** Transfer between registers and the in-context voice pass are built and off
   by default ([decision 0009](decisions/0009-voice-below-the-standard.md)). They stay off until a blind read
   by people says the pass helps.
+- **The implicit layer needs a new actuator.** A sealed study found every arm still told apart from the author's unseen
+  pieces, and plan-first generation did not help ([INDISTINGUISHABILITY_RESULT](../studies/INDISTINGUISHABILITY_RESULT.md)).
+  Its blind human read is prepared and waits for readers. Every output now carries how typical of you it is, and
+  `atelier fidelity --typicality` tests a run against your pieces, so the next attempt has a measure to be held to.
+  Holding drafts to your range on the request's subject (`--context local`) was tested offline and told your pieces
+  from the model's no better ([CONTEXT_BANDS_RESULT](../studies/CONTEXT_BANDS_RESULT.md)); it stays opt-in.
 - **A skill looked after for weeks.** The loop that tends a skill is built and tested offline, and has
   never run on a live skill over time.
 

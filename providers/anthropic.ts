@@ -132,9 +132,12 @@ export class AnthropicInferenceClient implements InferenceClient {
         noTemperature.add(this.modelId);
         return this.complete(req);
       }
-      if (!refusesForcedChoice(e)) throw plainFailure(e, this.modelId) ?? e;
+      // Once only: a model already asked without forced choice that still refuses it is an error, not a loop of paid calls.
+      if (!refusesForcedChoice(e) || noForcedChoice.has(this.modelId)) throw plainFailure(e, this.modelId) ?? e;
+      // A model can refuse both, one 400 at a time: the call without forced choice may then be refused for its
+      // temperature. Asked again from the top, each refusal is remembered once, so this ends.
       noForcedChoice.add(this.modelId);
-      res = await this.create(req, false).catch((x: unknown) => { throw plainFailure(x, this.modelId) ?? x; });
+      return this.complete(req);
     }
     return this.read(req, res);
   }

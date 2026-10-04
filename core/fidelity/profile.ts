@@ -30,6 +30,7 @@ import { trainDetector, scoreDetector } from './stylometry.js';
 import { authorFactDensity } from '../loop/fact-ledger.js';
 import { buildRetrievalIndex, retrieve } from './retrieval.js';
 import { effectMatrix } from './operators.js';
+import { localiseBands } from './context.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf, type ContextClass, type DetectorModel, type FeatureBand, type FidelityProfile, type FidelityReading } from './types.js';
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
@@ -165,7 +166,9 @@ export function valuesOf(text: string): Record<string, number | null> {
  * baseline be recounted with the roles of the profile a run is read with, from numbers stored at discovery.
  */
 export function readValues(all: Readonly<Record<string, number | null>>, cls: ContextClass, profile: FidelityProfile): Omit<FidelityReading, 'detector'> {
-  const { from, bands } = bandsFor(profile, cls);
+  const base = bandsFor(profile, cls);
+  const bands = profile.context ? localiseBands(base.bands, profile.context) : base.bands;
+  const from = profile.context ? 'local' as const : base.from;
   const values: Record<string, number | null> = {};
   const outside: { id: string; distance: number; direction: 'low' | 'high' }[] = [];
   let inBand = 0; let measured = 0;

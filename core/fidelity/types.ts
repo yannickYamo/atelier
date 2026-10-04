@@ -16,6 +16,9 @@
 // class, and pooled otherwise; the class is decided from the request and the output's length alone.
 
 import type { RegisterDecision } from '../voice/register.js';
+import type { Typicality } from './typicality.js';
+import type { LocalContext } from './context.js';
+import type { StructureMove } from '../structure/moves.js';
 import type { VoiceParagraph } from '../voice/pass.js';
 
 /** The context classes a band can be conditioned on. Length is the only axis with enough data per author. */
@@ -91,8 +94,8 @@ export interface DetectorModel {
 /** Where one text sits: the class, every feature's value, how many of the steering bands it is inside. */
 export interface FidelityReading {
   readonly cls: ContextClass;
-  /** the band set it was read against (pooled when the class had too few pieces) */
-  readonly bandsFrom: ContextClass | 'all';
+  /** the band set it was read against (pooled when the class had too few pieces; 'local' when moved toward the request's nearest pieces) */
+  readonly bandsFrom: ContextClass | 'all' | 'local';
   readonly values: Readonly<Record<string, number | null>>;
   /** features measured and inside their band, over RULE and SIGNAL bands only */
   readonly inBand: number;
@@ -101,6 +104,8 @@ export interface FidelityReading {
   readonly outside: readonly { readonly id: string; readonly distance: number; readonly direction: 'low' | 'high' }[];
   /** the detector's reading, when the skill has one: P(model-written), and which detector */
   readonly detector: { readonly p: number; readonly version: string; readonly families?: readonly string[] } | null;
+  /** how typical of the author the text is, as one calibrated number (./typicality.ts), when the skill has a calibration */
+  readonly typicality?: Typicality | null;
 }
 
 /** The author's fidelity profile, stored with the skill at build time. */
@@ -126,6 +131,11 @@ export interface FidelityProfile {
   readonly baseline?: { readonly medianInBand: number; readonly medianMeasured: number; readonly n: number };
   /** the reserved pieces' feature values (never their text), so the baseline is recounted with any roles */
   readonly unseen?: readonly { readonly cls: ContextClass; readonly values: Readonly<Record<string, number | null>> }[];
+  /**
+   * NEVER STORED. Set on a profile for one request only (`context=local`, ./context.ts): its SIGNAL bands are read
+   * moved toward the author's pieces nearest the request. The hash stays the stored profile's.
+   */
+  readonly context?: LocalContext;
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }
@@ -169,6 +179,16 @@ export interface ImplementationSettings {
    * Absent: off, which is what every release before it has.
    */
   readonly voice?: 'incontext';
+  /**
+   * HOW A DRAFT IS CHOSEN among those the rules cannot separate (./sampling.ts): absent, the best-scoring one;
+   * 'sample', drawn in proportion to how much likelier it is the author's than the model's. Opt-in.
+   */
+  readonly selection?: 'sample';
+  /**
+   * WHICH RANGE A DRAFT IS HELD TO (./context.ts): absent, the author's range over pieces of its length; 'local', the
+   * SIGNAL bands moved toward the author's pieces nearest the request. RULE bands never move. Opt-in.
+   */
+  readonly context?: 'local';
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
@@ -216,8 +236,25 @@ export interface FidelityRecord {
   readonly profileHash: string | null;
   readonly seed: number;
   readonly reading: FidelityReading | null;
+  /** the request's local target, when the run was held to it (`context=local`): enough to read the output again */
+  readonly context?: LocalContext;
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
+  /**
+   * the rounds written toward a target (`invoke --until-typical`, `--until-author`), in order: each round's
+   * typicality, the style detector's P(author) when the profile has one, and the REQUIRED rules it broke
+   */
+  readonly shape?: { readonly target: number; readonly authorTarget?: number;
+    readonly rounds: readonly { readonly round: number; readonly draft?: string; readonly p: number; readonly author?: number | null; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
+  /**
+   * plan-first generation (`invoke --structure plan`): the skeleton each draft was written against, the delivered
+   * text's moves as the structure reader read them, and the share of positions that followed the plan
+   */
+  readonly structure?: { readonly plans: readonly (readonly StructureMove[])[]; readonly read: readonly (StructureMove | null)[] | null; readonly followed: number | null;
+    /** each plan's seed, and which plan each written draft (by hash) was written against */
+    readonly seeds?: readonly number[]; readonly planOf?: Readonly<Record<string, number>>; readonly note?: string };
+  /** a draft drawn among the tied ones by density ratio (`selection: 'sample'`): how many, their weights, the seed */
+  readonly sampled?: { readonly among: number; readonly weights: readonly number[]; readonly seed: number; readonly chosen: number };
   /**
    * every application of an actuator against a band (./structural.ts), kept or not: which actuator, the target
    * feature, its value before and after, and why it was kept or refused

@@ -105,9 +105,9 @@ This is the layout. The claim reader's rates are its real measured ones; the res
 
 A skill built in 90 seconds held its own against a hand-tuned one. In an outside test, Atelier built a skill from 12 example coding-assistant answers for $0.41. On the benchmark of a popular hand-written skill tuned for it, the Atelier skill scored 4.51 against 4.32 as a plug-in. Run through `atelier invoke` it scored 4.39, against 4.13 for the earlier build and 3.99 with no skill.
 
-The invented-claim check is the piece I trust most. On product essays no test had used, it caught all 46 planted inventions and left 39 of 48 clean drafts alone. A pattern check on the same material caught 11 of 46.
+The invented-claim check is the piece I trust most. On product essays no test had used, it caught all 46 planted inventions and left 39 of 48 clean drafts alone. A pattern check on the same material caught 11 of 46. In a sealed study across two corpora, Atelier delivered no invented claim in 60 outputs, where plain prompting and pasted examples carried 37 to 67 flagged specifics per corpus ([INDISTINGUISHABILITY_RESULT](studies/INDISTINGUISHABILITY_RESULT.md)).
 
-Voice is not settled, and a model judge can't settle it: in an outside study, three frontier models preferred an imitation over the real author. An independent reviewer ran the fuller loop that steers pace and rhythm, and it didn't move the author's range at about three times the cost. That loop stays off by default behind `--fidelity`.
+Voice is not settled, and a model judge can't settle it: in an outside study, three frontier models preferred an imitation over the real author. An independent reviewer ran the fuller loop that steers pace and rhythm, and it didn't move the author's range at about three times the cost. That loop stays off by default behind `--fidelity`. The same study tested it directly: a classifier on features no part of Atelier reads still told every arm's outputs from the authors' unseen pieces, Atelier's included, and writing against a skeleton of the author's own paragraph moves did not close the gap.
 
 An outside test also found a real failure: an early runtime cut correct sentences from answers and scored below no skill at all. Since 0.7.0 only a measured instrument may delete text. Two studies came back null and one came back negative. They're listed next to the wins in [RESULTS](docs/RESULTS.md), at the same size, with every score in [bench/runs](https://github.com/yannickYamo/atelier/tree/main/bench/runs/0.7.0).
 
@@ -167,6 +167,7 @@ Atelier gives you the same split: agents write, and you decide what good means. 
 - [USAGE](docs/USAGE.md): commands, settings, and what Atelier builds around a skill
 - [RESULTS](docs/RESULTS.md) and [studies/](studies/README.md): every study, pass or fail
 - [ARCHITECTURE](docs/ARCHITECTURE.md): how a standard becomes a skill
+- [INSTRUMENTS](docs/INSTRUMENTS.md): every instrument, what it was validated on, and whether it may steer, gate or only report
 - [MEASURED-RULES](docs/MEASURED-RULES.md), [FORMATS](docs/FORMATS.md) and [TASTE](docs/TASTE.md): the counted checks, the formats, and the reader for everything else
 - [decisions/](docs/decisions/README.md): the choices the code depends on, and why
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on

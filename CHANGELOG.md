@@ -5,6 +5,74 @@ Notable changes to Atelier. Format follows [Keep a Changelog](https://keepachang
 **From 1.0 the on-disk state format under `$ATELIER_DATA` is stable within a major version:** a 1.x release
 reads every store a 1.0 release wrote. Before 1.0 a minor version could change it.
 
+## [Unreleased]
+
+### Added: how close to the author, as a distribution
+
+- **Typicality on every run.** A text is read as one point in feature space, over the features that separate the
+  author from the model: a shrinkage Mahalanobis distance, turned into a conformal p-value against the author's
+  own pieces. The panel says "as typical as N% of your own pieces". Calibrated at discovery from the pieces read;
+  `atelier fidelity --skill <name> --calibrate-from <folder>` calibrates a skill built before.
+- **Typical of you on this kind of subject.** The per-run reading is a weighted conformal p-value: the author's pieces
+  nearest the request count more in the reference, so a post about a failure is read against how the author writes
+  about failures. With equal weights it is the plain p-value.
+- **Can the outputs be told apart from the author?** `atelier fidelity --skill <name> --typicality`: a held-out
+  classifier's AUC (0.5 means it cannot), a kernel two-sample test, and how varied each side is at equal size.
+- **`invoke --until-typical <share>` and `--until-author <p>`** write more rounds (up to `--shape-rounds`, default 3)
+  until the output is that typical of the author, or until the style detector reads it as theirs with that
+  probability. The round kept breaks the fewest REQUIRED rules, then reads most likely the author's, then is most
+  typical. Each round keeps its own trace, and the kept round's draft is recorded.
+- **`--select sample`** (or `fidelity --set selection=sample`): among drafts the rules cannot separate, one is drawn
+  in proportion to how much likelier it is the author's than the model's (the style detector's density ratio),
+  seeded and recorded, instead of the most typical one. Decision 0010.
+
+- **Plan-first generation** (`invoke --structure plan`), opt-in: `atelier fidelity --read-structure-from <folder>`
+  reads how the author's pieces are built, one move per paragraph (claim, explain, example, evidence, story,
+  concession, definition, instruction, question, turn, summary; two reads, kept where they agree). Each draft is then
+  written against its own skeleton of moves, sampled from the author's chain with the pieces nearest the request
+  counted more and at a length drawn from the author's own; the delivered text is read back and the panel says how
+  much of its own skeleton it followed (aligned, so one cut paragraph does not zero the rest). A request that states
+  its own length or format gets no skeleton. A research preview: the reader's moves shape the drafts you opt into
+  while its features are under a sealed qualification (studies/STRUCTURE_READER_PREREGISTRATION.md), and no
+  feature of it steers selection or fails an output.
+
+- **`--context local`** (or `fidelity --set context=local`), opt-in: the SIGNAL bands a draft is held to move toward
+  the author's pieces nearest the request, by λ = n_eff / (n_eff + 6), so a few near pieces count for little and
+  many for most. RULE bands, the owner's ratified ranges, never move. The panel says how far the range moved and
+  which pieces were nearest; the target is recorded with the run. A request near too few pieces keeps the usual range,
+  and says so.
+
+### Studies
+
+- **Context bands: FAIL** (studies/CONTEXT_BANDS_RESULT.md, sealed in advance, offline, $0). On the indistinguishability
+  study's texts, bands moved toward the request's nearest pieces told the authors' unseen pieces from the model's
+  outputs no better than the usual bands (pooled AUC 0.803 both ways; difference +0.0006 [−0.025, 0.027], bar +0.05).
+  They did not reject the author's own pieces. Title-only requests gave lexical nearness too little to match: 12 of 36
+  newsletter texts got a local target at all.
+
+- **Indistinguishability: FAIL on the machine measure; the human read is pending** (studies/INDISTINGUISHABILITY_RESULT.md,
+  sealed in advance, $31.54). On two corpora, a classifier on a feature family no arm steers on told every arm's outputs
+  from the authors' unseen pieces (AUC 0.75–1.0): plain, pasted examples, Atelier, plan-first and plan-first steered.
+  Plan-first did not move outputs toward the author; on the newsletters it moved them further away. The three Atelier
+  arms delivered no invented claim in 60 outputs; the plain and pasted arms carried 37 to 67 flagged specifics per
+  corpus. Voice stays unclaimed.
+- **The structure reader: FAIL** (studies/STRUCTURE_READER_RESULT.md, sealed in advance, $1.97). Reliability is
+  solved: the two reads agree at a median κ of 0.867, and 11 of 12 features reproduce at 0.94 or better on an
+  independent re-read, where the move reader failed. Separation is not. On the corpus the move reader failed on, no
+  structure feature told the author from the model by the product's bar; the strongest (switch rate 0.718, entropy
+  rate 0.713) say the authors are less predictable, as the fiction study found, but below the bar. The reader stays
+  a monitor.
+
+### Fixed
+
+- **Amending a rule no longer drops the skill's fidelity layer.** A changed standard (`amend`, `confirm`, `add`) left
+  the skill with no profile, detector, retrieval or calibration, said nowhere. It now starts a new release line that
+  carries the author's profile (re-ratified against the new rules), passages, calibration and structure, and nothing
+  the loop learned under the old standard.
+- **The taste reader ran on no current model.** A model that refuses forced tool choice and temperature, one 400 at
+  a time, now gets both retries; an instrument asking for temperature 0 answers again.
+- **`--with <file>` bound nothing.** A bare path is refused with the form that binds it (`--with notes=<file>`).
+
 ## [1.1.0] — 2026-10-02 (install from npm; the voice layer, off by default)
 
 ### Added: install from npm, and one command to set up

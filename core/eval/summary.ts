@@ -61,6 +61,16 @@ export interface EvalSummary {
     readonly outside: readonly { readonly id: string; readonly label: string; readonly value: number | null; readonly band: readonly [number, number] | null }[];
     readonly facts: { readonly used: number; readonly supplied: number } | null;
     readonly edits: { readonly tried: number; readonly kept: number };
+    /** how typical of the author the delivered text is: the share of their own pieces at least as far from the rest */
+    readonly typicality?: { readonly p: number; readonly distance: number } | null;
+    /** the rounds written toward a typicality target (`invoke --until-typical`) */
+    readonly shape?: { readonly target: number; readonly authorTarget?: number; readonly written: number; readonly kept: number; readonly p: number; readonly author?: number | null } | null;
+    /** plan-first: the skeleton's length, and the share of it the delivered text followed */
+    readonly structure?: { readonly moves: number; readonly followed: number | null } | null;
+    /** a draft drawn among tied ones by density ratio */
+    readonly sampled?: { readonly among: number } | null;
+    /** held to the author's range on the request's subject (`context=local`): the nearest pieces and how far bands moved */
+    readonly context?: { readonly nearest: readonly string[]; readonly nEff: number; readonly lambda: number } | null;
   } | null;
   readonly monitors: {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
@@ -123,6 +133,14 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     if (fi.outside.length) out.push(`    ${pad('furthest outside', 18)}${fi.outside.slice(0, 3).map((o) => `${o.label} ${o.value === null ? '' : fmt(o.value)}${o.band ? ` (yours ${fmt(o.band[0])} to ${fmt(o.band[1])})` : ''}`).join(' · ')}`);
     if (fi.facts) out.push(`    ${pad('facts used', 18)}${fi.facts.used} of ${fi.facts.supplied} supplied`);
     if (fi.edits.tried) out.push(`    ${pad('steering', 18)}${fi.edits.kept} of ${fi.edits.tried} change(s) kept`);
+    if (fi.typicality) out.push(`    ${pad('typical of you', 18)}as typical as ${Math.round(fi.typicality.p * 100)}% of your own pieces (distance ${fmt(fi.typicality.distance)})`);
+    if (fi.shape) {
+      const toward = [fi.shape.target ? `${Math.round(fi.shape.target * 100)}% typical` : '', fi.shape.authorTarget ? `P(yours) ${fi.shape.authorTarget}` : ''].filter(Boolean).join(' and ');
+      out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);
+    }
+    if (fi.structure) out.push(`    ${pad('structure plan', 18)}${fi.structure.moves} moves from your own pieces${fi.structure.followed === null ? '' : `; the text followed ${Math.round(fi.structure.followed * 100)}% of them`}`);
+    if (fi.context) out.push(`    ${pad('range for subject', 18)}moved ${Math.round(fi.context.lambda * 100)}% toward your pieces nearest this request (${fmt(fi.context.nEff)} effective${fi.context.nearest.length ? `, nearest ${fi.context.nearest.slice(0, 3).join(', ')}` : ''}); ratified rules unchanged`);
+    if (fi.sampled) out.push(`    ${pad('draft drawn', 18)}from ${fi.sampled.among} tied drafts, in proportion to how likely each is yours`);
   }
   if (e.voice) {
     const v = e.voice; const r = v.register;

@@ -83,7 +83,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
   'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
-  'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register',
+  'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
@@ -92,7 +92,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality',
 ];
 
 export const argv = process.argv.slice(2);
@@ -495,7 +495,12 @@ export const boundMaterial = (): { name: string; path: string; text: string }[] 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
     const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : (argv[i + 1] ?? '');
-    if (!spec.includes('=')) continue;                    // a bare name binds a resource the caller holds elsewhere
+    // A bare name binds a resource the caller holds elsewhere. A bare PATH is a mistake that binds nothing, and
+    // the draft is then written with no material: refused, with the form that works.
+    if (!spec.includes('=')) {
+      if (/[\\/]|\.(?:md|markdown|txt|json)$/i.test(spec) || existsSync(spec)) die(`--with ${spec}: a file is bound with a name, --with notes=${spec}. A bare name declares a resource held elsewhere and reads no file.`);
+      continue;
+    }
     const name = spec.slice(0, spec.indexOf('='));
     const path = spec.slice(spec.indexOf('=') + 1);
     if (!existsSync(path)) die(`--with ${name}=${path}: there is no file at ${path}.`);
