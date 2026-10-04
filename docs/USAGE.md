@@ -165,6 +165,27 @@ pulled toward your usual range when few are near, and your ratified rules never 
 it told your pieces from the model's no better than the usual range ([result](../studies/CONTEXT_BANDS_RESULT.md)),
 so it is off unless you ask for it.
 
+A text farther from your pieces than any of them is from the rest reads "beyond every piece of yours", with both
+distances: the share cannot go below 1 in (your pieces + 1), so past your farthest piece it says nothing. The
+`--typicality` report also tells your own pieces from each other at random halves and prints that AUC: at a dozen
+texts a side an author's own pieces are told apart at 0.7 to 0.8 one time in twenty
+([result](../studies/AUTHOR_FLOOR_RESULT.md)), so an AUC is read against that floor, not against 0.5.
+
+### What your request was read as
+
+Every run of a skill built from a corpus prints a CONTEXT block: the register the request names and how that was
+read, how many of your pieces are near the request's subject, which ones, how they were found, and what the run
+used them for (the passages shown to the writer, the typical-of-you reading, your range for the subject, the
+plan). When fewer than two pieces are near, it says the readings rest on your whole range.
+`atelier eval --skill <name>` lists the requests your pieces were thin on, which is the list of what to write more of.
+
+Your nearest pieces are found by shared words. A request that is only a title shares few words with anything, so
+`atelier fidelity --skill <name> --read-subjects` has a small model read what each piece is about, once (one call
+per piece, a few cents), and `atelier fidelity --skill <name> --set nearness=reader` (or `invoke --nearness reader`
+for one run) then has it grade each request against those cards: same subject, related, or neither. Code checks
+every answer, the grades are recorded with the run, and with no model the words decide as before. It is opt-in
+until its sealed qualification is run ([pre-registration](../studies/SUBJECT_READER_PREREGISTRATION.md)).
+
 ### Voice, and other registers (opt-in)
 
 A skill built from blog posts is evidence about blog posts. Ask it for a contract and nothing in the corpus

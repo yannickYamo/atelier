@@ -386,8 +386,7 @@ export async function discover(): Promise<void> {
   writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
   // HOW TYPICAL OF THE AUTHOR A TEXT IS (core/fidelity/typicality.ts), calibrated on every piece that is not
   // reserved: the pieces read and the held-back ones, as `fidelity --calibrate-from` does. The reading moves in
-  // steps of 1/(n+1), and on the six pieces discovery read alone it could not go below 14%: four outputs at 1.2 to
-  // 2.6 times the author's farthest piece all read "as typical as 16%". The held-back pieces enter as feature
+  // steps of 1/(n+1): on six pieces it cannot go below 14%, however far the text is. The held-back pieces enter as feature
   // values only; nothing here serves their text, and they get no weight in a request's range (they are not in the
   // retrieval index). The reserved pieces stay out: they are the blind comparison.
   const calibrationPieces = [...read, ...heldItems.filter((h) => !readIds.has(h.id))];

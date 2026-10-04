@@ -36,6 +36,7 @@ exploratory, and say so.
 | A skill built from paywalled previews | the skill read a paywall teaser as the author's style, and the rewrite added em dashes and runs of short sentences | nothing held those tells; now the catalogue does, for every author | [CHANGELOG, Studies](../CHANGELOG.md) |
 | An outside expert's pilot | stopped at its own gate: the expert kept all 18 rules and made none required, against a bar of 2 | the first ratification by someone other than the builder bound nothing, and the gate held | [close](../studies/EXTERNAL_EXPERT_PILOT_CLOSE.md) |
 | A second maintainer | 2 clean rules against a threshold of 3, so the study did not run | a gate that fails is not excepted | [result](../studies/MAINTAINER_B_RESULT.md) |
+| The floor of the two-sample reading | an author's own pieces are told from each other at AUC 0.813 (8 a side) and 0.722 (12 a side) one time in twenty | an AUC is read against the author's own floor, not 0.5. Every Atelier arm of the indistinguishability study is above it, so that result stands; the plain arm on one author, and that author's reading without function-word n-grams, were not resolved at 8 a side | [author floor](../studies/AUTHOR_FLOOR_RESULT.md) |
 
 ## Numbers withdrawn
 

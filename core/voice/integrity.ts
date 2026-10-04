@@ -46,7 +46,7 @@ export function factsMissing(a: string, b: string): string[] {
 }
 
 /** Whether `voice` may replace `content`. `copied` is an overlap reader over the author's pieces (overlapIndex). */
-export function voiceIntegrity(content: string, voice: string, copied: ReturnType<typeof overlapIndex> | null): VoiceVerdict {
+export function voiceIntegrity(content: string, voice: string, copied: ReturnType<typeof overlapIndex> | null, opts: { strength?: boolean } = {}): VoiceVerdict {
   const before = wordsOf(content).length; const after = wordsOf(voice).length;
   if (!after) return { ok: false, check: 'empty', detail: 'the rewrite came back empty' };
   const ratio = before ? after / before : 0;
@@ -55,7 +55,9 @@ export function voiceIntegrity(content: string, voice: string, copied: ReturnTyp
   if (lost.length || added.length) {
     return { ok: false, check: 'facts', detail: [lost.length ? `lost: ${lost.slice(0, 3).join(', ')}` : '', added.length ? `added: ${added.slice(0, 3).join(', ')}` : ''].filter(Boolean).join('; ') };
   }
-  const strength = spanIntegrity(content, voice, new Set(), false);
+  // The strength word lists can be left out (`strength: false`) so a study can read the gate with a reader in their
+  // place (studies/VOICE_GATE_PREREGISTRATION.md). Nothing in the product leaves them out.
+  const strength = opts.strength === false ? { ok: true, lost: [] } : spanIntegrity(content, voice, new Set(), false);
   if (!strength.ok) return { ok: false, check: 'strength', detail: strength.lost.slice(0, 3).join('; ') };
   const run = copied ? copied(voice).longestShared : 0;
   if (run >= COPY_RUN) return { ok: false, check: 'copying', detail: `a run of ${run} words is the author's own` };
