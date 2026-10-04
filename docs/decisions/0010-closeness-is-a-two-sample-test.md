@@ -27,5 +27,7 @@ detector finds.
    never sees: features of another family, and people reading blind.
 4. **Opt-in** ([0008](0008-one-point-zero-is-the-floor.md)). A skill without a calibration behaves as before.
 
-**Not decided here.** Structure (how a piece introduces, explains, evidences and closes) needs a reader that
-passes qualification first; that is the next study.
+**Structure.** How a piece introduces, explains, evidences and closes is read by a paragraph-level structure
+reader under a sealed qualification. Until it passes, its features select and gate nothing. Plan-first generation
+(`invoke --structure plan`) is the one place its moves are used before then: opt-in, labelled a research preview,
+with the claim check on every draft and `--no-repair` refused.

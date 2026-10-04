@@ -30,9 +30,11 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   reads how the author's pieces are built, one move per paragraph (claim, explain, example, evidence, story,
   concession, definition, instruction, question, turn, summary; two reads, kept where they agree). Each draft is then
   written against its own skeleton of moves, sampled from the author's chain with the pieces nearest the request
-  counted more; the delivered text is read back and the panel says how much of its skeleton it followed. The
-  structure reader is under a sealed qualification (studies/STRUCTURE_READER_PREREGISTRATION.md); until it passes,
-  its features steer nothing.
+  counted more and at a length drawn from the author's own; the delivered text is read back and the panel says how
+  much of its own skeleton it followed (aligned, so one cut paragraph does not zero the rest). A request that states
+  its own length or format gets no skeleton. A research preview: the reader's moves shape the drafts you opt into
+  while its features are under a sealed qualification (studies/STRUCTURE_READER_PREREGISTRATION.md), and no
+  feature of it steers selection or fails an output.
 
 ### Fixed
 

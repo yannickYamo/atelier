@@ -237,10 +237,13 @@ function reportCloseness(L: store.StoreLayout, profileHash: string, records: rea
   // NOT ON RUNS STEERED BY THE SAME INSTRUMENT. A run that kept a round for its typicality was selected on these
   // features against these pieces; testing it here would measure the steering (decision 0010).
   const steered = records.filter((r) => r.fidelity?.shape);
-  const free = records.filter((r) => !r.fidelity?.shape);
+  // An output that measures too few of the features would sit at the author's centre by imputation and look close.
+  const measurable = (r: Read): boolean => cal.features.filter((f) => typeof r.reading.values[f] !== 'number').length <= MAX_UNMEASURED * cal.features.length;
+  const unplaced = records.filter((r) => !r.fidelity?.shape && !measurable(r)).length;
+  const free = records.filter((r) => !r.fidelity?.shape && measurable(r));
   const outputs = free.map((r) => standardise(r.reading.values, cal.features, cal.center, cal.scale));
   const c = closeness(cal.vectors, outputs);
-  console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s)${steered.length ? `; ${steered.length} run(s) steered toward typicality left out, since they were chosen on these same features` : ''}.`);
+  console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s)${steered.length ? `; ${steered.length} run(s) steered toward typicality left out, since they were chosen on these same features` : ''}${unplaced ? `; ${unplaced} too short to place left out` : ''}.`);
   console.log(c.c2st ? `  told apart by a held-out classifier: AUC ${c.c2st.auc} (95% CI ${c.c2st.ci95[0]} to ${c.c2st.ci95[1]}); 0.5 means it cannot tell them apart`
     : '  classifier two-sample test: not run (at least 6 on each side)');
   if (c.mmd) console.log(`  kernel two-sample test (MMD): p ${c.mmd.p}${c.mmd.p < 0.05 ? ', the outputs differ from your pieces' : ', no difference detected at this size'}`);

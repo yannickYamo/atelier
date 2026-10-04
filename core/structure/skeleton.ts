@@ -3,8 +3,9 @@
 // Every other actuator edits text after it is written, and structure is decided before the first sentence: no span
 // repair turns a tidy single-track argument into the shape the author builds. So the shape comes first. The author's
 // pieces, read by the structure reader (./moves.ts), give a first-order Markov chain over moves: how often each move
-// opens a piece, and which move follows which. A skeleton is sampled from that chain for the length asked, and each
-// draft is written against its own skeleton, one paragraph per move.
+// opens a piece, and which move follows which. A skeleton is sampled from that chain, at a length drawn from the
+// author's own, and each draft is written against its own skeleton, one paragraph per move. A request that states its
+// own length or format gets no skeleton: the request sets the shape then.
 //
 // SAMPLED, NOT THE MOST LIKELY PATH. The most likely path through an author's chain is their most typical piece,
 // and the most typical is what a detector finds (decision 0010). Each draft samples its own skeleton, seeded and
@@ -63,11 +64,20 @@ function draw(counts: readonly number[], rand: () => number): number {
 /** The median labelled length of the author's pieces, at least four paragraphs. */
 export const typicalLength = (chain: MoveChain): number => Math.max(4, chain.lengths[Math.floor(chain.lengths.length / 2)] ?? 8);
 
-/** A skeleton of `paragraphs` moves sampled from the chain, deterministic for a seed. */
-export function sampleSkeleton(chain: MoveChain, paragraphs: number, seed: number): StructureMove[] {
+/**
+ * A skeleton sampled from the chain, deterministic for a seed. Its length is drawn from the author's own piece
+ * lengths unless one is given, so drafts and runs differ in length as the author's pieces do. A move the author
+ * never followed with anything (a closing summary) backs off to the opening distribution rather than to a uniform
+ * draw over all eleven moves.
+ */
+export function sampleSkeleton(chain: MoveChain, paragraphs: number | null, seed: number): StructureMove[] {
   const rand = mulberry32(seed);
+  const n = paragraphs ?? Math.max(4, chain.lengths.length ? chain.lengths[Math.floor(rand() * chain.lengths.length)] : 8);
   const out: StructureMove[] = [STRUCTURE_MOVES[draw(chain.start, rand)]];
-  while (out.length < paragraphs) out.push(STRUCTURE_MOVES[draw(chain.transitions[idx(out[out.length - 1])], rand)]);
+  while (out.length < n) {
+    const row = chain.transitions[idx(out[out.length - 1])];
+    out.push(STRUCTURE_MOVES[draw(row.some((c) => c > 0) ? row : chain.start, rand)]);
+  }
   return out;
 }
 
@@ -90,11 +100,17 @@ export function skeletonBlock(skeleton: readonly StructureMove[]): string {
     + skeleton.map((m, i) => `${i + 1}. ${m}: ${WHAT[m]}`).join('\n');
 }
 
-/** How closely a written piece followed its skeleton: the share of positions whose agreed move matches. */
+/**
+ * How closely a written piece followed its skeleton: the longest common subsequence of the skeleton and the agreed
+ * moves read from the piece, over the longer of the two. Aligned, not position by position: one paragraph cut or
+ * merged would otherwise shift every later position and read as a piece that ignored its plan.
+ */
 export function followed(skeleton: readonly StructureMove[], read: readonly (StructureMove | null)[]): number | null {
-  const n = Math.min(skeleton.length, read.length);
-  if (!n) return null;
-  let same = 0;
-  for (let i = 0; i < n; i++) if (read[i] === skeleton[i]) same += 1;
-  return Math.round((same / Math.max(skeleton.length, read.length)) * 1000) / 1000;
+  if (!skeleton.length || !read.length) return null;
+  const a = skeleton; const b = read;
+  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+  }
+  return Math.round((dp[a.length][b.length] / Math.max(a.length, b.length)) * 1000) / 1000;
 }

@@ -237,7 +237,9 @@ export interface FidelityRecord {
    * plan-first generation (`invoke --structure plan`): the skeleton each draft was written against, the delivered
    * text's moves as the structure reader read them, and the share of positions that followed the plan
    */
-  readonly structure?: { readonly plans: readonly (readonly StructureMove[])[]; readonly read: readonly (StructureMove | null)[] | null; readonly followed: number | null; readonly note?: string };
+  readonly structure?: { readonly plans: readonly (readonly StructureMove[])[]; readonly read: readonly (StructureMove | null)[] | null; readonly followed: number | null;
+    /** each plan's seed, and which plan each written draft (by hash) was written against */
+    readonly seeds?: readonly number[]; readonly planOf?: Readonly<Record<string, number>>; readonly note?: string };
   /** a draft drawn among the tied ones by density ratio (`selection: 'sample'`): how many, their weights, the seed */
   readonly sampled?: { readonly among: number; readonly weights: readonly number[]; readonly seed: number; readonly chosen: number };
   /**

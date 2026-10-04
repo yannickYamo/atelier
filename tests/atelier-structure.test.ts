@@ -78,6 +78,9 @@ describe('the skeleton: a shape sampled from the author\'s own chain', () => {
   it('a sampled skeleton starts and moves the way the author does, and replays for a seed', () => {
     const chain = chainOf(author);
     const runs = Array.from({ length: 300 }, (_, k) => sampleSkeleton(chain, 6, k + 1));
+    // with no length given, lengths are drawn from the author's own (5, 6 or 7 here)
+    const lengths = new Set(Array.from({ length: 50 }, (_, k) => sampleSkeleton(chain, null, k + 1).length));
+    expect([...lengths].every((n) => n >= 5 && n <= 7) && lengths.size > 1).toBe(true);
     expect(runs.filter((r) => r[0] === 'STORY').length / runs.length).toBeGreaterThan(0.6);
     const afterStory = runs.flatMap((r) => r.slice(1).filter((_, i) => r[i] === 'STORY'));
     expect(afterStory.filter((m) => m === 'CLAIM').length / afterStory.length).toBeGreaterThan(0.7);
@@ -92,8 +95,14 @@ describe('the skeleton: a shape sampled from the author\'s own chain', () => {
     expect(block).toMatch(/1\. STORY: tell what happened/);
     expect(block).toMatch(/without inventing one/);
   });
-  it('adherence is the share of positions that match, over the longer of the two', () => {
+  it('adherence aligns the plan with what was read: one cut paragraph does not zero the rest', () => {
     expect(followed(['STORY', 'CLAIM', 'TURN'], ['STORY', 'CLAIM', 'EXAMPLE'])).toBeCloseTo(2 / 3, 3);
-    expect(followed(['STORY', 'CLAIM'], ['STORY', 'CLAIM', null, 'TURN'])).toBe(0.5);
+    expect(followed(['STORY', 'CLAIM', 'EXAMPLE', 'TURN', 'CLAIM'], ['CLAIM', 'EXAMPLE', 'TURN', 'CLAIM'])).toBe(0.8);
+    expect(followed([], ['CLAIM'])).toBeNull();
+  });
+  it('a move the author never followed with anything backs off to how pieces open, not to a uniform draw', () => {
+    const chain = chainOf([['STORY', 'CLAIM', 'SUMMARY'], ['STORY', 'CLAIM', 'SUMMARY'], ['STORY', 'EXAMPLE', 'SUMMARY']]);
+    const after = Array.from({ length: 200 }, (_, k) => sampleSkeleton(chain, 4, k + 7)).filter((r) => r[2] === 'SUMMARY').map((r) => r[3]);
+    expect(after.filter((m) => m === 'STORY').length / after.length).toBeGreaterThan(0.8);
   });
 });

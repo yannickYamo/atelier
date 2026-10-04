@@ -32,8 +32,8 @@ import { typicalityOf, typicalityInContext, type TypicalityCalibration } from '.
 import { valuesOf } from '../../core/fidelity/profile.js';
 import { densityRatio, drawIndex, seedOf } from '../../core/fidelity/sampling.js';
 import { scoreDetector } from '../../core/fidelity/stylometry.js';
-import { chainOf, sampleSkeleton, skeletonBlock, typicalLength, followed, NEAR_WEIGHT } from '../../core/structure/skeleton.js';
-import { readStructure, type StructureMove } from '../../core/structure/moves.js';
+import { chainOf, sampleSkeleton, skeletonBlock, followed, NEAR_WEIGHT, type MoveChain } from '../../core/structure/skeleton.js';
+import { readStructure, STRUCTURE_READER_VERSION, type StructureMove } from '../../core/structure/moves.js';
 import { structureModel } from './fidelity.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
@@ -284,9 +284,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // paragraph moves, sampled from the author's chain with their pieces nearest the request counted more.
   const structureFlag = flag('--structure');
   if (structureFlag && structureFlag !== 'plan') die(`--structure takes plan, got "${structureFlag}".`);
+  if (structureFlag && !fid) die('--structure plan needs the skill\'s fidelity profile (built from a corpus, and not with --no-fidelity).');
   const authorStructure = structureFlag && fid ? fstore.getStructure(L, fid.profile.hash) : null;
   if (structureFlag && !authorStructure) die(`--structure plan needs your pieces read for structure first: atelier fidelity --skill ${name} --read-structure-from <folder of your pieces>`);
   if (structureFlag && argv.includes('--sections')) die('--structure plan and --sections both decide the shape of the piece: use one.');
+  if (structureFlag && argv.includes('--no-repair')) die('--structure plan asks for stories and evidence paragraphs, and --no-repair turns off the check that cuts invented ones: drop one of them.');
+  if (authorStructure && authorStructure.reader !== STRUCTURE_READER_VERSION) die(`your pieces were read by structure reader ${authorStructure.reader}, and this is ${STRUCTURE_READER_VERSION}: read them again (atelier fidelity --skill ${name} --read-structure-from <folder>).`);
   const selectFlag = flag('--select');
   if (selectFlag && !['sample', 'best'].includes(selectFlag)) die(`--select is sample or best, got "${selectFlag}".`);
   const sampling = (selectFlag ?? runSettings?.selection ?? 'best') === 'sample' && Boolean(fid?.profile.detector);
@@ -401,10 +404,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
   // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
+  // A REQUEST THAT STATES ITS OWN LENGTH OR SHAPE GETS NO SKELETON: the request sets the shape then.
+  const planState = authorStructure && contractFile === null && !lengthAsked && shape !== 'SHAPE'
+    ? newPlanState(authorStructure, fid?.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : [], asked, nDrafts, started) : null;
+  if (authorStructure && !planState) trace.structure = { plans: [], read: null, followed: null, note: 'no skeleton: the request states its own length or format' };
   const sectionWriter = argv.includes('--sections') && contractFile === null
     ? writeBySections({ client, budget, servedText: servedForRun, task: taskForRun, trace })
-    : authorStructure && contractFile === null ? writeByPlan({ client, budget, servedText: servedForRun, task: taskForRun, trace,
-      plans: plansFor(authorStructure, fid?.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : [], asked, nDrafts) }) : null;
+    : planState ? writeByPlan({ client, budget, servedText: servedForRun, task: taskForRun, state: planState }) : null;
   // ONE CLAIM VERDICT PER RUN. The report the repair counted on the text it delivered (two reads agreed, and each
   // sentence's verdict held for the run by claimMemory) is the one the panel shows: a fresh read of the same text
   // is another sample of a noisy reader, and two samples of one run disagreed (7, 2 and 5 flags in a live test).
@@ -415,8 +421,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null),
-      shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste } : null),
-      authorStructure ? { budget, trace } : null)) : null,
+      shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
+        fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
+      planState ? { budget, trace, state: planState } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
@@ -795,11 +802,13 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
  * A round that fails costs that round, never the output already delivered.
  */
 /** One shape round: its delivered text, its draft, its readings, and the trace it alone produced. */
-interface ShapeRound { d: Delivered; draft: string; p: number; author: number | null; broken: number; edits: FidelityTrace['edits']; voice: FidelityTrace['voice']; taken: readonly TasteReading[] | null }
+interface ShapeRound { d: Delivered; draft: string; p: number; author: number | null; broken: number; edits: FidelityTrace['edits']; voice: FidelityTrace['voice']; taken: readonly TasteReading[] | null; notes: string[] }
 
 function withShape(refine: (draft: string) => Promise<Delivered>,
   s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
-    rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null } | null) {
+    rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null;
+    /** how a later round's draft is written, when drafts are written against a plan; null for a plain draft */
+    fresh?: ((round: number) => Promise<string>) | null } | null) {
   if (!s) return refine;
   return async (draft: string) => {
     const score = (d: Delivered): { p: number; author: number | null; broken: number } => {
@@ -810,18 +819,19 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
       && (s.target === null || t.p >= s.target) && (s.authorTarget === null || (t.author ?? 0) >= s.authorTarget);
     // EACH ROUND KEEPS ITS OWN TRACE. The structural edits, the voice pass and the taste reading a round produced
     // describe that round's text; the record must carry the kept round's, never the last one's.
-    const editsBefore = s.trace.edits.length;
+    const editsBefore = s.trace.edits.length; const notesBefore = s.taste?.notes.length ?? 0;
     const run = async (text: string): Promise<ShapeRound> => {
-      s.trace.edits.splice(editsBefore); s.trace.voice = undefined; if (s.taste) s.taste.taken = null;
+      s.trace.edits.splice(editsBefore); s.trace.voice = undefined;
+      if (s.taste) { s.taste.taken = null; s.taste.notes.splice(notesBefore); }
       const d = await refine(text);
-      return { d, draft: text, ...score(d), edits: s.trace.edits.slice(editsBefore), voice: s.trace.voice, taken: s.taste?.taken ?? null };
+      return { d, draft: text, ...score(d), edits: s.trace.edits.slice(editsBefore), voice: s.trace.voice, taken: s.taste?.taken ?? null, notes: s.taste?.notes.slice(notesBefore) ?? [] };
     };
     const tried: ShapeRound[] = [await run(draft)];
     let note: string | undefined;
     for (let round = 1; round <= s.rounds && !tried.some(met); round++) {
       try {
-        const w = await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, '', {});
-        tried.push(await run(w.piece));
+        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, '', {})).piece;
+        tried.push(await run(piece));
       } catch (err) {
         note = `round ${round} could not run (${(err as Error).message.split('\n')[0]}); the best output so far was delivered`;
         break;
@@ -832,7 +842,10 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
     const best = tried.reduce((a, b) => (better(a, b) ? b : a));
     s.trace.edits.splice(editsBefore, s.trace.edits.length - editsBefore, ...best.edits);
     s.trace.voice = best.voice;
-    if (s.taste) s.taste.taken = best.taken;
+    if (s.taste) { s.taste.taken = best.taken; s.taste.notes.splice(notesBefore, s.taste.notes.length - notesBefore, ...best.notes); }
+    // A LATER ROUND WAS WRITTEN ALONE: no draft selection, no draw. What the record says about round 0's drafts stays
+    // true of round 0; the draw is cleared so it is not read as the kept text's.
+    if (best !== tried[0]) { s.trace.sampled = undefined; note = note ?? `round ${tried.indexOf(best)} kept: written as one draft, without draft selection`; }
     if (!note && !met(best)) note = 'no round met the target; the output that broke the fewest rules and read most like yours was delivered';
     s.trace.shape = { target: s.target ?? 0, ...(s.authorTarget !== null ? { authorTarget: s.authorTarget } : {}),
       rounds: tried.map((t, k) => ({ round: k, draft: sha(t.draft), p: t.p, author: t.author, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
@@ -846,39 +859,62 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
   };
 }
 
+/** The plans of one run: the author's chain (nearest pieces weighted), each plan written so far, its seed, and which draft had which. */
+interface PlanState { readonly chain: MoveChain; readonly asked: string; readonly nonce: number; readonly plans: StructureMove[][]; readonly seeds: number[]; readonly planOf: Record<string, number> }
+
 /**
  * ONE SKELETON PER DRAFT (core/structure/skeleton.ts), from the author's chain with the pieces nearest the request
- * counted NEAR_WEIGHT times; seeded by the request and the draft's index, so a run replays and drafts differ.
+ * counted NEAR_WEIGHT times, each at a length drawn from the author's own. Seeded by the request, the draft and the
+ * run's start, recorded, so a run replays from its record and two runs of one request differ as the author's pieces do.
  */
-function plansFor(s: NonNullable<ReturnType<typeof fstore.getStructure>>, near: readonly string[], asked: string, n: number): StructureMove[][] {
+function newPlanState(s: NonNullable<ReturnType<typeof fstore.getStructure>>, near: readonly string[], asked: string, n: number, nonce: number): PlanState {
   const chain = chainOf(s.pieces.map((p) => p.moves), s.pieces.map((p) => (near.includes(p.id) ? NEAR_WEIGHT : 1)));
-  return Array.from({ length: Math.max(1, n) }, (_, i) => sampleSkeleton(chain, typicalLength(s.chain), seedOf([asked, String(i)])));
+  const st: PlanState = { chain, asked, nonce, plans: [], seeds: [], planOf: {} };
+  for (let i = 0; i < Math.max(1, n); i++) addPlan(st, `draft ${i}`);
+  return st;
+}
+function addPlan(st: PlanState, tag: string): number {
+  const seed = seedOf([st.asked, tag, String(st.nonce)]);
+  st.plans.push(sampleSkeleton(st.chain, null, seed)); st.seeds.push(seed);
+  return st.plans.length - 1;
 }
 
-/** Each draft written against its own skeleton; the skeletons are recorded whether or not the draft is kept. */
-function writeByPlan(c: { client: InferenceClient; budget: Budget; servedText: string; task: string; trace: FidelityTrace; plans: StructureMove[][] }) {
-  c.trace.structure = { plans: c.plans, read: null, followed: null };
-  return (i: number, v: DraftVariant): Promise<Written> => spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, skeletonBlock(c.plans[i % c.plans.length]), v);
+/** Each draft written against its own plan, and which plan it had remembered by the draft's hash. */
+function writeByPlan(c: { client: InferenceClient; budget: Budget; servedText: string; task: string; state: PlanState }) {
+  return async (i: number, v: DraftVariant): Promise<Written> => {
+    const k = i % c.state.plans.length;
+    const w = await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, skeletonBlock(c.state.plans[k]), v);
+    c.state.planOf[sha(w.piece)] = k;
+    return w;
+  };
+}
+
+/** A later shape round's draft, against a plan of its own. */
+async function freshPlannedDraft(client: InferenceClient, budget: Budget, servedText: string, task: string, st: PlanState, round: number): Promise<string> {
+  const k = addPlan(st, `round ${round}`);
+  const w = await spendOneWithResult(client, budget, servedText, task, null, skeletonBlock(st.plans[k]), {});
+  st.planOf[sha(w.piece)] = k;
+  return w.piece;
 }
 
 /**
  * READ THE DELIVERED TEXT'S STRUCTURE, LAST. Two small-model reads (core/structure/moves.ts): what each paragraph of
- * the output does, and how much of the delivered skeleton it followed. Reported; never changes the text. A reader
- * that cannot run costs the reading, never the output.
+ * the output does, and how much of ITS OWN plan it followed, the plan its draft was written against (found by the
+ * draft's hash). Reported; never changes the text. A reader that cannot run costs the reading, never the output.
  */
-function withStructureRead(refine: (draft: string) => Promise<Delivered>, s: { budget: Budget; trace: FidelityTrace } | null) {
+function withStructureRead(refine: (draft: string) => Promise<Delivered>, s: { budget: Budget; trace: FidelityTrace; state: PlanState } | null) {
   if (!s) return refine;
   return async (draft: string) => {
     const d = await refine(draft);
-    const st = s.trace.structure;
-    if (!st) return d;
+    const st = s.state;
+    const k = st.planOf[sha(d.repair?.draft ?? draft)];
+    const base = { plans: st.plans, seeds: st.seeds, planOf: st.planOf };
     try {
       const r = await readStructure(clientFor(structureModel()), s.budget, d.output);
-      // Scored against the skeleton it follows best: the run records which DRAFT won, and each draft had its own plan.
-      const best = r ? st.plans.reduce((a, p) => ((followed(p, r.moves) ?? 0) > (followed(a, r.moves) ?? 0) ? p : a), st.plans[0]) : st.plans[0];
-      s.trace.structure = { ...st, read: r?.moves ?? null, followed: r ? followed(best, r.moves) : null, ...(r ? {} : { note: 'the delivered text had too few paragraphs to read' }) };
+      s.trace.structure = { ...base, read: r?.moves ?? null, followed: r && k !== undefined ? followed(st.plans[k], r.moves) : null,
+        ...(!r ? { note: 'the delivered text had too few paragraphs to read' } : k === undefined ? { note: 'the delivered draft was not written against a plan' } : {}) };
     } catch (err) {
-      s.trace.structure = { ...st, note: `the structure reader could not run (${(err as Error).message.split('\n')[0]})` };
+      s.trace.structure = { ...base, read: null, followed: null, note: `the structure reader could not run (${(err as Error).message.split('\n')[0]})` };
     }
     return d;
   };
