@@ -466,7 +466,7 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const short = run('invoke', '--skill', 'posts', 'In one line, what broke?', '--structure', 'plan', '--json');
     const sj = JSON.parse(short.slice(short.indexOf('{'))) as { invocationId: string };
     const srec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${sj.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { note?: string; plans: unknown[] } } };
-    expect(srec.fidelity.structure?.note).toMatch(/states its own length or format/);
+    expect(srec.fidelity.structure?.note).toMatch(/asks for something short, or states its own format/);
   }, 180_000);
 
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {

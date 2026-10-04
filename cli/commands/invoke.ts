@@ -405,10 +405,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
   // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
   // A REQUEST THAT STATES ITS OWN LENGTH OR SHAPE GETS NO SKELETON: the request sets the shape then.
-  const planState = authorStructure && contractFile === null && !lengthAsked && shape !== 'SHAPE'
+  // A LONG request still gets a plan, at the length its word count sets; a SHORT one or a stated shape does not.
+  const planState = authorStructure && contractFile === null && lengthAsked !== 'SHORT' && shape !== 'SHAPE'
     ? newPlanState(authorStructure, fid?.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : [], asked, nDrafts, started,
       fid ? paragraphsFor(asked, fid.profile) : null) : null;
-  if (authorStructure && !planState) trace.structure = { plans: [], read: null, followed: null, note: 'no skeleton: the request states its own length or format' };
+  if (authorStructure && !planState) trace.structure = { plans: [], read: null, followed: null, note: 'no skeleton: the request asks for something short, or states its own format' };
   const sectionWriter = argv.includes('--sections') && contractFile === null
     ? writeBySections({ client, budget, servedText: servedForRun, task: taskForRun, trace })
     : planState ? writeByPlan({ client, budget, servedText: servedForRun, task: taskForRun, state: planState }) : null;
@@ -888,10 +889,16 @@ function addPlan(st: PlanState, tag: string): number {
  * the profile measured no paragraph length.
  */
 export function paragraphsFor(asked: string, profile: FidelityProfile): number | null {
-  const m = /\b(\d{2,5})\s*(?:-|to|–)?\s*(?:\d{2,5}\s*)?words?\b/i.exec(asked);
+  // The LAST count in the request: a title's own number ("Why 100 words of docs…") comes before the length asked.
+  // Thousands with commas, and a range read at its midpoint.
+  const num = '(\\d{1,3}(?:,\\d{3})+|\\d{2,6})';
+  const all = [...asked.matchAll(new RegExp(`\\b${num}(?:\\s*(?:-|–|to)\\s*${num})?\\s*words?\\b`, 'gi'))];
+  const m = all[all.length - 1];
   const per = profile.bands.find((b) => b.id === 'paragraphP50' && b.cls === 'all')?.median;
   if (!m || !per || per <= 0) return null;
-  return Math.min(40, Math.max(3, Math.round(Number(m[1]) / per)));
+  const n = (x: string): number => Number(x.replace(/,/g, ''));
+  const words = m[2] ? (n(m[1]) + n(m[2])) / 2 : n(m[1]);
+  return Math.min(40, Math.max(3, Math.round(words / per)));
 }
 
 /** Each draft written against its own plan, and which plan it had remembered by the draft's hash. */

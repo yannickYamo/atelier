@@ -113,7 +113,9 @@ describe('a word count sets the skeleton\'s length', () => {
   const profile = { bands: [{ id: 'paragraphP50', cls: 'all', median: 60 }] } as unknown as FidelityProfile;
   it('about 900 words at a 60-word paragraph is 15 paragraphs; no count, no length', () => {
     expect(paragraphsFor('Write a post titled "x". About 900 words.', profile)).toBe(15);
-    expect(paragraphsFor('Write a 300-500 word note', profile)).toBe(5);
+    expect(paragraphsFor('Write a 300-500 word note', profile)).toBe(7);
+    expect(paragraphsFor('About 1,200 words', profile)).toBe(20);
+    expect(paragraphsFor('Write a blog post titled "Why 100 words of docs beat 10 pages". About 900 words.', profile)).toBe(15);
     expect(paragraphsFor('Write a post about the outage', profile)).toBeNull();
     expect(paragraphsFor('About 20000 words', profile)).toBe(40);
   });
