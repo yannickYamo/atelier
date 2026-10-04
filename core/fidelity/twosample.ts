@@ -27,6 +27,8 @@ export interface ClosenessReading {
   /** AUC of telling outputs from author pieces, held out; null when either side is too small */
   readonly c2st: AucCi | null;
   readonly mmd: { readonly mmd2: number; readonly p: number } | null;
+  /** the author's own pieces told from each other at random halves: what the AUC above is read against */
+  readonly floor?: AuthorFloor | null;
   /** effective number of distinct texts in equal-size samples of each */
   readonly vendi: { readonly author: number; readonly outputs: number; readonly size: number } | null;
 }
@@ -77,10 +79,39 @@ export function vendiAtEqualSize(author: Mat, outputs: Mat, seed = 1, draws = 20
   return { author: r3(a / draws), outputs: r3(o / draws), size };
 }
 
+/**
+ * THE FLOOR: THE AUTHOR'S OWN PIECES TOLD FROM EACH OTHER. An AUC of 0.5 is what two draws of one distribution give
+ * on average, not what a dozen texts give every time. The author's pieces are split into two halves at random,
+ * `splits` times, and the same classifier is asked to tell one half from the other. The spread of those AUCs is
+ * what "cannot be told apart" looks like for THIS author at THIS sample size: an output-versus-author AUC at or
+ * below the 95th percentile is one the author's own pieces produce. An AUC below 0.5 counts as 0.5, as in the
+ * sealed studies: landing below chance by chance is not a closer result. Null with fewer than 2 × MIN_SAMPLE pieces.
+ */
+export interface AuthorFloor { readonly median: number; readonly p90: number; readonly p95: number; readonly size: number; readonly splits: number }
+export function floorOf(aucs: readonly number[], size: number): AuthorFloor | null {
+  if (!aucs.length) return null;
+  const xs = aucs.map((a) => Math.max(0.5, a)).sort((a, b) => a - b);
+  const q = (p: number): number => r3(xs[Math.min(xs.length - 1, Math.floor(xs.length * p))]);
+  return { median: q(0.5), p90: q(0.9), p95: q(0.95), size, splits: xs.length };
+}
+export function authorFloor(author: Mat, seed = 1, splits = 40): AuthorFloor | null {
+  const half = Math.floor(author.length / 2);
+  if (half < MIN_SAMPLE) return null;
+  const rand = mulberry32(seed);
+  const aucs: number[] = [];
+  for (let t = 0; t < splits; t++) {
+    const idx = author.map((_, i) => i);
+    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    const r = c2st(idx.slice(0, half).map((i) => author[i]), idx.slice(half, half * 2).map((i) => author[i]), { seed: seed + t });
+    if (r) aucs.push(r.auc);
+  }
+  return floorOf(aucs, half);
+}
+
 /** The three readings at once. */
 export function closeness(author: Mat, outputs: Mat, seed = 1): ClosenessReading {
   const enough = author.length >= MIN_SAMPLE && outputs.length >= MIN_SAMPLE;
   const m = enough ? mmdTest(author, outputs, mulberry32(seed)) : null;
-  return { author: author.length, outputs: outputs.length, c2st: c2st(author, outputs, { seed }),
+  return { author: author.length, outputs: outputs.length, c2st: c2st(author, outputs, { seed }), floor: authorFloor(author, seed),
     mmd: m ? { mmd2: r3(m.mmd2), p: r3(m.p) } : null, vendi: vendiAtEqualSize(author, outputs, seed) };
 }

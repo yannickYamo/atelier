@@ -1,4 +1,4 @@
-// atelier/core/loop/context-judge.ts — THREE QUESTIONS THAT NEED CONTEXT, ASKED OF A SMALL MODEL.
+// atelier/core/loop/context-judge.ts — QUESTIONS THAT NEED CONTEXT, ASKED OF A SMALL MODEL.
 //
 // Some decisions in the loop turn on reading, not on words: whether "If it can't, we split it." still
 // makes sense once the sentence before it is gone; whether a request states its own format ("return only
@@ -23,6 +23,11 @@ export interface RequestIntent {
   /** the request's own words that state its output format, verbatim, or null */
   readonly format: string | null;
   readonly length: 'LONG' | 'SHORT' | null;
+  /**
+   * The request's own words naming the KIND OF DOCUMENT it asks for ("white paper", "blog post"), verbatim; null
+   * when it names none. Undefined when the judge did not say: the word table decides then (../voice/register.ts).
+   */
+  readonly document?: string | null;
 }
 
 export interface ContextJudge {
@@ -41,10 +46,12 @@ const INTENT_SYSTEM = `You read a request someone made to a writing or coding as
 - format: if the request explicitly constrains the reply's shape or content type (for example "return only the code block", "just the number", "answer yes or no", "JSON only", "no explanation", "one line"), copy those exact words from the request. Otherwise null.
 - length: "LONG" if it explicitly asks for detail or depth, "SHORT" if it explicitly asks for brevity, otherwise null.
 
-Judge only what the request says in so many words. Do not infer a format from the topic.`;
+- document: if the request names the KIND OF DOCUMENT to be written (for example "blog post", "white paper", "memo", "speech", "contract", "email", "press release"), copy those exact words from the request; otherwise null. Only the document being asked for: not one the request mentions as its subject or its source ("a post about our quarterly report" asks for a post), and not a verb ("report the bug" names no document).
+
+Judge only what the request says in so many words. Do not infer a format or a document from the topic.`;
 const INTENT_SCHEMA = { type: 'object', properties: {
-  format: { type: ['string', 'null'] }, length: { type: ['string', 'null'], enum: ['LONG', 'SHORT', null] } },
-  required: ['format', 'length'], additionalProperties: false };
+  format: { type: ['string', 'null'] }, length: { type: ['string', 'null'], enum: ['LONG', 'SHORT', null] }, document: { type: ['string', 'null'] } },
+  required: ['format', 'length', 'document'], additionalProperties: false };
 
 const ALONE_SYSTEM = `A sentence is being removed from a text. For each numbered pair you get the removed sentence and the sentence that followed it. Say whether the following sentence still makes sense on its own once the removed one is gone: false when it points back at the removed one (a pronoun, "this", "either", "if it can't", a reply to it) so a reader would be lost; true when it stands alone.`;
 const ALONE_SCHEMA = { type: 'object', properties: { verdicts: { type: 'array', items: { type: 'object',
@@ -75,11 +82,16 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
     async requestIntent(task) {
       const k = sha(task);
       if (intents.has(k)) return intents.get(k) ?? null;
-      const raw = await ask(INTENT_SYSTEM, `<request>\n${task}\n</request>`, 'emit_intent', INTENT_SCHEMA) as { format?: unknown; length?: unknown } | null;
+      const raw = await ask(INTENT_SYSTEM, `<request>\n${task}\n</request>`, 'emit_intent', INTENT_SCHEMA) as { format?: unknown; length?: unknown; document?: unknown } | null;
       // Validated: a format must be the request's own words; a length must be one of the two labels.
       const format = typeof raw?.format === 'string' && raw.format.trim() && task.toLowerCase().includes(raw.format.trim().toLowerCase()) ? raw.format.trim() : null;
       const length: RequestIntent['length'] = raw?.length === 'LONG' ? 'LONG' : raw?.length === 'SHORT' ? 'SHORT' : null;
-      const out: RequestIntent | null = raw ? { format, length } : null;
+      // A document type must be the request's own words too: the reading is of what was declared, never a guess.
+      // Absent from the answer, or words the request does not hold, it stays undefined and the word table decides.
+      const said = raw?.document;
+      const document = said === null ? null
+        : typeof said === 'string' && said.trim() && task.toLowerCase().includes(said.trim().toLowerCase()) ? said.trim() : undefined;
+      const out: RequestIntent | null = raw ? { format, length, ...(document === undefined ? {} : { document }) } : null;
       intents.set(k, out);
       return out;
     },

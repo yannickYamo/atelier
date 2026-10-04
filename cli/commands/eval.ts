@@ -59,10 +59,17 @@ export function evaluate(): void {
       || ((b.fidelity ? b.fidelity.measured - b.fidelity.inBand : 0) - (a.fidelity ? a.fidelity.measured - a.fidelity.inBand : 0)))
     .slice(0, 5);
 
+  // WHERE THE CORPUS IS THIN. Runs whose request was near fewer than two of the author's pieces: the readings of
+  // those runs rest on the whole range, and the list says what more of the author's writing would sharpen.
+  const withSubject = evals.filter((e) => e.context?.subject);
+  const thinIds = new Set(withSubject.filter((e) => e.context?.subject?.thin).map((e) => e.invocationId));
+  const thinRequests = thinIds.size ? store.listInvocations(L).filter((r) => thinIds.has(r.invocationId)).map((r) => r.input.split('\n')[0].slice(0, 80)) : [];
+  const coverage = { runs: withSubject.length, thin: thinIds.size, requests: thinRequests };
+
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ skill: name, cohorts: summary.map((c) => ({ ...c, conformantCi: wilson(c.conformant, c.runs), wouldShipCi: wilson(c.wouldShip, c.rated) })),
       brokenRules: Object.fromEntries(brokenCount), reasons: Object.fromEntries(reasonCount), complaints: Object.fromEntries(complaints),
-      notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId) }, null, 1));
+      notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage }, null, 1));
     return;
   }
   if (!evals.length) { console.log(`No evaluated runs of "${name}" yet: every run from Atelier 1.0 records one (atelier invoke --skill ${name} "<task>").`); return; }
@@ -85,6 +92,12 @@ export function evaluate(): void {
     console.log('\n  WORTH YOUR READING (unrated, chosen by count: not conformant first, then furthest from your range)');
     for (const e of queue) console.log(`    atelier report ${e.invocationId}  then  atelier rate ${e.invocationId} yes|no "why"`);
     console.log(`    the taste reader earns a vote only from your labels: atelier taste --skill ${name} --calibrate`);
+  }
+  if (coverage.runs) {
+    console.log('\n  WHERE YOUR PIECES ARE THIN (requests near fewer than two of them)');
+    console.log(coverage.thin ? `    ${coverage.thin} of ${coverage.runs} run(s): their readings rest on your whole range, not on how you write on that subject`
+      : `    none of ${coverage.runs} run(s): every request was near at least two of your pieces`);
+    for (const q of [...new Set(coverage.requests)].slice(0, 5)) console.log(`    "${q}"`);
   }
   console.log(`\n  drift on your range: atelier fidelity --skill ${name}`);
 }

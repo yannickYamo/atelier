@@ -76,10 +76,11 @@ export function effectiveSize(w: readonly number[]): number {
  * The local target for one request, or null when the calibration does not know its pieces, the index does not
  * hold them, or the request is near too few of them to say anything (`MIN_EFFECTIVE_PIECES`).
  */
-export function localContext(request: string, cal: TypicalityCalibration, index: RetrievalIndex): LocalContext | null {
+export function localContext(request: string, cal: TypicalityCalibration, index: RetrievalIndex, weightOf?: (id: string) => number): LocalContext | null {
   const ids = cal.ids;
   if (ids?.length !== cal.vectors.length) return null;
-  const w = pieceWeights(index, request, ids);
+  // The nearness the run read (./nearness.ts) when it was read by a small model; otherwise the lexical cosine.
+  const w = weightOf ? ids.map((id) => Math.max(0, weightOf(id))) : pieceWeights(index, request, ids);
   const nEff = effectiveSize(w);
   if (nEff < MIN_EFFECTIVE_PIECES) return null;
   const lambda = nEff / (nEff + CONTEXT_PRIOR_PIECES);

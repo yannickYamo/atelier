@@ -62,7 +62,11 @@ export interface EvalSummary {
     readonly facts: { readonly used: number; readonly supplied: number } | null;
     readonly edits: { readonly tried: number; readonly kept: number };
     /** how typical of the author the delivered text is: the share of their own pieces at least as far from the rest */
-    readonly typicality?: { readonly p: number; readonly distance: number } | null;
+    readonly typicality?: { readonly p: number; readonly distance: number;
+      /** the pieces the reading rests on, and whether those nearest the request counted more */
+      readonly pieces?: number; readonly weighted?: boolean;
+      /** farther than every piece of the author's: the share says nothing past that, so the panel says this instead */
+      readonly beyond?: boolean; readonly farthest?: number } | null;
     /** the rounds written toward a typicality target (`invoke --until-typical`) */
     readonly shape?: { readonly target: number; readonly authorTarget?: number; readonly written: number; readonly kept: number; readonly p: number; readonly author?: number | null } | null;
     /** plan-first: the skeleton's length, and the share of it the delivered text followed */
@@ -86,8 +90,28 @@ export interface EvalSummary {
     readonly passed: number; readonly refused: number;
     readonly bank: string | null; readonly note: string | null;
   };
+  /**
+   * WHAT THE REQUEST WAS READ AS, AND WHICH OF THE AUTHOR'S PIECES IT WAS MEASURED AGAINST. The register the request
+   * names and how that was read; the pieces near its subject, how they were found, how much they amount to, and
+   * what the run used them for. Shown on every run of a skill built from a corpus: a reading "against your pieces
+   * nearest this request" means little until the person can see which pieces, and how few.
+   */
+  readonly context?: {
+    /** null when the owner has not declared the corpus's register (`atelier voice register`) */
+    readonly register: { readonly status: 'in' | 'out' | 'assumed-in'; readonly request: string | null; readonly corpus: readonly string[];
+      readonly source: 'declared' | 'keyword' | 'reader' | 'none'; readonly words: string | null } | null;
+    readonly subject: {
+      readonly source: 'reader' | 'lexical'; readonly reader: string | null; readonly fellBack: string | null;
+      readonly near: number; readonly of: number; readonly nEff: number; readonly thin: boolean;
+      readonly nearest: readonly { readonly id: string; readonly grade: 'same' | 'related' | null }[];
+      readonly usedFor: readonly ('passages' | 'typicality' | 'range' | 'skeleton')[];
+    } | null;
+  };
   readonly notMeasured: readonly string[];
 }
+
+/** Fewer calibration pieces than this and the typical-of-you share is coarse: the panel says the step it moves in. */
+export const COARSE_PIECES = 12;
 
 /** The escape character colour codes start with. */
 const ESC = String.fromCharCode(27);
@@ -125,6 +149,24 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   out.push(`  ${tag(f.held ?? true)}  ${pad('format', 17)}${f.kind === 'shape' ? `the request's own shape ("${f.words}"): ${f.withheld} presentation rule(s) withheld, by design` : f.kind === 'bare' ? `bare request ("${f.words}"): standard applied in full` : 'no format stated: standard applied in full'}${f.held === false ? ' · the format\'s hard limits are broken' : ''}`);
   const a = g.applicability;
   out.push(`  ${c('2', 'INFO')}  ${pad('applicability', 17)}${a.applied} applied · ${a.notApplicable} not applicable · ${a.waived.length} waived${a.waived.length ? `, each with a reason (${[...new Set(a.waived.map((w) => w.why))].slice(0, 2).join('; ')})` : ''}`);
+  if (e.context && (e.context.register || e.context.subject)) {
+    const r = e.context.register; const sb = e.context.subject;
+    out.push('');
+    out.push('  CONTEXT  what this request was read as, and which of your pieces it was measured against');
+    if (r) {
+      const how = r.source === 'declared' ? 'you declared it (--register)' : r.source === 'reader' ? `the request says "${r.words ?? r.request}"` : r.source === 'keyword' ? 'named in the request, found by word' : '';
+      out.push(`    ${pad('register', 18)}${r.request === null ? `none named in the request: taken to be yours (${r.corpus.join(', ')})`
+        : `${r.request} (${how}) · your pieces: ${r.corpus.join(', ')} · ${r.status === 'out' ? 'out of register: fidelity to you is not measurable here' : 'in register'}`}`);
+    }
+    if (sb) {
+      const by = sb.source === 'reader' ? `read by subject${sb.reader ? ` (${sb.reader.split(':').slice(1).join(':') || sb.reader})` : ''}` : 'found by shared words';
+      out.push(`    ${pad('subject', 18)}${sb.near} of your ${sb.of} pieces ${sb.near === 1 ? 'is' : 'are'} near this request (${fmt(sb.nEff)} effective) · ${by}${sb.fellBack ? ` · the subject reader was not used: ${sb.fellBack}` : ''}`);
+      if (sb.nearest.length) out.push(`    ${pad('nearest', 18)}${sb.nearest.map((n) => `${n.id}${n.grade ? ` (${n.grade} subject)` : ''}`).join(' · ')}`);
+      const uses: Record<string, string> = { passages: 'the passages shown to the writer', typicality: 'the typical-of-you reading', range: 'your range for the subject', skeleton: 'the plan' };
+      if (sb.usedFor.length) out.push(`    ${pad('used for', 18)}${sb.usedFor.map((u) => uses[u]).join(' · ')}`);
+      if (sb.thin) out.push(`    ${pad('thin', 18)}${sb.near === 0 ? 'none' : 'only one'} of your pieces is near this subject: the readings below rest on your whole range. More of your writing on it would sharpen them.`);
+    }
+  }
   if (e.fidelity) {
     const fi = e.fidelity;
     out.push('');
@@ -133,7 +175,12 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     if (fi.outside.length) out.push(`    ${pad('furthest outside', 18)}${fi.outside.slice(0, 3).map((o) => `${o.label} ${o.value === null ? '' : fmt(o.value)}${o.band ? ` (yours ${fmt(o.band[0])} to ${fmt(o.band[1])})` : ''}`).join(' · ')}`);
     if (fi.facts) out.push(`    ${pad('facts used', 18)}${fi.facts.used} of ${fi.facts.supplied} supplied`);
     if (fi.edits.tried) out.push(`    ${pad('steering', 18)}${fi.edits.kept} of ${fi.edits.tried} change(s) kept`);
-    if (fi.typicality) out.push(`    ${pad('typical of you', 18)}as typical as ${Math.round(fi.typicality.p * 100)}% of your own pieces (distance ${fmt(fi.typicality.distance)})`);
+    if (fi.typicality) {
+      const t = fi.typicality;
+      const basis = `${t.pieces ? ` · read against ${t.pieces} of your pieces${t.pieces < COARSE_PIECES ? `, so it moves in steps of ${Math.round(100 / (t.pieces + 1))}%` : ''}` : ''}${t.weighted ? ' · those nearest this request counted more' : ''}`;
+      out.push(t.beyond ? `    ${pad('typical of you', 18)}beyond every piece of yours: distance ${fmt(t.distance)}, your farthest piece ${fmt(t.farthest ?? 0)}${basis}`
+        : `    ${pad('typical of you', 18)}as typical as ${Math.round(t.p * 100)}% of your own pieces (distance ${fmt(t.distance)})${basis}`);
+    }
     if (fi.shape) {
       const toward = [fi.shape.target ? `${Math.round(fi.shape.target * 100)}% typical` : '', fi.shape.authorTarget ? `P(yours) ${fi.shape.authorTarget}` : ''].filter(Boolean).join(' and ');
       out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);

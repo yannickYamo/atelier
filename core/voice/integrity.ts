@@ -27,7 +27,8 @@ import { spanIntegrity } from '../loop/integrity.js';
 export const COPY_RUN = 12;
 export const LENGTH_RATIO: readonly [number, number] = [0.75, 1.35];
 
-export type VoiceCheck = 'empty' | 'facts' | 'strength' | 'copying' | 'length';
+/** `reader`: the word lists passed it and the small model's second read (./reader.ts) found a changed claim */
+export type VoiceCheck = 'empty' | 'facts' | 'strength' | 'copying' | 'length' | 'reader';
 export interface VoiceVerdict { readonly ok: boolean; readonly check?: VoiceCheck; readonly detail?: string }
 
 const key = (f: Fact): string => `${f.kind}:${f.norm}`;

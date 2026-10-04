@@ -98,7 +98,9 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       outside: reading.outside.slice(0, 3).map((o) => ({ id: o.id, label: featureOf(o.id)?.label.split(' (')[0] ?? o.id, value: reading.values[o.id] ?? null, band: band(o.id) })),
       facts: rec.fidelity?.coverage ? { used: rec.fidelity.coverage.used, supplied: rec.fidelity.coverage.supplied } : null,
       edits: { tried: edits.filter((e) => e.target !== '-').length, kept: edits.filter((e) => e.kept).length },
-      ...(reading.typicality ? { typicality: { p: reading.typicality.p, distance: reading.typicality.distance } } : {}),
+      ...(reading.typicality ? { typicality: { p: reading.typicality.p, distance: reading.typicality.distance,
+        ...(reading.typicality.pieces ? { pieces: reading.typicality.pieces } : {}), ...(reading.typicality.weighted ? { weighted: true } : {}),
+        ...(reading.typicality.beyond ? { beyond: true, farthest: reading.typicality.farthest ?? 0 } : {}) } } : {}),
       ...(ctx ? { context: { nearest: ctx.pieces.slice(0, 3).map((x) => x.id), nEff: ctx.nEff, lambda: ctx.lambda } } : {}),
       ...(rec.fidelity?.sampled ? { sampled: { among: rec.fidelity.sampled.among } } : {}),
       ...(rec.fidelity?.structure ? { structure: { moves: rec.fidelity.structure.plans[0]?.length ?? 0, followed: rec.fidelity.structure.followed } } : {}),
@@ -115,6 +117,14 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     fidelity ? `voice beyond the ${fidelity.measured} counted features` : 'your range (this skill has no fidelity profile: build it from a corpus)',
   ];
   const vr = rec.fidelity?.voice ?? null;
+  // CONTEXT: read from the record alone. The register decision when the owner declared one for the corpus; the
+  // nearness the run read and what it used it for.
+  const nr = rec.fidelity?.nearness ?? null;
+  const context: EvalSummary['context'] = vr || nr ? {
+    register: vr ? { status: vr.register.status, request: vr.register.request, corpus: vr.register.corpus, source: vr.register.source, words: vr.register.words ?? null } : null,
+    subject: nr ? { source: nr.source, reader: nr.reader ?? null, fellBack: nr.fellBack ?? null, near: nr.pieces.length, of: nr.of, nEff: nr.nEff, thin: nr.thin,
+      nearest: nr.pieces.slice(0, 3).map((x) => ({ id: x.id, grade: x.grade ?? null })), usedFor: nr.usedFor } : null,
+  } : undefined;
   if (vr?.register.status === 'out') notMeasured.push('fidelity in another register: not measurable from this corpus, your policy was applied');
   return {
     schema: 1, invocationId: rec.invocationId, skill: x.L.skillName, skillVersion: rec.skillVersionHash, at: rec.at,
@@ -143,6 +153,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       carried: vr.carried.length, notCarried: vr.notCarried.length,
       passed: (vr.paragraphs ?? []).filter((p) => p.kept).length, refused: (vr.paragraphs ?? []).filter((p) => !p.kept && p.check !== 'not-tried').length,
       bank: vr.bank ?? null, note: vr.note ?? null } } : {}),
+    ...(context ? { context } : {}),
     notMeasured,
   };
 }

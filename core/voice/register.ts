@@ -5,9 +5,13 @@
 // register the request is in, and out of register only the traits the owner's policy carries are applied
 // (./transfer.ts).
 //
-// THE DECISION IS DECLARED, NOT DETECTED. A register comes from the person (`--register`) or from a
-// document-type word in the request, read against a small versioned table. A request that names no
-// document type is taken to be in register, and the record says it was assumed. The lexical distance
+// THE DECISION IS DECLARED, NOT DETECTED. A register comes from the person (`--register`) or from the
+// document type the request itself names. WHICH WORDS OF THE REQUEST NAME ITS DOCUMENT is a reading: "a post
+// about our quarterly report" asks for a post, and "report the bug to the team" names no document, where a
+// word table reads "report" in both. So a small model reads it when there is one (../loop/context-judge.ts)
+// and must quote the request's own words; code checks the quote is there and maps it. The word table below is
+// the offline floor. A request that names no document type is taken to be in register, and the record says
+// it was assumed. The lexical distance
 // below is a MONITOR: it is recorded and shown, and it never decides. It parses text, so it would be a
 // detector, and no study has measured it against anyone's judgement of register.
 //
@@ -65,19 +69,28 @@ export interface RegisterDecision {
   readonly status: 'in' | 'out' | 'assumed-in';
   readonly corpus: readonly string[];
   readonly request: string | null;
-  readonly source: 'declared' | 'keyword' | 'none';
+  /** `reader`: the context judge quoted the request's own words; `keyword`: the word table found one (the offline floor) */
+  readonly source: 'declared' | 'keyword' | 'reader' | 'none';
+  /** the request's own words that named the document type, when a reader quoted them */
+  readonly words?: string;
   readonly table: number;
   /** a monitor: never decides */
   readonly distance: RegisterDistance | null;
 }
 
 /** The decision, from the registers the owner declared for the corpus and the request's own. */
-export function decideRegister(corpus: readonly string[], request: string, declared: string | undefined, distance: RegisterDistance | null = null): RegisterDecision {
+export function decideRegister(corpus: readonly string[], request: string, declared: string | undefined, distance: RegisterDistance | null = null,
+  read?: string | null): RegisterDecision {
   const own = corpus.map(normaliseRegister);
-  const asked = declared ? normaliseRegister(declared) : registerOfRequest(request);
-  const source = declared ? 'declared' as const : asked ? 'keyword' as const : 'none' as const;
+  // The person's flag first. Then the reader's quote, when a reader answered (`read` is its words, or null for
+  // "the request names no document"): it decides both ways, since the table's false hits are what it is for.
+  // With no reader (`read` undefined), the table.
+  // A quote the request does not hold is no reading at all: the table decides, as with no reader.
+  const quoted = !declared && typeof read === 'string' && read.trim() && request.toLowerCase().includes(read.trim().toLowerCase()) ? read.trim() : null;
+  const asked = declared ? normaliseRegister(declared) : quoted ? normaliseRegister(quoted) : read === null ? null : registerOfRequest(request);
+  const source = declared ? 'declared' as const : !asked ? 'none' as const : quoted ? 'reader' as const : 'keyword' as const;
   const status = asked === null ? 'assumed-in' as const : own.includes(asked) ? 'in' as const : 'out' as const;
-  return { status, corpus: own, request: asked, source, table: REGISTER_TABLE_VERSION, distance };
+  return { status, corpus: own, request: asked, source, ...(quoted ? { words: quoted } : {}), table: REGISTER_TABLE_VERSION, distance };
 }
 
 /** Paragraphs shorter than this share too few words with anything for a distance to mean something. */

@@ -7,6 +7,8 @@
 //   atelier fidelity --skill <name> --next                a new release with the settings the search proposes
 //   atelier fidelity --skill <name> --distill [--cap 0.5] experience notes from compared drafts (one model call)
 //   atelier fidelity --skill <name> --rollback            the active release back to its parent
+//   atelier fidelity --skill <name> --read-subjects [--cap 0.5]
+//                                                         a subject card per piece, read by a small model (for nearness=reader)
 //
 // Nothing here moves the standard. Every change is a new implementation release with a parent, so any of
 // them can be undone, and every output names the release that shaped it. The estimate reads the records
@@ -28,11 +30,13 @@ import { releaseWithSettings } from '../fidelity.js';
 import { calibrateTypicality, standardise, typicalityOf, MAX_UNMEASURED, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
 import { readJson } from '../../core/state/read-json.js';
 import { basename } from 'node:path';
-import { closeness } from '../../core/fidelity/twosample.js';
+import { closeness, MIN_SAMPLE } from '../../core/fidelity/twosample.js';
 import { readStructure, STRUCTURE_READER_VERSION, type StructureMove } from '../../core/structure/moves.js';
 import { structureFeatures, STRUCTURE_FEATURES } from '../../core/structure/features.js';
 import { chainOf, typicalLength } from '../../core/structure/skeleton.js';
 import { join } from 'node:path';
+import { piecesOf } from '../../core/fidelity/nearness.js';
+import { readSubjectCards } from '../../core/fidelity/subject-reader.js';
 import { familiesOf } from './qualify.js';
 import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding, clientFor, runFile, loadSession } from '../runtime.js';
 
@@ -48,6 +52,7 @@ export async function fidelity(): Promise<void> {
   if (calibrateDir) { calibrate(L, profile.hash, calibrateDir); return; }
   const structureDir = flag('--read-structure-from');
   if (structureDir) { await readAuthorStructure(L, profile.hash, structureDir); return; }
+  if (argv.includes('--read-subjects')) { await readSubjects(L, activeNow?.release.retrievalHash ?? null); return; }
   if (argv.includes('--rollback')) {
     const back = fstore.rollbackRelease(L) ?? die('nothing to roll back to: the active release is the first of its line (a new standard starts a new line).');
     console.log(`Active implementation release is now ${back.id} (${back.why}).`);
@@ -183,6 +188,7 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
   let voice = base.voice;
   let selection = base.selection;
   let context = base.context;
+  let nearness = base.nearness;
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
     if (k === 'selection') {
@@ -195,6 +201,11 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
       context = v === 'local' ? 'local' : undefined;
       continue;
     }
+    if (k === 'nearness') {
+      if (!['reader', 'lexical'].includes(v)) die(`"nearness" is reader or lexical, got "${v}".`);
+      nearness = v === 'reader' ? 'reader' : undefined;
+      continue;
+    }
     if (k === 'voice') {
       if (!['incontext', 'off'].includes(v)) die(`"voice" is incontext or off, got "${v}".`);
       voice = v === 'incontext' ? 'incontext' : undefined;
@@ -205,17 +216,17 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
       diversity = ['1', 'on', 'true'].includes(v);
       continue;
     }
-    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, selection or context.`);
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, selection, context or nearness.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
     counts[k] = Math.floor(n);
   }
   if (counts.drafts < 1) die('drafts must be at least 1.');
-  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}) };
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>
-  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}${s.context === 'local' ? ', held to your range on the request\'s subject' : ''}`;
+  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}${s.context === 'local' ? ', held to your range on the request\'s subject' : ''}${s.nearness === 'reader' ? ', nearest pieces read by subject' : ''}`;
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 
@@ -252,6 +263,8 @@ function reportCloseness(L: store.StoreLayout, profileHash: string, records: rea
   console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s)${steered.length ? `; ${steered.length} run(s) steered toward typicality left out, since they were chosen on these same features` : ''}${unplaced ? `; ${unplaced} too short to place left out` : ''}.`);
   console.log(c.c2st ? `  told apart by a held-out classifier: AUC ${c.c2st.auc} (95% CI ${c.c2st.ci95[0]} to ${c.c2st.ci95[1]}); 0.5 means it cannot tell them apart`
     : '  classifier two-sample test: not run (at least 6 on each side)');
+  console.log(c.floor ? `  your own pieces told from each other (random halves of ${c.floor.size}, ${c.floor.splits} splits): AUC ${c.floor.median} at the median, ${c.floor.p95} at the 95th percentile; an AUC above at or below that is one your own pieces give`
+    : `  your own pieces told from each other: not run (it needs ${MIN_SAMPLE * 2} of your pieces, and the calibration holds ${c.author})`);
   if (c.mmd) console.log(`  kernel two-sample test (MMD): p ${c.mmd.p}${c.mmd.p < 0.05 ? ', the outputs differ from your pieces' : ', no difference detected at this size'}`);
   if (c.vendi) console.log(`  variety at ${c.vendi.size} texts each: yours ${c.vendi.author} distinct, the outputs ${c.vendi.outputs}`);
   const ps = free.flatMap((r) => (r.reading.typicality?.calibration === cal.hash ? [r.reading.typicality.p] : []));
@@ -306,6 +319,27 @@ async function readAuthorStructure(L: store.StoreLayout, profileHash: string, di
     if (xs.length) console.log(`  ${f.label}: median ${round(xs[Math.floor(xs.length / 2)])}`);
   }
   console.log(`A piece of yours runs about ${typicalLength(chain)} labelled paragraphs. Plan-first generation: atelier invoke --skill ${L.skillName} --structure plan "<task>"`);
+}
+
+/**
+ * READ WHAT EACH PIECE IS ABOUT, ONCE (core/fidelity/subject-reader.ts). One small-model call per piece of the
+ * retrieval index, metered against --cap; the cards are stored with the index they were read from. Nothing changes
+ * until a release asks for them: atelier fidelity --set nearness=reader.
+ */
+async function readSubjects(L: store.StoreLayout, retrievalHash: string | null): Promise<void> {
+  const index = (retrievalHash ? fstore.getRetrievalIndex(L, retrievalHash) : null) ?? fstore.getRetrievalIndex(L)
+    ?? die(`"${L.skillName}" has no retrieval index: it is built at discovery from a corpus (atelier new <folder>).`);
+  const ids = piecesOf(index);
+  if (!ids.length) die(`"${L.skillName}" has no paragraph long enough to be a passage (40 words), so there is nothing to read a subject from.`);
+  const model = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL ?? 'claude-haiku-4-5';
+  const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 0.5), maxCalls: ids.length + 1 };
+  console.log(`Reading what ${ids.length} piece(s) are about, one read each by ${model}: roughly $${(ids.length * 0.004).toFixed(2)}; the cap is $${budget.capUsd.toFixed(2)}.`);
+  const cards = await readSubjectCards(clientFor(model), budget, index, model);
+  if (cards.cards.length < Math.min(ids.length, 2)) die(`only ${cards.cards.length} of ${ids.length} piece(s) could be read; nothing stored. $${budget.spentUsd.toFixed(3)} spent.`);
+  fstore.setSubjects(L, index.hash, cards);
+  console.log(`Read ${cards.cards.length} of ${ids.length} piece(s) (reader ${cards.reader}, cards ${cards.hash}). $${budget.spentUsd.toFixed(3)} spent.`);
+  for (const c of cards.cards) console.log(`  ${c.piece}: ${c.about}`);
+  console.log(`A request's nearest pieces are still found by shared words. To have them read by subject: atelier fidelity --skill ${L.skillName} --set nearness=reader (or, for one run, atelier invoke --nearness reader).`);
 }
 
 /** The structure reader's model: the one it was qualified with, unless one is named. */
