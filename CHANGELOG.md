@@ -12,7 +12,7 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **Typicality on every run.** A text is read as one point in feature space, over the features that separate the
   author from the model: a shrinkage Mahalanobis distance, turned into a conformal p-value against the author's
   own pieces. The panel says "as typical as N% of your own pieces". Calibrated at discovery from the pieces read;
-  `atelier fidelity --skill <name> --calibrate <folder>` calibrates a skill built before.
+  `atelier fidelity --skill <name> --calibrate-from <folder>` calibrates a skill built before.
 - **Can the outputs be told apart from the author?** `atelier fidelity --skill <name> --typicality`: a held-out
   classifier's AUC (0.5 means it cannot), a kernel two-sample test, and how varied each side is at equal size.
 - **`invoke --until-typical <share>`** writes more rounds until the output is that typical of the author (up to

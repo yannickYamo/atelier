@@ -39,7 +39,7 @@ export async function fidelity(): Promise<void> {
   const active = activeNow;
   const read = flag('--read');
   if (read) { readOne(readFileSync(read, 'utf8'), profile, fstore.getTypicality(L, profile.hash)); return; }
-  const calibrateDir = flag('--calibrate');
+  const calibrateDir = flag('--calibrate-from');
   if (calibrateDir) { calibrate(L, profile.hash, calibrateDir); return; }
   if (argv.includes('--rollback')) {
     const back = fstore.rollbackRelease(L) ?? die('nothing to roll back to: the active release is the first of its line (a new standard starts a new line).');
@@ -215,7 +215,7 @@ function calibrate(L: store.StoreLayout, profileHash: string, dir: string): void
  * permutation p-value, and how varied each side is at equal size.
  */
 function reportCloseness(L: store.StoreLayout, profileHash: string, records: readonly Read[]): void {
-  const cal = fstore.getTypicality(L, profileHash) ?? die(`no typicality calibration for this profile: rebuild the skill, or atelier fidelity --skill ${L.skillName} --calibrate <folder>.`);
+  const cal = fstore.getTypicality(L, profileHash) ?? die(`no typicality calibration for this profile: rebuild the skill, or atelier fidelity --skill ${L.skillName} --calibrate-from <folder>.`);
   const outputs = records.map((r) => standardise(r.reading.values, cal.features, cal.center, cal.scale));
   const c = closeness(cal.vectors, outputs);
   console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s).`);

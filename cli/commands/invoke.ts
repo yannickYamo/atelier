@@ -264,7 +264,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // to --shape-rounds. Steers on the control instrument only; the two-sample test that evaluates never sees it.
   const shapeTarget = flag('--until-typical') === undefined ? null : numericFlag('--until-typical', 0.2);
   if (shapeTarget !== null && !(shapeTarget > 0 && shapeTarget < 1)) die(`--until-typical takes a share between 0 and 1 (how typical of your own pieces), got ${flag('--until-typical')}.`);
-  if (shapeTarget !== null && !fid?.typicality) die(`--until-typical needs the skill's typicality calibration: rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate <folder of your pieces>.`);
+  if (shapeTarget !== null && !fid?.typicality) die(`--until-typical needs the skill's typicality calibration: rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate-from <folder of your pieces>.`);
   const shapeRounds = shapeTarget === null ? 0 : Math.max(1, Math.floor(numericFlag('--shape-rounds', 3)));
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
