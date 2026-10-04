@@ -11,6 +11,7 @@ import { c2st, closeness, vendiAtEqualSize } from '../core/fidelity/twosample.js
 import { mulberry32 } from '../core/fidelity/qualify.js';
 import { valuesOf } from '../core/fidelity/profile.js';
 import { densityRatio, drawIndex, seedOf } from '../core/fidelity/sampling.js';
+import { evaluationVocabulary, evaluationVector, standardisedVectors } from '../core/fidelity/evaluation.js';
 
 const SENTENCES = [
   'We shipped the change on a Tuesday.', 'Nobody noticed for a week.', "Then the support queue doubled, and it didn't stop.",
@@ -153,5 +154,25 @@ describe('typical in context: a weighted conformal p-value', () => {
   it('a calibration that does not know its pieces falls back to the plain p-value', () => {
     const anon = calibrateTypicality(pieces, steering)!;
     expect(typicalityInContext(valuesOf(authorPiece(30)), anon, () => 5)?.weighted).toBeUndefined();
+  });
+});
+
+describe('the evaluation-only family', () => {
+  it('its vocabulary comes from the reference alone, and a text\'s rates line up with it', () => {
+    const ref = Array.from({ length: 6 }, (_, k) => authorPiece(k));
+    const v = evaluationVocabulary(ref);
+    expect(v.chars.length).toBeGreaterThan(50);
+    expect(v.bigrams.length).toBeGreaterThan(20);
+    expect(evaluationVector(modelDraft(1), v)).toHaveLength(v.chars.length + v.bigrams.length);
+    // an n-gram only an output uses cannot enter the vocabulary
+    expect(v.bigrams).not.toContain('zebra crossing');
+  });
+  it('tells the model\'s drafts from the author\'s pieces, and cannot tell the author from themselves', () => {
+    const ref = Array.from({ length: 8 }, (_, k) => authorPiece(k));
+    const v = evaluationVocabulary(ref);
+    const refV = ref.map((t) => evaluationVector(t, v));
+    const held = Array.from({ length: 8 }, (_, k) => authorPiece(k + 40));
+    const { others } = standardisedVectors(refV, [...held, ...Array.from({ length: 8 }, (_, k) => modelDraft(k))].map((t) => evaluationVector(t, v)));
+    expect(c2st(others.slice(0, 8), others.slice(8))?.auc).toBeGreaterThan(0.9);
   });
 });

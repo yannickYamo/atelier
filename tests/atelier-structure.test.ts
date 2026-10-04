@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { canonicalMove, checkLabels, readStructure, STRUCTURE_MOVES, type StructureMove } from '../core/structure/moves.js';
 import { structureFeatures, entropyRate, transitions } from '../core/structure/features.js';
 import { cohenKappa } from '../core/stats/agreement.js';
+import { paragraphsFor } from '../cli/commands/invoke.js';
+import type { FidelityProfile } from '../core/fidelity/types.js';
 import { chainOf, sampleSkeleton, skeletonBlock, typicalLength, followed } from '../core/structure/skeleton.js';
 import { unmetered, type InferenceClient } from '../core/inference/client.js';
 
@@ -104,5 +106,15 @@ describe('the skeleton: a shape sampled from the author\'s own chain', () => {
     const chain = chainOf([['STORY', 'CLAIM', 'SUMMARY'], ['STORY', 'CLAIM', 'SUMMARY'], ['STORY', 'EXAMPLE', 'SUMMARY']]);
     const after = Array.from({ length: 200 }, (_, k) => sampleSkeleton(chain, 4, k + 7)).filter((r) => r[2] === 'SUMMARY').map((r) => r[3]);
     expect(after.filter((m) => m === 'STORY').length / after.length).toBeGreaterThan(0.8);
+  });
+});
+
+describe('a word count sets the skeleton\'s length', () => {
+  const profile = { bands: [{ id: 'paragraphP50', cls: 'all', median: 60 }] } as unknown as FidelityProfile;
+  it('about 900 words at a 60-word paragraph is 15 paragraphs; no count, no length', () => {
+    expect(paragraphsFor('Write a post titled "x". About 900 words.', profile)).toBe(15);
+    expect(paragraphsFor('Write a 300-500 word note', profile)).toBe(5);
+    expect(paragraphsFor('Write a post about the outage', profile)).toBeNull();
+    expect(paragraphsFor('About 20000 words', profile)).toBe(40);
   });
 });

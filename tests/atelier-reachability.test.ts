@@ -119,6 +119,9 @@ describe('a decision that is not an approval is still a decision', () => {
 // deliberate state — but "is anything dark that nobody decided to park". A module may leave the
 // codebase or leave this list; it may not leave silently.
 const PARKED: Readonly<Record<string, string>> = {
+  'core/fidelity/evaluation.ts':
+    'AN EVALUATION-ONLY FEATURE FAMILY (decision 0010): read by the sealed study harness (studies/harness/'
+    + 'indistinguishability.mjs) and by nothing in the product, so no arm can steer on what judges it.',
   'core/taste/moves.ts':
     'A CANDIDATE INSTRUMENT THAT FAILED ITS QUALIFICATION (studies/SENSOR_QUALIFICATION_RESULT.md): one '
     + 'feature reliable, kept and replicating against a floor of two. Kept for the next attempt and for the '
