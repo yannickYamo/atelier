@@ -96,9 +96,10 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       facts: rec.fidelity?.coverage ? { used: rec.fidelity.coverage.used, supplied: rec.fidelity.coverage.supplied } : null,
       edits: { tried: edits.filter((e) => e.target !== '-').length, kept: edits.filter((e) => e.kept).length },
       ...(reading.typicality ? { typicality: { p: reading.typicality.p, distance: reading.typicality.distance } } : {}),
+      ...(rec.fidelity?.sampled ? { sampled: { among: rec.fidelity.sampled.among } } : {}),
       ...(rec.fidelity?.shape ? (() => {
         const sh = rec.fidelity.shape; const kept = sh.rounds.find((r) => r.kept);
-        return { shape: { target: sh.target, written: sh.rounds.length, kept: kept?.round ?? 0, p: kept?.p ?? 0 } };
+        return { shape: { target: sh.target, ...(sh.authorTarget !== undefined ? { authorTarget: sh.authorTarget } : {}), written: sh.rounds.length, kept: kept?.round ?? 0, p: kept?.p ?? 0, author: kept?.author ?? null } };
       })() : {}),
     };
   })() : null;

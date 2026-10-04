@@ -172,6 +172,11 @@ export interface ImplementationSettings {
    * Absent: off, which is what every release before it has.
    */
   readonly voice?: 'incontext';
+  /**
+   * HOW A DRAFT IS CHOSEN among those the rules cannot separate (./sampling.ts): absent, the best-scoring one;
+   * 'sample', drawn in proportion to how much likelier it is the author's than the model's. Opt-in.
+   */
+  readonly selection?: 'sample';
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
@@ -221,8 +226,14 @@ export interface FidelityRecord {
   readonly reading: FidelityReading | null;
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
-  /** the rounds written to bring the output's typicality up to a target (`invoke --until-typical`), in order */
-  readonly shape?: { readonly target: number; readonly rounds: readonly { readonly round: number; readonly p: number; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
+  /**
+   * the rounds written toward a target (`invoke --until-typical`, `--until-author`), in order: each round's
+   * typicality, the style detector's P(author) when the profile has one, and the REQUIRED rules it broke
+   */
+  readonly shape?: { readonly target: number; readonly authorTarget?: number;
+    readonly rounds: readonly { readonly round: number; readonly p: number; readonly author?: number | null; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
+  /** a draft drawn among the tied ones by density ratio (`selection: 'sample'`): how many, their weights, the seed */
+  readonly sampled?: { readonly among: number; readonly weights: readonly number[]; readonly seed: number; readonly chosen: number };
   /**
    * every application of an actuator against a band (./structural.ts), kept or not: which actuator, the target
    * feature, its value before and after, and why it was kept or refused

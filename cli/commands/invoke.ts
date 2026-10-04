@@ -29,6 +29,8 @@ import { featureTrait, split, type TransferPolicy } from '../../core/voice/trans
 import { voicePass, MAX_PARAGRAPHS, type VoiceParagraph } from '../../core/voice/pass.js';
 import { MIN_PAIRS, type PairBank } from '../../core/voice/pairs.js';
 import { typicalityOf, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
+import { densityRatio, drawIndex, seedOf } from '../../core/fidelity/sampling.js';
+import { scoreDetector } from '../../core/fidelity/stylometry.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -265,7 +267,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const shapeTarget = flag('--until-typical') === undefined ? null : numericFlag('--until-typical', 0.2);
   if (shapeTarget !== null && !(shapeTarget > 0 && shapeTarget < 1)) die(`--until-typical takes a share between 0 and 1 (how typical of your own pieces), got ${flag('--until-typical')}.`);
   if (shapeTarget !== null && !fid?.typicality) die(`--until-typical needs the skill's typicality calibration: rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate-from <folder of your pieces>.`);
-  const shapeRounds = shapeTarget === null ? 0 : Math.max(1, Math.floor(numericFlag('--shape-rounds', 3)));
+  // AND UNTIL THE STYLE DETECTOR READS IT AS YOURS (`--until-author <p>`): the detector is the instrument that
+  // separates an author's pieces from model text where one-text typicality does not (decision 0010), so it is the
+  // control the loop steers on; the counted-feature two-sample test that evaluates never sees it.
+  const authorTarget = flag('--until-author') === undefined ? null : numericFlag('--until-author', 0.5);
+  if (authorTarget !== null && !(authorTarget > 0 && authorTarget < 1)) die(`--until-author takes a probability between 0 and 1, got ${flag('--until-author')}.`);
+  if (authorTarget !== null && !fid?.profile.detector) die(`--until-author needs the skill's style detector, trained at discovery against model drafts; rebuild ${name} from its corpus.`);
+  const shapeRounds = shapeTarget === null && authorTarget === null ? 0 : Math.max(1, Math.floor(numericFlag('--shape-rounds', 3)));
+  const selectFlag = flag('--select');
+  if (selectFlag && !['sample', 'best'].includes(selectFlag)) die(`--select is sample or best, got "${selectFlag}".`);
+  const sampling = (selectFlag ?? runSettings?.selection ?? 'best') === 'sample' && Boolean(fid?.profile.detector);
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
@@ -356,7 +367,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rel = fid?.release.settings;
   const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
     || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
-    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null;
+    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null || authorTarget !== null || sampling !== (rel.selection === 'sample' && Boolean(fid?.profile.detector));
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
   // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
   const steerProfile = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
@@ -388,8 +399,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null),
-      shapeTarget !== null && fid?.typicality ? { client, budget, calibration: fid.typicality, target: shapeTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace } : null)) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
+      shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace } : null)) : null,
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -397,7 +408,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     } : null, settingsFor(checks, taste, nDrafts),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
-      { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }) }, overridden,
+      { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
+        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }) }, overridden,
       policy && register ? { L, policy, register, traits, mode: voiceMode,
         note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
           : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null) : null);
@@ -621,7 +633,7 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][] }) {
+function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
   return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
     if (c.variant && written) c.trace.variants = written.map((w) => ({ index: w.index, temperature: w.temperatureSent, retrieved: c.retrievedFor?.[w.index] ?? [] }));
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
@@ -632,7 +644,17 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
     const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals, readings[i] ?? null),
       ...(c.ledger.length ? { facts: factCoverage(d, c.ledger).used.length } : {}), taste: tasteMissed[i] }));
     scored.sort(draftOrder);
-    const best = scored[0];
+    let best = scored[0];
+    // SAMPLED, NOT THE ARGMAX, among the drafts the rules cannot separate (core/fidelity/sampling.ts): drawn by how
+    // much likelier each is the author's than the model's, so outputs keep the author's spread.
+    const tied = c.sampling ? scored.filter((s) => s.req === best.req && s.taste === best.taste && s.tells === best.tells && s.detector !== null && s.detector !== undefined) : [];
+    if (tied.length > 1) {
+      const weights = tied.map((s) => Math.round(densityRatio(s.detector ?? 0.5) * 1000) / 1000);
+      const seed = seedOf(tied.map((s) => drafts[s.i]));
+      const k = drawIndex(weights, seed);
+      best = tied[k];
+      c.trace.sampled = { among: tied.length, weights, seed, chosen: best.i };
+    }
     const range = readings[best.i] ? `, ${readings[best.i].inBand} of ${readings[best.i].measured} measured features in your range` : '';
     return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${range}${c.signals.length && !readings.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
   } };
@@ -642,7 +664,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
 const OPERATOR_TRIES = 24;
 
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { shape?: NonNullable<FidelityRecord['shape']>; voice?: { bank: string; paragraphs: readonly VoiceParagraph[]; note?: string }; drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
+interface FidelityTrace { sampled?: NonNullable<FidelityRecord['sampled']>; shape?: NonNullable<FidelityRecord['shape']>; voice?: { bank: string; paragraphs: readonly VoiceParagraph[]; note?: string }; drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -748,20 +770,27 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
 }
 
 /**
- * ONE MORE DRAFT UNTIL THE SHAPE IS THE AUTHOR'S. The checked output's typicality is read; while it is below the
- * target and rounds remain, a fresh draft is written and put through the same checks and repair. The output kept
- * is the one that breaks the fewest REQUIRED rules, then the most typical: the rules always outrank the shape.
+ * ONE MORE DRAFT UNTIL THE SHAPE IS THE AUTHOR'S. The checked output is read for its typicality (one calibrated
+ * number) and, when the profile has one, by the style detector (P(author)); while a target is unmet and rounds
+ * remain, a fresh draft is written and put through the same checks and repair. The output kept breaks the fewest
+ * REQUIRED rules, then reads most likely the author's, then is most typical: the rules always outrank the shape.
  * A round that fails costs that round, never the output already delivered.
  */
 function withShape(refine: (draft: string) => Promise<Delivered>,
-  s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration; target: number; rounds: number; servedText: string; task: string; trace: FidelityTrace } | null) {
+  s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
+    rounds: number; servedText: string; task: string; trace: FidelityTrace } | null) {
   if (!s) return refine;
   return async (draft: string) => {
+    const score = (d: Delivered): { p: number; author: number | null; broken: number } => {
+      const scored = s.detector ? scoreDetector(s.detector, d.output) : null;
+      return { p: s.calibration ? typicalityOf(d.output, s.calibration).p : 0, author: scored ? Math.round((1 - scored.p) * 1000) / 1000 : null, broken: brokenIn(d.report).length };
+    };
+    const met = (t: { p: number; author: number | null; broken: number }): boolean => t.broken === 0
+      && (s.target === null || t.p >= s.target) && (s.authorTarget === null || (t.author ?? 0) >= s.authorTarget);
     const first = await refine(draft);
-    const score = (d: Delivered): { p: number; broken: number } => ({ p: typicalityOf(d.output, s.calibration).p, broken: brokenIn(d.report).length });
-    const tried: { d: Delivered; p: number; broken: number }[] = [{ d: first, ...score(first) }];
+    const tried: { d: Delivered; p: number; author: number | null; broken: number }[] = [{ d: first, ...score(first) }];
     let note: string | undefined;
-    for (let round = 1; round <= s.rounds && tried[tried.length - 1].p < s.target && !tried.some((t) => t.p >= s.target && t.broken === 0); round++) {
+    for (let round = 1; round <= s.rounds && !tried.some(met); round++) {
       try {
         const w = await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, '', {});
         const d = await refine(w.piece);
@@ -771,9 +800,12 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
         break;
       }
     }
-    const best = tried.reduce((a, b) => (b.broken < a.broken || (b.broken === a.broken && b.p > a.p) ? b : a));
-    if (!note && best.p < s.target) note = `no round reached ${s.target}; the most typical output that broke the fewest rules was delivered`;
-    s.trace.shape = { target: s.target, rounds: tried.map((t, i) => ({ round: i, p: t.p, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
+    const better = (a: typeof tried[number], b: typeof tried[number]): boolean => b.broken < a.broken
+      || (b.broken === a.broken && ((b.author ?? 0) > (a.author ?? 0) || ((b.author ?? 0) === (a.author ?? 0) && b.p > a.p)));
+    const best = tried.reduce((a, b) => (better(a, b) ? b : a));
+    if (!note && !met(best)) note = 'no round met the target; the output that broke the fewest rules and read most like yours was delivered';
+    s.trace.shape = { target: s.target ?? 0, ...(s.authorTarget !== null ? { authorTarget: s.authorTarget } : {}),
+      rounds: tried.map((t, k) => ({ round: k, p: t.p, author: t.author, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
     return best.d;
   };
 }
@@ -838,6 +870,7 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     seed: 0,
     reading: { ...readFidelity(output, fid.profile), ...(fid.typicality ? { typicality: typicalityOf(output, fid.typicality) } : {}) },
     ...(trace.shape ? { shape: trace.shape } : {}),
+    ...(trace.sampled ? { sampled: trace.sampled } : {}),
     ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
     ...(trace.edits.length ? { edits: trace.edits } : {}),
     ...(retrieved.length ? { retrieved: [...retrieved] } : {}),

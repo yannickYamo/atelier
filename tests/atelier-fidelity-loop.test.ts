@@ -420,10 +420,22 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
     expect(out).not.toMatch(/^EXIT:/);
     expect(out).toMatch(/typical of you {4}as typical as \d+% of your own pieces/);
-    expect(out).toMatch(/shape rounds {6}3 written toward 99%; kept round \d/);
+    expect(out).toMatch(/shape rounds {6}3 written toward 99% typical; kept round \d/);
     expect(run('invoke', '--skill', 'posts', 'x', '--until-typical', '2')).toMatch(/--until-typical takes a share between 0 and 1/);
     const report = run('fidelity', '--skill', 'posts', '--typicality');
     expect(report).toMatch(/output\(s\) against \d+ of your pieces/);
+  }, 180_000);
+
+  it('--until-author steers on the style detector, and --select sample draws a tied draft and records the draw', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-author', '0.99', '--shape-rounds', '1', '--select', 'sample', '--drafts', '3', '--panel', '--json');
+    expect(out).not.toMatch(/^EXIT:/);
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { shape?: { authorTarget?: number; rounds: { author?: number | null }[] }; settings?: { selection?: string } } };
+    expect(rec.fidelity.shape?.authorTarget).toBe(0.99);
+    expect(rec.fidelity.shape?.rounds.length).toBe(2);
+    expect(typeof rec.fidelity.shape?.rounds[0].author).toBe('number');
+    expect(rec.fidelity.settings?.selection).toBe('sample');
+    expect(run('invoke', '--skill', 'posts', 'x', '--select', 'random')).toMatch(/--select is sample or best/);
   }, 180_000);
 
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {

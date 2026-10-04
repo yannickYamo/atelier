@@ -10,6 +10,7 @@ import { calibrateTypicality, typicalityOf, standardise } from '../core/fidelity
 import { c2st, closeness } from '../core/fidelity/twosample.js';
 import { mulberry32 } from '../core/fidelity/qualify.js';
 import { valuesOf } from '../core/fidelity/profile.js';
+import { densityRatio, drawIndex, seedOf } from '../core/fidelity/sampling.js';
 
 const SENTENCES = [
   'We shipped the change on a Tuesday.', 'Nobody noticed for a week.', "Then the support queue doubled, and it didn't stop.",
@@ -82,5 +83,21 @@ describe('typicality, conformal', () => {
   it('the two-sample readings tell the model\'s drafts from the author\'s pieces', () => {
     const outputs = Array.from({ length: 8 }, (_, k) => standardise(valuesOf(modelDraft(k)), cal!.features, cal!.center, cal!.scale));
     expect(closeness(cal!.vectors, outputs).c2st?.auc).toBeGreaterThan(0.9);
+  });
+});
+
+describe('drawing among tied drafts by density ratio', () => {
+  it('draws each index in proportion to its weight, over many seeds', () => {
+    const w = [1, 3, 6]; const counts = [0, 0, 0];
+    for (let s = 0; s < 6000; s++) counts[drawIndex(w, s * 2654435761)] += 1;
+    expect(counts[0] / 6000).toBeCloseTo(0.1, 1);
+    expect(counts[2] / 6000).toBeCloseTo(0.6, 1);
+  });
+  it('the ratio is P(author)/P(model), clipped, and a seed is fixed by the drafts', () => {
+    expect(densityRatio(0.5)).toBeCloseTo(1, 9);
+    expect(densityRatio(0.2)).toBeCloseTo(4, 9);
+    expect(densityRatio(1)).toBe(0.01);
+    expect(seedOf(['a', 'b'])).toBe(seedOf(['a', 'b']));
+    expect(seedOf(['a', 'b'])).not.toBe(seedOf(['b', 'a']));
   });
 });

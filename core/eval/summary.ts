@@ -64,7 +64,9 @@ export interface EvalSummary {
     /** how typical of the author the delivered text is: the share of their own pieces at least as far from the rest */
     readonly typicality?: { readonly p: number; readonly distance: number } | null;
     /** the rounds written toward a typicality target (`invoke --until-typical`) */
-    readonly shape?: { readonly target: number; readonly written: number; readonly kept: number; readonly p: number } | null;
+    readonly shape?: { readonly target: number; readonly authorTarget?: number; readonly written: number; readonly kept: number; readonly p: number; readonly author?: number | null } | null;
+    /** a draft drawn among tied ones by density ratio */
+    readonly sampled?: { readonly among: number } | null;
   } | null;
   readonly monitors: {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
@@ -128,7 +130,11 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     if (fi.facts) out.push(`    ${pad('facts used', 18)}${fi.facts.used} of ${fi.facts.supplied} supplied`);
     if (fi.edits.tried) out.push(`    ${pad('steering', 18)}${fi.edits.kept} of ${fi.edits.tried} change(s) kept`);
     if (fi.typicality) out.push(`    ${pad('typical of you', 18)}as typical as ${Math.round(fi.typicality.p * 100)}% of your own pieces (distance ${fmt(fi.typicality.distance)})`);
-    if (fi.shape) out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${Math.round(fi.shape.target * 100)}%; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}%)`);
+    if (fi.shape) {
+      const toward = [fi.shape.target ? `${Math.round(fi.shape.target * 100)}% typical` : '', fi.shape.authorTarget ? `P(yours) ${fi.shape.authorTarget}` : ''].filter(Boolean).join(' and ');
+      out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);
+    }
+    if (fi.sampled) out.push(`    ${pad('draft drawn', 18)}from ${fi.sampled.among} tied drafts, in proportion to how likely each is yours`);
   }
   if (e.voice) {
     const v = e.voice; const r = v.register;
