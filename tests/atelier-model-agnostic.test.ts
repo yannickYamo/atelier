@@ -635,6 +635,11 @@ describe('a model that refuses forced tool choice is asked in words, and a model
             ? 'tool_choice: type "tool" and "any" are not supported for this model.' : '`temperature` is deprecated for this model.' } }));
           return;
         }
+        if (b.model === 'stubborn-model') {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'tool_choice: type "tool" and "any" are not supported for this model.' } }));
+          return;
+        }
         if (b.model === 'new-model' && b.tool_choice.type === 'tool') {
           res.statusCode = 400;
           res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'tool_choice: type "tool" and "any" are not supported for this model.' } }));
@@ -666,6 +671,12 @@ describe('a model that refuses forced tool choice is asked in words, and a model
     expect(r.json).toEqual({ ok: true });
     expect(r.temperatureSent).toBeNull();
     expect(seen.filter((x) => x.model === 'strict-model').map((x) => x.choice)).toEqual(['tool', 'auto', 'auto']);
+  });
+  it('a model that refuses forced choice even when it is not forced fails after one retry: no loop of paid calls', async () => {
+    await expect(new AnthropicInferenceClient('stubborn-model', 'sk-test', null).complete({
+      stableBlock: 's', variableBlock: '', userMessage: 'q', toolName: 'emit_answer', toolDescription: 'd',
+      schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }, maxTokens: 100 })).rejects.toThrow();
+    expect(seen.filter((x) => x.model === 'stubborn-model')).toHaveLength(2);
   });
   it('a model that accepts forced choice keeps it: the measured instruments do not change', async () => {
     await ask('claude-haiku-4-5');

@@ -6,8 +6,8 @@
 // tells two separable ones, a kernel test agrees, and the Vendi score counts distinct texts.
 import { describe, it, expect } from 'vitest';
 import { shrunkCovariance, invert, mahalanobis, vendi, mmdTest, colMeans } from '../core/stats/multivariate.js';
-import { calibrateTypicality, typicalityOf, standardise } from '../core/fidelity/typicality.js';
-import { c2st, closeness } from '../core/fidelity/twosample.js';
+import { calibrateTypicality, calibrateFromValues, restrictCalibration, typicalityOf, typicalityOfValues, standardise } from '../core/fidelity/typicality.js';
+import { c2st, closeness, vendiAtEqualSize } from '../core/fidelity/twosample.js';
 import { mulberry32 } from '../core/fidelity/qualify.js';
 import { valuesOf } from '../core/fidelity/profile.js';
 import { densityRatio, drawIndex, seedOf } from '../core/fidelity/sampling.js';
@@ -75,8 +75,8 @@ describe('typicality, conformal', () => {
     expect(cal?.features.every((f) => steering.includes(f))).toBe(true);
   });
   it('a new piece by the author is typical; a model wall of text is not', () => {
-    const own = typicalityOf(authorPiece(20), cal!);
-    const wall = typicalityOf(modelDraft(3), cal!);
+    const own = typicalityOf(authorPiece(20), cal!)!;
+    const wall = typicalityOf(modelDraft(3), cal!)!;
     expect(own.p).toBeGreaterThan(wall.p);
     expect(wall.p).toBeLessThanOrEqual(1 / 13 + 1e-9);
   });
@@ -99,5 +99,36 @@ describe('drawing among tied drafts by density ratio', () => {
     expect(densityRatio(1)).toBe(0.01);
     expect(seedOf(['a', 'b'])).toBe(seedOf(['a', 'b']));
     expect(seedOf(['a', 'b'])).not.toBe(seedOf(['b', 'a']));
+  });
+});
+
+describe('found by the gap analysis', () => {
+  it('Vendi sees a tight cluster: outputs shrunk toward one point read as less varied than the author', () => {
+    const author = gaussianRows(20, 5, 0, 11);
+    const tight = gaussianRows(20, 5, 0, 12).map((r) => r.map((v) => v * 0.05));
+    const v = vendiAtEqualSize(author, tight)!;
+    expect(v.outputs).toBeLessThan(v.author);
+  });
+  it('the conformal p-value is valid under exchangeable draws: at most about 10% of new texts fall at or below 0.1', () => {
+    const r = mulberry32(7);
+    const g = (): number => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r());
+    const row = (): Record<string, number> => Object.fromEntries(['a', 'b', 'c', 'd'].map((k) => [k, Math.exp(g() * 0.5)]));
+    let low = 0; const trials = 150;
+    for (let t = 0; t < trials; t++) {
+      const cal = calibrateFromValues(Array.from({ length: 15 }, row))!;
+      if (typicalityOfValues(row(), cal)!.p <= 0.1) low += 1;
+    }
+    expect(low / trials).toBeLessThan(0.15);
+  });
+  it('a text that measures too few of the features gets no reading, not "100% typical"', () => {
+    const cal = calibrateTypicality(Array.from({ length: 12 }, (_, k) => authorPiece(k)), ['paragraphP50', 'paragraphP90', 'sentencesPerParagraph', 'paragraphSpread'])!;
+    expect(typicalityOf('Yes.', cal)).toBeNull();
+  });
+  it('a calibration restricted to the ratified features keeps only those, recomputed from the stored vectors', () => {
+    const cal = calibrateTypicality(Array.from({ length: 12 }, (_, k) => authorPiece(k)), ['paragraphP50', 'paragraphP90', 'sentencesPerParagraph', 'paragraphSpread'])!;
+    const fewer = restrictCalibration(cal, ['paragraphP50', 'paragraphSpread'])!;
+    expect(fewer.features).toEqual(['paragraphP50', 'paragraphSpread']);
+    expect(fewer.scores).toHaveLength(12);
+    expect(restrictCalibration(cal, cal.features)).toBe(cal);
   });
 });

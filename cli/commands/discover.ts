@@ -351,7 +351,7 @@ export async function discover(): Promise<void> {
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.
   rmSync(runFile('signals.json'), { force: true });
-  rmSync(runFile('fidelity.json'), { force: true }); rmSync(runFile('retrieval.json'), { force: true });
+  rmSync(runFile('fidelity.json'), { force: true }); rmSync(runFile('retrieval.json'), { force: true }); rmSync(runFile('typicality.json'), { force: true });
   // THE PLAIN DRAFTS ARE OPTIONAL; THE TELL FLOOR IS NOT. Rules that compare the author with the model
   // need its drafts; the machine-tell floor, register and contrastive verdicts are measured on the author's
   // pieces alone. A comparison that failed once dropped all of them, and a skill shipped with no floor

@@ -25,11 +25,13 @@ import { DEFAULT_SETTINGS, type ImplementationSettings } from '../../core/fideli
 import type { Budget } from '../../core/inference/client.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { releaseWithSettings } from '../fidelity.js';
-import { calibrateTypicality, standardise, typicalityOf, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
+import { calibrateTypicality, standardise, typicalityOf, MAX_UNMEASURED, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
+import { readJson } from '../../core/state/read-json.js';
+import { basename } from 'node:path';
 import { closeness } from '../../core/fidelity/twosample.js';
 import { join } from 'node:path';
 import { familiesOf } from './qualify.js';
-import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding } from '../runtime.js';
+import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding, runFile, loadSession } from '../runtime.js';
 
 export async function fidelity(): Promise<void> {
   const name = skillArg();
@@ -72,7 +74,11 @@ export async function fidelity(): Promise<void> {
 /** Where one text sits: every steering feature, its value, the author's range, and whether it is inside. */
 function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.getProfile>>, cal: TypicalityCalibration | null): void {
   const r = readFidelity(text, profile);
-  if (cal) { const t = typicalityOf(text, cal); console.log(`As typical as ${Math.round(t.p * 100)}% of your own pieces (distance ${round(t.distance)}, calibrated on ${cal.scores.length}).`); }
+  if (cal) {
+    const t = typicalityOf(text, cal);
+    console.log(t ? `As typical as ${Math.round(t.p * 100)}% of your own pieces (distance ${round(t.distance)}, calibrated on ${cal.scores.length}).`
+      : `Too little of the text is measurable to place it against your pieces (more than ${Math.round(MAX_UNMEASURED * 100)}% of the ${cal.features.length} features unmeasured).`);
+  }
   console.log(`A ${r.cls} text, read against ${r.bandsFrom === 'all' ? 'your pooled range' : `your ${r.bandsFrom} pieces`}: in range on ${r.inBand} of ${r.measured} steering features.`);
   for (const b of profile.bands.filter((x) => x.cls === r.bandsFrom && x.role !== 'MONITOR')) {
     const v = r.values[b.id];
@@ -209,8 +215,19 @@ const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) 
 function calibrate(L: store.StoreLayout, profileHash: string, dir: string): void {
   const profile = fstore.getProfile(L, profileHash) ?? die('the active profile is not stored.');
   if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${dir} is not a folder.`);
-  const pieces = readdirSync(dir).filter((f) => /\.(md|markdown|txt)$/i.test(f)).sort().map((f) => readFileSync(join(dir, f), 'utf8'));
-  const cal = calibrateTypicality(pieces, profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id)) ?? die(`${pieces.length} piece(s) in ${dir}: a calibration needs at least 6, with features that vary.`);
+  // THE RESERVED PIECES STAY UNSEEN. Where this project's run recorded which of its pieces were reserved, those are
+  // left out by file name: they are the blind comparison, and a reference that holds them has seen it.
+  const reserved = new Set<string>();
+  const pathsFile = runFile('corpus-paths.json');
+  if (existsSync(pathsFile)) {
+    const ids = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.unitId));
+    for (const f of readJson<{ id: string; path: string }[]>(pathsFile, { kind: 'array', what: 'the corpus path list' })) if (ids.has(f.id)) reserved.add(basename(f.path));
+  }
+  const names = readdirSync(dir).filter((f) => /\.(md|markdown|txt)$/i.test(f) && !reserved.has(f)).sort();
+  if (reserved.size) console.log(`Left out ${readdirSync(dir).filter((f) => reserved.has(f)).length} reserved piece(s): they stay the blind comparison.`);
+  const pieces = names.map((f) => readFileSync(join(dir, f), 'utf8'));
+  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id);
+  const cal = calibrateTypicality(pieces, steering) ?? die(`no calibration from ${pieces.length} piece(s) over ${steering.length} steering feature(s): it needs at least 6 pieces and 2 features that vary across them.`);
   fstore.setTypicality(L, profileHash, cal);
   console.log(`Typicality calibrated on ${pieces.length} piece(s) over ${cal.features.length} feature(s) (calibration ${cal.hash}, shrinkage ${cal.shrinkage}). Every output is now read for how typical of you it is.`);
 }
@@ -222,13 +239,17 @@ function calibrate(L: store.StoreLayout, profileHash: string, dir: string): void
  */
 function reportCloseness(L: store.StoreLayout, profileHash: string, records: readonly Read[]): void {
   const cal = fstore.getTypicality(L, profileHash) ?? die(`no typicality calibration for this profile: rebuild the skill, or atelier fidelity --skill ${L.skillName} --calibrate-from <folder>.`);
-  const outputs = records.map((r) => standardise(r.reading.values, cal.features, cal.center, cal.scale));
+  // NOT ON RUNS STEERED BY THE SAME INSTRUMENT. A run that kept a round for its typicality was selected on these
+  // features against these pieces; testing it here would measure the steering (decision 0010).
+  const steered = records.filter((r) => r.fidelity?.shape);
+  const free = records.filter((r) => !r.fidelity?.shape);
+  const outputs = free.map((r) => standardise(r.reading.values, cal.features, cal.center, cal.scale));
   const c = closeness(cal.vectors, outputs);
-  console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s).`);
+  console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s)${steered.length ? `; ${steered.length} run(s) steered toward typicality left out, since they were chosen on these same features` : ''}.`);
   console.log(c.c2st ? `  told apart by a held-out classifier: AUC ${c.c2st.auc} (95% CI ${c.c2st.ci95[0]} to ${c.c2st.ci95[1]}); 0.5 means it cannot tell them apart`
     : '  classifier two-sample test: not run (at least 6 on each side)');
   if (c.mmd) console.log(`  kernel two-sample test (MMD): p ${c.mmd.p}${c.mmd.p < 0.05 ? ', the outputs differ from your pieces' : ', no difference detected at this size'}`);
   if (c.vendi) console.log(`  variety at ${c.vendi.size} texts each: yours ${c.vendi.author} distinct, the outputs ${c.vendi.outputs}`);
-  const ps = records.flatMap((r) => (r.reading.typicality ? [r.reading.typicality.p] : []));
+  const ps = free.flatMap((r) => (r.reading.typicality?.calibration === cal.hash ? [r.reading.typicality.p] : []));
   if (ps.length) console.log(`  typical of you, per output: median ${Math.round([...ps].sort((a, b) => a - b)[Math.floor(ps.length / 2)] * 100)}% over ${ps.length} output(s)`);
 }

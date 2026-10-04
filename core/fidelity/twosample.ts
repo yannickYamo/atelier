@@ -19,7 +19,7 @@
 // measures the steering (docs/decisions/0010-closeness-is-a-two-sample-test.md).
 
 import { aucWithCi, mulberry32, type AucCi } from './qualify.js';
-import { fitLogistic, logit, mmdTest, vendi, type Mat } from '../stats/multivariate.js';
+import { fitLogistic, logit, medianBandwidth, mmdTest, vendi, type Mat } from '../stats/multivariate.js';
 
 export interface ClosenessReading {
   readonly author: number;
@@ -69,8 +69,11 @@ export function vendiAtEqualSize(author: Mat, outputs: Mat, seed = 1, draws = 20
     for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
     return idx.slice(0, size).map((i) => rows[i]);
   };
+  // ONE BANDWIDTH FOR BOTH SIDES, from the pooled sample. A bandwidth per side makes the score blind to scale: a
+  // tight cluster of outputs, shrunk twentyfold, scored as varied as the author.
+  const h = medianBandwidth([...author, ...outputs]);
   let a = 0; let o = 0;
-  for (let t = 0; t < draws; t++) { a += vendi(sub(author)); o += vendi(sub(outputs)); }
+  for (let t = 0; t < draws; t++) { a += vendi(sub(author), h); o += vendi(sub(outputs), h); }
   return { author: r3(a / draws), outputs: r3(o / draws), size };
 }
 

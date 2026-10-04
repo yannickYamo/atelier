@@ -91,7 +91,8 @@ export function checkLabels(raw: unknown, n: number): StructureMove[] | null {
     if (i < 0 || i >= n || out[i] !== undefined || !move) return null;
     out[i] = move;
   }
-  return out.every((x) => x !== undefined) ? out as StructureMove[] : null;
+  const labelled = out.filter((x): x is StructureMove => x !== undefined);
+  return labelled.length === n ? labelled : null;
 }
 
 async function readOnce(client: InferenceClient, budget: Budget, paragraphs: readonly string[], order: readonly StructureMove[]): Promise<StructureMove[] | null> {

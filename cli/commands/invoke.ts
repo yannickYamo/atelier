@@ -273,22 +273,25 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const authorTarget = flag('--until-author') === undefined ? null : numericFlag('--until-author', 0.5);
   if (authorTarget !== null && !(authorTarget > 0 && authorTarget < 1)) die(`--until-author takes a probability between 0 and 1, got ${flag('--until-author')}.`);
   if (authorTarget !== null && !fid?.profile.detector) die(`--until-author needs the skill's style detector, trained at discovery against model drafts; rebuild ${name} from its corpus.`);
-  const shapeRounds = shapeTarget === null && authorTarget === null ? 0 : Math.max(1, Math.floor(numericFlag('--shape-rounds', 3)));
+  const shapeRounds = shapeTarget === null && authorTarget === null ? 0 : Math.floor(numericFlag('--shape-rounds', 3));
+  if ((shapeTarget !== null || authorTarget !== null) && shapeRounds < 1) die('--shape-rounds must be at least 1: each round is one more draft.');
+  if (shapeRounds > 0 && argv.includes('--no-repair')) die('--until-typical and --until-author check each round before keeping it, and --no-repair turns the checks off: drop one of them.');
   const selectFlag = flag('--select');
   if (selectFlag && !['sample', 'best'].includes(selectFlag)) die(`--select is sample or best, got "${selectFlag}".`);
   const sampling = (selectFlag ?? runSettings?.selection ?? 'best') === 'sample' && Boolean(fid?.profile.detector);
+  if (selectFlag === 'sample' && !fid?.profile.detector) report.say('(--select sample needs the skill\'s style detector, trained at discovery; drafts are chosen the usual way.)');
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0) + 0.3 * shapeRounds),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0))),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
-      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0) + 7 * shapeRounds) };
+      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0))) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -399,7 +402,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null),
-      shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace } : null)) : null,
+      shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
@@ -655,8 +658,9 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
       best = tied[k];
       c.trace.sampled = { among: tied.length, weights, seed, chosen: best.i };
     }
+    const drawn = tied.length > 1 ? `; drawn from ${tied.length} tied drafts in proportion to how likely each is yours` : '';
     const range = readings[best.i] ? `, ${readings[best.i].inBand} of ${readings[best.i].measured} measured features in your range` : '';
-    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${range}${c.signals.length && !readings.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — the best of ${drafts.length}` };
+    return { index: best.i, why: `${c.taste?.acts ? `${best.taste} taste rule(s) read as missed, ` : ''}${best.req} REQUIRED rule(s) broken, ${best.tells} machine-writing move(s), ${best.all} rule(s) of any weight${range}${c.signals.length && !readings.length ? `, ${best.signal ?? 'unknown distance'} from your signals` : ''}${best.style ? `, style margin ${best.style}` : ''} — ${drawn ? `one of ${drafts.length}${drawn}` : `the best of ${drafts.length}`}` };
   } };
 }
 
@@ -776,36 +780,54 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
  * REQUIRED rules, then reads most likely the author's, then is most typical: the rules always outrank the shape.
  * A round that fails costs that round, never the output already delivered.
  */
+/** One shape round: its delivered text, its draft, its readings, and the trace it alone produced. */
+interface ShapeRound { d: Delivered; draft: string; p: number; author: number | null; broken: number; edits: FidelityTrace['edits']; voice: FidelityTrace['voice']; taken: readonly TasteReading[] | null }
+
 function withShape(refine: (draft: string) => Promise<Delivered>,
   s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
-    rounds: number; servedText: string; task: string; trace: FidelityTrace } | null) {
+    rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null } | null) {
   if (!s) return refine;
   return async (draft: string) => {
     const score = (d: Delivered): { p: number; author: number | null; broken: number } => {
       const scored = s.detector ? scoreDetector(s.detector, d.output) : null;
-      return { p: s.calibration ? typicalityOf(d.output, s.calibration).p : 0, author: scored ? Math.round((1 - scored.p) * 1000) / 1000 : null, broken: brokenIn(d.report).length };
+      return { p: (s.calibration ? typicalityOf(d.output, s.calibration)?.p : null) ?? 0, author: scored ? Math.round((1 - scored.p) * 1000) / 1000 : null, broken: brokenIn(d.report).length };
     };
     const met = (t: { p: number; author: number | null; broken: number }): boolean => t.broken === 0
       && (s.target === null || t.p >= s.target) && (s.authorTarget === null || (t.author ?? 0) >= s.authorTarget);
-    const first = await refine(draft);
-    const tried: { d: Delivered; p: number; author: number | null; broken: number }[] = [{ d: first, ...score(first) }];
+    // EACH ROUND KEEPS ITS OWN TRACE. The structural edits, the voice pass and the taste reading a round produced
+    // describe that round's text; the record must carry the kept round's, never the last one's.
+    const editsBefore = s.trace.edits.length;
+    const run = async (text: string): Promise<ShapeRound> => {
+      s.trace.edits.splice(editsBefore); s.trace.voice = undefined; if (s.taste) s.taste.taken = null;
+      const d = await refine(text);
+      return { d, draft: text, ...score(d), edits: s.trace.edits.slice(editsBefore), voice: s.trace.voice, taken: s.taste?.taken ?? null };
+    };
+    const tried: ShapeRound[] = [await run(draft)];
     let note: string | undefined;
     for (let round = 1; round <= s.rounds && !tried.some(met); round++) {
       try {
         const w = await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, '', {});
-        const d = await refine(w.piece);
-        tried.push({ d, ...score(d) });
+        tried.push(await run(w.piece));
       } catch (err) {
         note = `round ${round} could not run (${(err as Error).message.split('\n')[0]}); the best output so far was delivered`;
         break;
       }
     }
-    const better = (a: typeof tried[number], b: typeof tried[number]): boolean => b.broken < a.broken
+    const better = (a: ShapeRound, b: ShapeRound): boolean => b.broken < a.broken
       || (b.broken === a.broken && ((b.author ?? 0) > (a.author ?? 0) || ((b.author ?? 0) === (a.author ?? 0) && b.p > a.p)));
     const best = tried.reduce((a, b) => (better(a, b) ? b : a));
+    s.trace.edits.splice(editsBefore, s.trace.edits.length - editsBefore, ...best.edits);
+    s.trace.voice = best.voice;
+    if (s.taste) s.taste.taken = best.taken;
     if (!note && !met(best)) note = 'no round met the target; the output that broke the fewest rules and read most like yours was delivered';
     s.trace.shape = { target: s.target ?? 0, ...(s.authorTarget !== null ? { authorTarget: s.authorTarget } : {}),
-      rounds: tried.map((t, k) => ({ round: k, p: t.p, author: t.author, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
+      rounds: tried.map((t, k) => ({ round: k, draft: sha(t.draft), p: t.p, author: t.author, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
+    // A LATER ROUND'S OUTPUT CARRIES ITS OWN DRAFT. The run's selection record describes round 0's drafts; the kept
+    // round's draft is recorded on the repair record, which a round that needed no repair would otherwise lack.
+    if (best !== tried[0] && !best.d.repair) {
+      return { ...best.d, repair: { passes: 0, violatedBefore: [], violatedAfter: brokenIn(best.d.report), originalOutputHash: sha(best.draft), draft: best.draft,
+        why: `shape round ${tried.indexOf(best)} of ${tried.length - 1}, kept for its shape; every REQUIRED measured rule as counted` } };
+    }
     return best.d;
   };
 }

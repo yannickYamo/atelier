@@ -15,9 +15,13 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   `atelier fidelity --skill <name> --calibrate-from <folder>` calibrates a skill built before.
 - **Can the outputs be told apart from the author?** `atelier fidelity --skill <name> --typicality`: a held-out
   classifier's AUC (0.5 means it cannot), a kernel two-sample test, and how varied each side is at equal size.
-- **`invoke --until-typical <share>`** writes more rounds until the output is that typical of the author (up to
-  `--shape-rounds`, default 3), keeping the round that breaks the fewest REQUIRED rules, then the most typical.
-  Decision 0010.
+- **`invoke --until-typical <share>` and `--until-author <p>`** write more rounds (up to `--shape-rounds`, default 3)
+  until the output is that typical of the author, or until the style detector reads it as theirs with that
+  probability. The round kept breaks the fewest REQUIRED rules, then reads most likely the author's, then is most
+  typical. Each round keeps its own trace, and the kept round's draft is recorded.
+- **`--select sample`** (or `fidelity --set selection=sample`): among drafts the rules cannot separate, one is drawn
+  in proportion to how much likelier it is the author's than the model's (the style detector's density ratio),
+  seeded and recorded, instead of the most typical one. Decision 0010.
 
 ### Fixed
 

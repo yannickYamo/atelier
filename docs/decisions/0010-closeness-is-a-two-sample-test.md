@@ -17,12 +17,14 @@ detector finds.
    `atelier fidelity --typicality`).
 2. **One text's closeness is one calibrated number.** A shrinkage Mahalanobis distance over the features that
    separate this author from the model, turned into a conformal p-value against the author's own pieces left
-   out one at a time: "as typical as p of your own pieces" (`core/fidelity/typicality.ts`). It is on every
-   run's panel.
-3. **The loop may steer on typicality; the evaluation may not use it.** `invoke --until-typical <p>` writes
-   more rounds until an output is that typical, keeping the one that breaks the fewest REQUIRED rules and then
-   the most typical. Rules always outrank shape. The two-sample test that evaluates is a separate instrument
-   on separate data.
+   out one at a time, each scored with the centre, scale and covariance of the others, as a new text is: "as
+   typical as p of your own pieces" (`core/fidelity/typicality.ts`). It is on every run's panel. A text that
+   measures too few of the features gets no reading.
+3. **The loop may steer on a control; the evaluation may not use it.** `invoke --until-typical` and
+   `--until-author` write more rounds; `--select sample` draws among tied drafts by the style detector's
+   density ratio. Rules always outrank shape. `fidelity --typicality` leaves out the runs steered toward
+   typicality, which were chosen on its own features, and the sealed study evaluates on instruments the loop
+   never sees: features of another family, and people reading blind.
 4. **Opt-in** ([0008](0008-one-point-zero-is-the-floor.md)). A skill without a calibration behaves as before.
 
 **Not decided here.** Structure (how a piece introduces, explains, evidences and closes) needs a reader that

@@ -157,7 +157,9 @@ output as one point over the features that separate you from the model, and comp
 pieces' distances from each other. `atelier fidelity --skill <name> --typicality` asks the question over all your
 runs: can a classifier tell your outputs from your pieces (an AUC of 0.5 means it cannot), and are your outputs as
 varied as you are. `invoke --until-typical 0.3` writes more rounds until an output is at least that typical, and
-never trades a REQUIRED rule for it.
+never trades a REQUIRED rule for it. `--until-author 0.5` does the same on the style detector: more rounds until it
+reads the output as yours at least half the time. `--select sample` draws among drafts the rules cannot separate by
+how likely each is yours, instead of always taking the most typical one, so your outputs keep your spread.
 
 ### Voice, and other registers (opt-in)
 

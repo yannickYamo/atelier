@@ -436,6 +436,8 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(typeof rec.fidelity.shape?.rounds[0].author).toBe('number');
     expect(rec.fidelity.settings?.selection).toBe('sample');
     expect(run('invoke', '--skill', 'posts', 'x', '--select', 'random')).toMatch(/--select is sample or best/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--no-repair')).toMatch(/--no-repair turns the checks off/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--shape-rounds', '0')).toMatch(/--shape-rounds must be at least 1/);
   }, 180_000);
 
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {

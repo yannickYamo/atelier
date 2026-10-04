@@ -231,7 +231,7 @@ export interface FidelityRecord {
    * typicality, the style detector's P(author) when the profile has one, and the REQUIRED rules it broke
    */
   readonly shape?: { readonly target: number; readonly authorTarget?: number;
-    readonly rounds: readonly { readonly round: number; readonly p: number; readonly author?: number | null; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
+    readonly rounds: readonly { readonly round: number; readonly draft?: string; readonly p: number; readonly author?: number | null; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
   /** a draft drawn among the tied ones by density ratio (`selection: 'sample'`): how many, their weights, the seed */
   readonly sampled?: { readonly among: number; readonly weights: readonly number[]; readonly seed: number; readonly chosen: number };
   /**

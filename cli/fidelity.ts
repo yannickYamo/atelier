@@ -18,7 +18,7 @@ import { baselineOf } from '../core/fidelity/profile.js';
 import { DEFAULT_SETTINGS, type FidelityProfile, type ImplementationRelease, type ImplementationSettings } from '../core/fidelity/types.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { readJson } from '../core/state/read-json.js';
-import type { TypicalityCalibration } from '../core/fidelity/typicality.js';
+import { restrictCalibration, type TypicalityCalibration } from '../core/fidelity/typicality.js';
 import { runFile } from './runtime.js';
 import { createHash } from 'node:crypto';
 
@@ -70,7 +70,11 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   if (index) fstore.setRetrievalIndex(L, index);
   // Keyed by the profile installed, which the owner's rulings may have changed from the one discovery wrote.
   const typicalityFile = runFile('typicality.json');
-  if (existsSync(typicalityFile)) fstore.setTypicality(L, profile.hash, readJson<TypicalityCalibration>(typicalityFile, { what: 'the typicality calibration' }));
+  // ON THE FEATURES THAT STEER AFTER THE OWNER'S RULINGS: a band the owner turned down is monitored, not steered, and
+  // a calibration over it would disagree with the one `fidelity --calibrate-from` makes for the same profile.
+  const discovered = existsSync(typicalityFile) ? readJson<TypicalityCalibration>(typicalityFile, { what: 'the typicality calibration' }) : null;
+  const calibration = discovered ? restrictCalibration(discovered, profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id)) : null;
+  if (calibration) fstore.setTypicality(L, profile.hash, calibration);
   // A NEW STANDARD STARTS A NEW LINE. Settings and notes earned under one standard are not evidence about
   // another: under a changed standard the first release is a root, with the first settings for this profile.
   const prior = fstore.getActiveRelease(L)?.release ?? null;
