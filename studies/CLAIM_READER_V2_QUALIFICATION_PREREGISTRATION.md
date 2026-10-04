@@ -31,7 +31,7 @@ spent as evidence, so it served as development data. On those same drafts, versi
 
 ## Materials: pieces no study has used
 
-- **25 newsletters** from the DailyDoseOfDS archive, chosen by seeded hash (seed
+- **25 newsletters** from a public data-science newsletter archive, chosen by seeded hash (seed
   `claim-reader-v2-2026-09-29`) from the 77 with at least 500 words once the metadata header is removed.
   These are technical explainers dense in figures, names and benchmarks, copied to
   `<a local folder>`.

@@ -32,7 +32,7 @@ before any of them are used. This study measures both, once.
 
 ## Materials
 
-- **Author pieces.** 40 DailyDoseOfDS newsletters, a house style from two authors, never used by any study
+- **Author pieces.** 40 newsletters from a public data-science newsletter, a house style from two authors, never used by any study
   (the claim reader's 25 are excluded). They were chosen by seeded hash (`sensor-qualification-2026-09-29`)
   from the 52 unused ones with at least 500 words, and are copied to `<a local folder>`.
 - **The split, by the same seed, before generation:**
