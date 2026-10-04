@@ -10,7 +10,7 @@ Atelier is open source and MIT licensed. Point it at pieces written the way you 
 
 From then on it does three jobs. It writes, checks and repairs every output, and you get a pass or fail before you read a word. It finds what keeps going wrong and searches for a better way to carry your rules. And it installs a change only when that change measures better, so the skill gets better without drifting from what you approved.
 
-It works for writing and for answers: blog posts, code review comments, coding-assistant answers, support replies, contracts, reports.
+It works for writing and for answers: code reviews, financial reports, blog posts, contracts, support replies, coding-assistant answers.
 
 ```bash
 atelier new ./examples-to-match "answers like these"         # read the examples, propose the rules
@@ -23,7 +23,9 @@ atelier tend --skill examples-to-match --auto                 # find what keeps 
 
 **A model can follow examples on the first draft. What it can't do is keep a standard someone owns.**
 
-Pasting your examples into a strong model gets you a good first draft. The rules get re-guessed on every run, and nothing checks the result. Atelier moves the standard outside the model, puts your name on it, and checks every output against it.
+Pasting your examples into a strong model gets you a good first draft. The rules get re-guessed on every run, and nothing checks the result. Atelier moves the standard outside the model, where no update can move it, and checks every output against it.
+
+I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
 
 - **A standard only you can change.** It is hashed and versioned. No model update, optimizer or judge can move it.
 - **A verdict on every output.** Conformant or not, with a plain pass or fail per check.
