@@ -4,7 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { checksFor, claimInstrumentOf, contextJudgeFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
+import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
@@ -19,7 +19,9 @@ import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
 import { putEval } from '../../core/state/eval-store.js';
-import { retrieve, renderRetrieved } from '../../core/fidelity/retrieval.js';
+import { renderRetrieved } from '../../core/fidelity/retrieval.js';
+import { lexicalNearness, readerNearness, nearWeight, referenceWeight, retrieveNear, type Nearness } from '../../core/fidelity/nearness.js';
+import { gradeSubjects, SUBJECT_READER_VERSION } from '../../core/fidelity/subject-reader.js';
 import { spendOneWithResult, type DraftVariant, type Written } from './improve.js';
 import { planSections, sectionBlock, joinSections, MAX_SECTIONS, type SectionPlan } from '../../core/fidelity/sections.js';
 import * as fstore from '../../core/state/fidelity-store.js';
@@ -255,7 +257,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // standard (`atelier voice register`). Without that policy nothing below runs and the skill is as it was.
   const storedPolicy = fid && std ? vstore.getPolicy(L) : null;
   const policy = storedPolicy?.standardVersionHash === std?.standardVersionHash ? storedPolicy : null;
-  const register = policy ? decideRegister(policy.corpusRegisters, asked, flag('--register')) : null;
   if (flag('--register') && !policy) die(`--register needs the corpus's own register first: atelier voice register --skill ${name} <register>`);
   const voiceFlag = flag('--voice');
   if (voiceFlag && !['incontext', 'off'].includes(voiceFlag)) die(`--voice is incontext or off, got "${voiceFlag}".`);
@@ -263,8 +264,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const bank = voiceMode === 'incontext' && fid ? vstore.getBank(L) : null;
   if (voiceFlag === 'incontext' && !policy) die(`the voice pass needs the corpus's register declared first: atelier voice register --skill ${name} <register>`);
   if (voiceFlag === 'incontext' && (!bank || bank.pairs.length < MIN_PAIRS)) die(`the voice pass needs a pair bank of at least ${MIN_PAIRS} pairs: atelier voice pairs --skill ${name}`);
-  // Never out of register: pairs carry the whole voice of the register they were written in.
-  const voiceRuns = voiceMode === 'incontext' && policy !== null && register?.status !== 'out' && bank !== null && bank.pairs.length >= MIN_PAIRS
+  // Whether the voice pass could run, before the request's register is read (below, once the run has a budget):
+  // its calls are reserved in the budget either way.
+  const voiceCould = voiceMode === 'incontext' && policy !== null && bank !== null && bank.pairs.length >= MIN_PAIRS
     && contractFile === null && !argv.includes('--no-repair');
   // ONE MORE DRAFT UNTIL THE SHAPE IS THE AUTHOR'S (`--until-typical <p>`): after the output is checked, its
   // typicality is read (core/fidelity/typicality.ts); below the target, another draft is written and checked, up
@@ -305,27 +307,62 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const contextReady = Boolean(fid?.typicality?.ids && fid.index);
   const recalibrate = `rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate-from <folder of your pieces>`;
   if (contextFlag === 'local' && !contextReady) die(`--context local needs the skill's retrieval index and a typicality calibration that knows its pieces: ${recalibrate}.`);
-  const local = contextWanted && contextReady && fid?.typicality && fid.index ? localContext(asked, fid.typicality, fid.index) : null;
-  if (contextWanted && !local) report.say(contextReady ? '(context=local: this request is near too few of your pieces to set a range of its own; your range for its length is used.)'
-    : `(context=local is set, but the skill's calibration does not know its pieces; your range for its length is used: ${recalibrate}.)`);
+  // HOW THE REQUEST'S NEAREST PIECES ARE FOUND (`--nearness reader`, core/fidelity/nearness.ts): by shared words, or
+  // by a small model's reading of the subject against the skill's subject cards, with the words as its floor.
+  const nearnessFlag = flag('--nearness');
+  if (nearnessFlag && !['reader', 'lexical'].includes(nearnessFlag)) die(`--nearness is reader or lexical, got "${nearnessFlag}".`);
+  const nearnessWanted = (nearnessFlag ?? runSettings?.nearness ?? 'lexical') === 'reader' && fid !== null;
+  const subjectCards = nearnessWanted && fid?.index ? fstore.getSubjects(L, fid.index.hash) : null;
+  if (nearnessFlag === 'reader' && !subjectCards) die(`--nearness reader needs your pieces read for their subjects first: atelier fidelity --skill ${name} --read-subjects`);
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0))),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0))),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
-      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)) };
+      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
   // refusal after the drafts were written would cost the person their output.
   if (taste?.acts) taste.client();
   const { client, binding } = checkedBinding(L, sv);
+  // WHAT THE REQUEST ITSELF SAYS: its length, its format and the kind of document it names. Read by the context
+  // judge when there is one (core/loop/context-judge.ts); the word patterns are the floor. On the run's own budget,
+  // so its calls count against the cap the person set.
+  const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor(budget) : undefined;
+  const intent = judge ? await judge.requestIntent(asked) : null;
+  // THE REGISTER OF THE REQUEST (core/voice/register.ts): the person's flag, else the request's own words for its
+  // document type as the judge quoted them, else the word table.
+  const register = policy ? decideRegister(policy.corpusRegisters, asked, flag('--register'), null, intent?.document) : null;
+  // Never out of register: pairs carry the whole voice of the register they were written in.
+  const voiceRuns = voiceCould && register?.status !== 'out';
+  // WHICH OF THE AUTHOR'S PIECES THIS REQUEST IS NEAR, read once and used by every step that weighs them: the
+  // passages shown, the typical-of-you reading, the range for the subject and the skeleton. Recorded with the run.
+  const subjectReader = nearnessWanted && subjectCards ? smallReaderFor() : undefined;
+  let nearness: Nearness | null = null;
+  // An index with no passage (every paragraph of the corpus under 40 words) has nothing to be near.
+  if (fid?.index?.passages.length) {
+    if (nearnessWanted) {
+      const stale = subjectCards && !subjectCards.reader.startsWith(`${SUBJECT_READER_VERSION}:`);
+      const grades = subjectCards && subjectReader && !stale ? await gradeSubjects(subjectReader.client, budget, asked, subjectCards) : null;
+      nearness = grades && subjectCards && subjectReader ? readerNearness(fid.index, grades, `${SUBJECT_READER_VERSION}:${subjectReader.model}`, subjectCards.hash)
+        : lexicalNearness(fid.index, asked, !subjectCards ? `your pieces are not read for their subjects yet (atelier fidelity --skill ${name} --read-subjects)`
+          : stale ? `your subject cards were read by ${subjectCards.reader}, and this is ${SUBJECT_READER_VERSION}: read them again (atelier fidelity --skill ${name} --read-subjects)`
+            : !subjectReader ? 'no small model to read the subject (offline, or no key)' : 'the subject reader could not answer');
+      if (nearness.fellBack) report.say(`(nearness=reader: ${nearness.fellBack}; your nearest pieces were found by shared words.)`);
+    } else nearness = lexicalNearness(fid.index, asked);
+  }
+  const readNear = nearness?.source === 'reader' ? nearness : null;
+  const local = contextWanted && contextReady && fid?.typicality && fid.index
+    ? localContext(asked, fid.typicality, fid.index, readNear ? (id) => nearWeight(readNear, id) : undefined) : null;
+  if (contextWanted && !local) report.say(contextReady ? '(context=local: this request is near too few of your pieces to set a range of its own; your range for its length is used.)'
+    : `(context=local is set, but the skill's calibration does not know its pieces; your range for its length is used: ${recalibrate}.)`);
 
   // ASKED FOR, NOT INVENTED. A story, a named source or a figure the person did not supply is cut from
   // the output (core/loop/claims.ts). Said before anything is spent, with how to supply the real ones.
@@ -358,10 +395,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // THE REQUEST SETS THE LENGTH WHEN IT SAYS ONE. "I want a detailed explanation" met a learned "my pieces
   // run about 100 words" and lost; so did "one line, please" against a long one. The learned length is
   // withheld from this run's prompt when the request asks for detail or brevity, and said in the record.
-  // Read by the context judge when there is one (core/loop/context-judge.ts); the word patterns are the floor.
-  // On the run's own budget, so its calls count against the cap the person set.
-  const judge = !argv.includes('--allow-unsourced') ? contextJudgeFor(budget) : undefined;
-  const intent = judge ? await judge.requestIntent(asked) : null;
+  // Read by the context judge above when there is one; the word patterns are the floor.
   // The judge's reading and the word pattern together: either one finding a stated length or format counts.
   const lengthAsked = intent?.length ?? requestedLength(asked);
   const lengthLine = lengthAsked ? servedText.split('\n').find((l) => /^My (?:pieces of this kind|answers usually) run about /.test(l.trim())) : undefined;
@@ -388,8 +422,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
-  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked) : { text: '', retrieved: [] };
-  const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieve(fid.index, asked, runSettings.retrievalK * nDrafts) : [];
+  const impl = fid && runSettings ? implementationBlock({ ...fid.release, settings: diverse ? { ...runSettings, retrievalK: 0 } : runSettings }, fid.index, asked, readNear) : { text: '', retrieved: [] };
+  const pool = diverse && fid?.index && runSettings && runSettings.retrievalK > 0 ? retrieveNear(fid.index, asked, runSettings.retrievalK * nDrafts, readNear) : [];
   // A run whose flags changed what the release would have done is recorded with the settings that ran and
   // no release: credited to the release, it would make the settings search compare arms that never ran.
   // Compared, not inferred from flags: `--fidelity` on a release that already runs the loop overrides nothing,
@@ -399,7 +433,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
     || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
     || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null || authorTarget !== null || sampling !== (rel.selection === 'sample' && Boolean(fid?.profile.detector)) || Boolean(structureFlag)
-    || contextWanted !== (rel.context === 'local');
+    || contextWanted !== (rel.context === 'local') || nearnessWanted !== (rel.nearness === 'reader');
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
   // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
   const carried = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
@@ -424,7 +458,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A REQUEST THAT STATES ITS OWN LENGTH OR SHAPE GETS NO SKELETON: the request sets the shape then.
   // A LONG request still gets a plan, at the length its word count sets; a SHORT one or a stated shape does not.
   const planState = authorStructure && contractFile === null && lengthAsked !== 'SHORT' && shape !== 'SHAPE'
-    ? newPlanState(authorStructure, fid?.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : [], asked, nDrafts, started,
+    ? newPlanState(authorStructure, nearness, asked, nDrafts, started,
       fid ? paragraphsFor(asked, fid.profile) : null) : null;
   if (authorStructure && !planState) trace.structure = { plans: [], read: null, followed: null, note: 'no skeleton: the request asks for something short, or states its own format' };
   const sectionWriter = argv.includes('--sections') && contractFile === null
@@ -439,7 +473,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
-      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null),
+      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null } : null),
       shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
       planState ? { budget, trace, state: planState } : null)) : null,
@@ -452,10 +486,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
-        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }) }, overridden,
+        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }), ...(nearnessWanted ? { nearness: 'reader' as const } : { nearness: undefined }) }, overridden,
       policy && register ? { L, policy, register, traits, mode: voiceMode,
         note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
-          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, asked, local) : null);
+          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, local,
+      nearness ? { ...nearness, usedFor: [...(impl.retrieved.length || pool.length ? ['passages' as const] : []), ...(fid.typicality?.ids && nearness.pieces.length ? ['typicality' as const] : []),
+        ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
@@ -783,7 +819,7 @@ function withEdits(refine: (draft: string) => Promise<Delivered>,
  * (the taste reader holds VETO, or the claim reader could not run).
  */
 function withVoice(refine: (draft: string) => Promise<Delivered>,
-  v: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; bank: PairBank; copied: ReturnType<typeof overlapIndex> | null; trace: FidelityTrace; taste: TasteSession | null } | null) {
+  v: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; bank: PairBank; copied: ReturnType<typeof overlapIndex> | null; trace: FidelityTrace; taste: TasteSession | null; reader?: InferenceClient | null } | null) {
   if (!v) return refine;
   return async (draft: string) => {
     const r = await refine(draft);
@@ -791,7 +827,7 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
     if (v.taste?.acts) return notRun('not run: the taste reader holds VETO on this skill, and a rewrite would change the text it read');
     if (v.checks.claimSensor?.degraded) return notRun('not run: the claim reader could not run, so a rewrite could not be checked for invented claims');
     let passed: Awaited<ReturnType<typeof voicePass>>;
-    try { passed = await voicePass(v.client, v.budget, r.output, v.bank, v.copied); } catch (err) {
+    try { passed = await voicePass(v.client, v.budget, r.output, v.bank, v.copied, v.reader ?? null); } catch (err) {
       return notRun(`could not run (${(err as Error).message.split('\n')[0]})`);
     }
     v.trace.voice = { bank: v.bank.hash, paragraphs: passed.paragraphs };
@@ -888,8 +924,8 @@ interface PlanState { readonly chain: MoveChain; readonly asked: string; readonl
  * counted NEAR_WEIGHT times, each at a length drawn from the author's own. Seeded by the request, the draft and the
  * run's start, recorded, so a run replays from its record and two runs of one request differ as the author's pieces do.
  */
-function newPlanState(s: NonNullable<ReturnType<typeof fstore.getStructure>>, near: readonly string[], asked: string, n: number, nonce: number, paragraphs: number | null = null): PlanState {
-  const chain = chainOf(s.pieces.map((p) => p.moves), s.pieces.map((p) => (near.includes(p.id) ? NEAR_WEIGHT : 1)));
+function newPlanState(s: NonNullable<ReturnType<typeof fstore.getStructure>>, near: Nearness | null, asked: string, n: number, nonce: number, paragraphs: number | null = null): PlanState {
+  const chain = chainOf(s.pieces.map((p) => p.moves), s.pieces.map((p) => (near ? referenceWeight(near, p.id, NEAR_WEIGHT) : 1)));
   const st: PlanState = { chain, asked, nonce, plans: [], seeds: [], planOf: {}, paragraphs };
   for (let i = 0; i < Math.max(1, n); i++) addPlan(st, `draft ${i}`);
   return st;
@@ -961,13 +997,12 @@ function withStructureRead(refine: (draft: string) => Promise<Delivered>, s: { b
 
 /**
  * HOW TYPICAL OF YOU, ON THIS KIND OF SUBJECT (core/fidelity/typicality.ts, `typicalityInContext`): the author's
- * pieces nearest the request (the retrieval index's top passages) count NEAR_WEIGHT times in the reference.
+ * pieces nearest the request (core/fidelity/nearness.ts) count up to NEAR_WEIGHT times in the reference.
  */
-function contextTypicality(output: string, fid: NonNullable<ReturnType<typeof releaseFor>>, asked: string): ReturnType<typeof typicalityOf> {
+function contextTypicality(output: string, fid: NonNullable<ReturnType<typeof releaseFor>>, near: Nearness | null): ReturnType<typeof typicalityOf> {
   const cal = fid.typicality;
   if (!cal) return null;
-  const near = new Set(fid.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : []);
-  return near.size ? typicalityInContext(valuesOf(output), cal, (id) => (near.has(id) ? NEAR_WEIGHT : 1)) : typicalityOf(output, cal);
+  return near?.pieces.length ? typicalityInContext(valuesOf(output), cal, (id) => referenceWeight(near, id, NEAR_WEIGHT)) : typicalityOf(output, cal);
 }
 
 /** The profile with every steering feature the policy does not carry set to MONITOR: read, never steered by. */
@@ -1015,7 +1050,7 @@ function withSections<T extends object>(select: T, write: ((i: number, v: DraftV
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
   applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean,
   voice: { L: store.StoreLayout; policy: TransferPolicy; register: RegisterDecision; traits: { carried: string[]; unknown: string[] } | null; mode: 'off' | 'incontext'; note: string | null } | null = null,
-  asked = '', local: LocalContext | null = null): FidelityRecord {
+  local: LocalContext | null = null, nearness: NonNullable<FidelityRecord['nearness']> | null = null): FidelityRecord {
   const cov = ledger.length ? factCoverage(output, ledger) : null;
   // The lexical distance is a monitor, read on the delivered text against the corpus's own threshold (computed
   // once per retrieval index and kept).
@@ -1029,8 +1064,9 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
     seed: 0,
-    reading: { ...readFidelity(output, local ? { ...fid.profile, context: local } : fid.profile), ...(fid.typicality ? { typicality: contextTypicality(output, fid, asked) } : {}) },
+    reading: { ...readFidelity(output, local ? { ...fid.profile, context: local } : fid.profile), ...(fid.typicality ? { typicality: contextTypicality(output, fid, nearness) } : {}) },
     ...(local ? { context: local } : {}),
+    ...(nearness ? { nearness } : {}),
     ...(trace.shape ? { shape: trace.shape } : {}),
     ...(trace.sampled ? { sampled: trace.sampled } : {}),
     ...(trace.structure ? { structure: trace.structure } : {}),

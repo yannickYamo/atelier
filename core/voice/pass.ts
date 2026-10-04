@@ -20,6 +20,7 @@ import type { overlapIndex } from '../observers/overlap.js';
 import { spend, BudgetExceeded, CallBudgetExceeded, UnboundedRuntime, type Budget, type InferenceClient } from '../inference/client.js';
 import { nearestPairs, type PairBank } from './pairs.js';
 import { voiceIntegrity, type VoiceCheck } from './integrity.js';
+import { readClaimChanges, VOICE_READER_VERSION } from './reader.js';
 
 /** Pairs shown per paragraph. */
 export const PAIRS_SHOWN = 4;
@@ -62,7 +63,7 @@ export function renderPairs(bank: PairBank, ids: readonly number[]): string {
  * that runs out, leaves the remaining paragraphs as they were and says so.
  */
 export async function voicePass(client: InferenceClient, budget: Budget, text: string, bank: PairBank,
-  copied: ReturnType<typeof overlapIndex> | null): Promise<VoicePassResult> {
+  copied: ReturnType<typeof overlapIndex> | null, reader: InferenceClient | null = null): Promise<VoicePassResult> {
   const paragraphs = paragraphsOf(text);
   const records: VoiceParagraph[] = [];
   const replacements: { start: number; end: number; text: string }[] = [];
@@ -93,7 +94,13 @@ export async function voicePass(client: InferenceClient, budget: Budget, text: s
     }
     // One paragraph in, one paragraph out: a rewrite that came back as several is held to the same checks as one.
     const flat = voice.replace(/\s*\n+\s*/g, ' ').trim();
-    const verdict = voiceIntegrity(p.text, flat, copied);
+    let verdict = voiceIntegrity(p.text, flat, copied);
+    // A SECOND READ, WHEN THERE IS A SMALL MODEL (./reader.ts): the word lists miss the phrasing nobody listed. It can
+    // only refuse; when it cannot answer, the word lists' verdict stands as it did before.
+    if (verdict.ok && reader) {
+      const changes = await readClaimChanges(reader, budget, p.text, flat);
+      if (changes?.length) verdict = { ok: false, check: 'reader', detail: `${VOICE_READER_VERSION} read ${changes.slice(0, 3).map((c) => `${c.kind}: "${c.quote}"`).join('; ')}` };
+    }
     records.push(verdict.ok ? { index, contentHash, voiceHash: sha(flat), kept: true, why: 'kept: facts, strength, length and copying all held' }
       : { index, contentHash, voiceHash: sha(flat), kept: false, ...(verdict.check ? { check: verdict.check } : {}), why: `refused (${verdict.check}): ${verdict.detail ?? ''}` });
     if (verdict.ok) replacements.push({ start: p.start, end: p.end, text: flat });

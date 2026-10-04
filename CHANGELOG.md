@@ -7,6 +7,38 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added: what a request was read as, on every run
+
+- **A CONTEXT block on the panel.** Every run of a skill built from a corpus says what its request was read as and
+  which of your pieces it was measured against: the register the request names and how that was read, how many of
+  your pieces are near its subject, which ones, how they were found, and what the run used them for (the passages
+  shown to the writer, the typical-of-you reading, your range for the subject, the plan). With fewer than two near
+  pieces it says the readings rest on your whole range. The same data is in `--json` and `atelier report`.
+- **`atelier eval` lists where your pieces are thin:** the requests that were near fewer than two of them.
+- **Nearest pieces by subject, opt-in.** `atelier fidelity --skill <name> --read-subjects` has a small model read
+  what each piece is about, once. With `fidelity --set nearness=reader` (or `invoke --nearness reader`) it then
+  grades each request against those cards: same subject, related, or neither. Code validates every answer, the
+  grades are recorded with the run, and with no model the shared words decide as before. A request that is only a
+  title shares few words with anything; read by subject, it still reaches the pieces on its subject and their
+  passages. Not yet qualified (studies/SUBJECT_READER_PREREGISTRATION.md).
+- **The register a request names is read, not matched.** The context judge quotes the request's own words for the
+  kind of document it asks for, and code checks the quote. "A post about our quarterly report" asks for a post and
+  "report the bug" names no document; the word table read a report in both, and is now the offline floor. Your
+  `--register` flag still wins ([decision 0011](docs/decisions/0011-context-is-read-recorded-and-shown.md)).
+- **The voice gate gets a second read.** After the fact ledger and the word lists, a small model reads whether the
+  rewrite changed what is claimed. It must quote what changed, and it can only refuse.
+- **`fidelity --typicality` reports your own floor:** how well the same classifier tells your own pieces from each
+  other at random halves. An AUC is read against that, not against 0.5.
+
+### Changed
+
+- **Typicality says when a text is beyond every piece of yours.** The share cannot go below 1 in (pieces + 1), so
+  a text far outside still read "as typical as 14%" on six pieces. Past your farthest piece the panel now says so,
+  with both distances, and it says how many pieces the reading rests on and the step it moves in.
+- **Typicality is calibrated on every piece that is not reserved,** the held-back ones included, as
+  `fidelity --calibrate-from` already did. A skill built before keeps its calibration until it is rebuilt or
+  recalibrated.
+
 ### Added: how close to the author, as a distribution
 
 - **Typicality on every run.** A text is read as one point in feature space, over the features that separate the
@@ -43,6 +75,19 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   and says so.
 
 ### Studies
+
+- **The author floor: 0.72 to 0.81, not 0.5** (studies/AUTHOR_FLOOR_RESULT.md, sealed in advance, offline, $0). The
+  classifier of the indistinguishability study, asked to tell one random set of an author's own pieces from another,
+  reaches AUC 0.813 at 8 a side and 0.722 at 12 a side one time in twenty. Every Atelier arm of that study sits above
+  its floor on both corpora, so its FAIL stands. Two readings were not resolved at 8 a side and are restated: the
+  plain arm on the technical author (0.750), and that author's reading without function-word n-grams (every arm).
+  Later machine readings are compared with the floor.
+- **Drafted, not run:** the subject reader and the register reading against word matching
+  (studies/SUBJECT_READER_PREREGISTRATION.md), the voice gate against planted changes
+  (studies/VOICE_GATE_PREREGISTRATION.md), and the in-context voice pass against pasted examples read blind by
+  people (studies/VOICE_PASS_PREREGISTRATION.md). Two offline observations are recorded in them before sealing: the
+  word table names the right document type on 25 of 40 labelled requests, and the voice gate as shipped keeps 32 of
+  112 faithful pairs.
 
 - **Context bands: FAIL** (studies/CONTEXT_BANDS_RESULT.md, sealed in advance, offline, $0). On the indistinguishability
   study's texts, bands moved toward the request's nearest pieces told the authors' unseen pieces from the model's

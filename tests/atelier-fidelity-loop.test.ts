@@ -419,7 +419,8 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   it('every run says how typical of you it is; --until-typical writes more rounds toward a target and keeps the best', () => {
     const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
     expect(out).not.toMatch(/^EXIT:/);
-    expect(out).toMatch(/typical of you {4}as typical as \d+% of your own pieces/);
+    // A text farther than every piece says so instead of a share that cannot go below 1/(n+1).
+    expect(out).toMatch(/typical of you {4}(?:as typical as \d+% of your own pieces|beyond every piece of yours: distance)/);
     expect(out).toMatch(/shape rounds {6}3 written toward 99% typical; kept round \d/);
     expect(run('invoke', '--skill', 'posts', 'x', '--until-typical', '2')).toMatch(/--until-typical takes a share between 0 and 1/);
     const report = run('fidelity', '--skill', 'posts', '--typicality');
@@ -456,6 +457,74 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('invoke', '--skill', 'posts', 'x', '--context', 'global')).toMatch(/--context is local or off/);
     expect(run('fidelity', '--skill', 'posts', '--set', 'context=near')).toMatch(/"context" is local or off/);
   }, 180_000);
+
+  it('nearness: every run names the pieces its request was near; --read-subjects and --nearness reader find them by subject, with the words as the floor', async () => {
+    // A corpus with paragraphs long enough to be passages (the `posts` corpus has none, so nothing there is "near").
+    // Its own project directory: a project holds one build.
+    const proj2 = mkdtempSync(join(tmpdir(), 'atelier-near-proj-'));
+    const long = join(proj2, 'essays'); mkdirSync(long, { recursive: true });
+    const cli = (env: Record<string, string>, ...args: string[]): string => {
+      try {
+        return execFileSync('node', [CLI, ...args, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], {
+          encoding: 'utf8', cwd: proj2, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj2, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CLAIMS: 'pattern', ...env } });
+      } catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`; }
+    };
+    const run2 = (...args: string[]): string => cli({}, ...args);
+    const essay = (k: number): string => Array.from({ length: 6 }, (_, p) => Array.from({ length: 8 + ((p + k) % 2) }, (_, t) => sentence(k * 7 + p * 5 + t)).join(' ')).join('\n\n');
+    for (let k = 0; k < 12; k++) writeFileSync(join(long, `essay-${k}.md`), essay(k));
+    const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['essay-0.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+      emit_factors: { factors: [factor('Say what happened before why.')] }, emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }] },
+      emit_observation: { applicable: true, present: true, why: 'seen' }, emit_piece: { piece: essay(3) }, emit_text: { text: essay(3) },
+      emit_card: { about: 'What a production failure taught the team.', subjects: ['a production failure', 'rolling back'] },
+      emit_pieces: { pieces: [{ card: 1, grade: 'same' }, { card: 2, grade: 'related' }, { card: 99, grade: 'same' }] },
+    } }) });
+    expect(run2('new', long, 'write an essay like these', '--name', 'essays', '--accept', '--no-ai-assist')).not.toMatch(/^EXIT:/);
+    interface Near { source: string; fellBack?: string; reader?: string; pieces: { id: string; grade?: string }[]; of: number; thin: boolean; usedFor: string[] }
+    interface Rec { fidelity: { settings?: { nearness?: string }; release: string | null; nearness?: Near } }
+    interface Out { invocationId: string; eval: { context?: { subject: { source: string; fellBack: string | null } | null } } }
+    const json = (out: string): Out => JSON.parse(out.slice(out.indexOf('{'))) as Out;
+    const recOf = (out: string): Rec => JSON.parse(readFileSync(join(data, 'skills', 'essays', 'invocations', `${json(out).invocationId}.json`), 'utf8')) as Rec;
+    // by default, by shared words: recorded with the run, carried by --json, and said on the panel
+    const plain = run2('invoke', '--skill', 'essays', 'Write about the cache that never expired and the rollback', '--json');
+    expect(plain).not.toMatch(/^EXIT:/);
+    expect(recOf(plain).fidelity.nearness).toMatchObject({ source: 'lexical', thin: false });
+    expect(recOf(plain).fidelity.nearness?.usedFor).toContain('passages');
+    expect(recOf(plain).fidelity.release).not.toBeNull();
+    expect(json(plain).eval.context?.subject).toMatchObject({ source: 'lexical' });
+    const shown = run2('report', json(plain).invocationId);
+    expect(shown).toMatch(/CONTEXT {2}what this request was read as, and which of your pieces it was measured against/);
+    expect(shown).toMatch(/subject {11}\d+ of your \d+ pieces are near this request/);
+    expect(shown).toMatch(/found by shared words/);
+    // by subject needs the cards first
+    expect(run2('invoke', '--skill', 'essays', 'x', '--nearness', 'reader')).toMatch(/--nearness reader needs your pieces read for their subjects first: atelier fidelity --skill essays --read-subjects/);
+    expect(run2('invoke', '--skill', 'essays', 'x', '--nearness', 'far')).toMatch(/--nearness is reader or lexical/);
+    expect(run('fidelity', '--skill', 'posts', '--read-subjects')).toMatch(/no paragraph long enough to be a passage/);
+    const read = run2('fidelity', '--skill', 'essays', '--read-subjects', '--cap', '1');
+    expect(read).toMatch(/Read (\d+) of \1 piece\(s\) \(reader subject-1:/);
+    // a title that shares no word with any piece is near nothing by words
+    const words = run2('invoke', '--skill', 'essays', 'Outage', '--json');
+    expect(recOf(words).fidelity.nearness).toMatchObject({ source: 'lexical', pieces: [], thin: true });
+    // with no small model (offline) the words are the floor, and the run says so
+    const floor = run2('invoke', '--skill', 'essays', 'Outage', '--nearness', 'reader', '--json');
+    expect(json(floor).eval.context?.subject?.fellBack).toMatch(/no small model to read the subject/);
+    expect(recOf(floor).fidelity).toMatchObject({ settings: { nearness: 'reader' }, release: null, nearness: { source: 'lexical' } });
+    // with one, the same title is near the pieces the reader graded, and their passages are shown to the writer
+    const graded = cli({ ATELIER_CLAIMS: 'model', ATELIER_CLAIMS_MODEL: 'scripted' }, 'invoke', '--skill', 'essays', 'Outage', '--nearness', 'reader', '--allow-unsourced', '--json');
+    const n = recOf(graded).fidelity.nearness;
+    expect(n).toMatchObject({ source: 'reader', reader: 'subject-1:scripted', thin: false });
+    expect(n?.pieces.map((x) => x.grade)).toEqual(['same', 'related']);
+    expect(n?.usedFor).toContain('passages');
+    expect(run2('report', json(graded).invocationId)).toMatch(/read by subject \(scripted\)[\s\S]*nearest {11}\S+ \(same subject\)/);
+    // and it is a setting, with a parent to roll back to
+    expect(run2('fidelity', '--skill', 'essays', '--set', 'nearness=reader')).toMatch(/nearest pieces read by subject/);
+    expect(run2('fidelity', '--skill', 'essays', '--set', 'nearness=close')).toMatch(/"nearness" is reader or lexical/);
+    run2('fidelity', '--skill', 'essays', '--rollback');
+    const ev = run2('eval', '--skill', 'essays');
+    expect(ev).toMatch(/WHERE YOUR PIECES ARE THIN \(requests near fewer than two of them\)\n {4}2 of 4 run\(s\)/);
+    expect(ev).toMatch(/"Outage"/);
+    // the next test scripts its own answers
+  }, 300_000);
 
   it('plan-first: the author\'s structure is read once, each draft gets its own skeleton, and the delivered text is read against it', async () => {
     const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['post-0.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });

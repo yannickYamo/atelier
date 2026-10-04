@@ -57,6 +57,15 @@ export interface Typicality {
   readonly calibration: string;
   /** read against the author's pieces weighted toward those nearest the request (`typicalityInContext`) */
   readonly weighted?: true;
+  /** how many of the author's pieces the reading rests on: with n pieces it cannot go below 1/(n+1) */
+  readonly pieces?: number;
+  /**
+   * FARTHER THAN EVERY PIECE OF THE AUTHOR'S. The p-value has a floor of 1/(n+1): with six pieces, a text twice as
+   * far as the farthest of them still reads "as typical as 14% of your pieces". Past the farthest piece the share
+   * says nothing, so the reading says that instead, with the farthest piece's distance beside the text's.
+   */
+  readonly beyond?: true;
+  readonly farthest?: number;
 }
 
 const r4 = (x: number): number => Math.round(x * 10000) / 10000;
@@ -152,7 +161,9 @@ export function typicalityOfValues(values: Readonly<Record<string, number | null
   const x = standardise(values, cal.features, cal.center, cal.scale);
   const d = mahalanobis(x, cal.features.map(() => 0), cal.precision);
   const atLeast = cal.scores.filter((sc) => sc >= d).length;
-  return { p: r4((1 + atLeast) / (cal.scores.length + 1)), distance: r4(d), calibration: cal.hash };
+  const farthest = cal.scores[cal.scores.length - 1] ?? 0;
+  return { p: r4((1 + atLeast) / (cal.scores.length + 1)), distance: r4(d), calibration: cal.hash, pieces: cal.scores.length,
+    ...(d > farthest ? { beyond: true as const, farthest: r4(farthest) } : {}) };
 }
 
 /** How typical a text is of the author, or null when it measures too few of the calibration's features. */

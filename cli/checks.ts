@@ -9,7 +9,7 @@ import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
-import type { Budget } from '../core/inference/client.js';
+import type { Budget, InferenceClient } from '../core/inference/client.js';
 import { flag, providerFor, clientAndBinding, DATA } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf } from '../core/observers/formats.js';
@@ -69,6 +69,23 @@ export function contextJudgeFor(budget?: Budget): ContextJudge | undefined {
   const model = named ?? CLAIMS_MODEL_DEFAULT;
   // The run's budget when there is one (invoke); a check with no run of its own gets a small cap of its own.
   return modelJudge(clientAndBinding('discovery', model).client, budget ?? { spentUsd: 0, capUsd: 0.2, maxCalls: 40 });
+}
+
+/**
+ * The small model for the readings that need context and decide nothing alone: a request's subject
+ * (core/fidelity/subject-reader.ts) and whether a voice rewrite kept its claims (core/voice/reader.ts). The claim
+ * reader's model on the same backend, under the same conditions as the context judge. None offline: nearness is
+ * then read by shared words, and the voice gate by its word lists.
+ */
+export function smallReaderFor(): { client: InferenceClient; model: string } | undefined {
+  const mode = flag('--claims') ?? process.env.ATELIER_CLAIMS ?? 'model';
+  if (mode === 'pattern') return undefined;
+  const named = flag('--claims-model') ?? process.env.ATELIER_CLAIMS_MODEL;
+  const provider = providerFor('discovery');
+  if (!named && provider !== 'anthropic') return undefined;
+  if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return undefined;
+  const model = named ?? CLAIMS_MODEL_DEFAULT;
+  return { client: clientAndBinding('discovery', model).client, model };
 }
 
 /**

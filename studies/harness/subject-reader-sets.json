@@ -1,0 +1,176 @@
+{
+ "far": [
+  "Keeping a sourdough starter alive through winter",
+  "Negotiating a commercial lease for a small shop",
+  "Training for a first marathon after forty",
+  "Pruning apple trees in late winter",
+  "A beginner's guide to celestial navigation",
+  "Choosing a school for a child with dyslexia",
+  "Restoring a cast-iron pan",
+  "How the offside rule changed football tactics",
+  "Planning a week of hiking in the Dolomites",
+  "The history of the fountain pen"
+ ],
+ "register": [
+  {
+   "request": "Write a blog post about why we moved off the queue",
+   "register": "post"
+  },
+  {
+   "request": "Draft a white paper on cold storage for hospital pharmacies",
+   "register": "white-paper"
+  },
+  {
+   "request": "Write a post about our quarterly report",
+   "register": "post"
+  },
+  {
+   "request": "Report the bug to the platform team in two sentences",
+   "register": null
+  },
+  {
+   "request": "Explain how the cache works",
+   "register": null
+  },
+  {
+   "request": "I need a memo for the board on the pricing change",
+   "register": "memo"
+  },
+  {
+   "request": "Draft the contract for the pilot with the hospital",
+   "register": "contract"
+  },
+  {
+   "request": "Write a speech for the all-hands on Friday",
+   "register": "speech"
+  },
+  {
+   "request": "Turn these notes into an email to the customer",
+   "register": "email"
+  },
+  {
+   "request": "Post the results to the channel once the tests pass",
+   "register": null
+  },
+  {
+   "request": "Summarise the contract we signed last week in a short post",
+   "register": "post"
+  },
+  {
+   "request": "Write the keynote for the developer conference",
+   "register": "speech"
+  },
+  {
+   "request": "What should I say when I email my landlord about the leak?",
+   "register": "email"
+  },
+  {
+   "request": "Write an essay on why estimates fail",
+   "register": "post"
+  },
+  {
+   "request": "A newsletter issue about vector databases",
+   "register": "post"
+  },
+  {
+   "request": "Write the annual report section on headcount",
+   "register": "report"
+  },
+  {
+   "request": "Give me three titles for an article on on-call",
+   "register": null
+  },
+  {
+   "request": "Address the concerns the reviewers raised",
+   "register": null
+  },
+  {
+   "request": "Write a press release announcing the funding round",
+   "register": "press-release"
+  },
+  {
+   "request": "Draft terms of service for the beta",
+   "register": "contract"
+  },
+  {
+   "request": "Write a toast for my sister's wedding",
+   "register": "speech"
+  },
+  {
+   "request": "Write a white paper, not a blog post, on data residency",
+   "register": "white-paper"
+  },
+  {
+   "request": "Write up the incident as a postmortem",
+   "register": "postmortem"
+  },
+  {
+   "request": "Write a LinkedIn post on what the migration taught us",
+   "register": "post"
+  },
+  {
+   "request": "Memo to self: what is the difference between a mutex and a semaphore?",
+   "register": null
+  },
+  {
+   "request": "Write a cover letter for the staff engineer role",
+   "register": "cover-letter"
+  },
+  {
+   "request": "Write about the article I read on burnout",
+   "register": null
+  },
+  {
+   "request": "A status report for the steering committee",
+   "register": "report"
+  },
+  {
+   "request": "Explain the agreement between the two teams in plain words",
+   "register": null
+  },
+  {
+   "request": "Write the README for the importer",
+   "register": "readme"
+  },
+  {
+   "request": "Write a short story about a lighthouse keeper",
+   "register": "short-story"
+  },
+  {
+   "request": "Write a blog post in the form of a memo to a new hire",
+   "register": "post"
+  },
+  {
+   "request": "How do I email a large file?",
+   "register": null
+  },
+  {
+   "request": "Write remarks for the retirement dinner",
+   "register": "speech"
+  },
+  {
+   "request": "Write release notes for version 2.4",
+   "register": "release-notes"
+  },
+  {
+   "request": "Write a financial report on the third quarter",
+   "register": "report"
+  },
+  {
+   "request": "Rewrite this paragraph so it is shorter",
+   "register": null
+  },
+  {
+   "request": "Write an NDA for a contractor",
+   "register": "contract"
+  },
+  {
+   "request": "Write a product description for the standing desk",
+   "register": "product-description"
+  },
+  {
+   "request": "Write the essay my newsletter will run next week on technical debt",
+   "register": "post"
+  }
+ ]
+}

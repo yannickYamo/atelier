@@ -18,6 +18,7 @@
 import type { RegisterDecision } from '../voice/register.js';
 import type { Typicality } from './typicality.js';
 import type { LocalContext } from './context.js';
+import type { Nearness, NearnessUse } from './nearness.js';
 import type { StructureMove } from '../structure/moves.js';
 import type { VoiceParagraph } from '../voice/pass.js';
 
@@ -189,6 +190,12 @@ export interface ImplementationSettings {
    * SIGNAL bands moved toward the author's pieces nearest the request. RULE bands never move. Opt-in.
    */
   readonly context?: 'local';
+  /**
+   * HOW A REQUEST'S NEAREST PIECES ARE FOUND (./nearness.ts): absent, by shared words (TF-IDF); 'reader', by a small
+   * model's reading of the subject against the skill's subject cards (./subject-reader.ts), with the words as its
+   * floor. Opt-in: needs the cards (`atelier fidelity --read-subjects`).
+   */
+  readonly nearness?: 'reader';
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
@@ -238,6 +245,8 @@ export interface FidelityRecord {
   readonly reading: FidelityReading | null;
   /** the request's local target, when the run was held to it (`context=local`): enough to read the output again */
   readonly context?: LocalContext;
+  /** which of the author's pieces the request was read as near, how, and what the run used that for (./nearness.ts) */
+  readonly nearness?: Nearness & { readonly usedFor: readonly NearnessUse[] };
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
   /**

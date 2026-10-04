@@ -17,6 +17,10 @@ on both counts.
 | Two-sample test, counted features | evaluation over a run | by construction | partly steered on by default selection |
 | Evaluation family (character 4-grams, word bigrams) | evaluation only | by construction | small samples give approximate intervals |
 | Context bands (`context=local`) | moves SIGNAL bands toward the request's nearest pieces (opt-in) | FAIL as a sharper detector | title-only requests find too few near pieces |
+| Nearness, by shared words | chooses the passages shown and the pieces a reading weighs; shown on every panel | not measured against anyone's judgement of subject | a title shares few words with anything |
+| Nearness, by subject (`nearness=reader`) | the same, read by a small model (opt-in) | not yet: sealed qualification drafted | unmeasured |
+| Register reading (context judge) | names the document type a request asks for; the word table is its floor | not yet: in the same qualification | unmeasured; the word table is right on 25 of 40 labelled requests |
+| Voice gate | refuses a voice rewrite that changed a fact or a claim (the voice pass is opt-in) | not yet: sealed qualification drafted | keeps 32 of 112 faithful pairs on one author |
 | Structure reader | monitor; shapes plan-first drafts (research preview) | reliable, does not separate | FAIL as a separating sensor |
 | Taste reader | monitor until your labels validate it | per skill | unvalidated by default |
 | Move reader | parked | failed | reliable where it did not separate |
@@ -78,6 +82,12 @@ request when the skill knows them.
   3,000 simulated trials per setting (n 6 to 30, d 4 to 20, heavy tails, 5% missing).
 - **Role:** a monitor on every run. It is the control for `--until-typical`, and `fidelity --typicality` leaves out
   runs steered on it.
+- **Past your farthest piece it says so.** The share cannot go below 1 in (pieces + 1): with six pieces a text reads
+  14% however far it is. A text farther than every piece reads "beyond every piece of yours", with its distance and
+  your farthest piece's. The panel also says how many pieces the reading rests on, the step it moves in when there
+  are fewer than 12, and whether the pieces nearest the request counted more.
+- **Calibrated on every piece that is not reserved** (the pieces discovery read and the ones it held back), as
+  `fidelity --calibrate-from` does. The held-back pieces enter as feature values only.
 - **Known failures:** it reads one text at a time. On one author, an older Atelier's drafts had a median typicality of
   62% while the set was told apart at AUC 0.975. A text measuring too few features gets no reading.
 
@@ -89,6 +99,11 @@ kernel test (MMD with a permutation p-value), and the Vendi score of each side a
 - **Validated by construction:** in tests, AUC about 0.5 for two draws of one distribution and about 1 for separable
   ones.
 - **Role:** evaluation over a run, `atelier fidelity --typicality`.
+- **Read against your own floor.** The report also tells your own pieces from each other, at random halves, 40
+  times, and prints the median and the 95th percentile of those AUCs (it needs 12 pieces). On two authors, with the
+  evaluation family, that floor was 0.813 at 8 a side and 0.722 at 12 a side
+  ([studies/AUTHOR_FLOOR_RESULT.md](../studies/AUTHOR_FLOOR_RESULT.md)): an AUC at or below it is one your own
+  pieces give, and is unresolved, not a pass.
 - **Known failures:** default draft selection already ranks on these features, so this reading is only partly
   independent of what produced the outputs.
 
@@ -115,6 +130,50 @@ by its TF-IDF nearness to the request; the local band is the weighted 10th to 90
 - **Known failures:** on a request that is only a title, few pieces are near (12 of 36 newsletter texts got a
   target at all). A per-piece value the calibration did not measure sits at the author's centre.
 - **Record:** [studies/CONTEXT_BANDS_RESULT.md](../studies/CONTEXT_BANDS_RESULT.md).
+
+## Nearness
+
+**Which of your pieces a request is near.** One reading per run, recorded with it and shown in the panel's CONTEXT
+block: how many pieces are near, which, how they were found and what the run used them for.
+
+- **By shared words (the default):** a TF-IDF cosine between the request and your passages. The near pieces are
+  the ones holding the request's six closest passages.
+- **By subject (`nearness=reader`, opt-in):** a small model writes a subject card per piece, once, from its body
+  (`atelier fidelity --read-subjects`), then grades each request against the cards: same subject, related, or left
+  out. Code drops a card number that does not exist and a label outside the two; the grades are recorded, so a
+  replay reads the record. With no model, no cards or no answer, the words are used and the panel says so.
+- **Role:** chooses which of your own passages the writer is shown, and which pieces count more in the
+  typical-of-you reading, the range for the subject and the plan. It gates nothing and cuts nothing.
+- **Validated:** not yet. The qualification is drafted with its bars fixed: the piece a title came from is found,
+  not everything is called near, unseen titles are covered, subjects the corpus lacks are near nothing, and two
+  reads agree ([studies/SUBJECT_READER_PREREGISTRATION.md](../studies/SUBJECT_READER_PREREGISTRATION.md)).
+- **Known failures:** by words, a request that is only a title is often near nothing (12 of 36 newsletter texts
+  got a local target in the context-bands study). Better nearness has not been shown to move outputs toward the
+  author, and the context-bands result says not to expect it.
+
+## Register reading
+
+**The words of a request that name the kind of document it asks for.** The context judge quotes them; code checks
+the quote is in the request and maps it to a register. "A post about our quarterly report" asks for a post, and
+"report the bug" names no document, where a word table reads a report in both.
+
+- **Role:** decides whether a request is in the register your pieces were written in, for a skill whose owner
+  declared one. Out of register, only the traits your policy carries are applied. Your `--register` flag always wins.
+- **Validated:** not yet. On 40 labelled requests written with the table's known traps in them, the word table is
+  right on 25; the judge's reading is measured in the same qualification as nearness.
+- **Floor:** with no judge, or a quote the request does not hold, the word table decides.
+
+## Voice gate
+
+**Whether a voice rewrite of a paragraph kept its facts and its claims.** A fact ledger and word lists in code,
+then a small model's second read that must quote what changed and can only refuse.
+
+- **Role:** a rewrite it refuses is dropped and the content paragraph kept whole. Only reached when the voice pass
+  is on, which no release has by default.
+- **Validated:** not yet. Offline, on the 112 faithful pairs of one skill's bank, the gate as shipped in 1.1 keeps
+  32: the strength word lists read a hedge said in other words as a hedge lost. The qualification reads three
+  gates against planted changes, including the reader in the word lists' place
+  ([studies/VOICE_GATE_PREREGISTRATION.md](../studies/VOICE_GATE_PREREGISTRATION.md)).
 
 ## Structure reader
 

@@ -37,6 +37,14 @@ Also next:
   `atelier fidelity --typicality` tests a run against your pieces, so the next attempt has a measure to be held to.
   Holding drafts to your range on the request's subject (`--context local`) was tested offline and told your pieces
   from the model's no better ([CONTEXT_BANDS_RESULT](../studies/CONTEXT_BANDS_RESULT.md)); it stays opt-in.
+  The machine reading now has a floor: an author's own pieces are told from each other at AUC 0.72 to 0.81 at those
+  sizes ([AUTHOR_FLOOR_RESULT](../studies/AUTHOR_FLOOR_RESULT.md)), so a later arm is read against that, not 0.5.
+- **Three small studies, in order, then no further voice round.** The subject reader and the register reading
+  against word matching ([pre-registration](../studies/SUBJECT_READER_PREREGISTRATION.md)); the voice gate against
+  planted changes ([pre-registration](../studies/VOICE_GATE_PREREGISTRATION.md)); and the in-context voice pass
+  against pasted examples, read blind by people ([pre-registration](../studies/VOICE_PASS_PREREGISTRATION.md)).
+  A trained voice model, steering and authorship embeddings stay unbuilt
+  ([decision 0011](decisions/0011-context-is-read-recorded-and-shown.md)).
 - **A skill looked after for weeks.** The loop that tends a skill is built and tested offline, and has
   never run on a live skill over time.
 

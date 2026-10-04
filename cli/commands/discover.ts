@@ -384,9 +384,13 @@ export async function discover(): Promise<void> {
   const profile = buildProfile({ read, held: heldItems, model: drafts, corpusHash: ev.corpusHash, modelFamilies: generators,
     unseen: items.filter((i) => reservedIds.has(i.id)).map((i) => i.text) });
   writeAtomic(runFile('fidelity.json'), JSON.stringify(profile));
-  // HOW TYPICAL OF THE AUTHOR A TEXT IS (core/fidelity/typicality.ts), calibrated on the pieces read: never the
-  // held-back or reserved ones, which stay the blind comparison.
-  const typicality = calibrateTypicality(read.map((i) => i.text), profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id), read.map((i) => i.id));
+  // HOW TYPICAL OF THE AUTHOR A TEXT IS (core/fidelity/typicality.ts), calibrated on every piece that is not
+  // reserved: the pieces read and the held-back ones, as `fidelity --calibrate-from` does. The reading moves in
+  // steps of 1/(n+1): on six pieces it cannot go below 14%, however far the text is. The held-back pieces enter as feature
+  // values only; nothing here serves their text, and they get no weight in a request's range (they are not in the
+  // retrieval index). The reserved pieces stay out: they are the blind comparison.
+  const calibrationPieces = [...read, ...heldItems.filter((h) => !readIds.has(h.id))];
+  const typicality = calibrateTypicality(calibrationPieces.map((i) => i.text), profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id), calibrationPieces.map((i) => i.id));
   if (typicality) writeAtomic(runFile('typicality.json'), JSON.stringify(typicality));
   // RETRIEVAL, FROM THE PIECES READ ONLY. The held-back pieces are the blind comparison (atelier reference):
   // served to the writer, they would be compared with outputs written from them.

@@ -30,6 +30,7 @@ import type { FidelityProfile, ImplementationRelease } from '../fidelity/types.j
 import type { QualifyResult } from '../fidelity/qualify.js';
 import type { RetrievalIndex } from '../fidelity/retrieval.js';
 import type { TypicalityCalibration } from '../fidelity/typicality.js';
+import type { SubjectCards } from '../fidelity/subject-reader.js';
 import type { StructureMove } from '../structure/moves.js';
 import type { MoveChain } from '../structure/skeleton.js';
 import { passagesHash } from '../fidelity/retrieval.js';
@@ -246,4 +247,15 @@ export function getStructure(l: StoreLayout, profileHash: string): AuthorStructu
 export function setStructure(l: StoreLayout, profileHash: string, s: AuthorStructure): void {
   if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
   writeAtomic(join(base(l), 'structure', `${profileHash}.json`), JSON.stringify(s));
+}
+
+/** The subject cards read for the retrieval index with this hash (../fidelity/subject-reader.ts), or null. */
+export function getSubjects(l: StoreLayout, indexHash: string): SubjectCards | null {
+  if (!/^[0-9a-f]+$/.test(indexHash)) return null;
+  const p = join(base(l), 'subjects', `${indexHash}.json`);
+  return existsSync(p) ? readJson<SubjectCards>(p, { what: 'the subject cards', requireKeys: ['cards', 'reader', 'hash'] }) : null;
+}
+export function setSubjects(l: StoreLayout, indexHash: string, cards: SubjectCards): void {
+  if (!/^[0-9a-f]+$/.test(indexHash)) throw new Error(`STORE: "${indexHash}" is not a retrieval index hash.`);
+  writeAtomic(join(base(l), 'subjects', `${indexHash}.json`), JSON.stringify(cards));
 }
