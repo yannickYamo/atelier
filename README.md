@@ -1,12 +1,14 @@
 # Atelier
 
-**Atelier turns examples of work you want reproduced into a standard you approve once, and it checks every output against that standard.**
+**Atelier is an agentic system that builds AI skills from examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved.**
 
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
-Atelier is an open-source CLI, MIT licensed. Point it at pieces written the way you want: yours, your team's, or a style you admire. It finds the rules behind them and shows the evidence for each one. You approve the rules once. From then on every output is written, checked and repaired against them, and you get a pass or fail before you read a word.
+Atelier is open source and MIT licensed. Point it at pieces written the way you want: yours, your team's, or a style you admire. It reads them, proposes the rules behind them and shows the evidence for each. You approve the rules once, and Atelier compiles them into a skill.
+
+From then on it does three jobs. It writes, checks and repairs every output, and you get a pass or fail before you read a word. It finds what keeps going wrong and searches for a better way to carry your rules. And it installs a change only when that change measures better, so the skill gets better without drifting from what you approved.
 
 It works for writing and for answers: blog posts, code review comments, coding-assistant answers, support replies, contracts, reports.
 
@@ -14,6 +16,7 @@ It works for writing and for answers: blog posts, code review comments, coding-a
 atelier new ./examples-to-match "answers like these"         # read the examples, propose the rules
 atelier new ./examples-to-match --accept                      # approve them, install the skill
 atelier invoke --skill examples-to-match "the next answer"    # an output, checked and repaired
+atelier tend --skill examples-to-match --auto                 # find what keeps failing, keep a fix only if it measures better
 ```
 
 ## What you get
@@ -26,9 +29,10 @@ Pasting your examples into a strong model gets you a good first draft. The rules
 - **A verdict on every output.** Conformant or not, with a plain pass or fail per check.
 - **Nothing invented.** A made-up story, quote or figure is cut from published writing, never reworded.
 - **No machine tells and no copying.** Em dashes, stock phrases and runs lifted from your examples are counted and held to your limits.
+- **A skill that improves without drifting.** Atelier searches for better ways to carry your rules and keeps a change only when it measures better. It can never edit a rule.
 - **Every change undone in one command.** Each release is versioned and rolls back.
 
-Here is the same model on the same task, with and without Atelier:
+The same model on the same task, with and without Atelier:
 
 | On the same task | Without Atelier | With Atelier |
 |---|---|---|
@@ -43,15 +47,20 @@ Change the model next month and the standard doesn't move.
 
 ## How it works
 
-**Five steps, and only one of them is yours.**
+**Three loops, and one decision in them is yours.**
 
-1. Atelier reads the examples and proposes rules. Each one arrives with evidence: how often your examples do it, how often a plain model does, and whether it held on pieces it never read.
-2. You approve the standard once. Required rules instruct the model; the rest guide it by example.
-3. Every output is checked. Counted rules get measured: machine-writing tells, lengths, phrases, and what a piece must contain.
-4. A small model lists every specific claim, and code checks each one against what you supplied. In published writing an invented claim is deleted. In answers, general knowledge is listed for you to check, and a claim of work the agent never did is cut.
-5. Only what broke is rewritten. Two drafts are written, and the one closer to the range your own pieces span is kept.
+**Build.** A discovery agent reads your examples and proposes rules. Each arrives with evidence: how often your examples do it, how often a plain model does, and whether it held on pieces the agent never read. It also writes drafts of its own on your topics, to find where the model drifts from you. You approve the standard once, and it's hashed. A compiler then gives each rule the least machinery that carries it: an instruction, an example, a self-check, an output contract, or nothing.
 
-Step 4 treats writing and answers differently on purpose. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
+**Run.** Every output goes through a harness:
+
+1. Two drafts are written, and the one closer to the range your own pieces span is kept.
+2. Counted rules get measured: machine-writing tells, lengths, phrases, and what a piece must contain.
+3. A small model lists every specific claim, and code checks each one against what you supplied. In published writing an invented claim is deleted. In answers, general knowledge is listed for you to check, and a claim of work the agent never did is cut.
+4. Only what broke is rewritten, and the run is recorded with its verdict.
+
+**Improve.** Atelier mines its own records for what keeps going wrong: rules that keep being missed, complaints no rule covers. `atelier fix "what was wrong"` turns your complaint into a candidate you compare blind. `atelier tend --auto` runs a round of search from cron, tests each candidate against a regression floor, and installs a winner only when the promotion gate allows it. It undoes its own install when a rule starts breaking more often. Every change is a release you can roll back, and no automated step can change a rule.
+
+The claim check treats writing and answers differently on purpose. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
 
 Use it where you already work: a skill for Claude Code or Codex, `npx skills add`, a single-file export for any agent, a CLI guard that exits 1 on a broken rule, an MCP server, or a Claude Code hook.
 
