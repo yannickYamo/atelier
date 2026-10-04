@@ -1,16 +1,23 @@
 # Atelier
 
-**Atelier is an agentic system that builds AI skills from examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved.**
-
 [![CI](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml/badge.svg)](https://github.com/yannickYamo/atelier/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](package.json)
 
-Atelier is open source and MIT licensed. Point it at pieces written the way you want: yours, your team's, or a style you admire. It reads them, proposes the rules behind them and shows the evidence for each. You approve the rules once, and Atelier compiles them into a skill.
+## What is Atelier?
 
-From then on it does three jobs. It writes, checks and repairs every output, and you get a pass or fail before you read a word. It finds what keeps going wrong and searches for a better way to carry your rules. And it installs a change only when that change measures better, so the skill gets better without drifting from what you approved.
+Atelier is an agentic system that builds AI skills from examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved. I built it because I kept hitting the same wall: perfect context, still variance. You point it at pieces written the way you want - yours, your team's, or a style you admire - and it reads them, proposes the rules behind them, and shows the evidence for each one. You approve those rules once. From then on, Atelier compiles them into a skill and does the work of holding them.
 
-It works for writing and for answers: code reviews, financial reports, blog posts, contracts, support replies, coding-assistant answers.
+I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
+
+Think of it as four steps you walk through:
+
+1. **Point it at examples.** It reads them and proposes the rules behind them, each with evidence: how often your examples do it, how often a plain model does, and whether it held on pieces the agent never read.
+2. **Approve the rules once.** The standard is hashed and versioned the moment you accept it. No model update, optimizer or judge can move it.
+3. **Every output is written, checked and repaired.** You get a plain pass or fail per check before you read a word, and only what broke gets rewritten.
+4. **It improves itself, and keeps a change only when it measures better.** Atelier mines its own records for what keeps going wrong, searches for a better way to carry your rules, and installs a winner only when the gate allows it.
+
+Instead of a model that re-guesses your rules on every run, you get rules you approved, kept in a file outside the model, and a verdict on every output.
 
 ```bash
 atelier new ./examples-to-match "answers like these"         # read the examples, propose the rules
@@ -19,20 +26,13 @@ atelier invoke --skill examples-to-match "the next answer"    # an output, check
 atelier tend --skill examples-to-match --auto                 # find what keeps failing, keep a fix only if it measures better
 ```
 
-## What you get
+## Why Atelier?
 
-**A model given your examples writes a good first draft, then guesses your rules again on every run after it.**
-
-Nothing checks the result, either. Atelier keeps the rules in a file you approved, outside the model, and checks every output against them. A new model version doesn't change them.
-
-I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
-
-- **A standard only you can change.** It is hashed and versioned. No model update, optimizer or judge can move it.
-- **A verdict on every output.** Conformant or not, with a plain pass or fail per check.
-- **Nothing invented.** A made-up story, quote or figure is cut from published writing, never reworded.
-- **No machine tells and no copying.** Em dashes, stock phrases and runs lifted from your examples are counted and held to your limits.
-- **A skill that improves without drifting.** Atelier searches for better ways to carry your rules and keeps a change only when it measures better. It can never edit a rule.
-- **Every change undone in one command.** Each release is versioned and rolls back.
+- **Rules you own.** The standard is hashed and versioned, and only you can change it. Swap the model next month and the rules don't move with it.
+- **Nothing invented.** A made-up story, quote or figure is cut from published writing, never reworded. On product essays no test had used, the claim check caught all 46 planted inventions and left 39 of 48 clean drafts alone.
+- **A verdict on every output.** Conformant or not, with a plain pass or fail per check, plus what wasn't measured. There's no overall score, because adding the checks up would hide the one that failed.
+- **It improves without drifting.** Atelier searches for better ways to carry your rules and keeps a change only when it measures better. It can never edit a rule, and every release rolls back in one command.
+- **It works where you already work.** A skill for Claude Code or Codex, `npx skills add`, a Cursor or VS Code entry, an MCP server, a CLI guard that exits 1 on a broken rule, or a single-file export for any agent. It covers writing and answers alike: code reviews, financial reports, blog posts, contracts, support replies.
 
 The same model on the same task, with and without Atelier:
 
@@ -49,22 +49,15 @@ Change the model next month and the standard doesn't move.
 
 ## How it works
 
-**Atelier runs three loops: build, run and improve. You make one decision in them, approving the rules.**
+Atelier runs three loops, and you make one decision in them.
 
-**Build.** A discovery agent reads your examples and proposes rules. Each arrives with evidence: how often your examples do it, how often a plain model does, and whether it held on pieces the agent never read. It also writes drafts of its own on your topics, to find where the model drifts from you. You approve the standard once, and it's hashed. A compiler then gives each rule the least machinery that carries it: an instruction, an example, a self-check, an output contract, or nothing.
+**Build.** A discovery agent reads your examples, proposes rules with evidence, and writes drafts of its own on your topics to find where the model drifts from you. You approve the standard once, and it's hashed. A compiler then gives each rule the least machinery that carries it: an instruction, an example, a self-check, an output contract, or nothing.
 
-**Run.** Every output goes through a harness:
+**Run.** Two drafts are written and the closer one to your range is kept. Counted rules get measured. A small model lists every specific claim and code checks each one against what you supplied. Only what broke is rewritten, and the run is recorded with its verdict.
 
-1. Two drafts are written, and the one closer to the range your own pieces span is kept.
-2. Counted rules get measured: machine-writing tells, lengths, phrases, and what a piece must contain.
-3. A small model lists every specific claim, and code checks each one against what you supplied. In published writing an invented claim is deleted. In answers, general knowledge is listed for you to check, and a claim of work the agent never did is cut.
-4. Only what broke is rewritten, and the run is recorded with its verdict.
-
-**Improve.** Atelier mines its own records for what keeps going wrong: rules that keep being missed, complaints no rule covers. `atelier fix "what was wrong"` turns your complaint into a candidate you compare blind. `atelier tend --auto` runs a round of search from cron, tests each candidate against a regression floor, and installs a winner only when the promotion gate allows it. It undoes its own install when a rule starts breaking more often. Every change is a release you can roll back, and no automated step can change a rule.
+**Improve.** `atelier fix` turns your complaint into a candidate you compare blind. `atelier tend --auto` runs a round of search, tests each candidate against a regression floor, and undoes its own install when a rule starts breaking more often.
 
 The claim check treats writing and answers differently on purpose. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
-
-Use it where you already work: a skill for Claude Code or Codex, `npx skills add`, a single-file export for any agent, a CLI guard that exits 1 on a broken rule, an MCP server, or a Claude Code hook.
 
 ## What you see after every run
 
