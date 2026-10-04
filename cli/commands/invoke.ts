@@ -28,6 +28,7 @@ import { decideRegister, registerDistance, registerThreshold, type RegisterDecis
 import { featureTrait, split, type TransferPolicy } from '../../core/voice/transfer.js';
 import { voicePass, MAX_PARAGRAPHS, type VoiceParagraph } from '../../core/voice/pass.js';
 import { MIN_PAIRS, type PairBank } from '../../core/voice/pairs.js';
+import { typicalityOf, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
 import { checkClass } from '../../core/observers/doc-class.js';
 import { readTaste, tasteRules, describeTaste, applicabilityFor, vetoMisses, type TasteReading } from '../../core/taste/reader.js';
 import { tastePermissions } from '../../core/taste/calibration.js';
@@ -258,18 +259,25 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // Never out of register: pairs carry the whole voice of the register they were written in.
   const voiceRuns = voiceMode === 'incontext' && policy !== null && register?.status !== 'out' && bank !== null && bank.pairs.length >= MIN_PAIRS
     && contractFile === null && !argv.includes('--no-repair');
+  // ONE MORE DRAFT UNTIL THE SHAPE IS THE AUTHOR'S (`--until-typical <p>`): after the output is checked, its
+  // typicality is read (core/fidelity/typicality.ts); below the target, another draft is written and checked, up
+  // to --shape-rounds. Steers on the control instrument only; the two-sample test that evaluates never sees it.
+  const shapeTarget = flag('--until-typical') === undefined ? null : numericFlag('--until-typical', 0.2);
+  if (shapeTarget !== null && !(shapeTarget > 0 && shapeTarget < 1)) die(`--until-typical takes a share between 0 and 1 (how typical of your own pieces), got ${flag('--until-typical')}.`);
+  if (shapeTarget !== null && !fid?.typicality) die(`--until-typical needs the skill's typicality calibration: rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate <folder of your pieces>.`);
+  const shapeRounds = shapeTarget === null ? 0 : Math.max(1, Math.floor(numericFlag('--shape-rounds', 3)));
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0)),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceRuns ? 0.03 * MAX_PARAGRAPHS : 0) + 0.3 * shapeRounds),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
-      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0)) };
+      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (voiceRuns ? MAX_PARAGRAPHS + 4 : 0) + 7 * shapeRounds) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -348,7 +356,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rel = fid?.release.settings;
   const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
     || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
-    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off');
+    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null;
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
   // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
   const steerProfile = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
@@ -378,8 +386,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
-      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null)) : null,
+    std && !argv.includes('--no-repair') ? keepDelivered(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
+      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null),
+      shapeTarget !== null && fid?.typicality ? { client, budget, calibration: fid.typicality, target: shapeTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
@@ -633,7 +642,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
 const OPERATOR_TRIES = 24;
 
 /** What the inner loop saw, gathered during the run and written with the record. */
-interface FidelityTrace { voice?: { bank: string; paragraphs: readonly VoiceParagraph[]; note?: string }; drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
+interface FidelityTrace { shape?: NonNullable<FidelityRecord['shape']>; voice?: { bank: string; paragraphs: readonly VoiceParagraph[]; note?: string }; drafts: FidelityReading[]; edits: (Application | { target: string; kept: boolean; why: string })[]; variants: { index: number; temperature: number | null; retrieved: number[] }[]; plan?: SectionPlan }
 
 /**
  * THE SECOND ACTUATOR, AFTER THE COUNTED CHECKS (core/fidelity/structural.ts). The repaired draft is
@@ -738,6 +747,37 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
   };
 }
 
+/**
+ * ONE MORE DRAFT UNTIL THE SHAPE IS THE AUTHOR'S. The checked output's typicality is read; while it is below the
+ * target and rounds remain, a fresh draft is written and put through the same checks and repair. The output kept
+ * is the one that breaks the fewest REQUIRED rules, then the most typical: the rules always outrank the shape.
+ * A round that fails costs that round, never the output already delivered.
+ */
+function withShape(refine: (draft: string) => Promise<Delivered>,
+  s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration; target: number; rounds: number; servedText: string; task: string; trace: FidelityTrace } | null) {
+  if (!s) return refine;
+  return async (draft: string) => {
+    const first = await refine(draft);
+    const score = (d: Delivered): { p: number; broken: number } => ({ p: typicalityOf(d.output, s.calibration).p, broken: brokenIn(d.report).length });
+    const tried: { d: Delivered; p: number; broken: number }[] = [{ d: first, ...score(first) }];
+    let note: string | undefined;
+    for (let round = 1; round <= s.rounds && tried[tried.length - 1].p < s.target && !tried.some((t) => t.p >= s.target && t.broken === 0); round++) {
+      try {
+        const w = await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, '', {});
+        const d = await refine(w.piece);
+        tried.push({ d, ...score(d) });
+      } catch (err) {
+        note = `round ${round} could not run (${(err as Error).message.split('\n')[0]}); the best output so far was delivered`;
+        break;
+      }
+    }
+    const best = tried.reduce((a, b) => (b.broken < a.broken || (b.broken === a.broken && b.p > a.p) ? b : a));
+    if (!note && best.p < s.target) note = `no round reached ${s.target}; the most typical output that broke the fewest rules was delivered`;
+    s.trace.shape = { target: s.target, rounds: tried.map((t, i) => ({ round: i, p: t.p, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
+    return best.d;
+  };
+}
+
 /** The profile with every steering feature the policy does not carry set to MONITOR: read, never steered by. */
 function carriedProfile(p: FidelityProfile, policy: TransferPolicy): FidelityProfile {
   return { ...p, bands: p.bands.map((b) => (b.role !== 'MONITOR' && policy.states[featureTrait(b.id)] === undefined ? { ...b, role: 'MONITOR' as const } : b)) };
@@ -796,7 +836,8 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
     seed: 0,
-    reading: readFidelity(output, fid.profile),
+    reading: { ...readFidelity(output, fid.profile), ...(fid.typicality ? { typicality: typicalityOf(output, fid.typicality) } : {}) },
+    ...(trace.shape ? { shape: trace.shape } : {}),
     ...(trace.drafts.length ? { drafts: trace.drafts } : {}),
     ...(trace.edits.length ? { edits: trace.edits } : {}),
     ...(retrieved.length ? { retrieved: [...retrieved] } : {}),

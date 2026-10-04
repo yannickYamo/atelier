@@ -61,6 +61,10 @@ export interface EvalSummary {
     readonly outside: readonly { readonly id: string; readonly label: string; readonly value: number | null; readonly band: readonly [number, number] | null }[];
     readonly facts: { readonly used: number; readonly supplied: number } | null;
     readonly edits: { readonly tried: number; readonly kept: number };
+    /** how typical of the author the delivered text is: the share of their own pieces at least as far from the rest */
+    readonly typicality?: { readonly p: number; readonly distance: number } | null;
+    /** the rounds written toward a typicality target (`invoke --until-typical`) */
+    readonly shape?: { readonly target: number; readonly written: number; readonly kept: number; readonly p: number } | null;
   } | null;
   readonly monitors: {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
@@ -123,6 +127,8 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     if (fi.outside.length) out.push(`    ${pad('furthest outside', 18)}${fi.outside.slice(0, 3).map((o) => `${o.label} ${o.value === null ? '' : fmt(o.value)}${o.band ? ` (yours ${fmt(o.band[0])} to ${fmt(o.band[1])})` : ''}`).join(' · ')}`);
     if (fi.facts) out.push(`    ${pad('facts used', 18)}${fi.facts.used} of ${fi.facts.supplied} supplied`);
     if (fi.edits.tried) out.push(`    ${pad('steering', 18)}${fi.edits.kept} of ${fi.edits.tried} change(s) kept`);
+    if (fi.typicality) out.push(`    ${pad('typical of you', 18)}as typical as ${Math.round(fi.typicality.p * 100)}% of your own pieces (distance ${fmt(fi.typicality.distance)})`);
+    if (fi.shape) out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${Math.round(fi.shape.target * 100)}%; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}%)`);
   }
   if (e.voice) {
     const v = e.voice; const r = v.register;

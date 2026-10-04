@@ -95,6 +95,11 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       outside: reading.outside.slice(0, 3).map((o) => ({ id: o.id, label: featureOf(o.id)?.label.split(' (')[0] ?? o.id, value: reading.values[o.id] ?? null, band: band(o.id) })),
       facts: rec.fidelity?.coverage ? { used: rec.fidelity.coverage.used, supplied: rec.fidelity.coverage.supplied } : null,
       edits: { tried: edits.filter((e) => e.target !== '-').length, kept: edits.filter((e) => e.kept).length },
+      ...(reading.typicality ? { typicality: { p: reading.typicality.p, distance: reading.typicality.distance } } : {}),
+      ...(rec.fidelity?.shape ? (() => {
+        const sh = rec.fidelity.shape; const kept = sh.rounds.find((r) => r.kept);
+        return { shape: { target: sh.target, written: sh.rounds.length, kept: kept?.round ?? 0, p: kept?.p ?? 0 } };
+      })() : {}),
     };
   })() : null;
   const qual = p ? fstore.getQualification(x.L, p.hash) : null;

@@ -10,6 +10,9 @@
 //   retrieval/<hash>.json   every index a release has named, kept for the same reason
 //   releases/<id>.json      implementation releases, content-addressed and never overwritten
 //   active.json             the ONLY mutable file: which release is serving. Rollback moves it to the parent.
+//   typicality/<profile hash>.json
+//                           the conformal calibration of how typical a text is of the author, read against the
+//                           profile it names (../fidelity/typicality.ts)
 //   qualifications/<profile hash>.json
 //                           what `atelier qualify` measured for the instruments of that profile, keyed by
 //                           the profile it qualified: a result is about one detector and one band set
@@ -26,6 +29,7 @@ import type { StoreLayout } from './store.js';
 import type { FidelityProfile, ImplementationRelease } from '../fidelity/types.js';
 import type { QualifyResult } from '../fidelity/qualify.js';
 import type { RetrievalIndex } from '../fidelity/retrieval.js';
+import type { TypicalityCalibration } from '../fidelity/typicality.js';
 import { passagesHash } from '../fidelity/retrieval.js';
 import { releaseId, canonicalJson } from '../fidelity/release.js';
 
@@ -205,4 +209,19 @@ export function getQualification(l: StoreLayout, profileHash: string): Qualifica
 /** Store a qualification under the hash of the profile it measured. A later measurement replaces it. */
 export function setQualification(l: StoreLayout, q: Qualification): void {
   writeAtomic(qualificationPath(l, q.profileHash), JSON.stringify(q, null, 1));
+}
+
+const typicalityPath = (l: StoreLayout, profileHash: string): string => {
+  if (!/^[0-9a-f]+$/.test(profileHash)) throw new Error(`STORE: "${profileHash}" is not a profile hash.`);
+  return join(base(l), 'typicality', `${profileHash}.json`);
+};
+
+/** The typicality calibration stored for the profile with this hash, or null. */
+export function getTypicality(l: StoreLayout, profileHash: string): TypicalityCalibration | null {
+  if (!/^[0-9a-f]+$/.test(profileHash)) return null;
+  const p = typicalityPath(l, profileHash);
+  return existsSync(p) ? readJson<TypicalityCalibration>(p, { what: 'the typicality calibration', requireKeys: ['features', 'scores', 'hash'] }) : null;
+}
+export function setTypicality(l: StoreLayout, profileHash: string, cal: TypicalityCalibration): void {
+  writeAtomic(typicalityPath(l, profileHash), JSON.stringify(cal));
 }

@@ -16,6 +16,7 @@
 // class, and pooled otherwise; the class is decided from the request and the output's length alone.
 
 import type { RegisterDecision } from '../voice/register.js';
+import type { Typicality } from './typicality.js';
 import type { VoiceParagraph } from '../voice/pass.js';
 
 /** The context classes a band can be conditioned on. Length is the only axis with enough data per author. */
@@ -101,6 +102,8 @@ export interface FidelityReading {
   readonly outside: readonly { readonly id: string; readonly distance: number; readonly direction: 'low' | 'high' }[];
   /** the detector's reading, when the skill has one: P(model-written), and which detector */
   readonly detector: { readonly p: number; readonly version: string; readonly families?: readonly string[] } | null;
+  /** how typical of the author the text is, as one calibrated number (./typicality.ts), when the skill has a calibration */
+  readonly typicality?: Typicality | null;
 }
 
 /** The author's fidelity profile, stored with the skill at build time. */
@@ -218,6 +221,8 @@ export interface FidelityRecord {
   readonly reading: FidelityReading | null;
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
+  /** the rounds written to bring the output's typicality up to a target (`invoke --until-typical`), in order */
+  readonly shape?: { readonly target: number; readonly rounds: readonly { readonly round: number; readonly p: number; readonly broken: number; readonly kept: boolean }[]; readonly note?: string };
   /**
    * every application of an actuator against a band (./structural.ts), kept or not: which actuator, the target
    * feature, its value before and after, and why it was kept or refused

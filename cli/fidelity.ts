@@ -18,6 +18,7 @@ import { baselineOf } from '../core/fidelity/profile.js';
 import { DEFAULT_SETTINGS, type FidelityProfile, type ImplementationRelease, type ImplementationSettings } from '../core/fidelity/types.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import { readJson } from '../core/state/read-json.js';
+import type { TypicalityCalibration } from '../core/fidelity/typicality.js';
 import { runFile } from './runtime.js';
 import { createHash } from 'node:crypto';
 
@@ -67,6 +68,9 @@ export function installFidelity(L: store.StoreLayout, v: StandardVersion, skillV
   fstore.setProfile(L, profile);
   const index = existsSync(indexFile) ? readJson<RetrievalIndex>(indexFile, { what: 'the retrieval index' }) : null;
   if (index) fstore.setRetrievalIndex(L, index);
+  // Keyed by the profile installed, which the owner's rulings may have changed from the one discovery wrote.
+  const typicalityFile = runFile('typicality.json');
+  if (existsSync(typicalityFile)) fstore.setTypicality(L, profile.hash, readJson<TypicalityCalibration>(typicalityFile, { what: 'the typicality calibration' }));
   // A NEW STANDARD STARTS A NEW LINE. Settings and notes earned under one standard are not evidence about
   // another: under a changed standard the first release is a root, with the first settings for this profile.
   const prior = fstore.getActiveRelease(L)?.release ?? null;
@@ -96,7 +100,7 @@ export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): Imp
  * child release when the skill has moved since (a `fix` or a promotion), never across a change of standard.
  * Null when the skill has no profile.
  */
-export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string }): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null } | null {
+export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string }): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
   const active = fstore.getActiveRelease(L)?.release ?? null;
   if (!active) return null;
   // The profile and index the release names, not whichever was built last: a rollback serves what it says.
@@ -127,7 +131,7 @@ export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string;
   }
   assertSameStandard(release, sv.standardVersionHash);
   const index = release.retrievalHash ? fstore.getRetrievalIndex(L, release.retrievalHash) ?? fstore.getRetrievalIndex(L) : null;
-  return { release, profile, index: index?.hash === release.retrievalHash ? index : null };
+  return { release, profile, index: index?.hash === release.retrievalHash ? index : null, typicality: fstore.getTypicality(L, profile.hash) };
 }
 
 /** Whether a release still carries 0.8's automatic loop settings, never chosen by a person or the search. */

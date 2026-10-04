@@ -416,6 +416,16 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(out).toMatch(/in range on \d+ of \d+ steering features/);
     expect(out).toMatch(/HIGH {2}.*paragraph/);
   }, 60_000);
+  it('every run says how typical of you it is; --until-typical writes more rounds toward a target and keeps the best', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--until-typical', '0.99', '--shape-rounds', '2', '--panel');
+    expect(out).not.toMatch(/^EXIT:/);
+    expect(out).toMatch(/typical of you {4}as typical as \d+% of your own pieces/);
+    expect(out).toMatch(/shape rounds {6}3 written toward 99%; kept round \d/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--until-typical', '2')).toMatch(/--until-typical takes a share between 0 and 1/);
+    const report = run('fidelity', '--skill', 'posts', '--typicality');
+    expect(report).toMatch(/output\(s\) against \d+ of your pieces/);
+  }, 180_000);
+
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {
     expect(run('voice', 'status', '--skill', 'posts')).toMatch(/no register declared, so nothing of the voice layer runs/);
     const before = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');

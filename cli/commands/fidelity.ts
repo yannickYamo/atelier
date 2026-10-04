@@ -12,7 +12,7 @@
 // them can be undone, and every output names the release that shaped it. The estimate reads the records
 // `invoke` already wrote; only --distill calls a model.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { estimate, describeEstimate, type FidelityObservation } from '../../core/fidelity/estimator.js';
@@ -25,6 +25,9 @@ import { DEFAULT_SETTINGS, type ImplementationSettings } from '../../core/fideli
 import type { Budget } from '../../core/inference/client.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { releaseWithSettings } from '../fidelity.js';
+import { calibrateTypicality, standardise, typicalityOf, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
+import { closeness } from '../../core/fidelity/twosample.js';
+import { join } from 'node:path';
 import { familiesOf } from './qualify.js';
 import { DATA, die, argv, flag, numericFlag, skillArg, clientAndBinding } from '../runtime.js';
 
@@ -35,7 +38,9 @@ export async function fidelity(): Promise<void> {
   const profile = (activeNow?.release.profileHash ? fstore.getProfile(L, activeNow.release.profileHash) : null) ?? fstore.getProfile(L) ?? die(`"${name}" has no fidelity profile: it is built at discovery from a corpus (atelier new <folder>), and a skill written from stated rules has no author's range to steer toward.`);
   const active = activeNow;
   const read = flag('--read');
-  if (read) { readOne(readFileSync(read, 'utf8'), profile); return; }
+  if (read) { readOne(readFileSync(read, 'utf8'), profile, fstore.getTypicality(L, profile.hash)); return; }
+  const calibrateDir = flag('--calibrate');
+  if (calibrateDir) { calibrate(L, profile.hash, calibrateDir); return; }
   if (argv.includes('--rollback')) {
     const back = fstore.rollbackRelease(L) ?? die('nothing to roll back to: the active release is the first of its line (a new standard starts a new line).');
     console.log(`Active implementation release is now ${back.id} (${back.why}).`);
@@ -53,6 +58,7 @@ export async function fidelity(): Promise<void> {
   const records = store.listInvocations(L).flatMap((r) => (r.fidelity?.reading && r.standardVersionHash === from.standardVersionHash && r.fidelity.profileHash === profile.hash
     ? [{ ...r, reading: r.fidelity.reading }] : []));
   if (argv.includes('--distill')) { await distill(L, from, records); return; }
+  if (argv.includes('--typicality')) { reportCloseness(L, profile.hash, records); return; }
   const outcomes = outcomesOf(records, (id) => fstore.getRelease(L, id)?.settings ?? null);
   if (argv.includes('--next')) {
     const p = nextSettings(from.settings, outcomes) ?? die('nothing to propose: every neighbouring setting has enough outputs measured, or none can be compared yet (each needs 20).');
@@ -64,8 +70,9 @@ export async function fidelity(): Promise<void> {
 }
 
 /** Where one text sits: every steering feature, its value, the author's range, and whether it is inside. */
-function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.getProfile>>): void {
+function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.getProfile>>, cal: TypicalityCalibration | null): void {
   const r = readFidelity(text, profile);
+  if (cal) { const t = typicalityOf(text, cal); console.log(`As typical as ${Math.round(t.p * 100)}% of your own pieces (distance ${round(t.distance)}, calibrated on ${cal.scores.length}).`); }
   console.log(`A ${r.cls} text, read against ${r.bandsFrom === 'all' ? 'your pooled range' : `your ${r.bandsFrom} pieces`}: in range on ${r.inBand} of ${r.measured} steering features.`);
   for (const b of profile.bands.filter((x) => x.cls === r.bandsFrom && x.role !== 'MONITOR')) {
     const v = r.values[b.id];
@@ -188,3 +195,34 @@ const describeSettings = (s: ImplementationSettings): string =>
   `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}`;
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
+
+/**
+ * CALIBRATE FROM A FOLDER, for a skill built before calibrations were kept. Use the pieces the skill was built
+ * from, never the reserved ones: those are the blind comparison, and a reference that includes them has seen it.
+ */
+function calibrate(L: store.StoreLayout, profileHash: string, dir: string): void {
+  const profile = fstore.getProfile(L, profileHash) ?? die('the active profile is not stored.');
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${dir} is not a folder.`);
+  const pieces = readdirSync(dir).filter((f) => /\.(md|markdown|txt)$/i.test(f)).sort().map((f) => readFileSync(join(dir, f), 'utf8'));
+  const cal = calibrateTypicality(pieces, profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id)) ?? die(`${pieces.length} piece(s) in ${dir}: a calibration needs at least 6, with features that vary.`);
+  fstore.setTypicality(L, profileHash, cal);
+  console.log(`Typicality calibrated on ${pieces.length} piece(s) over ${cal.features.length} feature(s) (calibration ${cal.hash}, shrinkage ${cal.shrinkage}). Every output is now read for how typical of you it is.`);
+}
+
+/**
+ * CAN THE OUTPUTS BE TOLD APART FROM YOUR PIECES? A two-sample reading (core/fidelity/twosample.ts) of every
+ * recorded output against the pieces the calibration was made on: a held-out classifier's AUC, MMD with a
+ * permutation p-value, and how varied each side is at equal size.
+ */
+function reportCloseness(L: store.StoreLayout, profileHash: string, records: readonly Read[]): void {
+  const cal = fstore.getTypicality(L, profileHash) ?? die(`no typicality calibration for this profile: rebuild the skill, or atelier fidelity --skill ${L.skillName} --calibrate <folder>.`);
+  const outputs = records.map((r) => standardise(r.reading.values, cal.features, cal.center, cal.scale));
+  const c = closeness(cal.vectors, outputs);
+  console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s).`);
+  console.log(c.c2st ? `  told apart by a held-out classifier: AUC ${c.c2st.auc} (95% CI ${c.c2st.ci95[0]} to ${c.c2st.ci95[1]}); 0.5 means it cannot tell them apart`
+    : '  classifier two-sample test: not run (at least 6 on each side)');
+  if (c.mmd) console.log(`  kernel two-sample test (MMD): p ${c.mmd.p}${c.mmd.p < 0.05 ? ', the outputs differ from your pieces' : ', no difference detected at this size'}`);
+  if (c.vendi) console.log(`  variety at ${c.vendi.size} texts each: yours ${c.vendi.author} distinct, the outputs ${c.vendi.outputs}`);
+  const ps = records.flatMap((r) => (r.reading.typicality ? [r.reading.typicality.p] : []));
+  if (ps.length) console.log(`  typical of you, per output: median ${Math.round([...ps].sort((a, b) => a - b)[Math.floor(ps.length / 2)] * 100)}% over ${ps.length} output(s)`);
+}

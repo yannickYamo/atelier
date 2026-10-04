@@ -14,3 +14,4 @@ comments say what is true now and link here for how it got that way.
 | [0007](0007-taste-as-a-range.md) | Taste as a range: the fidelity loop below the standard |
 | [0008](0008-one-point-zero-is-the-floor.md) | 1.0 is the floor: later work is added beside it, never in place of it |
 | [0009](0009-voice-below-the-standard.md) | Voice below the standard: transfer as a declared policy, in-context pairs first, no trained model yet |
+| [0010](0010-closeness-is-a-two-sample-test.md) | Closeness is a two-sample test: one calibrated number per text, and a test over the run |
