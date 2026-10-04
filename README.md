@@ -21,9 +21,9 @@ atelier tend --skill examples-to-match --auto                 # find what keeps 
 
 ## What you get
 
-**A model can follow examples on the first draft. What it can't do is keep a standard someone owns.**
+**A model given your examples writes a good first draft, then guesses your rules again on every run after it.**
 
-Pasting your examples into a strong model gets you a good first draft. The rules get re-guessed on every run, and nothing checks the result. Atelier moves the standard outside the model, where no update can move it, and checks every output against it.
+Nothing checks the result, either. Atelier keeps the rules in a file you approved, outside the model, and checks every output against them. A new model version doesn't change them.
 
 I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
 
@@ -49,7 +49,7 @@ Change the model next month and the standard doesn't move.
 
 ## How it works
 
-**Three loops, and one decision in them is yours.**
+**Atelier runs three loops: build, run and improve. You make one decision in them, approving the rules.**
 
 **Build.** A discovery agent reads your examples and proposes rules. Each arrives with evidence: how often your examples do it, how often a plain model does, and whether it held on pieces the agent never read. It also writes drafts of its own on your topics, to find where the model drifts from you. You approve the standard once, and it's hashed. A compiler then gives each rule the least machinery that carries it: an instruction, an example, a self-check, an output contract, or nothing.
 
@@ -108,7 +108,7 @@ This is the layout. The claim reader's rates are its real measured ones; the res
 
 ## What's proven, and what isn't
 
-**The counted guarantees are the claim. Voice is not.**
+**What Atelier counts holds up in the tests. Matching an author's voice hasn't been shown yet.**
 
 A skill built in 90 seconds held its own against a hand-tuned one. In an outside test, Atelier built a skill from 12 example coding-assistant answers for $0.41. On the benchmark of a popular hand-written skill tuned for it, the Atelier skill scored 4.51 against 4.32 as a plug-in. Run through `atelier invoke` it scored 4.39, against 4.13 for the earlier build and 3.99 with no skill.
 
@@ -120,7 +120,7 @@ An outside test also found a real failure: an early runtime cut correct sentence
 
 ## How it compares
 
-**Everything here infers or enforces a standard. The question is who owns it.**
+**Each of these tools finds a standard or enforces one. They differ in who can change it.**
 
 | | Where the standard comes from | Who can move it | Checked on every output | Invented claims | A change you can undo |
 |---|---|---|---|---|---|
@@ -155,19 +155,19 @@ has every command.
 
 ## Where it's going
 
-**Agents will write most of what a team ships. Each of those things needs a standard someone owns.**
+**More of what a team ships is written by agents: docs, release notes, support replies, review comments, reports. Each kind needs rules someone approved.**
 
-Docs, release notes, support replies, review comments, reports. Models change every few months, and the standard shouldn't.
+Models change every few months. The rules shouldn't change with them.
 
 Two tests come next. An independent reviewer runs the sealed study of voice ([B6](studies/B6_PREREGISTRATION.md)) on their own corpora, read blind by people. Then the head-to-head against GEPA and SkillOpt runs on the same tasks, writer and budget for every arm. Until both are in, voice and the optimizer comparison aren't claimed. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
 
 ## How I built it
 
-**Agents wrote most of the code. I set the bar and owned the call.**
+**Coding agents wrote most of the code. I wrote the briefs, set the architecture and decided what shipped.**
 
 I set the direction, the architecture and the rules the code must keep. Coding agents wrote most of the code against written briefs. Independent reviews and outside tests checked it, and their findings get fixed in the open.
 
-That's how Atelier works, and it's how Atelier was made: agents do the volume, and a person owns the outcome. [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md) says who did what, and [LESSONS](docs/LESSONS.md) says what it taught.
+Atelier gives you the same split: agents write, and you decide what good means. [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md) says who did what, and [LESSONS](docs/LESSONS.md) says what it taught.
 
 ## Learn more
 
