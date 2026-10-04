@@ -36,6 +36,15 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   while its features are under a sealed qualification (studies/STRUCTURE_READER_PREREGISTRATION.md), and no
   feature of it steers selection or fails an output.
 
+### Studies
+
+- **The structure reader: FAIL** (studies/STRUCTURE_READER_RESULT.md, sealed in advance, $1.97). Reliability is
+  solved: the two reads agree at a median κ of 0.867, and 11 of 12 features reproduce at 0.94 or better on an
+  independent re-read, where the move reader failed. Separation is not. On the corpus the move reader failed on, no
+  structure feature told the author from the model by the product's bar; the strongest (switch rate 0.718, entropy
+  rate 0.713) say the authors are less predictable, as the fiction study found, but below the bar. The reader stays
+  a monitor.
+
 ### Fixed
 
 - **The taste reader ran on no current model.** A model that refuses forced tool choice and temperature, one 400 at

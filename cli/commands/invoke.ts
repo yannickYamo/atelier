@@ -406,7 +406,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
   // A REQUEST THAT STATES ITS OWN LENGTH OR SHAPE GETS NO SKELETON: the request sets the shape then.
   const planState = authorStructure && contractFile === null && !lengthAsked && shape !== 'SHAPE'
-    ? newPlanState(authorStructure, fid?.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : [], asked, nDrafts, started) : null;
+    ? newPlanState(authorStructure, fid?.index ? retrieve(fid.index, asked, 6).map((k) => fid.index?.passages[k]?.piece ?? '') : [], asked, nDrafts, started,
+      fid ? paragraphsFor(asked, fid.profile) : null) : null;
   if (authorStructure && !planState) trace.structure = { plans: [], read: null, followed: null, note: 'no skeleton: the request states its own length or format' };
   const sectionWriter = argv.includes('--sections') && contractFile === null
     ? writeBySections({ client, budget, servedText: servedForRun, task: taskForRun, trace })
@@ -860,23 +861,37 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
 }
 
 /** The plans of one run: the author's chain (nearest pieces weighted), each plan written so far, its seed, and which draft had which. */
-interface PlanState { readonly chain: MoveChain; readonly asked: string; readonly nonce: number; readonly plans: StructureMove[][]; readonly seeds: number[]; readonly planOf: Record<string, number> }
+interface PlanState { readonly chain: MoveChain; readonly asked: string; readonly nonce: number; readonly plans: StructureMove[][]; readonly seeds: number[]; readonly planOf: Record<string, number>;
+  /** the skeleton length the request's word count sets, or null to draw it from the author's own */
+  readonly paragraphs: number | null }
 
 /**
  * ONE SKELETON PER DRAFT (core/structure/skeleton.ts), from the author's chain with the pieces nearest the request
  * counted NEAR_WEIGHT times, each at a length drawn from the author's own. Seeded by the request, the draft and the
  * run's start, recorded, so a run replays from its record and two runs of one request differ as the author's pieces do.
  */
-function newPlanState(s: NonNullable<ReturnType<typeof fstore.getStructure>>, near: readonly string[], asked: string, n: number, nonce: number): PlanState {
+function newPlanState(s: NonNullable<ReturnType<typeof fstore.getStructure>>, near: readonly string[], asked: string, n: number, nonce: number, paragraphs: number | null = null): PlanState {
   const chain = chainOf(s.pieces.map((p) => p.moves), s.pieces.map((p) => (near.includes(p.id) ? NEAR_WEIGHT : 1)));
-  const st: PlanState = { chain, asked, nonce, plans: [], seeds: [], planOf: {} };
+  const st: PlanState = { chain, asked, nonce, plans: [], seeds: [], planOf: {}, paragraphs };
   for (let i = 0; i < Math.max(1, n); i++) addPlan(st, `draft ${i}`);
   return st;
 }
 function addPlan(st: PlanState, tag: string): number {
   const seed = seedOf([st.asked, tag, String(st.nonce)]);
-  st.plans.push(sampleSkeleton(st.chain, null, seed)); st.seeds.push(seed);
+  st.plans.push(sampleSkeleton(st.chain, st.paragraphs, seed)); st.seeds.push(seed);
   return st.plans.length - 1;
+}
+
+/**
+ * A WORD COUNT IN THE REQUEST SETS THE SKELETON'S LENGTH: "about 900 words" at the author's median paragraph of 60
+ * words is 15 paragraphs, not a length drawn from their 3,000-word pieces. Null when the request states no count or
+ * the profile measured no paragraph length.
+ */
+export function paragraphsFor(asked: string, profile: FidelityProfile): number | null {
+  const m = /\b(\d{2,5})\s*(?:-|to|–)?\s*(?:\d{2,5}\s*)?words?\b/i.exec(asked);
+  const per = profile.bands.find((b) => b.id === 'paragraphP50' && b.cls === 'all')?.median;
+  if (!m || !per || per <= 0) return null;
+  return Math.min(40, Math.max(3, Math.round(Number(m[1]) / per)));
 }
 
 /** Each draft written against its own plan, and which plan it had remembered by the draft's hash. */
