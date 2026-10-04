@@ -167,6 +167,7 @@ Atelier gives you the same split: agents write, and you decide what good means. 
 - [USAGE](docs/USAGE.md): commands, settings, and what Atelier builds around a skill
 - [RESULTS](docs/RESULTS.md) and [studies/](studies/README.md): every study, pass or fail
 - [ARCHITECTURE](docs/ARCHITECTURE.md): how a standard becomes a skill
+- [INSTRUMENTS](docs/INSTRUMENTS.md): every instrument, what it was validated on, and whether it may steer, gate or only report
 - [MEASURED-RULES](docs/MEASURED-RULES.md), [FORMATS](docs/FORMATS.md) and [TASTE](docs/TASTE.md): the counted checks, the formats, and the reader for everything else
 - [decisions/](docs/decisions/README.md): the choices the code depends on, and why
 - [MEASUREMENTS.md](MEASUREMENTS.md): every figure quoted in the code, and what it rests on
