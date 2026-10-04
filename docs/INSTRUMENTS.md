@@ -16,6 +16,7 @@ on both counts.
 | Typicality (conformal) | monitor; control for `--until-typical` | coverage by simulation | blind to a run that clusters |
 | Two-sample test, counted features | evaluation over a run | by construction | partly steered on by default selection |
 | Evaluation family (character 4-grams, word bigrams) | evaluation only | by construction | small samples give approximate intervals |
+| Context bands (`context=local`) | moves SIGNAL bands toward the request's nearest pieces (opt-in) | FAIL as a sharper detector | title-only requests find too few near pieces |
 | Structure reader | monitor; shapes plan-first drafts (research preview) | reliable, does not separate | FAIL as a separating sensor |
 | Taste reader | monitor until your labels validate it | per skill | unvalidated by default |
 | Move reader | parked | failed | reliable where it did not separate |
@@ -100,6 +101,20 @@ read.** Nothing in the product reads them.
 - **Known failures:** at 8 to 12 texts a side, the bootstrap intervals cover 0.5 about 82–85% of the time under no
   difference, so they are approximate. The most frequent n-grams are fragments of function words, which the style
   detector also reads; the study reports a reading without them.
+
+## Context bands
+
+**The SIGNAL bands a draft is held to, moved toward the author's pieces nearest the request.** Each piece is weighted
+by its TF-IDF nearness to the request; the local band is the weighted 10th to 90th percentile, and the band used is
+λ · local + (1 − λ) · usual, with λ = n_eff / (n_eff + 6). RULE bands never move.
+
+- **Did not pass:** on 20 unseen author pieces and 40 model outputs, the in-band share separated them at AUC 0.803
+  with the usual bands and 0.803 with local ones. The author's own pieces stayed in range (median 0.895 both ways).
+- **Role:** opt-in (`invoke --context local`, `fidelity --set context=local`). It steers selection and edits for the
+  runs that ask for it, and is recorded with them.
+- **Known failures:** on a request that is only a title, few pieces are near (12 of 36 newsletter texts got a
+  target at all). A per-piece value the calibration did not measure sits at the author's centre.
+- **Record:** [studies/CONTEXT_BANDS_RESULT.md](../studies/CONTEXT_BANDS_RESULT.md).
 
 ## Structure reader
 

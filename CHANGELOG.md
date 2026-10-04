@@ -36,7 +36,19 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   while its features are under a sealed qualification (studies/STRUCTURE_READER_PREREGISTRATION.md), and no
   feature of it steers selection or fails an output.
 
+- **`--context local`** (or `fidelity --set context=local`), opt-in: the SIGNAL bands a draft is held to move toward
+  the author's pieces nearest the request, by λ = n_eff / (n_eff + 6), so a few near pieces count for little and
+  many for most. RULE bands, the owner's ratified ranges, never move. The panel says how far the range moved and
+  which pieces were nearest; the target is recorded with the run. A request near too few pieces keeps the usual range,
+  and says so.
+
 ### Studies
+
+- **Context bands: FAIL** (studies/CONTEXT_BANDS_RESULT.md, sealed in advance, offline, $0). On the indistinguishability
+  study's texts, bands moved toward the request's nearest pieces told the authors' unseen pieces from the model's
+  outputs no better than the usual bands (pooled AUC 0.803 both ways; difference +0.0006 [−0.025, 0.027], bar +0.05).
+  They did not reject the author's own pieces. Title-only requests gave lexical nearness too little to match: 12 of 36
+  newsletter texts got a local target at all.
 
 - **Indistinguishability: FAIL on the machine measure; the human read is pending** (studies/INDISTINGUISHABILITY_RESULT.md,
   sealed in advance, $31.54). On two corpora, a classifier on a feature family no arm steers on told every arm's outputs

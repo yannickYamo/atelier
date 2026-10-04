@@ -160,6 +160,10 @@ varied as you are. `invoke --until-typical 0.3` writes more rounds until an outp
 never trades a REQUIRED rule for it. `--until-author 0.5` does the same on the style detector: more rounds until it
 reads the output as yours at least half the time. `--select sample` draws among drafts the rules cannot separate by
 how likely each is yours, instead of always taking the most typical one, so your outputs keep your spread.
+`--context local` holds drafts to your range on the request's subject: your pieces nearest the request set it,
+pulled toward your usual range when few are near, and your ratified rules never move. A sealed offline test found
+it told your pieces from the model's no better than the usual range ([result](../studies/CONTEXT_BANDS_RESULT.md)),
+so it is off unless you ask for it.
 
 ### Voice, and other registers (opt-in)
 
