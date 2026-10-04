@@ -17,6 +17,7 @@
 
 import type { RegisterDecision } from '../voice/register.js';
 import type { Typicality } from './typicality.js';
+import type { LocalContext } from './context.js';
 import type { StructureMove } from '../structure/moves.js';
 import type { VoiceParagraph } from '../voice/pass.js';
 
@@ -93,8 +94,8 @@ export interface DetectorModel {
 /** Where one text sits: the class, every feature's value, how many of the steering bands it is inside. */
 export interface FidelityReading {
   readonly cls: ContextClass;
-  /** the band set it was read against (pooled when the class had too few pieces) */
-  readonly bandsFrom: ContextClass | 'all';
+  /** the band set it was read against (pooled when the class had too few pieces; 'local' when moved toward the request's nearest pieces) */
+  readonly bandsFrom: ContextClass | 'all' | 'local';
   readonly values: Readonly<Record<string, number | null>>;
   /** features measured and inside their band, over RULE and SIGNAL bands only */
   readonly inBand: number;
@@ -130,6 +131,11 @@ export interface FidelityProfile {
   readonly baseline?: { readonly medianInBand: number; readonly medianMeasured: number; readonly n: number };
   /** the reserved pieces' feature values (never their text), so the baseline is recounted with any roles */
   readonly unseen?: readonly { readonly cls: ContextClass; readonly values: Readonly<Record<string, number | null>> }[];
+  /**
+   * NEVER STORED. Set on a profile for one request only (`context=local`, ./context.ts): its SIGNAL bands are read
+   * moved toward the author's pieces nearest the request. The hash stays the stored profile's.
+   */
+  readonly context?: LocalContext;
   /** hash of bands and detector, recorded with every reading */
   readonly hash: string;
 }
@@ -178,6 +184,11 @@ export interface ImplementationSettings {
    * 'sample', drawn in proportion to how much likelier it is the author's than the model's. Opt-in.
    */
   readonly selection?: 'sample';
+  /**
+   * WHICH RANGE A DRAFT IS HELD TO (./context.ts): absent, the author's range over pieces of its length; 'local', the
+   * SIGNAL bands moved toward the author's pieces nearest the request. RULE bands never move. Opt-in.
+   */
+  readonly context?: 'local';
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
@@ -225,6 +236,8 @@ export interface FidelityRecord {
   readonly profileHash: string | null;
   readonly seed: number;
   readonly reading: FidelityReading | null;
+  /** the request's local target, when the run was held to it (`context=local`): enough to read the output again */
+  readonly context?: LocalContext;
   /** readings of every draft before selection, in the order written */
   readonly drafts?: readonly FidelityReading[];
   /**

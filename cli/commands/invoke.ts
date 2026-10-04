@@ -30,6 +30,7 @@ import { voicePass, MAX_PARAGRAPHS, type VoiceParagraph } from '../../core/voice
 import { MIN_PAIRS, type PairBank } from '../../core/voice/pairs.js';
 import { typicalityOf, typicalityInContext, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
 import { valuesOf } from '../../core/fidelity/profile.js';
+import { localContext, type LocalContext } from '../../core/fidelity/context.js';
 import { densityRatio, drawIndex, seedOf } from '../../core/fidelity/sampling.js';
 import { scoreDetector } from '../../core/fidelity/stylometry.js';
 import { chainOf, sampleSkeleton, skeletonBlock, followed, NEAR_WEIGHT, type MoveChain } from '../../core/structure/skeleton.js';
@@ -294,6 +295,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (selectFlag && !['sample', 'best'].includes(selectFlag)) die(`--select is sample or best, got "${selectFlag}".`);
   const sampling = (selectFlag ?? runSettings?.selection ?? 'best') === 'sample' && Boolean(fid?.profile.detector);
   if (selectFlag === 'sample' && !fid?.profile.detector) report.say('(--select sample needs the skill\'s style detector, trained at discovery; drafts are chosen the usual way.)');
+  // THE AUTHOR'S RANGE ON THIS KIND OF SUBJECT (`--context local`, core/fidelity/context.ts): the SIGNAL bands moved
+  // toward the author's pieces nearest the request, by how many of them are near. RULE bands never move.
+  const contextFlag = flag('--context');
+  if (contextFlag && !['local', 'off'].includes(contextFlag)) die(`--context is local or off, got "${contextFlag}".`);
+  const contextWanted = (contextFlag ?? runSettings?.context ?? 'off') === 'local' && fid !== null;
+  if (contextFlag === 'local' && !(fid?.typicality && fid.index)) die(`--context local needs the skill's typicality calibration and its retrieval index: rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate-from <folder of your pieces>.`);
+  const local = contextWanted && fid?.typicality && fid.index ? localContext(asked, fid.typicality, fid.index) : null;
+  if (contextWanted && !local) report.say('(context=local: this request is near too few of your pieces to set a range of its own; your range for its length is used.)');
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
@@ -384,10 +393,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rel = fid?.release.settings;
   const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
     || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
-    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null || authorTarget !== null || sampling !== (rel.selection === 'sample' && Boolean(fid?.profile.detector)) || Boolean(structureFlag);
+    || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null || authorTarget !== null || sampling !== (rel.selection === 'sample' && Boolean(fid?.profile.detector)) || Boolean(structureFlag)
+    || contextWanted !== (rel.context === 'local');
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
   // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
-  const steerProfile = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
+  const carried = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
+  const steerProfile = carried && local ? { ...carried, context: local } : carried;
+  const editProfile = fid && local ? { ...fid.profile, context: local } : fid?.profile ?? null;
   // What each draft call was given, by the index it was asked for; the record keeps only the calls that came back
   // (selectDraft), with the temperature the provider was actually sent.
   const retrievedFor: number[][] = [];
@@ -421,7 +433,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste } : null),
       shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
@@ -435,10 +447,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
-        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }) }, overridden,
+        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }) }, overridden,
       policy && register ? { L, policy, register, traits, mode: voiceMode,
         note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
-          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, asked) : null);
+          : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, asked, local) : null);
 
   reportDrift(report, L, sv, rec);
   if (!machine) console.log(`\n${rec.output}\n`);
@@ -998,7 +1010,7 @@ function withSections<T extends object>(select: T, write: ((i: number, v: DraftV
 function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output: string, trace: FidelityTrace, retrieved: readonly number[],
   applicability: FidelityRecord['applicability'], ledger: readonly Fact[], settings: ImplementationSettings, overridden: boolean,
   voice: { L: store.StoreLayout; policy: TransferPolicy; register: RegisterDecision; traits: { carried: string[]; unknown: string[] } | null; mode: 'off' | 'incontext'; note: string | null } | null = null,
-  asked = ''): FidelityRecord {
+  asked = '', local: LocalContext | null = null): FidelityRecord {
   const cov = ledger.length ? factCoverage(output, ledger) : null;
   // The lexical distance is a monitor, read on the delivered text against the corpus's own threshold (computed
   // once per retrieval index and kept).
@@ -1012,7 +1024,8 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
     release: overridden ? null : fid.release.id, settings, profileHash: fid.profile.hash,
     // Nothing of ours is sampled: the drafts are the model's, and every choice after them is deterministic.
     seed: 0,
-    reading: { ...readFidelity(output, fid.profile), ...(fid.typicality ? { typicality: contextTypicality(output, fid, asked) } : {}) },
+    reading: { ...readFidelity(output, local ? { ...fid.profile, context: local } : fid.profile), ...(fid.typicality ? { typicality: contextTypicality(output, fid, asked) } : {}) },
+    ...(local ? { context: local } : {}),
     ...(trace.shape ? { shape: trace.shape } : {}),
     ...(trace.sampled ? { sampled: trace.sampled } : {}),
     ...(trace.structure ? { structure: trace.structure } : {}),

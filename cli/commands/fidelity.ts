@@ -182,11 +182,17 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
   let diversity = base.diversity ?? false;
   let voice = base.voice;
   let selection = base.selection;
+  let context = base.context;
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
     if (k === 'selection') {
       if (!['sample', 'best'].includes(v)) die(`"selection" is sample or best, got "${v}".`);
       selection = v === 'sample' ? 'sample' : undefined;
+      continue;
+    }
+    if (k === 'context') {
+      if (!['local', 'off'].includes(v)) die(`"context" is local or off, got "${v}".`);
+      context = v === 'local' ? 'local' : undefined;
       continue;
     }
     if (k === 'voice') {
@@ -199,17 +205,17 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
       diversity = ['1', 'on', 'true'].includes(v);
       continue;
     }
-    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice or selection.`);
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, selection or context.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
     counts[k] = Math.floor(n);
   }
   if (counts.drafts < 1) die('drafts must be at least 1.');
-  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}) };
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>
-  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}`;
+  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}${s.context === 'local' ? ', held to your range on the request\'s subject' : ''}`;
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 

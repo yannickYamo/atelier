@@ -129,6 +129,29 @@ export function aucWithCi(pos: readonly number[], neg: readonly number[], opts: 
   return { auc: r4(auc), ci95: resamples ? [r4(Math.min(at(0.025), auc)), r4(Math.max(at(0.975), auc))] : [r4(auc), r4(auc)] };
 }
 
+/**
+ * HOW MUCH ONE SCORING TELLS TWO GROUPS APART BETTER THAN ANOTHER, ON THE SAME TEXTS. `a` and `b` score the same
+ * texts, in the same order, two ways; the difference is AUC(b) − AUC(a). The bootstrap draws texts, not scores,
+ * within each stratum and side, so a text keeps both its scores and the pairing is kept. Deterministic for a seed.
+ */
+export function aucDifferenceWithCi(strata: readonly { readonly pos: readonly (readonly [number, number])[]; readonly neg: readonly (readonly [number, number])[] }[],
+  opts: { resamples?: number; seed?: number } = {}): { a: number; b: number; diff: number; ci95: readonly [number, number] } {
+  if (!strata.length || strata.some((s) => !s.pos.length || !s.neg.length)) throw new Error('aucDifferenceWithCi needs texts on both sides of every stratum');
+  const pooled = (ss: readonly { pos: readonly (readonly [number, number])[]; neg: readonly (readonly [number, number])[] }[], k: 0 | 1): number =>
+    aucRaw(ss.flatMap((s) => s.pos.map((x) => x[k])), ss.flatMap((s) => s.neg.map((x) => x[k])));
+  const a = pooled(strata, 0); const b = pooled(strata, 1);
+  const resamples = opts.resamples ?? 2000; const rnd = mulberry32(opts.seed ?? 1);
+  const boots: number[] = [];
+  for (let i = 0; i < resamples; i++) {
+    const drawn = strata.map((s) => ({ pos: drawWithReplacement(s.pos, rnd), neg: drawWithReplacement(s.neg, rnd) }));
+    boots.push(pooled(drawn, 1) - pooled(drawn, 0));
+  }
+  boots.sort((x, y) => x - y);
+  const at = (q: number): number => boots[Math.min(boots.length - 1, Math.max(0, Math.floor(q * boots.length)))];
+  const diff = b - a;
+  return { a: r4(a), b: r4(b), diff: r4(diff), ci95: resamples ? [r4(Math.min(at(0.025), diff)), r4(Math.max(at(0.975), diff))] : [r4(diff), r4(diff)] };
+}
+
 // ── Folds ──────────────────────────────────────────────────────────────────────────────────────
 
 const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

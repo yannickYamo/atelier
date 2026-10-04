@@ -69,6 +69,8 @@ export interface EvalSummary {
     readonly structure?: { readonly moves: number; readonly followed: number | null } | null;
     /** a draft drawn among tied ones by density ratio */
     readonly sampled?: { readonly among: number } | null;
+    /** held to the author's range on the request's subject (`context=local`): the nearest pieces and how far bands moved */
+    readonly context?: { readonly nearest: readonly string[]; readonly nEff: number; readonly lambda: number } | null;
   } | null;
   readonly monitors: {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
@@ -137,6 +139,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
       out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);
     }
     if (fi.structure) out.push(`    ${pad('structure plan', 18)}${fi.structure.moves} moves from your own pieces${fi.structure.followed === null ? '' : `; the text followed ${Math.round(fi.structure.followed * 100)}% of them`}`);
+    if (fi.context) out.push(`    ${pad('range for subject', 18)}moved ${Math.round(fi.context.lambda * 100)}% toward your pieces nearest this request (${fmt(fi.context.nEff)} effective${fi.context.nearest.length ? `, nearest ${fi.context.nearest.slice(0, 3).join(', ')}` : ''}); ratified rules unchanged`);
     if (fi.sampled) out.push(`    ${pad('draft drawn', 18)}from ${fi.sampled.among} tied drafts, in proportion to how likely each is yours`);
   }
   if (e.voice) {

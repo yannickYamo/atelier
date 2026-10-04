@@ -440,6 +440,23 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('invoke', '--skill', 'posts', 'x', '--until-author', '0.5', '--shape-rounds', '0')).toMatch(/--shape-rounds must be at least 1/);
   }, 180_000);
 
+  it('--context local holds drafts to the range on the request\'s subject, records the target or says why there is none, and is a setting', () => {
+    const out = run('invoke', '--skill', 'posts', 'Write a post about the cache that never expired and the rollback', '--context', 'local', '--panel', '--json');
+    expect(out).not.toMatch(/^EXIT:/);
+    const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { settings?: { context?: string }; context?: { lambda: number; nEff: number }; reading: { bandsFrom: string } } };
+    expect(rec.fidelity.settings?.context).toBe('local');
+    if (rec.fidelity.context) {
+      expect(rec.fidelity.reading.bandsFrom).toBe('local');
+      expect(rec.fidelity.context.lambda).toBeCloseTo(rec.fidelity.context.nEff / (rec.fidelity.context.nEff + 6), 2);
+      expect(out).toMatch(/range for subject\s+moved \d+% toward your pieces nearest this request/);
+    } else {
+      expect(out).toMatch(/near too few of your pieces to set a range of its own/);
+    }
+    expect(run('invoke', '--skill', 'posts', 'x', '--context', 'global')).toMatch(/--context is local or off/);
+    expect(run('fidelity', '--skill', 'posts', '--set', 'context=near')).toMatch(/"context" is local or off/);
+  }, 180_000);
+
   it('plan-first: the author\'s structure is read once, each draft gets its own skeleton, and the delivered text is read against it', async () => {
     const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['post-0.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {

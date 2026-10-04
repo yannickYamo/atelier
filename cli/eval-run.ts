@@ -11,6 +11,7 @@ import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loo
 import { featureOf } from '../core/observers/features.js';
 import { overlapIndex } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
+import { localiseBands } from '../core/fidelity/context.js';
 import { QUALIFIED_READERS, DISPUTED_WHY } from '../core/loop/claim-extract.js';
 import type { EvalSummary } from '../core/eval/summary.js';
 import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
@@ -86,7 +87,9 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const reading = rec.fidelity?.reading ?? null;
   const p = x.profile;
   const fidelity: EvalSummary['fidelity'] = reading && p ? (() => {
-    const { bands } = bandsFor(p, reading.cls);
+    const ctx = rec.fidelity?.context ?? null;
+    const base = bandsFor(p, reading.cls).bands;
+    const bands = ctx ? localiseBands(base, ctx) : base;
     const band = (id: string): readonly [number, number] | null => bands.find((b) => b.id === id)?.band ?? null;
     const edits = rec.fidelity?.edits ?? [];
     return {
@@ -96,6 +99,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       facts: rec.fidelity?.coverage ? { used: rec.fidelity.coverage.used, supplied: rec.fidelity.coverage.supplied } : null,
       edits: { tried: edits.filter((e) => e.target !== '-').length, kept: edits.filter((e) => e.kept).length },
       ...(reading.typicality ? { typicality: { p: reading.typicality.p, distance: reading.typicality.distance } } : {}),
+      ...(ctx ? { context: { nearest: ctx.pieces.slice(0, 3).map((x) => x.id), nEff: ctx.nEff, lambda: ctx.lambda } } : {}),
       ...(rec.fidelity?.sampled ? { sampled: { among: rec.fidelity.sampled.among } } : {}),
       ...(rec.fidelity?.structure ? { structure: { moves: rec.fidelity.structure.plans[0]?.length ?? 0, followed: rec.fidelity.structure.followed } } : {}),
       ...(rec.fidelity?.shape ? (() => {
