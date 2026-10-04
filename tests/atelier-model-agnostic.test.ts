@@ -628,6 +628,13 @@ describe('a model that refuses forced tool choice is asked in words, and a model
         const b = JSON.parse(body) as { model: string; tool_choice: { type: string }; messages: { content: string }[] };
         seen.push({ model: b.model, choice: b.tool_choice.type, asked: b.messages[0].content.includes('Answer by calling the emit_answer tool') });
         res.setHeader('content-type', 'application/json');
+        const t = (JSON.parse(body) as { temperature?: number }).temperature;
+        if (b.model === 'strict-model' && (b.tool_choice.type === 'tool' || t !== undefined)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: b.tool_choice.type === 'tool'
+            ? 'tool_choice: type "tool" and "any" are not supported for this model.' : '`temperature` is deprecated for this model.' } }));
+          return;
+        }
         if (b.model === 'new-model' && b.tool_choice.type === 'tool') {
           res.statusCode = 400;
           res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'tool_choice: type "tool" and "any" are not supported for this model.' } }));
@@ -651,6 +658,14 @@ describe('a model that refuses forced tool choice is asked in words, and a model
     expect((await ask('new-model')).json).toEqual({ ok: true });
     expect(seen.filter((x) => x.model === 'new-model').map((x) => `${x.choice}${x.asked ? '+asked' : ''}`)).toEqual(['tool', 'auto+asked', 'auto+asked']);
     expect(refusesForcedChoice(new Error('tool_choice not supported'))).toBe(false);
+  });
+  it('a model that refuses forced choice AND temperature, one 400 at a time, still answers: an instrument at temperature 0', async () => {
+    const r = await new AnthropicInferenceClient('strict-model', 'sk-test', null).complete({
+      stableBlock: 's', variableBlock: '', userMessage: 'q', toolName: 'emit_answer', toolDescription: 'd',
+      schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }, maxTokens: 100, temperature: 0 });
+    expect(r.json).toEqual({ ok: true });
+    expect(r.temperatureSent).toBeNull();
+    expect(seen.filter((x) => x.model === 'strict-model').map((x) => x.choice)).toEqual(['tool', 'auto', 'auto']);
   });
   it('a model that accepts forced choice keeps it: the measured instruments do not change', async () => {
     await ask('claude-haiku-4-5');
