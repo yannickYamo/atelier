@@ -44,6 +44,8 @@ const BASELINES = ['plain', 'pasted', 'atelier']; const CANDIDATES = ['plan', 's
 const FLAGS = { atelier: [], plan: ['--structure', 'plan'], steered: ['--structure', 'plan', '--select', 'sample', '--until-author', '0.5', '--shape-rounds', '1'] };
 /** The most one Atelier run may spend (its --cap), and the most a direct call may: what the cap check reserves. */
 const RUN_CAP = 4; const DIRECT_CAP = 0.6; const VERIFY_COST = 0.02;
+/** A run back with an `atelier:` refusal this fast never reached a model call. */
+const REFUSAL_MS = 15000;
 mkdirSync(OUT, { recursive: true });
 
 // ── inputs, checked before anything is spent ────────────────────────────────────────────────────────
@@ -117,11 +119,16 @@ async function generate(c, arm, title, examples) {
     const d = await direct(prompt, arm === 'pasted' ? examples : []);
     o = { ...d, costUsd: d.costUsd + VERIFY_COST, invented: inventedIn(c, d.output, prompt) };
   } else {
+    const t0 = Date.now();
     const r = cli(c, ['invoke', '--skill', c.skill, prompt, '--json', '--cap', String(RUN_CAP), ...FLAGS[arm]]);
     let j = null; try { j = JSON.parse(r.out); } catch { /* a failed run */ }
     if (!j) {
-      // A FAILED RUN IS RECORDED AT ITS CAP and never retried: what it spent is not known, and a resume must not pay twice.
-      cache[key] = { corpus: c.name, arm, title, failed: (r.err ?? '').split('\n').filter(Boolean).slice(-2).join(' '), costUsd: RUN_CAP }; save();
+      // A FAILED RUN IS RECORDED AT ITS CAP and never retried: what it spent is not known, and a resume must not pay
+      // twice. A refusal before anything is spent (the CLI's own preflight, back within REFUSAL_MS) costs nothing; it
+      // stops the study, since every later run of that arm would be refused the same way.
+      const refused = Date.now() - t0 < REFUSAL_MS && /atelier: /.test(r.err ?? '');
+      cache[key] = { corpus: c.name, arm, title, failed: (r.err ?? '').split('\n').filter(Boolean).slice(-2).join(' '), costUsd: refused ? 0 : RUN_CAP }; save();
+      if (refused) { console.error(`${c.name}/${arm}/${title}: refused before spending (${cache[key].failed}); stopping.`); delete cache[key]; save(); process.exit(4); }
       console.error(`${c.name}/${arm}/${title}: run failed, recorded at $${RUN_CAP}`);
       return cache[key];
     }

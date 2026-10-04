@@ -105,12 +105,16 @@ export function firstSettings(_profile: FidelityProfile, hasIndex: boolean): Imp
  * Null when the skill has no profile.
  */
 export function releaseFor(L: store.StoreLayout, sv: { skillVersionHash: string; standardVersionHash: string }): { release: ImplementationRelease; profile: FidelityProfile; index: RetrievalIndex | null; typicality: TypicalityCalibration | null } | null {
-  const active = fstore.getActiveRelease(L)?.release ?? null;
+  let active = fstore.getActiveRelease(L)?.release ?? null;
   if (!active) return null;
+  // A NEW STANDARD STARTS A NEW LINE; IT DOES NOT LOSE THE AUTHOR. What the loop learned under one standard (settings,
+  // notes) says nothing about another, so none of it carries. The author's pieces do: the profile, re-ratified against
+  // the new rules, the retrieval index, the typicality calibration and the structure read. Returning nothing here, as
+  // before, left a skill whose rule was amended with no profile, no detector and no retrieval, said nowhere.
+  if (active.standardVersionHash !== sv.standardVersionHash) active = newLineUnder(L, active, sv) ?? active;
   // The profile and index the release names, not whichever was built last: a rollback serves what it says.
   const profile = active.profileHash ? fstore.getProfile(L, active.profileHash) ?? fstore.getProfile(L) : fstore.getProfile(L);
   if (!profile || (active.profileHash && profile.hash !== active.profileHash)) return null;
-  // A NEW STANDARD IS A NEW SKILL. What the loop learned under one standard says nothing about another.
   if (active.standardVersionHash !== sv.standardVersionHash) return null;
   let release = active;
   // 0.8'S DEFAULT IS NOT A CHOICE. A skill built under 0.8 got the full loop as its first release, which 1.0
@@ -170,4 +174,27 @@ export function releaseWithSettings(L: store.StoreLayout, from: ImplementationRe
   const r = fstore.putRelease(L, makeRelease({ ...withoutId(from), parent: from.id, settings, createdAt: new Date().toISOString(), why }));
   fstore.setActiveRelease(L, r.id);
   return r;
+}
+
+/**
+ * THE FIRST RELEASE UNDER A STANDARD THE OWNER CHANGED, carrying what describes the author and nothing the loop
+ * learned. Null when the new standard is not stored or the old release names no profile.
+ */
+function newLineUnder(L: store.StoreLayout, old: ImplementationRelease, sv: { skillVersionHash: string; standardVersionHash: string }): ImplementationRelease | null {
+  const v = store.getStandard(L, sv.standardVersionHash);
+  const oldProfile = old.profileHash ? fstore.getProfile(L, old.profileHash) : null;
+  if (!v || !oldProfile) return null;
+  const profile = ratifiedProfile(oldProfile, v);
+  fstore.setProfile(L, profile);
+  const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').map((b) => b.id);
+  const cal = fstore.getTypicality(L, oldProfile.hash);
+  const carriedCal = cal ? restrictCalibration(cal, steering) : null;
+  if (carriedCal && !fstore.getTypicality(L, profile.hash)) fstore.setTypicality(L, profile.hash, carriedCal);
+  const structure = fstore.getStructure(L, oldProfile.hash);
+  if (structure && !fstore.getStructure(L, profile.hash)) fstore.setStructure(L, profile.hash, structure);
+  const release = fstore.putRelease(L, makeRelease({ parent: null, standardVersionHash: sv.standardVersionHash, skillVersionHash: sv.skillVersionHash,
+    settings: firstSettings(profile, old.retrievalHash !== null), notes: [], profileHash: profile.hash, retrievalHash: old.retrievalHash,
+    createdAt: new Date().toISOString(), why: `the first release under standard ${sv.standardVersionHash}: your profile and passages carried, nothing the loop learned` }));
+  if (store.getActive(L) === sv.skillVersionHash) fstore.setActiveRelease(L, release.id);
+  return release;
 }

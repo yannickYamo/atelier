@@ -47,6 +47,10 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ### Fixed
 
+- **Amending a rule no longer drops the skill's fidelity layer.** A changed standard (`amend`, `confirm`, `add`) left
+  the skill with no profile, detector, retrieval or calibration, said nowhere. It now starts a new release line that
+  carries the author's profile (re-ratified against the new rules), passages, calibration and structure, and nothing
+  the loop learned under the old standard.
 - **The taste reader ran on no current model.** A model that refuses forced tool choice and temperature, one 400 at
   a time, now gets both retries; an instrument asking for temperature 0 answers again.
 - **`--with <file>` bound nothing.** A bare path is refused with the form that binds it (`--with notes=<file>`).

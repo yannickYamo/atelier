@@ -469,6 +469,19 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(srec.fidelity.structure?.note).toMatch(/asks for something short, or states its own format/);
   }, 180_000);
 
+  it('amending a rule keeps the author: a new release line carries the profile, the passages and the calibration', () => {
+    const before = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    expect(before).toMatch(/FIDELITY {2}descriptive/);
+    const plan = run('plan', '--skill', 'posts');
+    const rule = /^\s{2}(c\d+|p\d+|m\d+)\b/m.exec(plan)?.[1] ?? 'p1';
+    expect(run('amend', '--skill', 'posts', '--rule', rule, '--materiality', 'PREFERRED', '--reason', 'test: an owner reweighs a rule')).not.toMatch(/^EXIT:/);
+    const after = run('invoke', '--skill', 'posts', 'Write a post about the outage', '--panel');
+    expect(after).not.toMatch(/^EXIT:/);
+    expect(after).toMatch(/FIDELITY {2}descriptive/);
+    expect(after).toMatch(/typical of you/);
+    expect(run('fidelity', '--skill', 'posts')).toMatch(/the first release under standard [0-9a-f]+: your profile and passages carried/);
+  }, 180_000);
+
   it('the voice layer does nothing until a register is declared; out of register only what the owner marked carries', () => {
     expect(run('voice', 'status', '--skill', 'posts')).toMatch(/no register declared, so nothing of the voice layer runs/);
     const before = run('invoke', '--skill', 'posts', 'Draft the contract for the pilot', '--panel');

@@ -88,3 +88,20 @@ about $45–55.
 ## Record
 
 The result goes in `studies/INDISTINGUISHABILITY_RESULT.md` and the CHANGELOG, whatever it is.
+
+## Amendment, 2026-10-04, before any analysis
+
+The first run stopped after two briefs of the first corpus. It had produced 10 outputs and exposed two faults; no
+result had been computed.
+
+1. **A product bug: amending a rule dropped the skill's fidelity layer.** The first corpus's skill had two rules
+   reweighed by its owner before the study. That minted a new standard, and `releaseFor` returned no release for it,
+   so the skill ran with no profile, no detector, no retrieval and no calibration, without saying so. The two
+   `atelier` outputs were written that way and are discarded. The plan and steered runs were refused before spending
+   anything. Fixed in the product: a changed standard now starts a new release line that carries the author's
+   profile (re-ratified against the new rules), passages, calibration and structure, and nothing the loop learned.
+2. **The harness booked a refused run at its full cap.** A refusal before any model call now costs nothing and stops
+   the study, since every later run of that arm would be refused the same way.
+
+The harness is now sha256 prefix **`6c4d591b01529784`**. The plain and pasted outputs already written are kept: nothing
+about them changed. The decision rule, the instrument and the materials are unchanged.
