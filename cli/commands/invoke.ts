@@ -300,9 +300,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const contextFlag = flag('--context');
   if (contextFlag && !['local', 'off'].includes(contextFlag)) die(`--context is local or off, got "${contextFlag}".`);
   const contextWanted = (contextFlag ?? runSettings?.context ?? 'off') === 'local' && fid !== null;
-  if (contextFlag === 'local' && !(fid?.typicality && fid.index)) die(`--context local needs the skill's typicality calibration and its retrieval index: rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate-from <folder of your pieces>.`);
-  const local = contextWanted && fid?.typicality && fid.index ? localContext(asked, fid.typicality, fid.index) : null;
-  if (contextWanted && !local) report.say('(context=local: this request is near too few of your pieces to set a range of its own; your range for its length is used.)');
+  // The per-piece values come from the calibration, and a calibration made before it kept its pieces' ids cannot say
+  // which piece is near the request.
+  const contextReady = Boolean(fid?.typicality?.ids && fid.index);
+  const recalibrate = `rebuild it from its corpus, or run atelier fidelity --skill ${name} --calibrate-from <folder of your pieces>`;
+  if (contextFlag === 'local' && !contextReady) die(`--context local needs the skill's retrieval index and a typicality calibration that knows its pieces: ${recalibrate}.`);
+  const local = contextWanted && contextReady && fid?.typicality && fid.index ? localContext(asked, fid.typicality, fid.index) : null;
+  if (contextWanted && !local) report.say(contextReady ? '(context=local: this request is near too few of your pieces to set a range of its own; your range for its length is used.)'
+    : `(context=local is set, but the skill's calibration does not know its pieces; your range for its length is used: ${recalibrate}.)`);
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1)));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;

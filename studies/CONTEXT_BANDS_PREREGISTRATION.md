@@ -66,3 +66,14 @@ A FAIL here is "not shown on 60 texts", not "no effect".
 
 Whether drafts held to local bands read more like the author to people, or are told apart less by an evaluation
 instrument. Those need new outputs and model calls, and are left to a generation study.
+
+## Amendment 1, before any result was read
+
+The first run stopped at its own input check: the author-posts skill's typicality calibration had been made
+before calibrations kept their pieces' ids, so it could not say which piece is near a request. Nothing was scored.
+The calibration was remade offline with `atelier fidelity --calibrate-from` on the same 12 read pieces (the plan's
+`read` list), over the same 19 steering features (calibration `de0fe5da4933a5c4`). Its values differ from the old
+one because the old one predates per-fold standardisation. The texts, the rule and the harness are unchanged.
+
+`invoke --context local` now says this case plainly (recalibrate) instead of reporting that the request is near
+too few pieces.
