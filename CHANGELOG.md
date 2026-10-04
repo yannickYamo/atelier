@@ -38,6 +38,12 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ### Studies
 
+- **Indistinguishability: FAIL on the machine measure; the human read is pending** (studies/INDISTINGUISHABILITY_RESULT.md,
+  sealed in advance, $31.54). On two corpora, a classifier on a feature family no arm steers on told every arm's outputs
+  from the authors' unseen pieces (AUC 0.75–1.0): plain, pasted examples, Atelier, plan-first and plan-first steered.
+  Plan-first did not move outputs toward the author; on the newsletters it moved them further away. The three Atelier
+  arms delivered no invented claim in 60 outputs; the plain and pasted arms carried 37 to 67 flagged specifics per
+  corpus. Voice stays unclaimed.
 - **The structure reader: FAIL** (studies/STRUCTURE_READER_RESULT.md, sealed in advance, $1.97). Reliability is
   solved: the two reads agree at a median κ of 0.867, and 11 of 12 features reproduce at 0.94 or better on an
   independent re-read, where the move reader failed. Separation is not. On the corpus the move reader failed on, no
