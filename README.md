@@ -154,18 +154,11 @@ Models change every few months. The rules shouldn't change with them.
 
 Two tests come next. An independent reviewer runs the sealed study of voice ([B6](studies/B6_PREREGISTRATION.md)) on their own corpora, read blind by people. Then the head-to-head against GEPA and SkillOpt runs on the same tasks, writer and budget for every arm. Until both are in, voice and the optimizer comparison aren't claimed. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
 
-## How I built it
-
-**Coding agents wrote most of the code. I wrote the briefs, set the architecture and decided what shipped.**
-
-I set the direction, the architecture and the rules the code must keep. Coding agents wrote most of the code against written briefs. Independent reviews and outside tests checked it, and their findings get fixed in the open.
-
-Atelier gives you the same split: agents write, and you decide what good means. [HOW-IT-WAS-BUILT](docs/HOW-IT-WAS-BUILT.md) says who did what, and [LESSONS](docs/LESSONS.md) says what it taught.
-
 ## Learn more
 
 - [USAGE](docs/USAGE.md): commands, settings, and what Atelier builds around a skill
 - [RESULTS](docs/RESULTS.md) and [studies/](studies/README.md): every study, pass or fail
+- [LESSONS](docs/LESSONS.md): what building it taught, each with its evidence
 - [ARCHITECTURE](docs/ARCHITECTURE.md): how a standard becomes a skill
 - [INSTRUMENTS](docs/INSTRUMENTS.md): every instrument, what it was validated on, and whether it may steer, gate or only report
 - [MEASURED-RULES](docs/MEASURED-RULES.md), [FORMATS](docs/FORMATS.md) and [TASTE](docs/TASTE.md): the counted checks, the formats, and the reader for everything else
