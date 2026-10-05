@@ -65,7 +65,12 @@ export interface ScopeProfile {
   readonly lengths: Readonly<Partial<Record<Asked, { readonly lo: number; readonly hi: number; readonly n: number }>>>;
   /** findings the reader offered that code dropped (a quote not in the answer, an unknown kind, an example that does not exist) */
   readonly dropped: number;
+  /** examples the reader returned nothing for. Past MAX_UNREAD of them, no frequency is stated for any kind */
+  readonly unread?: number;
 }
+
+/** More than this share of the examples unread, and what was read is not the corpus: no habit is stated from it. */
+export const MAX_UNREAD = 0.2;
 
 export const SCOPE_SYSTEM = `You read examples of how one person answers requests, to describe how much they write for what was asked. Each example is numbered. Some come with the request they answer; some are the answer alone.
 
@@ -125,15 +130,19 @@ export function groundScope(examples: readonly ScopeExample[], raw: readonly Raw
       k.examples.add(i); kinds.set(kind, k);
     }
   }
-  // A kind is reported over the examples it could be read on: every example the reader answered for, or only the paired ones.
-  const readOn = (kind: BeyondKind): number => [...seen].filter((i) => !NEEDS_REQUEST.has(kind) || examples[i].request !== null).length;
-  const beyond = raw === null ? [] : BEYOND_KINDS.filter((k) => readOn(k) > 0).map((kind) => ({ kind, count: kinds.get(kind)?.examples.size ?? 0, of: readOn(kind), quote: kinds.get(kind)?.quote ?? null }));
+  // A KIND IS COUNTED OVER EVERY EXAMPLE IT COULD BE READ ON, never over the ones the reader happened to answer for:
+  // a reader that returned two of twelve examples printed "never (0 of 2)", a habit of the corpus read on two pieces.
+  // An example the reader did not return is unread; with more than one in five unread, no frequency is stated at all.
+  const unread = raw === null ? 0 : examples.length - seen.size;
+  const readable = (kind: BeyondKind): number => examples.filter((e) => !NEEDS_REQUEST.has(kind) || e.request !== null).length;
+  const complete = raw !== null && examples.length > 0 && unread / examples.length <= MAX_UNREAD;
+  const beyond = !complete ? [] : BEYOND_KINDS.filter((k) => readable(k) > 0).map((kind) => ({ kind, count: kinds.get(kind)?.examples.size ?? 0, of: readable(kind), quote: kinds.get(kind)?.quote ?? null }));
   const lengths: Partial<Record<Asked, { lo: number; hi: number; n: number }>> = {};
   for (const a of ['DETAIL', 'BRIEF', 'NEITHER'] as const) {
     const xs = [...asked].filter(([, v]) => v === a).map(([i]) => proseWords(examples[i].text)).filter((n) => n > 0);
     if (xs.length >= MIN_PER_KIND) lengths[a] = { ...span(xs), n: xs.length };
   }
-  return { version: 1, reader, examples: examples.length, paired, beyond, lengths, dropped };
+  return { version: 1, reader, examples: examples.length, paired, beyond, lengths, dropped, ...(unread ? { unread } : {}) };
 }
 
 /** Read the examples once: one call, metered on `budget`. A failure is the caller's to catch; counts alone still make a profile. */
@@ -170,6 +179,7 @@ export function describeScope(p: ScopeProfile): string {
     : p.paired === 0
       ? 'My examples came without the requests they answer, so their length shows how small those requests were, not how long I write. No length is learned from them.'
       : `Only ${p.paired} of my ${p.examples} examples came with their request: too few of any one kind to say how long I write for it.`);
+  if (!p.beyond.length && (p.unread ?? 0) > 0) lines.push('', `What I add beyond what was asked could not be counted: ${p.unread} of my ${p.examples} examples could not be read, and a habit is not stated from the rest.`);
   if (p.beyond.length) {
     lines.push('', 'What I add beyond what was asked, counted over my examples. This holds at any length:');
     for (const b of p.beyond) lines.push(`- ${BEYOND_LABEL[b.kind]}: ${often(b.count, b.of)} (${b.count} of ${b.of})${b.quote && b.count > 0 ? `, e.g. "${b.quote}"` : ''}`);

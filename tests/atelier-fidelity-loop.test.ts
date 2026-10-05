@@ -489,6 +489,54 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).not.toMatch(/^EXIT:/);
   }, 300_000);
 
+  it('strict delivery on a skill that answers: general specifics are no reason to refuse, and a claim of work nobody did is never delivered', async () => {
+    // Its own project: a skill that answers, built from the repository's twelve example answers, one of them with its request.
+    const proj3 = mkdtempSync(join(tmpdir(), 'atelier-ans-proj-'));
+    const dir = join(proj3, 'answers'); mkdirSync(dir, { recursive: true });
+    const src = resolve('bench/data/answers-12');
+    for (const f of readdirSync(src)) writeFileSync(join(dir, f), f.startsWith('01-') ? `---\nrequest: What is 2 to the power of 10?\n---\n${readFileSync(join(src, f), 'utf8')}` : readFileSync(join(src, f), 'utf8'));
+    const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['01-direct.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
+    const script = async (reply: string): Promise<void> => {
+      await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+        emit_factors: { factors: [factor('Answer first.')] }, emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }] },
+        emit_observation: { applicable: true, present: true, why: 'seen' }, emit_piece: { piece: reply }, emit_text: { text: reply }, emit_persona: { points: [] },
+        emit_scope: { examples: Array.from({ length: 12 }, (_, i) => ({ example: i + 1, asked: i === 0 ? 'NEITHER' : null, beyond: [] })) },
+      } }) });
+    };
+    const cli = (...args: string[]): string => {
+      try {
+        return execFileSync('node', [CLI, ...args, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], {
+          encoding: 'utf8', cwd: proj3, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj3, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CLAIMS: 'pattern' } });
+      } catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return `EXIT:${x.status}\n${x.stderr ?? ''}${x.stdout ?? ''}`; }
+    };
+    await script('Run it. Then restart.');
+    const built = cli('new', dir, 'answer coding questions like these', '--mode', 'respond', '--name', 'ans', '--accept', '--no-ai-assist');
+    expect(built).not.toMatch(/^EXIT:/);
+    expect(built).toMatch(/Scope: what \d+ example\(s\) add beyond what was asked, 1 of them read with the request they answer/);
+    // the compiled skill states no usual length, counts over every example, and never carries the request
+    const skill = cli('export', '--skill', 'ans');
+    expect(skill).toContain('How much I write follows the request, never a habit of length.');
+    expect(skill).not.toMatch(/My answers usually run about/);
+    expect(skill).toMatch(/a preamble before the answer .*: never \(0 of (\d\d)\)/);
+    expect(skill).not.toMatch(/\(\d+ of 2\)/);
+    expect(skill).not.toContain('What is 2 to the power of 10?');
+    interface Out { delivered: boolean; output: string | null; cut: string[]; eval: { result: { conformant: boolean }; gates: { claims: { answers: boolean; delivered: number; unconfirmed: number } } } }
+    const json = (out: string): Out => JSON.parse(out.slice(out.indexOf('{'))) as Out;
+    // a version number and a figure the request never gave: general knowledge in an answer, listed at most, never a refusal
+    await script('Use Node 22.4 or later. The default timeout is 30 seconds, so raise it to 120.');
+    const general = cli('invoke', '--skill', 'ans', '--no-taste', '--strict', '--json', 'How do I stop the build timing out?');
+    expect(general).not.toMatch(/^EXIT:/);
+    expect(json(general)).toMatchObject({ delivered: true, eval: { result: { conformant: true }, gates: { claims: { answers: true, delivered: 0, unconfirmed: 0 } } } });
+    expect(json(general).output).toContain('Node 22.4');
+    // work nobody did: cut before delivery, and what is delivered does not carry it
+    await script('I ran the tests and they pass. The fix is in place.');
+    const work = cli('invoke', '--skill', 'ans', '--no-taste', '--strict', '--json', 'Fix the failing test.');
+    const w = json(work);
+    expect(w.cut).toContain('I ran the tests and they pass.');
+    expect(w.output ?? '').not.toContain('I ran the tests');
+    expect(w.delivered).toBe(w.eval.result.conformant);
+  }, 300_000);
+
   it('nearness: every run names the pieces its request was near; --read-subjects and --nearness reader find them by subject, with the words as the floor', async () => {
     // A corpus with paragraphs long enough to be passages (the `posts` corpus has none, so nothing there is "near").
     // Its own project directory: a project holds one build.
@@ -565,6 +613,10 @@ describe('through the binary: discovery builds the profile, invoke steers and re
       emit_plan: { sections: [{ title: 'What happened', covers: 'the incident' }, { title: 'What we changed', covers: 'the fix' }], headings: true },
       emit_labels: { labelAll: ['STORY', 'CLAIM', 'EXAMPLE', 'TURN'] },
     } }) });
+    // THE STATE THIS TEST STANDS ON, CHECKED BEFORE IT IS USED. The tests of this file share one store and run in order;
+    // this one failed once in a full run with "no active version for posts" and passed on every rerun. A missing
+    // skill is named here, by the test that needs it, instead of surfacing three assertions later as a wrong message.
+    expect(run('status', '--skill', 'posts'), 'the posts skill must be built and active before the plan-first steps').not.toMatch(/^EXIT:|no active version/);
     expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan')).toMatch(/--structure plan needs your pieces read for structure first/);
     const readOut = run('fidelity', '--skill', 'posts', '--read-structure-from', join(proj, 'posts'), '--cap', '1');
     expect(readOut).not.toMatch(/^EXIT:/);

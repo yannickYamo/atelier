@@ -5,7 +5,7 @@
 //   node bench/compare/run.mjs --tasks splits/test.jsonl --arm skill:path/to/SKILL.md --out out/hand.jsonl
 //   node bench/compare/run.mjs --tasks splits/test.jsonl --arm atelier-runtime:<build> --runtimes runtimes.json --out out/rt.jsonl
 //
-// Options: --model <id> (default claude-opus-4-8, or BENCH_MODEL) · --max-tokens <n> (default 4096) ·
+// Options: --model <id> (default claude-opus-5, or BENCH_MODEL; it must have a price, or the cap cannot hold) · --max-tokens <n> (default 4096) ·
 // --trials <n> (1) · --condition baseline|candidate|comparator (none → baseline, other arms → candidate) ·
 // --placement system|harness · --sealed splits/SEALED.json · --cap <usd> (25) ·
 // --provider anthropic|openai-compatible --base-url <url> (the second for a local or scripted backend).
@@ -42,7 +42,7 @@ const RUNNER = 'atelier-compare';
 const args = process.argv.slice(2);
 const tasksPath = opt(args, 'tasks'); const arm = opt(args, 'arm'); const out = opt(args, 'out');
 if (!tasksPath || !arm || !out) die('usage: run.mjs --tasks <file> --arm none|skill:<file>|atelier-runtime:<build> --out <responses.jsonl> [--model <id>] [--max-tokens <n>]');
-const model = opt(args, 'model', process.env.BENCH_MODEL ?? 'claude-opus-4-8');
+const model = opt(args, 'model', process.env.BENCH_MODEL ?? 'claude-opus-5');
 const maxTokens = Number(opt(args, 'max-tokens', '4096'));
 const trials = Number(opt(args, 'trials', '1'));
 const cap = Number(opt(args, 'cap', '25'));
@@ -95,14 +95,30 @@ const harnessPrompt = (task, instructions) => 'Follow the response-style skill b
 
 const ANSWER_SCHEMA = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false };
 
+// A CAP THAT CANNOT SEE COST IS NOT A CAP. A model with no known price returned a null cost, the loop added 0, and
+// `--cap` never bound. So a price is required before the first call: the pricing table's for an Anthropic model,
+// `--price-in` and `--price-out` (dollars per million tokens) for any other backend. Refused here, nothing spent.
 async function client() {
   if (provider === 'anthropic') {
     const { AnthropicInferenceClient } = await import('../../dist/providers/anthropic.js');
-    return new AnthropicInferenceClient(model);
+    const { ANTHROPIC_PRICING, priceFor } = await import('../../dist/providers/pricing.js');
+    const price = priceFor(ANTHROPIC_PRICING, model);
+    if (!price) die(`no price is known for "${model}", so the cap could not hold. Use a model in providers/pricing.ts. Nothing was spent.`);
+    return new AnthropicInferenceClient(model, undefined, price);
   }
   const baseUrl = opt(args, 'base-url') ?? die('--provider openai-compatible needs --base-url');
+  const priceIn = Number(opt(args, 'price-in', 'NaN')); const priceOut = Number(opt(args, 'price-out', 'NaN'));
+  if (!(priceIn >= 0) || !(priceOut >= 0)) die('--provider openai-compatible needs --price-in and --price-out (dollars per million tokens), so the cap can hold. Nothing was spent.');
   const { OpenAICompatibleInferenceClient } = await import('../../dist/providers/openai-compatible.js');
-  return new OpenAICompatibleInferenceClient({ modelId: model, baseUrl, apiKey: process.env.OPENAI_API_KEY, strictSchema: false });
+  return new OpenAICompatibleInferenceClient({ modelId: model, baseUrl, apiKey: process.env.OPENAI_API_KEY, strictSchema: false, pricing: { inputPerM: priceIn, outputPerM: priceOut } });
+}
+// A runtime arm passes its own model to `atelier invoke`; an Anthropic one without a price is refused the same way.
+async function checkRuntimePrice(spec) {
+  const a = spec.args ?? []; const at = a.indexOf('--model'); const prov = a.indexOf('--provider');
+  const runtimeModel = at >= 0 ? a[at + 1] : model;
+  if (prov >= 0 && a[prov + 1] !== 'anthropic') return;
+  const { ANTHROPIC_PRICING, priceFor } = await import('../../dist/providers/pricing.js');
+  if (!priceFor(ANTHROPIC_PRICING, runtimeModel)) die(`no price is known for the runtime arm's model "${runtimeModel}", so the cap could not hold. Nothing was spent.`);
 }
 
 async function modelArm(c, t) {
@@ -122,6 +138,7 @@ if (kind === 'atelier-runtime') {
   if (!file) die('atelier-runtime needs --runtimes <file> (or RUNTIMES_FILE): {"<build>": {"cli": …, "data": …, "proj": …, "skill": …}}');
   runtimeSpec = JSON.parse(readFileSync(file, 'utf8'))[armArg] ?? die(`no build called ${armArg} in ${file}`);
   for (const k of ['cli', 'data', 'proj', 'skill']) if (!runtimeSpec[k]) die(`runtime ${armArg} has no "${k}"`);
+  await checkRuntimePrice(runtimeSpec);
 }
 
 function runtimeArm(t) {
@@ -141,20 +158,27 @@ function runtimeArm(t) {
 const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`) : []);
 const prior = existsSync(out) ? readJsonl(out).filter((r) => r.condition === condition) : [];
 let spent = prior.reduce((n, r) => n + (r.cost_usd ?? 0), 0);
+let perCall = Math.max(Number(opt(args, 'per-call', '0.25')), ...prior.map((r) => r.cost_usd ?? 0));
 mkdirSync(dirname(resolve(out)), { recursive: true });
 const c = kind === 'atelier-runtime' ? null : await client();
 
 for (let trial = 1; trial <= trials; trial++) {
   for (const t of tasks) {
     if (done.has(`${t.id}\u0000${trial}\u0000${condition}\u0000${RUNNER}`)) { console.error(`skip ${t.id} trial ${trial} (done)`); continue; }
-    if (spent >= cap) { console.error(`stopped: $${spent.toFixed(4)} reached the --cap of $${cap}. Rerun with a higher cap to continue.`); process.exit(3); }
+    // BEFORE THE CALL, with room for it: the dearest call seen so far (or --per-call), so the cap is never passed by a whole call.
+    if (spent + perCall > cap) { console.error(`stopped: $${spent.toFixed(4)} spent, and one more call (about $${perCall.toFixed(4)}) would pass the --cap of $${cap}. Rerun with a higher cap to continue.`); process.exit(3); }
     let r; let last;
     for (let attempt = 0; attempt < 3 && !r; attempt++) {
       try { r = c ? await modelArm(c, t) : runtimeArm(t); } catch (e) { last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`); }
     }
     if (!r) die(`${t.id} failed three times: ${last?.message}`);
     if (!r.response) die(`${t.id}: the arm returned an empty answer, and an empty answer judged would read as a result`);
-    spent += r.cost ?? 0;
+    // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
+    if (typeof r.cost !== 'number') {
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split })}\n`);
+      console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
+    }
+    spent += r.cost; perCall = Math.max(perCall, r.cost);
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: r.cost, model,
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
       skill_sha256: skillSha, tasks_sha256: tasksSha, split };

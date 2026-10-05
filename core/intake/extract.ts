@@ -97,9 +97,49 @@ export function splitRequest(raw: string): { text: string; request: string | nul
       }
     }
   }
-  const h = /^\s*#{1,3}\s*(?:request|question|prompt)\s*:?\s*\r?\n([\s\S]*?)\r?\n#{1,3}\s*(?:answer|response|reply)\s*:?\s*\r?\n([\s\S]*)$/i.exec(body);
-  if (h?.[1].trim() && h[2].trim()) return { text: h[2].replace(/^\s*\n/, ''), request: h[1].trim() };
+  // THREE LABEL LAYOUTS, EACH ONLY WHEN THE FILE BEGINS WITH THE REQUEST LABEL. Headings (`## Request` / `## Answer`),
+  // bold labels (`**Request:**` / `**Answer:**`) and `Q:` / `A:`. The answer label must start a line outside a code
+  // fence: an answer that shows "## Answer" inside a fenced block is not split there. A label further down the file
+  // (an FAQ in a post, a "question" in prose) never splits anything: such a file is the author's writing, whole.
+  const ASK = '(?:request|question|prompt)'; const REPLY = '(?:answer|response|reply)';
+  const layouts: readonly [RegExp, RegExp][] = [
+    [new RegExp(`^\\s*#{1,3}\\s*${ASK}\\s*:?\\s*$`, 'i'), new RegExp(`^#{1,3}\\s*${REPLY}\\s*:?\\s*$`, 'i')],
+    [new RegExp(`^\\s*\\*\\*${ASK}\\s*:?\\*\\*\\s*:?`, 'i'), new RegExp(`^\\*\\*${REPLY}\\s*:?\\*\\*\\s*:?`, 'i')],
+    [/^\s*Q\s*:/, /^A\s*:/],
+  ];
+  const lines = body.split(/\r?\n/);
+  const first = lines.findIndex((l) => l.trim() !== '');
+  for (const [ask, reply] of layouts) {
+    if (first < 0 || !ask.test(lines[first])) continue;
+    let fenced = false; let at = -1;
+    for (let i = first + 1; i < lines.length; i++) {
+      if (/^\s*(?:```|~~~)/.test(lines[i])) { fenced = !fenced; continue; }
+      if (!fenced && reply.test(lines[i])) { at = i; break; }
+    }
+    if (at < 0) continue;
+    const request = [lines[first].replace(ask, ''), ...lines.slice(first + 1, at)].join('\n').trim();
+    const answer = [lines[at].replace(reply, ''), ...lines.slice(at + 1)].join('\n').replace(/^\s*\n/, '').replace(/^[ \t]+/, '');
+    if (request && answer.trim()) return { text: answer, request };
+  }
   return { text: raw, request: null };
+}
+
+/**
+ * A FILE THAT LOOKS LIKE A REQUEST AND AN ANSWER AND WAS READ WHOLE. Text before the request label, or a label
+ * layout `splitRequest` does not know, leaves the asker's words in the author's text with nothing said. This is the
+ * test for saying it: a line that starts with a request label, in a file that was not split. Never a reason to
+ * guess: the file stays whole, and the build names it.
+ */
+export function looksLikeUnsplitPair(raw: string): boolean {
+  if (splitRequest(raw).request !== null) return false;
+  let fenced = false; let ask = false; let reply = false;
+  for (const l of raw.split(/\r?\n/)) {
+    if (/^\s*(?:```|~~~)/.test(l)) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    if (/^\s*(?:#{1,6}\s*|\*\*)?(?:request|question|prompt)\s*:?(?:\*\*)?\s*:?\s*$/i.test(l) || /^\s*(?:\*\*)?(?:request|question|prompt|Q)\s*:/i.test(l)) ask = true;
+    else if (ask && (/^\s*(?:#{1,6}\s*|\*\*)?(?:answer|response|reply)\s*:?(?:\*\*)?\s*:?\s*$/i.test(l) || /^\s*(?:\*\*)?(?:answer|response|reply|A)\s*:/i.test(l))) reply = true;
+  }
+  return ask && reply;
 }
 
 export function extract(path: string): Extraction {

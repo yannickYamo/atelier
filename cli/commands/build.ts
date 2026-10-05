@@ -8,7 +8,7 @@ import type { StoredSignal } from '../../core/observers/selection.js';
 import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
-import { sessionCorpus, sessionPairs } from '../corpus.js';
+import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
 import { deriveScope, groundScope, type ScopeProfile } from '../../core/compiler/scope.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
@@ -93,13 +93,17 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // never the build: the profile is then counts alone, and states no habit nobody read.
   if (isReplyWork(v.workType) && (!voice.scope || personaFlag === 'auto')) {
     const pairs = sessionPairs();
+    // Said once, by name: such a file's request was learned as the author's writing by every reading before this one.
+    const whole = unsplitPairs(loadSession().source ?? '');
+    if (whole.length) console.log(`(${whole.length} file(s) look like a request and an answer, but were read whole: ${whole.slice(0, 5).join(', ')}${whole.length > 5 ? ', …' : ''}. Start the file with front matter \`request:\`, or \`## Request\` then \`## Answer\`, and build again.)`);
     if (pairs.length >= 3) {
       const scopeBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
       let scope: ScopeProfile;
       try {
         scope = await onCorpusReader((c) => deriveScope(c, scopeBudget, pairs, proposerModel()));
         console.log(`Scope: what ${scope.examples} example(s) add beyond what was asked, ${scope.paired} of them read with the request they answer`
-          + `${scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
+          + (scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : '')
+          + `${scope.unread ? ` (${scope.unread} example(s) not read${scope.beyond.length ? '' : ': too many to state a habit from the rest'})` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
       } catch (e) {
         scope = groundScope(pairs, null, null);
         console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);

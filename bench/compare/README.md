@@ -91,11 +91,11 @@ Writer model, max tokens and the endpoints, once:
 ```bash
 npm install && npm run build
 export ANTHROPIC_API_KEY=...                       # run.mjs's model arms and the runtime arm
-export BENCH_MODEL=claude-opus-4-8                 # or --model on each run.mjs
+export BENCH_MODEL=claude-opus-5                   # or --model on each run.mjs; it must have a price (providers/pricing.ts)
 # GEPA and SkillOpt reach their models through an OpenAI-compatible endpoint. The task model must be the
 # same writer, at the same max tokens (Anthropic's OpenAI-compatible endpoint serves it):
 export OPENAI_COMPATIBLE_BASE_URL=https://api.anthropic.com/v1 OPENAI_COMPATIBLE_API_KEY=$ANTHROPIC_API_KEY
-export TASK_MODEL=claude-opus-4-8 REFLECTION_MODEL=<reflection model> JUDGE_MODEL=<judge model>
+export TASK_MODEL=claude-opus-5 REFLECTION_MODEL=<reflection model> JUDGE_MODEL=<judge model>
 ```
 
 The four fixed arms on the sealed test split (one file per arm, or one file with `--condition` set per arm
@@ -146,7 +146,7 @@ export OPTIMIZER_OPENAI_COMPATIBLE_BASE_URL=$OPENAI_COMPATIBLE_BASE_URL OPTIMIZE
 export TARGET_OPENAI_COMPATIBLE_BASE_URL=$OPENAI_COMPATIBLE_BASE_URL TARGET_OPENAI_COMPATIBLE_API_KEY=$OPENAI_COMPATIBLE_API_KEY
 cd SkillOpt
 python scripts/train.py --config configs/atelier_compare/default.yaml --cfg-options \
-  model.optimizer=<reflection model> model.target=claude-opus-4-8 env.max_completion_tokens=4096 \
+  model.optimizer=<reflection model> model.target=claude-opus-5 env.max_completion_tokens=4096 \
   env.split_dir=$PWD/../work/skillopt-split env.sealed_file=$PWD/../work/splits/SEALED.json \
   env.skill_init=$PWD/../i-have-adhd/skills/i-have-adhd/SKILL.md \
   env.evaluator=ihaveadhd env.ihaveadhd_dir=$PWD/../i-have-adhd \

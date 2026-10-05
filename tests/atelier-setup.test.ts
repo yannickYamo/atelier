@@ -2,6 +2,7 @@
 //
 // `atelier setup` writes into config files that belong to other tools, some of them in the person's home.
 // So each promise is tried both ways: what it adds, and what it must leave alone.
+import { version } from '../cli/help.js';
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -14,13 +15,13 @@ const INSTALLED = { command: 'atelier', args: ['mcp'] };
 describe('the entry it writes', () => {
   it('starts the installed binary when there is one, and npx when there is not', () => {
     const bin = mkdtempSync(join(tmpdir(), 'atelier-setup-bin-'));
-    expect(launchFor(bin)).toEqual({ command: 'npx', args: ['-y', PACKAGE, 'mcp'] });
+    expect(launchFor(bin)).toEqual({ command: 'npx', args: ['-y', `${PACKAGE}@${version()}`, 'mcp'] });
     writeFileSync(join(bin, 'atelier'), '');
     expect(launchFor(bin)).toEqual(INSTALLED);
     // npx's scratch install puts the binary on PATH only while the command runs: it does not count.
     const npx = join(mkdtempSync(join(tmpdir(), 'atelier-setup-npx-')), '_npx', 'abc', 'node_modules', '.bin');
     mkdirSync(npx, { recursive: true }); writeFileSync(join(npx, 'atelier'), '');
-    expect(launchFor(npx)).toEqual({ command: 'npx', args: ['-y', PACKAGE, 'mcp'] });
+    expect(launchFor(npx)).toEqual({ command: 'npx', args: ['-y', `${PACKAGE}@${version()}`, 'mcp'] });
     expect(PACKAGE).toBe((JSON.parse(readFileSync('package.json', 'utf8')) as { name: string }).name);
   });
   it('is added beside the servers and keys already there', () => {
@@ -42,6 +43,11 @@ describe('the entry it writes', () => {
     expect(out.text.startsWith(before)).toBe(true);
     expect(out.text).toContain('[mcp_servers.atelier]\ncommand = "atelier"\nargs = ["mcp"]\n');
     expect(withTomlServer(out.text, INSTALLED)).toEqual({ kind: 'present' });
+    // the header in any spelling TOML allows is the same table: appending a second one would break the whole file
+    for (const header of ['[mcp_servers.atelier] # mine', '[mcp_servers."atelier"]', '[ mcp_servers . atelier ]', "  [mcp_servers.'atelier']   # x"]) {
+      expect(withTomlServer(`${header}\ncommand = "atelier"\n`, INSTALLED), header).toEqual({ kind: 'present' });
+    }
+    expect((withTomlServer('[mcp_servers.atelier_old]\ncommand = "x"\n', INSTALLED) as { kind: string }).kind).toBe('added');
   });
 });
 

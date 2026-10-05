@@ -24,6 +24,11 @@ const CACHE = join(OUT, 'cache.json');
 const cache = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, 'utf8')) : {};
 const save = () => writeFileSync(CACHE, JSON.stringify(cache, null, 1));
 const flat = (s) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+// OMISSIONS A PERSON REJECTED (`--rejected <file>`, one task id a line): a rewrite that kept the part it was told to
+// remove is not an omission, and scoring it would count the writer's failure as the reader's miss. The run writes
+// omissions-for-review.md; sensitivity is read only once a person has been through it (`--rejected` or `--reviewed`).
+const REJECTED = new Set(arg('--rejected') && existsSync(arg('--rejected')) ? readFileSync(arg('--rejected'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []);
+const REVIEWED = REJECTED.size > 0 || process.argv.includes('--reviewed');
 for (const t of TASKS) for (const p of t.parts) if (!flat(t.request).includes(flat(p))) fail(`${t.id}: the part "${p}" is not the request's own words.`);
 const SCHEMA = { type: 'object', properties: { reply: { type: 'string' } }, required: ['reply'], additionalProperties: false };
 async function write(key, system, user) {
@@ -47,16 +52,18 @@ for (const t of TASKS) {
   const om = await write(`omit|${t.id}`, `Here is a reply to a request. Write it again with everything about ONE part of the request removed: "${part}". Keep every other part as it is, and do not mention that anything was left out.`, `<request>\n${t.request}\n</request>\n\n<reply>\n${full.reply}\n</reply>`);
   if (!om.reply) { rows.push({ id: t.id, kind: 'omitted', part, failed: om.failed ?? 'no reply' }); continue; }
   const cOm = await judge.covers(t.request, om.reply);
-  rows.push({ id: t.id, kind: 'omitted', part, read: cOm ? verdictFor(cOm, part) : 'unread', text: om.reply });
+  rows.push({ id: t.id, kind: 'omitted', part, read: cOm ? verdictFor(cOm, part) : 'unread', text: om.reply, full: full.reply, request: t.request, ...(REJECTED.has(t.id) ? { rejected: true } : {}) });
 }
 const rate = (k, n) => { const c = clopperPearson(k, n); return { k, n, share: n ? Math.round((k / n) * 1000) / 1000 : null, ci95: [Math.round(c.lo * 1000) / 1000, Math.round(c.hi * 1000) / 1000] }; };
-const om = rows.filter((r) => r.kind === 'omitted' && !r.failed); const fu = rows.filter((r) => r.kind === 'full');
+const allOm = rows.filter((r) => r.kind === 'omitted' && !r.failed); const om = allOm.filter((r) => !r.rejected); const fu = rows.filter((r) => r.kind === 'full');
 // MISSING means read as not given (false). Unlisted, unclear and unread are not "missing": they count against sensitivity.
-const m = { omitted: om.length, fullParts: fu.length, unread: rows.filter((r) => r.read === 'unread').length,
+const m = { omitted: om.length, rejectedOmissions: allOm.length - om.length, reviewed: REVIEWED, fullParts: fu.length, unread: rows.filter((r) => r.read === 'unread').length,
   sensitivity: rate(om.filter((r) => r.read === false).length, om.length), falseAlarm: rate(fu.filter((r) => r.read === false).length, fu.length) };
 const num = (x) => typeof x === 'number' && Number.isFinite(x);
 const bars = { sensitivity: num(m.sensitivity.share) && m.sensitivity.share >= 0.85 && m.sensitivity.ci95[0] >= 0.75, falseAlarm: num(m.falseAlarm.share) && m.falseAlarm.share <= 0.1, enough: om.length >= 40,
   complete: rows.length > 0 && (m.unread + rows.filter((r) => r.failed).length) / rows.length <= 0.05 };
-const result = { measures: m, bars, verdict: !bars.complete || !bars.enough ? 'UNRESOLVED' : bars.sensitivity && bars.falseAlarm ? 'PASS' : 'FAIL', spentUsd: Math.round(budget.spentUsd * 1000) / 1000, rows };
+writeFileSync(join(OUT, 'omissions-for-review.md'), `# Omissions to confirm\n\nFor each, check that the omitted reply really no longer gives the named part. List the task ids where it still does in a file, one a line, and run again with --rejected <file> (or --reviewed when none is rejected).\n\n${allOm.map((r) => `## ${r.id}\n\nRequest: ${r.request}\n\nPart removed: ${r.part}\n\n### Full reply\n\n${r.full}\n\n### Omitted reply\n\n${r.text}\n`).join('\n---\n\n')}`);
+// Until a person has confirmed the omissions the verdict is UNRESOLVED, whatever the numbers say.
+const result = { measures: m, bars, verdict: !REVIEWED || !bars.complete || !bars.enough ? 'UNRESOLVED' : bars.sensitivity && bars.falseAlarm ? 'PASS' : 'FAIL', spentUsd: Math.round(budget.spentUsd * 1000) / 1000, rows };
 writeFileSync(join(OUT, 'coverage-reader.json'), JSON.stringify(result, null, 1));
 console.log(JSON.stringify({ measures: m, bars, verdict: result.verdict, spentUsd: result.spentUsd }, null, 1));

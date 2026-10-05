@@ -12,7 +12,7 @@ The 14 cases, rubric and blind judge of [ayghri/i-have-adhd](https://github.com/
 git clone https://github.com/ayghri/i-have-adhd && git -C i-have-adhd checkout 839872f9d1cd634fed642b4589ce7226199cc15f
 ```
 
-Every arm answers with the same model (`claude-opus-4-8`), through one runner (`runners/arms.py`), so each
+Every arm answers with the same model (`claude-opus-5` by default: a model with a known price, so the cap holds; the recorded 0.7.0 runs used `claude-opus-4-8`), through one runner (`runners/arms.py`), so each
 results file has one runner as the harness requires:
 
 | arm | what answers | how the runner is told |

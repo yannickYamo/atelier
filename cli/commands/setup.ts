@@ -18,6 +18,7 @@
 //   VS Code       <project>/.vscode/mcp.json     { "servers": { … } }
 //   Codex         ~/.codex/config.toml           [mcp_servers.<name>]
 
+import { version } from '../help.js';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -66,7 +67,10 @@ export function launchFor(pathEnv: string | undefined): Launch {
   const transient = (d: string): boolean => /[\\/]_npx[\\/]/.test(d) || /[\\/]node_modules[\\/]\.bin[\\/]?$/.test(d);
   const onPath = (pathEnv ?? '').split(delimiter).filter((d) => d && !transient(d))
     .some((d) => ['atelier', 'atelier.cmd'].some((b) => existsSync(join(d, b))));
-  return onPath ? { command: 'atelier', args: ['mcp'] } : { command: 'npx', args: ['-y', PACKAGE, 'mcp'] };
+  // PINNED TO THE VERSION THAT WROTE THE CONFIG. An unpinned `npx -y <package>` starts whatever is newest on the day
+  // the agent launches it, so a config written under one version would run another without anyone choosing that.
+  const v = version();
+  return onPath ? { command: 'atelier', args: ['mcp'] } : { command: 'npx', args: ['-y', /^\d+\.\d+\.\d+/.test(v) ? `${PACKAGE}@${v}` : PACKAGE, 'mcp'] };
 }
 
 export type Outcome =
@@ -93,7 +97,10 @@ export function withJsonServer(existing: string | null, key: 'mcpServers' | 'ser
 /** A TOML config with the server's table appended; the rest of the file is kept byte for byte. */
 export function withTomlServer(existing: string | null, launch: Launch): Outcome {
   const text = existing ?? '';
-  if (/^\s*\[mcp_servers\.atelier\]\s*$/m.test(text)) return { kind: 'present' };
+  // The table's header in any spelling TOML allows: a trailing comment, a quoted key, spaces inside the brackets.
+  // The bare-header test missed `[mcp_servers.atelier] # mine` and `[mcp_servers."atelier"]`, appended a second
+  // table, and a duplicate table is a parse error that takes the whole config down.
+  if (/^\s*\[\s*mcp_servers\s*\.\s*(?:atelier|"atelier"|'atelier')\s*\]\s*(?:#.*)?$/m.test(text)) return { kind: 'present' };
   const block = `[mcp_servers.atelier]\ncommand = ${JSON.stringify(launch.command)}\nargs = [${launch.args.map((a) => JSON.stringify(a)).join(', ')}]\n`;
   return { kind: 'added', text: `${text}${text && !text.endsWith('\n') ? '\n' : ''}${text.trim() ? '\n' : ''}${block}` };
 }

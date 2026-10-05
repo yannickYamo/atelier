@@ -93,7 +93,9 @@ const rate = (k, n) => { const ci = clopperPearson(k, n); return { k, n, share: 
 
 const pairs = [...BANK.pairs].sort((a, b) => h(`${SEED}|${a.id}`).localeCompare(h(`${SEED}|${b.id}`)));
 const rows = { clean: [], planted: [] };
-for (const p of pairs) rows.clean.push({ id: p.id, ...(await read(p.neutral, p.author)) });
+// A CLEAN PAIR A PERSON DISPUTED (`<pair id>|CLEAN` in --rejected): its plain side truly differs in a claim from the
+// author's, so a gate that refuses it is right. Such a pair is reported apart and never counted against specificity.
+for (const p of pairs) rows.clean.push({ id: p.id, plain: p.neutral, author: p.author, ...(REJECTED.has(`${p.id}|CLEAN`) ? { disputed: true } : {}), ...(await read(p.neutral, p.author)) });
 for (const p of pairs.slice(0, PLANTED_PARAGRAPHS)) {
   for (const kind of Object.keys(KINDS)) {
     const pl = await plant(p, kind);
@@ -104,10 +106,11 @@ for (const p of pairs.slice(0, PLANTED_PARAGRAPHS)) {
 }
 const live = rows.planted.filter((r) => !r.discarded);
 const by = (f) => ({ overall: rate(live.filter(f).length, live.length), ...Object.fromEntries(Object.keys(KINDS).map((k) => { const xs = live.filter((r) => r.kind === k); return [k, rate(xs.filter(f).length, xs.length)]; })) });
-const m = { planted: live.length, discarded: rows.planted.length - live.length, clean: rows.clean.length, unread: [...rows.clean, ...live].filter((r) => r.reader === 'unread').length,
+const cleanOk = rows.clean.filter((r) => !r.disputed);
+const m = { planted: live.length, discarded: rows.planted.length - live.length, clean: cleanOk.length, disputedClean: rows.clean.length - cleanOk.length, unread: [...rows.clean, ...live].filter((r) => r.reader === 'unread').length,
   sensitivity: { lists: by(refusedByLists), listsAndReader: by(refusedByBoth), ledgerAndReader: by(refusedByLedgerAndReader) },
   specificity: Object.fromEntries([['lists', refusedByLists], ['listsAndReader', refusedByBoth], ['ledgerAndReader', refusedByLedgerAndReader]]
-    .map(([name, f]) => [name, rate(rows.clean.filter((r) => !f(r)).length, rows.clean.length)])) };
+    .map(([name, f]) => [name, rate(cleanOk.filter((r) => !f(r)).length, cleanOk.length)])) };
 // THE BARS, AS SEALED, read on each gate. A gate passes when it holds all four.
 const barsOf = (name) => { const s = m.sensitivity[name]; return { sensitivity: s.overall.share >= 0.9 && s.overall.ci95[0] >= 0.8,
   everyKind: Object.keys(KINDS).every((k) => s[k].n >= MIN_PER_KIND && s[k].share >= 0.75), specificity: m.specificity[name].share >= 0.6,
@@ -117,5 +120,5 @@ const passes = (name) => Object.values(bars[name]).every(Boolean);
 const result = { reader: VOICE_READER_VERSION, bank: BANK.hash, measures: m, bars, verdict: Object.fromEntries(Object.keys(bars).map((n) => [n, passes(n) ? 'PASS' : 'FAIL'])), spentUsd: Math.round(budget.spentUsd * 1000) / 1000, rows };
 writeFileSync(join(OUT, 'voice-gate.json'), JSON.stringify(result, null, 1));
 // FOR THE PERSON WHO CONFIRMS THE PLANTS: each one, its declared kind, the words changed, before and after.
-writeFileSync(join(OUT, 'plants-for-review.md'), `# Plants to confirm\n\nFor each, check that the change is the kind it declares and changes what is claimed. List the ones that are not in a file, one "<pair id>|<KIND>" a line, and run again with --rejected <file> (or --reviewed when none is rejected).\n\n${live.map((r) => `## ${r.id}|${r.kind}\n\nwords: ${r.words}\n\nbefore: ${r.original}\n\nafter: ${r.text}\n`).join('\n')}`);
+writeFileSync(join(OUT, 'plants-for-review.md'), `# Plants to confirm\n\nFor each, check that the change is the kind it declares and changes what is claimed. List the ones that are not in a file, one "<pair id>|<KIND>" a line, and run again with --rejected <file> (or --reviewed when none is rejected).\n\n${live.map((r) => `## ${r.id}|${r.kind}\n\nwords: ${r.words}\n\nbefore: ${r.original}\n\nafter: ${r.text}\n`).join('\n')}\n# Clean pairs to confirm\n\nFor each, check that the plain paragraph and the author's make the same claims. No gate's verdict is shown here on purpose. List a pair that truly differs as "<pair id>|CLEAN".\n\n${rows.clean.map((r) => `## ${r.id}|CLEAN\n\nplain: ${r.plain}\n\nauthor: ${r.author}\n`).join('\n')}`);
 console.log(JSON.stringify({ measures: m, bars, verdict: result.verdict, spentUsd: result.spentUsd }, null, 1));

@@ -20,7 +20,7 @@ import re
 import subprocess
 import sys
 
-MODEL = os.environ.get("BENCH_MODEL", "claude-opus-4-8")
+MODEL = os.environ.get("BENCH_MODEL", "claude-opus-5")
 CLAUDE = ["claude", "--disable-slash-commands", "--print", "--output-format", "json", "--no-session-persistence",
           "--setting-sources", "", "--model", MODEL, "--tools", ""]
 

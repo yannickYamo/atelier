@@ -1,0 +1,14 @@
+{
+ "name": "stop-slop",
+ "source": "https://github.com/hardikpandya/stop-slop SKILL.md, section Scoring, at commit 8da1f030185bdfe8471220585162991eaeb970e9 (MIT). The dimensions and questions are copied from it; the skill itself revises a piece below 35 of 50.",
+ "scale": [1, 10],
+ "threshold": 35,
+ "weights": { "Directness": 1, "Rhythm": 1, "Trust": 1, "Authenticity": 1, "Density": 1 },
+ "dimensions": [
+  { "name": "Directness", "question": "Statements or announcements?" },
+  { "name": "Rhythm", "question": "Varied or metronomic?" },
+  { "name": "Trust", "question": "Respects reader intelligence?" },
+  { "name": "Authenticity", "question": "Sounds human?" },
+  { "name": "Density", "question": "Anything cuttable?" }
+ ]
+}
