@@ -3,7 +3,7 @@
 **For a tester who did not build Atelier.** Take `main`, your own key, your own corpora and your own readers, and find
 out whether what Atelier says holds. Report what you find at the same size whether it wins or loses.
 [Decision 0012](../docs/decisions/0012-the-closing-rules.md) is the contract: each claim is tested once, and a FAIL
-closes it.
+closes it for the 1.x line.
 
 ## Why an outside test
 
@@ -46,6 +46,7 @@ Report anything that does not behave as written. These are checks of behaviour, 
 
 | # | Study | Pre-registration | Harness | Decides |
 |---|---|---|---|---|
+| I0 | The judges of A and A-w, on planted good and bad answers | in `CLOSING_A` and `CLOSING_AW` | `bench/compare/judge-qualification.mjs` | whether a judge's scores may be read at all |
 | I1 | Subject reader and register reading against word matching | `SUBJECT_READER_PREREGISTRATION.md` | `subject-reader-qualification.mjs` | whether `nearness=reader` and the judge's register reading may be relied on |
 | I2 | Coverage reading against planted omissions | `COVERAGE_READER_PREREGISTRATION.md` | `coverage-qualification.mjs` | whether strict delivery keeps its completion draft |
 | I3 | Voice gate against planted changes | `VOICE_GATE_PREREGISTRATION.md` | `voice-gate-qualification.mjs` | which gate, if any, the voice pass may use |
@@ -53,23 +54,31 @@ Report anything that does not behave as written. These are checks of behaviour, 
 Each pre-registration is a DRAFT with its bars written. Seal it by a public commit before its first model call and
 change no line after. If you think a bar is wrong, amend it in a commit before the run and say why.
 
-For I1, add at least 20 register requests of your own, labelled before you run, and report them apart from the
-builder's 40. For I3, a person confirms every plant is the kind it declares (the harness writes
-`plants-for-review.md`; rerun with `--rejected <file>` or `--reviewed`).
+A person confirms the planted material before any bar is read: every plant and every clean pair for I3, every
+omission for I2 (each harness writes a review file and takes `--rejected <file>` or `--reviewed`). For I1, add at
+least 20 register requests of your own, labelled before you run, and report them apart from the builder's 40.
 
-## Then the three claims
+## Then the four claims
 
-| Claim | Pre-registration | What it needs from you |
-|---|---|---|
-| A. Quality on coding answers | `CLOSING_A_PREREGISTRATION.md` | 20 or more examples with their requests; 100 or more new tasks; a careful hand-written skill whose author was given the same standard; the benchmark's judge, qualified; a second judge; a person to code a sample blind |
-| B. Delivery under `--strict` | `CLOSING_B_PREREGISTRATION.md`, `harness/strict-delivery.mjs` | two skills (one writes, one answers); a pilot of 20 requests; 120 or more sealed requests; a person to audit every delivered output |
-| C. Implicit voice | `VOICE_PASS_PREREGISTRATION.md`, `harness/voice-pass.mjs` | only if I3 passed a gate: a skill with a pair bank and a declared register, the `pasted` and `atelier` outputs for the same unseen titles (`harness/indistinguishability.mjs`), five readers who never see the key |
+The bar is the owner's: **from a corpus and a prompt, a person gets a better skill than a hand-crafted one.** The
+hand-crafted skills are i-have-adhd for answers and stop-slop for writing. Each claim's analysis is a script in the
+repository; seal its sha256 with the pre-registration.
 
-Also free, if you are handed them: the five blind-read packets of the earlier indistinguishability study. Have five
-people read them and score them against the sealed key.
+| Claim | Pre-registration | Analysis | What it needs from you |
+|---|---|---|---|
+| A. Coding answers against i-have-adhd | `CLOSING_A_PREREGISTRATION.md` | `bench/compare/closing-quality.mjs` | 20 or more examples with their requests; 150 new tasks (40 with named parts, 15 that depend on files not shown); a priced writer model; the benchmark's judge, qualified; a second judge; a person to code a fifth of the answers blind |
+| A-w. Writing against stop-slop | `CLOSING_AW_PREREGISTRATION.md` | `bench/compare/closing-quality.mjs`, `bench/compare/rubric-judge.mjs` with `rubrics/stop-slop.json` | two authors with 20 or more pieces each; 30 briefs per author with their facts; five readers per author; a person to code a fifth blind |
+| B. Delivery and repeatability across domains | `CLOSING_B_PREREGISTRATION.md` | `harness/strict-delivery.mjs` | three or more skills from different kinds of work; a pilot of 20 requests per skill; 60 or more sealed requests per skill; a person to audit every delivered output |
+| C. Implicit voice | `VOICE_PASS_PREREGISTRATION.md` | `harness/voice-pass.mjs`, `harness/voice-pass-score.mjs` | only if I3 passed a gate: two authors, each with a skill, a declared register and a pair bank; 15 sealed requests each; five readers per author who never see the key |
 
-Optional, never blocking: Atelier against GEPA and SkillOpt with `bench/compare` (read its README; seal the test
-split before anything is optimized; judge all arms of a case in one session; report cost per arm).
+In A and A-w the one primary arm is the exported plug-in (`atelier export`). The strict runtime's answer quality is
+reported under B. A show endpoint must clear its bar; a guard fails only on a clear loss; which is which is written
+in each pre-registration.
+
+Also free, if you are handed them: the five blind-read packets of the earlier indistinguishability study.
+
+Optional, never blocking: Atelier against GEPA and SkillOpt with `bench/compare` (seal the test split before
+anything is optimized; judge all arms of a case in one session; report cost per arm).
 
 ## Rules
 
@@ -78,8 +87,8 @@ split before anything is optimized; judge all arms of a case in one session; rep
 - **Describe authors, never name them.** They must have agreed to this use.
 - **No model judge decides voice.** People reading blind decide; a machine reading is reported beside the author's
   own floor (`atelier fidelity --typicality` prints it), and an arm at the floor is unresolved, not passed.
-- **State each run's cap before it and stop at it.** A model with no known price is refused by the harnesses, because
-  a cap that sees $0.00 never stops.
+- **State each run's cap before it and stop at it.** A model with no known price is refused by the harnesses and by
+  `bench/compare/run.mjs`, because a cap that sees $0.00 never stops.
 - **A failed reading is counted, never skipped.**
 - **Do not change the standard, the rules or the code to make a test pass.** A bug you find is a finding: report it,
   and say which results it touches. Fix a harness, never a bar, and record the fix.
@@ -93,8 +102,10 @@ conclude from it; every harness fix and every deviation. Then one page that answ
 
 - Is the length defect gone, and did anything new break in its place?
 - Which of the five new readings may be relied on?
-- On coding answers, where do the plug-in and the strict runtime each stand against the hand-written skill?
-- Under strict delivery, was anything that broke a measured rule delivered, and how often did it refuse?
+- From examples and a prompt, is the Atelier skill better than i-have-adhd on coding answers, and than stop-slop on
+  writing: on the owner's rules, and on each hand-crafted skill's own measure?
+- Under strict delivery, in which domains was nothing that broke a measured rule delivered, how often did it not
+  deliver, and is the output more repeatable than pasted examples?
 - Did people prefer the voice pass to pasted examples?
 - What should Atelier stop claiming, keep claiming, or be allowed to start claiming?
 

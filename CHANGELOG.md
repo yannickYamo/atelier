@@ -7,6 +7,41 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Ready for the closing test
+
+Defects found by an outside review of the build, each with what it broke.
+
+- **The count under "What I add beyond what was asked" used the wrong denominator.** A habit was counted over the
+  examples the reader returned, so a reader that answered for two of twelve printed "never (0 of 2)". It is now
+  counted over every example it could be read on; an example the reader did not return is unread, and with more than
+  one in five unread no frequency is stated.
+- **Two request layouts were read as the author's text:** bold labels (`**Request:**` / `**Answer:**`) and `Q:` /
+  `A:`. Both now split when the file begins with the request label; an answer label inside a code fence never splits.
+  A file that looks like a request and an answer and is not split is named at build, and stays whole.
+- **`atelier setup` could append a second `[mcp_servers.atelier]` table** to a Codex config whose header carried a
+  comment or a quoted key, and a duplicate table breaks the file. Every spelling of the header is now recognised.
+  The `npx` launch it writes is pinned to the running version.
+- **The benchmark runner could not see cost.** Its default model had no price, a call's cost came back unknown, the
+  loop added 0, and `--cap` never bound. `bench/compare/run.mjs` now defaults to a priced model, refuses a model with
+  no price (and another backend without `--price-in` and `--price-out`) before any call, checks the cap before each
+  call with room for it, and stops on a call whose cost is unknown.
+- **The strict-delivery harness left errored runs out of its rate.** Not delivered is now counted over every request:
+  a refusal, and an error that survives two retries. It reports per skill and by reason, and needs two skills of 60
+  requests each unless `--pilot`.
+- **Planted material is confirmed by a person before a bar is read:** every omission in the coverage study, every
+  clean pair in the voice-gate study.
+- **The voice-pass harness dropped outputs with no rewritten paragraph,** which could put its pass bar out of reach.
+  Every voice output is now shown; both arms are written in one run; it takes two authors.
+- **Strict delivery on a skill that answers is held by a test:** a specific that is not in the request is no reason
+  to refuse, and a claim of work nobody did is cut before delivery.
+
+### Added: the instruments of the closing test
+
+- `bench/compare/closing-quality.mjs`: the analysis of a quality claim, fixed before the run (case-level paired
+  differences, shows and guards, the sentence filled in). `bench/compare/judge-qualification.mjs`: a judge read on
+  planted good and bad answers. `bench/compare/rubric-judge.mjs` with `rubrics/stop-slop.json`: a blind judge for a
+  hand-written skill's own score. `studies/harness/voice-pass-score.mjs`: the voice read scored over requests.
+
 ### Changed: how much a skill writes follows the request, never a learned length
 
 - **A skill that answers states no usual length.** A skill built from twelve answers of 9 to 108 words said "my

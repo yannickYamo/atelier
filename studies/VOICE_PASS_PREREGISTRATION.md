@@ -1,57 +1,75 @@
 # Pre-registration (draft): does the in-context voice pass read more like the author than pasted examples, to people?
 
 **Status:** DRAFT, not sealed. Run only after the [voice gate study](VOICE_GATE_PREREGISTRATION.md), with the gate
-that study qualifies. Sealed by a public commit of this file before the first new output. Estimated cost: under $12
-(the harness cap), and five people's reading.
+that study qualifies; if no gate qualifies, this claim is UNRESOLVED and closed. Sealed by the tester with a public
+commit of this file and the sha256 of `harness/voice-pass-score.mjs` before the first output.
+[Decision 0012](../docs/decisions/0012-the-closing-rules.md), claim C.
 
 ## The question
 
 [Decision 0009](../docs/decisions/0009-voice-below-the-standard.md) built an in-context voice pass, off by default,
 and set its first test: it must win a sealed blind read by people against pasted examples before any trained voice
-model is considered. That read has not happened. This is it, and it is the last voice round planned: a pass keeps
-the voice pass as an option worth turning on; a fail leaves voice unclaimed and the work goes elsewhere.
+model is considered. This is that read, and the last voice round of the 1.x line. Explicit voice (punctuation,
+typography, banned moves) is already measured and claimed; this is about the implicit layer, rhythm and word choice,
+which every earlier attempt failed to move.
 
 ## Material
 
-The technical author's corpus of the indistinguishability study: 12 pieces the skill read, 8 it never read. The
-requests are the titles of the 8, in that study's brief form.
+**Two authors** who agreed, each with a skill built from their pieces, a declared register and a pair bank.
+**Fifteen sealed requests per author**, on subjects the skill never saw.
 
-| Arm | What writes | Source |
-|---|---|---|
-| pasted | the model with four of the author's pieces pasted in | the outputs that study recorded, unchanged |
-| atelier | the skill as shipped | the outputs that study recorded, unchanged (machine reading only) |
-| voice | the skill with the voice pass on (`invoke --voice incontext`), nearness as the release has it | written new |
+| Arm | What writes |
+|---|---|
+| pasted | the model with four of the author's pieces in the prompt |
+| voice | the skill with the voice pass on (`invoke --voice incontext`) |
 
-A voice output in which no paragraph was rewritten is the atelier arm under another name: it is recorded and not
-counted. If fewer than 6 of 8 voice outputs count, the study is VOID, not failed.
+**Both arms are written in the same run** by the same model (`harness/voice-pass.mjs`), never read from an earlier
+study. **Every voice output is shown, rewritten or not**: it is what a person who turned the pass on would get. The
+share with no paragraph rewritten is reported.
 
-## The human read (primary)
+## The read
 
-Five readers, one packet each (`harness/voice-pass.mjs`). For each request a reader sees two excerpts of the
-author's read pieces, never one of the four pieces the pasted arm was shown, then the pasted and the voice output for that request, cleaned, cut to the same length, sides
-seeded and the key sealed apart. The question: which of the two reads more like the author of the excerpts?
+**One panel of five readers per author**, each reading all fifteen pairs of that author. For each request a reader
+sees two excerpts of the author's pieces, never one of the four the pasted arm was shown, then the two outputs
+cleaned and cut to one length, sides seeded per reader. The question: which reads more like the author of the
+excerpts? The key stays sealed until every reader has answered.
 
-**PASS:** the voice output is chosen in at least 26 of 40 judgments (one-sided binomial against one half,
-p = 0.040), and no invented claim is delivered in any counted voice output.
+## The rule (`harness/voice-pass-score.mjs`; the unit is the request)
 
-Reported beside it, deciding nothing: the count per request (judgments on one request are not independent), and
-each reader's own count.
+Each request gives one number: the share of its five readers who chose the voice output. **PASS needs all three:**
 
-## The machine reading (secondary, never a pass on its own)
+1. the pooled mean over the thirty requests is above one half, by a sign-flip randomisation test over requests
+   (one-sided 5%, 10,000 seeded flips);
+2. the pooled mean is at least 0.60;
+3. each author's own mean is at least 0.55.
 
-The evaluation family's AUC of each arm against the 8 unseen pieces, beside the author's own floor at 8 a side
-(0.813, [AUTHOR_FLOOR_RESULT](AUTHOR_FLOOR_RESULT.md)). An arm at or below the floor is unresolved at this size, and
-is said so. Also reported: paragraphs rewritten and refused, REQUIRED rules held.
+And no invented claim is delivered in any voice output. **Minimum valid units:** 13 requests per author with both
+outputs and every reader's answer; below that, UNRESOLVED.
 
-## What changes with the result
+Reported beside it, deciding nothing: the evaluation family's AUC of each arm against the author's unseen pieces,
+with the author's own floor at that size ([AUTHOR_FLOOR_RESULT](AUTHOR_FLOOR_RESULT.md)); paragraphs rewritten and
+refused; REQUIRED rules held.
 
-- **PASS:** the README may say the voice pass was preferred to pasted examples by people on one author, with the
-  numbers. Decision 0009's first condition is met. The pass stays opt-in.
-- **FAIL or VOID:** the README's "voice is not claimed" stands. No further voice round is planned, and the trained
-  model stays unbuilt.
+## Sentences
+
+- **PASS:** "For two authors, blind readers preferred the voice pass to the author's pieces pasted into the prompt,
+  [x]% of the time." The pass stays opt-in.
+- **FAIL:** "For these two authors, the in-context voice pass did not read more like the author than pasted examples."
+- **UNRESOLVED:** "The voice read did not run: [cause]. It is closed without a result."
+
+After a FAIL or a final UNRESOLVED, implicit voice returns only as a different generator (a model trained on the
+author's work), under its own decision and the four conditions of 0009.
 
 ## Limits
 
-One author, one register, eight requests, five readers: enough to see a clear preference, not a small one (the read
-finds a true preference of 0.70 about four times in five, and one of 0.60 about one time in three). The arms differ in content as well as voice, as every arm of the
-earlier study did.
+Two authors, thirty requests, ten readers. The design is the reviewer's, who reports simulating it with reader and
+request effects: a false pass about 3% of the time, and a pass about three times in four when readers truly prefer
+the voice output 65% of the time. Those figures are theirs and were not recomputed here. The arms differ in content
+as well as voice.
+
+## What changed before sealing
+
+- Two authors and fifteen requests each, in place of one author and eight; one panel per author.
+- The unit is the request and the test is over requests: forty judgments on eight requests were not forty results.
+- Every voice output is shown. Dropping the ones with no rewrite made the old bar unreachable when any was dropped.
+- Both arms are written in the same run.

@@ -39,8 +39,9 @@ Also next:
   from the model's no better ([CONTEXT_BANDS_RESULT](../studies/CONTEXT_BANDS_RESULT.md)); it stays opt-in.
   The machine reading now has a floor: an author's own pieces are told from each other at AUC 0.72 to 0.81 at those
   sizes ([AUTHOR_FLOOR_RESULT](../studies/AUTHOR_FLOOR_RESULT.md)), so a later arm is read against that, not 0.5.
-- **The closing test.** An independent tester takes `main` and tests three claims once each: answer quality against
-  a careful hand-written skill, delivery under `--strict`, and the last voice read
+- **The closing test.** An independent tester takes `main` and tests four claims once each: coding answers against
+  i-have-adhd, writing against stop-slop, delivery and repeatability under `--strict` across several kinds of work,
+  and the last voice read
   ([the brief](../studies/INDEPENDENT_TEST_BRIEF.md), [decision 0012](decisions/0012-the-closing-rules.md)). A FAIL
   closes the claim for the 1.x line.
 - **Three small studies, in order, then no further voice round.** The subject reader and the register reading

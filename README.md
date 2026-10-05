@@ -152,7 +152,7 @@ has every command.
 
 Models change every few months. The rules shouldn't change with them.
 
-What comes next is a closing test by an independent tester: answer quality against a careful hand-written skill, delivery under `--strict`, and one last blind read of voice, each tested once with its pass and fail sentences written first ([the closing rules](docs/decisions/0012-the-closing-rules.md), [the brief](studies/INDEPENDENT_TEST_BRIEF.md)). Until each is in, it isn't claimed. The head-to-head against GEPA and SkillOpt can run at any time and is reported either way. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
+What comes next is a closing test by an independent tester. The bar: from a folder of examples and a prompt, you get a better skill than a hand-crafted one. It is tested against [i-have-adhd](https://github.com/ayghri/i-have-adhd) on coding answers and [stop-slop](https://github.com/hardikpandya/stop-slop) on writing, with delivery under `--strict` across several kinds of work and one last blind read of voice. Each claim is tested once, with its pass and fail sentences written first ([the closing rules](docs/decisions/0012-the-closing-rules.md), [the brief](studies/INDEPENDENT_TEST_BRIEF.md)). Until each is in, it isn't claimed. The head-to-head against GEPA and SkillOpt is optional: it can run at any time, is reported either way, and never delays or reopens a claim. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
 
 ## Learn more
 

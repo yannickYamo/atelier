@@ -24,7 +24,9 @@ One skill's pair bank (112 pairs: the plain paragraph, and the author's own para
 
 - **Clean (112):** the plain paragraph as the content, the author's paragraph as the rewrite. A refusal is a false
   positive: a paragraph of voice lost, never a fact. The plain side was written by a model from the author's, so a
-  few pairs may truly differ in a claim; a clean pair every gate refuses is listed for a person to check.
+  few pairs may truly differ in a claim. A person reads every clean pair, plain beside author, before any gate's
+  verdict is shown (`plants-for-review.md`); a pair that truly differs is disputed, reported apart, and never counted
+  against specificity.
 - **Planted (60 paragraphs × 6 kinds):** the author's paragraph with one change of a known kind, made by a writer
   model (`claude-sonnet-5`, seeded choice of paragraphs) that must return the words it changed. Code checks the
   words are where it says (new in the plant, or gone from it: a claim is made stronger by taking a hedge out) and

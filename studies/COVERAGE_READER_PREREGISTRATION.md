@@ -18,7 +18,9 @@ request's own words for every part (`harness/coverage-qualification.mjs` checks 
 
 - **Full:** a writer model's reply giving every part. A part read as missing is a false alarm.
 - **Omitted:** the same reply written again with one part left out, the part fixed by the task's position before any
-  reply exists. Reading that part as given is a miss. A person confirms, on a random 20, that the part is really gone.
+  reply exists. Reading that part as given is a miss. A person confirms, on **every** omitted reply, that the part
+  is really gone (`omissions-for-review.md`); one that still gives the part is rejected and reported apart. Until a
+  person has been through them the verdict is UNRESOLVED.
 
 ## Bars
 
@@ -26,7 +28,7 @@ request's own words for every part (`harness/coverage-qualification.mjs` checks 
 |---|---|
 | Sensitivity: omitted parts read as missing | at least 0.85, lower end of the 95% interval at 0.75 or above |
 | False alarms: parts of full replies read as missing | at most 0.10 |
-| Enough | at least 40 valid omissions |
+| Enough | at least 40 omissions a person confirmed |
 | Complete | at most one reading in twenty failed or unread; otherwise UNRESOLVED |
 
 A part the reader did not list, or marked unclear, counts against sensitivity.
