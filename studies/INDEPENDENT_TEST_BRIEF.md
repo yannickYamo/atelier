@@ -42,6 +42,34 @@ walkthrough to a third. Confirm, on a skill you build:
 
 Report anything that does not behave as written. These are checks of behaviour, not claims.
 
+## Phase 0: development, before anything is sealed
+
+Two claims have a bar a tie does not clear: coding answers must score higher than i-have-adhd, and the voice pass must
+be preferred to pasted examples. A FAIL of either is final for 1.x, so neither is sealed until development says the
+product is ready. Development material never enters a test.
+
+The method is error analysis, as Hamel Husain and Shreya Shankar teach it: one arbiter of quality, a written critique
+of every failure before any metric, the critiques grouped into failure modes, and a judge trusted only once its
+true-positive and true-negative rates are known.
+
+1. **Build** the Atelier skill from the examples (20 or more, with their requests).
+2. **Run** it and i-have-adhd on at least 80 development tasks of your own, judged in one session per case.
+3. **Read every loss.** For each case where the Atelier answer scored lower, write one or two sentences on why, from
+   the two answers and the judge's note. No categories yet.
+4. **Group** the critiques into failure modes and count them. Report the list.
+5. **Fix the cause, in how a skill is built.** Send the list back; a fix that names a task, or only helps one, is
+   refused. `atelier fix "<the critique>"` and `atelier tend` are the product's own way to take a critique.
+6. **Measure again** on the half of the development tasks no fix was written from.
+
+Two things the literature says to try first, both to be tested and neither assumed: a skill of two or three focused
+parts outperformed comprehensive documentation, and skills written without iterative checking gave no gain on
+average ([SkillsBench, arXiv 2602.12670](https://arxiv.org/abs/2602.12670)). So: a shorter export against the full
+one, and the strict runtime against the plug-in.
+
+**Ready** for claim A: on the held-out half, at least 0.15 higher than i-have-adhd with a lower bound above zero.
+**Ready** for claim C: the line in `VOICE_PASS_PREREGISTRATION.md`. A claim that is not ready is not sealed; say so
+in the report. That is not a FAIL.
+
 ## Then the instruments, each before the claim that leans on it
 
 | # | Study | Pre-registration | Harness | Decides |
@@ -66,13 +94,13 @@ repository; seal its sha256 with the pre-registration.
 
 | Claim | Pre-registration | Analysis | What it needs from you |
 |---|---|---|---|
-| A. Coding answers against i-have-adhd | `CLOSING_A_PREREGISTRATION.md` | `bench/compare/closing-quality.mjs` | 20 or more examples with their requests; 150 new tasks (40 with named parts, 15 that depend on files not shown); a priced writer model; the benchmark's judge, qualified; a second judge; a person to code a fifth of the answers blind |
+| A. Coding answers against i-have-adhd | `CLOSING_A_PREREGISTRATION.md` | `bench/compare/closing-quality.mjs` | 20 or more examples with their requests; 300 new tasks (80 with named parts, 30 that depend on files not shown); a priced writer model; the benchmark's judge, qualified; a second judge; a person to code a fifth of the answers blind |
 | A-w. Writing against stop-slop | `CLOSING_AW_PREREGISTRATION.md` | `bench/compare/closing-quality.mjs`, `bench/compare/rubric-judge.mjs` with `rubrics/stop-slop.json` | two authors with 20 or more pieces each; 30 briefs per author with their facts; five readers per author; a person to code a fifth blind |
 | B. Delivery and repeatability across domains | `CLOSING_B_PREREGISTRATION.md` | `harness/strict-delivery.mjs` | three or more skills from different kinds of work; a pilot of 20 requests per skill; 60 or more sealed requests per skill; a person to audit every delivered output |
 | C. Implicit voice | `VOICE_PASS_PREREGISTRATION.md` | `harness/voice-pass.mjs`, `harness/voice-pass-score.mjs` | only if I3 passed a gate: two authors, each with a skill, a declared register and a pair bank; 15 sealed requests each; five readers per author who never see the key |
 
-In A and A-w the one primary arm is the exported plug-in (`atelier export`). The strict runtime's answer quality is
-reported under B. A show endpoint must clear its bar; a guard fails only on a clear loss; which is which is written
+In A the primary arm is the better Atelier configuration on validation (the exported plug-in or the strict runtime),
+and it must score higher than i-have-adhd: a tie fails. In A-w the primary arm is the exported plug-in. A show endpoint must clear its bar; a guard fails only on a clear loss; which is which is written
 in each pre-registration.
 
 Also free, if you are handed them: the five blind-read packets of the earlier indistinguishability study.

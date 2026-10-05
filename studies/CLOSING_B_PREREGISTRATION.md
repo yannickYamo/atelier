@@ -47,7 +47,7 @@ pilot shows how much of the refusal rate it is.
 **Claim B PASSES** when R1 and R2 hold for every skill. R3 and R4 have their own sentences, said beside it either way.
 **Minimum valid units:** 55 requests per skill after retries.
 
-**Reported, deciding nothing:** the 150 tasks of [claim A](CLOSING_A_PREREGISTRATION.md) run once under `--strict`
+**Reported, deciding nothing:** the tasks of [claim A](CLOSING_A_PREREGISTRATION.md) run once under `--strict`
 with the answering skill, judged with the other arms: quality on the answers delivered, and over all requests with a
 refusal scored as a failed answer.
 

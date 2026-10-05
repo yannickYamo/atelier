@@ -5,7 +5,7 @@
 // UNRESOLVED. The benchmark runner refuses to start when it could not see what a call costs.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { mulberry32 } from '../core/fidelity/qualify.js';
@@ -36,7 +36,7 @@ function fixture(cases: number, shift: number, blockerRate: { candidate: number;
   }
   writeFileSync(join(dir, 'scores.jsonl'), jsonl(scores)); writeFileSync(join(dir, 'verify.jsonl'), jsonl(verify)); writeFileSync(join(dir, 'human.jsonl'), jsonl(human));
   writeFileSync(join(dir, 'config.json'), JSON.stringify({ claim: 'A', k: 20, weights: WEIGHTS, scores: ['scores.jsonl'], conditions: { bare: 'bare', handwritten: 'hand', strongest: 'hand', candidate: 'plugin' },
-    verify: 'verify.jsonl', human: 'human.jsonl', depthCases: Array.from({ length: cases }, (_, c) => `c${c}`).filter((_, c) => c % 5 === 0), minUnits: 140 }));
+    verify: 'verify.jsonl', human: 'human.jsonl', depthCases: Array.from({ length: cases }, (_, c) => `c${c}`).filter((_, c) => c % 5 === 0), minUnits: 140, margins: { handwritten: -0.2 } }));
   return join(dir, 'config.json');
 }
 interface Result { verdict: string; sentence: string; validCases: number; endpoints: { P1: { pass: boolean }; P2: { pass: boolean; n: number }[]; P4: { pass: boolean }[]; P5: { pass: boolean; agreement: { share: number } }; P6: { pass: boolean } } }
@@ -53,7 +53,16 @@ describe('the analysis of a closing quality claim', () => {
   it('"scored higher" is said only when the lower bound against the hand-written skill is above zero', () => {
     const r = analyse(fixture(150, 0.4, { candidate: 0.1, handwritten: 0.1 }));
     expect(r.verdict).toBe('PASS');
-    expect(r.sentence).toMatch(/the Atelier plug-in built from 20 examples scored higher overall than the hand-written skill \(\+0\.\d+\)/);
+    expect(r.sentence).toMatch(/the Atelier plug-in built from 20 examples scored higher overall than the hand-written skill \(\+0\.\d+, lower bound \+0\.\d+\)/);
+  });
+  it('with the bar sealed at "scores higher", an equal arm fails and a clearly better one passes', () => {
+    const sealed = (config: string): string => { const c = JSON.parse(readFileSync(config, 'utf8')) as { margins?: object }; c.margins = { handwritten: 0 }; writeFileSync(config, JSON.stringify(c)); return config; };
+    const equal = analyse(sealed(fixture(300, 0, { candidate: 0.1, handwritten: 0.1 })));
+    expect(equal.verdict).toBe('FAIL');
+    expect(equal.sentence).toMatch(/failed "scores higher than the hand-written skill": .*where the bar was > 0\./);
+    const better = analyse(sealed(fixture(300, 0.25, { candidate: 0.1, handwritten: 0.1 })));
+    expect(better.verdict).toBe('PASS');
+    expect(better.sentence).toMatch(/scored higher overall than the hand-written skill \(\+0\.\d+, lower bound \+0\.\d+\)/);
   });
   it('an arm 0.4 worse fails the overall bar, with the estimate and the bar in the sentence', () => {
     const r = analyse(fixture(150, -0.4, { candidate: 0.1, handwritten: 0.1 }));

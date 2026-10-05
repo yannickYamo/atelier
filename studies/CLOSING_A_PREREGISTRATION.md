@@ -8,11 +8,23 @@ sha256 of `bench/compare/closing-quality.mjs`, before any arm answers a test tas
 
 Atelier exists so that someone with a folder of examples and a prompt gets a better skill than a hand-crafted one.
 The hand-crafted skill here is [i-have-adhd](https://github.com/ayghri/i-have-adhd), on its own benchmark's judge.
-"Better" is said in two parts, and the sentence says only what was shown:
+"Better" has two parts, and both must be shown:
 
-- **on the owner's taste:** the rules the owner approved are held more often. This must be shown.
-- **on the hand-written skill's own judge:** not worse overall, with no clear loss anywhere. If the Atelier skill
-  scores clearly higher, the sentence says "scored higher"; if not, it says "was not worse".
+- **on the hand-written skill's own judge: it scores higher.** The lower bound of the difference is above zero. A
+  tie is a FAIL of this claim, however fair the tie.
+- **on the owner's taste:** the rules the owner approved are held more often.
+
+And nothing may be clearly lost on the way: no dimension, blockers or requested depth.
+
+## Readiness comes before the seal
+
+A FAIL is final for the 1.x line, and "scores higher" is a bar a tie does not clear, so this claim is sealed only
+when development says it is ready ([the brief](INDEPENDENT_TEST_BRIEF.md), phase 0). On development tasks that never
+enter the test, the Atelier skill is run against i-have-adhd, every loss is read and grouped into failure modes, the
+causes are fixed in how a skill is built (never for one task), and the loop repeats. **The claim is sealed when, on
+a held-out half of the development tasks, the Atelier arm scores at least 0.15 higher with a lower bound above zero.**
+If development never reaches that, the claim is not sealed, and the README says a tie, as it does today. Not sealing
+is not a FAIL.
 
 ## Why the earlier comparison could not decide
 
@@ -25,9 +37,10 @@ cases are where it was found, so they are a regression table here and never part
 
 - **Examples:** at least 20 answers, each with the request it answers, including requests for detail and for
   brevity. The same examples are available to every arm that uses examples.
-- **Tasks: 150** new coding-answer tasks written by someone who is not the builder, after the product commit is
-  frozen. **40** ask for a walkthrough, a comparison or a plan with named parts; **15** depend on files the agent is
-  not shown.
+- **Tasks: 300** new coding-answer tasks written by someone who is not the builder, after the product commit is
+  frozen. **80** ask for a walkthrough, a comparison or a plan with named parts; **30** depend on files the agent is
+  not shown. At the paired spread the outside review measured on earlier sessions (SD about 0.73 a case), 300 tasks show a true gain of 0.10 about
+  three times in four and one of 0.15 almost always; 150 would need 0.15 for the same odds.
 - **The standard:** the Atelier skill's rules, ratified by the person who owns the examples.
 - **The writer model:** one priced model for every arm, named and frozen in the seal (`bench/compare/run.mjs` refuses
   a model with no known price).
@@ -41,12 +54,13 @@ cases are where it was found, so they are a regression table here and never part
 | 3 | i-have-adhd, as published | baseline: the hand-written skill |
 | 4 | i-have-adhd with the same examples pasted under it | baseline: what a person could do without Atelier |
 | 5 | a skill a frontier model induces from the examples, then twenty minutes of expert editing | baseline |
-| 6 | **Atelier, the exported plug-in** (`atelier export`) | **the one primary arm** |
+| 6 | **Atelier, from the same examples**: the exported plug-in, or the runtime under strict delivery | **the one primary arm** |
 | 7 | i-have-adhd with Atelier's checks on its answers (`atelier verify --repair`) | reported |
 
-The plug-in is compared with arm 3 directly, and with the strongest of arms 2, 4 and 5 as chosen on a validation
-split before the test opens. The strict runtime is not an arm here: its quality is reported under
-[claim B](CLOSING_B_PREREGISTRATION.md). Claim A has one verdict.
+**Which Atelier configuration is the primary arm is chosen on the validation split, before the test opens**, the same
+way the strongest baseline is: the plug-in (`atelier export`) or the strict runtime (`atelier invoke --strict
+--answer-only`, a refusal scored as a failed answer). The other is reported. The primary arm is compared with arm 3
+directly, and with the strongest of arms 2, 4 and 5. Claim A has one verdict.
 
 ## Judge
 
@@ -61,26 +75,26 @@ than 0.80 of the planted answers, the claim is UNRESOLVED.
 | | Endpoint | Kind | Rule |
 |---|---|---|---|
 | P1 | better than the bare model | show | weighted score, lower 95% bound above 0 |
-| P2 | not worse than i-have-adhd, and not worse than the strongest baseline | show | lower 95% bound above −0.20, each |
+| P2 | **scores higher than i-have-adhd**; and not worse than the strongest other baseline | show | against i-have-adhd, lower 95% bound above 0; against the strongest baseline, above −0.20 |
 | P3 | no dimension clearly worse | guard | fails only if a dimension's upper 95% bound is below −0.25 |
 | P4 | blockers | guard | fails only if the plug-in clearly has more: the 97.5% bound excludes zero |
 | P5 | the owner's required rules are held more often than under i-have-adhd | show | REQUIRED rules with a measurement, counted by `atelier verify` on every answer of both arms; lower 95% bound above 0. A person codes a random, arm-stratified fifth blind to arm; below 0.90 agreement with the counts, UNRESOLVED |
-| P6 | requested depth | guard | on the 40 named-part tasks, parts given as coded by a person blind to arm; fails only if the plug-in clearly gives fewer: the 97.5% bound excludes zero |
+| P6 | requested depth | guard | on the 80 named-part tasks, parts given as coded by a person blind to arm; fails only if the plug-in clearly gives fewer: the 97.5% bound excludes zero |
 | P7 | cost | report | dollars per answer, per arm |
 
 **A show must clear its bar. A guard fails only on a clear loss.** As a "show", an arm exactly equal on blockers
 passed about one time in three at 100 tasks: that would have failed Atelier for the size of the test, not for its
 answers. The guards are held at 97.5% and at zero, not at a margin, so a loss that is real and clear still fails.
 
-**PASS:** P1 to P6 all hold. **Minimum valid units:** 140 tasks with every compared arm answered and judged; below
-that, UNRESOLVED.
+**PASS:** P1 to P6 all hold. **Minimum valid units:** 280 tasks with every compared arm answered and judged; below
+that, UNRESOLVED. The config seals `"margins": {"handwritten": 0, "overall": -0.2}`.
 
 ## Sentences (filled by the analysis script)
 
-- **PASS:** "On [n] coding tasks it never saw, the Atelier plug-in built from [k] examples [scored higher overall
-  than | was not worse overall than] the hand-written skill [and | or] the strongest baseline, no quality dimension,
-  blocker rate or requested depth showed a clear loss, and it held the shared required rules more often. This is not
-  a result for each dimension separately."
+- **PASS:** "On [n] coding tasks it never saw, the Atelier [plug-in | runtime] built from [k] examples scored higher
+  overall than the hand-written skill (+[x], lower bound +[y]) and was not worse than the strongest baseline, no
+  quality dimension, blocker rate or requested depth showed a clear loss, and it held the shared required rules more
+  often. This is not a result for each dimension separately."
 - **FAIL**, one per failed endpoint: "... failed "[endpoint]": [estimate] (bounds ...), where the bar was [bar]."
 - **UNRESOLVED:** "The quality comparison did not complete: [cause]. It is closed without a result."
 
@@ -96,5 +110,8 @@ P4 are read on that skill's own judge for that reason. A margin of 0.20 on a fiv
   requests, a refusal is a failed answer, and it could not pass a quality bar by construction.
 - The hand-written skill is i-have-adhd as published, and as published with the examples pasted, since nobody will
   rewrite a public skill to another owner's rules.
-- Blockers and requested depth became guards; tasks went from 100 to 150.
+- The bar against the hand-written skill is "scores higher", at the owner's word: a tie fails. Because of that the
+  claim is sealed only after a readiness check on development tasks, and the tasks went from 100 to 300.
+- Blockers and requested depth became guards.
+- The Atelier configuration (plug-in or strict runtime) is chosen on validation, like the strongest baseline.
 - An analysis script, a judge-qualification reader and a minimum of valid units were added.

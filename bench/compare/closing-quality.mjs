@@ -17,7 +17,9 @@
 //   preference   file (writing): {case_id, reader, chose}: "candidate" or "comparator", read blind
 //   depthCases   [case ids] that ask for named parts
 //   harms        [{name, file}] (writing): {case_id, trial, condition, count}: a counted harm, such as invented specifics delivered
-//   margins      {overall, dimension, preference} and minUnits, exactly as sealed
+//   margins      {handwritten, overall, dimension, preference} and minUnits, exactly as sealed. `handwritten: 0` makes
+//                the claim "scores higher than the hand-written skill"; `overall` is the bar against the strongest
+//                other baseline
 //   cost         file: {condition, cost_usd, conformant (bool)}
 //
 // THE UNIT IS THE CASE. Trials are averaged inside a case and sessions over a case before any difference is taken;
@@ -61,7 +63,10 @@ function perCase(files, condition, value) {
 const paired = (a, b) => [...a.keys()].filter((k) => b.has(k)).map((k) => a.get(k) - b.get(k));
 
 export function analyse(cfg, load) {
+  // `handwritten` is the bar against the hand-written skill itself: 0 means the claim is "scores higher", and the
+  // lower bound must be above it. `overall` is the bar against the strongest other baseline ("not worse than").
   const C = cfg.conditions; const M = { overall: -0.2, dimension: -0.25, preference: 0.4, ...(cfg.margins ?? {}) };
+  if (M.handwritten === undefined) M.handwritten = M.overall;
   const sessions = cfg.scores.map(load);
   const dims = Object.keys(cfg.weights);
   const weighted = (r) => dims.reduce((s, d) => s + cfg.weights[d] * r[d], 0);
@@ -72,7 +77,8 @@ export function analyse(cfg, load) {
   // SHOW: better than the bare model; not worse than the hand-written skill, nor than the strongest baseline.
   if (C.bare) { const b = bounds(paired(cand, score(C.bare))); E.P1 = { what: 'better than the bare model', ...b, bar: '> 0', pass: b.lo95 !== null && b.lo95 > 0 }; }
   const against = [['the hand-written skill', C.handwritten], ...(C.strongest && C.strongest !== C.handwritten ? [['the strongest baseline', C.strongest]] : [])];
-  E.P2 = against.map(([name, c]) => { const b = bounds(paired(cand, score(c))); return { what: `not worse than ${name}`, ...b, bar: `> ${M.overall}`, pass: b.lo95 !== null && b.lo95 > M.overall }; });
+  E.P2 = against.map(([name, c], i) => { const bar = i === 0 ? M.handwritten : M.overall; const b = bounds(paired(cand, score(c)));
+    return { what: `${bar >= 0 ? 'scores higher than' : 'not worse than'} ${name}`, ...b, bar: `> ${bar}`, pass: b.lo95 !== null && b.lo95 > bar }; });
   // GUARD: no dimension clearly worse than the hand-written skill.
   E.P3 = dims.map((d) => { const b = bounds(paired(score(C.candidate, (r) => r[d]), score(C.handwritten, (r) => r[d]))); return { what: d, ...b, bar: `upper bound not below ${M.dimension}`, pass: !(b.hi95 !== null && b.hi95 < M.dimension) }; });
   // GUARD: blockers. Fails only when the candidate clearly has more.
@@ -126,7 +132,7 @@ export function analyse(cfg, load) {
   const subject = cfg.claim === 'A-w' ? `On ${valid} writing briefs it never saw, an Atelier skill built from ${cfg.k ?? '[k]'} pieces` : `On ${valid} coding tasks it never saw, the Atelier plug-in built from ${cfg.k ?? '[k]'} examples`;
   const sentence = verdict === 'UNRESOLVED' ? `The quality comparison did not complete: ${unresolved}. It is closed without a result.`
     // "Scored higher" is said only when it was shown: the lower bound of the difference against every baseline is above zero.
-    : verdict === 'PASS' ? `${subject} ${E.P2.every((e) => e.lo95 > 0) ? `scored higher overall than the hand-written skill${C.strongest && C.strongest !== C.handwritten ? ' and the strongest baseline' : ''} (${E.P2.map((e) => `+${e.mean}`).join(', ')})` : `was not worse overall than the hand-written skill${C.strongest && C.strongest !== C.handwritten ? ' or the strongest baseline' : ''}`}, no quality dimension${E.P4 ? ', blocker rate' : ''}${E.P6 ? ' or requested depth' : ''} showed a clear loss${E.PREF ? `, readers chose its piece ${Math.round((E.PREF.mean ?? 0) * 100)}% of the time` : ''}, and it held the shared required rules more often. This is not a result for each dimension separately.`
+    : verdict === 'PASS' ? `${subject} ${E.P2[0].lo95 > 0 ? `scored higher overall than the hand-written skill (+${E.P2[0].mean}, lower bound +${E.P2[0].lo95})` : 'was not worse overall than the hand-written skill'}${E.P2[1] ? (E.P2[1].lo95 > 0 ? ` and higher than the strongest baseline (+${E.P2[1].mean})` : ' and was not worse than the strongest baseline') : ''}, no quality dimension${E.P4 ? ', blocker rate' : ''}${E.P6 ? ' or requested depth' : ''} showed a clear loss${E.PREF ? `, readers chose its piece ${Math.round((E.PREF.mean ?? 0) * 100)}% of the time` : ''}, and it held the shared required rules more often. This is not a result for each dimension separately.`
       : failed.map((e) => `${subject} failed "${e.what}": ${e.mean} (bounds ${e.lo95 ?? e.lo975} to ${e.hi95 ?? e.hi975}), where the bar was ${e.bar}.`).join(' ');
   return { claim: cfg.claim ?? 'A', validCases: valid, margins: M, endpoints: E, verdict, sentence };
 }
