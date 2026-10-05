@@ -189,7 +189,11 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
     expect(m).not.toMatch(/My answers usually run about/);
     expect(m).toContain('How much I write follows the request, never a habit of length.');
     expect(m).toMatch(/gets every part it asks for at the length that takes/);
-    expect(m).toMatch(/Never describe a project, a file or a result you have not seen/);
+    // give what was asked first, against stated assumptions; hold back only where the wrong target would do damage
+    expect(m).toMatch(/Give what was asked first\./);
+    expect(m).toMatch(/write the answer\s+against assumptions you state/);
+    expect(m).toMatch(/name the risk, give the safe path[\s\S]*and then the command/);
+    expect(m).toMatch(/Never describe a\s+project, a file or a result you have not seen/);
     expect(m).toMatch(/Do the work the request asks for instead of\s+handing it back/);
     expect(m).toMatch(/Never describe a step you did\s+not take or a result you did not see/);
     expect(m).toMatch(/Ask only for a decision that is\s+the person's to make/);

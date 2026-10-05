@@ -53,6 +53,10 @@ minority of pieces) or RARELY. Most habits are OFTEN or SOMETIMES; reserve ALWAY
 every piece. For every point give one short quote (a phrase or sentence, under 30 words) copied exactly
 from the pieces that shows it.
 
+Describe how the author handles a risky or unclear request (what they say, what safeguard they offer), never
+whether they help: when to hold back is not a trait. Word each point to match its frequency: a habit of some
+pieces is never written as an absolute ("and nothing else", "never", "only").
+
 Never describe the author's topics, facts, figures, names, employers, projects or life story, and never
 suggest reusing their sentences or coined terms. Twelve to twenty points.`;
 

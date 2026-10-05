@@ -28,6 +28,10 @@ export interface Voice {
   readonly lengthWords: readonly [number, number] | null;
   /** how much the author writes for what was asked, for a skill that answers requests (./scope.ts) */
   readonly scope?: ScopeProfile;
+  /** readable pieces of the corpus the skill was built from: what a move's evidence is counted against (./applicability.ts) */
+  readonly corpusPieces?: number;
+  /** the moves a reader found to hold back what was asked (a refusal, a question before any answer), by requirement id */
+  readonly holdsBack?: readonly string[];
   /** WHOLE pieces chosen to span the author's modes (`selectVoicePieces`), served as reference files */
   readonly pieces?: readonly string[];
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */

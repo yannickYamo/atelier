@@ -21,6 +21,15 @@
 //                the claim "scores higher than the hand-written skill"; `overall` is the bar against the strongest
 //                other baseline
 //   cost         file: {condition, cost_usd, conformant (bool)}
+//   axes         [{name, file}]: THE SIGNED BAR. Each file holds {case_id, trial?, condition, failed (bool)}: one
+//                failure per answer on one axis (quality: a blocker or a named failure mode, from
+//                bench/compare/failure-modes.mjs; rule anchor: a measured required rule broken; repeatability: the
+//                verdict differed between runs; voice: the reader chose the other arm). For each axis the script
+//                reports both arms' failure rates and R = 1 − candidate / hand-written, and the axis PASSES when
+//                R is at least `bar.reduction` (0.20) AND the candidate clearly fails less (the lower 95% bound of
+//                the case-level difference is above zero).
+//   reads        [fileA, fileB]: two judge reads of the same answers; answers whose reads disagree on the blocker
+//                are written to --disagreements for a person, and the disagreement rate is the judge's noise
 //
 // THE UNIT IS THE CASE. Trials are averaged inside a case and sessions over a case before any difference is taken;
 // a bound is one-sided, from the case-level paired differences (Student t). Two kinds of endpoint:
@@ -125,7 +134,26 @@ export function analyse(cfg, load) {
     E.cost = Object.fromEntries([...new Set(rows.map((r) => r.condition))].map((c) => { const rs = rows.filter((r) => r.condition === c); const ok = rs.filter((r) => r.conformant !== false).length;
       return [c, { dollars: r3(rs.reduce((a, r) => a + (r.cost_usd ?? 0), 0)), answers: rs.length, perUsableAnswer: ok ? r3(rs.reduce((a, r) => a + (r.cost_usd ?? 0), 0) / ok) : null }]; }));
   }
-  const all = [E.P1, ...(E.P2 ?? []), ...(E.P3 ?? []), ...(E.P4 ?? []), E.P5, E.P6, ...(E.HARM ?? []), E.PREF].filter(Boolean);
+  // THE SIGNED BAR, AXIS BY AXIS: 20% fewer failures than the hand-written skill, and clearly fewer.
+  const reduction = cfg.bar?.reduction ?? 0.2;
+  for (const ax of cfg.axes ?? []) {
+    const rows = [load(ax.file)]; const rate = (c) => perCase(rows, c, (r) => (r.failed === true ? 1 : r.failed === false ? 0 : null));
+    const cand = rate(C.candidate); const hand = rate(C.handwritten);
+    const ids = [...cand.keys()].filter((k) => hand.has(k));
+    const fc = ids.length ? mean(ids.map((k) => cand.get(k))) : null; const fh = ids.length ? mean(ids.map((k) => hand.get(k))) : null;
+    const b = bounds(ids.map((k) => hand.get(k) - cand.get(k)));   // positive: the candidate fails less
+    const Rel = fh ? 1 - fc / fh : null;
+    (E.AXES ??= []).push({ what: `${ax.name}: at least ${Math.round(reduction * 100)}% fewer failures than the hand-written skill`, axis: ax.name, n: ids.length,
+      candidate: fc === null ? null : r3(fc), handwritten: fh === null ? null : r3(fh), reduction: Rel === null ? null : r3(Rel), mean: b.mean, lo95: b.lo95, hi95: b.hi95,
+      bar: `reduction >= ${reduction} and lower bound of the difference > 0`, pass: Rel !== null && Rel >= reduction && b.lo95 !== null && b.lo95 > 0 });
+  }
+  if (cfg.reads?.length === 2) {
+    const [a, b2] = cfg.reads.map(load); const key = (r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}`;
+    const second = new Map(b2.map((r) => [key(r), r])); const both = a.filter((r) => second.has(key(r)));
+    const differ = both.filter((r) => Boolean(r.blocker) !== Boolean(second.get(key(r)).blocker));
+    E.judgeNoise = { answers: both.length, blockerDisagreements: differ.length, rate: both.length ? r3(differ.length / both.length) : null, toReview: differ.map((r) => ({ case_id: r.case_id, trial: r.trial, condition: r.condition })) };
+  }
+  const all = [E.P1, ...(E.P2 ?? []), ...(E.P3 ?? []), ...(E.P4 ?? []), E.P5, E.P6, ...(E.HARM ?? []), E.PREF, ...(E.AXES ?? [])].filter(Boolean);
   const failed = all.filter((e) => e.pass === false);
   const unresolved = valid < (cfg.minUnits ?? 0) ? `only ${valid} cases have every arm judged, under the minimum of ${cfg.minUnits}` : E.P5?.unresolved ?? null;
   const verdict = unresolved ? 'UNRESOLVED' : failed.length ? 'FAIL' : 'PASS';
@@ -134,7 +162,9 @@ export function analyse(cfg, load) {
     // "Scored higher" is said only when it was shown: the lower bound of the difference against every baseline is above zero.
     : verdict === 'PASS' ? `${subject} ${E.P2[0].lo95 > 0 ? `scored higher overall than the hand-written skill (+${E.P2[0].mean}, lower bound +${E.P2[0].lo95})` : 'was not worse overall than the hand-written skill'}${E.P2[1] ? (E.P2[1].lo95 > 0 ? ` and higher than the strongest baseline (+${E.P2[1].mean})` : ' and was not worse than the strongest baseline') : ''}, no quality dimension${E.P4 ? ', blocker rate' : ''}${E.P6 ? ' or requested depth' : ''} showed a clear loss${E.PREF ? `, readers chose its piece ${Math.round((E.PREF.mean ?? 0) * 100)}% of the time` : ''}, and it held the shared required rules more often. This is not a result for each dimension separately.`
       : failed.map((e) => `${subject} failed "${e.what}": ${e.mean} (bounds ${e.lo95 ?? e.lo975} to ${e.hi95 ?? e.hi975}), where the bar was ${e.bar}.`).join(' ');
-  return { claim: cfg.claim ?? 'A', validCases: valid, margins: M, endpoints: E, verdict, sentence };
+  // One sentence per axis of the signed bar, said whether it was reached or not: a miss is a result.
+  const axes = (E.AXES ?? []).map((x) => `${x.axis}: ${x.candidate === null ? 'not measured' : `${Math.round(x.candidate * 100)}% failed against ${Math.round(x.handwritten * 100)}% for the hand-written skill, ${x.reduction === null ? 'no reduction computable' : `${Math.round(x.reduction * 100)}% fewer`} (${x.pass ? 'reached' : 'not reached'}: the bar is ${Math.round(reduction * 100)}% fewer and clearly fewer)`}.`);
+  return { claim: cfg.claim ?? 'A', validCases: valid, margins: M, endpoints: E, verdict, sentence, ...(axes.length ? { axes } : {}) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
@@ -142,5 +172,6 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.
   const cfg = JSON.parse(readFileSync(file, 'utf8'));
   const result = analyse(cfg, (f) => jsonl(resolve(dirname(file), f)));
   if (arg('--out')) writeFileSync(arg('--out'), JSON.stringify(result, null, 1));
+  if (arg('--disagreements') && result.endpoints.judgeNoise) writeFileSync(arg('--disagreements'), `${result.endpoints.judgeNoise.toReview.map((r) => JSON.stringify(r)).join('\n')}\n`);
   console.log(JSON.stringify(result, null, 1));
 }

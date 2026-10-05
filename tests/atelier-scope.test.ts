@@ -5,7 +5,7 @@
 // whether a reply gives what the request asks is a reading code validates.
 import { describe, it, expect } from 'vitest';
 import { splitRequest, looksLikeUnsplitPair } from '../core/intake/extract.js';
-import { groundScope, deriveScope, describeScope, SCOPE_READER_VERSION, MIN_PER_KIND } from '../core/compiler/scope.js';
+import { groundScope, deriveScope, describeScope, spreadByKind, SCOPE_READER_VERSION, MIN_PER_KIND } from '../core/compiler/scope.js';
 import { usualLength } from '../core/compiler/voice.js';
 import { coverageOf, modelJudge } from '../core/loop/context-judge.js';
 import { authorFloor } from '../core/fidelity/twosample.js';
@@ -179,5 +179,22 @@ describe('the panel under strict delivery', () => {
     expect(p).toMatch(/request coverage {2}1 of 3 thing\(s\) the request asks for are given not found: "with rollback points" 1 unclear not qualified yet/);
     expect(renderPanel({ ...base, delivery: { mode: 'strict', delivered: true, redraws: 2 } })).toMatch(/DELIVERED ANYWAY \(--allow-nonconformant\)/);
     expect(renderPanel({ ...base, result: { conformant: true, reasons: [] } })).not.toMatch(/DELIVERED/);
+  });
+});
+
+describe('the examples shown are spread across the kinds of request the corpus holds', () => {
+  const w = (n: number): string => Array.from({ length: n }, () => 'word').join(' ');
+  const texts = [w(200), w(210), w(190), w(220), w(8), w(12), w(40)];
+  const kinds = ['explain', 'explain', 'explain', 'explain', 'fact', 'code', null] as const;
+  it('every kind is shown at least once, however small the budget, and the largest kind does not crowd the rest out', () => {
+    const tight = spreadByKind(texts, kinds, 50);
+    expect(new Set(tight.map((i) => kinds[i]))).toEqual(new Set(['explain', 'fact', 'code', null]));
+    expect(tight).toHaveLength(4);
+    const roomy = spreadByKind(texts, kinds, 5000);
+    expect(roomy).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+  it('the kind is read with the scope, and a kind outside the list is not kept', () => {
+    const p = groundScope([{ text: 'a b c', request: null }, { text: 'd e f', request: null }], [{ example: 1, asked: null, kind: 'code', beyond: [] }, { example: 2, asked: null, kind: 'poem', beyond: [] }], 'r');
+    expect(p.kinds).toEqual(['code', null]);
   });
 });

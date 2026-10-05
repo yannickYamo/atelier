@@ -67,7 +67,13 @@ export interface ScopeProfile {
   readonly dropped: number;
   /** examples the reader returned nothing for. Past MAX_UNREAD of them, no frequency is stated for any kind */
   readonly unread?: number;
+  /** what kind of request each example answers, in the order of the examples; null where the reader did not say */
+  readonly kinds?: readonly (RequestKind | null)[];
 }
+
+/** The kinds of request an answer can be to: what the examples shown with a skill are spread across (`spreadByKind`). */
+export const REQUEST_KINDS = ['fact', 'code', 'fix', 'status', 'explain', 'plan', 'ask', 'casual'] as const;
+export type RequestKind = typeof REQUEST_KINDS[number];
 
 /** More than this share of the examples unread, and what was read is not the corpus: no habit is stated from it. */
 export const MAX_UNREAD = 0.2;
@@ -76,6 +82,7 @@ export const SCOPE_SYSTEM = `You read examples of how one person answers request
 
 For each example:
 - asked: only when the request is shown. "DETAIL" if the request asks, in so many words, for detail, depth, a walkthrough, a full explanation or a complete plan. "BRIEF" if it asks, in so many words, for brevity (one line, short, just the answer, yes or no). Otherwise "NEITHER". Do not infer it from the topic.
+- kind: what kind of request the example answers, from the request when it is shown and from the answer otherwise: "fact" (a short fact or yes/no), "code" (write code), "fix" (fix or change something), "status" (report progress or a result), "explain" (explain or compare), "plan" (a plan with steps), "ask" (the answer asks for something before it can proceed), "casual" (thanks, small talk).
 - beyond: everything in the ANSWER that goes beyond what was asked, each as one of these kinds with a short quote copied exactly from the answer:
   - "preamble": anything before the answer starts (a greeting, praise for the question, a statement of what is about to be done)
   - "restates-request": the request said back before answering it (only when the request is shown)
@@ -92,13 +99,14 @@ export const SCOPE_SCHEMA: Record<string, unknown> = {
   properties: { examples: { type: 'array', items: { type: 'object',
     properties: {
       example: { type: 'number' }, asked: { type: ['string', 'null'], enum: ['DETAIL', 'BRIEF', 'NEITHER', null] },
+      kind: { type: ['string', 'null'] },
       beyond: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string' }, quote: { type: 'string' } }, required: ['kind', 'quote'], additionalProperties: false } },
     },
     required: ['example', 'asked', 'beyond'], additionalProperties: false } } },
   required: ['examples'], additionalProperties: false,
 };
 
-interface RawExample { example?: unknown; asked?: unknown; beyond?: unknown }
+interface RawExample { example?: unknown; asked?: unknown; beyond?: unknown; kind?: unknown }
 
 /** Lengths in words, the middle half, rounded to 10 below 200 and to 50 above: never a floor a short answer cannot reach. */
 const span = (xs: readonly number[]): { lo: number; hi: number } => {
@@ -117,11 +125,14 @@ export function groundScope(examples: readonly ScopeExample[], raw: readonly Raw
   const kinds = new Map<BeyondKind, { examples: Set<number>; quote: string }>();
   const asked = new Map<number, Asked>();
   const seen = new Set<number>();
+  const kindOf = new Map<number, RequestKind>();
   for (const r of raw ?? []) {
     const i = typeof r.example === 'number' && Number.isInteger(r.example) ? r.example - 1 : -1;
     if (i < 0 || i >= examples.length || seen.has(i)) { dropped += 1; continue; }
     seen.add(i);
     const e = examples[i];
+    const kind = REQUEST_KINDS.find((k) => k === r.kind);
+    if (kind) kindOf.set(i, kind);
     if (e.request !== null && (r.asked === 'DETAIL' || r.asked === 'BRIEF' || r.asked === 'NEITHER')) asked.set(i, r.asked);
     for (const b of Array.isArray(r.beyond) ? r.beyond as { kind?: unknown; quote?: unknown }[] : []) {
       const kind = BEYOND_KINDS.find((k) => k === b.kind);
@@ -142,7 +153,8 @@ export function groundScope(examples: readonly ScopeExample[], raw: readonly Raw
     const xs = [...asked].filter(([, v]) => v === a).map(([i]) => proseWords(examples[i].text)).filter((n) => n > 0);
     if (xs.length >= MIN_PER_KIND) lengths[a] = { ...span(xs), n: xs.length };
   }
-  return { version: 1, reader, examples: examples.length, paired, beyond, lengths, dropped, ...(unread ? { unread } : {}) };
+  return { version: 1, reader, examples: examples.length, paired, beyond, lengths, dropped, ...(unread ? { unread } : {}),
+    ...(kindOf.size ? { kinds: examples.map((_, i) => kindOf.get(i) ?? null) } : {}) };
 }
 
 /** Read the examples once: one call, metered on `budget`. A failure is the caller's to catch; counts alone still make a profile. */
@@ -185,4 +197,33 @@ export function describeScope(p: ScopeProfile): string {
     for (const b of p.beyond) lines.push(`- ${BEYOND_LABEL[b.kind]}: ${often(b.count, b.of)} (${b.count} of ${b.of})${b.quote && b.count > 0 ? `, e.g. "${b.quote}"` : ''}`);
   }
   return lines.join('\n');
+}
+
+/**
+ * THE EXAMPLES SHOWN WITH A SKILL THAT ANSWERS, SPREAD ACROSS THE KINDS OF REQUEST THE CORPUS HOLDS. Chosen for how
+ * they sound alone, 19 of 24 examples were shown and the code-only answer, the one-line answer and the no-context
+ * answer were among the 5 left out: the model saw how the author explains and never how they just deliver. Each
+ * kind is shown at least once (its example nearest that kind's median length); then kinds take turns, largest
+ * first, while the word budget lasts. Returns indexes into `texts`, in corpus order.
+ */
+export function spreadByKind(texts: readonly string[], kinds: readonly (RequestKind | null)[], budgetWords: number): number[] {
+  const words = texts.map((t) => proseWords(t) || t.trim().split(/\s+/).filter(Boolean).length);
+  const groups = new Map<string, number[]>();
+  texts.forEach((_, i) => { const k = kinds[i] ?? 'unread'; groups.set(k, [...(groups.get(k) ?? []), i]); });
+  // Within a kind, nearest its median length first: a typical example of the kind, not its longest.
+  const ordered = [...groups.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0])).map(([, ix]) => {
+    const med = quantile(ix.map((i) => words[i]), 0.5);
+    return [...ix].sort((a, b) => Math.abs(words[a] - med) - Math.abs(words[b] - med) || a - b);
+  });
+  const chosen: number[] = []; let used = 0;
+  for (let round = 0; ordered.some((g) => g.length > round); round++) {
+    for (const g of ordered) {
+      const i = g[round];
+      if (i === undefined) continue;
+      // The first of each kind is always shown; after that the budget decides.
+      if (round > 0 && used + words[i] > budgetWords) continue;
+      chosen.push(i); used += words[i];
+    }
+  }
+  return chosen.sort((a, b) => a - b);
 }

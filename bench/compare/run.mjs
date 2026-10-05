@@ -149,6 +149,14 @@ function runtimeArm(t) {
       '--max-tokens', String(maxTokens), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
     const done = spawnSync(process.execPath, cmd, { cwd: runtimeSpec.proj, env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj },
       encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
+    // A STRICT REFUSAL IS AN ANSWER TO THE QUESTION "what did the person get", NOT AN ERROR. Exit 3 with "not
+    // delivered (strict delivery)" used to be thrown, retried twice and then end the whole run, so a refusal cost
+    // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
+    if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
+      const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
+      const spentOn = [...(done.stderr ?? '').matchAll(/\$(\d+\.\d+) · everything this run checked/g)].map((m) => Number(m[1])).pop();
+      return { response: null, refused: why.split('; '), usage: {}, cost: spentOn ?? null };
+    }
     if (done.status !== 0) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
     const cost = [...(done.stderr ?? '').matchAll(/\$(\d+\.\d+) · everything this run checked/g)].map((m) => Number(m[1])).pop();
     return { response: done.stdout.trim(), usage: {}, cost: cost ?? null };
@@ -172,14 +180,16 @@ for (let trial = 1; trial <= trials; trial++) {
       try { r = c ? await modelArm(c, t) : runtimeArm(t); } catch (e) { last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`); }
     }
     if (!r) die(`${t.id} failed three times: ${last?.message}`);
-    if (!r.response) die(`${t.id}: the arm returned an empty answer, and an empty answer judged would read as a result`);
+    if (!r.response && !r.refused) die(`${t.id}: the arm returned an empty answer, and an empty answer judged would read as a result`);
+    // A refusal that printed no cost is charged the dearest call seen so far: never zero, and never a reason to stop.
+    if (r.refused && typeof r.cost !== 'number') r.cost = perCall;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
       appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     spent += r.cost; perCall = Math.max(perCall, r.cost);
-    const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: r.cost, model,
+    const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}), usage: r.usage, cost_usd: r.cost, model,
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
       skill_sha256: skillSha, tasks_sha256: tasksSha, split };
     appendFileSync(out, `${JSON.stringify(row)}\n`);

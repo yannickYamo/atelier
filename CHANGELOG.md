@@ -7,6 +7,38 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: a move is carried no more widely than your examples support
+
+For a skill that answers requests ([decision 0013](docs/decisions/0013-carried-no-wider-than-the-corpus.md)). In a
+first development round against a careful hand-written skill, fourteen of fifteen lost cases had one cause: the
+Atelier skill withheld what was asked. A habit of three examples in twenty-four had been compiled as a trait, two
+moves and a built-in paragraph. Rebuild a skill to get these.
+
+- **A move is stated only on evidence:** at least three pieces where it could apply and a lower bound of 0.3 on how
+  often it was made. Below that your own words are shown as one instance and no instruction is written from them.
+- **A stated move carries its condition,** and what to do when it does not hold.
+- **A move that holds back what was asked is yours to rule on.** A refusal, or a question before any answer, is shown
+  as an instance until you say when it applies (`atelier amend --rule <id> --applies-when "<when>"`). The build names
+  each one.
+- **A move is served with its example, or not at all.** The export used to name example files it did not carry.
+- **"How I sound" holds only what holds across your pieces.** A "sometimes" is no longer served as a trait.
+- **The built-in guidance gives what was asked first:** against stated assumptions when something was not shown, and
+  with the safe path when the action is destructive.
+- **The examples shown are spread across the kinds of request you answer,** within a word budget (`--full` for all).
+- The build prints how each move is carried and why. Writing skills are unchanged.
+
+### Added: the closing bar's instruments
+
+- **`bench/compare/failure-modes.mjs`:** one yes or no per failure mode on every answer (withholds the deliverable,
+  refuses without a safe path, invents context, action not first), by code where code can tell.
+- **`bench/compare/closing-quality.mjs` reads the signed bar:** per axis, both arms' failure rates, the reduction,
+  and whether it was reached; and the judge's own disagreement between two reads, with the answers to send a person.
+
+### Fixed
+
+- **The benchmark runner treated a strict refusal as an error,** retried it twice and ended the run, so a refusal
+  cost three runs and a refused task was never recorded. It is now one row, with its reasons, and never retried.
+
 ### Ready for the closing test
 
 Defects found by an outside review of the build, each with what it broke.

@@ -12,6 +12,7 @@
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
 import { describeScope, groundScope } from '../../core/compiler/scope.js';
+import { moveEvidence, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import type { Voice } from '../../core/compiler/voice.js';
@@ -413,10 +414,23 @@ export function renderAgentSkill(
   // enforce it, the honest report is UNSUPPORTED, not a paragraph.
   const exampleCarried = carried.filter((x) => x.carrier === 'EXAMPLE');
   const always = (r: { appliesWhen: string }): boolean => isGeneralScope(r.appliesWhen);
-  const referenceSection = exampleCarried.length
+  // ── A MOVE IS CARRIED NO MORE WIDELY THAN THE CORPUS SUPPORTS (core/compiler/applicability.ts) ──
+  //
+  // The moves a standard holds but does not require. Each is stated as something I do, stated only with its
+  // condition, or shown as one instance and never stated, by how many pieces show it. A move that holds back what
+  // was asked stays an instance until the owner rules on it. The standard is untouched: this is how a rule is carried.
+  const sometimes = exampleCarried.map((x) => x.r).filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE');
+  const moveCarriers = new Map(sometimes.map((r) => [r.requirementId, moveEvidence(r.observedRate, voice?.corpusPieces ?? null, {
+    answers, general: always(r), holdsBack: Boolean(voice?.holdsBack?.includes(r.requirementId)) || HOLDS_BACK.test(r.statement), ownerRuled: ownerWrote(r) })]));
+  const isExemplarOnly = (id: string): boolean => moveCarriers.get(id)?.carrier === 'exemplar';
+  const stated = sometimes.filter((r) => !isExemplarOnly(r.requirementId));
+  // The index names a file only when the file shows something: a stated move, or an instance in the author's own words.
+  const indexed = exampleCarried.filter((x) => !isExemplarOnly(x.r.requirementId) || Boolean(x.r.evidence?.trim()));
+  const referenceSection = indexed.length
     ? `\n## Reference material\n\nEach file below shows an observed realization from the source work. Read a file when its condition\napplies to what you are writing; they are instances, not extra instructions.\n\n`
-      + exampleCarried.map((x) => `- \`examples/${x.r.requirementId}.md\` — `
-        + (always(x.r) ? 'relevant to any piece of this kind' : condition(x.r.appliesWhen))).join('\n') + '\n'
+      + indexed.map((x) => `- \`examples/${x.r.requirementId}.md\` — `
+        + (isExemplarOnly(x.r.requirementId) ? `one instance, not a habit${always(x.r) ? '' : `, from ${condition(x.r.appliesWhen)}`}`
+          : always(x.r) ? 'relevant to any piece of this kind' : condition(x.r.appliesWhen))).join('\n') + '\n'
     : '';
 
   // ── HOW I SOUND (core/compiler/voice.ts, persona.ts) ───────────────────────────────────────────
@@ -425,8 +439,11 @@ export function renderAgentSkill(
   // rounds found rules alone never produced it. The persona says how the author sounds and HOW OFTEN;
   // whole pieces show their modes; the length is theirs. Never their topics, facts or sentences.
   const pieceFiles = (voice?.pieces ?? []).map((_, i) => `examples/voice-${i + 1}.md`);
+  const traits = voice?.persona ? { ...voice.persona, points: voice.persona.points.filter((x) => x.frequency === 'ALWAYS' || x.frequency === 'OFTEN') } : undefined;
   const voiceParts = [
-    voice?.persona?.points.length ? `How I sound, and how often (each point is quoted from my own pieces; a "sometimes" is not an "always"):\n\n${describePersona(voice.persona)}` : '',
+    // A TRAIT IS WHAT HOLDS ACROSS PIECES. A point marked "sometimes" or "rarely" is a conditional habit, and served
+    // under "How I sound" it reads as how I always am: the moves carry such habits, each with its condition.
+    traits?.points.length ? `How I sound (each point is quoted from my own pieces and holds in most or all of them):\n\n${describePersona(traits)}` : '',
     pieceFiles.length ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.` : '',
     voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
     // AN ANSWER'S LENGTH BELONGS TO ITS REQUEST (core/compiler/scope.ts). "My answers usually run about 100 words,
@@ -451,8 +468,12 @@ itself allows (write the fix, the report, the command) and say how to check it. 
 not take or a result you did not see. Finding something out is your job: when the request says where the work is
 (a file, a repository), do it, or say exactly what you would open and change. Ask only for a decision that is
 the person's to make (which environment, which of two services), never for what you could find yourself.
-When the request depends on files or a system you were not shown and cannot open, say what you looked for and
-ask for the one thing that blocks you. Never describe a project, a file or a result you have not seen.`
+Give what was asked first. When the request depends on files or a system you were not shown, write the answer
+against assumptions you state ("assuming \`parseDate(s: string): Date\`"), then ask for the one thing that
+would change it. When an action is destructive, name the risk, give the safe path (a dry run, a backup, the
+narrower command) and then the command. Ask instead of answering only when the request names no target and
+acting on the wrong one would do damage, and then say what you will do with each answer. Never describe a
+project, a file or a result you have not seen.`
     : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
 names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
 ` : '';
@@ -462,19 +483,19 @@ names, figures, sentences, coined terms or stories: a story of mine you were not
   // such moves together became a template a blind reader recognised across five topics. So the moves a
   // standard holds but does not require are stated with how often the author makes them, and one piece
   // may use about as many as the author's own pieces carry on average, never all of them.
-  const sometimes = exampleCarried.map((x) => x.r).filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE');
   const rateOf = (r: StandardVersion['requirements'][number]): number | null => (r.observedRate && r.observedRate.applicable > 0 ? r.observedRate.present / r.observedRate.applicable : null);
-  const expected = sometimes.reduce((n, r) => n + (rateOf(r) ?? 0.5), 0);
-  const perPiece = Math.max(1, Math.min(sometimes.length, Math.round(expected)));
-  const sometimesSection = sometimes.length ? `
+  const expected = stated.reduce((n, r) => n + (rateOf(r) ?? 0.5), 0);
+  const perPiece = Math.max(1, Math.min(stated.length, Math.round(expected)));
+  const counted = (r: StandardVersion['requirements'][number]): string => (r.observedRate ? ` (in ${r.observedRate.present} of ${r.observedRate.applicable} of my pieces where it could apply)` : '');
+  const sometimesSection = stated.length ? `
 ## Moves I sometimes make
 
 ${answers
-    ? 'Not rules: things I do in some answers and not others. Use one only where the request calls for it.'
+    ? 'Not rules: things I do in some answers and not others. Use one only where the request calls for it, and never in place of giving what was asked.'
     : `Not rules: things I do in some pieces and not others. Use about ${perPiece} of them in one piece, only where the piece
 calls for one, and never the same set every time.`}
 
-${sometimes.map((r) => `- ${r.statement.trim()}${r.observedRate ? ` (in ${r.observedRate.present} of ${r.observedRate.applicable} of my pieces where it could apply)` : ''}`).join('\n')}
+${stated.map((r) => `- ${moveCarriers.get(r.requirementId)?.carrier === 'general' || always(r) ? r.statement.trim() : conditionalLine(r.statement, r.appliesWhen)}${counted(r)}`).join('\n')}
 ` : '';
 
   const skillMd = `---
@@ -532,6 +553,17 @@ mintedAt:        ${v.mintedAt}
   const exampleFiles: Record<string, string> = {};
   for (const x of exampleCarried) {
     const r = x.r;
+    // SHOWN, NEVER STATED. A move with too little evidence to be a habit, or one that holds back what was asked and
+    // the owner has not ruled on, reaches the model only as the author's own words in the one situation they came
+    // from. The statement Atelier wrote about it is not served: an instruction read off one piece is what turned
+    // "ask first, in 3 of 24 answers" into an answer that withheld the command.
+    if (isExemplarOnly(r.requirementId)) {
+      const quote = r.evidence?.trim();
+      exampleFiles[`examples/${r.requirementId}.md`] = quote
+        ? `[${r.requirementId}] One instance from my own work${isGeneralScope(r.appliesWhen) ? '' : `, from ${condition(r.appliesWhen)}`}. Not a habit and not a rule: nothing is to be done from it beyond recognising the case.\n\n> ${quote.replace(/\n/g, '\n> ')}\n`
+        : `[${r.requirementId}] Seen too rarely in my work to state, and no passage of mine was anchored for it. Nothing is to be done from this.\n`;
+      continue;
+    }
     // A LINKED REALIZATION SAYS WHOSE FORM IT IS. Without the parent named, the model reads it as one
     // more thing to do; with it, the obligation stays with the decision and this is how that decision
     // characteristically lands. `realizationTolerance` is the author's answer to how tightly the form
@@ -614,6 +646,10 @@ mintedAt:        ${v.mintedAt}
   const conditional = carried.filter((x) => !isGeneralScope(x.r.appliesWhen) && x.carrier !== 'NONE');
   const contextMap: Record<string, string> = conditional.length ? { 'context-map.json': `${JSON.stringify({
     note: 'Serve a component when its condition holds. Unconditional components always serve.',
+    // A MOVE IS SERVED WITH ITS EXAMPLE, OR NOT AT ALL. Without a context named, a conditional move's instruction
+    // was served and its example withheld: the model got "ask one question first" without the answer that shows
+    // the question coming with three commands. Each example file carries its own condition, so all are served.
+    serveAll: true,
     components: conditional.map((x) => ({ requirementId: x.r.requirementId, carrier: x.carrier,
       artifact: x.carrier === 'EXAMPLE' ? `examples/${x.r.requirementId}.md` : 'SKILL.md',
       appliesWhen: x.r.appliesWhen })),

@@ -87,6 +87,8 @@ export interface Run {
    * ratify page's caveat reads it; absent on runs that predate it, which read as checked.
    */
   readonly heldOutChecked?: boolean;
+  /** how many pieces the rules were checked against: what a move's evidence is counted over at build */
+  readonly heldOutPieces?: number;
 }
 
 export const isEnrolled = (r: Run, s: StudyKind): boolean => r.enrolments.some((e) => e.study === s);

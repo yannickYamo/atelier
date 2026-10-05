@@ -106,7 +106,7 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
 
   const ctxFlag = context.toLowerCase();
   const cmap = pkg.files['context-map.json']
-    ? (JSON.parse(pkg.files['context-map.json']) as { components: { requirementId: string; appliesWhen: string }[] })
+    ? (JSON.parse(pkg.files['context-map.json']) as { serveAll?: boolean; components: { requirementId: string; appliesWhen: string }[] })
     : { components: [] };
   const conditional = new Map(cmap.components.map((c) => [c.requirementId, c.appliesWhen]));
   const exampleFiles = Object.keys(pkg.files).filter((f) => f.startsWith('examples/'));
@@ -115,6 +115,9 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
     const id = f.slice('examples/'.length, -'.md'.length);
     const cond = conditional.get(id);
     if (!cond) return true;
+    // A package built since moves are served with their examples (`serveAll`) serves every example file when no
+    // context is named: each carries its own condition. A named context still narrows to the files it matches.
+    if (!ctxFlag && cmap.serveAll) return true;
     if (ctxFlag && cond.toLowerCase().includes(ctxFlag)) return true;
     withheld.push(f); return false;
   });

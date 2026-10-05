@@ -520,6 +520,9 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(skill).toMatch(/a preamble before the answer .*: never \(0 of (\d\d)\)/);
     expect(skill).not.toMatch(/\(\d+ of 2\)/);
     expect(skill).not.toContain('What is 2 to the power of 10?');
+    // a file the skill names is a file the export carries: a move is never served without its example
+    for (const m of skill.matchAll(/`examples\/([\w-]+)\.md`/g)) expect(skill, `examples/${m[1]}.md is named and not inlined`).toContain(`[${m[1]}]`);
+    expect(skill).toMatch(/Give what was asked first\./);
     interface Out { delivered: boolean; output: string | null; cut: string[]; eval: { result: { conformant: boolean }; gates: { claims: { answers: boolean; delivered: number; unconfirmed: number } } } }
     const json = (out: string): Out => JSON.parse(out.slice(out.indexOf('{'))) as Out;
     // a version number and a figure the request never gave: general knowledge in an answer, listed at most, never a refusal

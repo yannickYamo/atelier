@@ -9,8 +9,13 @@ import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
-import { deriveScope, groundScope, type ScopeProfile } from '../../core/compiler/scope.js';
+import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../../core/compiler/scope.js';
+
+/** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
+const ANSWER_EXAMPLE_WORDS = 1200;
 import { isReplyWork } from '../../core/observers/formats.js';
+import { isGeneralScope } from '../../core/state/canonical-state.js';
+import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
@@ -109,6 +114,38 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
         console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
       }
       voice = { ...voice, scope };
+      // The examples shown are spread across the kinds of request the corpus holds, within a word budget, so the
+      // model sees how the author delivers as well as how they explain (core/compiler/scope.ts, `spreadByKind`).
+      if (scope.kinds && voiceFlag === undefined && !argv.includes('--full')) {
+        const shown = spreadByKind(pairs.map((x) => x.text), scope.kinds, ANSWER_EXAMPLE_WORDS);
+        const mix = new Map<string, number>();
+        for (const i of shown) mix.set(scope.kinds[i] ?? 'unread', (mix.get(scope.kinds[i] ?? 'unread') ?? 0) + 1);
+        voice = { ...voice, pieces: shown.map((i) => pairs[i].text) };
+        console.log(`Examples shown: ${shown.length} of ${pairs.length}, spread over the kinds of request you answer (${[...mix].map(([k, n]) => `${k} ${n}`).join(', ')}). --full shows them all.`);
+      }
+    }
+  }
+  // HOW EACH MOVE IS CARRIED (core/compiler/applicability.ts). The moves the standard holds and does not require are
+  // counted against the pieces they were checked on; the ones that hold back what was asked are read by the corpus
+  // reader (the word pattern is its floor) and stay examples until the owner rules on them. Said at build, move by
+  // move, so the owner sees what was stated, what was shown, and the one question that is theirs.
+  const moves = v.requirements.filter((r) => !r.measurement && !r.realizes && r.materiality !== 'REQUIRED' && r.kind === 'GENERATIVE' && r.authority !== 'EXPERT_REJECTED');
+  if (moves.length && isReplyWork(v.workType)) {
+    const pieces = loadSession().run?.heldOutPieces ?? voice.corpusPieces ?? null;
+    const moveBudget: Budget = { spentUsd: 0, capUsd: 0.2, maxCalls: 1 };
+    const read = await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
+    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || HOLDS_BACK.test(r.statement)).map((r) => r.requirementId);
+    voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack };
+    const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers: isReplyWork(v.workType), general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
+    const n = (c: string): number => carried.filter((x) => x.e.carrier === c).length;
+    console.log(`Moves: ${n('general')} stated as something I do, ${n('conditional')} stated only with their condition, ${n('exemplar')} shown as an example and never stated.`);
+    for (const x of carried) console.log(`  ${x.r.requirementId}  ${x.e.why}`);
+    // THE OWNER'S QUESTION. When to refuse, and when to ask before answering, is not read off a few pieces and is
+    // not Atelier's to decide: it is asked, with the move in the owner's hands.
+    const asks = carried.filter((x) => holdsBack.includes(x.r.requirementId) && !ownerWrote(x.r)).slice(0, 3);
+    if (asks.length) {
+      console.log(`\nYours to rule on: ${asks.length} move(s) hold back what was asked (a refusal, or a question before any answer). By default the skill gives what was asked first, with the safe path, and shows these as examples only.`);
+      for (const x of asks) console.log(`  ${x.r.requirementId}  "${x.r.statement.trim().slice(0, 140)}"\n      To make it a rule, say when it applies in your own words: atelier amend --skill ${skillNameFrom(flag('--name') ?? loadSession().skillName ?? 'name')} --rule ${x.r.requirementId} --applies-when "<the cases where you hold back>" --reason "<why>"`);
     }
   }
   if (personaFlag === 'none') return { ...voice, persona: undefined };

@@ -16,4 +16,5 @@ comments say what is true now and link here for how it got that way.
 | [0009](0009-voice-below-the-standard.md) | Voice below the standard: transfer as a declared policy, in-context pairs first, no trained model yet |
 | [0010](0010-closeness-is-a-two-sample-test.md) | Closeness is a two-sample test: one calibrated number per text, and a test over the run |
 | [0011](0011-context-is-read-recorded-and-shown.md) | Context is read, recorded and shown: a small model reads, code decides, and every run names the pieces it was measured against |
-| [0012](0012-the-closing-rules.md) | The closing rules: four claims tested once each by an outside tester against hand-crafted skills, a FAIL final for 1.x, strict delivery opt-in (proposed, awaits the owner's signature) |
+| [0012](0012-the-closing-rules.md) | The closing rules: four claims tested once each by an outside tester against hand-crafted skills; the bar is 20% fewer failures and clearly fewer; a published miss is a close (signed 2026-10-05) |
+| [0013](0013-carried-no-wider-than-the-corpus.md) | A move is carried no more widely than the corpus supports: stated on evidence, with its condition, and a move that holds back is the owner's to rule on |

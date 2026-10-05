@@ -346,7 +346,8 @@ export async function discover(): Promise<void> {
   // named pattern (em dashes, fragments, "not X, it's Y", signposting…) is counted in both. Wide gaps
   // become proposed caps and floors, each checked on held-out pieces first; see core/observers/contrast.ts.
   // Saved BEFORE the optional comparison: whatever happens to it, the discovery already paid for is kept.
-  saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked }, proposals, proposalMeta });
+  // How many pieces the rules were checked against: what a move's "seen in N pieces" is counted over at build.
+  saveSession({ ...s, run: { ...(t as { run: Run }).run, heldOutChecked, ...('heldOutIds' in chain ? { heldOutPieces: chain.heldOutIds.length } : {}) }, proposals, proposalMeta });
   // THE SIGNALS ARE THIS STEP'S OR NONE. Build installs whatever signals.json the run holds, so one left
   // by an earlier discovery would be installed after a comparison that failed, or never ran
   // (--no-contrast), as if this one had found them.

@@ -16,13 +16,25 @@ The hand-crafted skill here is [i-have-adhd](https://github.com/ayghri/i-have-ad
 
 And nothing may be clearly lost on the way: no dimension, blockers or requested depth.
 
+## The signed bar (2026-10-05), which replaces P2 below as the test of "better"
+
+On the quality axis a failure is an answer with a blocker both judge reads agree on, or a named failure mode
+(`bench/compare/failure-modes.mjs`: withholds the deliverable, refuses without a safe path, invents context, action
+not first), each reader qualified first. The Atelier arm reaches the bar when it has **at least 20% fewer failures
+than i-have-adhd, and clearly fewer** (the lower 95% bound of the case-level difference above zero). The config
+seals `"axes": [{"name": "quality", "file": ...}]` and `"bar": {"reduction": 0.2}`. The judge's mean (P1 to P3) is
+reported beside it and no longer decides the claim; the guards P4 and P6 and the rule endpoint P5 stand. Answers whose
+two judge reads disagree on the blocker go to a person (`--disagreements`), and the disagreement rate is reported as
+the judge's noise. A miss is published as measured and closes the claim.
+
 ## Readiness comes before the seal
 
 A FAIL is final for the 1.x line, and "scores higher" is a bar a tie does not clear, so this claim is sealed only
 when development says it is ready ([the brief](INDEPENDENT_TEST_BRIEF.md), phase 0). On development tasks that never
 enter the test, the Atelier skill is run against i-have-adhd, every loss is read and grouped into failure modes, the
 causes are fixed in how a skill is built (never for one task), and the loop repeats. **The claim is sealed when, on
-a held-out half of the development tasks, the Atelier arm scores at least 0.15 higher with a lower bound above zero.**
+the held-out development tasks, the Atelier arm has at least 20% fewer failures than i-have-adhd.** Development runs
+at most three rounds.
 If development never reaches that, the claim is not sealed, and the README says a tie, as it does today. Not sealing
 is not a FAIL.
 

@@ -145,3 +145,62 @@ describe('the voice read is scored over requests, never over single judgments', 
     expect(score(panel(10, 0.9, 3)).verdict).toBe('UNRESOLVED');
   });
 });
+
+describe('the signed bar: 20% fewer failures than the hand-written skill, and clearly fewer', () => {
+  /** An axis file: `cases` cases, the candidate failing `fc` of them and the hand-written skill `fh`. */
+  function axis(cases: number, fc: number, fh: number, shared = fc): string {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-axis-'));
+    const rows: object[] = []; const scores: object[] = [];
+    for (let c = 0; c < cases; c++) {
+      for (const [condition, n] of [['hand', fh], ['plugin', fc]] as const) {
+        // the hand-written skill fails `shared` of the cases the candidate fails, and others of its own
+        rows.push({ case_id: `c${c}`, trial: 1, condition, failed: condition === 'plugin' ? c < n : (c >= fc - shared && c < fc - shared + n) });
+        scores.push({ case_id: `c${c}`, trial: 1, condition, ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, 4])), blocker: false });
+      }
+    }
+    writeFileSync(join(dir, 'axis.jsonl'), jsonl(rows)); writeFileSync(join(dir, 'scores.jsonl'), jsonl(scores));
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ claim: 'A', weights: WEIGHTS, scores: ['scores.jsonl'], conditions: { handwritten: 'hand', candidate: 'plugin' }, margins: { handwritten: -5 }, axes: [{ name: 'quality', file: 'axis.jsonl' }] }));
+    return join(dir, 'config.json');
+  }
+  interface Axes { axes: string[]; endpoints: { AXES: { pass: boolean; reduction: number; candidate: number; handwritten: number }[] } }
+  const run = (config: string): Axes => JSON.parse(node('bench/compare/closing-quality.mjs', '--config', config).out) as Axes;
+  it('reached when the reduction is at least 20% and the difference is clearly above zero', () => {
+    const r = run(axis(200, 30, 60));
+    expect(r.endpoints.AXES[0]).toMatchObject({ pass: true, reduction: 0.5, candidate: 0.15, handwritten: 0.3 });
+    expect(r.axes[0]).toBe('quality: 15% failed against 30% for the hand-written skill, 50% fewer (reached: the bar is 20% fewer and clearly fewer).');
+  });
+  it('not reached when the reduction is under 20%, or when it is 20% and not clearly above zero', () => {
+    expect(run(axis(200, 52, 60)).endpoints.AXES[0]).toMatchObject({ pass: false, reduction: 0.133 });
+    // 25% fewer on forty tasks: the size cannot tell it from no difference
+    const small = run(axis(40, 9, 12, 3));
+    expect(small.endpoints.AXES[0]).toMatchObject({ pass: false, reduction: 0.25 });
+    expect(small.axes[0]).toMatch(/25% fewer \(not reached/);
+  });
+});
+
+describe('one binary check per failure mode', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atelier-modes-'));
+  writeFileSync(join(dir, 'tasks.jsonl'), jsonl([{ id: 't1', prompt: 'Write the test for parseDate.', wants: 'code' }, { id: 't2', prompt: 'Give me the command to reset the branch.', wants: 'command' }, { id: 't3', prompt: 'Is the migration done?', wants: 'status' }]));
+  writeFileSync(join(dir, 'responses.jsonl'), jsonl([
+    { case_id: 't1', trial: 1, condition: 'a', response: 'You should cover the leap year and the empty string. Want me to write it?' },
+    { case_id: 't1', trial: 1, condition: 'b', response: '```ts\nit("parses", () => expect(parseDate("2024-02-29")).toBeTruthy());\n```' },
+    { case_id: 't2', trial: 1, condition: 'a', response: 'I won\'t hand over a command that rewrites history.' },
+    { case_id: 't2', trial: 1, condition: 'b', response: 'I won\'t force it blindly: use `git push --force-with-lease`, which stops if someone else pushed.' },
+    { case_id: 't3', trial: 1, condition: 'a', response: 'Migrations are a delicate topic and there are several things to consider first.' },
+    { case_id: 't3', trial: 1, condition: 'b', response: 'Done: 3 of 3 tables migrated.' },
+    { case_id: 't3', trial: 1, condition: 'c', response: null },
+  ]));
+  it('withholding, refusing without a safe path and action-not-first are decided by code; a strict refusal is a failed answer', () => {
+    const out = join(dir, 'modes.jsonl');
+    expect(node('bench/compare/failure-modes.mjs', '--responses', join(dir, 'responses.jsonl'), '--tasks', join(dir, 'tasks.jsonl'), '--out', out, '--code-only').code).toBe(0);
+    const rows = readFileSync(out, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { case_id: string; condition: string; F1: boolean | null; F2: boolean; F4: boolean; failed: boolean });
+    const of = (c: string, a: string): typeof rows[number] => rows.find((r) => r.case_id === c && r.condition === a)!;
+    expect(of('t1', 'a')).toMatchObject({ F1: true, failed: true });
+    expect(of('t1', 'b')).toMatchObject({ F1: false, failed: false });
+    expect(of('t2', 'a')).toMatchObject({ F1: true, F2: true });
+    expect(of('t2', 'b')).toMatchObject({ F1: false, F2: false, failed: false });
+    expect(of('t3', 'a')).toMatchObject({ F4: true, failed: true });
+    expect(of('t3', 'b')).toMatchObject({ F4: false });
+    expect(of('t3', 'c')).toMatchObject({ F1: true, F2: true, failed: true });
+  });
+});

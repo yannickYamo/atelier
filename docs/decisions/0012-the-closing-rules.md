@@ -1,6 +1,6 @@
 # 0012. The closing rules
 
-**Status.** Proposed 2026-10-04; binding once the owner signs below. It amends [0006](0006-release-contract.md):
+**Status.** Signed by the owner on 2026-10-05. Binding. It amends [0006](0006-release-contract.md):
 0006's four-of-five-domain claim stays a stated goal and gets its first counted test in claim B; its table of what
 blocks a release stands.
 
@@ -16,6 +16,23 @@ The hand-crafted skills are [i-have-adhd](https://github.com/ayghri/i-have-adhd)
 a tie fails. On writing it means the author's rules are held more often with no clear loss on stop-slop's own score,
 and the sentence says "scored higher" only where that was shown. For voice, the in-context pass is taken as far as
 it goes and read once by people.
+
+**The signed bar (2026-10-05).** Against i-have-adhd on answers and stop-slop on writing, on four axes: quality,
+rule anchor, repeatability and voice. On each axis the Atelier skill reaches the bar when it has **at least 20% fewer
+failures than the hand-crafted skill as measured, and clearly fewer**: the lower 95% bound of the case-level
+difference is above zero. What counts as a failure on each axis is in the pre-registrations; the analysis is
+`bench/compare/closing-quality.mjs` (`axes`). This bar replaces the wording above wherever the two differ, and it
+does not change again.
+
+**How this closes (2026-10-05).**
+
+- Nothing new is built unless it fixes a failure the tester measured.
+- Development runs at most three rounds: the tester measures and sends a table of failure modes, the builder fixes
+  causes, the tester measures again. No other brief enters the loop.
+- After the third round the claims are sealed and tested once if the held-out tasks reach the bar. If they do not,
+  what was measured is published as it stands.
+- **A published miss is a close.** "12% fewer, where the bar was 20%" ends the question for the 1.x line exactly as a
+  pass would. A miss is never a reason for another mechanism.
 
 **Decision.**
 
@@ -66,4 +83,4 @@ it goes and read once by people.
 **Not in this record.** A trained voice model. Any new voice mechanism. A claim for each quality dimension
 separately, which would need several hundred tasks per dimension.
 
-**Signed:** _(owner, date)_
+**Signed:** the owner, 2026-10-05 (the bar above, and that a published miss is a close).
