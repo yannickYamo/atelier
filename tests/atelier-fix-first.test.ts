@@ -183,9 +183,13 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
     const std = { ...base, workType } as unknown as StandardVersion;
     return renderAgentSkill(std, compileArchitecture(std), 'x', 'd', null, [], voice).files['SKILL.md'];
   };
-  it('answers: the length is a default the request overrides, and the line against invention names results and systems', async () => {
+  it('answers: no usual length is stated, the request sets it, and the line against invention names results and systems', async () => {
     const m = await md('answers');
-    expect(m).toContain('unless the request asks for more or less');
+    // A word count read off short examples won over "unless the request asks for more": no number is a target now.
+    expect(m).not.toMatch(/My answers usually run about/);
+    expect(m).toContain('How much I write follows the request, never a habit of length.');
+    expect(m).toMatch(/gets every part it asks for at the length that takes/);
+    expect(m).toMatch(/Never describe a project, a file or a result you have not seen/);
     expect(m).toMatch(/Do the work the request asks for instead of\s+handing it back/);
     expect(m).toMatch(/Never describe a step you did\s+not take or a result you did not see/);
     expect(m).toMatch(/Ask only for a decision that is\s+the person's to make/);
@@ -194,7 +198,7 @@ describe('P1-4: a skill for answers is compiled in the words of answers', () => 
   });
   it('polarity: writing keeps the essay wording', async () => {
     const m = await md('writing');
-    expect(m).toContain('My pieces of this kind run about 100 words.');
+    expect(m).toContain('My pieces of this kind run about 100 words when the request names no length. A request that names one, or asks for more or less, sets it.');
     expect(m).toContain('a story of mine you were not given is not yours to tell');
   });
 });

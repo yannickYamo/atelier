@@ -20,6 +20,8 @@ on both counts.
 | Nearness, by shared words | chooses the passages shown and the pieces a reading weighs; shown on every panel | not measured against anyone's judgement of subject | a title shares few words with anything |
 | Nearness, by subject (`nearness=reader`) | the same, read by a small model (opt-in) | not yet: sealed qualification drafted | unmeasured |
 | Register reading (context judge) | names the document type a request asks for; the word table is its floor | not yet: in the same qualification | unmeasured; the word table is right on 25 of 40 labelled requests |
+| Scope reading | what example answers add beyond what was asked; a carrier in the compiled skill | not as an instrument; its effect is tested in the closing test | states no length from answers alone |
+| Coverage reading | under strict delivery: which parts of the request the reply gives; triggers one completion draft | not yet: sealed qualification drafted | unmeasured |
 | Voice gate | refuses a voice rewrite that changed a fact or a claim (the voice pass is opt-in) | not yet: sealed qualification drafted | keeps 32 of 112 faithful pairs on one author |
 | Structure reader | monitor; shapes plan-first drafts (research preview) | reliable, does not separate | FAIL as a separating sensor |
 | Taste reader | monitor until your labels validate it | per skill | unvalidated by default |
@@ -174,6 +176,26 @@ then a small model's second read that must quote what changed and can only refus
   32: the strength word lists read a hedge said in other words as a hedge lost. The qualification reads three
   gates against planted changes, including the reader in the word lists' place
   ([studies/VOICE_GATE_PREREGISTRATION.md](../studies/VOICE_GATE_PREREGISTRATION.md)).
+
+## Scope reading
+
+**What an example answer adds beyond what was asked,** and, when the example carries its request, whether the
+request asked for detail or brevity. One call at build; each finding must be quoted from its own answer; code counts.
+
+- **Role:** a carrier in the compiled skill, like the persona ("a preamble: never, 0 of 12"). It replaces the usual
+  length a skill that answers used to state. It gates nothing.
+- **Validated:** not as an instrument of its own. The behaviour it exists for is checked in the closing test: requests
+  for depth are no longer cut short ([studies/CLOSING_A_PREREGISTRATION.md](../studies/CLOSING_A_PREREGISTRATION.md), P6).
+- **Known limits:** a length is stated only as a record, for a kind of request seen three times or more in pairs.
+
+## Coverage reading
+
+**What a request explicitly asks for, and whether the reply gives each part.** A part must quote the request; a part
+read as given must quote the reply, or it is unclear.
+
+- **Role:** under strict delivery only. A missing part triggers one more draft with the parts named, kept only if it
+  breaks no more REQUIRED rules and leaves fewer parts out. Shown on the panel as a monitor; it decides no verdict.
+- **Validated:** not yet ([studies/COVERAGE_READER_PREREGISTRATION.md](../studies/COVERAGE_READER_PREREGISTRATION.md)).
 
 ## Structure reader
 

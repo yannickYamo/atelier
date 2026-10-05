@@ -87,25 +87,31 @@ export function vendiAtEqualSize(author: Mat, outputs: Mat, seed = 1, draws = 20
  * below the 95th percentile is one the author's own pieces produce. An AUC below 0.5 counts as 0.5, as in the
  * sealed studies: landing below chance by chance is not a closer result. Null with fewer than 2 × MIN_SAMPLE pieces.
  */
-export interface AuthorFloor { readonly median: number; readonly p90: number; readonly p95: number; readonly size: number; readonly splits: number }
-export function floorOf(aucs: readonly number[], size: number): AuthorFloor | null {
+export interface AuthorFloor { readonly median: number; readonly p90: number; readonly p95: number; readonly size: number; readonly other: number; readonly splits: number }
+export function floorOf(aucs: readonly number[], size: number, other = size): AuthorFloor | null {
   if (!aucs.length) return null;
   const xs = aucs.map((a) => Math.max(0.5, a)).sort((a, b) => a - b);
   const q = (p: number): number => r3(xs[Math.min(xs.length - 1, Math.floor(xs.length * p))]);
-  return { median: q(0.5), p90: q(0.9), p95: q(0.95), size, splits: xs.length };
+  return { median: q(0.5), p90: q(0.9), p95: q(0.95), size, other, splits: xs.length };
 }
-export function authorFloor(author: Mat, seed = 1, splits = 40): AuthorFloor | null {
-  const half = Math.floor(author.length / 2);
-  if (half < MIN_SAMPLE) return null;
+/**
+ * `side` is the size of one side of the comparison the floor is for (the outputs, when they are fewer than the
+ * author's pieces): that many of the author's pieces are told from all the rest, so the floor has the sample sizes of
+ * the reading it is read against. Without it, the pieces are split in halves.
+ */
+export function authorFloor(author: Mat, seed = 1, splits = 40, side?: number): AuthorFloor | null {
+  const a = side ?? Math.floor(author.length / 2);
+  const b = side === undefined ? a : author.length - a;
+  if (a < MIN_SAMPLE || b < MIN_SAMPLE) return null;
   const rand = mulberry32(seed);
   const aucs: number[] = [];
   for (let t = 0; t < splits; t++) {
     const idx = author.map((_, i) => i);
     for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
-    const r = c2st(idx.slice(0, half).map((i) => author[i]), idx.slice(half, half * 2).map((i) => author[i]), { seed: seed + t });
+    const r = c2st(idx.slice(a, a + b).map((i) => author[i]), idx.slice(0, a).map((i) => author[i]), { seed: seed + t });
     if (r) aucs.push(r.auc);
   }
-  return floorOf(aucs, half);
+  return floorOf(aucs, a, b);
 }
 
 /** The three readings at once. */

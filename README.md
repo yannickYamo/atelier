@@ -152,7 +152,7 @@ has every command.
 
 Models change every few months. The rules shouldn't change with them.
 
-Two tests come next. An independent reviewer runs the sealed study of voice ([B6](studies/B6_PREREGISTRATION.md)) on their own corpora, read blind by people. Then the head-to-head against GEPA and SkillOpt runs on the same tasks, writer and budget for every arm. Until both are in, voice and the optimizer comparison aren't claimed. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
+What comes next is a closing test by an independent tester: answer quality against a careful hand-written skill, delivery under `--strict`, and one last blind read of voice, each tested once with its pass and fail sentences written first ([the closing rules](docs/decisions/0012-the-closing-rules.md), [the brief](studies/INDEPENDENT_TEST_BRIEF.md)). Until each is in, it isn't claimed. The head-to-head against GEPA and SkillOpt can run at any time and is reported either way. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
 
 ## Learn more
 

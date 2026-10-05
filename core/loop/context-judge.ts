@@ -30,7 +30,19 @@ export interface RequestIntent {
   readonly document?: string | null;
 }
 
+/** One thing a request explicitly asks for, and whether the reply gives it. `covered` is null when the reader said yes without a real quote. */
+export interface AskedPart { readonly words: string; readonly covered: boolean | null; readonly where?: string }
+export interface RequestCoverage { readonly parts: readonly AskedPart[] }
+
 export interface ContextJudge {
+  /**
+   * WHAT THE REQUEST ASKS FOR, AND WHETHER THE REPLY GIVES EACH PART. "Walk me through PKCE, I want a detailed
+   * explanation" met a skill that had learned short answers, and came back condensed; "plan the migration with
+   * rollback points" came back without the rollback points. Whether a reply covers what was asked is a reading.
+   * Each part must be quoted from the request, and a part marked covered must quote the reply. Null when the judge
+   * could not answer. Optional: a judge that cannot read coverage leaves the run as it was.
+   */
+  covers?(task: string, output: string): Promise<RequestCoverage | null>;
   /** What the request itself asks of the output's form. Null when the judge could not answer. */
   requestIntent(task: string): Promise<RequestIntent | null>;
   /** For each pair, whether `next` still reads on its own once `removed` is gone. Null when it could not answer. */
@@ -62,12 +74,41 @@ const WORK_SYSTEM = `You read an assistant's answer, sentence by sentence. Mark 
 const WORK_SCHEMA = { type: 'object', properties: { claims: { type: 'array', items: { type: 'number' } } },
   required: ['claims'], additionalProperties: false };
 
+export const COVER_SYSTEM = `You get a request and the reply to it. List each distinct thing the request explicitly asks the reply to contain, explain, compare, plan or do, quoting the request's own words for it (a few words each; at most eight parts; a plain question is one part). An instruction about form ("return only the code", "in one line") is not a part.
+
+For each part say whether the reply gives it:
+- covered true, with a short quote copied exactly from the reply where it does;
+- covered false, when the reply does not give it, gives it only in passing where the request asked for detail, or hands it back to the person.
+
+Giving it means the content is there, not that the word appears. Judge only what the request asks for in so many words.`;
+const COVER_SCHEMA = { type: 'object', properties: { parts: { type: 'array', items: { type: 'object',
+  properties: { words: { type: 'string' }, covered: { type: 'boolean' }, where: { type: ['string', 'null'] } }, required: ['words', 'covered', 'where'], additionalProperties: false } } },
+  required: ['parts'], additionalProperties: false };
+
+const squash = (s: string): string => s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
+/** The parts of a model's answer that quote the request; a "covered" with no real quote from the reply is unclear, never covered. */
+export function coverageOf(task: string, output: string, raw: unknown): RequestCoverage | null {
+  const list = (raw as { parts?: unknown } | null)?.parts;
+  if (!Array.isArray(list)) return null;
+  const t = squash(task); const o = squash(output);
+  const parts: AskedPart[] = [];
+  for (const x of list as { words?: unknown; covered?: unknown; where?: unknown }[]) {
+    const words = typeof x.words === 'string' ? x.words.trim() : '';
+    if (words.length < 3 || !t.includes(squash(words)) || typeof x.covered !== 'boolean' || parts.some((p) => squash(p.words) === squash(words))) continue;
+    const where = typeof x.where === 'string' && x.where.trim().length >= 3 && o.includes(squash(x.where)) ? x.where.trim() : null;
+    parts.push(x.covered ? (where ? { words, covered: true, where } : { words, covered: null }) : { words, covered: false });
+    if (parts.length === 8) break;
+  }
+  return { parts };
+}
+
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 /** A judge backed by a small model. Every failure is a null, and the caller falls back to its patterns. */
 export function modelJudge(client: InferenceClient, budget: Budget): ContextJudge {
   const intents = new Map<string, RequestIntent | null>();
   const answers = new Map<string, ReadonlySet<number> | null>();
+  const covered = new Map<string, RequestCoverage | null>();
   const ask = async (system: string, user: string, tool: string, schema: Record<string, unknown>): Promise<unknown> => {
     try {
       const res = await spend(budget, 0.005, async () => {
@@ -115,5 +156,14 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
         : null);
     },
     workClaims(sentences) { return answers.get(sha(sentences.join('\n'))) ?? null; },
+    async covers(task, output) {
+      if (!task.trim() || !output.trim()) return null;
+      // One reading per text for the run: the panel reads the delivered text the loop already read.
+      const k = sha(`${task}\u0000${output}`);
+      if (covered.has(k)) return covered.get(k) ?? null;
+      const out = coverageOf(task, output, await ask(COVER_SYSTEM, `<request>\n${task}\n</request>\n\n<reply>\n${output}\n</reply>`, 'emit_coverage', COVER_SCHEMA));
+      covered.set(k, out);
+      return out;
+    },
   };
 }

@@ -22,6 +22,7 @@ import { putEval } from '../../core/state/eval-store.js';
 import { renderRetrieved } from '../../core/fidelity/retrieval.js';
 import { lexicalNearness, readerNearness, nearWeight, referenceWeight, retrieveNear, type Nearness } from '../../core/fidelity/nearness.js';
 import { gradeSubjects, SUBJECT_READER_VERSION } from '../../core/fidelity/subject-reader.js';
+import type { ContextJudge } from '../../core/loop/context-judge.js';
 import { spendOneWithResult, type DraftVariant, type Written } from './improve.js';
 import { planSections, sectionBlock, joinSections, MAX_SECTIONS, type SectionPlan } from '../../core/fidelity/sections.js';
 import * as fstore from '../../core/state/fidelity-store.js';
@@ -280,9 +281,17 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const authorTarget = flag('--until-author') === undefined ? null : numericFlag('--until-author', 0.5);
   if (authorTarget !== null && !(authorTarget > 0 && authorTarget < 1)) die(`--until-author takes a probability between 0 and 1, got ${flag('--until-author')}.`);
   if (authorTarget !== null && !fid?.profile.detector) die(`--until-author needs the skill's style detector, trained at discovery against model drafts; rebuild ${name} from its corpus.`);
-  const shapeRounds = shapeTarget === null && authorTarget === null ? 0 : Math.floor(numericFlag('--shape-rounds', 3));
-  if ((shapeTarget !== null || authorTarget !== null) && shapeRounds < 1) die('--shape-rounds must be at least 1: each round is one more draft.');
-  if (shapeRounds > 0 && argv.includes('--no-repair')) die('--until-typical and --until-author check each round before keeping it, and --no-repair turns the checks off: drop one of them.');
+  const shapeAsked = shapeTarget !== null || authorTarget !== null;
+  // STRICT DELIVERY (`--strict`, or `fidelity --set delivery=strict`): an output is delivered only when its verdict
+  // is conformant. A reply that leaves out part of what the request asks is completed once; a draft that still
+  // breaks a REQUIRED rule is written again (--redraws, default 2); what still does not conform is refused, with
+  // its reasons and a failing exit. `--allow-nonconformant` delivers it anyway, marked, and still exits failing.
+  const strict = (argv.includes('--strict') || runSettings?.delivery === 'strict') && std !== null && contractFile === null;
+  if (argv.includes('--strict') && argv.includes('--no-repair')) die('--strict delivers only a checked output, and --no-repair turns the checks off: drop one of them.');
+  const redraws = strict && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--redraws', 2))) : 0;
+  const shapeRounds = Math.max(shapeAsked ? Math.floor(numericFlag('--shape-rounds', 3)) : 0, redraws);
+  if (shapeAsked && shapeRounds < 1) die('--shape-rounds must be at least 1: each round is one more draft.');
+  if (shapeAsked && argv.includes('--no-repair')) die('--until-typical and --until-author check each round before keeping it, and --no-repair turns the checks off: drop one of them.');
   // PLAN-FIRST (`--structure plan`, core/structure/skeleton.ts): each draft is written against its own skeleton of
   // paragraph moves, sampled from the author's chain with their pieces nearest the request counted more.
   const structureFlag = flag('--structure');
@@ -320,12 +329,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0))),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0)),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
-      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)) };
+      + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)
+      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0)) };
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -433,7 +443,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const overridden = !ran || !rel || argv.includes('--sections') || argv.includes('--no-repair')
     || ran.drafts !== rel.drafts || ran.editBudget !== rel.editBudget || ran.retrievalK !== rel.retrievalK || ran.notesCap !== rel.notesCap
     || Boolean(ran.diversity) !== Boolean(rel.diversity) || voiceMode !== (rel.voice ?? 'off') || shapeTarget !== null || authorTarget !== null || sampling !== (rel.selection === 'sample' && Boolean(fid?.profile.detector)) || Boolean(structureFlag)
-    || contextWanted !== (rel.context === 'local') || nearnessWanted !== (rel.nearness === 'reader');
+    || contextWanted !== (rel.context === 'local') || nearnessWanted !== (rel.nearness === 'reader') || strict !== (rel.delivery === 'strict');
   const trace: FidelityTrace = { drafts: [], edits: [], variants: [] };
   // Out of register the author's range steers only on the features the policy carries; the rest are read, not steered by.
   const carried = fid && policy && register?.status === 'out' ? carriedProfile(fid.profile, policy) : fid?.profile ?? null;
@@ -467,14 +477,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // ONE CLAIM VERDICT PER RUN. The report the repair counted on the text it delivered (two reads agreed, and each
   // sentence's verdict held for the run by claimMemory) is the one the panel shows: a fresh read of the same text
   // is another sample of a noisy reader, and two samples of one run disagreed (7, 2 and 5 flags in a live test).
+  const completions: string[] = [];
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null } : null),
-      shapeRounds > 0 && fid ? { client, budget, calibration: fid.typicality, detector: fid.profile.detector, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
+      strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
+      shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
       planState ? { budget, trace, state: planState } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
@@ -486,7 +498,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
-        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }), ...(nearnessWanted ? { nearness: 'reader' as const } : { nearness: undefined }) }, overridden,
+        ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }), ...(nearnessWanted ? { nearness: 'reader' as const } : { nearness: undefined }),
+        ...(strict ? { delivery: 'strict' as const } : { delivery: undefined }) }, overridden,
       policy && register ? { L, policy, register, traits, mode: voiceMode,
         note: voiceMode === 'incontext' && !voiceRuns ? (register.status === 'out' ? 'not run out of register: pairs carry the whole voice of the register they were written in'
           : !bank || bank.pairs.length < MIN_PAIRS ? `not run: the pair bank holds fewer than ${MIN_PAIRS} pairs (atelier voice pairs)` : 'not run on this kind of output') : null } : null, local,
@@ -494,7 +507,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
         ...(local ? ['range' as const] : []), ...(planState ? ['skeleton' as const] : [])] } : null) : null);
 
   reportDrift(report, L, sv, rec);
-  if (!machine) console.log(`\n${rec.output}\n`);
+  // Under strict delivery nothing is printed until the verdict is known.
+  if (!machine && !strict) console.log(`\n${rec.output}\n`);
+  for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
@@ -517,17 +532,31 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
-      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []) });
+      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []),
+      // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when
+      // the loop already read this text. A monitor on the panel: it never decides the verdict.
+      coverage: strict && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
+      strict: strict ? { redraws, allowed: argv.includes('--allow-nonconformant') } : null });
   } catch (e) {
     report.say(`(the evaluation of this run could not be built: ${(e as Error).message.split('\n')[0]})`);
   }
   if (evaluation) putEval(L, evaluation);
   const showPanel = evaluation && !argv.includes('--quiet') && (argv.includes('--panel') || (!machine && process.stdout.isTTY));
+  // STRICT DELIVERY: THE VERDICT DECIDES. An output that does not conform (or whose evaluation could not be built) is
+  // not delivered: the reasons are, with a failing exit. The record keeps the text, for `atelier report`.
+  const nonconformant = strict && !evaluation?.result.conformant;
+  const refused = nonconformant && !argv.includes('--allow-nonconformant');
+  if (nonconformant) process.exitCode = STRICT_EXIT;
+  if (strict && !machine && !refused) console.log(`\n${nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n' : ''}${rec.output}\n`);
+  if (refused) {
+    const why = evaluation ? evaluation.result.reasons.join('; ') : 'the run could not be evaluated';
+    console.error(`atelier: not delivered (strict delivery): ${why}. The text is kept with the record: atelier report ${rec.invocationId}. To deliver it anyway, marked: --allow-nonconformant.`);
+  }
   if (showPanel && evaluation) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
-  if (machine === 'answer') process.stdout.write(`${rec.output}\n`);
+  if (machine === 'answer' && !refused) process.stdout.write(`${rec.output}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
-      output: rec.output, invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
+      output: refused ? null : rec.output, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
@@ -858,6 +887,39 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
  */
 /** One shape round: its delivered text, its draft, its readings, and the trace it alone produced. */
 interface ShapeRound { d: Delivered; draft: string; p: number; author: number | null; broken: number; edits: FidelityTrace['edits']; voice: FidelityTrace['voice']; taken: readonly TasteReading[] | null; notes: string[] }
+
+/** The exit code of a strict run whose output did not conform, delivered or not. */
+export const STRICT_EXIT = 3;
+
+/**
+ * GIVE WHAT WAS ASKED, ONCE MORE (strict delivery). The checked output is read against the request
+ * (core/loop/context-judge.ts, `covers`): each thing the request explicitly asks for, and whether the reply gives
+ * it. When a part is missing, one more draft is written with those parts named, put through the same checks, and
+ * kept only if it breaks no more REQUIRED rules and leaves fewer parts out. The instruction never asks for
+ * content the writer does not have: a part it cannot give, it must say so. A reader that cannot answer changes nothing.
+ */
+function withCoverage(refine: (draft: string) => Promise<Delivered>,
+  c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[] } | null) {
+  if (!c?.judge.covers) return refine;
+  const covers = c.judge.covers.bind(c.judge);
+  return async (draft: string) => {
+    const d = await refine(draft);
+    try {
+      const missing = ((await covers(c.asked, d.output))?.parts ?? []).filter((p) => p.covered === false).map((p) => p.words);
+      if (!missing.length) return d;
+      const note = `An earlier reply left out parts of what the request asks for: ${missing.map((m) => `"${m}"`).join('; ')}. Write the reply so that it gives each of them in full, at the length that takes. `
+        + 'If you cannot give one because you were not shown what it needs, say so plainly and ask for it. Never invent a file, a project, a figure or a result.';
+      const piece = (await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, note, {})).piece;
+      const d2 = await refine(piece);
+      const missing2 = ((await covers(c.asked, d2.output))?.parts ?? []).filter((p) => p.covered === false).length;
+      const better = brokenIn(d2.report).length <= brokenIn(d.report).length && missing2 < missing.length;
+      c.notes.push(better ? `Completed: the first reply left out ${missing.length} part(s) of the request (${missing.map((m) => `"${m}"`).join('; ')}); it was written again and now leaves out ${missing2}.`
+        : `The reply leaves out ${missing.length} part(s) of the request (${missing.map((m) => `"${m}"`).join('; ')}); one more draft did not do better, so the first is kept.`);
+      if (better && !d2.repair) return { ...d2, repair: { passes: 0, violatedBefore: [], violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again to give every part the request asks for' } };
+      return better ? d2 : d;
+    } catch { return d; }
+  };
+}
 
 function withShape(refine: (draft: string) => Promise<Delivered>,
   s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;

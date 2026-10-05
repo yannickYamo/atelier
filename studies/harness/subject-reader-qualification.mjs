@@ -30,6 +30,8 @@ const request = (title, words) => `Write a blog post titled "${title}". About ${
 const rate = (k, n) => ({ k, n, share: n ? Math.round((k / n) * 1000) / 1000 : null, ci95: n ? (({ lo, hi }) => [Math.round(lo * 1000) / 1000, Math.round(hi * 1000) / 1000])(clopperPearson(k, n)) : null });
 
 const result = { reader: `${SEALED_READER_VERSION}:${READER}`, corpora: [], register: null };
+// A GRADING THAT FAILED IS COUNTED, NEVER SKIPPED: a reader that answers half the time is not a reader that passed.
+let attempted = 0; let failed = 0;
 const pooled = { knownR: [0, 0], knownL: [0, 0], coverR: [0, 0], coverL: [0, 0], farR: [0, 0], farL: [0, 0], first: [], second: [], nearShare: [] };
 for (const c of PLAN.corpora) {
   // The title line is removed before the index is built: a card must be read from the body, never from the title.
@@ -39,8 +41,9 @@ for (const c of PLAN.corpora) {
   const ids = piecesOf(index);
   if (cards.cards.length < ids.length) console.error(`${c.name}: ${ids.length - cards.cards.length} piece(s) got no card`);
   const grade = async (req) => {
+    attempted += 1;
     const a = await gradeSubjects(client, budget, req, cards); const b = await gradeSubjects(client, budget, req, cards);
-    if (!a || !b) return null;
+    if (!a || !b) { failed += 1; return null; }
     for (const id of ids) { pooled.first.push(a.has(id)); pooled.second.push(b.has(id)); }
     return readerNearness(index, a, result.reader, cards.hash);
   };
@@ -80,7 +83,8 @@ for (const q of SETS.register) {
   const intent = await judge.requestIntent(q.request);
   const byReader = intent ? decideRegister(['post'], q.request, undefined, null, intent.document).request : undefined;
   const byTable = decideRegister(['post'], q.request, undefined).request;
-  if (byReader === undefined) { reg.rows.push({ ...q, failed: true }); continue; }
+  attempted += 1;
+  if (byReader === undefined) { failed += 1; reg.rows.push({ ...q, failed: true }); continue; }
   reg.n += 1; reg.reader += byReader === q.register ? 1 : 0; reg.table += byTable === q.register ? 1 : 0;
   reg.rows.push({ ...q, reader: byReader, table: byTable });
 }
@@ -89,17 +93,23 @@ const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.lengt
 const m = { knownItem: { reader: rate(...pooled.knownR), lexical: rate(...pooled.knownL) }, coverage: { reader: rate(...pooled.coverR), lexical: rate(...pooled.coverL) },
   falseNear: { reader: rate(...pooled.farR), lexical: rate(...pooled.farL) }, selectivity: { medianShareNear: median(pooled.nearShare) },
   repeat: { kappa: kappa(pooled.first, pooled.second), pairs: pooled.first.length }, register: { reader: rate(reg.reader, reg.n), table: rate(reg.table, reg.n) } };
-// THE BARS, AS SEALED.
+// THE BARS, AS SEALED. A share that could not be computed (nothing was read) holds no bar: `null <= 0.05` is true
+// in JavaScript, and a reader that read nothing would have passed the false-near bar.
+const num = (x) => typeof x === 'number' && Number.isFinite(x);
 const bars = {
-  knownItem: m.knownItem.reader.share >= 0.8 && m.knownItem.reader.share >= m.knownItem.lexical.share,
-  selectivity: m.selectivity.medianShareNear !== null && m.selectivity.medianShareNear <= 1 / 3,
-  coverage: m.coverage.reader.share >= 0.8 && m.coverage.reader.share > m.coverage.lexical.share,
-  falseNear: m.falseNear.reader.share <= 0.05,
-  repeat: m.repeat.kappa !== null && m.repeat.kappa >= 0.8,
-  register: m.register.reader.share >= 0.9 && m.register.reader.share >= m.register.table.share,
+  knownItem: num(m.knownItem.reader.share) && num(m.knownItem.lexical.share) && m.knownItem.reader.share >= 0.8 && m.knownItem.reader.share >= m.knownItem.lexical.share,
+  selectivity: num(m.selectivity.medianShareNear) && m.selectivity.medianShareNear <= 1 / 3,
+  coverage: num(m.coverage.reader.share) && num(m.coverage.lexical.share) && m.coverage.reader.share >= 0.8 && m.coverage.reader.share > m.coverage.lexical.share,
+  falseNear: num(m.falseNear.reader.share) && m.falseNear.reader.share <= 0.05,
+  repeat: num(m.repeat.kappa) && m.repeat.kappa >= 0.8,
+  register: num(m.register.reader.share) && num(m.register.table.share) && m.register.reader.share >= 0.9 && m.register.reader.share >= m.register.table.share,
 };
+// MORE THAN ONE READING IN TWENTY FAILED: the study is UNRESOLVED, whatever the bars say of what did come back.
+const complete = attempted > 0 && failed / attempted <= 0.05;
 result.register = reg.rows; result.measures = m; result.bars = bars;
-result.verdict = { subject: bars.knownItem && bars.selectivity && bars.coverage && bars.falseNear && bars.repeat ? 'PASS' : 'FAIL', register: bars.register ? 'PASS' : 'FAIL' };
+result.readings = { attempted, failed };
+result.verdict = !complete ? { subject: 'UNRESOLVED', register: 'UNRESOLVED', why: `${failed} of ${attempted} readings failed` }
+  : { subject: bars.knownItem && bars.selectivity && bars.coverage && bars.falseNear && bars.repeat ? 'PASS' : 'FAIL', register: bars.register ? 'PASS' : 'FAIL' };
 result.spentUsd = Math.round(budget.spentUsd * 1000) / 1000;
 writeFileSync(join(OUT, 'subject-reader.json'), JSON.stringify(result, null, 1));
 console.log(JSON.stringify({ measures: m, bars, verdict: result.verdict, spentUsd: result.spentUsd }, null, 1));

@@ -83,7 +83,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'structured-output', 'supersedes', 'target-backend', 'target-base-url', 'target-model',
   'target-price-in', 'target-price-out', 'target-provider', 'target-strict-schema', 'target-structured-output',
   'task', 'material', 'temperature', 'want', 'to', 'token-limit-param', 'verdict',
-  'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context', 'nearness',
+  'why', 'work-type', 'override', 'edits', 'contrast-drafts', 'settings', 'contrast-models', 'topics', 'resamples', 'register', 'until-typical', 'shape-rounds', 'calibrate-from', 'until-author', 'select', 'structure', 'read-structure-from', 'context', 'nearness', 'redraws',
 ];
 
 export const BOOLEAN_OPTIONS: readonly string[] = [
@@ -92,7 +92,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant',
 ];
 
 export const argv = process.argv.slice(2);

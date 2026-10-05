@@ -15,6 +15,7 @@
 //
 // Pieces reserved for blind testing never reach this module: callers pass readable pieces only.
 
+import type { ScopeProfile } from './scope.js';
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
 import { functionProfile, proseWords, patternRate, FUNCTION_WORDS, type PatternId } from '../observers/style.js';
 import type { Persona } from './persona.js';
@@ -23,18 +24,23 @@ import type { Persona } from './persona.js';
 export interface Voice {
   /** short passages served inline (the first design; kept so packages built with it still render) */
   readonly passages: readonly string[];
-  /** the middle half of the author's piece lengths, in words, rounded to 100 */
+  /** the middle half of the author's piece lengths, in words. Stated for writing only: an answer's length belongs to its request (./scope.ts) */
   readonly lengthWords: readonly [number, number] | null;
+  /** how much the author writes for what was asked, for a skill that answers requests (./scope.ts) */
+  readonly scope?: ScopeProfile;
   /** WHOLE pieces chosen to span the author's modes (`selectVoicePieces`), served as reference files */
   readonly pieces?: readonly string[];
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
   readonly persona?: Persona;
 }
 
-/** The middle half of the author's piece lengths in prose words, rounded to 100; null under three pieces. */
+/**
+ * The middle half of the author's piece lengths in prose words; null under three pieces. Rounded to 100 from 200
+ * words up and to 10 below: with a floor of 100, answers of 9 to 108 words were described as "about 100 words".
+ */
 export function usualLength(pieces: readonly string[]): readonly [number, number] | null {
   const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
-  const round = (n: number): number => Math.max(100, Math.round(n / 100) * 100);
+  const round = (n: number): number => (n < 200 ? Math.max(10, Math.round(n / 10) * 10) : Math.round(n / 100) * 100);
   return lengths.length >= 3 ? [round(quantile(lengths, 0.25)), round(quantile(lengths, 0.75))] as const : null;
 }
 

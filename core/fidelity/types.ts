@@ -196,6 +196,13 @@ export interface ImplementationSettings {
    * floor. Opt-in: needs the cards (`atelier fidelity --read-subjects`).
    */
   readonly nearness?: 'reader';
+  /**
+   * HOW AN OUTPUT IS DELIVERED: absent, as 1.0 delivers it (the output with its verdict, exit 0); 'strict', only
+   * when the verdict is conformant. Under 'strict' the request is read for what it asks, a reply that leaves a part
+   * out is completed once, a draft that breaks a REQUIRED rule is written again, and an output that still does not
+   * conform is refused with its reasons and a failing exit. Opt-in in 1.x (decision 0008); the default from 2.0.
+   */
+  readonly delivery?: 'strict';
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */

@@ -33,6 +33,11 @@ const request = (title, words) => `Write a blog post titled "${title}". About ${
 const studied = (arm, title) => STUDY[h(`${c.name}|${arm}|${title}`).slice(0, 16)];
 const held = c.heldOut.map((f) => { const text = readFileSync(f, 'utf8'); return { f, text, title: titleOf(text, f) }; });
 const read = c.read.map((f) => readFileSync(f, 'utf8'));
+// THE PASTED ARM WAS SHOWN THE FIRST FOUR READ PIECES (studies/harness/indistinguishability.mjs). A reader shown an
+// excerpt of one of them would be comparing the pasted output with its own source, so excerpts come from the rest.
+const PASTED = 4;
+const excerptable = read.slice(PASTED);
+if (excerptable.length < 2) fail(`${c.name}: fewer than two read pieces outside the ${PASTED} the pasted arm was shown; no excerpt can be drawn fairly.`);
 for (const x of held) for (const arm of ['pasted', 'atelier']) if (!studied(arm, x.title)?.output) fail(`the study's cache holds no ${arm} output for "${x.title}".`);
 
 const FLAGS = ['--voice', 'incontext', ...(arg('--nearness') === 'reader' ? ['--nearness', 'reader'] : [])];
@@ -97,7 +102,10 @@ for (let r = 1; r <= READERS; r++) {
   const order = held.filter((x) => voice(x.title)).sort((a, b) => h(`order|${r}|${a.title}`).localeCompare(h(`order|${r}|${b.title}`)));
   let page = `# Which one reads more like this author? (reader ${r})\n\nEach section shows two excerpts by the author, then two new pieces on one subject, A and B. Neither was written by the author. Mark the one that reads more like the author of the excerpts. Read both in full. Do not open the key before you finish.\n`;
   order.forEach((x, k) => {
-    const refs = [0, 1].map((i) => cut(clean(read[parseInt(h(`ref|${r}|${x.title}|${i}`).slice(0, 6), 16) % read.length]), 250));
+    // Two different pieces, neither one the pasted arm saw.
+    const first = parseInt(h(`ref|${r}|${x.title}|0`).slice(0, 6), 16) % excerptable.length;
+    const second = (first + 1 + (parseInt(h(`ref|${r}|${x.title}|1`).slice(0, 6), 16) % (excerptable.length - 1))) % excerptable.length;
+    const refs = [first, second].map((i) => cut(clean(excerptable[i]), 250));
     const p = clean(studied('pasted', x.title).output); const v = clean(voice(x.title).output);
     const words = Math.min(p.split(/\s+/).length, v.split(/\s+/).length);
     const voiceFirst = parseInt(h(`side|${r}|${x.title}`).slice(0, 2), 16) % 2 === 0;

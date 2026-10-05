@@ -30,7 +30,7 @@ import { releaseWithSettings } from '../fidelity.js';
 import { calibrateTypicality, standardise, typicalityOf, MAX_UNMEASURED, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
 import { readJson } from '../../core/state/read-json.js';
 import { basename } from 'node:path';
-import { closeness, MIN_SAMPLE } from '../../core/fidelity/twosample.js';
+import { closeness, authorFloor, MIN_SAMPLE } from '../../core/fidelity/twosample.js';
 import { readStructure, STRUCTURE_READER_VERSION, type StructureMove } from '../../core/structure/moves.js';
 import { structureFeatures, STRUCTURE_FEATURES } from '../../core/structure/features.js';
 import { chainOf, typicalLength } from '../../core/structure/skeleton.js';
@@ -189,6 +189,7 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
   let selection = base.selection;
   let context = base.context;
   let nearness = base.nearness;
+  let delivery = base.delivery;
   for (const part of spec.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
     if (k === 'selection') {
@@ -199,6 +200,11 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
     if (k === 'context') {
       if (!['local', 'off'].includes(v)) die(`"context" is local or off, got "${v}".`);
       context = v === 'local' ? 'local' : undefined;
+      continue;
+    }
+    if (k === 'delivery') {
+      if (!['strict', 'open'].includes(v)) die(`"delivery" is strict or open, got "${v}".`);
+      delivery = v === 'strict' ? 'strict' : undefined;
       continue;
     }
     if (k === 'nearness') {
@@ -216,17 +222,17 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
       diversity = ['1', 'on', 'true'].includes(v);
       continue;
     }
-    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, selection, context or nearness.`);
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, selection, context, nearness or delivery.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
     counts[k] = Math.floor(n);
   }
   if (counts.drafts < 1) die('drafts must be at least 1.');
-  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}) };
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>
-  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}${s.context === 'local' ? ', held to your range on the request\'s subject' : ''}${s.nearness === 'reader' ? ', nearest pieces read by subject' : ''}`;
+  `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}${s.context === 'local' ? ', held to your range on the request\'s subject' : ''}${s.nearness === 'reader' ? ', nearest pieces read by subject' : ''}${s.delivery === 'strict' ? ', strict delivery (only a conformant output is delivered)' : ''}`;
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 
@@ -260,10 +266,14 @@ function reportCloseness(L: store.StoreLayout, profileHash: string, records: rea
   const free = records.filter((r) => !r.fidelity?.shape && measurable(r));
   const outputs = free.map((r) => standardise(r.reading.values, cal.features, cal.center, cal.scale));
   const c = closeness(cal.vectors, outputs);
+  // THE FLOOR AT THE SIZE OF THE COMPARISON. The reading above tells `outputs` from all of your pieces; the floor
+  // tells a set of your pieces the size of the smaller side from the rest. Halves of your pieces are smaller than
+  // either side, and a smaller sample reads a higher AUC by chance.
+  const floor = authorFloor(cal.vectors, 1, 40, Math.min(outputs.length, Math.floor(cal.vectors.length / 2)));
   console.log(`${c.outputs} output(s) against ${c.author} of your pieces, over ${cal.features.length} feature(s)${steered.length ? `; ${steered.length} run(s) steered toward typicality left out, since they were chosen on these same features` : ''}${unplaced ? `; ${unplaced} too short to place left out` : ''}.`);
   console.log(c.c2st ? `  told apart by a held-out classifier: AUC ${c.c2st.auc} (95% CI ${c.c2st.ci95[0]} to ${c.c2st.ci95[1]}); 0.5 means it cannot tell them apart`
     : '  classifier two-sample test: not run (at least 6 on each side)');
-  console.log(c.floor ? `  your own pieces told from each other (random halves of ${c.floor.size}, ${c.floor.splits} splits): AUC ${c.floor.median} at the median, ${c.floor.p95} at the 95th percentile; an AUC above at or below that is one your own pieces give`
+  console.log(floor ? `  your own pieces told from each other (${floor.size} against ${floor.other}, ${floor.splits} random splits): AUC ${floor.median} at the median, ${floor.p95} at the 95th percentile; an AUC above at or below that is one your own pieces give`
     : `  your own pieces told from each other: not run (it needs ${MIN_SAMPLE * 2} of your pieces, and the calibration holds ${c.author})`);
   if (c.mmd) console.log(`  kernel two-sample test (MMD): p ${c.mmd.p}${c.mmd.p < 0.05 ? ', the outputs differ from your pieces' : ', no difference detected at this size'}`);
   if (c.vendi) console.log(`  variety at ${c.vendi.size} texts each: yours ${c.vendi.author} distinct, the outputs ${c.vendi.outputs}`);
