@@ -50,6 +50,9 @@ Each request is graded twice by the reader (temperature 0, no cache between the 
 | Repeatability | Cohen's kappa of near or not, first read against second, over every (request, piece) pair | at least 0.80 |
 | Register | share of the 40 requests whose document type is read right | reader at least 0.90, and at least the table's share |
 
+A grading that fails is counted, never skipped. If more than one reading in twenty fails, both verdicts are
+**UNRESOLVED**, whatever the bars say of what came back; a share that could not be computed holds no bar.
+
 **Subject reader: PASS** when the first five bars all hold. **Register reading: PASS** when the sixth holds. The two
 verdicts are separate.
 

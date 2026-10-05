@@ -7,6 +7,42 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: how much a skill writes follows the request, never a learned length
+
+- **A skill that answers states no usual length.** A skill built from twelve answers of 9 to 108 words said "my
+  answers usually run about 100 words", and on a request that said "I explicitly want a detailed explanation" it
+  wrote a third of what the bare model wrote. The number was the size of twelve questions the skill had never seen.
+  A length is not detectable from answers alone, so it is no longer stated: the skill says the request sets the
+  length, that a request for a walkthrough, a comparison or a plan gets every part it asks for, and never to shorten
+  one to match shorter examples.
+- **What is detectable is read instead: what an answer adds beyond what was asked.** A preamble, the request said
+  back, a caveat, an unasked alternative, a next step, an offer of more, a recap. Read per example by one model call
+  at build, each finding quoted from its own answer and counted in code ("a preamble: never, 0 of 12"). This is the
+  author's economy, and it holds at any length. Rebuild a skill to get it.
+- **An example may carry the request it answers:** front matter `request:` or a `## Request` then `## Answer`
+  section. The request is kept apart, so no rule, band, passage or persona is learned from the asker's words. With
+  three or more examples of one kind of request (asked for detail, asked for brevity, neither), the length they ran
+  is stated as a record, never a target.
+- **The usual length of writing has no floor of 100 words.**
+- **A skill that answers is told what to do with an empty context:** say what it looked for and ask for the one thing
+  that blocks it, and never describe a project, a file or a result it has not seen.
+
+### Added: strict delivery
+
+- **`atelier invoke --strict`** (or `fidelity --set delivery=strict`) delivers an output only when its verdict is
+  conformant. The request is read for what it explicitly asks, and a reply that leaves a part out is written once
+  more with those parts named; a draft that breaks a REQUIRED rule is written again (`--redraws`, default 2); what
+  still does not conform is refused with its reasons and exit code 3, and the text stays with the record.
+  `--allow-nonconformant` delivers it anyway, marked, still exiting 3. Without `--strict` nothing changes: 1.x
+  delivers every output with its verdict ([decision 0012](docs/decisions/0012-the-closing-rules.md)).
+- **Request coverage on the panel** under strict delivery: how many of the things the request asks for the delivered
+  text gives, and which it does not. A monitor; not yet qualified (studies/COVERAGE_READER_PREREGISTRATION.md).
+
+### Fixed
+
+- **`fidelity --typicality` computed the author's floor on halves of the pieces,** smaller than either side of the
+  reading it is compared with, so it read high. It is now computed at the size of the comparison.
+
 ### Added: what a request was read as, on every run
 
 - **A CONTEXT block on the panel.** Every run of a skill built from a corpus says what its request was read as and
@@ -82,6 +118,12 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   its floor on both corpora, so its FAIL stands. Two readings were not resolved at 8 a side and are restated: the
   plain arm on the technical author (0.750), and that author's reading without function-word n-grams (every arm).
   Later machine readings are compared with the floor.
+- **The closing test, drafted for an independent tester** (studies/INDEPENDENT_TEST_BRIEF.md, decision 0012): answer
+  quality against a careful hand-written skill on 100 or more new tasks (CLOSING_A), delivery under `--strict`
+  (CLOSING_B), the coverage reading against planted omissions (COVERAGE_READER). Five defects in the study harnesses
+  were fixed first: plants made by removing words were discarded; a model with no known price billed $0.00 so a cap
+  could not hold; a share that could not be computed passed a "at most" bar; failed readings were skipped instead of
+  counted; and a reader's excerpts could come from the pasted arm's own source pieces.
 - **Drafted, not run:** the subject reader and the register reading against word matching
   (studies/SUBJECT_READER_PREREGISTRATION.md), the voice gate against planted changes
   (studies/VOICE_GATE_PREREGISTRATION.md), and the in-context voice pass against pasted examples read blind by

@@ -80,7 +80,11 @@ export interface EvalSummary {
     readonly detector: { readonly p: number; readonly families: readonly string[]; readonly qualified: boolean | null } | null;
     readonly taste: { readonly followed: number; readonly missed: number; readonly unclear: number; readonly waiting: number;
       readonly labelled: { readonly right: number; readonly of: number } | null; readonly acts: boolean } | null;
+    /** what the request explicitly asks for, and how much of it the delivered text gives (read under strict delivery) */
+    readonly coverage?: { readonly asked: number; readonly given: number; readonly missing: readonly string[]; readonly unclear: number };
   };
+  /** strict delivery: an output is delivered only when it conforms, or when the person let it through by flag */
+  readonly delivery?: { readonly mode: 'strict'; readonly delivered: boolean; readonly redraws: number };
   /** the register decision and the voice pass, for a skill whose owner declared the corpus's register */
   readonly voice?: {
     readonly mode: 'off' | 'incontext';
@@ -133,6 +137,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   const tail = ` $${e.costUsd.toFixed(2)} · ${secs(e.durationMs)} ──`;
   out.push(head + '─'.repeat(Math.max(2, width - head.length - tail.length)) + tail);
   out.push(`  RESULT  ${e.result.conformant ? c('32', 'CONFORMANT') : c('31', 'NOT CONFORMANT')}${e.result.reasons.length ? `: ${e.result.reasons.join('; ')}` : ''}`);
+  if (e.delivery && !e.result.conformant) out.push(`  ${e.delivery.delivered ? 'DELIVERED ANYWAY (--allow-nonconformant), with a failing exit' : 'NOT DELIVERED (strict delivery): the text is kept with the record'}`);
   out.push('');
   out.push('  GATES  binary, every run');
   const g = e.gates;
@@ -183,7 +188,9 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     }
     if (fi.shape) {
       const toward = [fi.shape.target ? `${Math.round(fi.shape.target * 100)}% typical` : '', fi.shape.authorTarget ? `P(yours) ${fi.shape.authorTarget}` : ''].filter(Boolean).join(' and ');
-      out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);
+      // With no shape target the rounds are strict delivery's redraws: written until every REQUIRED rule held.
+      if (!toward) out.push(`    ${pad('redraws', 18)}${fi.shape.written} draft(s) written until every required rule held; kept round ${fi.shape.kept}`);
+      else out.push(`    ${pad('shape rounds', 18)}${fi.shape.written} written toward ${toward}; kept round ${fi.shape.kept} (${Math.round(fi.shape.p * 100)}% typical${fi.shape.author !== null && fi.shape.author !== undefined ? `, P(yours) ${fi.shape.author}` : ''})`);
     }
     if (fi.structure) out.push(`    ${pad('structure plan', 18)}${fi.structure.moves} moves from your own pieces${fi.structure.followed === null ? '' : `; the text followed ${Math.round(fi.structure.followed * 100)}% of them`}`);
     if (fi.context) out.push(`    ${pad('range for subject', 18)}moved ${Math.round(fi.context.lambda * 100)}% toward your pieces nearest this request (${fmt(fi.context.nEff)} effective${fi.context.nearest.length ? `, nearest ${fi.context.nearest.slice(0, 3).join(', ')}` : ''}); ratified rules unchanged`);
@@ -198,7 +205,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
     out.push(`    ${pad('voice pass', 18)}${v.mode === 'off' ? 'off' : `in-context pairs${v.bank ? ` (bank ${v.bank.slice(0, 8)})` : ''}: ${v.passed} paragraph(s) rewritten, ${v.refused} refused and kept as written`}${v.note ? ` · ${v.note}` : ''}`);
   }
   const m = e.monitors;
-  if (m.detector || m.taste) {
+  if (m.detector || m.taste || m.coverage) {
     out.push('');
     out.push('  MONITORS  shown only, never gate');
     if (m.detector) out.push(`    ${pad('style detector', 18)}P(model-written) ${m.detector.p}${m.detector.families.length ? ` · valid for ${m.detector.families.join(', ')}` : ''} · ${m.detector.qualified === true ? 'qualified on the hold-outs atelier qualify could run' : m.detector.qualified === false ? 'did not qualify on held-out data' : 'not qualified yet (atelier qualify)'}`);
@@ -207,6 +214,10 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
       const lab = t.labelled ? `its misses right on ${t.labelled.right} of ${t.labelled.of} labelled` : 'not validated: label it with atelier taste --calibrate';
       out.push(`    ${pad('taste reader', 18)}${t.followed} followed · ${t.missed} missed · ${t.unclear} unclear${t.waiting ? ` · ${t.waiting} waiting for material` : ''} · ${lab}${t.acts ? ' · holds VETO' : ''}`);
     }
+  }
+  if (m.coverage) {
+    const cv = m.coverage;
+    out.push(`    ${pad('request coverage', 18)}${cv.given} of ${cv.asked} thing(s) the request asks for are given${cv.missing.length ? ` · not found: ${cv.missing.map((w) => `"${w}"`).join(', ')}` : ''}${cv.unclear ? ` · ${cv.unclear} unclear` : ''} · not qualified yet`);
   }
   out.push('');
   out.push(`  not measured: ${e.notMeasured.join('; ')}`);

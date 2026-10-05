@@ -11,6 +11,7 @@
 // meaning the same thing. So the renderer emits ONLY `name` and `description`, and anything
 // host-specific must be declared as an explicit adaptation the compiler chose, never a default.
 
+import { describeScope, groundScope } from '../../core/compiler/scope.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
 import type { Voice } from '../../core/compiler/voice.js';
@@ -428,9 +429,15 @@ export function renderAgentSkill(
     voice?.persona?.points.length ? `How I sound, and how often (each point is quoted from my own pieces; a "sometimes" is not an "always"):\n\n${describePersona(voice.persona)}` : '',
     pieceFiles.length ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.` : '',
     voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
-    voice?.lengthWords ? (answers
-      ? `My answers usually run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words, unless the request asks for more or less.`
-      : `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words.`) : '',
+    // AN ANSWER'S LENGTH BELONGS TO ITS REQUEST (core/compiler/scope.ts). "My answers usually run about 100 words,
+    // unless the request asks for more or less" was read off twelve small answers, and the number won over the
+    // clause: a requested walkthrough came back a third as long as the bare model's. So a skill that answers states
+    // no usual length: it states how much it adds beyond what was asked, and that the request sets the length.
+    answers ? (voice ? describeScope(voice.scope ?? groundScope([], null, null)) : '')
+      // For writing, the length the author's pieces run is theirs, and still only a default: it is what a piece runs
+      // when the request names no length. (The line keeps its opening words: `invoke` finds it by them to withhold it
+      // from a run whose request states a length.)
+      : voice?.lengthWords ? `My pieces of this kind run about ${voice.lengthWords[0] === voice.lengthWords[1] ? voice.lengthWords[0] : `${voice.lengthWords[0]} to ${voice.lengthWords[1]}`} words when the request names no length. A request that names one, or asks for more or less, sets it.` : '',
   ].filter(Boolean);
   const voiceSection = voiceParts.length ? `
 ## How I sound
@@ -443,7 +450,9 @@ handing it back: with tools, use them and report only what they returned; withou
 itself allows (write the fix, the report, the command) and say how to check it. Never describe a step you did
 not take or a result you did not see. Finding something out is your job: when the request says where the work is
 (a file, a repository), do it, or say exactly what you would open and change. Ask only for a decision that is
-the person's to make (which environment, which of two services), never for what you could find yourself.`
+the person's to make (which environment, which of two services), never for what you could find yourself.
+When the request depends on files or a system you were not shown and cannot open, say what you looked for and
+ask for the one thing that blocks you. Never describe a project, a file or a result you have not seen.`
     : `Take who is speaking, the register, the hedging, the rhythm and the spelling. Never take my topics, facts,
 names, figures, sentences, coined terms or stories: a story of mine you were not given is not yours to tell.`}
 ` : '';

@@ -28,7 +28,7 @@ counted. If fewer than 6 of 8 voice outputs count, the study is VOID, not failed
 ## The human read (primary)
 
 Five readers, one packet each (`harness/voice-pass.mjs`). For each request a reader sees two excerpts of the
-author's read pieces, then the pasted and the voice output for that request, cleaned, cut to the same length, sides
+author's read pieces, never one of the four pieces the pasted arm was shown, then the pasted and the voice output for that request, cleaned, cut to the same length, sides
 seeded and the key sealed apart. The question: which of the two reads more like the author of the excerpts?
 
 **PASS:** the voice output is chosen in at least 26 of 40 judgments (one-sided binomial against one half,

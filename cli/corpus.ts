@@ -15,13 +15,24 @@ import { die, loadSession } from './runtime.js';
  * (README, LICENSE, notes) are skipped, and pieces reserved for blind testing are left out, matched by content.
  */
 export function readCorpus(path: string, what = '--corpus'): string[] {
+  return readCorpusPairs(path, what).map((p) => p.text);
+}
+
+/** The same pieces, each with the request it answers when its file carries one (core/intake/extract.ts, `splitRequest`). */
+export function readCorpusPairs(path: string, what = '--corpus'): { text: string; request: string | null }[] {
   if (!existsSync(path)) die(`${what}: there is nothing at ${path}.`);
   const files = statSync(path).isDirectory() ? walk(path).map((r) => join(path, r)) : [path];
   const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.artifact.trim()));
   return files
     .filter((f) => (READABLE as readonly string[]).includes(extname(f).toLowerCase()) && !META_NAME.test(basename(f)))
-    .flatMap((f) => { const r = extract(f); return r.ok ? [(r as { text: string }).text] : []; })
-    .filter((t) => !reserved.has(t.trim()));
+    .flatMap((f) => { const r = extract(f); return r.ok ? [{ text: r.text, request: r.request ?? null }] : []; })
+    .filter((p) => !reserved.has(p.text.trim()));
+}
+
+/** The pieces this project's run read, with their requests: `sessionCorpus` for a reading that needs the pair. */
+export function sessionPairs(): { text: string; request: string | null }[] {
+  const s = loadSession();
+  return s.source && existsSync(s.source) ? readCorpusPairs(s.source, 'the corpus this skill was built from') : [];
 }
 
 /**

@@ -458,6 +458,37 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     expect(run('fidelity', '--skill', 'posts', '--set', 'context=near')).toMatch(/"context" is local or off/);
   }, 180_000);
 
+  it('strict delivery: an output that does not conform is written again, then refused with a failing exit; a flag delivers it marked', () => {
+    // The `posts` skill's scripted drafts always break a REQUIRED rule, so every round fails.
+    const refused = run('invoke', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '1', 'write about the rollback');
+    expect(refused).toMatch(/^EXIT:3\n/);
+    expect(refused).toMatch(/atelier: not delivered \(strict delivery\): .*required rule/);
+    expect(refused).toMatch(/atelier report i[0-9a-f]+/);
+    // nothing of the text is printed
+    expect(refused).not.toContain('The cause was a cache that never expired.');
+    const id = /atelier report (i[0-9a-f]+)/.exec(refused)?.[1] ?? '';
+    const rep = run('report', id);
+    expect(rep).toMatch(/NOT DELIVERED \(strict delivery\)/);
+    expect(rep).toMatch(/redraws {11}2 draft\(s\) written until every required rule held/);
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${id}.json`), 'utf8')) as { output: string; fidelity: { release: string | null; settings?: { delivery?: string } } };
+    // the record keeps the text, and the run is not credited to a release that does not deliver strictly
+    expect(rec.output.length).toBeGreaterThan(0);
+    expect(rec.fidelity).toMatchObject({ release: null, settings: { delivery: 'strict' } });
+    const json = run('invoke', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '0', '--json', 'write about the rollback');
+    expect(json).toMatch(/^EXIT:3\n/);
+    expect(JSON.parse(json.slice(json.indexOf('{'))) as { output: string | null; delivered: boolean }).toMatchObject({ output: null, delivered: false });
+    const allowed = run('invoke', '--skill', 'posts', '--no-taste', '--strict', '--redraws', '0', '--allow-nonconformant', 'write about the rollback');
+    expect(allowed).toMatch(/^EXIT:3\n/);
+    expect(allowed).toMatch(/NOT CONFORMANT, delivered because --allow-nonconformant was given/);
+    expect(run('invoke', '--skill', 'posts', 'x', '--strict', '--no-repair')).toMatch(/--strict delivers only a checked output/);
+    // and it is a setting, with a parent to roll back to; without it, delivery is as 1.0 delivers
+    expect(run('fidelity', '--skill', 'posts', '--set', 'delivery=strict')).toMatch(/strict delivery \(only a conformant output is delivered\)/);
+    expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).toMatch(/^EXIT:3\n/);
+    expect(run('fidelity', '--skill', 'posts', '--set', 'delivery=maybe')).toMatch(/"delivery" is strict or open/);
+    run('fidelity', '--skill', 'posts', '--rollback');
+    expect(run('invoke', '--skill', 'posts', '--no-taste', 'write about the rollback')).not.toMatch(/^EXIT:/);
+  }, 300_000);
+
   it('nearness: every run names the pieces its request was near; --read-subjects and --nearness reader find them by subject, with the words as the floor', async () => {
     // A corpus with paragraphs long enough to be passages (the `posts` corpus has none, so nothing there is "near").
     // Its own project directory: a project holds one build.

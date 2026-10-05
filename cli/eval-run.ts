@@ -17,6 +17,7 @@ import type { EvalSummary } from '../core/eval/summary.js';
 import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
+import type { RequestCoverage } from '../core/loop/context-judge.js';
 
 /** A run of this many words repeated from a served piece of the author's is copying (cli/commands/invoke.ts). */
 export const COPY_LIMIT = 12;
@@ -40,6 +41,10 @@ export interface RunEvalInput {
   readonly report: VerifyReport | null;
   /** a structured output (an output contract): held by its contract, not by prose rules */
   readonly contract: boolean;
+  /** what the request asked for against the delivered text, when it was read (strict delivery) */
+  readonly coverage?: RequestCoverage | null;
+  /** strict delivery: how many redraws were allowed, and whether a nonconformant output was let through by flag */
+  readonly strict?: { readonly redraws: number; readonly allowed: boolean } | null;
 }
 
 export function buildRunEval(x: RunEvalInput): EvalSummary {
@@ -148,7 +153,10 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     monitors: {
       detector: reading?.detector ? { p: reading.detector.p, families: reading.detector.families ?? [], qualified: detectorQ ? detectorQ.result.passes : null } : null,
       taste: x.taste,
+      ...(x.coverage ? { coverage: { asked: x.coverage.parts.length, given: x.coverage.parts.filter((p) => p.covered === true).length,
+        missing: x.coverage.parts.filter((p) => p.covered === false).map((p) => p.words), unclear: x.coverage.parts.filter((p) => p.covered === null).length } } : {}),
     },
+    ...(x.strict ? { delivery: { mode: 'strict' as const, delivered: reasons.length === 0 || x.strict.allowed, redraws: x.strict.redraws } } : {}),
     ...(vr ? { voice: { mode: vr.mode, register: { status: vr.register.status, request: vr.register.request, corpus: vr.register.corpus, distance: vr.register.distance },
       carried: vr.carried.length, notCarried: vr.notCarried.length,
       passed: (vr.paragraphs ?? []).filter((p) => p.kept).length, refused: (vr.paragraphs ?? []).filter((p) => !p.kept && p.check !== 'not-tried').length,

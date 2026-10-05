@@ -171,6 +171,32 @@ distances: the share cannot go below 1 in (your pieces + 1), so past your farthe
 texts a side an author's own pieces are told apart at 0.7 to 0.8 one time in twenty
 ([result](../studies/AUTHOR_FLOOR_RESULT.md)), so an AUC is read against that floor, not against 0.5.
 
+### Skills that answer: length follows the request
+
+A skill built from example answers states no usual length. Answers alone cannot show whether an author is terse or
+the questions were small, so the skill says the request sets the length, and states what your examples add beyond
+what was asked (a preamble, a caveat, an offer of more), counted over them. If your examples carry the request they
+answer, the build reads the pair. Put it in front matter:
+
+```markdown
+---
+request: Walk me through OAuth PKCE. I want a detailed explanation.
+---
+PKCE has three steps. ...
+```
+
+or as a `## Request` section followed by `## Answer`. The request is never read as your writing.
+
+### Strict delivery
+
+`atelier invoke --skill <name> --strict "<task>"` delivers the output only when it conforms. A reply that leaves out
+part of what the request asks is written once more; a draft that breaks a REQUIRED rule is written again
+(`--redraws <n>`, default 2); what still does not conform is refused with its reasons and exit code 3, and
+`atelier report <run>` shows the text. `--allow-nonconformant` delivers it anyway, marked. To make it the skill's
+way of running: `atelier fidelity --skill <name> --set delivery=strict`. It holds the REQUIRED rules that have a
+measurement and the claim check; a REQUIRED rule in prose with no measurement is read by the taste reader and is
+outside the guarantee.
+
 ### What your request was read as
 
 Every run of a skill built from a corpus prints a CONTEXT block: the register the request names and how that was

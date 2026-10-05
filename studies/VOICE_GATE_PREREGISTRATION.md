@@ -26,8 +26,10 @@ One skill's pair bank (112 pairs: the plain paragraph, and the author's own para
   positive: a paragraph of voice lost, never a fact. The plain side was written by a model from the author's, so a
   few pairs may truly differ in a claim; a clean pair every gate refuses is listed for a person to check.
 - **Planted (60 paragraphs × 6 kinds):** the author's paragraph with one change of a known kind, made by a writer
-  model (`claude-sonnet-5-5`, seeded choice of paragraphs) that must return the words it changed. Code checks the
-  words are where it says and that the length stayed in range; a plant that fails is discarded and counted.
+  model (`claude-sonnet-5`, seeded choice of paragraphs) that must return the words it changed. Code checks the
+  words are where it says (new in the plant, or gone from it: a claim is made stronger by taking a hedge out) and
+  that the length stayed in range; a plant that fails is discarded and counted. Then a person confirms each plant
+  is the kind it declares and changes what is claimed (`plants-for-review.md`); a plant they reject is left out.
 
   | Kind | The change |
   |---|---|
@@ -54,7 +56,8 @@ A reader that could not answer counts as finding nothing.
 - **Every kind:** at least 0.75 of each kind refused.
 - **Specificity:** at least 0.60 of clean pairs kept. A refused paragraph costs voice, not truth, so this bar is the
   lower one; below it the voice pass changes too little to be worth running.
-- **Enough:** at least 200 valid plants.
+- **Enough:** at least 200 valid plants, and at least 30 of each kind.
+- **Reviewed:** the plants were confirmed by a person before the bars are read.
 
 A gate **PASSES** when it holds all four.
 

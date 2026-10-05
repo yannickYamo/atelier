@@ -27,7 +27,9 @@ import { execFileSync } from 'node:child_process';
 import { extname, basename } from 'node:path';
 
 export type Extraction =
-  | { readonly ok: true; readonly text: string; readonly via: string }
+  | { readonly ok: true; readonly text: string; readonly via: string;
+      /** the request this example answers, when the file carries one (`splitRequest`): never part of `text` */
+      readonly request?: string }
   | { readonly ok: false; readonly reason: string; readonly remedy: string | null };
 
 /**
@@ -60,11 +62,53 @@ export const READABLE = ['.md', '.markdown', '.txt', '.docx', '.rtf', '.pdf', ..
  */
 export const META_NAME = /^(readme|license|licence|changelog|contributing|notes?|todo|index|redaction)(\.[a-z0-9]+)?$/i;
 
+/**
+ * AN EXAMPLE OF AN ANSWER MAY CARRY THE REQUEST IT ANSWERS, AND THE REQUEST IS NOT THE AUTHOR'S WRITING.
+ *
+ * How long and how deep an answer runs is a property of the pair, request and answer, and a corpus of answers
+ * alone cannot show it: twelve short answers to twelve small questions read as "this author writes about a
+ * hundred words", and a skill built from them cut a requested walkthrough to a third. So an example file may say
+ * what was asked, in either of two layouts:
+ *
+ *   front matter      ---                         headings      ## Request
+ *                     request: How do I undo…?                  How do I undo the last commit?
+ *                     ---                                       ## Answer
+ *                     git reset --soft HEAD~1 …                 git reset --soft HEAD~1 …
+ *
+ * The request is returned apart and removed from the text, so no rule, band, passage or persona is ever learned
+ * from the asker's words. A file with neither layout is returned whole, byte for byte, as before.
+ */
+export function splitRequest(raw: string): { text: string; request: string | null } {
+  const body = raw.replace(/^\uFEFF/, '');
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(body);
+  if (fm) {
+    const lines = fm[1].split(/\r?\n/);
+    const at = lines.findIndex((l) => /^request\s*:/i.test(l));
+    if (at >= 0) {
+      const first = lines[at].replace(/^request\s*:\s*/i, '');
+      // A block scalar (`request: |` or `>`) runs over the indented lines that follow; else the value is the line.
+      let end = at + 1;
+      if (/^[|>][+-]?\s*$/.test(first) || first === '') while (end < lines.length && (/^\s+\S/.test(lines[end]) || lines[end].trim() === '')) end += 1;
+      const value = (/^[|>][+-]?\s*$/.test(first) || first === '' ? lines.slice(at + 1, end).map((l) => l.trim()).join('\n') : first.replace(/^(["'])([\s\S]*)\1$/, '$2')).trim();
+      if (value) {
+        const rest = [...lines.slice(0, at), ...lines.slice(end)].filter((l) => l.trim() !== '');
+        const answer = body.slice(fm[0].length);
+        return { text: rest.length ? `---\n${rest.join('\n')}\n---\n${answer}` : answer.replace(/^\s*\n/, ''), request: value };
+      }
+    }
+  }
+  const h = /^\s*#{1,3}\s*(?:request|question|prompt)\s*:?\s*\r?\n([\s\S]*?)\r?\n#{1,3}\s*(?:answer|response|reply)\s*:?\s*\r?\n([\s\S]*)$/i.exec(body);
+  if (h?.[1].trim() && h[2].trim()) return { text: h[2].replace(/^\s*\n/, ''), request: h[1].trim() };
+  return { text: raw, request: null };
+}
+
 export function extract(path: string): Extraction {
   const ext = extname(path).toLowerCase();
   switch (ext) {
-    case '.md': case '.markdown': case '.txt':
-      return { ok: true, text: readFileSync(path, 'utf8'), via: 'utf8' };
+    case '.md': case '.markdown': case '.txt': {
+      const { text, request } = splitRequest(readFileSync(path, 'utf8'));
+      return { ok: true, text, via: 'utf8', ...(request ? { request } : {}) };
+    }
     case '.docx': return extractDocx(path);
     case '.rtf': return { ok: true, text: stripRtf(readFileSync(path, 'utf8')), via: 'rtf (control-word strip — formatting is discarded, and so is anything encoded as a field)' };
     case '.pdf': return extractPdf(path);

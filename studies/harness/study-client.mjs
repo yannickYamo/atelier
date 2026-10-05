@@ -15,7 +15,10 @@ export function clientFor(model) {
   const base = arg('--base-url');
   if (base) return new OpenAICompatibleInferenceClient({ modelId: model, baseUrl: base, pricing: { inputPerM: 1, outputPerM: 1 }, strictSchema: false });
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) fail('ANTHROPIC_API_KEY is not set. Nothing was spent.');
-  return new AnthropicInferenceClient(model, undefined, priceFor(ANTHROPIC_PRICING, model));
+  // A MODEL WITH NO PRICE BILLS $0.00 HERE, AND A CAP THAT SEES $0.00 NEVER STOPS. Refused before anything is spent.
+  const price = priceFor(ANTHROPIC_PRICING, model);
+  if (!price) fail(`no price is known for "${model}", so the cap could not hold. Use a model in providers/pricing.ts. Nothing was spent.`);
+  return new AnthropicInferenceClient(model, undefined, price);
 }
 
 /** A budget with a hard cap in dollars and calls: the harness stops, with what it has, when either is reached. */

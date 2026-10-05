@@ -8,7 +8,9 @@ import type { StoredSignal } from '../../core/observers/selection.js';
 import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
-import { sessionCorpus } from '../corpus.js';
+import { sessionCorpus, sessionPairs } from '../corpus.js';
+import { deriveScope, groundScope, type ScopeProfile } from '../../core/compiler/scope.js';
+import { isReplyWork } from '../../core/observers/formats.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
@@ -34,7 +36,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile, numericFlag, orchestrated } from '../runtime.js';
+  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -86,6 +88,25 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     if (pieces.length) console.log(`Voice: ${pieces.length} whole piece(s) of the author's own served with the skill, chosen to span how they write. Turn off with --voice none.`);
   }
   if (!voice) return null;
+  // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
+  // once from the examples, with the request each one answers when its file carries it. A failure costs the reading,
+  // never the build: the profile is then counts alone, and states no habit nobody read.
+  if (isReplyWork(v.workType) && (!voice.scope || personaFlag === 'auto')) {
+    const pairs = sessionPairs();
+    if (pairs.length >= 3) {
+      const scopeBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
+      let scope: ScopeProfile;
+      try {
+        scope = await onCorpusReader((c) => deriveScope(c, scopeBudget, pairs, proposerModel()));
+        console.log(`Scope: what ${scope.examples} example(s) add beyond what was asked, ${scope.paired} of them read with the request they answer`
+          + `${scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
+      } catch (e) {
+        scope = groundScope(pairs, null, null);
+        console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
+      }
+      voice = { ...voice, scope };
+    }
+  }
   if (personaFlag === 'none') return { ...voice, persona: undefined };
   if (readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };

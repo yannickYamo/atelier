@@ -27,6 +27,7 @@ const SEALED_READER_VERSION = 'voice-gate-1';
 if (VOICE_READER_VERSION !== SEALED_READER_VERSION) fail(`the voice reader is ${VOICE_READER_VERSION}; the pre-registration sealed ${SEALED_READER_VERSION}.`);
 const SEED = 'voice-gate-2026-10-04';
 const PLANTED_PARAGRAPHS = 60;
+const MIN_PER_KIND = 30;
 const KINDS = {
   FACT_CHANGED: 'change ONE figure, date or name to a different one',
   FACT_ADDED: 'add ONE short specific claim the paragraph does not make (a figure, a named example or a cause), in a clause of at most twelve words',
@@ -39,7 +40,10 @@ const BANK = JSON.parse(readFileSync(arg('--bank') ?? fail('missing --bank'), 'u
 const OUT = arg('--out') ?? fail('missing --out');
 mkdirSync(OUT, { recursive: true });
 const budget = budgetOf(Number(arg('--cap', '4')), 2000);
-const writer = clientFor(arg('--writer', 'claude-sonnet-5-5')); const reader = clientFor(arg('--reader', 'claude-haiku-4-5'));
+const writer = clientFor(arg('--writer', 'claude-sonnet-5'));
+// PLANTS A PERSON REJECTED (`--rejected <file>`, one "<pair id>|<KIND>" a line): a plant that is not the kind it
+// declares, or changes nothing a reader would call a claim, is left out. The run writes plants-for-review.md first.
+const REJECTED = new Set(arg('--rejected') && existsSync(arg('--rejected')) ? readFileSync(arg('--rejected'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []); const reader = clientFor(arg('--reader', 'claude-haiku-4-5'));
 const CACHE = join(OUT, 'cache.json');
 const cache = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, 'utf8')) : {};
 const save = () => writeFileSync(CACHE, JSON.stringify(cache, null, 1));
@@ -60,8 +64,12 @@ async function plant(pair, kind) {
     });
     const text = typeof x?.paragraph === 'string' ? x.paragraph.replace(/\s*\n+\s*/g, ' ').trim() : ''; const words = typeof x?.words === 'string' ? x.words.trim() : '';
     const ratio = wordsOf(text).length / Math.max(1, wordsOf(pair.neutral).length);
-    // VALID only when the change is where the planter says it is, and the length gate would not refuse it for its own reason.
-    const there = kind === 'FACT_DROPPED' ? flat(pair.author).includes(flat(words)) && !flat(text).includes(flat(words)) : flat(text).includes(flat(words)) && !flat(pair.author).includes(flat(words));
+    // VALID only when the change is where the planter says it is, and the length gate would not refuse it for its own
+    // reason. A change is made by adding words or by removing them, whatever its kind (a claim is made STRONGER by
+    // taking a hedge out): the words are either new in the plant, or were in the paragraph and are gone.
+    const added = flat(text).includes(flat(words)) && !flat(pair.author).includes(flat(words));
+    const removed = flat(pair.author).includes(flat(words)) && !flat(text).includes(flat(words));
+    const there = kind === 'FACT_DROPPED' ? removed : kind === 'FACT_ADDED' ? added : added || removed;
     o = { text, words, valid: Boolean(text) && words.length > 1 && flat(text) !== flat(pair.author) && there && ratio >= LENGTH_RATIO[0] && ratio <= LENGTH_RATIO[1] };
   } catch (e) { o = { failed: String(e.message).split('\n')[0] }; if (/budget|cap/i.test(o.failed)) { console.error(`stopped at the cap: ${o.failed}`); return o; } }
   cache[key] = o; save();
@@ -89,8 +97,9 @@ for (const p of pairs) rows.clean.push({ id: p.id, ...(await read(p.neutral, p.a
 for (const p of pairs.slice(0, PLANTED_PARAGRAPHS)) {
   for (const kind of Object.keys(KINDS)) {
     const pl = await plant(p, kind);
+    if (REJECTED.has(`${p.id}|${kind}`)) { rows.planted.push({ id: p.id, kind, discarded: 'rejected by the person who reviewed the plants' }); continue; }
     if (!pl.valid) { rows.planted.push({ id: p.id, kind, discarded: pl.failed ?? 'the change was not where the planter said, or the length moved out of range' }); continue; }
-    rows.planted.push({ id: p.id, kind, words: pl.words, ...(await read(p.neutral, pl.text)) });
+    rows.planted.push({ id: p.id, kind, words: pl.words, text: pl.text, original: p.author, ...(await read(p.neutral, pl.text)) });
   }
 }
 const live = rows.planted.filter((r) => !r.discarded);
@@ -101,9 +110,12 @@ const m = { planted: live.length, discarded: rows.planted.length - live.length, 
     .map(([name, f]) => [name, rate(rows.clean.filter((r) => !f(r)).length, rows.clean.length)])) };
 // THE BARS, AS SEALED, read on each gate. A gate passes when it holds all four.
 const barsOf = (name) => { const s = m.sensitivity[name]; return { sensitivity: s.overall.share >= 0.9 && s.overall.ci95[0] >= 0.8,
-  everyKind: Object.keys(KINDS).every((k) => s[k].n > 0 && s[k].share >= 0.75), specificity: m.specificity[name].share >= 0.6, enough: live.length >= 200 }; };
+  everyKind: Object.keys(KINDS).every((k) => s[k].n >= MIN_PER_KIND && s[k].share >= 0.75), specificity: m.specificity[name].share >= 0.6,
+  enough: live.length >= 200 && Object.keys(KINDS).every((k) => s[k].n >= MIN_PER_KIND), reviewed: REJECTED.size > 0 || process.argv.includes('--reviewed') }; };
 const bars = { lists: barsOf('lists'), listsAndReader: barsOf('listsAndReader'), ledgerAndReader: barsOf('ledgerAndReader') };
 const passes = (name) => Object.values(bars[name]).every(Boolean);
 const result = { reader: VOICE_READER_VERSION, bank: BANK.hash, measures: m, bars, verdict: Object.fromEntries(Object.keys(bars).map((n) => [n, passes(n) ? 'PASS' : 'FAIL'])), spentUsd: Math.round(budget.spentUsd * 1000) / 1000, rows };
 writeFileSync(join(OUT, 'voice-gate.json'), JSON.stringify(result, null, 1));
+// FOR THE PERSON WHO CONFIRMS THE PLANTS: each one, its declared kind, the words changed, before and after.
+writeFileSync(join(OUT, 'plants-for-review.md'), `# Plants to confirm\n\nFor each, check that the change is the kind it declares and changes what is claimed. List the ones that are not in a file, one "<pair id>|<KIND>" a line, and run again with --rejected <file> (or --reviewed when none is rejected).\n\n${live.map((r) => `## ${r.id}|${r.kind}\n\nwords: ${r.words}\n\nbefore: ${r.original}\n\nafter: ${r.text}\n`).join('\n')}`);
 console.log(JSON.stringify({ measures: m, bars, verdict: result.verdict, spentUsd: result.spentUsd }, null, 1));
