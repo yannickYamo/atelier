@@ -61,6 +61,52 @@ Also next:
 - **Search under a fixed standard**, designed in [decision 0004](decisions/0004-search-under-a-fixed-standard.md):
   GEPA-class search over how rules are carried, with a judge checked against people before it is trusted.
 
+## Exploration, after the closing test
+
+Nothing here is built, and nothing here starts before the closing test's results are in the README
+([decision 0012](decisions/0012-the-closing-rules.md)).
+
+- **A trained voice adapter.** Every attempt at the implicit layer of a voice (rhythm, word choice) used prompting,
+  and every test of it failed. The published evidence points the other way: in a study of 50 authors, expert readers
+  disfavoured text prompted with an author's examples and preferred text from a model fine-tuned on the author's
+  work ([arXiv 2510.13939](https://arxiv.org/abs/2510.13939)). The idea is a small open-weight model with a low-rank
+  adapter (LoRA) that rewrites a checked draft paragraph by paragraph into the author's voice. The frontier model
+  still writes the content and Atelier still checks it; the adapter is one more way of carrying the standard, hashed,
+  recorded with every output and rolled back like any release.
+
+  **The open question is how little writing is enough.** Three 300-word essays are about 1,200 tokens. An adapter
+  trained on that learns the three essays, not the author: it copies their sentences and their subjects. So the
+  exploration is tiered by how much the author has written, and each tier is a hypothesis to test, not a design:
+
+  | The author's corpus | What to try | Why |
+  |---|---|---|
+  | a few short pieces | no training on the author. The pieces go in the prompt, and a **shared** adapter does the rewriting | the corpus fits in context; what can be trained once, on many consenting authors, is the skill of imitating from a few examples |
+  | tens of pieces | the shared adapter, then a light adapter for the author on top | enough paragraphs to hold some back and stop training when the held-back ones stop improving |
+  | a large body of work | an adapter for the author | the case the published result covers |
+
+  A second shared adapter needs no author data at all: one trained to remove machine-writing habits. The same study
+  found readers penalised prompted text mainly for those habits, more than for any missing habit of the author.
+
+  **How the training data would be made.** From the pair bank Atelier already builds: each of the author's paragraphs
+  beside the same facts in plain words, the model learning plain to author. Several plain versions of one paragraph
+  multiply the examples without inventing a word of the author's. Two rules: the author's side of a pair is always
+  their real text, never a model's imitation of it; and question-and-answer pairs made from the pieces are not
+  used, because they teach what the author said, not how they say it.
+
+  **A first configuration to test, not a recommendation:** a Llama-class instruct model of a few billion parameters;
+  low rank (4 to 8) on the attention projections only; one to three epochs at a low learning rate with dropout; the
+  checkpoint chosen on held-back pieces, never on training loss; and a copying check on every candidate (no run of
+  twelve words from the corpus).
+
+  **What stays out of the weights.** Voice may be trained. Facts about the person may not: a model that has memorised
+  them will also invent them. What the author knows and has done stays supplied material, checked as it is today.
+
+  **What must be true before anything is built** ([decision 0009](decisions/0009-voice-below-the-standard.md)): the
+  gate that refuses a rewrite which changed a claim is qualified; the author agreed to their writing being trained
+  on; and a feasibility read comes first, on one consenting author with a large body of work, using a hosted
+  fine-tune so that no infrastructure is built to find out whether people prefer the result. If they do not, this
+  stops there.
+
 ## Not doing
 
 - **Letting any automated step change a rule.** It is what makes the standard yours
