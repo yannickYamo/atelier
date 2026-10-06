@@ -745,7 +745,7 @@ describe('the axis files are built from the raw readings by a rule fixed before 
     symlinkSync(join(dir, 'in', 'quality.jsonl'), join(dir, 'axes3', 'quality.jsonl'), 'file');
     const name = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes.json'), '--out', join(dir, 'axes3'));
     expect(name.code, name.out).toBe(2);
-    expect(name.out).toMatch(/quality\.jsonl is .*in\/quality\.jsonl, which is also one of the files this script writes in --out\. Nothing was written\. Name another --out\./);
+    expect(name.out).toMatch(/quality\.jsonl is .*in\/quality\.jsonl, which is also one of the files this script writes in --out(?: \(through a link[^)]*\))?\. Nothing was written\. Name another --out\./);
     expect(readFileSync(join(dir, 'in', 'quality.jsonl'), 'utf8')).toBe(files['quality.jsonl']);
     // and a link to a folder of its own is a folder of its own: the run is made, and the inputs are as they were
     mkdirSync(join(dir, 'real-out'));
