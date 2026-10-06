@@ -50,6 +50,8 @@ an independent tester ([decision 0012](decisions/0012-the-closing-rules.md)), an
 | Not more repeatable as a plug-in | rule verdict differed between two runs on 15% of tasks against 20%, not clearly fewer | the same 60 tasks |
 | Behind a hand-written writing skill on that skill's own score | 2.4 and 3.5 points lower of 50 | one company blog, one speaker |
 | Strict delivery refused too much | 7 of 80 answers, on one rule; fixed, not yet measured again | 40 working tasks |
+| Fewer of the author's rules broken than skills from GEPA and SkillOpt | in 5 of 6 comparisons, at small budgets, with both searching on Atelier's own rule score; a fair-budget run on a sealed test has not been made | three kinds of work, one author each |
+| Far larger than the skills it is compared with | 5,035 to 13,818 exported words against 189 to 1,240 for hand-written, GEPA and SkillOpt skills (16 to 38 times the hand-written seed). On one skill measured part by part, 9,201 of 13,173 words are the author's whole pieces | three kinds of work; the part-by-part count is one skill |
 
 ## Numbers withdrawn
 
@@ -64,7 +66,8 @@ an independent tester ([decision 0012](decisions/0012-the-closing-rules.md)), an
 - That it works for other writers, or read by other people. An external blind study is next.
 - That it handles support replies.
 - That the self-improving loop holds up on a live skill over weeks.
-- How it compares with GEPA-style optimizers on a shared task.
+- How it compares with GEPA-style optimizers at a fair budget on a sealed test. A development run at small budgets is in the table above.
+- How small a skill can be and still hold its standard. One study is drafted, not sealed ([EFFICIENCY_ABLATION](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md), [decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)).
 - The claim reader on a person's own writing: most of its false flags were true first-person stories.
 
 A result table with only wins would be the one number here you should not trust.

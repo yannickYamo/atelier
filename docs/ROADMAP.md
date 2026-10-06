@@ -1,78 +1,152 @@
 # Roadmap
 
-**What is next, why, and what is deliberately not being built. Each item names the problem it solves.**
+**Where Atelier is going, drawn as an opportunity solution tree: one outcome, the problems that stand between
+people and it, what was built or will be built for each, and the test that decides whether it worked. Every branch
+carries its reason.**
 
-## Now
+## The outcome
 
-Both items are tests, not features, and each result is published whichever way it comes out.
+From a folder of examples and a prompt, a person gets a skill that is better than a careful hand-written one, and
+can rely on it without reading every draft.
 
-- **Voice, read blind by people.** An independent reviewer runs the sealed study
-  ([B6](../studies/B6_PREREGISTRATION.md)) on their own corpora: plain prompting, pasted examples, and
-  Atelier with and without the loop. Until it is in, voice is not claimed.
-- **A head-to-head with GEPA and SkillOpt.** The same tasks, writer and budget for every arm, a sealed test
-  split, and two scores: the benchmark's own judge and Atelier's standard. The kit is in
-  [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare).
+It is counted against two public hand-written skills
+([i-have-adhd](https://github.com/ayghri/i-have-adhd) for answers,
+[stop-slop](https://github.com/hardikpandya/stop-slop) for writing), on four axes (quality, the owner's rules,
+repeatability, voice). The bar is at least 20% fewer failures and clearly fewer
+([decision 0012](decisions/0012-the-closing-rules.md)). Each claim is tested once by someone who is not the builder,
+and a miss is published as a miss.
 
-## Next: easier to install and to use where work happens
+## The tree
 
-In this order, each one usable on its own.
+```mermaid
+flowchart TD
+  O["OUTCOME<br/>From examples and a prompt:<br/>a skill better than a hand-written one,<br/>trusted without reading every draft"]
 
-1. **npm and one-command setup.** `npx @yannickyamo/atelier setup` finds the coding agents in a project and
-   gives each the Atelier MCP server; `npm install -g @yannickyamo/atelier` replaces clone, build and link.
-   Built; it ships with the next tagged release.
-2. **A check on pull requests.** `atelier verify` as a GitHub Action on docs, release notes and changelogs:
-   a broken REQUIRED rule fails the check, and the run's panel is the comment.
-3. **Ready-made standards.** A few public standards (a changelog, a code review, a support reply), each with
-   its skill card and one command to install it, from authors who agreed to be listed.
-4. **A standard shared by a team.** One approved standard, used by everyone on the team and checked in CI.
+  O --> P1["I can't tell whether the output<br/>still follows my rules"]
+  O --> P2["It invents things<br/>I never said"]
+  O --> P3["Its answers are worse than<br/>a careful hand-written skill's"]
+  O --> P4["It doesn't sound like me"]
+  O --> P5["The skill is too big and the<br/>checked run costs too much"]
+  O --> P6["It takes too long to get<br/>a working skill"]
 
-Also next:
+  P1 --> S1a["A standard approved once,<br/>hashed, checked on every output"]:::shipped
+  P1 --> S1b["Strict delivery:<br/>only a conformant output ships"]:::testing
+  P2 --> S2a["A claim reader qualified<br/>on planted inventions"]:::shipped
+  P3 --> S3a["A habit is carried no wider<br/>than the examples support"]:::shipped
+  P3 --> S3b["The closing test against<br/>two hand-written skills"]:::next
+  P4 --> S4a["Whole pieces and a persona,<br/>each point quoted from the author"]:::shipped
+  P4 --> S4b["A last in-context voice read,<br/>by people, blind"]:::next
+  P4 --> S4c["A trained voice adapter"]:::later
+  P5 --> S5a["Size by part and cost by purpose,<br/>on every skill and every run"]:::shipped
+  P5 --> S5b["A budget for the author's pieces,<br/>and excerpts in place of whole pieces"]:::testing
+  P5 --> S5c["One draft first,<br/>a small model first"]:::later
+  P6 --> S6a["Install from npm,<br/>one command to connect an agent"]:::testing
+  P6 --> S6b["Review the few rules that decide<br/>most outputs, accept the rest"]:::later
+  P6 --> S6c["Ready-made standards,<br/>a check on pull requests"]:::later
 
-- **The voice layer, measured.** Transfer between registers and the in-context voice pass are built and off
-  by default ([decision 0009](decisions/0009-voice-below-the-standard.md)). They stay off until a blind read
-  by people says the pass helps.
-- **The implicit layer needs a new actuator.** A sealed study found every arm still told apart from the author's unseen
-  pieces, and plan-first generation did not help ([INDISTINGUISHABILITY_RESULT](../studies/INDISTINGUISHABILITY_RESULT.md)).
-  Its blind human read is prepared and waits for readers. Every output now carries how typical of you it is, and
-  `atelier fidelity --typicality` tests a run against your pieces, so the next attempt has a measure to be held to.
-  Holding drafts to your range on the request's subject (`--context local`) was tested offline and told your pieces
-  from the model's no better ([CONTEXT_BANDS_RESULT](../studies/CONTEXT_BANDS_RESULT.md)); it stays opt-in.
-  The machine reading now has a floor: an author's own pieces are told from each other at AUC 0.72 to 0.81 at those
-  sizes ([AUTHOR_FLOOR_RESULT](../studies/AUTHOR_FLOOR_RESULT.md)), so a later arm is read against that, not 0.5.
-- **The closing test.** An independent tester takes `main` and tests four claims once each: coding answers against
-  i-have-adhd, writing against stop-slop, delivery and repeatability under `--strict` across several kinds of work,
-  and the last voice read
-  ([the brief](../studies/INDEPENDENT_TEST_BRIEF.md), [decision 0012](decisions/0012-the-closing-rules.md)). A FAIL
-  closes the claim for the 1.x line.
-- **Three small studies, in order, then no further voice round.** The subject reader and the register reading
-  against word matching ([pre-registration](../studies/SUBJECT_READER_PREREGISTRATION.md)); the voice gate against
-  planted changes ([pre-registration](../studies/VOICE_GATE_PREREGISTRATION.md)); and the in-context voice pass
-  against pasted examples, read blind by people ([pre-registration](../studies/VOICE_PASS_PREREGISTRATION.md)).
-  A trained voice model, steering and authorship embeddings stay unbuilt
-  ([decision 0011](decisions/0011-context-is-read-recorded-and-shown.md)).
-- **A skill looked after for weeks.** The loop that tends a skill is built and tested offline, and has
-  never run on a live skill over time.
+  classDef shipped fill:#d7f0dd,stroke:#2f7d45,color:#12351d;
+  classDef testing fill:#fdf1c7,stroke:#a67c00,color:#3d2e00;
+  classDef next fill:#dbe9fb,stroke:#2b62b3,color:#11284a;
+  classDef later fill:#ececec,stroke:#7a7a7a,color:#2b2b2b;
+```
 
-## Later
+Green is built and has a measurement behind it, some of it not yet in a tagged release. Yellow is built and waiting
+for its measurement. Blue is the next test. Gray is
+decided for later, with its condition. The problems are in the words people used for them; the evidence under each
+is in [RESULTS](RESULTS.md).
 
-- **Other domains, measured.** Contracts, financial reports and support replies run today and have been
-  only partly measured. The study is drafted in
-  [CROSS_DOMAIN_PREREGISTRATION](../studies/CROSS_DOMAIN_PREREGISTRATION.md).
-- **Search under a fixed standard**, designed in [decision 0004](decisions/0004-search-under-a-fixed-standard.md):
-  GEPA-class search over how rules are carried, with a judge checked against people before it is trusted.
+## Branch by branch: what, why, and the test
 
-## After the closing test: easier before deeper
+### 1. "I can't tell whether the output still follows my rules"
 
-- **Time to a working skill.** Most people will say "review code the way our principal engineer does", not
-  "ratify a standard". The path should be: give 15 to 30 examples, read what Atelier thinks the standard is, approve
-  or change the eight to fifteen behaviours that matter, connect the agent. Today a build proposes twenty to
-  forty-odd rules and prints its internals. Next is a review that shows the few rules that decide most outputs first
-  and accepts the rest as suggested, and output that says what happened in one line with the detail behind
-  `atelier report`.
-- **A small model first, a strong one only on refusal.** Under strict delivery, run a cheap or local model and
-  retry on the frontier model only when the output is refused. The checks are code and do not depend on the model;
-  what is unmeasured is how often a small model is refused.
-- **First-draft rate per rule and per model,** so a rule a model cannot hold is seen and carried another way.
+**Why it matters.** A skill nobody can check has to be read draft by draft, which is the work it was meant to save.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| A standard the owner approves once, hashed, that no automated step can change | Shipped | The standard's hash never moved through diagnosis, a new version, a rerun and a settlement ([moat result](../studies/MOAT_RESULT.md)) |
+| Counted checks on every output, with a pass or fail a person can read | Shipped | In development, answers breaking a counted rule: 31% against 76% for a hand-written skill on coding answers, 0% against 10% on contract clauses, 10% against 95% on code review |
+| Strict delivery: an output ships only when it conforms | Built, opt-in | It refused 7 of 80 answers on one rule; the cause is fixed and is measured again in the last development round. Claim B tests it across three kinds of work |
+
+### 2. "It invents things I never said"
+
+**Why it matters.** One invented figure in a post costs more trust than every rule held.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| A small model reads each draft for specifics; code decides whether each is supported | Shipped, qualified | All 46 planted inventions caught and 39 of 48 clean drafts left alone at its production settings ([v3 result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)) |
+| Only a measured instrument may cut text | Shipped | An unqualified reader reports and never deletes ([decision 0003](decisions/0003-authority-by-measurement.md)) |
+
+### 3. "Its answers are worse than a careful hand-written skill's"
+
+**Why it matters.** This is the bar the owner signed: better than a skill a person wrote by hand.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| A habit is stated only on evidence, and one that holds back what was asked is the owner's to rule on | Shipped | Fourteen of fifteen lost cases had one cause: the skill withheld what was asked. After the change, failed answers were 15.0% against 25.4% on 60 held-out coding tasks ([decision 0013](decisions/0013-carried-no-wider-than-the-corpus.md)) |
+| The closing test, four claims, once each, by an independent tester | Next | [The brief](../studies/INDEPENDENT_TEST_BRIEF.md). A FAIL closes the claim for the 1.x line |
+| Writing, on the hand-written skill's own score | Open, measured behind | 2.4 and 3.5 points of 50 lower on two authors. It is published as it stands |
+
+### 4. "It doesn't sound like me"
+
+**Why it matters.** Rules describe a writer; they do not sound like one. This is the least solved branch.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| The author's own pieces and a persona quoted from them, served with the skill | Shipped; voice not claimed | Exploratory blind rounds on one author: a skill of rules alone was ranked least like the author, and a later one with a description and whole pieces was preferred on the two briefs read. The pre-registered gate of those rounds failed |
+| How typical an output is of the author, against the author's own floor | Shipped, an instrument | An author's own pieces are told from each other at AUC 0.72 to 0.81, so a reading is compared with that and not with 0.5 ([author floor](../studies/AUTHOR_FLOOR_RESULT.md)) |
+| Plan-first writing, bands near the request's subject, a structure reader | Tried, failed | Plan-first: every arm was still told from the author's unseen pieces, AUC 0.75 to 1.0 ([indistinguishability](../studies/INDISTINGUISHABILITY_RESULT.md)). Bands near the subject told the author from the model no better ([context bands](../studies/CONTEXT_BANDS_RESULT.md)). The structure reader was reliable and separated nothing ([structure reader](../studies/STRUCTURE_READER_RESULT.md)) |
+| One last in-context voice read, by people, blind | Next | Claim C. If it fails, voice is not claimed in 1.x and no further prompting round is run |
+| A trained voice adapter | After the closing test | See "Exploration" below: the published evidence favours a model trained on the author over one prompted with their examples |
+
+### 5. "The skill is too big and the checked run costs too much"
+
+**Why it matters.** A reviewer measured Atelier's exported skills at 5,035 to 13,818 words against 189 to 1,240 for
+the skills they were compared with. Size costs context in an agent, latency and attention. The checked runtime costs
+about seven times the plug-in.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| Every skill states its size, stored and exported, with the export by part | Built | On the one skill measured part by part, 9,201 of 13,173 words are the author's whole pieces, set by one budget |
+| Every run says where its cost went, by purpose | Built | Two drafts explain at most two of the seven times; the rest is unmeasured until real runs report it |
+| A word budget for the author's pieces, and excerpts from more pieces in place of a few whole ones | Built, opt-in | [One study, drafted](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md): four smaller configurations of each of two writing skills against today's. The smaller of two (none of the author's pieces, or whole pieces within 3,000 words) becomes the default if it is rejected in neither domain; excerpts are measured for the next version. If nothing is selected the size stays, and the study will not have shown that the size buys anything: its error rates are large both ways ([decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)) |
+| One draft first and a second only on evidence; a small model first and a strong one only on refusal | 2.0 | Each changes how a run spends, so each waits for the cost breakdown from real runs |
+| Sending only the rules that apply to a request | 2.0 | On the one skill measured, the rules and their examples are a fifth of the export, and a wrong "does not apply" silently drops a rule the owner required |
+
+### 6. "It takes too long to get a working skill"
+
+**Why it matters.** Most people will say "review code the way our principal engineer does", not "ratify a
+standard". Today a build proposes twenty to forty-odd rules and prints its internals.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| Install from npm, and one command that connects the agents in a project | Built | Ships with the next tagged release |
+| A review that shows the few rules that decide most outputs first, and one line of output with the detail behind `atelier report` | 2.0, first | Time from a folder of examples to a first accepted output |
+| A check on pull requests: `atelier verify` on docs, release notes and changelogs | 2.0 | A broken REQUIRED rule fails the check, and the run's panel is the comment |
+| Ready-made standards from authors who agreed to be listed; one standard shared by a team and checked in CI | 2.0 | Whether a team keeps a standard in its repository |
+
+## The order from here
+
+1. **One study of size.** The reviewer measures five configurations of two skills once, by a rule sealed first.
+2. **One build:** exactly the configuration the rule selects, with today's prepared beside it as the fallback.
+3. **The last development round,** on that commit: the strict-delivery fix, the final export on every held-out task,
+   the four axes, and ten blind pairs read by the owner.
+4. **The closing test:** four claims, once each, by an independent tester, on one frozen commit.
+5. **Publish every result,** pass or miss, tag the release, and close the 1.x line.
+6. **2.0** starts from time to a working skill.
+
+Nothing is added between these steps because a result disappointed.
+
+## Also waiting on evidence
+
+- **A head-to-head with GEPA and SkillOpt at a fair budget, on a sealed test.** A development run at small budgets
+  found Atelier breaking fewer of the author's rules in 5 of 6 comparisons, with much larger skills. The kit is in
+  [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare). It never blocks a claim.
+- **A skill looked after for weeks.** The loop that tends a skill is built and tested offline, and has never run on a
+  live skill over time.
+- **Other domains, measured.** Contracts, financial reports and support replies run today and have been only partly
+  measured ([CROSS_DOMAIN_PREREGISTRATION](../studies/CROSS_DOMAIN_PREREGISTRATION.md)).
+- **Search under a fixed standard** ([decision 0004](decisions/0004-search-under-a-fixed-standard.md)): a search over
+  how rules are carried, with no operation that can edit the standard. No measured defect of 1.x needs it.
 
 ## Exploration, after the closing test
 

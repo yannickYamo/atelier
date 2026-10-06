@@ -177,7 +177,7 @@ atelier export --skill posts --out skill.md --no-index            # leave out th
 The budget is a ceiling, counted in words of prose for whole pieces and in every word for excerpts. Excerpts are
 for a skill that writes; answers are short and shown whole. A build keeps the budget and the form until you give others, and choosing again calls no model. Nothing here is a default: a skill built without
 these options is chosen exactly as before. Whether a smaller skill holds your rules and your voice as well is a
-measured question ([the pre-registration](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md),
+question for a measurement ([the drafted pre-registration](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md),
 [decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)).
 
 `atelier report <run>` ends with where that run's cost went, one line per purpose with its calls and the tokens

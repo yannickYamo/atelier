@@ -274,100 +274,176 @@ describe('where a run\'s cost went', () => {
 // ── THE RULE THAT CHOOSES THE DEFAULT, HELD BOTH WAYS ───────────────────────────────────────────
 //
 // bench/compare/efficiency-select.mjs is sealed with the ablation's pre-registration, so it is tested like product
-// code: an arm that is truly level is selected, one that is worse is not, and an arm nobody could read is never
-// chosen by default.
+// code: an arm that is level is selected, one that is worse is not, an arm nobody could read is never chosen by
+// default, and rows that are not what the rule expects stop the run instead of thinning it.
+const script = (name: string, ...args: string[]): { code: number; out: string } => {
+  try { return { code: 0, out: execFileSync('node', [resolve(`bench/compare/${name}`), ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) }; }
+  catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return { code: x.status ?? -1, out: `${x.stdout ?? ''}${x.stderr ?? ''}` }; }
+};
+const jsonl = (rows: readonly object[]): string => `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
+
 describe('the rule that chooses which size becomes the default', () => {
-  const node = (...args: string[]): { code: number; out: string } => {
-    try { return { code: 0, out: execFileSync('node', [resolve('bench/compare/efficiency-select.mjs'), ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) }; }
-    catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return { code: x.status ?? -1, out: `${x.stdout ?? ''}${x.stderr ?? ''}` }; }
-  };
-  const jsonl = (rows: readonly object[]): string => `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`;
-  interface Arm { words: number; breaks: (task: number) => boolean; score: (task: number) => number; chosen?: (task: number) => 'arm' | 'reference' }
-  interface Standing { arm: string; eligible: boolean; rejectedIn: string[]; unreadIn: string[] }
-  interface Selection { selected: string | null; sentence: string; standing: Standing[]; domains: { name: string; arms: Record<string, { rejectedBy: string[]; voice: { read: boolean } }> }[] }
-  /** One domain's files: `tasks` tasks, two outputs each, the reference and every arm. */
-  const domain = (dir: string, name: string, tasks: number, arms: Record<string, Arm>, voice = false): object => {
-    const rules: object[] = []; const quality: object[] = []; const picks: object[] = [];
+  interface Arm { words: number; breaks: (task: number, trial: number) => boolean; score: (task: number) => number; chosen?: (task: number) => string }
+  interface Standing { arm: string; state: 'stands' | 'rejected' | 'unread'; rejectedIn: string[]; unreadIn: string[] }
+  interface Selection { selected: string | null; smallestStanding: string | null; sentence: string; standing: Standing[]; domains: { name: string; arms: Record<string, { rejectedBy: string[]; voice: { read: boolean } }> }[] }
+  interface Files { rules: object[]; quality: object[]; picks: object[] }
+  /** One domain's files: `tasks` tasks, two outputs each, the reference and every arm. `edit` changes the rows before they are written. */
+  const domain = (dir: string, name: string, tasks: number, arms: Record<string, Arm>, opts: { voice?: boolean; edit?: (f: Files) => void; excluded?: string[] } = {}): object => {
+    const f: Files = { rules: [], quality: [], picks: [] };
     for (let t = 0; t < tasks; t++) for (const [condition, a] of Object.entries(arms)) {
-      for (const trial of [1, 2]) { rules.push({ case_id: `t${t}`, trial, condition, broken: a.breaks(t) }); quality.push({ case_id: `t${t}`, trial, condition, score: a.score(t) }); }
-      if (a.chosen) picks.push({ case_id: `t${t}`, condition, chose: a.chosen(t) });
+      for (const trial of [1, 2]) { f.rules.push({ case_id: `t${t}`, trial, condition, broken: a.breaks(t, trial) }); f.quality.push({ case_id: `t${t}`, trial, condition, score: a.score(t) }); }
+      if (a.chosen) f.picks.push({ case_id: `t${t}`, condition, chose: a.chosen(t) });
     }
+    opts.edit?.(f);
     writeFileSync(join(dir, `${name}-sizes.json`), JSON.stringify(Object.fromEntries(Object.entries(arms).map(([k, a]) => [k, a.words]))));
-    writeFileSync(join(dir, `${name}-rules.jsonl`), jsonl(rules)); writeFileSync(join(dir, `${name}-quality.jsonl`), jsonl(quality));
-    if (voice) writeFileSync(join(dir, `${name}-voice.jsonl`), jsonl(picks));
-    return { name, sizes: `${name}-sizes.json`, rules: `${name}-rules.jsonl`, quality: [`${name}-quality.jsonl`], voice: voice ? `${name}-voice.jsonl` : null };
+    writeFileSync(join(dir, `${name}-rules.jsonl`), jsonl(f.rules)); writeFileSync(join(dir, `${name}-quality.jsonl`), jsonl(f.quality));
+    if (opts.voice) writeFileSync(join(dir, `${name}-voice.jsonl`), jsonl(f.picks));
+    return { name, sizes: `${name}-sizes.json`, rules: `${name}-rules.jsonl`, quality: [`${name}-quality.jsonl`], voice: opts.voice ? `${name}-voice.jsonl` : null, ...(opts.excluded ? { excluded: opts.excluded } : {}) };
   };
-  const analyse = (dir: string, domains: object[], arms: string[], minTasks = 20): Selection => {
-    writeFileSync(join(dir, 'config.json'), JSON.stringify({ reference: 'full', arms, domains, margins: { rules: 0.05, quality: 1 }, minTasks }));
-    const r = node('--config', join(dir, 'config.json'), '--out', join(dir, 'result.json'));
+  const config = (dir: string, domains: object[], arms: string[], more: object = {}): string => {
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ reference: 'full', arms, defaultable: arms, domains, margins: { rules: 0.05, quality: 1 }, minTasks: 20, ceiling: 0.85, ...more }));
+    return join(dir, 'config.json');
+  };
+  const analyse = (dir: string, domains: object[], arms: string[], more: object = {}): Selection => {
+    const r = script('efficiency-select.mjs', '--config', config(dir, domains, arms, more), '--out', join(dir, 'result.json'));
     expect(r.code, r.out).toBe(0);
     return JSON.parse(readFileSync(join(dir, 'result.json'), 'utf8')) as Selection;
   };
-  const level: Omit<Arm, 'words'> = { breaks: (t) => t % 10 === 0, score: (t) => 36 + (t % 5) };
+  const refused = (dir: string, domains: object[], arms: string[], more: object = {}): string => {
+    const r = script('efficiency-select.mjs', '--config', config(dir, domains, arms, more));
+    expect(r.code, r.out).toBe(2);
+    return r.out;
+  };
+  /** Breaks a rule in `n` of the 60 outputs of 30 tasks: the first `n` outputs, first trials first. */
+  const breaking = (n: number) => (t: number, trial: number): boolean => (trial === 1 ? t < Math.min(n, 30) : t < n - 30);
+  const level: Omit<Arm, 'words'> = { breaks: breaking(6), score: (t) => 36 + (t % 5) };
   const tmp = (): string => mkdtempSync(join(tmpdir(), 'atelier-eff-select-'));
 
-  it('arms level with the reference on every task: the smallest is selected, and the sentence does not call them equivalent', () => {
+  it('arms level with the reference: the smallest is selected, and the sentence does not call them equivalent', () => {
     const dir = tmp();
-    const arms = { full: { ...level, words: 13000 }, 'lean-3000': { ...level, words: 6000 }, 'lean-1500': { ...level, words: 4500 } };
-    const r = analyse(dir, [domain(dir, 'blog', 30, arms), domain(dir, 'contracts', 30, arms)], ['lean-1500', 'lean-3000']);
-    expect(r.selected).toBe('lean-1500');
-    expect(r.sentence).toMatch(/^SELECTED: "lean-1500", 9,000 exported words over 2 domain\(s\) against 26,000 for "full"/);
+    const arms = { full: { ...level, words: 13000 }, 'lean-3000': { ...level, words: 6000 }, 'no-pieces': { ...level, words: 4500 } };
+    const r = analyse(dir, [domain(dir, 'blog', 30, arms), domain(dir, 'contracts', 30, arms)], ['no-pieces', 'lean-3000']);
+    expect(r.selected).toBe('no-pieces');
+    expect(r.sentence).toMatch(/^SELECTED: "no-pieces", 9,000 exported words over 2 domain\(s\) against 26,000 for "full"/);
     expect(r.sentence).toMatch(/does not show the two are equivalent/);
+  });
+  it('the rule count is compared in whole outputs: three more in sixty stands at any base rate, four more is rejected', () => {
+    // The same measured difference used to be rejected or not by floating point (0.20 − 0.15 is not 0.05 in a double).
+    for (const base of [0, 3, 6, 9, 10, 12]) {
+      const dir = tmp();
+      const arms = { full: { ...level, breaks: breaking(base), words: 13000 }, three: { ...level, breaks: breaking(base + 3), words: 5000 }, four: { ...level, breaks: breaking(base + 4), words: 4000 } };
+      const r = analyse(dir, [domain(dir, 'blog', 30, arms)], ['four', 'three']);
+      expect(r.standing.find((x) => x.arm === 'three')?.state, `base ${base}`).toBe('stands');
+      expect(r.domains[0].arms.four.rejectedBy[0], `base ${base}`).toBe(`rules: breaks a required rule in ${base + 4} of 60 outputs against ${base} for the reference: 4 more, where 3 are allowed`);
+      expect(r.selected).toBe('three');
+    }
   });
   it('an arm worse in one domain is not saved by the other: domains are never pooled', () => {
     const dir = tmp();
-    const worse = { ...level, breaks: (t: number) => t % 10 === 0 || t % 10 === 1 };     // ten points more rule-breaking outputs
-    const blog = domain(dir, 'blog', 30, { full: { ...level, words: 13000 }, 'lean-1500': { ...level, words: 4500 }, 'lean-3000': { ...level, words: 6000 } });
-    const contracts = domain(dir, 'contracts', 30, { full: { ...level, words: 5700 }, 'lean-1500': { ...worse, words: 3700 }, 'lean-3000': { ...level, words: 5200 } });
-    const r = analyse(dir, [blog, contracts], ['lean-1500', 'lean-3000']);
-    expect(r.standing.find((x) => x.arm === 'lean-1500')).toMatchObject({ eligible: false, rejectedIn: ['contracts'] });
-    expect(r.domains[1].arms['lean-1500'].rejectedBy[0]).toMatch(/^rules: breaks a required rule in 10 more outputs in a hundred/);
+    const blog = domain(dir, 'blog', 30, { full: { ...level, words: 13000 }, 'no-pieces': { ...level, words: 4500 }, 'lean-3000': { ...level, words: 6000 } });
+    const contracts = domain(dir, 'contracts', 30, { full: { ...level, words: 5700 }, 'no-pieces': { ...level, breaks: breaking(12), words: 3700 }, 'lean-3000': { ...level, words: 5200 } });
+    const r = analyse(dir, [blog, contracts], ['no-pieces', 'lean-3000']);
+    expect(r.standing.find((x) => x.arm === 'no-pieces')).toMatchObject({ state: 'rejected', rejectedIn: ['contracts'] });
     expect(r.selected).toBe('lean-3000');
   });
-  it('a loss inside the margin is still a loss when it is clear: worse on every task where the two differ', () => {
+  it('quality: the margin is a tolerance. A small loss on every task stands; more than the margin is rejected', () => {
     const dir = tmp();
-    const slightly = { ...level, breaks: (t: number) => level.breaks(t) || t % 20 === 1 };   // five points: at the margin, not over it
-    const r = analyse(dir, [domain(dir, 'blog', 100, { full: { ...level, words: 13000 }, lean: { ...slightly, words: 4500 } })], ['lean']);
-    expect(r.domains[0].arms.lean.rejectedBy[0]).toMatch(/^rules: clearly worse: worse on 5 of the 5 tasks where the two differ/);
-    expect(r.selected).toBeNull();
-    expect(r.sentence).toMatch(/^NONE SELECTED: .*"full" stays the default/);
-  });
-  it('quality: lower by more than the margin is rejected; lower by less, with no clear loss, is not', () => {
-    const dir = tmp();
-    const noisy = (shift: number) => (t: number): number => level.score(t) + shift + (t % 2 ? 1.5 : -1.5);
-    const r = analyse(dir, [domain(dir, 'blog', 30, { full: { ...level, words: 13000 }, low: { ...level, score: noisy(-2), words: 4000 }, near: { ...level, score: noisy(-0.3), words: 5000 } })], ['low', 'near']);
-    expect(r.domains[0].arms.low.rejectedBy[0]).toMatch(/^quality: scores 2 points lower than the reference, over the margin of 1/);
+    const r = analyse(dir, [domain(dir, 'blog', 30, { full: { ...level, words: 13000 }, low: { ...level, score: (t) => level.score(t) - 2, words: 4000 }, near: { ...level, score: (t) => level.score(t) - 0.25, words: 5000 } })], ['low', 'near']);
+    expect(r.domains[0].arms.low.rejectedBy[0]).toBe('quality: scores 2 points lower than the reference, where 1 is allowed');
     expect(r.domains[0].arms.near.rejectedBy).toEqual([]);
     expect(r.selected).toBe('near');
   });
-  it('too few tasks to read an arm leaves it unread, and an unread arm is never selected', () => {
+  it('an arm that may not become the default is measured and reported, never selected', () => {
+    const dir = tmp();
+    const arms = { full: { ...level, words: 13000 }, 'excerpts-1500': { ...level, words: 3000 }, 'lean-3000': { ...level, words: 6000 } };
+    const r = analyse(dir, [domain(dir, 'blog', 30, arms)], ['excerpts-1500', 'lean-3000'], { defaultable: ['lean-3000'] });
+    expect(r.selected).toBe('lean-3000');
+    expect(r.smallestStanding).toBe('excerpts-1500');
+    expect(r.sentence).toMatch(/The smallest arm that stood is "excerpts-1500" .* may not become the default in this version\.$/);
+    // and when the only standing arm is one that may not: nothing is selected
+    const dir2 = tmp();
+    const none = analyse(dir2, [domain(dir2, 'blog', 30, { ...arms, 'lean-3000': { ...level, breaks: breaking(20), words: 6000 } })], ['excerpts-1500', 'lean-3000'], { defaultable: ['lean-3000'] });
+    expect(none.selected).toBeNull();
+    expect(none.sentence).toMatch(/^NONE SELECTED: .*"full" stays the default\. The study did not show that a smaller skill holds; at this size it could not have shown that it does not\./);
+  });
+  it('where the reference itself breaks a rule in nearly every output, rules are unread: no arm is selected on a reading with no room', () => {
+    const dir = tmp();
+    const arms = { full: { ...level, breaks: breaking(54), words: 13000 }, lean: { ...level, breaks: breaking(56), words: 4500 } };
+    const r = script('efficiency-select.mjs', '--config', config(dir, [domain(dir, 'blog', 30, arms)], ['lean']));
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/^unread {4}lean .* unread in: blog/m);
+    expect(r.out).toMatch(/blog · rules unread: the reference breaks a required rule in 54 of 60 outputs, over the ceiling of 0\.85/);
+    expect(r.out).toMatch(/^NONE SELECTED/m);
+    // polarity: at the ceiling exactly (51 of 60) the reading stands
+    const dir2 = tmp();
+    expect(analyse(dir2, [domain(dir2, 'blog', 30, { full: { ...level, breaks: breaking(51), words: 13000 }, lean: { ...level, breaks: breaking(52), words: 4500 } })], ['lean']).selected).toBe('lean');
+  });
+  it('equal sizes take the arm listed first, so the sealed order decides and nothing else does', () => {
+    const arms = { full: { ...level, words: 13000 }, a: { ...level, words: 5000 }, b: { ...level, words: 5000 } };
+    const d1 = tmp(); const d2 = tmp();
+    expect(analyse(d1, [domain(d1, 'blog', 30, arms)], ['a', 'b']).selected).toBe('a');
+    expect(analyse(d2, [domain(d2, 'blog', 30, arms)], ['b', 'a']).selected).toBe('b');
+  });
+  it('too few tasks leaves a domain unread, and an unread arm is never selected', () => {
     const dir = tmp();
     const arms = { full: { ...level, words: 13000 }, lean: { ...level, words: 4500 } };
     const r = analyse(dir, [domain(dir, 'blog', 30, arms), domain(dir, 'contracts', 12, arms)], ['lean']);
-    expect(r.standing[0]).toMatchObject({ eligible: false, unreadIn: ['contracts'], rejectedIn: [] });
+    expect(r.standing[0]).toMatchObject({ state: 'unread', unreadIn: ['contracts'], rejectedIn: [] });
     expect(r.selected).toBeNull();
   });
-  it('voice rejects only where a qualified reader read it: unread it rejects nothing, read it can', () => {
-    const dir = tmp();
+  it('voice rejects only where a qualified reader read it; and where it is read, an arm with too few choices is unread', () => {
     const arms = (chosen: Arm['chosen']) => ({ full: { ...level, words: 13000 }, lean: { ...level, words: 4500, chosen } });
-    const unread = analyse(dir, [domain(dir, 'blog', 30, arms((): 'reference' => 'reference'))], ['lean']);
+    const d1 = tmp();
+    const unread = analyse(d1, [domain(d1, 'blog', 30, arms(() => 'reference'))], ['lean']);
     expect(unread.domains[0].arms.lean.voice.read).toBe(false);
     expect(unread.selected).toBe('lean');
-    const dir2 = tmp();
-    const read = analyse(dir2, [domain(dir2, 'blog', 30, arms((): 'reference' => 'reference'), true)], ['lean']);
+    const d2 = tmp();
+    const read = analyse(d2, [domain(d2, 'blog', 30, arms(() => 'reference'), { voice: true })], ['lean']);
     expect(read.domains[0].arms.lean.rejectedBy[0]).toMatch(/^voice: the reference was chosen on 30 of the 30 tasks/);
     expect(read.selected).toBeNull();
-    const dir3 = tmp();
-    const split = analyse(dir3, [domain(dir3, 'blog', 30, arms((t) => (t % 2 ? 'arm' : 'reference')), true)], ['lean']);
-    expect(split.selected).toBe('lean');
+    const d3 = tmp();
+    expect(analyse(d3, [domain(d3, 'blog', 30, arms((t) => (t % 2 ? 'arm' : 'reference')), { voice: true })], ['lean']).selected).toBe('lean');
+    // nineteen choices, every one for the reference: too few to read, so the arm is unread, never waved through
+    const d4 = tmp();
+    const few = analyse(d4, [domain(d4, 'blog', 30, arms(() => 'reference'), { voice: true, edit: (f) => { f.picks = f.picks.slice(0, 19); } })], ['lean']);
+    expect(few.standing[0]).toMatchObject({ state: 'unread', unreadIn: ['blog'] });
+    expect(few.selected).toBeNull();
   });
-  it('a config that lists the reference as an arm, or leaves out a margin, is refused before anything is read', () => {
+  it('rows that are not what the rule expects stop the run: a wrong label, a wrong type, a duplicate, a missing task', () => {
+    const arms = { full: { ...level, words: 13000 }, lean: { ...level, breaks: breaking(20), words: 4500 } };
+    const bad = (edit: (f: Files) => void, voice = false, withChoice = false): string => {
+      const dir = tmp();
+      const a = withChoice ? { ...arms, lean: { ...arms.lean, chosen: (): string => 'reference' } } : arms;
+      return refused(dir, [domain(dir, 'blog', 30, a, { edit, voice })], ['lean']);
+    };
+    // every arm labelled as the runner labels a skill arm
+    expect(bad((f) => { f.rules = f.rules.map((r) => ({ ...r, condition: 'candidate' })); })).toMatch(/condition is "candidate", which is neither the reference nor a listed arm/);
+    // an exit code written where a boolean is expected, and a judge row with no score
+    expect(bad((f) => { f.rules = f.rules.map((r) => ({ ...r, broken: 1 })); })).toMatch(/has no usable value/);
+    expect(bad((f) => { f.quality = f.quality.map((r) => ({ ...(r as { score: number }), score: undefined, Directness: 7 })); })).toMatch(/blog quality \(session 1\): .* has no usable value/);
+    // the same rows appended twice
+    expect(bad((f) => { f.rules = [...f.rules, ...f.rules.slice(0, 3)]; })).toMatch(/appears twice for "full"/);
+    // the arm's failing tasks missing: the reading must not quietly lose them and select the arm
+    expect(bad((f) => { f.rules = f.rules.filter((r) => { const x = r as { condition: string; broken: boolean }; return x.condition !== 'lean' || !x.broken; }); })).toMatch(/"lean" is not on the reference's tasks and trials \(20 missing, 0 extra/);
+    // a voice choice labelled with the arm's name
+    expect(bad((f) => { f.picks = f.picks.map((r) => ({ ...r, chose: 'full' })); }, true, true)).toMatch(/has chose "full"; it must be "arm" or "reference"/);
+  });
+  it('a task excluded is excluded for every arm, and named', () => {
+    const dir = tmp();
+    const arms = { full: { ...level, words: 13000 }, lean: { ...level, words: 4500 } };
+    const d = domain(dir, 'blog', 30, arms, { excluded: ['t0', 't1'], edit: (f) => { f.rules = f.rules.filter((r) => { const x = r as { condition: string; case_id: string }; return !(x.condition === 'lean' && (x.case_id === 't0' || x.case_id === 't1')); }); } });
+    const r = script('efficiency-select.mjs', '--config', config(dir, [d], ['lean']));
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/blog · 2 task\(s\) excluded for every arm: t0, t1/);
+    expect(r.out).toMatch(/^stands {4}lean/m);
+  });
+  it('a config that lists the reference as an arm, leaves out a margin, or has no whole minTasks is refused', () => {
     const dir = tmp();
     const d = domain(dir, 'blog', 30, { full: { ...level, words: 1 }, lean: { ...level, words: 1 } });
-    writeFileSync(join(dir, 'bad.json'), JSON.stringify({ reference: 'full', arms: ['full', 'lean'], domains: [d], margins: { rules: 0.05, quality: 1 }, minTasks: 20 }));
-    expect(node('--config', join(dir, 'bad.json'))).toMatchObject({ code: 2 });
-    writeFileSync(join(dir, 'bad2.json'), JSON.stringify({ reference: 'full', arms: ['lean'], domains: [d], margins: { rules: 0.05 }, minTasks: 20 }));
-    expect(node('--config', join(dir, 'bad2.json')).out).toMatch(/margins needs numbers/);
+    expect(refused(dir, [d], ['full', 'lean'])).toMatch(/the reference is not one of the arms/);
+    expect(refused(dir, [d], ['lean'], { margins: { rules: 0.05 } })).toMatch(/margins needs numbers/);
+    expect(refused(dir, [d], ['lean'], { minTasks: null })).toMatch(/config needs "minTasks"/);
+    expect(refused(dir, [d], ['lean'], { defaultable: ['other'] })).toMatch(/defaultable must be a list of arms/);
   });
 });
 
@@ -500,6 +576,60 @@ describe('through the binary: a skill built without asking is unchanged, and the
     try { expect(run(data, proj, 'build', '--name', 'voice', '--piece-budget', '500')).toMatch(/--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here/); }
     finally { renameSync(`${dir}-away`, dir); }
     expect(body(exported('unmoved.md'))).toBe(body(full));
+  });
+  it('from each arm\'s answers to a selection: the rows are built by a sealed script, not by hand', () => {
+    // Two arms of this skill as exported above, three tasks, two answers each, written as `run.mjs` writes them: every
+    // skill arm labelled "candidate", one file per arm.
+    const work = join(proj, 'ablation'); mkdirSync(work, { recursive: true });
+    const clean = 'We decided first, and explained after. The reasoning follows the decision, and it is short.';
+    const breaks = 'Let us delve into the rich tapestry of this ever-evolving landscape. It\'s not a tool, it\'s a movement. Here\'s the thing: here\'s why. Here\'s how.';
+    const answers = (text: (task: number, trial: number) => string): string => jsonl([1, 2].flatMap((trial) => [0, 1, 2].map((t) => ({ case_id: `t${t}`, trial, condition: 'candidate', runner: 'compare', response: text(t, trial), cost_usd: 0.01 }))));
+    writeFileSync(join(work, 'tasks.jsonl'), jsonl([0, 1, 2].map((t) => ({ id: `t${t}`, prompt: `Write about decision ${t}.` }))));
+    writeFileSync(join(work, 'full.jsonl'), answers(() => clean));
+    writeFileSync(join(work, 'lean.jsonl'), answers((t) => (t === 0 ? breaks : clean)));
+    writeFileSync(join(work, 'rubric.json'), JSON.stringify({ name: 'r', scale: [1, 10], dimensions: [{ name: 'Directness', question: '?' }, { name: 'Rhythm', question: '?' }] }));
+    const plan = (more: object = {}, domain: object = {}): string => {
+      writeFileSync(join(work, 'plan.json'), JSON.stringify({ reference: 'full', arms: ['lean-1500'], defaultable: ['lean-1500'], margins: { rules: 0.05, quality: 1 }, minTasks: 2, ceiling: 0.85, trials: 2, ...more,
+        domains: [{ name: 'blog', skill: 'voice', data, tasks: 'tasks.jsonl', exports: { full: out('full.md'), 'lean-1500': out('b1500.md') }, responses: { full: 'full.jsonl', 'lean-1500': 'lean.jsonl' },
+          judged: ['judged-1.jsonl'], rubric: 'rubric.json', voice: null, ...domain }] }));
+      return join(work, 'plan.json');
+    };
+    const merged = script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', join(work, 'out'));
+    expect(merged.code, merged.out).toBe(0);
+    const forJudge = readFileSync(join(work, 'out', 'blog-responses.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { case_id: string; trial: number; condition: string });
+    // every answer carries its arm's own label, which is what the judge shuffles by and the rule reads
+    expect(forJudge).toHaveLength(12);
+    expect([...new Set(forJudge.map((r) => r.condition))].sort()).toEqual(['full', 'lean-1500']);
+    // the judge's rows, as rubric-judge.mjs writes them: one number per dimension, no total
+    writeFileSync(join(work, 'judged-1.jsonl'), jsonl(forJudge.map((r) => ({ case_id: r.case_id, trial: r.trial, condition: r.condition, Directness: 8, Rhythm: r.condition === 'full' ? 7 : 6.5, notes: '', pass: '1' }))));
+    const rows = script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'rows', '--out', join(work, 'out'));
+    expect(rows.code, rows.out).toBe(0);
+    const rules = readFileSync(join(work, 'out', 'blog-rules.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { condition: string; case_id: string; broken: unknown });
+    // a boolean per answer, from `atelier verify`: the two answers that break a required rule, and no other
+    expect(rules.every((r) => typeof r.broken === 'boolean')).toBe(true);
+    expect(rules.filter((r) => r.broken).map((r) => `${r.condition} ${r.case_id}`)).toEqual(['lean-1500 t0', 'lean-1500 t0']);
+    const quality = readFileSync(join(work, 'out', 'blog-quality-1.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { condition: string; score: number });
+    expect(quality.find((r) => r.condition === 'full')?.score).toBe(15);
+    expect(quality.find((r) => r.condition === 'lean-1500')?.score).toBe(14.5);
+    const sizes = JSON.parse(readFileSync(join(work, 'out', 'blog-sizes.json'), 'utf8')) as Record<string, number>;
+    expect(sizes.full).toBe(countWords(readFileSync(out('full.md'), 'utf8')));
+    expect(sizes['lean-1500']).toBeLessThan(sizes.full);
+    // and the rule reads what the script wrote, with no step in between: two more broken outputs in six, rejected
+    const chosen = script('efficiency-select.mjs', '--config', join(work, 'out', 'ablation.json'));
+    expect(chosen.code, chosen.out).toBe(0);
+    expect(chosen.out).toMatch(/blog · lean-1500 · rules: breaks a required rule in 2 of 6 outputs against 0 for the reference: 2 more, where 0 are allowed/);
+    expect(chosen.out).toMatch(/^NONE SELECTED/m);
+    // an answer missing for one arm stops the run, with what to do
+    writeFileSync(join(work, 'lean.jsonl'), answers(() => clean).split('\n').slice(1).join('\n'));
+    expect(script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', join(work, 'out')).out).toMatch(/t0 trial 1 is missing for "lean-1500"\. Run it, or exclude the task for every arm/);
+    writeFileSync(join(work, 'lean.jsonl'), answers(() => clean));
+    // two arms with one export must be declared, and are then read once, on one set of answers
+    const twin = { exports: { full: out('full.md'), 'lean-1500': out('full.md') } };
+    expect(script('efficiency-rows.mjs', '--plan', plan({}, twin), '--stage', 'merge', '--out', join(work, 'out')).out).toMatch(/the exports of "full" and "lean-1500" are byte-identical\. Declare it/);
+    const declared = script('efficiency-rows.mjs', '--plan', plan({}, { ...twin, sameAs: { 'lean-1500': 'full' }, responses: { full: 'full.jsonl' } }), '--stage', 'merge', '--out', join(work, 'out2'));
+    expect(declared.code, declared.out).toBe(0);
+    const once = readFileSync(join(work, 'out2', 'blog-responses.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { condition: string; response: string });
+    expect(once.filter((r) => r.condition === 'lean-1500').map((r) => r.response)).toEqual(once.filter((r) => r.condition === 'full').map((r) => r.response));
   });
   it('a run records where its cost went and what it sent: every call the backend served is on a line, the request\'s reading included', async () => {
     // With a context judge on, the request is read before any draft is written. The ledger starts where the run's

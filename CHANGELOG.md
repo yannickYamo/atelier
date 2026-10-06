@@ -237,15 +237,18 @@ Defects found by an outside review of the build, each with what it broke.
 
 - **Size, measured** (development, by the reviewer and offline here; no sealed result). Exported Atelier skills ran
   5,035 words (code review), 5,760 (contracts) and 13,818 (speeches), against 189 to 361 for the hand-written seeds,
-  863 to 1,240 for GEPA's and 308 to 1,037 for SkillOpt's. On one skill built from a technical author's posts, part
+  863 to 1,240 for GEPA's and 308 to 1,037 for SkillOpt's: 16 to 38 times the seed. On one skill built from a technical author's posts, part
   by part: your pieces 9,201 of 13,173 words (three whole pieces), rule examples 1,954, rules and instructions 682,
   how I sound 471, moves 396, the reference index 282, framing 187.
-- **Drafted, not run: how small a skill can be and still hold its standard**
-  (studies/EFFICIENCY_ABLATION_PREREGISTRATION.md, decision 0014). Six configurations of one skill on 30 development
-  tasks in each of two kinds of writing. The rule that selects is `bench/compare/efficiency-select.mjs`: each domain
-  on its own, the measured difference against a margin, an exact test for a clear loss, voice only where a reader
-  was qualified. It selects a configuration and does not show two sizes are equivalent; the selected arm is
-  confirmed beside today's skill in the last development round, with today's as the fallback.
+- **Drafted, not run: can a skill serve less of the author's writing and still hold its standard**
+  (studies/EFFICIENCY_ABLATION_PREREGISTRATION.md, decision 0014). Four smaller configurations of each of two
+  writing skills against today's, on 30 or more development tasks per domain. Two scripts hold the rule:
+  `bench/compare/efficiency-rows.mjs` builds the rows (each arm's answers under its own label, a broken rule by
+  `atelier verify` offline, the score as the sum of the rubric's dimensions) and `bench/compare/efficiency-select.mjs`
+  reads them: each domain on its own, the rule count in whole answers against a tolerance of five in a hundred, the
+  score against one point of fifty, voice only where a reader was qualified. Rows it does not expect stop the run. It
+  selects a configuration and states its error rates, which are large both ways at this size; the selected arm is
+  measured again beside today's skill in the last development round, with today's prepared as the fallback.
 
 - **Development against hand-crafted skills, round 2** (run by the reviewer on 5 October 2026; readiness evidence
   under decision 0012, not a sealed result; one author per domain; model judges, each qualified on known pairs

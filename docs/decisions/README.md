@@ -10,7 +10,7 @@ comments say what is true now and link here for how it got that way.
 | [0003](0003-authority-by-measurement.md) | An instrument earns the right to block by measurement |
 | [0004](0004-search-under-a-fixed-standard.md) | How a GEPA-class search would work here (designed, not built) |
 | [0005](0005-forced-tool-choice.md) | Forced tool choice where a model accepts it |
-| [0006](0006-release-contract.md) | The release contract, and the moat it answers to (proposed, awaits the owner's signature) |
+| [0006](0006-release-contract.md) | The release contract, and the moat it answers to (proposed, never signed; amended by 0012, which keeps its domain goal and its blocking table) |
 | [0007](0007-taste-as-a-range.md) | Taste as a range: the fidelity loop below the standard |
 | [0008](0008-one-point-zero-is-the-floor.md) | 1.0 is the floor: later work is added beside it, never in place of it |
 | [0009](0009-voice-below-the-standard.md) | Voice below the standard: transfer as a declared policy, in-context pairs first, no trained model yet |
@@ -18,3 +18,4 @@ comments say what is true now and link here for how it got that way.
 | [0011](0011-context-is-read-recorded-and-shown.md) | Context is read, recorded and shown: a small model reads, code decides, and every run names the pieces it was measured against |
 | [0012](0012-the-closing-rules.md) | The closing rules: four claims tested once each by an outside tester against hand-crafted skills; the bar is 20% fewer failures and clearly fewer; a published miss is a close (signed 2026-10-05) |
 | [0013](0013-carried-no-wider-than-the-corpus.md) | A move is carried no more widely than the corpus supports: stated on evidence, with its condition, and a move that holds back is the owner's to rule on |
+| [0014](0014-the-smallest-realization-that-holds-the-standard.md) | The smallest realization that holds the standard: one bounded study of size before the last round, every candidate named in advance, a selection with stated error rates and never a proof, and the fallback a commit prepared first (approved 2026-10-05) |

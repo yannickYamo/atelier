@@ -136,7 +136,7 @@ An outside test also found a real failure: an early runtime cut correct sentence
 
 Atelier keeps the part each one is good at. It finds the rules from your examples, the way a voice tool does. It checks them on every output, the way a style checker does. It can search for a better way to carry them, the way an optimizer does. The rules stay the ones you approved.
 
-I haven't run Atelier head to head against GEPA or SkillOpt yet. The kit to do it fairly is in [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare), and the result goes here whichever way it comes out. More in [COMPARISON](docs/COMPARISON.md).
+A first head-to-head against GEPA and SkillOpt has been run, in development and at small budgets, with both searching on Atelier's own rule score: Atelier broke fewer of the author's rules in 5 of 6 comparisons, and its skills were 6 to 16 times the size of theirs. A run at a fair budget, on a sealed test, hasn't been made. The kit to do it is in [bench/compare](https://github.com/yannickYamo/atelier/tree/main/bench/compare), and the result goes here whichever way it comes out. More in [COMPARISON](docs/COMPARISON.md) and [RESULTS](docs/RESULTS.md).
 
 ## Install
 
@@ -163,7 +163,7 @@ has every command.
 
 Models change every few months. The rules shouldn't change with them.
 
-What comes next is a closing test by an independent tester. The bar: from a folder of examples and a prompt, you get a better skill than a hand-crafted one. It is tested against [i-have-adhd](https://github.com/ayghri/i-have-adhd) on coding answers and [stop-slop](https://github.com/hardikpandya/stop-slop) on writing, with delivery under `--strict` across several kinds of work and one last blind read of voice. Each claim is tested once, with its pass and fail sentences written first ([the closing rules](docs/decisions/0012-the-closing-rules.md), [the brief](studies/INDEPENDENT_TEST_BRIEF.md)). Until each is in, it isn't claimed. The head-to-head against GEPA and SkillOpt is optional: it can run at any time, is reported either way, and never delays or reopens a claim. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
+What comes next is a closing test by an independent tester. The bar: from a folder of examples and a prompt, you get a better skill than a hand-crafted one. It is tested against [i-have-adhd](https://github.com/ayghri/i-have-adhd) on coding answers and [stop-slop](https://github.com/hardikpandya/stop-slop) on writing, with delivery under `--strict` across several kinds of work and one last blind read of voice. Each claim is tested once, with its pass and fail sentences written first ([the closing rules](docs/decisions/0012-the-closing-rules.md), [the brief](studies/INDEPENDENT_TEST_BRIEF.md)). Until each is in, it isn't claimed. Before that test, one measured weakness is being worked on: an exported Atelier skill ran 16 to 38 times the size of a hand-written one, and on the one skill measured part by part most of it is your own pieces served whole. One study, drafted, selects a smaller default if one stands against today's on your rules and on quality ([decision 0014](docs/decisions/0014-the-smallest-realization-that-holds-the-standard.md)). The head-to-head against GEPA and SkillOpt is optional: it can run at any time, is reported either way, and never delays or reopens a claim. The rest of the plan is in [ROADMAP](docs/ROADMAP.md).
 
 ## Learn more
 

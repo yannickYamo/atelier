@@ -136,6 +136,7 @@ npm run acceptance:carriers -- --host codex
 | C116 | an excerpt is the author's words, in order, with the cut marked | the opening and a passage from the midpoint, each exactly as it stood; a code fence never cut through; a long paragraph taken apart at its line breaks, then its sentences; a short piece shown whole; the skill says "passages", never "a whole piece" (`tests/atelier-efficiency.test.ts`) |
 | C117 | a budget is not part of what a package served | two budgets that choose the same pieces are one package under one hash, and the form is recorded in one place whichever path set it, so a rebuild that lands on a stored package is not refused (`tests/atelier-efficiency.test.ts`) |
 | C118 | the export's index goes only when asked | `export --no-index` removes the list of example files and nothing else; each file's condition is still in the file the export inlines (`tests/atelier-efficiency.test.ts`) |
+| C119 | the rule that selects a size is a script, and so are its rows | `efficiency-rows.mjs` labels each arm's answers, reads a broken rule from `atelier verify` and sums the rubric; `efficiency-select.mjs` compares whole answers, never pools domains, never selects an unread arm or one outside the defaultable list, and stops on an unknown label, a wrong type, a duplicate or a missing task (`tests/atelier-efficiency.test.ts`) |
 
 ## CLAUDE CODE, live session, human
 

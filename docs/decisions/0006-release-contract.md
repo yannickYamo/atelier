@@ -1,6 +1,9 @@
 # 0006. The release contract, and the moat it answers to
 
-**Status.** Proposed 2026-09-30; binding once the owner signs below. Changed only by a new decision record.
+**Status.** Proposed 2026-09-30 and never signed. [0012](0012-the-closing-rules.md), signed on 2026-10-05, is the
+binding record and amends this one: only what 0012 keeps of it operates (the goal of four domains in five, first
+counted in claim B, and the table of what blocks a release). Recorded in
+[0014](0014-the-smallest-realization-that-holds-the-standard.md). The text below is kept as proposed.
 
 **Context.** Four outside rounds in one week moved Atelier back and forth: each fix was tested against the
 probe that reported it, and the regression showed up in the next outside run. Nothing measured Atelier's
