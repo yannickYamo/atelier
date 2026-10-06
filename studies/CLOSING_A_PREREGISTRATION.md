@@ -16,7 +16,27 @@ The hand-crafted skill here is [i-have-adhd](https://github.com/ayghri/i-have-ad
 
 And nothing may be clearly lost on the way: no dimension, blockers or requested depth.
 
-## The signed bar (2026-10-05), which replaces P2 below as the test of "better"
+## The four axes of the signed bar (this section decides the claim)
+
+One Atelier arm is read on all four axes: the exported plug-in or the runtime under strict delivery, **chosen on the
+working development tasks before the test opens** and never per axis. The comparator is i-have-adhd as published.
+Two outputs per task for every arm. Each axis is reached at 20% fewer failures and clearly fewer; when the
+comparator never fails on an axis there is nothing to reduce and the axis is not applicable.
+
+| Axis | A failure is | Read by |
+|---|---|---|
+| Quality | an answer with a blocker both judge reads agree on, or a named failure mode | the qualified judge, twice; `bench/compare/failure-modes.mjs` |
+| Rule anchor | an answer breaking a REQUIRED rule that has a measurement | `atelier verify` on every answer of both arms; a person audits a fifth |
+| Repeatability | a task whose two outputs differ on pass or fail, or on any REQUIRED rule's verdict; under strict delivery, also delivered against refused | counted |
+| Voice | a task where most of three readers pick the other arm's answer as closer to the owner's examples | three people, blind, sides seeded, on 100 of the tasks |
+
+The owner's rules were never shown to i-have-adhd, so the rule-anchor sentence says so: it reads "held the owner's
+rules", never "the other skill is worse at its own aims".
+
+**The claim's verdict:** PASS when every applicable axis is reached. Otherwise each axis is published as measured,
+reached or not, and the claim closes. The config seals four `axes` files and `"bar": {"reduction": 0.2}`.
+
+## The quality axis in detail (2026-10-05)
 
 On the quality axis a failure is an answer with a blocker both judge reads agree on, or a named failure mode
 (`bench/compare/failure-modes.mjs`: withholds the deliverable, refuses without a safe path, invents context, action

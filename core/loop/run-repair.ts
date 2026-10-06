@@ -549,12 +549,16 @@ export async function refineToStandard(
   // longer than they write. Tried before the rewrite passes, which then have less to do, and again after,
   // because a rewrite can put a dash back. Kept only on the same terms as a rewrite: nothing gets worse.
   const mechanical: string[] = [];
+  const notKept: string[] = [];
   const fixMechanically = async (): Promise<void> => {
     const m = mechanicalFixes(v, report, text);
     if (m.text === text) return;
     const after = await check(m.text);
     sameInstrument();
-    if (!acceptRepair(report, after).ok) return;
+    // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
+    // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
+    const accepted = acceptRepair(report, after);
+    if (!accepted.ok) { if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
     text = m.text; report = after; mechanical.push(...m.fixed);
   };
   if (report.failed) await fixMechanically();
@@ -624,6 +628,7 @@ export async function refineToStandard(
     const how = `fixed without a model: ${mechanical.join('; ')}`;
     why = report.failed ? `${why}; ${how}` : `every REQUIRED measured rule now holds (${how})`;
   }
+  if (report.failed && notKept.length) why = `${why}; ${notKept.join('; ')}`;
   // AND AGAIN AT THE END, on the text that ships: whatever the passes did, no flagged claim survives them.
   // Once the flagged claims were kept uncut, cutting them again at the end would only repeat the attempt.
   const last = keptUncut ? { text, report, cut: [] as string[] } : await cutSafely(text, report);

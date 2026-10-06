@@ -61,6 +61,19 @@ Also next:
 - **Search under a fixed standard**, designed in [decision 0004](decisions/0004-search-under-a-fixed-standard.md):
   GEPA-class search over how rules are carried, with a judge checked against people before it is trusted.
 
+## After the closing test: easier before deeper
+
+- **Time to a working skill.** Most people will say "review code the way our principal engineer does", not
+  "ratify a standard". The path should be: give 15 to 30 examples, read what Atelier thinks the standard is, approve
+  or change the eight to fifteen behaviours that matter, connect the agent. Today a build proposes twenty to
+  forty-odd rules and prints its internals. Next is a review that shows the few rules that decide most outputs first
+  and accepts the rest as suggested, and output that says what happened in one line with the detail behind
+  `atelier report`.
+- **A small model first, a strong one only on refusal.** Under strict delivery, run a cheap or local model and
+  retry on the frontier model only when the output is refused. The checks are code and do not depend on the model;
+  what is unmeasured is how often a small model is refused.
+- **First-draft rate per rule and per model,** so a rule a model cannot hold is seen and carried another way.
+
 ## Exploration, after the closing test
 
 Nothing here is built, and nothing here starts before the closing test's results are in the README

@@ -31,6 +31,11 @@ does not change again.
   causes, the tester measures again. No other brief enters the loop.
 - After the third round the claims are sealed and tested once if the held-out tasks reach the bar. If they do not,
   what was measured is published as it stands.
+- **Round 2 (2026-10-05), development evidence run by the reviewer:** on 60 held-out coding tasks the plug-in had
+  15.0% failed answers against 25.4% for i-have-adhd (41% fewer, lower bound above zero) and broke a counted rule in
+  31% of answers against 76%. Repeatability was 25% fewer and not clearly fewer. Strict delivery refused 7 of 80
+  answers, all on one paragraph-length rule whose repair needs no model. That repair is fixed; it is the last change
+  to the product before the seals. Round 3 measures it and chooses the Atelier arm.
 - **A published miss is a close.** "12% fewer, where the bar was 20%" ends the question for the 1.x line exactly as a
   pass would. A miss is never a reason for another mechanism.
 

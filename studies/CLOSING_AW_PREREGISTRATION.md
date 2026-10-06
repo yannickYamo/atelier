@@ -16,6 +16,26 @@ author than the hand-written one, in two parts:
   hand-written skill's piece by a clear margin when asked which reads like the author. The first must be shown.
 - **on stop-slop's own score:** not worse, with no dimension clearly worse.
 
+## The four axes of the signed bar (this section decides the claim)
+
+The Atelier arm against stop-slop as published, two outputs per brief, each axis reached at 20% fewer failures and
+clearly fewer (`bench/compare/closing-quality.mjs`, `axes`).
+
+| Axis | A failure is | Read by |
+|---|---|---|
+| Quality | a piece under stop-slop's own line (35 of 50) on both judge reads | the qualified rubric judge |
+| Rule anchor | a piece breaking one of the author's REQUIRED rules that has a measurement | `atelier verify`; a person audits a fifth |
+| Repeatability | a brief whose two pieces differ on any REQUIRED rule's verdict | counted |
+| Voice | a brief where most of five readers pick stop-slop's piece as sounding more like the author | five people per author, blind |
+
+On voice, 20% fewer failures means readers choose the Atelier piece on at least five briefs in nine. W1 to W6 below
+are reported beside the axes; W5's 0.40 line no longer decides anything. Development found stop-slop ahead on its
+own score by 2.4 to 3.5 points of 50 on two authors: the quality axis may well be missed, and a miss is published.
+
+**Readiness before the seal:** on development briefs for an author not in the test, each axis is measured once; the
+claim is sealed when rule anchor and voice reach the bar there. **Size:** at least 60 briefs per author, from the
+spread measured in development, not the 27-brief floor below.
+
 ## Material
 
 - **Two authors** who agreed, each with at least 20 pieces. The skill is built from the pieces it may read; the

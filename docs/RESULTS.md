@@ -38,6 +38,19 @@ exploratory, and say so.
 | A second maintainer | 2 clean rules against a threshold of 3, so the study did not run | a gate that fails is not excepted | [result](../studies/MAINTAINER_B_RESULT.md) |
 | The floor of the two-sample reading | an author's own pieces are told from each other at AUC 0.813 (8 a side) and 0.722 (12 a side) one time in twenty | an AUC is read against the author's own floor, not 0.5. Every Atelier arm of the indistinguishability study is above it, so that result stands; the plain arm on one author, and that author's reading without function-word n-grams, were not resolved at 8 a side | [author floor](../studies/AUTHOR_FLOOR_RESULT.md) |
 
+## Development evidence, not yet sealed
+
+Run by a reviewer who also proposed fixes, with model judges; it says whether a claim is ready to be tested once by
+an independent tester ([decision 0012](decisions/0012-the-closing-rules.md)), and is not that test.
+
+| Result | Number | Population |
+|---|---|---|
+| Fewer failed coding answers than a careful hand-written skill | 15.0% against 25.4% (41% fewer, lower bound above zero) | 60 held-out tasks, one corpus of 24 examples, the skill's own benchmark judge |
+| Fewer answers breaking the owner's counted rules | 31% against 76% on coding answers; 0% against 10% on contract clauses; 10% against 95% on code review | one author each; the other skill was never shown the rules |
+| Not more repeatable as a plug-in | rule verdict differed between two runs on 15% of tasks against 20%, not clearly fewer | the same 60 tasks |
+| Behind a hand-written writing skill on that skill's own score | 2.4 and 3.5 points lower of 50 | one company blog, one speaker |
+| Strict delivery refused too much | 7 of 80 answers, on one rule; fixed, not yet measured again | 40 working tasks |
+
 ## Numbers withdrawn
 
 - **p = 9.1 × 10⁻¹³** for the maintainer study pooled 46 nested observations as independent. The

@@ -129,6 +129,18 @@ export function paragraphsOf(text: string): { start: number; end: number; text: 
   });
 }
 
+/**
+ * Each prose paragraph with its sentences, as the paragraph-length rule counts them. A repair that splits a long
+ * paragraph reads the text through this, so it and the rule can never disagree about what a paragraph or a sentence
+ * is (core/loop/mechanical-repair.ts).
+ */
+export function paragraphSentences(text: string): { start: number; end: number; sentences: Sentence[] }[] {
+  return blocksOf(text).filter((b) => b.kind === 'PARA').map((b) => {
+    const last = b.segs[b.segs.length - 1];
+    return { start: b.segs[0].start, end: last.start + last.text.length, sentences: splitSentences(join(b)) };
+  });
+}
+
 export const quantile = (xs: readonly number[], q: number): number => {
   if (!xs.length) return 0;
   const s = [...xs].sort((a, b) => a - b);

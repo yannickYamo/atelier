@@ -138,8 +138,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack };
     const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers: isReplyWork(v.workType), general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
     const n = (c: string): number => carried.filter((x) => x.e.carrier === c).length;
+    // One line, not one per move: what the owner needs is the count and the question below. `atelier plan` lists every rule.
     console.log(`Moves: ${n('general')} stated as something I do, ${n('conditional')} stated only with their condition, ${n('exemplar')} shown as an example and never stated.`);
-    for (const x of carried) console.log(`  ${x.r.requirementId}  ${x.e.why}`);
     // THE OWNER'S QUESTION. When to refuse, and when to ask before answering, is not read off a few pieces and is
     // not Atelier's to decide: it is asked, with the move in the owner's hands.
     const asks = carried.filter((x) => holdsBack.includes(x.r.requirementId) && !ownerWrote(x.r)).slice(0, 3);

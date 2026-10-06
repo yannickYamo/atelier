@@ -7,6 +7,17 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: strict delivery refused answers a mechanical fix should have saved
+
+- **The paragraph split now reads the text as the paragraph rule does.** The rule that flags a long paragraph and
+  the fix that splits one each found paragraphs and sentences their own way. Where they disagreed (a paragraph with
+  a list directly under it, a hard-wrapped paragraph, a block quote) the fix saw nothing to split, the rule stayed
+  broken, and under `--strict` the answer was refused: 7 of 80 answers in a development run, all on one rule. The
+  split now uses the rule's own paragraphs and sentences, changes no word, and after it the rule holds.
+- **A fix that needs no model is never dropped in silence.** When it cannot be kept because it would break another
+  rule, the run says which fix and why.
+- **The build says how moves are carried in one line,** not one per move.
+
 ### Changed: a move is carried no more widely than your examples support
 
 For a skill that answers requests ([decision 0013](docs/decisions/0013-carried-no-wider-than-the-corpus.md)). In a
@@ -178,6 +189,28 @@ Defects found by an outside review of the build, each with what it broke.
   and says so.
 
 ### Studies
+
+- **Development against hand-crafted skills, round 2** (run by the reviewer on 5 October 2026; readiness evidence
+  under decision 0012, not a sealed result; one author per domain; model judges, each qualified on known pairs
+  first; a `claude-opus-5` writer for every arm).
+  - *Coding answers, 60 held-out tasks, against i-have-adhd:* failed answers 15.0% against 25.4% (41% fewer, lower
+    bound above zero); answers breaking a counted rule 31% against 76%; blockers level (7.5% against 7.9%); rule
+    verdict differing between two runs 15% against 20%, not clearly fewer. Before the compiler change of decision
+    0013 the same comparison was 25.0% against 28.9%.
+  - *Strict runtime, 40 working tasks:* no better than i-have-adhd (26.9% failed against 25.6%), with 7 of 80
+    answers refused on one paragraph rule (fixed above) and about seven times the plug-in's cost per answer.
+  - *Contracts, 30 clauses of one drafting house:* no Atelier answer broke a counted rule (stop-slop 10%, GEPA 7%,
+    SkillOpt 17%, bare 23%); level with stop-slop on stop-slop's own score (36.1 against 37.3 of 50).
+  - *Code review, 30 diffs of one maintainer:* 10% of Atelier answers broke a counted rule against 95% for a careful
+    hand-written review skill.
+  - *Speeches, 21 openings of one speaker:* every arm broke at least one of thirteen counted rules in every answer;
+    Atelier broke 4.1 a piece against 6.8 for stop-slop, and scored 3.5 points lower on stop-slop's own score.
+  - *A company blog, 20 posts:* 2.05 counted rules broken a piece against 2.65 for stop-slop and 2.60 for four
+    pieces pasted; 2.4 points lower than stop-slop on its own score; a model judge preferred Atelier's voice to
+    stop-slop's and could not separate it from pasted pieces (54%).
+  - *GEPA and SkillOpt,* at small budgets and searching on Atelier's own rule score: Atelier broke fewer rules in 5
+    of 6 comparisons. Reported as it stands; a fair-budget run has not been made.
+  - Voice here was read by a model judge and decides nothing: people decide it, in the sealed read.
 
 - **The author floor: 0.72 to 0.81, not 0.5** (studies/AUTHOR_FLOOR_RESULT.md, sealed in advance, offline, $0). The
   classifier of the indistinguishability study, asked to tell one random set of an author's own pieces from another,

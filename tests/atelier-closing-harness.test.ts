@@ -169,6 +169,12 @@ describe('the signed bar: 20% fewer failures than the hand-written skill, and cl
     expect(r.endpoints.AXES[0]).toMatchObject({ pass: true, reduction: 0.5, candidate: 0.15, handwritten: 0.3 });
     expect(r.axes[0]).toBe('quality: 15% failed against 30% for the hand-written skill, 50% fewer (reached: the bar is 20% fewer and clearly fewer).');
   });
+  it('an axis the hand-written skill never failed has nothing to reduce: not applicable when neither failed, a miss when only the candidate did', () => {
+    const none = run(axis(50, 0, 0));
+    expect(none.endpoints.AXES[0].pass).toBeNull();
+    expect(none.axes[0]).toBe('quality: neither skill failed: nothing to reduce.');
+    expect(run(axis(50, 5, 0)).endpoints.AXES[0].pass).toBe(false);
+  });
   it('not reached when the reduction is under 20%, or when it is 20% and not clearly above zero', () => {
     expect(run(axis(200, 52, 60)).endpoints.AXES[0]).toMatchObject({ pass: false, reduction: 0.133 });
     // 25% fewer on forty tasks: the size cannot tell it from no difference

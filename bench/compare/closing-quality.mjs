@@ -145,7 +145,9 @@ export function analyse(cfg, load) {
     const Rel = fh ? 1 - fc / fh : null;
     (E.AXES ??= []).push({ what: `${ax.name}: at least ${Math.round(reduction * 100)}% fewer failures than the hand-written skill`, axis: ax.name, n: ids.length,
       candidate: fc === null ? null : r3(fc), handwritten: fh === null ? null : r3(fh), reduction: Rel === null ? null : r3(Rel), mean: b.mean, lo95: b.lo95, hi95: b.hi95,
-      bar: `reduction >= ${reduction} and lower bound of the difference > 0`, pass: Rel !== null && Rel >= reduction && b.lo95 !== null && b.lo95 > 0 });
+      // THE ZERO-DENOMINATOR RULE. When the hand-written skill never failed on an axis there is nothing to reduce:
+      // the axis is not applicable (pass null), unless the candidate did fail, which is a plain miss.
+      bar: `reduction >= ${reduction} and lower bound of the difference > 0`, pass: fh === 0 ? (fc === 0 ? null : false) : (Rel !== null && Rel >= reduction && b.lo95 !== null && b.lo95 > 0) });
   }
   if (cfg.reads?.length === 2) {
     const [a, b2] = cfg.reads.map(load); const key = (r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}`;
@@ -163,7 +165,7 @@ export function analyse(cfg, load) {
     : verdict === 'PASS' ? `${subject} ${E.P2[0].lo95 > 0 ? `scored higher overall than the hand-written skill (+${E.P2[0].mean}, lower bound +${E.P2[0].lo95})` : 'was not worse overall than the hand-written skill'}${E.P2[1] ? (E.P2[1].lo95 > 0 ? ` and higher than the strongest baseline (+${E.P2[1].mean})` : ' and was not worse than the strongest baseline') : ''}, no quality dimension${E.P4 ? ', blocker rate' : ''}${E.P6 ? ' or requested depth' : ''} showed a clear loss${E.PREF ? `, readers chose its piece ${Math.round((E.PREF.mean ?? 0) * 100)}% of the time` : ''}, and it held the shared required rules more often. This is not a result for each dimension separately.`
       : failed.map((e) => `${subject} failed "${e.what}": ${e.mean} (bounds ${e.lo95 ?? e.lo975} to ${e.hi95 ?? e.hi975}), where the bar was ${e.bar}.`).join(' ');
   // One sentence per axis of the signed bar, said whether it was reached or not: a miss is a result.
-  const axes = (E.AXES ?? []).map((x) => `${x.axis}: ${x.candidate === null ? 'not measured' : `${Math.round(x.candidate * 100)}% failed against ${Math.round(x.handwritten * 100)}% for the hand-written skill, ${x.reduction === null ? 'no reduction computable' : `${Math.round(x.reduction * 100)}% fewer`} (${x.pass ? 'reached' : 'not reached'}: the bar is ${Math.round(reduction * 100)}% fewer and clearly fewer)`}.`);
+  const axes = (E.AXES ?? []).map((x) => `${x.axis}: ${x.candidate === null ? 'not measured' : x.pass === null ? 'neither skill failed: nothing to reduce' : `${Math.round(x.candidate * 100)}% failed against ${Math.round(x.handwritten * 100)}% for the hand-written skill, ${x.reduction === null ? 'no reduction computable' : `${Math.round(x.reduction * 100)}% fewer`} (${x.pass ? 'reached' : 'not reached'}: the bar is ${Math.round(reduction * 100)}% fewer and clearly fewer)`}.`);
   return { claim: cfg.claim ?? 'A', validCases: valid, margins: M, endpoints: E, verdict, sentence, ...(axes.length ? { axes } : {}) };
 }
 

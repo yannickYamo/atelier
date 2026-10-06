@@ -8,6 +8,15 @@
 
 Atelier is an agentic system that builds AI skills from examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved. I built it because I kept hitting the same wall: perfect context, still variance. In production, a standard model suffers from "needle in a haystack" drop-offs, hallucinatory drift, and little formatting discipline. You point it at pieces written the way you want - yours, your team's, or a style you admire - and it reads them, proposes the rules behind them, and shows the evidence for each one. You approve those rules once. From then on, Atelier compiles them into a skill and does the work of holding them.
 
+Teams ask for it in plainer words:
+
+- "Review code the way our principal engineer does."
+- "Draft every contract the way our legal team works."
+- "Write the way our best product people write and reason."
+- "Change the model underneath without changing how we work."
+
+You don't need to learn how Atelier works to get there. Give it 15 to 30 examples, read what it thinks your standard is, accept its suggestions or change the few that matter to you, and connect your agent. Everything else stays underneath.
+
 I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
 
 Think of it as four steps you walk through:
@@ -51,9 +60,11 @@ Change the model next month and the standard doesn't move.
 
 Atelier runs three loops, and you make one decision in them.
 
+The model writes; code checks and decides. You own what good means, and the machine may only look for a better way to carry it: meaning and optimization have different owners.
+
 **Build.** A discovery agent reads your examples, proposes rules with evidence, and writes drafts of its own on your topics to find where the model drifts from you. You approve the standard once, and it's hashed. A compiler then gives each rule the least machinery that carries it: an instruction, an example, a self-check, an output contract, or nothing.
 
-**Run.** Two drafts are written and the closer one to your range is kept. Counted rules get measured. A small model lists every specific claim and code checks each one against what you supplied. Only what broke is rewritten, and the run is recorded with its verdict.
+**Run.** Two drafts are written and the closer one to your range is kept. Counted rules get measured. A small model lists every specific claim and code checks each one against what you supplied. Only what broke is rewritten, and the run is recorded with its verdict. The loop is bounded: at most two repair passes, and with `--strict` a fixed number of fresh drafts, then a refusal with its reasons. Only what you required goes into the prompt as an instruction; what you merely tolerate, or what was only observed, never does.
 
 **Improve.** `atelier fix` turns your complaint into a candidate you compare blind. `atelier tend --auto` runs a round of search, tests each candidate against a regression floor, and undoes its own install when a rule starts breaking more often.
 

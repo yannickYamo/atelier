@@ -629,7 +629,11 @@ describe('through the binary: discovery builds the profile, invoke steers and re
     const j = JSON.parse(out.slice(out.indexOf('{'))) as { invocationId: string };
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${j.invocationId}.json`), 'utf8')) as { fidelity: { structure?: { plans: string[][]; read: (string | null)[] | null; followed: number | null } } };
     expect(rec.fidelity.structure?.plans).toHaveLength(2);
-    expect(rec.fidelity.structure?.plans[0][0]).toBe('STORY');
+    // A PLAN IS SAMPLED, with a seed that carries the time of the run, from a chain smoothed over every move: its first
+    // move is usually the one the author opens with and now and then another. Asserting the usual one made this test
+    // fail about one run in a few hundred. What must hold every time: each plan is made of known moves.
+    const MOVES = ['claim', 'explain', 'example', 'evidence', 'story', 'concession', 'definition', 'instruction', 'question', 'turn', 'summary'];
+    for (const plan of rec.fidelity.structure?.plans ?? []) for (const move of plan) expect(MOVES, move).toContain(move.toLowerCase());
     expect(rec.fidelity.structure?.read?.length).toBeGreaterThan(3);
     expect(typeof rec.fidelity.structure?.followed).toBe('number');
     expect(run('invoke', '--skill', 'posts', 'x', '--structure', 'plan', '--sections')).toMatch(/use one/);

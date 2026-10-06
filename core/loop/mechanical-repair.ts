@@ -8,6 +8,7 @@
 
 import type { StandardVersion } from '../state/canonical-state.js';
 import type { VerifyReport } from '../observers/verify.js';
+import { paragraphSentences } from '../observers/text.js';
 
 /**
  * Em dashes, replaced by the punctuation a writer who never uses them would reach for. A pair inside one
@@ -27,20 +28,41 @@ export function replaceEmDashes(text: string): string {
 }
 
 /**
- * Paragraphs longer than `max` sentences, split at sentence boundaries into near-equal parts. Headings,
- * lists, tables, quotes and code are not prose paragraphs and are left alone.
+ * Paragraphs longer than `max` sentences, split at sentence boundaries into near-equal parts.
+ *
+ * READ THROUGH THE RULE'S OWN EYES. This used to find paragraphs by blank lines and sentences by its own pattern,
+ * while the rule that flags a long paragraph counts them another way (`paragraphsOf`: a paragraph ends where a list
+ * begins, inline code is not prose, a hard-wrapped paragraph is one paragraph). Where the two disagreed the repair
+ * saw nothing to split, the rule stayed broken, and under strict delivery an answer was refused for a paragraph of
+ * five sentences. The split now uses the rule's paragraphs and the rule's sentences, so what the rule flags is what
+ * gets split, and after the split the rule holds.
+ *
+ * No word changes: a paragraph break is put before a sentence, in place of the space that was there. Inside a
+ * block quote each part stays quoted. Lists, headings, tables and code are not paragraphs and are left alone.
  */
 export function splitLongParagraphs(text: string, max: number): string {
-  return text.split(/(\n\s*\n)/).map((block) => {
-    if (!isProse(block)) return block;
-    const sentences = block.trim().split(/(?<=[.!?]["”’)]?)\s+(?=["“‘(]?[A-Z0-9])/);
-    if (sentences.length <= max) return block;
-    const parts = Math.ceil(sentences.length / max);
-    const size = Math.ceil(sentences.length / parts);
-    const out: string[] = [];
-    for (let i = 0; i < sentences.length; i += size) out.push(sentences.slice(i, i + size).join(' '));
-    return out.join('\n\n');
-  }).join('');
+  if (!(max >= 1)) return text;
+  let out = text;
+  // Each pass re-reads the text, since a split moves every later offset; a pass that changes nothing ends it.
+  for (let pass = 0; pass < 50; pass++) {
+    const long = paragraphSentences(out).find((p) => p.sentences.length > max);
+    if (!long) return out;
+    const n = long.sentences.length;
+    const size = Math.ceil(n / Math.ceil(n / max));
+    const quoted = /^[ \t]*>/.test(out.slice(out.lastIndexOf('\n', long.start - 1) + 1, long.start + 1));
+    let next = out;
+    // From the last break to the first, so earlier offsets stay true.
+    for (let k = Math.floor((n - 1) / size) * size; k >= size; k -= size) {
+      const at = long.sentences[k].start;
+      let from = at;
+      while (from > long.start && /\s/.test(next[from - 1])) from -= 1;
+      // A quoted paragraph is split into two quotes: the rule ends a paragraph at a blank line, and a ">" alone is not one.
+      next = `${next.slice(0, from)}${quoted ? '\n\n> ' : '\n\n'}${next.slice(at)}`;
+    }
+    if (next === out) return out;
+    out = next;
+  }
+  return out;
 }
 
 /**
@@ -65,11 +87,6 @@ export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: 
   }
   return { text: out, fixed };
 }
-
-const isProse = (block: string): boolean => {
-  const t = block.trim();
-  return Boolean(t) && !/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|\||>|```|~~~)/m.test(t);
-};
 
 /** Apply `f` to each prose line outside code fences, leaving inline code as it is. */
 function mapProse(text: string, f: (line: string) => string): string {
