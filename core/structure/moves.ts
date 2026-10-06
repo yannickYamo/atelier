@@ -101,8 +101,8 @@ async function readOnce(client: InferenceClient, budget: Budget, paragraphs: rea
     const x = await client.complete({ stableBlock: systemFor(order), variableBlock: '', userMessage: numbered,
       toolName: 'emit_labels', toolDescription: 'Return one move per numbered paragraph.', schema: SCHEMA,
       maxTokens: Math.max(800, paragraphs.length * 40), temperature: 0 });
-    return { value: checkLabels(x.json, paragraphs.length), cost: x.cost };
-  });
+    return { value: checkLabels(x.json, paragraphs.length), cost: x.cost, usage: x };
+  }, 'structure');
 }
 
 /** Read a text twice and keep the moves both reads agree on. Null when the text has too few paragraphs or a read is malformed. */

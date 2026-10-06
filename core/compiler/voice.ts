@@ -8,6 +8,8 @@
 //   pieces      WHOLE pieces spanning the author's modes (an essay, a list, a talk transcript): the most
 //               typical piece by Burrows' Delta first, then the piece least like any chosen, within a word
 //               budget (`selectVoicePieces`)
+//   excerpts    the same choice over more pieces, each shown by its opening and a passage from its middle
+//               (`selectVoiceExcerpts`): opt-in, for a smaller skill that still shows the author's range
 //   length      the author's usual piece length, the middle half of their pieces (`usualLength`), which a
 //               rules-only skill lost: its output ran 1,500 words where the author's run 2,000 or more
 //   passages    the first design, a few short passages served inline (`selectVoicePassages`); kept so
@@ -19,6 +21,9 @@ import type { ScopeProfile } from './scope.js';
 import { paragraphsOf, wordsOf, quantile } from '../observers/text.js';
 import { functionProfile, proseWords, patternRate, FUNCTION_WORDS, type PatternId } from '../observers/style.js';
 import type { Persona } from './persona.js';
+
+/** How a chosen piece is shown: all of it, or its opening and a passage from its middle. */
+export type PieceForm = 'whole' | 'excerpts';
 
 /** What a skill serves of the author's own writing. */
 export interface Voice {
@@ -32,8 +37,12 @@ export interface Voice {
   readonly corpusPieces?: number;
   /** the moves a reader found to hold back what was asked (a refusal, a question before any answer), by requirement id */
   readonly holdsBack?: readonly string[];
-  /** WHOLE pieces chosen to span the author's modes (`selectVoicePieces`), served as reference files */
+  /** pieces chosen to span the author's modes, served as reference files: whole (`selectVoicePieces`), or as excerpts */
   readonly pieces?: readonly string[];
+  /** how `pieces` are shown. Absent: whole, which is every skill built before excerpts existed */
+  readonly pieceForm?: PieceForm;
+  /** the word budget the pieces were chosen within, when the owner set one (`--piece-budget`); absent: the default */
+  readonly pieceBudget?: number;
   /** how the author sounds, described with frequencies and proven by quotes (./persona.ts) */
   readonly persona?: Persona;
 }
@@ -115,8 +124,12 @@ export function selectVoicePassages(pieces: readonly string[], count = VOICE_PAS
   return { passages: chosen.map((c) => c.text), lengthWords };
 }
 
-/** Words of whole pieces a skill serves at most: enough for two or three modes, small enough to serve. */
-const PIECE_BUDGET_WORDS = 9000;
+/**
+ * Words of the author's pieces a skill serves at most, by default: enough for two or three whole pieces. On the two
+ * skills first measured, these pieces were seven words in ten of the export (core/eval/size.ts), so the budget is
+ * the owner's to set per build (`--piece-budget`); the default moves only on a measured comparison.
+ */
+export const PIECE_BUDGET_WORDS = 9000;
 
 /** What distinguishes one mode of an author's writing from another: point of view, layout, pace, length. */
 const MODE_FEATURES: readonly PatternId[] = ['FIRST_PERSON', 'ONE_LINE_PARAGRAPH', 'BOLD_SPAN', 'DASH_ASIDE', 'RHETORICAL_QUESTION', 'CONTRACTION'];
@@ -129,17 +142,13 @@ function modeVector(t: string): number[] {
 }
 
 /**
- * WHOLE PIECES THAT SPAN HOW THE AUTHOR WRITES. An author writes in modes (an essay, a list, a talk
- * transcript), and a short passage shows one paragraph of one of them. So: the most typical piece
- * first, then, while the word budget allows, the piece least like any already chosen (farthest-point
- * sampling on standardised mode features). Pieces longer than half the budget are left out, so one
- * long piece cannot use it all. Needs three pieces or more.
+ * THE ORDER IN WHICH PIECES ARE CHOSEN TO SPAN HOW THE AUTHOR WRITES: the most typical piece first, then, while the
+ * budget allows, the piece least like any already chosen (farthest-point sampling on standardised mode features).
+ * `eligible` are the indexes that may be chosen and `cost` what each uses of the budget; typicality and the mode
+ * features are always read on the whole pieces, whatever part of one is then shown.
  */
-export function selectVoicePieces(pieces: readonly string[], budgetWords = PIECE_BUDGET_WORDS): string[] {
-  if (pieces.length < 3) return [];
-  const words = pieces.map((t) => proseWords(t));
-  const fits = pieces.map((_, i) => i).filter((i) => words[i] > 0 && words[i] <= budgetWords / 2);
-  if (!fits.length) return [];
+function spanningOrder(pieces: readonly string[], eligible: readonly number[], cost: (i: number) => number, budgetWords: number): number[] {
+  if (!eligible.length) return [];
   const vs = pieces.map(modeVector);
   const k = vs[0].length;
   const mean = Array.from({ length: k }, (_, j) => vs.reduce((a, v) => a + v[j], 0) / vs.length);
@@ -147,13 +156,112 @@ export function selectVoicePieces(pieces: readonly string[], budgetWords = PIECE
   const z = vs.map((v) => v.map((x, j) => (x - mean[j]) / sd[j]));
   const dist = (a: number, b: number): number => Math.sqrt(z[a].reduce((s, x, j) => s + (x - z[b][j]) ** 2, 0));
   const score = typicality(pieces);
-  const chosen = [fits.slice().sort((a, b) => score(pieces[a]) - score(pieces[b]))[0]];
-  let used = words[chosen[0]];
+  const chosen = [eligible.slice().sort((a, b) => score(pieces[a]) - score(pieces[b]))[0]];
+  let used = cost(chosen[0]);
   for (;;) {
-    const next = fits.filter((i) => !chosen.includes(i) && used + words[i] <= budgetWords)
+    const next = eligible.filter((i) => !chosen.includes(i) && used + cost(i) <= budgetWords)
       .map((i) => ({ i, d: Math.min(...chosen.map((c) => dist(i, c))) })).sort((a, b) => b.d - a.d)[0];
     if (!next) break;
-    chosen.push(next.i); used += words[next.i];
+    chosen.push(next.i); used += cost(next.i);
   }
-  return chosen.map((i) => pieces[i]);
+  return chosen;
+}
+
+/**
+ * WHOLE PIECES THAT SPAN HOW THE AUTHOR WRITES. An author writes in modes (an essay, a list, a talk
+ * transcript), and a short passage shows one paragraph of one of them. So: the most typical piece
+ * first, then, while the word budget allows, the piece least like any already chosen (`spanningOrder`).
+ * Pieces longer than half the budget are left out, so one long piece cannot use it all. The budget counts
+ * words of prose, as it always has: code, tables and headings in a piece are served and not counted. Needs
+ * three pieces or more; a budget of 0 chooses none.
+ */
+export function selectVoicePieces(pieces: readonly string[], budgetWords = PIECE_BUDGET_WORDS): string[] {
+  if (pieces.length < 3 || budgetWords <= 0) return [];
+  const words = pieces.map((t) => proseWords(t));
+  const fits = pieces.map((_, i) => i).filter((i) => words[i] > 0 && words[i] <= budgetWords / 2);
+  return spanningOrder(pieces, fits, (i) => words[i], budgetWords).map((i) => pieces[i]);
+}
+
+/** About this many words for each of the two passages an excerpt shows. */
+export const EXCERPT_WORDS = 250;
+/** What stands between an excerpt's two passages, so a reader never takes them for one continuous text. */
+export const EXCERPT_GAP = '[…]';
+
+/** One run of the author's text, and what stood between it and the run before it in the piece. */
+interface Unit { readonly text: string; readonly gap: string }
+
+/**
+ * A PIECE AS UNITS AN EXCERPT CAN BE BUILT FROM, in the author's order and words. A unit is a block as the author laid
+ * it out (text between blank lines; a fenced code block is one unit, blank lines and all). A block longer than a
+ * passage is taken apart, or a piece written as one long paragraph, or with single line breaks, would have no
+ * excerpt shorter than itself: first at its line breaks, then, for a line still too long, at its sentence ends.
+ * Each unit remembers what joined it to the one before, so units put back together read exactly as the piece did.
+ */
+function unitsOf(text: string): Unit[] {
+  const blocks: { text: string; fenced: boolean }[] = []; let held: string[] = []; let fence: string | null = null; let fenced = false;
+  const flush = (): void => { if (held.some((l) => l.trim())) blocks.push({ text: held.join('\n').replace(/\s+$/, ''), fenced }); held = []; fenced = false; };
+  for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+    const mark = /^\s*(```|~~~)/.exec(line)?.[1] ?? null;
+    if (fence) { held.push(line); if (mark === fence) fence = null; continue; }
+    if (mark) { fence = mark; fenced = true; held.push(line); continue; }
+    if (line.trim()) held.push(line); else flush();
+  }
+  flush();
+  const long = (t: string): boolean => wordsOf(t).length > EXCERPT_WORDS;
+  const out: Unit[] = [];
+  for (const b of blocks) {
+    // Code is never taken apart: half a block of code shows nothing of how the author writes it.
+    const lines = b.fenced || !long(b.text) ? [b.text] : b.text.split('\n');
+    lines.forEach((line, i) => {
+      const sentences = b.fenced || !long(line) ? [line] : line.split(/(?<=[.!?]["')\]]?)\s+(?=\S)/);
+      sentences.forEach((sentence, j) => out.push({ text: sentence, gap: j > 0 ? ' ' : i > 0 ? '\n' : '\n\n' }));
+    });
+  }
+  return out;
+}
+
+/** Units put back together as they stood in the piece. */
+const joined = (units: readonly Unit[]): string => units.map((u, i) => (i === 0 ? u.text : `${u.gap}${u.text}`)).join('');
+
+/**
+ * ONE PIECE SHOWN BY ITS OPENING AND A PASSAGE FROM ITS MIDDLE, about EXCERPT_WORDS each. The author's own words in
+ * the author's order, never reworded, in whole units (`unitsOf`): the opening runs from the first unit until it has
+ * the words, the middle starts at the unit the piece's midpoint falls in. A piece too short to leave anything out is
+ * returned whole. A passage can run over EXCERPT_WORDS by its last unit, which is at most a paragraph of that
+ * length, a sentence, or a block of code.
+ */
+export function excerptOf(text: string): string {
+  const units = unitsOf(text);
+  const words = units.map((u) => wordsOf(u.text).length);
+  const total = words.reduce((a, b) => a + b, 0);
+  if (total <= EXCERPT_WORDS * 3) return joined(units);
+  const run = (from: number): number => { let n = 0; let j = from; while (j < units.length && n < EXCERPT_WORDS) n += words[j++]; return j; };
+  const openEnd = run(0);
+  // The unit the piece's midpoint falls in, or the first one after the opening when the opening already reached it.
+  let seen = 0; let mid = 0;
+  while (mid < units.length - 1 && seen + words[mid] < total / 2) seen += words[mid++];
+  const midStart = Math.max(mid, openEnd);
+  if (midStart >= units.length) return joined(units);
+  const midEnd = run(midStart);
+  // Contiguous passages are one run of the piece and are joined as it joined them; a real cut is marked.
+  if (midStart === openEnd) return `${joined(units.slice(0, midEnd))}${midEnd < units.length ? `\n\n${EXCERPT_GAP}` : ''}`;
+  return `${joined(units.slice(0, openEnd))}\n\n${EXCERPT_GAP}\n\n${joined(units.slice(midStart, midEnd))}${midEnd < units.length ? `\n\n${EXCERPT_GAP}` : ''}`;
+}
+
+/**
+ * EXCERPTS FROM MORE PIECES, IN PLACE OF A FEW WHOLE ONES. Two or three whole essays show two or three of an
+ * author's modes at length; for the same words, an opening and a middle passage from each of many pieces show more
+ * of the range. Pieces are chosen exactly as whole ones are (`spanningOrder`), each costing its excerpt's words. A
+ * piece of any length can be shown, but never one whose excerpt alone is over the budget: the budget is a ceiling,
+ * for the first piece chosen as for the last. Opt-in (`--pieces excerpts`): whether it carries a voice as well as
+ * whole pieces do is a question for a measured comparison, not for this function.
+ */
+export function selectVoiceExcerpts(pieces: readonly string[], budgetWords = PIECE_BUDGET_WORDS): string[] {
+  if (pieces.length < 3 || budgetWords <= 0) return [];
+  const excerpts = pieces.map(excerptOf);
+  // Counted as an export counts them (runs of non-whitespace, the cut marks included), so the budget holds exactly
+  // on the number a person reads off `atelier export`.
+  const words = excerpts.map((t) => { const x = t.trim(); return x ? x.split(/\s+/).length : 0; });
+  const eligible = pieces.map((_, i) => i).filter((i) => words[i] > 0 && words[i] <= budgetWords);
+  return spanningOrder(pieces, eligible, (i) => words[i], budgetWords).map((i) => excerpts[i]);
 }

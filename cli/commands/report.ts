@@ -21,6 +21,7 @@ import { renderSkillCard } from '../../core/eval/skill-card.js';
 import { skillCardFor } from '../skill-card.js';
 import { featureOf } from '../../core/observers/features.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
+import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, die, argv, flag, positional, positionals } from '../runtime.js';
 
 /** The skill a run belongs to: named, or found by its id across the store. */
@@ -47,14 +48,32 @@ export function report(): void {
   }
   const { L, rec } = locate(id);
   const e = getEval(L, rec.invocationId);
-  if (argv.includes('--json')) { console.log(JSON.stringify({ eval: e, trace: traceOf(rec) }, null, 1)); return; }
+  if (argv.includes('--json')) { console.log(JSON.stringify({ eval: e, trace: [...traceOf(rec), ...costOf(e)] }, null, 1)); return; }
   console.log(e ? renderPanel(e, { width: process.stdout.columns || 110, color: process.stdout.isTTY && !process.env.NO_COLOR })
     : '(no evaluation was recorded with this run: it ran before Atelier 1.0)');
   console.log('\nTRACE');
-  for (const [component, lines] of traceOf(rec)) {
+  for (const [component, lines] of [...traceOf(rec), ...costOf(e)]) {
     console.log(`  ${component}`);
     for (const l of lines) console.log(`    ${l}`);
   }
+}
+
+/**
+ * WHERE THE RUN'S COST WENT AND WHAT IT SENT, from the stored evaluation: one line per purpose with its calls and
+ * the tokens the provider counted, then the words served. A run recorded before these were kept adds nothing.
+ */
+export function costOf(e: EvalSummary | null): [string, string[]][] {
+  if (!e?.spend && !e?.sent) return [];
+  const lines: string[] = [];
+  const k = (x: number): string => x.toLocaleString('en-US');
+  for (const l of e.spend ?? []) {
+    lines.push(`${l.purpose}: $${l.usd.toFixed(4)} · ${l.calls} call${l.calls === 1 ? '' : 's'}${l.inputTokens + l.outputTokens > 0 ? ` · ${k(l.inputTokens)} tokens in, ${k(l.outputTokens)} out` : ''}`);
+  }
+  // The total is the run's own figure; a difference from the lines is said, never absorbed.
+  const summed = (e.spend ?? []).reduce((n, l) => n + l.usd, 0);
+  if (e.spend && Math.abs(summed - e.costUsd) >= 0.0001) lines.push(`${summed < e.costUsd ? 'not attributed' : 'counted in the lines and not in the total'}: $${Math.abs(e.costUsd - summed).toFixed(4)} against the run's $${e.costUsd.toFixed(4)}`);
+  if (e.sent) lines.push(`sent to the writer: ${k(e.sent.skill)} words of skill · ${k(e.sent.added)} added for this request (your nearest passages, notes) · ${k(e.sent.request)} of request`);
+  return [['cost and size', lines]];
 }
 
 /** The record, component by component, in the order the run went through them. */

@@ -150,6 +150,50 @@ holds a template's sections in order ([MEASURED-RULES](MEASURED-RULES.md)). To u
 no skill folder (a system prompt, another tool), `atelier export --skill <name> --out skill.md` writes it
 as one file with its examples inlined.
 
+### How big a skill is, and what a run cost
+
+A skill has three sizes, and they are stated apart. **Stored** is every file of the compiled package.
+**Exported** is what `atelier export` writes and what `atelier invoke` serves: the instructions with the example
+files inlined. **Per run** is what one run sent the writer: the served skill, what was added for the request (your nearest
+passages, the release's notes), and the request. The first two are on the skill's card, printed at build and by
+`atelier report --skill <name>`, with the export split by part:
+
+```
+SIZE  stored 13,400 words in 31 files · exported 13,173 words (79,300 bytes)
+  the export    your pieces 9,201 (3 files) · rule examples 1,954 (25 files) · rules and instructions 682
+                how I sound 471 · moves 396 · reference index 282 · framing 187
+```
+
+Most of a skill built from writing is your own pieces, served whole so the model hears you. How much of them is
+served is yours to set, and neither option changes a rule:
+
+```bash
+atelier build --name posts --piece-budget 3000                    # choose the pieces again, within 3,000 words
+atelier build --name posts --piece-budget 3000 --pieces excerpts  # an opening and a middle passage of each, from more pieces
+atelier build --name posts --piece-budget 0                       # none of your pieces; the persona and your usual length stay
+atelier export --skill posts --out skill.md --no-index            # leave out the list naming files the export has inlined
+```
+
+The budget is a ceiling, counted in words of prose for whole pieces and in every word for excerpts. Excerpts are
+for a skill that writes; answers are short and shown whole. A build keeps the budget and the form until you give others, and choosing again calls no model. Nothing here is a default: a skill built without
+these options is chosen exactly as before. Whether a smaller skill holds your rules and your voice as well is a
+measured question ([the pre-registration](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md),
+[decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)).
+
+`atelier report <run>` ends with where that run's cost went, one line per purpose with its calls and the tokens
+the provider counted, and with the words the writer was sent:
+
+```
+cost and size
+  writing: $0.1012 · 2 calls · 26,410 tokens in, 1,790 out
+  claim reader: $0.0214 · 2 calls · 9,120 tokens in, 610 out
+  taste reader: $0.0188 · 3 calls · 7,400 tokens in, 420 out
+  sent to the writer: 13,173 words of skill · 610 added for this request (your nearest passages, notes) · 14 of request
+```
+
+Lines and total are counted from the same moment, where the run's budget is made. A call that names no purpose is
+counted under `other`, and a difference between the lines and the total is printed, never absorbed. The figures in these two examples are illustrations of the layout.
+
 ### How close to you, measured
 
 Every run's panel says how typical of you the output is: "as typical as 35% of your own pieces". It reads the

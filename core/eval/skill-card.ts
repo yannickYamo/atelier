@@ -9,6 +9,8 @@
 // the MCP tool `atelier_skill_report`. It is never served to the model writing the output: evaluation data in a
 // writing prompt is a target to write toward, and a measure written toward stops measuring.
 
+import { describeParts, describeSize, type SkillSize } from './size.js';
+
 export interface SkillCard {
   readonly schema: 1;
   readonly skill: string;
@@ -40,6 +42,8 @@ export interface SkillCard {
   /** the voice layer, for a skill whose owner declared the corpus's register */
   readonly voice?: { readonly registers: readonly string[]; readonly carried: number; readonly invariant: number; readonly unknown: number;
     readonly pairs: number | null; readonly mode: 'off' | 'incontext' };
+  /** how big the skill is, stored and exported, and where the export's words are (./size.ts); absent when the package is not in the store */
+  readonly size?: SkillSize;
   readonly notMeasured: readonly string[];
   readonly next: readonly string[];
 }
@@ -79,6 +83,12 @@ export function renderSkillCard(c: SkillCard, width = 110): string {
     out.push(`  VOICE  written in: ${v.registers.join(', ')}`);
     out.push(`    ${pad('out of register', 18)}${v.carried} trait(s) carry (${v.invariant} measured across registers, ${v.carried - v.invariant} by your ruling), ${v.unknown} do not`);
     out.push(`    ${pad('voice pass', 18)}${v.mode === 'incontext' ? 'on' : 'off'}${v.pairs === null ? ' · no pair bank (atelier voice pairs)' : ` · ${v.pairs} pair(s) in the bank`}`);
+  }
+  if (c.size) {
+    out.push('');
+    out.push(`  SIZE  ${describeSize(c.size)}`);
+    out.push(`    ${pad('the export', 18)}${describeParts(c.size)}`);
+    out.push(`    ${pad('per run', 18)}what a run sent, and what it cost by purpose: atelier report <run>`);
   }
   out.push('');
   out.push(`  not measured: ${c.notMeasured.join('; ')}`);

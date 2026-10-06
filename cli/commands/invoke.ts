@@ -45,7 +45,9 @@ import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
-import { processSpentUsd, type Budget, type InferenceClient } from '../../core/inference/client.js';
+import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
+import { countWords } from '../../core/eval/size.js';
+import { composeServed } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
@@ -81,12 +83,12 @@ const deliveryOf = (materializedHash: string, servedHash: string, files: string[
   matched: servedHash === materializedHash, servedFiles: files, servedExamples, withheldByContext: withheld
 });
 
-export function resolveServedSkill(name: string): ServedSkill {
+export function resolveServedSkill(name: string, opts: { readonly index?: boolean } = {}): ServedSkill {
   const L: store.StoreLayout = { root: DATA, skillName: name };
   // A CANDIDATE is served by explicit id and is NOT active. That asymmetry is the product: a person
   // must be able to run the thing being proposed WITHOUT it having been adopted first.
   const wanted = flag('--candidate') ?? store.getActive(L) ?? die(`no active version for ${name}. Build it first.`);
-  return resolveServedVersion(L, wanted, flag('--context') ?? '');
+  return resolveServedVersion(L, wanted, flag('--context') ?? '', opts);
 }
 
 /** A run of this many words repeated from a served piece of the author's is copying, not an echo of a phrase. */
@@ -98,51 +100,13 @@ const LIFTED_RUN = 12;
  * runs serve through this too, so a comparison between two versions is never a comparison between two
  * ways of serving them.
  */
-export function resolveServedVersion(L: store.StoreLayout, wanted: string, context: string): ServedSkill {
+export function resolveServedVersion(L: store.StoreLayout, wanted: string, context: string, opts: { readonly index?: boolean } = {}): ServedSkill {
   const sv = store.getSkillVersion(L, wanted) ?? die(`SkillVersion ${wanted} is missing from the store.`);
   const pkg = store.getPackage(L, sv.materializedHash)
     ?? die(`package ${sv.materializedHash} is not in the store — this SkillVersion was built before packages were persisted, so what it served cannot be reconstructed. Rebuild it.`);
-  const skillMd = pkg.files['SKILL.md'] ?? die('the stored package has no SKILL.md.');
-
-  const ctxFlag = context.toLowerCase();
-  const cmap = pkg.files['context-map.json']
-    ? (JSON.parse(pkg.files['context-map.json']) as { serveAll?: boolean; components: { requirementId: string; appliesWhen: string }[] })
-    : { components: [] };
-  const conditional = new Map(cmap.components.map((c) => [c.requirementId, c.appliesWhen]));
-  const exampleFiles = Object.keys(pkg.files).filter((f) => f.startsWith('examples/'));
-  const withheld: string[] = [];
-  const servedExamples = exampleFiles.filter((f) => {
-    const id = f.slice('examples/'.length, -'.md'.length);
-    const cond = conditional.get(id);
-    if (!cond) return true;
-    // A package built since moves are served with their examples (`serveAll`) serves every example file when no
-    // context is named: each carries its own condition. A named context still narrows to the files it matches.
-    if (!ctxFlag && cmap.serveAll) return true;
-    if (ctxFlag && cond.toLowerCase().includes(ctxFlag)) return true;
-    withheld.push(f); return false;
-  });
-  // ── A BOUNDARY, BECAUSE THE OLD FRAMING ANSWERED THE WRONG QUESTION ──────────────────────────
-  //
-  // This block opened with `# How the author works — examples` and said "these are instances, not
-  // instructions". That is a statement about AUTHORITY — whether the model must comply. It says
-  // nothing about OUTPUT OWNERSHIP, which is what was actually going wrong: the model treated the
-  // section as part of the document it was writing and continued it, appending the skill's own
-  // requirement text to the user's deliverable in roughly half of generations.
-  //
-  // So the block is fenced rather than headed, and says what it is FOR rather than only what it is
-  // NOT. No heading to continue, and an explicit statement that the deliverable starts after it.
-  const exampleBlock = servedExamples.length
-    ? `\n\n=== REFERENCE MATERIAL — PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT ===\n\n`
-      + `Everything up to the end marker shows how the author works, or how this skill's rules apply\n`
-      + `(a "write this, not that" file is model-written, never the author's). It is context for you, never\n`
-      + `content for the reader: do not reproduce, continue, quote, enumerate, summarise or mention\n`
-      + `any of it unless the user explicitly asks about the skill itself. These are instances rather\n`
-      + `than instructions — where one is marked NOT required, an output that does otherwise is not\n`
-      + `wrong.\n\n${servedExamples.map((f) => pkg.files[f]).join('\n\n- - -\n\n')}`
-      + `\n\n=== END REFERENCE MATERIAL — the work you produce begins fresh from here ===`
-    : '';
+  if (pkg.files['SKILL.md'] === undefined) die('the stored package has no SKILL.md.');
+  const { servedText, servedExamples, withheld } = composeServed(pkg.files, context, opts);
   const contractFile = pkg.files['contracts/output.schema.json'] ?? null;
-  const servedText = `${skillMd}${exampleBlock}`;
   // WHAT WAS TRIED ON THE WAY TO A SKILL IS NOT PART OF THE SKILL. Nobody ratified it, and
   // independent measurement says showing an accumulated knowledge layer to the component doing the
   // work makes the work worse (63.7% -> 60.9%, arXiv 2608.27454) while showing it to the component
@@ -339,6 +303,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
       + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)
       + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0)) };
+  // FROM HERE ON, EVERYTHING SPENT IS THIS RUN'S. Taken where the budget is made, before the first call that can
+  // draw on it: the reading of the request and the grading of its subject are paid for before any draft, and a
+  // snapshot taken at the first draft left them out of the lines by purpose, and out of the total whenever the claim
+  // reader, on a meter of its own, cost more than they did.
+  const spentBefore = processSpentUsd();
+  const ledgerBefore = processSpendByPurpose();
   if (nDrafts * 0.2 > budget.capUsd) die(`--drafts ${nDrafts} needs roughly $${(nDrafts * 0.2).toFixed(2)} and the cap is $${budget.capUsd.toFixed(2)}. Nothing was spent. Raise --cap or ask for fewer drafts.`);
   taste?.bind(budget);
   // Made before any draft is paid for: building the reader's client can refuse a configuration, and a
@@ -384,7 +354,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (nDrafts > 1 && (!std || contractFile !== null)) {
     console.log(`(--drafts ${nDrafts} does not apply here: ${!std ? 'the standard is missing' : 'this skill has an output contract, so there is one shape to produce'}; writing one draft.)`);
   }
-  const spentBefore = processSpentUsd();
   // ASKED ONLY FOR WHAT CAN BE DONE HONESTLY. A move that needs material nobody bound ("name the design
   // alternative we rejected") was still sent, and the writer met it by inventing: 16 "we considered / we
   // rejected" lines against 7 without the skill. Such rules are withheld from this run's prompt and named
@@ -455,10 +424,14 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // What each draft call was given, by the index it was asked for; the record keeps only the calls that came back
   // (selectDraft), with the temperature the provider was actually sent.
   const retrievedFor: number[][] = [];
+  let perDraftWords = 0;
   const variantOf = (i: number): DraftVariant => {
     const mine = pool.filter((_, j) => j % nDrafts === i).slice(0, runSettings?.retrievalK ?? 0);
     retrievedFor[i] = mine;
-    return { temperature: DIVERSITY_TEMPERATURES[i % DIVERSITY_TEMPERATURES.length], stableExtra: mine.length && fid?.index ? `\n\n${renderRetrieved(fid.index, mine)}` : '' };
+    const stableExtra = mine.length && fid?.index ? `\n\n${renderRetrieved(fid.index, mine)}` : '';
+    // With drafts made to differ each draft is given its own passages; the largest such block is what a draft was sent.
+    perDraftWords = Math.max(perDraftWords, countWords(stableExtra));
+    return { temperature: DIVERSITY_TEMPERATURES[i % DIVERSITY_TEMPERATURES.length], stableExtra };
   };
   // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
   const ledger = factLedger(materialText);
@@ -519,6 +492,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   reportFidelity(report, rec);
   reportRestyle(report, rec.output, material);
   const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
+  // Taken where the total is, so the lines by purpose sum to it: what the evaluation below reads is not this run's writing.
+  const spentBy = spendBetween(ledgerBefore, processSpendByPurpose());
   // THE EVALUATION OF THIS RUN (core/eval/summary.ts): stored beside the record, carried by --json, and drawn as
   // the panel on a terminal (or with --panel); --quiet leaves it out of the terminal, never out of the record.
   // FAULT-ISOLATED: the evaluation never costs the person a paid output. If it cannot be built, the run is
@@ -534,6 +509,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
       answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
+      // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
+      spend: spentBy,
+      sent: { skill: countWords(servedForRun) - countWords(impl.text), added: countWords(impl.text) + perDraftWords, request: countWords(taskForRun) },
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
       applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []),
       // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when

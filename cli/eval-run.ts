@@ -34,6 +34,9 @@ export interface RunEvalInput {
   readonly format: { readonly words: string | null; readonly shape: 'SHAPE' | 'BARE' | null; readonly withheld: number };
   readonly taste: EvalSummary['monitors']['taste'];
   readonly costUsd: number;
+  /** where the cost went, by purpose, and what the run sent the writer (core/eval/size.ts); both recorded as given */
+  readonly spend?: EvalSummary['spend'];
+  readonly sent?: EvalSummary['sent'];
   readonly durationMs: number;
   readonly drafts: number;
   readonly applicability: readonly { readonly requirementId: string; readonly status: 'APPLIED' | 'NOT_APPLICABLE' | 'WAIVED'; readonly why?: string }[];
@@ -134,7 +137,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   return {
     schema: 1, invocationId: rec.invocationId, skill: x.L.skillName, skillVersion: rec.skillVersionHash, at: rec.at,
     release: rec.fidelity?.release ?? null, model: rec.observedRuntime.resolvedModel ?? rec.runtimeBinding.requestedModel ?? null,
-    drafts: x.drafts, costUsd: Math.round(x.costUsd * 10000) / 10000, durationMs: Math.round(x.durationMs),
+    drafts: x.drafts, costUsd: Math.round(x.costUsd * 10000) / 10000, ...(x.spend ? { spend: x.spend } : {}), ...(x.sent ? { sent: x.sent } : {}), durationMs: Math.round(x.durationMs),
     result: { conformant: reasons.length === 0, reasons },
     gates: {
       required: { held: req.length - broken.length, applicable: req.length, broken, ...(x.contract ? { contract: true } : {}) },

@@ -75,7 +75,7 @@ export const VALUED_OPTIONS: readonly string[] = [
   'one-pager', 'pick', 'price-in', 'price-out', 'provenance', 'provider', 'claims', 'claims-model',
   'candidates', 'compiled', 'contexts', 'contrast-cap', 'contexts-exercising', 'control', 'frozen-at', 'max-tokens',
   'cap', 'cases', 'development', 'expert-consistency', 'key', 'observation', 'observer-kappa', 'out', 'page', 'probe-cap', 'prose', 'standard', 'target',
-  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast',
+  'results', 'sealed-at', 'seed', 'suite', 'phase', 'class', 'contrast', 'piece-budget', 'pieces',
   'corpus', 'tasks', 'fires', 'margin', 'enforce', 'observe', 'check', 'floor-cap',
   'finalists', 'screen-model', 'voice', 'persona', 'add', 'strike', 'probe', 'read', 'label', 'reader-model', 'runs',
   'questions', 'reason', 'required-n', 'reserve', 'role',
@@ -92,7 +92,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index',
 ];
 
 export const argv = process.argv.slice(2);

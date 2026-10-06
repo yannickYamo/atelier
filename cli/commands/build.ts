@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { selectVoicePieces, usualLength, type Voice } from '../../core/compiler/voice.js';
+import { selectVoicePieces, selectVoiceExcerpts, usualLength, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -75,6 +75,12 @@ export function revert(): void {
  * point proven by a quote from their pieces, none describing a move the standard rules out). From the
  * pieces this run read (never a reserved one), kept through every rebuild. `--voice none` serves none of
  * it; `--persona none` keeps the pieces and drops the description; `auto` chooses again.
+ *
+ * HOW MUCH OF THE AUTHOR'S WRITING IS SERVED IS THE OWNER'S TO SET. `--piece-budget <words>` chooses the pieces
+ * again within that many words (0 serves none and keeps the persona and the length), and `--pieces excerpts` shows
+ * each chosen piece by its opening and a passage from its middle, so the same words reach more pieces. Both are
+ * kept through later rebuilds, like the rest of the voice; neither changes a rule, and without them a build
+ * chooses exactly as it did before they existed.
  */
 async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Voice | null> {
   const choice = (name: string): 'none' | 'auto' | undefined => {
@@ -83,20 +89,56 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     return x as 'none' | 'auto' | undefined;
   };
   const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
-  if (voiceFlag === 'none') return null;
+  const budgetFlag = flag('--piece-budget');
+  const pieceBudget = budgetFlag === undefined ? undefined : /^\d+$/.test(budgetFlag.trim()) ? Number(budgetFlag.trim()) : die(`--piece-budget takes a whole number of words (0 serves none of your pieces), got "${budgetFlag}".`);
+  const formFlag = flag('--pieces')?.trim().toLowerCase();
+  if (formFlag !== undefined && formFlag !== 'whole' && formFlag !== 'excerpts') die(`--pieces takes whole or excerpts, got "${formFlag}".`);
+  const pieceForm = formFlag as PieceForm | undefined;
+  const reselect = pieceBudget !== undefined || pieceForm !== undefined;
+  const answers = isReplyWork(v.workType);
+  // Answers are short and are shown whole: an opening and a middle passage of a forty-word answer is the answer.
+  if (answers && pieceForm === 'excerpts') die('--pieces excerpts applies to a skill that writes: the answers this skill shows are short, and are shown whole. Use --piece-budget to show fewer of them.');
+  if (voiceFlag === 'none') {
+    if (reselect) die('--voice none serves none of your pieces, so --piece-budget and --pieces have nothing to choose from: drop one of them.');
+    return null;
+  }
   let voice: Voice | null = voiceFlag === undefined ? store.getVoice(L) : null;
+  // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
+  // pieces again must never spend, nor bring back a persona the owner turned off.
+  const derivesPersona = !voice || personaFlag === 'auto';
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
-  const readable = !voice || personaFlag === 'auto' ? sessionCorpus() : [];
+  const readable = derivesPersona || reselect ? sessionCorpus() : [];
+  // A budget or a form with no pieces to apply it to is refused, with or without a stored voice: never ignored.
+  if (reselect && readable.length < 3) die('--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here. Run it from the project the skill was built in, with its folder of pieces in place.');
+  // A skill that answers shows examples spread over the kinds of request (`spreadExamples`), so no whole pieces are
+  // chosen for it here when that spread will replace them.
+  const spreads = (x: Voice | null): boolean => answers && Boolean(x?.scope?.kinds) && voiceFlag === undefined && !argv.includes('--full');
+  const choose = (form: PieceForm, budget: number): string[] => (form === 'excerpts' ? selectVoiceExcerpts(readable, budget) : selectVoicePieces(readable, budget));
+  const chosen = (pieces: readonly string[], form: PieceForm, budget: number | undefined): string =>
+    `${form === 'excerpts' ? `passages from ${pieces.length} piece(s)` : `${pieces.length} whole piece(s)`} of the author's own served with the skill${budget === undefined ? '' : `, within ${budget} words`}, chosen to span how they write`;
   if (!voice && readable.length >= 3) {
-    const pieces = selectVoicePieces(readable);
-    voice = { passages: [], lengthWords: usualLength(readable), pieces };
-    if (pieces.length) console.log(`Voice: ${pieces.length} whole piece(s) of the author's own served with the skill, chosen to span how they write. Turn off with --voice none.`);
+    const form = pieceForm ?? 'whole';
+    const pieces = choose(form, pieceBudget ?? PIECE_BUDGET_WORDS);
+    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(form === 'excerpts' ? { pieceForm: form } : {}), ...(pieceBudget === undefined ? {} : { pieceBudget }) };
+    if (pieces.length) console.log(`Voice: ${chosen(pieces, form, pieceBudget)}. Turn off with --voice none.`);
+    else if (pieceBudget !== undefined && !answers) console.log(`Voice: none of the author's pieces fits within ${pieceBudget} words, so none is served; how they sound and how long they write are kept.`);
+  } else if (voice && reselect) {
+    // A skill built before keeps its pieces until the owner asks for others, and then they are chosen again from
+    // the pieces it was built from: a budget cannot be met by cutting the ones already stored.
+    const form = pieceForm ?? voice.pieceForm ?? 'whole';
+    const budget = pieceBudget ?? voice.pieceBudget;
+    if (spreads(voice)) voice = { ...voice, pieceBudget: budget };
+    else {
+      const pieces = choose(form, budget ?? PIECE_BUDGET_WORDS);
+      voice = { ...voice, pieces, pieceForm: form === 'excerpts' ? form : undefined, pieceBudget: budget };
+      console.log(pieces.length ? `Voice: ${chosen(pieces, form, budget)}.` : `Voice: none of the author's pieces is served${budget === undefined ? '' : ` within ${budget} words`}; how they sound and how long they write are kept.`);
+    }
   }
   if (!voice) return null;
   // HOW MUCH THE AUTHOR WRITES FOR WHAT WAS ASKED (core/compiler/scope.ts), for a skill that answers requests: read
   // once from the examples, with the request each one answers when its file carries it. A failure costs the reading,
   // never the build: the profile is then counts alone, and states no habit nobody read.
-  if (isReplyWork(v.workType) && (!voice.scope || personaFlag === 'auto')) {
+  if (answers && (!voice.scope || personaFlag === 'auto')) {
     const pairs = sessionPairs();
     // Said once, by name: such a file's request was learned as the author's writing by every reading before this one.
     const whole = unsplitPairs(loadSession().source ?? '');
@@ -114,17 +156,12 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
         console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
       }
       voice = { ...voice, scope };
-      // The examples shown are spread across the kinds of request the corpus holds, within a word budget, so the
-      // model sees how the author delivers as well as how they explain (core/compiler/scope.ts, `spreadByKind`).
-      if (scope.kinds && voiceFlag === undefined && !argv.includes('--full')) {
-        const shown = spreadByKind(pairs.map((x) => x.text), scope.kinds, ANSWER_EXAMPLE_WORDS);
-        const mix = new Map<string, number>();
-        for (const i of shown) mix.set(scope.kinds[i] ?? 'unread', (mix.get(scope.kinds[i] ?? 'unread') ?? 0) + 1);
-        voice = { ...voice, pieces: shown.map((i) => pairs[i].text) };
-        console.log(`Examples shown: ${shown.length} of ${pairs.length}, spread over the kinds of request you answer (${[...mix].map(([k, n]) => `${k} ${n}`).join(', ')}). --full shows them all.`);
-      }
+      if (voiceFlag === undefined) voice = spreadExamples(voice, pairs);
     }
   }
+  // A skill that answers, built before, asked for another budget: its examples are spread again over the kinds its
+  // scope already holds. Nothing is read again, so nothing is spent.
+  else if (reselect && spreads(voice)) voice = spreadExamples(voice, sessionPairs());
   // HOW EACH MOVE IS CARRIED (core/compiler/applicability.ts). The moves the standard holds and does not require are
   // counted against the pieces they were checked on; the ones that hold back what was asked are read by the corpus
   // reader (the word pattern is its floor) and stay examples until the owner rules on them. Said at build, move by
@@ -149,7 +186,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     }
   }
   if (personaFlag === 'none') return { ...voice, persona: undefined };
-  if (readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
+  if (!derivesPersona || readable.length < 3 || (personaFlag !== 'auto' && voice.persona)) return voice;
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
@@ -161,6 +198,27 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     console.log(`(the persona could not be derived: ${(e as Error).message.split('\n')[0]}; the skill is built without it.)`);
     return voice;
   }
+}
+
+/**
+ * THE EXAMPLES A SKILL THAT ANSWERS SHOWS, spread across the kinds of request the corpus holds, within a word budget,
+ * so the model sees how the author delivers as well as how they explain (core/compiler/scope.ts, `spreadByKind`).
+ * The budget is the owner's (`--piece-budget`) in place of ANSWER_EXAMPLE_WORDS. One example of each kind is shown
+ * whatever the budget, except at 0, which shows none. `--full` shows every example, and a scope that does not hold
+ * a kind for each example leaves the pieces as they are; `chooseVoice` checks both before it relies on this.
+ */
+function spreadExamples(voice: Voice, pairs: readonly { text: string }[]): Voice {
+  const kinds = voice.scope?.kinds;
+  if (kinds?.length !== pairs.length || argv.includes('--full')) return voice;
+  if (voice.pieceBudget === 0) {
+    console.log(`Examples shown: none of ${pairs.length} (--piece-budget 0). What you add beyond what was asked is still stated.`);
+    return { ...voice, pieces: [] };
+  }
+  const shown = spreadByKind(pairs.map((x) => x.text), kinds, voice.pieceBudget ?? ANSWER_EXAMPLE_WORDS);
+  const mix = new Map<string, number>();
+  for (const i of shown) mix.set(kinds[i] ?? 'unread', (mix.get(kinds[i] ?? 'unread') ?? 0) + 1);
+  console.log(`Examples shown: ${shown.length} of ${pairs.length}, spread over the kinds of request you answer (${[...mix].map(([k, n]) => `${k} ${n}`).join(', ')}). --full shows them all.`);
+  return { ...voice, pieces: shown.map((i) => pairs[i].text) };
 }
 
 export async function build(nameArg?: string): Promise<void> {

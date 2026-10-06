@@ -149,8 +149,8 @@ export async function steerTowardRange(
             const x = await client.complete({ stableBlock: SENTENCE_SYSTEM, variableBlock: '',
               userMessage: `THE SENTENCE\n${c.s}\n\nYOU MAY DROP\n${(LICENSE[target.id] ?? []).join(', ')}`,
               toolName: 'emit_sentence', toolDescription: 'Return the one rewritten sentence.', schema: SCHEMA, maxTokens: 600, temperature: 0 });
-            return { value: x, cost: x.cost };
-          });
+            return { value: x, cost: x.cost, usage: x };
+          }, 'steering');
           const out = (res.json as { sentence?: unknown } | null)?.sentence;
           rewrite = typeof out === 'string' && out.trim() ? out.trim() : null;
         } catch (e) {

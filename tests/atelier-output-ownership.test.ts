@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { findOwnershipBreaches, describeBreaches } from '../core/state/output-ownership.js';
 import { readFileSync } from 'node:fs';
+import { composeServed } from '../cli/served.js';
 
 describe('the skill\'s internals are not part of the user\'s work', () => {
   it('catches the exact shape that was measured', () => {
@@ -56,10 +57,14 @@ describe('the rendering no longer offers a structure to continue', () => {
   it('the served block is fenced and states output ownership, not just authority', () => {
     // "instances, not instructions" settles whether the model must COMPLY. It says nothing about
     // whether the material belongs in the deliverable, which is what was going wrong.
-    expect(invoke).toMatch(/PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT/);
-    expect(invoke).toMatch(/do not reproduce, continue, quote, enumerate/);
-    expect(invoke).toMatch(/begins fresh from here/);
-    expect(invoke).not.toMatch(/# How the author works — examples/);
+    // Read off the text a model is served (cli/served.ts), not off the source that composes it.
+    const served = composeServed({ 'SKILL.md': '# x\n\nWrite it.', 'examples/p1.md': '[p1]\n\nAn instance.' }, '').servedText;
+    expect(served).toMatch(/PRIVATE CONTEXT, NOT PART OF YOUR OUTPUT/);
+    expect(served).toMatch(/do not reproduce, continue, quote, enumerate/);
+    expect(served).toMatch(/begins fresh from here/);
+    expect(served).not.toMatch(/# How the author works — examples/);
+    // polarity: a package with no example file serves no fence at all
+    expect(composeServed({ 'SKILL.md': '# x\n\nWrite it.' }, '').servedText).toBe('# x\n\nWrite it.');
   });
 
   it('and the check runs on the output, never on the served bytes', () => {

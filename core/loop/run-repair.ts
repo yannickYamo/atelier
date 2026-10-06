@@ -522,8 +522,8 @@ export async function refineToStandard(
           userMessage: `THE DRAFT\n"""\n${t}\n"""\n\nTHE STATEMENTS THAT MUST GO\n${gone.map((g, i) => `${i + 1}. ${g}`).join('\n')}`
             + (pointing.length ? `\n\nSENTENCES THAT WILL POINT AT REMOVED TEXT (rewrite each to stand alone, or drop it)\n${pointing.map((g) => `- ${g}`).join('\n')}` : ''),
           toolName: 'emit_draft', toolDescription: 'Return the whole rewritten draft.', schema: REDRAFT_SCHEMA, maxTokens: 6000 });
-        return { value: x, cost: x.cost };
-      });
+        return { value: x, cost: x.cost, usage: x };
+      }, 'repair');
       const out = (res.json as { text?: unknown } | null)?.text;
       return typeof out === 'string' && out.trim() ? out.trim() : null;
     } catch { return null; }
@@ -587,8 +587,8 @@ export async function refineToStandard(
           toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.',
           schema: REPAIR_SCHEMA, maxTokens: 4000,
         });
-        return { value: x, cost: x.cost };
-      });
+        return { value: x, cost: x.cost, usage: x };
+      }, 'repair');
     } catch (e) {
       why = `the rewrite could not run (${(e as Error).message.split('\n')[0]}); the draft is delivered as it stands`;
       break;

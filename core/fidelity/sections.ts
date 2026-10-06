@@ -57,8 +57,8 @@ export async function planSections(client: InferenceClient, budget: Budget, serv
   const res = await spend(budget, 0.1, async () => {
     const x = await client.complete({ stableBlock: `${served}\n\n${PLAN_SYSTEM}`, variableBlock: task, userMessage: 'Plan the piece now.',
       toolName: 'emit_plan', toolDescription: 'Return the plan of sections.', schema: PLAN_SCHEMA, maxTokens: 2000, temperature: 0 });
-    return { value: x, cost: x.cost };
-  });
+    return { value: x, cost: x.cost, usage: x };
+  }, 'writing');
   const plan = parsePlan(res.json);
   if (!plan) throw new Error('the plan did not come back as 2 to 9 sections');
   return plan;

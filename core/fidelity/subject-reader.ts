@@ -108,8 +108,8 @@ export async function readSubjectCards(client: InferenceClient, budget: Budget, 
       const raw = await spend(budget, 0.01, async () => {
         const x = await client.complete({ stableBlock: CARD_SYSTEM, variableBlock: '', userMessage: `<piece>\n${cardText(index, piece)}\n</piece>`,
           toolName: 'emit_card', toolDescription: 'Return what the piece is about.', schema: CARD_SCHEMA, maxTokens: 400, temperature: 0 });
-        return { value: x.json, cost: x.cost };
-      });
+        return { value: x.json, cost: x.cost, usage: x };
+      }, 'nearness');
       const card = cardOf(piece, raw);
       if (card) cards.push(card);
     } catch { break; }
@@ -145,8 +145,8 @@ export async function gradeSubjects(client: InferenceClient, budget: Budget, req
       const x = await client.complete({ stableBlock: GRADE_SYSTEM, variableBlock: `<cards>\n${renderCards(cards.cards)}\n</cards>`,
         userMessage: `<request>\n${request}\n</request>`, toolName: 'emit_pieces', toolDescription: 'Return the pieces on the request\'s subject.',
         schema: GRADE_SCHEMA, maxTokens: 600, temperature: 0 });
-      return { value: x.json, cost: x.cost };
-    });
+      return { value: x.json, cost: x.cost, usage: x };
+    }, 'nearness');
     return gradesOf(cards.cards, raw);
   } catch { return null; }
 }

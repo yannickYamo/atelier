@@ -318,7 +318,46 @@ export class UnboundedRuntime extends Error {
 let processSpent = 0;
 export const processSpentUsd = (): number => processSpent;
 
-export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Promise<{ value: T; cost: InferenceCost }>): Promise<T> {
+/**
+ * WHAT A CALL WAS FOR. A run's total says what it cost and not where the money went: the checked runtime cost about
+ * seven times the plug-in, two drafts explain at most two of the seven, and nothing recorded the rest. Each call on
+ * the path of a run names its purpose where it is made, and the ledger below adds them up beside the total. A call
+ * that names none is counted under `other`, so the lines always sum to the total and what nobody attributed shows.
+ */
+export type SpendPurpose =
+  | 'writing'          // a draft, a redraw, a completion, a section or its plan
+  | 'repair'           // rewriting the spans that broke a rule, or redrafting around a cut claim
+  | 'claim reader'     // reading a draft for invented specifics
+  | 'taste reader'     // reading a draft against the rules only a reading can check, and its repair
+  | 'context judge'    // what the request asks for: its register, its parts, what a specific refers to
+  | 'steering'         // sentence rewrites toward the author's range
+  | 'voice pass'       // the in-context voice rewrite and its gate's second read
+  | 'nearness'         // which of the author's pieces are on the request's subject
+  | 'structure'        // reading a text's paragraph moves
+  | 'other';
+
+/** What the provider reported for one call. Absent where a call site does not pass it on. */
+export interface CallUsage { readonly inputTokens: number; readonly cacheReadTokens: number; readonly cacheWriteTokens: number; readonly outputTokens: number }
+
+/** One purpose's share of what a process (or a run, as a difference of two snapshots) spent. */
+export interface SpendLine { readonly purpose: SpendPurpose; readonly usd: number; readonly calls: number;
+  /** every input token the provider counted, cached or not; 0 where no call of this purpose reported its usage */
+  readonly inputTokens: number; readonly outputTokens: number }
+
+const processLedger = new Map<SpendPurpose, { usd: number; calls: number; inputTokens: number; outputTokens: number }>();
+
+/** A copy of the ledger as it stands, to be compared with a later one (`spendBetween`). */
+export const processSpendByPurpose = (): readonly SpendLine[] => [...processLedger].map(([purpose, x]) => ({ purpose, ...x }));
+
+/** What was spent between two snapshots, largest first; purposes with no call in between are left out. */
+export function spendBetween(before: readonly SpendLine[], after: readonly SpendLine[]): SpendLine[] {
+  const was = new Map(before.map((l) => [l.purpose, l]));
+  return after.map((l) => { const b = was.get(l.purpose);
+    return { purpose: l.purpose, usd: l.usd - (b?.usd ?? 0), calls: l.calls - (b?.calls ?? 0), inputTokens: l.inputTokens - (b?.inputTokens ?? 0), outputTokens: l.outputTokens - (b?.outputTokens ?? 0) }; })
+    .filter((l) => l.calls > 0).sort((a, b) => b.usd - a.usd || b.calls - a.calls || a.purpose.localeCompare(b.purpose));
+}
+
+export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Promise<{ value: T; cost: InferenceCost; usage?: CallUsage }>, purpose: SpendPurpose = 'other'): Promise<T> {
   const inFlight = budget.inFlightUsd ?? 0;
   if (budget.spentUsd + inFlight + estimateUsd > budget.capUsd) throw new BudgetExceeded(budget.spentUsd + inFlight + estimateUsd, budget.capUsd);
   const used = budget.calls ?? 0;
@@ -327,11 +366,14 @@ export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Pr
   }
   budget.calls = used + 1;
   budget.inFlightUsd = inFlight + estimateUsd;
-  let result: { value: T; cost: InferenceCost };
+  let result: { value: T; cost: InferenceCost; usage?: CallUsage };
   try { result = await fn(); } finally { budget.inFlightUsd = (budget.inFlightUsd ?? 0) - estimateUsd; }
-  const { value, cost } = result;
+  const { value, cost, usage } = result;
   budget.spentUsd += budgetUsd(cost);
   processSpent += budgetUsd(cost);
+  const line = processLedger.get(purpose) ?? { usd: 0, calls: 0, inputTokens: 0, outputTokens: 0 };
+  processLedger.set(purpose, { usd: line.usd + budgetUsd(cost), calls: line.calls + 1,
+    inputTokens: line.inputTokens + (usage ? usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens : 0), outputTokens: line.outputTokens + (usage?.outputTokens ?? 0) });
   // AFTER ONE CALL, AND NOT BEFORE. What a call costs is reported by the provider, so the first one
   // is what establishes whether a dollar cap is capable of binding this runtime at all. If it is not,
   // and no call bound was set, then continuing means running with no bound while displaying one.

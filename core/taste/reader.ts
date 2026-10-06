@@ -116,8 +116,8 @@ async function readOnce(client: InferenceClient, budget: Budget, text: string, r
       toolName: 'emit_readings', toolDescription: 'One reading per numbered rule.',
       schema: READING_SCHEMA, maxTokens: 3000, temperature: 0,
     });
-    return { value: x, cost: x.cost };
-  });
+    return { value: x, cost: x.cost, usage: x };
+  }, 'taste reader');
   const raw = (res.json as { readings?: RawReading[] } | null)?.readings ?? [];
   const out = new Map<number, RawReading>();
   // A model may send "2" for 2; the first reading per number wins.
@@ -139,8 +139,8 @@ export async function applicability(client: InferenceClient, budget: Budget, tas
       toolName: 'emit_applicability', toolDescription: 'One answer per numbered condition.',
       schema: APPLICABILITY_SCHEMA, maxTokens: 800, temperature: 0,
     });
-    return { value: x, cost: x.cost };
-  });
+    return { value: x, cost: x.cost, usage: x };
+  }, 'taste reader');
   const answers = (res.json as { answers?: { n: number | string; applies: string }[] } | null)?.answers ?? [];
   conditional.forEach(({ i }, j) => { if (answers.find((a) => String(a.n) === String(j + 1))?.applies === 'NO') out[i] = false; });
   return out;

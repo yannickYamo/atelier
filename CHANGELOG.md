@@ -7,6 +7,51 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added: how big a skill is, and where a run's cost went
+
+Measuring tools only: no default of a build or a run changes, and a skill built before is served byte for byte as
+it was ([decision 0014](docs/decisions/0014-the-smallest-realization-that-holds-the-standard.md)).
+
+- **A skill states its size three ways.** Stored (every file of the package), exported (what a run is served and
+  what `atelier export` writes) and per run (what one run sent the writer). The first two are on the skill's card,
+  printed at build and by `atelier report --skill <name>`, with the export split by part: your pieces, the rule
+  examples, the rules and instructions, how you sound, the moves, the reference index, the framing.
+  `atelier export --out` prints the same split.
+- **A run says where its cost went.** Each model call on the path of a run names its purpose: writing, repair, the
+  claim reader, the taste reader, the context judge, steering, the voice pass, nearness, structure.
+  `atelier report <run>` and `invoke --json` give one line per purpose with its calls and the tokens the provider
+  counted, and the words the writer was sent: the skill, what was added for the request, the request. A call that
+  names no purpose is counted under `other`, and a difference between the lines and the total is printed.
+
+### Added: how much of your own writing a skill serves is yours to set (opt-in)
+
+- **`atelier build --piece-budget <words>`** (and on `atelier new`) chooses your pieces again within that many words
+  of prose. `0` serves none of them and keeps the persona and your usual length. Choosing again reads the pieces the
+  skill was built from and calls no model. For a skill that answers, it is the budget of the examples shown: one of
+  each kind of request whatever the budget, none at 0.
+- **`--pieces excerpts`** shows each chosen piece by its opening and a passage from its middle, about 250 words each,
+  in your order and your words, with `[…]` where text is left out; a paragraph longer than a passage is taken apart
+  at its line breaks, then its sentences, and code is never cut. The same budget reaches more of your pieces, and is
+  a ceiling. The skill says they are passages. For a skill that writes: answers are short and shown whole.
+- **`atelier export --no-index`** leaves out the list that names each example file: an export has already inlined
+  those files, each with its own condition.
+- A build keeps the budget and the form until you give others. Without these options a build chooses exactly as
+  before.
+
+### Fixed
+
+- **A run's cost could leave out the reading of the request.** What a run spent was counted from its first draft,
+  and the request is read before that. When the claim reader, on a meter of its own, cost more than those first
+  calls, they were in no figure. The total and the lines by purpose are now both counted from where the run's budget
+  is made.
+
+### Changed: what is printed
+
+Wording only, for anyone who reads these lines with a script. The card at the end of a build has a SIZE block.
+`atelier export --out` prints a second line with the export by part, counts words as `wc -w` does (it can be one
+lower than before), and its note for a long export names `--piece-budget`. `atelier export` without `--out` prints
+the skill and nothing else, as before.
+
 ### Fixed: strict delivery refused answers a mechanical fix should have saved
 
 - **The paragraph split now reads the text as the paragraph rule does.** The rule that flags a long paragraph and
@@ -189,6 +234,18 @@ Defects found by an outside review of the build, each with what it broke.
   and says so.
 
 ### Studies
+
+- **Size, measured** (development, by the reviewer and offline here; no sealed result). Exported Atelier skills ran
+  5,035 words (code review), 5,760 (contracts) and 13,818 (speeches), against 189 to 361 for the hand-written seeds,
+  863 to 1,240 for GEPA's and 308 to 1,037 for SkillOpt's. On one skill built from a technical author's posts, part
+  by part: your pieces 9,201 of 13,173 words (three whole pieces), rule examples 1,954, rules and instructions 682,
+  how I sound 471, moves 396, the reference index 282, framing 187.
+- **Drafted, not run: how small a skill can be and still hold its standard**
+  (studies/EFFICIENCY_ABLATION_PREREGISTRATION.md, decision 0014). Six configurations of one skill on 30 development
+  tasks in each of two kinds of writing. The rule that selects is `bench/compare/efficiency-select.mjs`: each domain
+  on its own, the measured difference against a margin, an exact test for a clear loss, voice only where a reader
+  was qualified. It selects a configuration and does not show two sizes are equivalent; the selected arm is
+  confirmed beside today's skill in the last development round, with today's as the fallback.
 
 - **Development against hand-crafted skills, round 2** (run by the reviewer on 5 October 2026; readiness evidence
   under decision 0012, not a sealed result; one author per domain; model judges, each qualified on known pairs

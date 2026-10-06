@@ -18,6 +18,8 @@ import { tastePermissions } from '../core/taste/calibration.js';
 import { claimSensorFor } from './checks.js';
 import { readerModel } from './commands/taste.js';
 import type { SkillCard } from '../core/eval/skill-card.js';
+import { skillSizeOf } from '../core/eval/size.js';
+import { composeServed } from './served.js';
 
 /** The card for the skill's active version (or `skillVersion`), built from its stored state and stored once. */
 export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; skillVersion?: string; persist?: boolean } = {}): SkillCard | null {
@@ -53,6 +55,9 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
   const transfer = policy?.standardVersionHash === std.standardVersionHash ? split(policy, traits) : null;
   const rulesRead = tasteRules(std);
   const perms = rulesRead.length ? tastePermissions(rulesRead, store.readEvents(L), readerModel()) : null;
+  // The size of the package this version serves, measured on the text a run is served and an export writes.
+  const pkg = store.getPackage(L, version.materializedHash);
+  const served = pkg?.files['SKILL.md'] !== undefined ? composeServed(pkg.files, '') : null;
   const card: SkillCard = {
     schema: 1, skill: L.skillName, skillVersion: sv, standardVersion: std.standardVersionHash,
     builtAt: stored?.builtAt ?? (opts.persist ? new Date().toISOString() : null),
@@ -80,6 +85,7 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
     ...(policy && transfer ? { voice: { registers: policy.corpusRegisters, carried: transfer.carried.length,
       invariant: transfer.carried.filter((t) => policy.states[t].kind === 'invariant').length, unknown: transfer.unknown.length,
       pairs: vstore.getBank(L)?.pairs.length ?? null, mode: active?.settings.voice ?? 'off' } } : {}),
+    ...(pkg && served ? { size: skillSizeOf(pkg.files, served.servedText, served.servedExamples) } : {}),
     notMeasured: [
       rulesRead.length ? 'the reading-based rules, until the taste reader is validated by your labels' : 'argument, stance and content',
       profile ? `voice beyond the ${pooled.length} counted features` : 'your range (built without a corpus: no profile)',

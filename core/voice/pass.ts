@@ -84,8 +84,8 @@ export async function voicePass(client: InferenceClient, budget: Budget, text: s
           toolName: 'emit_paragraph', toolDescription: 'Return the rewritten paragraph.', schema: SCHEMA,
           maxTokens: Math.max(400, Math.ceil(wordsOf(p.text).length * 3)), temperature: VOICE_TEMPERATURE });
         const out = (x.json as { paragraph?: unknown }).paragraph;
-        return { value: typeof out === 'string' ? out.trim() : '', cost: x.cost };
-      });
+        return { value: typeof out === 'string' ? out.trim() : '', cost: x.cost, usage: x };
+      }, 'voice pass');
     } catch (e) {
       const why = `the voice pass could not run (${(e as Error).message.split('\n')[0]})`;
       if (e instanceof BudgetExceeded || e instanceof CallBudgetExceeded || e instanceof UnboundedRuntime) stopped = 'the run\'s budget was reached before this paragraph';

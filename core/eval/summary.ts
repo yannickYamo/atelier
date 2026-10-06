@@ -18,6 +18,9 @@
 // Everything here is read from the run's record and the skill's stored state; nothing is computed for the panel
 // that the record does not hold.
 
+import type { SpendLine } from '../inference/client.js';
+import type { RunSent } from './size.js';
+
 /** The evaluation of one run. `schema` moves when a field's meaning does. */
 export interface EvalSummary {
   readonly schema: 1;
@@ -30,6 +33,16 @@ export interface EvalSummary {
   readonly model: string | null;
   readonly drafts: number;
   readonly costUsd: number;
+  /**
+   * WHERE THE COST WENT: one line per purpose (writing, repair, the claim reader, the taste reader, …), each with its
+   * calls and the tokens the provider counted. Lines and `costUsd` are both read from the moment the run's budget is
+   * made, so they agree; `atelier report` prints any difference instead of hiding it. What no call site named is
+   * under `other`.
+   * Absent on a run recorded before the ledger existed.
+   */
+  readonly spend?: readonly SpendLine[];
+  /** what this run sent the writer, in words: the served skill, the passages and notes added for the request, the request */
+  readonly sent?: RunSent;
   readonly durationMs: number;
   readonly result: { readonly conformant: boolean; readonly reasons: readonly string[] };
   readonly gates: {

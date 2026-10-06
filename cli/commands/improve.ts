@@ -303,8 +303,8 @@ export async function spendOneWithResult(
       schema, maxTokens: draftMaxTokens() };
     servedTask = req.variableBlock;
     const res = await client.complete(req);
-    return { value: res, cost: res.cost };
-  });
+    return { value: res, cost: res.cost, usage: res };
+  }, 'writing');
   const piece = contract
     ? JSON.stringify(r.json ?? null, null, 2)
     : asText((r.json as { piece?: unknown } | null)?.piece);

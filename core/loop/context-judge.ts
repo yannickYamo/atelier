@@ -114,8 +114,8 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
       const res = await spend(budget, 0.005, async () => {
         const x = await client.complete({ stableBlock: system, variableBlock: '', userMessage: user, toolName: tool,
           toolDescription: 'Return the judgement.', schema, maxTokens: 800, temperature: 0 });
-        return { value: x, cost: x.cost };
-      });
+        return { value: x, cost: x.cost, usage: x };
+      }, 'context judge');
       return res.json;
     } catch { return null; }
   };

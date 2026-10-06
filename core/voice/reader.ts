@@ -54,8 +54,8 @@ export async function readClaimChanges(client: InferenceClient, budget: Budget, 
     const raw = await spend(budget, 0.01, async () => {
       const x = await client.complete({ stableBlock: VOICE_READER_SYSTEM, variableBlock: '', userMessage: `<original>\n${content}\n</original>\n\n<rewrite>\n${voice}\n</rewrite>`,
         toolName: 'emit_changes', toolDescription: 'Return what the rewrite changed in what is claimed.', schema: SCHEMA, maxTokens: 500, temperature: 0 });
-      return { value: x.json, cost: x.cost };
-    });
+      return { value: x.json, cost: x.cost, usage: x };
+    }, 'voice pass');
     return changesOf(content, voice, raw);
   } catch { return null; }
 }

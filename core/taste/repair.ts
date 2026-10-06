@@ -78,8 +78,8 @@ export async function refineTaste(
     res = await spend(budget, 0.05, async () => {
       const x = await client.complete({ stableBlock: checks.placeholders ? REPAIR_SYSTEM_WITH_PLACEHOLDERS : REPAIR_SYSTEM, variableBlock: '', userMessage: repairPrompt(text, targets),
         toolName: 'emit_replacements', toolDescription: 'Return one replacement per numbered span.', schema: REPAIR_SCHEMA, maxTokens: 4000 });
-      return { value: x, cost: x.cost };
-    });
+      return { value: x, cost: x.cost, usage: x };
+    }, 'taste reader');
   } catch (e) {
     return { output: text, targeted, fixed: [], readings, why: `the rewrite could not run (${(e as Error).message.split('\n')[0]})` };
   }

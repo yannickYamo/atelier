@@ -576,8 +576,8 @@ export function modelSensor(client: InferenceClient, budget: Budget, model: stri
               // which degraded the whole run to the pattern check (measured, bench/claims).
               schema: EXTRACT_SCHEMA, maxTokens: 16000, temperature: 0,
             });
-            return { value: x, cost: x.cost };
-          });
+            return { value: x, cost: x.cost, usage: x };
+          }, 'claim reader');
           const raw = (res.json as { specifics?: unknown } | null)?.specifics;
           if (!Array.isArray(raw)) throw new Error('the reader returned no list of specifics');
           return asSpecifics(raw) ?? [];
