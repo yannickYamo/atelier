@@ -21,13 +21,26 @@
 //                the claim "scores higher than the hand-written skill"; `overall` is the bar against the strongest
 //                other baseline
 //   cost         file: {condition, cost_usd, conformant (bool)}
-//   axes         [{name, file}]: THE SIGNED BAR. Each file holds {case_id, trial?, condition, failed (bool)}: one
-//                failure per answer on one axis (quality: a blocker or a named failure mode, from
-//                bench/compare/failure-modes.mjs; rule anchor: a measured required rule broken; repeatability: the
-//                verdict differed between runs; voice: the reader chose the other arm). For each axis the script
-//                reports both arms' failure rates and R = 1 − candidate / hand-written, and the axis PASSES when
-//                R is at least `bar.reduction` (0.20) AND the candidate clearly fails less (the lower 95% bound of
-//                the case-level difference is above zero).
+//   axes         [{name, file, tasks?}]: THE SIGNED BAR, and when it is given THE VERDICT COMES FROM THE AXES ALONE (see
+//                below). bench/compare/axes.mjs writes the quality, rule anchor and repeatability files; voice is
+//                read by people. For each axis the script reports both arms' failure rates and
+//                R = 1 − candidate / hand-written, and the axis is REACHED when R is at least `bar.reduction` (0.20)
+//                AND the candidate clearly fails less (the lower 95% bound of the case-level difference is above
+//                zero). What a row is depends on the axis's name:
+//                  quality, rule anchor (and any other name)   {case_id, trial, condition, failed (bool)}: one row
+//                                  for every sealed task, every trial 1 to `trials`, and both arms
+//                  repeatability   {case_id, trial: 1, condition, failed (bool)}: one row a task and arm; failed
+//                                  when the task's outputs differed
+//                  voice           {case_id, reader, chose}: `chose` is "candidate" or "comparator" (the hand-written
+//                                  skill), one row for each reader of a task, exactly `readers` rows a task, no
+//                                  reader twice. A task is a failure of the arm most of its readers did not choose,
+//                                  so `readers` is odd
+//                An axis read on part of the sealed tasks (voice, on 100 of them) names them itself: `tasks`, a
+//                list or a file like the config's, every id one of the sealed tasks.
+//   requiredAxes [axis names] the claim requires, as sealed: ["quality", "rule anchor", "repeatability", "voice"]
+//   tasks        the sealed task ids: a file of {id} a line, or a list
+//   trials       outputs per task per arm, numbered 1 to n
+//   readers      people who read each task on the voice axis (an odd number)
 //   reads        [fileA, fileB]: two judge reads of the same answers; answers whose reads disagree on the blocker
 //                are written to --disagreements for a person, and the disagreement rate is the judge's noise
 //
@@ -38,8 +51,26 @@
 //   GUARD  fails only on a clear loss: the 97.5% bound excludes zero on the losing side (blockers, requested depth),
 //          or a dimension's 95% bound is below the dimension margin. A guard asks "is there a clear loss", never
 //          "was no loss shown": as a SHOW, an arm exactly equal on blockers passed about one time in three.
-import { readFileSync, writeFileSync } from 'node:fs';
+//
+// WITH `axes`, THE AXES DECIDE AND NOTHING ELSE DOES. P1 to P6, PREF and HARM are still computed and reported in
+// `endpoints`; they are the bar as it stood before it was signed, and they never change the verdict. Without
+// `axes` the verdict is read from those endpoints, as before.
+//   UNRESOLVED  the config names no `requiredAxes`; a required axis has no entry in `axes`; an axis is named twice;
+//               `tasks` and `trials` are not given, so coverage could not be checked; a required axis does not cover
+//               exactly its sealed tasks (and trials, or readers) for both arms: a row short, a task that is not
+//               sealed, a row twice, a `failed` that is not true or false. The sentence names the axis and the first
+//               row at fault. Also when fewer cases than `minUnits` have every arm judged. Never a pass, and rows are
+//               never thinned to what happens to be there.
+//   FAIL        every required axis is covered, and at least one is not reached.
+//   PASS        every required axis is covered, and each is reached or not applicable.
+// AN AXIS IS NOT APPLICABLE (`pass` null, `state` "not applicable") only when it is fully covered and the hand-written
+// skill never failed on it: there is nothing to reduce, and it does not block a pass. If the candidate failed there
+// and the hand-written skill did not, the axis is not reached. `pass` is also null on an axis that is not covered;
+// `state` says which ("reached", "not reached", "not applicable", "not covered", or "not checked" when the config
+// gave no tasks to check against). Rows of arms other than the two compared are not read.
+import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tCrit } from '../../dist/core/stats/t.js';
 
 const arg = (n) => { const i = process.argv.indexOf(n); return i === -1 ? null : process.argv[i + 1]; };
@@ -70,6 +101,58 @@ function perCase(files, condition, value) {
 }
 /** Paired case-level differences a − b, over the cases both arms have. */
 const paired = (a, b) => [...a.keys()].filter((k) => b.has(k)).map((k) => a.get(k) - b.get(k));
+
+/** What one row of an axis file is, by the axis's name. */
+const unitOf = (name) => (name === 'repeatability' ? 'task' : name === 'voice' ? 'reader' : 'answer');
+
+/** Task ids from the config: a list as written, or a file of {id} a line. Null when they cannot be read as distinct ids. */
+function idsOf(spec, load) {
+  let rows;
+  try { rows = Array.isArray(spec) ? spec : typeof spec === 'string' ? load(spec) : null; } catch { return null; }
+  if (!rows?.length) return null;
+  const ids = rows.map((t) => (typeof t === 'string' ? t : t !== null && typeof t === 'object' && typeof t.id === 'string' ? t.id : ''));
+  return ids.includes('') || new Set(ids).size !== ids.length ? null : ids;
+}
+
+/**
+ * One axis file against its sealed tasks: `{ rows }` as {case_id, trial, condition, failed}, exactly one for every
+ * task, trial and arm compared, or `{ problem }` naming the first row at fault. Nothing is dropped to make it fit.
+ */
+function coveredRows(name, rows, C, tasks, trials, readers) {
+  const unit = unitOf(name); const known = new Set(tasks); const seen = new Set(); const show = (r) => JSON.stringify(r);
+  if (unit === 'reader') {
+    if (!Number.isInteger(readers) || readers < 1 || readers % 2 === 0) return { problem: 'the config\'s `readers` must be an odd whole number, so that every task has a majority' };
+    const by = new Map();
+    for (const r of rows) {
+      if (r === null || typeof r !== 'object' || !known.has(r.case_id)) return { problem: `a row is for a task that is not sealed for this axis: ${show(r)}` };
+      if (typeof r.reader !== 'string' && typeof r.reader !== 'number') return { problem: `a row names no reader: ${show(r)}` };
+      if (r.chose !== 'candidate' && r.chose !== 'comparator') return { problem: `a row's \`chose\` is neither "candidate" nor "comparator": ${show(r)}` };
+      const k = `${r.case_id}\u0000${r.reader}`;
+      if (seen.has(k)) return { problem: `a reader's choice appears twice: ${show(r)}` };
+      seen.add(k); by.set(r.case_id, [...(by.get(r.case_id) ?? []), r.chose]);
+    }
+    const short = tasks.filter((id) => (by.get(id)?.length ?? 0) !== readers);
+    if (short.length) return { problem: `${short.length} of ${tasks.length} tasks do not have ${readers} readers' choices (first: ${short[0]} has ${by.get(short[0])?.length ?? 0})` };
+    return { rows: tasks.flatMap((id) => { const lost = by.get(id).filter((c) => c === 'comparator').length * 2 > readers;
+      return [{ case_id: id, trial: 1, condition: C.candidate, failed: lost }, { case_id: id, trial: 1, condition: C.handwritten, failed: !lost }]; }) };
+  }
+  const n = unit === 'task' ? 1 : trials; const kept = [];
+  for (const r of rows) {
+    if (r === null || typeof r !== 'object') return { problem: `a line is not a row: ${show(r)}` };
+    if (r.condition !== C.candidate && r.condition !== C.handwritten) continue;
+    if (!known.has(r.case_id)) return { problem: `a row is for a task that is not sealed for this axis: ${show(r)}` };
+    const trial = unit === 'task' ? r.trial ?? 1 : r.trial;
+    if (!Number.isInteger(trial) || trial < 1 || trial > n) return { problem: `a row's trial is not one of 1 to ${n}: ${show(r)}` };
+    if (typeof r.failed !== 'boolean') return { problem: `a row's \`failed\` is not true or false: ${show(r)}` };
+    const k = `${r.case_id}\u0000${trial}\u0000${r.condition}`;
+    if (seen.has(k)) return { problem: `a row appears twice: ${show(r)}` };
+    seen.add(k); kept.push({ case_id: r.case_id, trial, condition: r.condition, failed: r.failed });
+  }
+  const missing = [];
+  for (const arm of [C.candidate, C.handwritten]) for (const id of tasks) for (let t = 1; t <= n; t++) if (!seen.has(`${id}\u0000${t}\u0000${arm}`)) missing.push(`${id} trial ${t} for "${arm}"`);
+  if (missing.length) return { problem: `${missing.length} of ${2 * tasks.length * n} rows are missing (first: ${missing[0]})` };
+  return { rows: kept };
+}
 
 export function analyse(cfg, load) {
   // `handwritten` is the bar against the hand-written skill itself: 0 means the claim is "scores higher", and the
@@ -134,20 +217,33 @@ export function analyse(cfg, load) {
     E.cost = Object.fromEntries([...new Set(rows.map((r) => r.condition))].map((c) => { const rs = rows.filter((r) => r.condition === c); const ok = rs.filter((r) => r.conformant !== false).length;
       return [c, { dollars: r3(rs.reduce((a, r) => a + (r.cost_usd ?? 0), 0)), answers: rs.length, perUsableAnswer: ok ? r3(rs.reduce((a, r) => a + (r.cost_usd ?? 0), 0) / ok) : null }]; }));
   }
-  // THE SIGNED BAR, AXIS BY AXIS: 20% fewer failures than the hand-written skill, and clearly fewer.
+  // THE SIGNED BAR, AXIS BY AXIS: 20% fewer failures than the hand-written skill, and clearly fewer. Each axis is
+  // first held against the sealed tasks; one that does not cover them is not read at all.
   const reduction = cfg.bar?.reduction ?? 0.2;
+  const sealedTasks = cfg.tasks === undefined ? null : idsOf(cfg.tasks, load);
+  const checkable = sealedTasks !== null && Number.isInteger(cfg.trials) && cfg.trials >= 1;
   for (const ax of cfg.axes ?? []) {
-    const rows = [load(ax.file)]; const rate = (c) => perCase(rows, c, (r) => (r.failed === true ? 1 : r.failed === false ? 0 : null));
+    const what = `${ax.name}: at least ${Math.round(reduction * 100)}% fewer failures than the hand-written skill`; const bar = `reduction >= ${reduction} and lower bound of the difference > 0`;
+    let file; let problem = null; let covered = false;
+    try { file = load(ax.file); } catch (e) { problem = `its file cannot be read (${e.code ?? String(e.message).split('\n')[0]})`; }
+    if (!problem && checkable) {
+      const own = ax.tasks === undefined ? sealedTasks : idsOf(ax.tasks, load);
+      if (own === null || own.some((id) => !sealedTasks.includes(id))) problem = 'its own `tasks` are not readable as a list of sealed task ids';
+      else { const c = coveredRows(ax.name, file, C, own, cfg.trials, cfg.readers); if (c.problem) problem = c.problem; else { file = c.rows; covered = true; } }
+    }
+    if (problem) { (E.AXES ??= []).push({ what, axis: ax.name, n: 0, candidate: null, handwritten: null, reduction: null, mean: null, lo95: null, hi95: null, bar, pass: null, state: 'not covered', problem }); continue; }
+    const rows = [file]; const rate = (c) => perCase(rows, c, (r) => (r.failed === true ? 1 : r.failed === false ? 0 : null));
     const cand = rate(C.candidate); const hand = rate(C.handwritten);
     const ids = [...cand.keys()].filter((k) => hand.has(k));
     const fc = ids.length ? mean(ids.map((k) => cand.get(k))) : null; const fh = ids.length ? mean(ids.map((k) => hand.get(k))) : null;
     const b = bounds(ids.map((k) => hand.get(k) - cand.get(k)));   // positive: the candidate fails less
     const Rel = fh ? 1 - fc / fh : null;
-    (E.AXES ??= []).push({ what: `${ax.name}: at least ${Math.round(reduction * 100)}% fewer failures than the hand-written skill`, axis: ax.name, n: ids.length,
+    // THE ZERO-DENOMINATOR RULE. When the hand-written skill never failed on an axis there is nothing to reduce:
+    // the axis is not applicable (pass null), unless the candidate did fail, which is a plain miss.
+    const pass = fh === 0 ? (fc === 0 ? null : false) : (Rel !== null && Rel >= reduction && b.lo95 !== null && b.lo95 > 0);
+    (E.AXES ??= []).push({ what, axis: ax.name, n: ids.length,
       candidate: fc === null ? null : r3(fc), handwritten: fh === null ? null : r3(fh), reduction: Rel === null ? null : r3(Rel), mean: b.mean, lo95: b.lo95, hi95: b.hi95,
-      // THE ZERO-DENOMINATOR RULE. When the hand-written skill never failed on an axis there is nothing to reduce:
-      // the axis is not applicable (pass null), unless the candidate did fail, which is a plain miss.
-      bar: `reduction >= ${reduction} and lower bound of the difference > 0`, pass: fh === 0 ? (fc === 0 ? null : false) : (Rel !== null && Rel >= reduction && b.lo95 !== null && b.lo95 > 0) });
+      bar, pass, state: !covered ? 'not checked' : pass === null ? 'not applicable' : pass ? 'reached' : 'not reached' });
   }
   if (cfg.reads?.length === 2) {
     const [a, b2] = cfg.reads.map(load); const key = (r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}`;
@@ -155,21 +251,51 @@ export function analyse(cfg, load) {
     const differ = both.filter((r) => Boolean(r.blocker) !== Boolean(second.get(key(r)).blocker));
     E.judgeNoise = { answers: both.length, blockerDisagreements: differ.length, rate: both.length ? r3(differ.length / both.length) : null, toReview: differ.map((r) => ({ case_id: r.case_id, trial: r.trial, condition: r.condition })) };
   }
-  const all = [E.P1, ...(E.P2 ?? []), ...(E.P3 ?? []), ...(E.P4 ?? []), E.P5, E.P6, ...(E.HARM ?? []), E.PREF, ...(E.AXES ?? [])].filter(Boolean);
+  // One sentence per axis of the signed bar, said whether it was reached or not: a miss is a result.
+  const axisSentence = (x) => `${x.axis}: ${x.state === 'not covered' ? `not read: ${x.problem}` : x.candidate === null ? 'not measured' : x.state === 'not applicable' ? `the hand-written skill never failed on the ${x.n} tasks, all covered: nothing to reduce, so the axis is not applicable and does not block a pass` : x.pass === null ? 'neither skill failed: nothing to reduce' : `${Math.round(x.candidate * 100)}% failed against ${Math.round(x.handwritten * 100)}% for the hand-written skill, ${x.reduction === null ? 'no reduction computable' : `${Math.round(x.reduction * 100)}% fewer`} (${x.pass ? 'reached' : 'not reached'}: the bar is ${Math.round(reduction * 100)}% fewer and clearly fewer)`}.`;
+  const tooFew = valid < (cfg.minUnits ?? 0) ? `only ${valid} cases have every arm judged, under the minimum of ${cfg.minUnits}` : null;
+  const base = { claim: cfg.claim ?? 'A', validCases: valid, margins: M, endpoints: E };
+  const closed = (cause) => `The quality comparison did not complete: ${cause}. It is closed without a result.`;
+  if (cfg.axes) {
+    // THE AXES DECIDE, AND NOTHING ELSE DOES. The endpoints above are reported beside them.
+    const given = E.AXES ?? []; const named = given.map((x) => x.axis);
+    const required = Array.isArray(cfg.requiredAxes) && cfg.requiredAxes.length && cfg.requiredAxes.every((n) => typeof n === 'string') ? cfg.requiredAxes : null;
+    const twice = named.find((n, i) => named.indexOf(n) !== i);
+    const absent = (required ?? []).filter((n) => !named.includes(n));
+    const mine = given.filter((x) => (required ?? []).includes(x.axis));
+    const uncovered = mine.find((x) => x.state === 'not covered');
+    const unresolved = !required ? 'the config names no `requiredAxes`, so no set of axes could decide the claim'
+      : twice !== undefined ? `the axis "${twice}" is given twice in \`axes\``
+        : absent.length ? `the required ${absent.length > 1 ? 'axes' : 'axis'} ${absent.map((n) => `"${n}"`).join(', ')} ${absent.length > 1 ? 'are' : 'is'} missing from \`axes\``
+          : !checkable ? 'the config gives no readable `tasks` and whole-number `trials`, so no axis could be checked against the sealed tasks'
+            : uncovered ? `the ${uncovered.axis} axis does not cover its sealed tasks: ${uncovered.problem}`
+              : tooFew;
+    const missed = mine.filter((x) => x.pass === false);
+    const verdict = unresolved ? 'UNRESOLVED' : missed.length ? 'FAIL' : 'PASS';
+    const subject = cfg.claim === 'A-w' ? `On ${sealedTasks?.length ?? 0} writing briefs it never saw, an Atelier skill built from ${cfg.k ?? '[k]'} pieces` : `On ${sealedTasks?.length ?? 0} coding tasks it never saw, the Atelier plug-in built from ${cfg.k ?? '[k]'} examples`;
+    const each = mine.map((x) => { const t = axisSentence(x); return t[0].toUpperCase() + t.slice(1); }).join(' ');
+    const sentence = verdict === 'UNRESOLVED' ? closed(unresolved)
+      : verdict === 'PASS' ? `${subject} met the signed bar against the hand-written skill on ${mine.length === 1 ? 'the one required axis' : `all ${mine.length} required axes`}. ${each}`
+        : `${subject} did not meet the signed bar against the hand-written skill: ${missed.map((x) => x.axis).join(', ')} not reached. ${each}`;
+    return { ...base, requiredAxes: cfg.requiredAxes ?? null, verdict, sentence, axes: [...given.map(axisSentence), ...absent.map((n) => `${n}: required, and not given.`)] };
+  }
+  const all = [E.P1, ...(E.P2 ?? []), ...(E.P3 ?? []), ...(E.P4 ?? []), E.P5, E.P6, ...(E.HARM ?? []), E.PREF].filter(Boolean);
   const failed = all.filter((e) => e.pass === false);
-  const unresolved = valid < (cfg.minUnits ?? 0) ? `only ${valid} cases have every arm judged, under the minimum of ${cfg.minUnits}` : E.P5?.unresolved ?? null;
+  const unresolved = tooFew ?? E.P5?.unresolved ?? null;
   const verdict = unresolved ? 'UNRESOLVED' : failed.length ? 'FAIL' : 'PASS';
   const subject = cfg.claim === 'A-w' ? `On ${valid} writing briefs it never saw, an Atelier skill built from ${cfg.k ?? '[k]'} pieces` : `On ${valid} coding tasks it never saw, the Atelier plug-in built from ${cfg.k ?? '[k]'} examples`;
-  const sentence = verdict === 'UNRESOLVED' ? `The quality comparison did not complete: ${unresolved}. It is closed without a result.`
+  const sentence = verdict === 'UNRESOLVED' ? closed(unresolved)
     // "Scored higher" is said only when it was shown: the lower bound of the difference against every baseline is above zero.
     : verdict === 'PASS' ? `${subject} ${E.P2[0].lo95 > 0 ? `scored higher overall than the hand-written skill (+${E.P2[0].mean}, lower bound +${E.P2[0].lo95})` : 'was not worse overall than the hand-written skill'}${E.P2[1] ? (E.P2[1].lo95 > 0 ? ` and higher than the strongest baseline (+${E.P2[1].mean})` : ' and was not worse than the strongest baseline') : ''}, no quality dimension${E.P4 ? ', blocker rate' : ''}${E.P6 ? ' or requested depth' : ''} showed a clear loss${E.PREF ? `, readers chose its piece ${Math.round((E.PREF.mean ?? 0) * 100)}% of the time` : ''}, and it held the shared required rules more often. This is not a result for each dimension separately.`
       : failed.map((e) => `${subject} failed "${e.what}": ${e.mean} (bounds ${e.lo95 ?? e.lo975} to ${e.hi95 ?? e.hi975}), where the bar was ${e.bar}.`).join(' ');
-  // One sentence per axis of the signed bar, said whether it was reached or not: a miss is a result.
-  const axes = (E.AXES ?? []).map((x) => `${x.axis}: ${x.candidate === null ? 'not measured' : x.pass === null ? 'neither skill failed: nothing to reduce' : `${Math.round(x.candidate * 100)}% failed against ${Math.round(x.handwritten * 100)}% for the hand-written skill, ${x.reduction === null ? 'no reduction computable' : `${Math.round(x.reduction * 100)}% fewer`} (${x.pass ? 'reached' : 'not reached'}: the bar is ${Math.round(reduction * 100)}% fewer and clearly fewer)`}.`);
-  return { claim: cfg.claim ?? 'A', validCases: valid, margins: M, endpoints: E, verdict, sentence, ...(axes.length ? { axes } : {}) };
+  return { ...base, verdict, sentence };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
+// RUN AS A SCRIPT only when this file is the one node was started on. The two paths are compared as real paths: node
+// resolves a symlink for the module and not for the argument, and on a path through one (macOS /tmp) a textual
+// comparison never matched, so the script exited 0 having written nothing.
+const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.url))) {
   const file = arg('--config') ?? fail('missing --config');
   const cfg = JSON.parse(readFileSync(file, 'utf8'));
   const result = analyse(cfg, (f) => jsonl(resolve(dirname(file), f)));

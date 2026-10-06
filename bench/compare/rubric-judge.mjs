@@ -6,15 +6,22 @@
 // bench/compare/closing-quality.mjs and judge-qualification.mjs read. Qualify the judge before its scores are used.
 //
 //   node bench/compare/rubric-judge.mjs --responses <responses.jsonl> --tasks <tasks.jsonl> --rubric <rubric.json> --out <scores.jsonl>
-//        [--judge <model>] [--pass 1] [--cap 10]
+//        [--judge <model>] [--pass 1] [--cap 10] [--max-tokens 6000]
 //   responses.jsonl  {case_id, trial, condition, response}: as bench/compare/run.mjs writes them
 //   rubric.json      {"name", "source", "scale": [1, 10], "dimensions": [{"name", "question"}]}
 //   --pass           the label shuffle's seed: judge twice with --pass 1 and --pass 2 into two files, one session each
+//   --max-tokens     the judge's output limit for one session, a positive whole number, recorded on every row
+//                    (`max_tokens`). Checked before anything is read or any client is made
 import { readFileSync, appendFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spend } from '../../dist/core/inference/client.js';
 import { arg, fail, clientFor, budgetOf } from '../../studies/harness/study-client.mjs';
 
+// THE JUDGE'S OUTPUT LIMIT. One session scores every arm of a case, each with notes: five pieces needed about 6,000
+// tokens in practice, and claim A sends seven. At the earlier limit of 1,500 a session was cut short, and a session
+// cut short is dropped as "not written", which quietly thins the reading. Raise it for more arms or longer notes.
+const MAX_TOKENS = Number(arg('--max-tokens', '6000'));
+if (!Number.isInteger(MAX_TOKENS) || MAX_TOKENS < 1) fail(`--max-tokens must be a positive whole number, and "${arg('--max-tokens')}" is not. Nothing was spent.`);
 const jsonl = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
 const RESP = jsonl(arg('--responses') ?? fail('missing --responses')); const TASKS = new Map(jsonl(arg('--tasks') ?? fail('missing --tasks')).map((t) => [t.id, t]));
 const RUBRIC = JSON.parse(readFileSync(arg('--rubric') ?? fail('missing --rubric'), 'utf8'));
@@ -37,12 +44,12 @@ for (const [key, rows] of groups) {
   const task = TASKS.get(rows[0].case_id) ?? fail(`no task ${rows[0].case_id}`);
   const raw = await spend(budget, 0.2, async () => {
     const x = await judge.complete({ stableBlock: SYSTEM, variableBlock: '', userMessage: `<brief>\n${task.prompt}\n</brief>\n\n${[...labelOf].map(([l, r]) => `<piece label="${l}">\n${r.response}\n</piece>`).join('\n\n')}`,
-      toolName: 'emit_scores', toolDescription: 'Return the scores of every labelled piece.', schema: SCHEMA, maxTokens: 1500, temperature: 0 });
+      toolName: 'emit_scores', toolDescription: 'Return the scores of every labelled piece.', schema: SCHEMA, maxTokens: MAX_TOKENS, temperature: 0 });
     return { value: x.json, cost: x.cost };
   });
   const got = new Map((raw?.pieces ?? []).map((p) => [p.label, p]));
   // A CASE IS WRITTEN WHOLE OR NOT AT ALL: a session that scored only some arms compares nothing, and is run again.
-  if ([...labelOf.keys()].some((l) => !got.has(l) || DIMS.some((d) => !(got.get(l)[d] >= LO && got.get(l)[d] <= HI)))) { console.error(`${rows[0].case_id} trial ${rows[0].trial}: the judge did not score every piece in range; not written`); continue; }
-  for (const [l, r] of labelOf) appendFileSync(OUT, `${JSON.stringify({ case_id: r.case_id, trial: r.trial, condition: r.condition, ...Object.fromEntries(DIMS.map((d) => [d, got.get(l)[d]])), notes: got.get(l).notes, pass: PASS })}\n`);
+  if ([...labelOf.keys()].some((l) => !got.has(l) || DIMS.some((d) => !(got.get(l)[d] >= LO && got.get(l)[d] <= HI)))) { console.error(`${rows[0].case_id} trial ${rows[0].trial}: the judge did not score every piece in range (a session cut short at --max-tokens ${MAX_TOKENS} reads like this); not written`); continue; }
+  for (const [l, r] of labelOf) appendFileSync(OUT, `${JSON.stringify({ case_id: r.case_id, trial: r.trial, condition: r.condition, ...Object.fromEntries(DIMS.map((d) => [d, got.get(l)[d]])), notes: got.get(l).notes, pass: PASS, max_tokens: MAX_TOKENS })}\n`);
   console.error(`${rows[0].case_id} trial ${rows[0].trial}: ${labelOf.size} arms judged  $${budget.spentUsd.toFixed(3)}`);
 }

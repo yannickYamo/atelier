@@ -68,7 +68,7 @@ function wordsCounted(m: Measurement): ((t: string) => number) | null {
  */
 export interface HeldBack { readonly tasks: readonly string[]; readonly texts: readonly string[] }
 
-/** Pick the pairs to ship with a standard, from every repair the skill's invocations recorded. */
+/** Pick the pairs to ship with a standard, from the repairs the skill's invocations recorded, test runs aside. */
 export function selectContrastPairs(invocations: readonly InvocationRecord[], v: StandardVersion,
   heldBack: HeldBack = { tasks: [], texts: [] }): ContrastPair[] {
   const reservedTask = new Set(heldBack.tasks.map((t) => t.trim()));
@@ -77,7 +77,9 @@ export function selectContrastPairs(invocations: readonly InvocationRecord[], v:
   const perRule = new Map<string, number>();
   const seen = new Set<string>();
   const out: ContrastPair[] = [];
-  const newestFirst = [...invocations].filter((i) => !reservedTask.has(i.input.trim())).sort((a, b) => b.at.localeCompare(a.at));
+  // A run made as a test (`invoke --test-run`, which the benchmark runner passes) is recorded and never learned from:
+  // a skill rebuilt after a benchmark would otherwise carry pairs taken from the benchmark's own answers.
+  const newestFirst = [...invocations].filter((i) => !i.settings?.flags.testRun && !reservedTask.has(i.input.trim())).sort((a, b) => b.at.localeCompare(a.at));
   for (const inv of newestFirst) {
     for (const p of inv.repair?.pairs ?? []) {
       if (out.length >= MAX_PAIRS) return out;

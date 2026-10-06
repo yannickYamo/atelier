@@ -17,8 +17,9 @@ import { isReplyWork } from '../../core/observers/formats.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
-import { selectContrastPairs } from '../../core/compiler/contrast-examples.js';
+import { selectContrastPairs, contrastFor } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
+import { piecesBreaking } from '../../core/observers/derive.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { onCorpusReader } from './discover.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -41,7 +42,7 @@ import { extract } from '../../core/intake/extract.js';
 
 import { describeMatrix, type Carrier } from '../../core/delivery/carrier-delivery.js';
 import { sha, DATA, die, argv, flag, projectDir, pickHost,
-  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel } from '../runtime.js';
+  loadSession, saveSession, step, runFile, numericFlag, orchestrated, proposerModel, adoptMovedRun } from '../runtime.js';
 
 // ── build ────────────────────────────────────────────────────────────────────────────────────
 /** Host is detected or forced. Atelier runs the same either way; only install location differs. */
@@ -283,6 +284,9 @@ export async function build(nameArg?: string): Promise<void> {
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
   // what failed. It used to surface a raw ENOENT with an absolute store path — technically accurate,
   // and useless to someone who has simply not minted a standard yet.
+  // A project folder that was moved or renamed has no run under its new path: the run that built this skill is found
+  // in the store and taken over, with a line saying so (cli/runtime.ts, `adoptMovedRun`).
+  if (!existsSync(runFile('pending-standard.json')) && adoptMovedRun(name)) s = loadSession();
   const pendingPath = runFile('pending-standard.json');
   if (!existsSync(pendingPath)) {
     die('there is no standard to build from yet.\n'
@@ -346,7 +350,15 @@ export async function build(nameArg?: string): Promise<void> {
   // The arrangement is COMPILED, not derived from the requirement list. That is what lets a skill
   // improve while the standard stands still.
   const arch = compileArchitecture(v);
-  const desc = flag('--description') ?? defaultDescription(v.workType);
+  // WHAT THE SKILL IS FOR IS KEPT THROUGH A REBUILD, like its voice and its class. A rebuild that changed nothing else
+  // used to replace the owner's description with the default one, in the line a host decides to load the skill by.
+  // Kept only while the skill is still for the same kind of work: a standard for other work under an old name does
+  // not inherit a sentence written for the first.
+  const before = ((): string | undefined => {
+    const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null;
+    return sv?.description && store.getStandard(L, sv.standardVersionHash)?.workType === v.workType ? sv.description : undefined;
+  })();
+  const desc = flag('--description') ?? before ?? defaultDescription(v.workType);
   // ── THE EXEMPLAR, WHEN THE OWNER NAMES ONE ──────────────────────────────────────────────────
   //
   // Never a reserved piece: that work is held back to test the skill blind, and a skill that ships it
@@ -391,10 +403,16 @@ export async function build(nameArg?: string): Promise<void> {
   }
   const contrastOff = contrastFlag === undefined ? store.getContrast(L).off : contrastFlag.trim().toLowerCase() === 'none';
   const heldBack = { tasks: (s.reservation?.reserved ?? []).map((u) => u.task), texts: (s.reservation?.reserved ?? []).map((u) => u.artifact) };
-  const contrast = { off: contrastOff, pairs: contrastOff ? [] : selectContrastPairs(store.listInvocations(L), v, heldBack) };
+  // CHOSEN ONCE AND KEPT. Pairs used to be chosen again on every build from every run in the store, so a rebuild
+  // that asked for nothing changed the skill: after a benchmark, a plain rebuild added pairs taken from benchmark
+  // answers. A first build chooses them; a rebuild keeps the ones the skill has, checked again against this standard;
+  // `--contrast auto`, given, chooses again. A run made as a test (`invoke --test-run`) never feeds them.
+  const rechoose = !store.getActive(L) || contrastFlag?.trim().toLowerCase() === 'auto';
+  const contrast = { off: contrastOff, pairs: contrastOff ? [] : rechoose ? selectContrastPairs(store.listInvocations(L), v, heldBack) : contrastFor(store.getContrast(L).pairs, v) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
   const voice = await chooseVoice(L, v);
+  reportOwnPieces(v, name);
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
@@ -516,6 +534,31 @@ export async function build(nameArg?: string): Promise<void> {
   reportInstalled(host, inst.installedAt, name, v, arch, pkg.packageHash);
   reportObservedBoundaries(arch, v, name);
   showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0);
+}
+
+/** Below this share of the author's own pieces meeting every counted required rule, the build names the rules to look at. */
+const OWN_PIECES_SHARE = 0.9;
+
+/**
+ * A GOLDEN CORPUS AGAINST ITS OWN STANDARD, said at every build: how many of the author's own pieces (the ones this
+ * run could use, never the reserve) meet every REQUIRED rule that is counted. A standard the author's best work
+ * fails is the wrong standard, and an output held to it is held to something the author does not do. Where fewer
+ * than nine pieces in ten pass, the rules most of them break are named with the command that makes each a
+ * preference. Nothing is changed here: what is required is the owner's to rule on.
+ */
+function reportOwnPieces(v: StandardVersion, name: string): void {
+  const own = sessionCorpus();
+  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED');
+  if (own.length < 3 || !rules.length) return;
+  const breaking = rules.flatMap((r) => (r.measurement ? [{ id: r.requirementId, pieces: piecesBreaking(own, r.measurement) }] : []));
+  const failing = new Set(breaking.flatMap((b) => b.pieces));
+  const passing = own.length - failing.size;
+  console.log(`Your own pieces: ${passing} of ${own.length} meet every required rule that is counted.`);
+  if (passing / own.length >= OWN_PIECES_SHARE) return;
+  const worst = breaking.filter((b) => b.pieces.length).sort((a, b) => b.pieces.length - a.pieces.length).slice(0, 5);
+  console.log('  A standard your own best work fails will fail drafts for things you do. The rules they break most:');
+  for (const b of worst) console.log(`    ${b.id}  broken by ${b.pieces.length} of your ${own.length} pieces    atelier amend --skill ${name} --rule ${b.id} --materiality PREFERRED --reason "my own pieces break it"`);
+  console.log('  A rule made a preference is still shown, still counted and still used to choose between drafts.');
 }
 
 /**

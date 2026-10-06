@@ -507,7 +507,9 @@ export interface InvocationSettings {
   readonly contextJudge?: string | null;
   readonly maxTokens: number;
   readonly temperature?: number;
-  readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean };
+  readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean;
+    /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
+    readonly testRun?: boolean };
 }
 
 export interface InvocationRecord {

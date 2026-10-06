@@ -137,7 +137,8 @@ function runtimeArm(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'compare-material-'));
   try {
     const withArgs = t.material ? (writeFileSync(join(tmp, 'material.md'), t.material), ['--with', `material=${join(tmp, 'material.md')}`]) : [];
-    const cmd = [resolve(runtimeSpec.cli), 'invoke', '--skill', runtimeSpec.skill, '--answer-only', '--target-model', model,
+    // A benchmark's runs are tests: marked so a later rebuild never learns its "write this, not that" pairs from them.
+    const cmd = [resolve(runtimeSpec.cli), 'invoke', '--skill', runtimeSpec.skill, '--answer-only', '--test-run', '--target-model', model,
       '--max-tokens', String(maxTokens), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
     const done = spawnSync(process.execPath, cmd, { cwd: runtimeSpec.proj, env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj },
       encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });

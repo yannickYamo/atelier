@@ -10,8 +10,19 @@
 //   F3 invents context             the answer names files, projects or results the task did not give
 //   F4 action not first            on a status or fix task, the first line is neither the answer nor an action
 //
-//   node bench/compare/failure-modes.mjs --responses <responses.jsonl> --tasks <tasks.jsonl> --out <modes.jsonl> [--reader claude-haiku-4-5] [--cap 5] [--code-only]
-//   tasks.jsonl: {id, prompt, wants?: "code" | "command" | "fix" | "status" | "explain"}; `wants` is sealed with the task.
+//   node bench/compare/failure-modes.mjs --responses <responses.jsonl> --tasks <tasks.jsonl> --out <modes.jsonl> [--reader claude-haiku-4-5] [--cap 5] [--code-only] [--legacy-tasks]
+//   tasks.jsonl: {id, prompt, wants: "code" | "command" | "fix" | "status" | "explain"}; `wants` is sealed with the task.
+//
+// `wants` IS REQUIRED: it says what the request asks for, and it is what lets code decide F1 and F4.
+//   code, fix   F1 is decided by code: the answer holds a code block, an indented line or inline code, or it fails
+//   command     F1 is decided by code: the answer holds a command, or it fails
+//   status, fix F4 is decided by code: the first line is the answer or an action, or it fails
+//   explain     nothing to deliver in a form code can see: F1 is left to the reader, F4 does not apply
+// Without it F1 always goes to the reader and F4 is never checked, so two task files would be read by two
+// instruments. The tasks file is checked whole before any answer is read: a task with no `wants`, or with a value
+// outside those five, stops the run (exit 2) naming the task. `--legacy-tasks` accepts tasks that have none (the 14
+// public cases and older development files), reads them as before and says so in one line; a value outside the five
+// is refused even then.
 //   Writes {case_id, trial, condition, F1, F2, F3, F4, failed, by}: `by` says which checks code decided.
 //   A strict refusal (response null) is a failed answer: F1 and F2.
 import { readFileSync, appendFileSync, existsSync } from 'node:fs';
@@ -51,6 +62,13 @@ const SCHEMA = { type: 'object', properties: { F1: { type: 'boolean' }, F3: { ty
 if (process.argv[1] && process.argv[1].endsWith('failure-modes.mjs')) {
   const RESP = jsonl(arg('--responses') ?? fail('missing --responses')); const TASKS = new Map(jsonl(arg('--tasks') ?? fail('missing --tasks')).map((t) => [t.id, t]));
   const OUT = arg('--out') ?? fail('missing --out');
+  const WANTS = ['code', 'command', 'fix', 'status', 'explain'];
+  const legacy = has('--legacy-tasks'); let without = 0;
+  for (const t of TASKS.values()) {
+    if (t.wants === undefined || t.wants === null) { if (!legacy) fail(`failure-modes: task ${t.id} has no \`wants\` (one of ${WANTS.join(', ')}), so code could not decide F1 or F4 on it. Add it to the tasks file, or pass --legacy-tasks for a file written before \`wants\` was required.`); without++; }
+    else if (!WANTS.includes(t.wants)) fail(`failure-modes: task ${t.id} has \`wants\` ${JSON.stringify(t.wants)}, which is not one of ${WANTS.join(', ')}.`);
+  }
+  if (legacy) console.error(`--legacy-tasks: ${without} of ${TASKS.size} tasks have no \`wants\`. On those F1 is left to the reader and F4 is not checked (recorded as false).`);
   const done = new Set(existsSync(OUT) ? jsonl(OUT).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}`) : []);
   const reader = has('--code-only') ? null : clientFor(arg('--reader', 'claude-haiku-4-5')); const budget = budgetOf(Number(arg('--cap', '5')), 100000);
   for (const r of RESP) {

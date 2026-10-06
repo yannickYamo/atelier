@@ -249,3 +249,26 @@ the commands in order:
 
 Neither calls a model.
 
+
+## The axis files of the closing claims (decision 0012)
+
+The signed bar is read on four axes: quality, rule anchor, repeatability and voice. Two scripts are sealed with the
+pre-registrations of claims A and A-w, and neither calls a model.
+
+- `axes.mjs` builds three of the four axis files from the raw readings, so that nobody builds them by hand after the
+  outputs exist: `node bench/compare/axes.mjs --config <axes.json> --out <dir>`. It reads the two judge reads, the
+  failure-mode rows and a person's resolutions (claim A) or the rubric and its threshold (claim A-w), and the
+  `atelier verify` rows, and writes `quality.jsonl`, `rule-anchor.jsonl` and `repeatability.jsonl`, each row
+  `{case_id, trial, condition, failed}`. A task or trial missing for an arm, a row twice, an unknown label, a value
+  of the wrong type, or two judge reads that disagree on a blocker with no person's decision, stops the run (exit 2)
+  naming the row. Voice is not built: people read it blind, and their choices `{case_id, reader, chose}` are the
+  fourth file as they stand. The config and the rules are in the script's header.
+- `closing-quality.mjs` reads the claim. When its config has `axes`, the verdict comes from the axes alone; the
+  earlier endpoints (P1 to P6, the readers' preference, the counted harms) are still reported and decide nothing.
+  The config names the axes the claim needs (`requiredAxes`) and the sealed `tasks`, `trials` and `readers`. Every
+  required axis must be given, and each file must cover exactly its sealed tasks for both arms: every task and
+  trial once, or every reader's choice once on voice. An axis that is absent, short, holds a task that is not
+  sealed, repeats a row or has a `failed` that is not true or false makes the claim UNRESOLVED, with the axis and
+  the first row at fault in the sentence. With every required axis covered the claim is a PASS when each is reached
+  or not applicable, and a FAIL when one is not reached. An axis is not applicable only when it is fully covered
+  and the hand-written skill never failed on it; it does not block a pass.

@@ -21,7 +21,8 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
-import { deriveMeasuredRules } from '../../core/observers/derive.js';
+import { deriveMeasuredRules, piecesBreaking } from '../../core/observers/derive.js';
+import type { Measurement } from '../../core/state/canonical-state.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
@@ -333,12 +334,17 @@ export async function discover(): Promise<void> {
   // with their measurement attached, over the pieces discovery was allowed to read (never the
   // reserve). They go on the same screen and take the same ruling as everything else.
   const readIds = new Set(openGoldens.filter((g) => g.role === 'PROPOSAL').map((g) => g.contextId));
+  // THE AUTHOR'S OWN PIECES, AGAINST EACH COUNTED RULE (core/observers/derive.ts, `piecesBreaking`): the pieces read
+  // and the pieces held out, in one fixed order, never the reserve. Recorded with each rule so the review can hold
+  // its suggestions to the corpus they describe.
+  const ownPieces = openItems.filter((i) => readIds.has(i.id) || heldIds.has(i.id)).map((i) => i.text);
+  const corpusOf = (r: { measurement?: Measurement | null }): ProposalMeta['corpus'] => (r.measurement ? { pieces: ownPieces.length, breaking: piecesBreaking(ownPieces, r.measurement) } : null);
   const measured = deriveMeasuredRules(openItems.filter((i) => readIds.has(i.id)), openItems.filter((i) => heldIds.has(i.id)), sourceProvenance());
   if (measured.length) {
     console.log(`${measured.length} measurable rule(s) counted from the same pieces: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
     proposals = [...proposals, ...measured.map((m) => m.requirement)];
     proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
-      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance } satisfies ProposalMeta])) };
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance, corpus: corpusOf(m.requirement) } satisfies ProposalMeta])) };
   }
   // ── WHAT THE MODEL DOES THAT THE AUTHOR DOESN'T ───────────────────────────────────────────────
   //
@@ -403,7 +409,7 @@ export async function discover(): Promise<void> {
     console.log(`${contrast.length} rule(s) ${from}: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
     proposals = [...proposals, ...contrast.map((c) => c.requirement)];
     proposalMeta = { ...proposalMeta, ...Object.fromEntries(contrast.map((c) => [c.requirement.requirementId, {
-      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance } satisfies ProposalMeta])) };
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance, corpus: corpusOf(c.requirement) } satisfies ProposalMeta])) };
     // An addition to what is already saved, not a second save of the run.
     saveSession({ ...loadSession(), proposals, proposalMeta });
   }

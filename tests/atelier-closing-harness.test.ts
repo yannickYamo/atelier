@@ -4,8 +4,8 @@
 // is truly equal passes, an arm that is clearly worse fails, a clear loss trips a guard, and too few cases is
 // UNRESOLVED. The benchmark runner refuses to start when it could not see what a call costs.
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, symlinkSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { mulberry32 } from '../core/fidelity/qualify.js';
@@ -208,5 +208,368 @@ describe('one binary check per failure mode', () => {
     expect(of('t3', 'a')).toMatchObject({ F4: true, failed: true });
     expect(of('t3', 'b')).toMatchObject({ F4: false });
     expect(of('t3', 'c')).toMatchObject({ F1: true, F2: true, failed: true });
+  });
+});
+
+/** Like `node`, with what the script said on stderr kept when it succeeds too: a summary line is output. */
+const nodeAll = (script: string, ...args: string[]): { code: number; out: string } => {
+  const r = spawnSync('node', [resolve(script), ...args], { encoding: 'utf8' });
+  return { code: r.status ?? -1, out: `${r.stdout}${r.stderr}` };
+};
+
+// ── THE AXES DECIDE THE CLAIM, AND ONLY WHEN EACH COVERS ITS SEALED TASKS ───────────────────────────
+describe('with axes given, the verdict comes from the axes alone, each held against the sealed tasks', () => {
+  type Rows = Record<'quality' | 'rule anchor' | 'repeatability' | 'voice', Record<string, unknown>[]>;
+  interface Opts { fail?: Partial<Record<keyof Rows, [candidate: number, handwritten: number]>>; edit?: (rows: Rows) => void; config?: (c: Record<string, unknown>) => void }
+  const NAMES = ['quality', 'rule anchor', 'repeatability', 'voice'] as const;
+  /**
+   * Forty sealed tasks, two outputs each, three voice readers. On each axis the candidate fails the first `c` tasks
+   * and the hand-written skill the first `h`; on voice a task is lost by the arm two of its three readers passed over.
+   * The judge's scores put the candidate two points under the hand-written skill, so the retired endpoint P2 fails.
+   */
+  function sealed(o: Opts = {}): string {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-sealed-'));
+    const rows: Rows = { quality: [], 'rule anchor': [], repeatability: [], voice: [] }; const scores: object[] = [];
+    const of = (name: keyof Rows): [number, number] => o.fail?.[name] ?? [4, 20];
+    for (let t = 0; t < 40; t++) {
+      for (const [condition, arm] of [['plugin', 0], ['hand', 1]] as const) {
+        for (const trial of [1, 2]) {
+          rows.quality.push({ case_id: `t${t}`, trial, condition, failed: t < of('quality')[arm] });
+          rows['rule anchor'].push({ case_id: `t${t}`, trial, condition, failed: t < of('rule anchor')[arm] });
+          scores.push({ case_id: `t${t}`, trial, condition, ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, arm === 0 ? 2 : 4])), blocker: false });
+        }
+        rows.repeatability.push({ case_id: `t${t}`, trial: 1, condition, failed: t < of('repeatability')[arm] });
+      }
+      const lost = t < of('voice')[0];
+      for (const reader of [1, 2, 3]) rows.voice.push({ case_id: `t${t}`, reader, chose: (reader === 3) !== lost ? 'comparator' : 'candidate' });
+    }
+    o.edit?.(rows);
+    for (const n of NAMES) writeFileSync(join(dir, `${n.replace(' ', '-')}.jsonl`), jsonl(rows[n]));
+    writeFileSync(join(dir, 'scores.jsonl'), jsonl(scores));
+    writeFileSync(join(dir, 'tasks.jsonl'), jsonl(Array.from({ length: 40 }, (_, t) => ({ id: `t${t}`, prompt: 'x' }))));
+    const c: Record<string, unknown> = { claim: 'A', k: 20, weights: WEIGHTS, scores: ['scores.jsonl'], conditions: { handwritten: 'hand', candidate: 'plugin' }, margins: { handwritten: 0 },
+      axes: NAMES.map((name) => ({ name, file: `${name.replace(' ', '-')}.jsonl` })), requiredAxes: [...NAMES], tasks: 'tasks.jsonl', trials: 2, readers: 3 };
+    o.config?.(c);
+    writeFileSync(join(dir, 'config.json'), JSON.stringify(c));
+    return join(dir, 'config.json');
+  }
+  interface Axis { axis: string; pass: boolean | null; state: string; candidate: number | null; handwritten: number | null; problem?: string }
+  interface Verdict { verdict: string; sentence: string; axes: string[]; endpoints: { P2: { pass: boolean }[]; AXES: Axis[] } }
+  const run = (o: Opts = {}): Verdict => JSON.parse(node('bench/compare/closing-quality.mjs', '--config', sealed(o)).out) as Verdict;
+  const axisOf = (r: Verdict, name: string): Axis => r.endpoints.AXES.find((x) => x.axis === name)!;
+
+  it('every required axis reached is a PASS though a retired endpoint is low, and the sentence is built from the axes', () => {
+    const r = run();
+    expect(r.endpoints.P2[0].pass).toBe(false);
+    expect(r.endpoints.AXES.map((x) => x.state)).toEqual(['reached', 'reached', 'reached', 'reached']);
+    expect(axisOf(r, 'voice')).toMatchObject({ candidate: 0.1, handwritten: 0.9 });
+    expect(r.verdict).toBe('PASS');
+    expect(r.sentence).toMatch(/^On 40 coding tasks it never saw, the Atelier plug-in built from 20 examples met the signed bar against the hand-written skill on all 4 required axes\. Quality: 10% failed against 50% for the hand-written skill, 80% fewer \(reached/);
+    expect(r.sentence).not.toMatch(/scored higher|not worse overall/);
+    // the same files with no axes are read on the endpoints, as before: the low endpoint fails the claim
+    const before = run({ config: (c) => { delete c.axes; delete c.requiredAxes; } });
+    expect(before.verdict).toBe('FAIL');
+    expect(before.sentence).toMatch(/failed "scores higher than the hand-written skill"/);
+  });
+  it('a required axis with no file is UNRESOLVED and named; so is a config that requires none', () => {
+    const r = run({ config: (c) => { c.axes = (c.axes as { name: string }[]).filter((a) => a.name !== 'voice'); } });
+    expect(r.verdict).toBe('UNRESOLVED');
+    expect(r.sentence).toBe('The quality comparison did not complete: the required axis "voice" is missing from `axes`. It is closed without a result.');
+    expect(r.axes.at(-1)).toBe('voice: required, and not given.');
+    const none = run({ config: (c) => { delete c.requiredAxes; } });
+    expect(none.verdict).toBe('UNRESOLVED');
+    expect(none.sentence).toMatch(/the config names no `requiredAxes`/);
+    // an axis nobody requires does not decide: three required and reached is a PASS with the fourth left out
+    expect(run({ config: (c) => { c.requiredAxes = ['quality', 'rule anchor', 'repeatability']; c.axes = (c.axes as { name: string }[]).filter((a) => a.name !== 'voice'); } }).verdict).toBe('PASS');
+  });
+  it('an axis that does not cover exactly the sealed tasks is UNRESOLVED, naming the axis and the first row at fault', () => {
+    const short = run({ edit: (f) => { f.quality.splice(1, 1); } });
+    expect(short.verdict).toBe('UNRESOLVED');
+    expect(short.sentence).toMatch(/the quality axis does not cover its sealed tasks: 1 of 160 rows are missing \(first: t0 trial 2 for "plugin"\)/);
+    expect(axisOf(short, 'quality')).toMatchObject({ state: 'not covered', pass: null, candidate: null });
+    const twice = run({ edit: (f) => { f['rule anchor'].push(f['rule anchor'][0]); } });
+    expect(twice.verdict).toBe('UNRESOLVED');
+    expect(twice.sentence).toMatch(/the rule anchor axis does not cover its sealed tasks: a row appears twice: \{"case_id":"t0","trial":1,"condition":"plugin","failed":true\}/);
+    const unknown = run({ edit: (f) => { f.repeatability.push({ case_id: 't99', trial: 1, condition: 'hand', failed: false }); } });
+    expect(unknown.verdict).toBe('UNRESOLVED');
+    expect(unknown.sentence).toMatch(/the repeatability axis does not cover its sealed tasks: a row is for a task that is not sealed for this axis: \{"case_id":"t99"/);
+    const untyped = run({ edit: (f) => { f.quality[5].failed = 'no'; } });
+    expect(untyped.verdict).toBe('UNRESOLVED');
+    expect(untyped.sentence).toMatch(/the quality axis .* `failed` is not true or false/);
+    const readers = run({ edit: (f) => { f.voice.pop(); } });
+    expect(readers.verdict).toBe('UNRESOLVED');
+    expect(readers.sentence).toMatch(/the voice axis does not cover its sealed tasks: 1 of 40 tasks do not have 3 readers' choices \(first: t39 has 2\)/);
+    // with no sealed tasks to hold the files against, nothing can be called covered
+    expect(run({ config: (c) => { delete c.tasks; } }).sentence).toMatch(/no readable `tasks` and whole-number `trials`/);
+  });
+  it('an axis read on part of the tasks names them, and is held to exactly those', () => {
+    const part = Array.from({ length: 20 }, (_, t) => `t${t}`);
+    const onPart = (rows: Rows): void => { rows.voice = rows.voice.filter((r) => part.includes(r.case_id as string)); };
+    const voiceTasks = (c: Record<string, unknown>): void => { (c.axes as { name: string; tasks?: string[] }[]).find((a) => a.name === 'voice')!.tasks = part; };
+    const r = run({ edit: onPart, config: voiceTasks });
+    expect(r.verdict).toBe('PASS');
+    expect(axisOf(r, 'voice')).toMatchObject({ state: 'reached', candidate: 0.2, handwritten: 0.8 });
+    expect(run({ edit: onPart }).verdict).toBe('UNRESOLVED');
+  });
+  it('a required axis that is covered and not reached is a FAIL, with every axis in the sentence', () => {
+    const r = run({ fail: { quality: [18, 20] } });
+    expect(axisOf(r, 'quality')).toMatchObject({ state: 'not reached', pass: false });
+    expect(r.verdict).toBe('FAIL');
+    expect(r.sentence).toMatch(/did not meet the signed bar against the hand-written skill: quality not reached\. Quality: 45% failed against 50% for the hand-written skill, 10% fewer \(not reached.*Voice: 10% failed against 90%/);
+  });
+  it('an axis the hand-written skill never failed is not applicable only when fully covered, and then does not block a PASS', () => {
+    const r = run({ fail: { quality: [0, 0] } });
+    expect(axisOf(r, 'quality')).toMatchObject({ state: 'not applicable', pass: null });
+    expect(r.verdict).toBe('PASS');
+    expect(r.axes[0]).toBe('quality: the hand-written skill never failed on the 40 tasks, all covered: nothing to reduce, so the axis is not applicable and does not block a pass.');
+    // the candidate failing where the hand-written skill never did is a miss
+    expect(run({ fail: { quality: [3, 0] } }).verdict).toBe('FAIL');
+    // and short of its tasks the same axis is not read at all
+    const short = run({ fail: { quality: [0, 0] }, edit: (f) => { f.quality.pop(); } });
+    expect(axisOf(short, 'quality').state).toBe('not covered');
+    expect(short.verdict).toBe('UNRESOLVED');
+  });
+  it('fewer judged cases than the sealed minimum is UNRESOLVED whatever the axes say', () => {
+    expect(run({ config: (c) => { c.minUnits = 30; } }).verdict).toBe('PASS');
+    const r = run({ config: (c) => { c.minUnits = 280; } });
+    expect(r.verdict).toBe('UNRESOLVED');
+    expect(r.sentence).toMatch(/only 40 cases have every arm judged, under the minimum of 280/);
+  });
+});
+
+// ── THE AXIS FILES ARE BUILT BY A SEALED SCRIPT, NOT BY HAND ────────────────────────────────────────
+describe('the axis files are built from the raw readings by a rule fixed before the run', () => {
+  type Row = Record<string, unknown>;
+  interface Inputs { tasks: Row[]; one: Row[]; two: Row[]; modes: Row[]; resolutions: Row[]; verify: Row[] }
+  type Failed = { case_id: string; trial: number; condition: string; failed: boolean }[];
+  const mode = (case_id: string, trial: number, condition: string, F1: boolean): Row => ({ case_id, trial, condition, F1, F2: false, F3: false, F4: false, failed: F1, unread: 0, by: { F1: 'code', F2: 'code', F3: 'reader', F4: 'code' } });
+  /** Claim A, five tasks, two outputs. The hand-written skill is clean and breaks a rule everywhere; the candidate's rows are set by `plugin`. */
+  function claimA(plugin: Record<string, { blocker: [boolean, boolean][]; decided?: (boolean | null)[]; mode?: boolean[]; broken: boolean[] }>): Inputs {
+    const f: Inputs = { tasks: [], one: [], two: [], modes: [], resolutions: [], verify: [] };
+    for (const [id, p] of Object.entries(plugin)) {
+      f.tasks.push({ id, prompt: 'x', wants: 'code' });
+      for (const trial of [1, 2]) {
+        const [a, b] = p.blocker[trial - 1]; const who = p.decided?.[trial - 1] ?? null;
+        f.one.push({ case_id: id, trial, condition: 'plugin', blocker: a }, { case_id: id, trial, condition: 'hand', blocker: false }, { case_id: id, trial, condition: 'bare', blocker: true });
+        f.two.push({ case_id: id, trial, condition: 'plugin', blocker: b }, { case_id: id, trial, condition: 'hand', blocker: false });
+        if (who !== null) f.resolutions.push({ case_id: id, trial, condition: 'plugin', blocker: who });
+        f.modes.push(mode(id, trial, 'plugin', p.mode?.[trial - 1] ?? false), mode(id, trial, 'hand', false));
+        f.verify.push({ case_id: id, trial, condition: 'plugin', broken: p.broken[trial - 1] }, { case_id: id, trial, condition: 'hand', broken: true });
+      }
+    }
+    return f;
+  }
+  const SMALL = {
+    t1: { blocker: [[false, false], [false, false]] as [boolean, boolean][], broken: [false, false] },                                   // clean twice
+    t2: { blocker: [[true, true], [false, false]] as [boolean, boolean][], broken: [false, false] },                                     // a blocker both reads agree on, once
+    t3: { blocker: [[true, false], [false, true]] as [boolean, boolean][], decided: [true, false], broken: [false, false] },             // the reads disagree: the person decides
+    t4: { blocker: [[false, false], [false, false]] as [boolean, boolean][], mode: [true, true], broken: [true, true] },                 // a named failure mode alone, both times
+    t5: { blocker: [[false, false], [false, false]] as [boolean, boolean][], broken: [true, false] },                                    // a rule broken once
+  };
+  /** Writes the inputs and the config, runs the script. `out` is beside the inputs unless given. */
+  function build(f: Inputs, more: Record<string, unknown> = {}, outOf: (dir: string) => string = (dir) => join(dir, 'axes')): { code: number; out: string; dir: string; read: (file: string, arm: string) => boolean[] } {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-axes-'));
+    for (const [name, rows] of Object.entries(f)) writeFileSync(join(dir, `${name}.jsonl`), jsonl(rows as Row[]));
+    const claim = more.claim ?? 'A';
+    writeFileSync(join(dir, 'axes.json'), JSON.stringify({ claim, tasks: 'tasks.jsonl', trials: 2, candidate: 'plugin', handwritten: 'hand', others: ['bare'], reads: ['one.jsonl', 'two.jsonl'], verify: 'verify.jsonl',
+      ...(claim === 'A' ? { modes: 'modes.jsonl', resolutions: 'resolutions.jsonl' } : { rubric: resolve('bench/compare/rubrics/stop-slop.json') }), ...more }));
+    const r = nodeAll('bench/compare/axes.mjs', '--config', join(dir, 'axes.json'), '--out', outOf(dir));
+    const read = (file: string, arm: string): boolean[] => (readFileSync(join(outOf(dir), file), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as Failed[number])).filter((x) => x.condition === arm).map((x) => x.failed);
+    return { ...r, dir, read };
+  }
+  const refused = (r: { code: number; out: string; dir: string }, why: RegExp): void => {
+    expect(r.code, r.out).toBe(2);
+    expect(r.out).toMatch(why);
+    for (const file of ['quality.jsonl', 'rule-anchor.jsonl', 'repeatability.jsonl']) expect(existsSync(join(r.dir, 'axes', file))).toBe(false);
+  };
+
+  it('claim A: an agreed blocker, a disagreement a person decided, and a named failure mode alone each fail quality', () => {
+    const r = build(claimA(SMALL));
+    expect(r.code, r.out).toBe(0);
+    //                                             t1            t2           t3           t4          t5
+    expect(r.read('quality.jsonl', 'plugin')).toEqual([false, false, true, false, true, false, true, true, false, false]);
+    expect(r.read('quality.jsonl', 'hand')).toEqual(Array.from({ length: 10 }, () => false));
+    expect(r.read('rule-anchor.jsonl', 'plugin')).toEqual([false, false, false, false, false, false, true, true, true, false]);
+    expect(r.read('rule-anchor.jsonl', 'hand')).toEqual(Array.from({ length: 10 }, () => true));
+    expect(r.out).toMatch(/quality: "plugin" 4 of 10 answers failed, "hand" 0 of 10 answers failed · 2 of 20 blockers decided by a person/);
+    expect(r.out).toMatch(/voice is not built here/);
+  });
+  it('repeatability fails exactly the tasks whose two outputs differ, on quality or on the rule verdict', () => {
+    const r = build(claimA(SMALL));
+    // t2 and t3 differ on quality, t5 on the rule; t4 fails both times and is repeated
+    expect(r.read('repeatability.jsonl', 'plugin')).toEqual([false, true, true, false, true]);
+    expect(r.read('repeatability.jsonl', 'hand')).toEqual([false, false, false, false, false]);
+    // two outputs that each break a rule, and not the same rule, differ on a rule's verdict
+    const f = claimA(SMALL);
+    for (const v of f.verify) v.rules = v.broken === true ? [v.condition === 'plugin' && v.case_id === 't4' ? `R${String(v.trial)}` : 'R1'] : [];
+    expect(build(f).read('repeatability.jsonl', 'plugin')).toEqual([false, true, true, true, true]);
+  });
+  it('claim A-w: a piece under the rubric\'s line on both reads fails quality; under it on one read does not', () => {
+    const f = claimA({ t1: SMALL.t1, t2: SMALL.t1 });
+    const scored = (rows: Row[], totals: Record<string, number>): Row[] => rows.filter((r) => r.condition !== 'bare').map(({ blocker: _blocker, ...r }) => {
+      const total = r.condition === 'plugin' ? totals[`${String(r.case_id)}.${String(r.trial)}`] : 40;
+      return { ...r, Directness: total - 28, Rhythm: 7, Trust: 7, Authenticity: 7, Density: 7 };
+    });
+    f.one = scored(f.one, { 't1.1': 30, 't1.2': 30, 't2.1': 34, 't2.2': 35 });
+    f.two = scored(f.two, { 't1.1': 32, 't1.2': 36, 't2.1': 34, 't2.2': 34 });
+    const r = build(f, { claim: 'A-w' });
+    expect(r.code, r.out).toBe(0);
+    // t1: under 35 twice, then under on one read only. t2: 34 and 34, then exactly 35 on one read
+    expect(r.read('quality.jsonl', 'plugin')).toEqual([true, false, true, false]);
+    expect(r.read('quality.jsonl', 'hand')).toEqual([false, false, false, false]);
+    // in writing a brief's pieces are held to the rule verdict alone: these differ on quality and on no rule
+    expect(r.read('repeatability.jsonl', 'plugin')).toEqual([false, false]);
+    const unscored = claimA({ t1: SMALL.t1 });
+    refused(build(unscored, { claim: 'A-w' }), /judge read 1 one\.jsonl: t1 trial 1 \(plugin\) has no number for "Directness"/);
+  });
+  it('input that is not whole is refused, naming the row, and nothing is written', () => {
+    const drop = (rows: Row[], id: string, trial: number, arm: string): Row[] => rows.filter((r) => !(r.case_id === id && r.trial === trial && r.condition === arm));
+    const f = (edit: (x: Inputs) => void): Inputs => { const x = claimA(SMALL); edit(x); return x; };
+    refused(build(f((x) => { x.verify = drop(x.verify, 't2', 2, 'plugin'); })), /verify verify\.jsonl: t2 trial 2 is missing for "plugin"/);
+    refused(build(f((x) => { x.one = drop(x.one, 't4', 1, 'hand'); })), /judge read 1 one\.jsonl: t4 trial 1 is missing for "hand"/);
+    refused(build(f((x) => { x.modes.push(x.modes[0]); })), /failure modes modes\.jsonl: t1 trial 1 \(plugin\) appears twice/);
+    refused(build(f((x) => { x.resolutions = drop(x.resolutions, 't3', 2, 'plugin'); })), /t3 trial 2 \(plugin\): the two judge reads disagree on the blocker and resolutions\.jsonl has no row for it/);
+    refused(build(f((x) => { x.resolutions.push({ case_id: 't1', trial: 1, condition: 'plugin', blocker: true }); })), /t1 trial 1 \(plugin\) is resolved, and the two judge reads agree/);
+    refused(build(f((x) => { x.verify[0].broken = 'yes'; })), /verify verify\.jsonl: t1 trial 1 \(plugin\) has `broken` "yes", which is not true or false/);
+    refused(build(f((x) => { x.two.push({ case_id: 't9', trial: 1, condition: 'hand', blocker: false }); })), /"t9", which is not a task of tasks\.jsonl/);
+    refused(build(f((x) => { x.modes[0] = { ...x.modes[0], F3: null, unread: 1 }; })), /t1 trial 1 \(plugin\) has a check that nobody read/);
+    // "bare" is in the judge's file: it is passed over only because the config lists it
+    refused(build(claimA(SMALL), { others: [] }), /condition "bare", which is neither arm \("plugin", "hand"\) nor listed in "others"/);
+  });
+  it('--out may not be the inputs\' directory, nor hold an input', () => {
+    const own = build(claimA(SMALL), {}, (dir) => dir);
+    expect(own.code).toBe(2);
+    expect(own.out).toMatch(/--out must be a directory of its own/);
+    expect(existsSync(join(own.dir, 'quality.jsonl'))).toBe(false);
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-axes-in-'));
+    mkdirSync(join(dir, 'in')); mkdirSync(join(dir, 'out'));
+    const f = claimA(SMALL);
+    for (const [name, rows] of Object.entries(f)) writeFileSync(join(dir, name === 'verify' ? 'out' : 'in', `${name}.jsonl`), jsonl(rows as Row[]));
+    writeFileSync(join(dir, 'in', 'axes.json'), JSON.stringify({ claim: 'A', tasks: 'tasks.jsonl', trials: 2, candidate: 'plugin', handwritten: 'hand', others: ['bare'], reads: ['one.jsonl', 'two.jsonl'], modes: 'modes.jsonl', resolutions: 'resolutions.jsonl', verify: '../out/verify.jsonl' }));
+    const held = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes.json'), '--out', join(dir, 'out'));
+    expect(held.code).toBe(2);
+    expect(held.out).toMatch(/\.\.\/out\/verify\.jsonl is inside --out/);
+    expect(existsSync(join(dir, 'out', 'verify.jsonl'))).toBe(true);
+  });
+  it('end to end: the files it writes are the axes closing-quality.mjs requires, and the claim is read on them', () => {
+    // Thirty tasks. The hand-written skill has an agreed blocker on twenty and the candidate on three; rules are
+    // broken, and broken on one output only, far more often by the hand-written skill.
+    const plugin = Object.fromEntries(Array.from({ length: 30 }, (_, t) => [`t${String(t).padStart(2, '0')}`, { blocker: [[t < 3, t < 3], [t < 3, t < 3]] as [boolean, boolean][], broken: [t < 4, t < 2] }]));
+    const f = claimA(plugin);
+    const n = (r: Row): number => Number(String(r.case_id).slice(1));
+    for (const r of [...f.one, ...f.two]) if (r.condition === 'hand') r.blocker = n(r) < 20;
+    for (const r of f.verify) if (r.condition === 'hand') r.broken = r.trial === 1 ? n(r) < 25 : n(r) < 10;
+    const built = build(f);
+    expect(built.code, built.out).toBe(0);
+    expect(built.read('repeatability.jsonl', 'hand').filter(Boolean)).toHaveLength(15);
+    expect(built.read('repeatability.jsonl', 'plugin').filter(Boolean)).toHaveLength(2);
+    const voice = f.tasks.flatMap((t, i) => [1, 2, 3].map((reader) => ({ case_id: t.id, reader, chose: (reader === 3) !== i < 5 ? 'comparator' : 'candidate' })));
+    writeFileSync(join(built.dir, 'voice.jsonl'), jsonl(voice));
+    writeFileSync(join(built.dir, 'scores.jsonl'), jsonl(f.one.map((r) => ({ ...r, ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, 4])) }))));
+    const config = { claim: 'A', k: 20, weights: WEIGHTS, scores: ['scores.jsonl'], conditions: { handwritten: 'hand', candidate: 'plugin' }, tasks: 'tasks.jsonl', trials: 2, readers: 3, minUnits: 30,
+      requiredAxes: ['quality', 'rule anchor', 'repeatability', 'voice'],
+      axes: [{ name: 'quality', file: 'axes/quality.jsonl' }, { name: 'rule anchor', file: 'axes/rule-anchor.jsonl' }, { name: 'repeatability', file: 'axes/repeatability.jsonl' }, { name: 'voice', file: 'voice.jsonl' }] };
+    writeFileSync(join(built.dir, 'closing.json'), JSON.stringify(config));
+    const r = JSON.parse(node('bench/compare/closing-quality.mjs', '--config', join(built.dir, 'closing.json')).out) as { verdict: string; axes: string[]; endpoints: { AXES: { state: string; candidate: number; handwritten: number }[] } };
+    expect(r.endpoints.AXES.map((x) => x.state)).toEqual(['reached', 'reached', 'reached', 'reached']);
+    expect(r.endpoints.AXES[0]).toMatchObject({ candidate: 0.1, handwritten: 0.667 });
+    expect(r.endpoints.AXES[2]).toMatchObject({ candidate: 0.067, handwritten: 0.5 });
+    expect(r.verdict).toBe('PASS');
+    // the same claim with one built file a row short is not read
+    const quality = readFileSync(join(built.dir, 'axes', 'quality.jsonl'), 'utf8').trim().split('\n');
+    writeFileSync(join(built.dir, 'axes', 'quality.jsonl'), `${quality.slice(1).join('\n')}\n`);
+    expect((JSON.parse(node('bench/compare/closing-quality.mjs', '--config', join(built.dir, 'closing.json')).out) as { verdict: string }).verdict).toBe('UNRESOLVED');
+  });
+});
+
+describe('the rubric judge\'s output limit is an argument, checked before anything is spent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atelier-rubric-'));
+  writeFileSync(join(dir, 'tasks.jsonl'), jsonl([{ id: 'b1', prompt: 'Write the note.' }]));
+  writeFileSync(join(dir, 'responses.jsonl'), jsonl([{ case_id: 'b1', trial: 1, condition: 'a', response: 'One.' }, { case_id: 'b1', trial: 1, condition: 'b', response: 'Two.' }]));
+  const out = join(dir, 'scores.jsonl');
+  /** The judge with no key and no backend: it can get as far as making its client, and no further. */
+  const judge = (...args: string[]): { code: number; out: string } => {
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(ANTHROPIC|OPENAI)_/.test(k)));
+    try { return { code: 0, out: execFileSync('node', [resolve('bench/compare/rubric-judge.mjs'), ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env }) }; }
+    catch (e) { const x = e as { status?: number; stdout?: string; stderr?: string }; return { code: x.status ?? -1, out: `${x.stdout ?? ''}${x.stderr ?? ''}` }; }
+  };
+  const files = ['--responses', join(dir, 'responses.jsonl'), '--tasks', join(dir, 'tasks.jsonl'), '--rubric', resolve('bench/compare/rubrics/stop-slop.json'), '--out', out];
+  it('a limit that is not a positive whole number is refused before a client is made', () => {
+    for (const bad of ['0', '-5', '1.5', 'many']) {
+      const r = judge(...files, '--max-tokens', bad);
+      expect(r.code, bad).toBe(2);
+      expect(r.out, bad).toMatch(/--max-tokens must be a positive whole number/);
+      expect(r.out, bad).not.toMatch(/ANTHROPIC_API_KEY/);
+    }
+  });
+  it('a valid limit, and the default, get as far as the client, which has no key', () => {
+    for (const ok of [['--max-tokens', '2000'], []]) {
+      const r = judge(...files, ...ok);
+      expect(r.code).toBe(2);
+      expect(r.out).toMatch(/ANTHROPIC_API_KEY is not set\. Nothing was spent\./);
+      expect(r.out).not.toMatch(/--max-tokens/);
+    }
+    expect(existsSync(out)).toBe(false);
+  });
+});
+
+describe('a sealed script runs when it is reached through a symlink', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atelier-link-'));
+  // macOS /tmp is such a path. Where the platform does not let a test make a link, there is nothing to run.
+  let linked = true;
+  try { symlinkSync(resolve('bench/compare'), join(dir, 'compare'), 'dir'); } catch { linked = false; }
+  it.skipIf(!linked)('closing-quality.mjs prints and writes its result', () => {
+    const out = join(dir, 'closing.json');
+    const r = node(join(dir, 'compare', 'closing-quality.mjs'), '--config', fixture(150, 0, { candidate: 0.1, handwritten: 0.1 }), '--out', out);
+    expect(r.code, r.out).toBe(0);
+    expect((JSON.parse(r.out) as { verdict: string }).verdict).toBe('PASS');
+    expect((JSON.parse(readFileSync(out, 'utf8')) as { verdict: string }).verdict).toBe('PASS');
+  });
+  it.skipIf(!linked)('efficiency-select.mjs prints and writes its result', () => {
+    const rules: object[] = []; const quality: object[] = [];
+    for (let t = 0; t < 4; t++) for (const condition of ['full', 'lean']) for (const trial of [1, 2]) { rules.push({ case_id: `t${t}`, trial, condition, broken: false }); quality.push({ case_id: `t${t}`, trial, condition, score: 40 }); }
+    writeFileSync(join(dir, 'sizes.json'), JSON.stringify({ full: 9000, lean: 4000 })); writeFileSync(join(dir, 'rules.jsonl'), jsonl(rules)); writeFileSync(join(dir, 'quality.jsonl'), jsonl(quality));
+    writeFileSync(join(dir, 'ablation.json'), JSON.stringify({ reference: 'full', arms: ['lean'], defaultable: ['lean'], margins: { rules: 0.05, quality: 1 }, minTasks: 2, ceiling: 0.85, trials: 2,
+      domains: [{ name: 'blog', sizes: 'sizes.json', rules: 'rules.jsonl', quality: ['quality.jsonl'], voice: null }] }));
+    const out = join(dir, 'selected.json');
+    const r = node(join(dir, 'compare', 'efficiency-select.mjs'), '--config', join(dir, 'ablation.json'), '--out', out);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/SELECTED: "lean"/);
+    expect((JSON.parse(readFileSync(out, 'utf8')) as { selected: string }).selected).toBe('lean');
+  });
+});
+
+describe('what a task asks for is sealed with it, so code decides the same checks on every task', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atelier-wants-'));
+  writeFileSync(join(dir, 'responses.jsonl'), jsonl([{ case_id: 't1', trial: 1, condition: 'a', response: 'You should cover the leap year. Want me to write it?' }, { case_id: 't2', trial: 1, condition: 'a', response: 'Several things to consider first.' }]));
+  const run = (name: string, tasks: object[], ...flags: string[]): { code: number; out: string; rows: { case_id: string; F1: boolean | null; F4: boolean; by: { F1: string } }[] } => {
+    writeFileSync(join(dir, `${name}.jsonl`), jsonl(tasks));
+    const out = join(dir, `${name}-modes.jsonl`);
+    const r = nodeAll('bench/compare/failure-modes.mjs', '--responses', join(dir, 'responses.jsonl'), '--tasks', join(dir, `${name}.jsonl`), '--out', out, '--code-only', ...flags);
+    return { ...r, rows: existsSync(out) ? readFileSync(out, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as never) : [] };
+  };
+  it('a task with no `wants` is refused by name before any answer is read; with it, code decides F1 and F4', () => {
+    const bare = run('bare', [{ id: 't1', prompt: 'Write the test.', wants: 'code' }, { id: 't2', prompt: 'Is it done?' }]);
+    expect(bare.code).toBe(2);
+    expect(bare.out).toMatch(/task t2 has no `wants` \(one of code, command, fix, status, explain\)/);
+    expect(bare.rows).toEqual([]);
+    const whole = run('whole', [{ id: 't1', prompt: 'Write the test.', wants: 'code' }, { id: 't2', prompt: 'Is it done?', wants: 'status' }]);
+    expect(whole.code, whole.out).toBe(0);
+    expect(whole.out).not.toMatch(/legacy/);
+    expect(whole.rows).toMatchObject([{ case_id: 't1', F1: true, by: { F1: 'code' } }, { case_id: 't2', F4: true }]);
+  });
+  it('--legacy-tasks accepts tasks that have none, reads them as before, and says what code no longer decides', () => {
+    const r = run('legacy', [{ id: 't1', prompt: 'Write the test.' }, { id: 't2', prompt: 'Is it done?' }], '--legacy-tasks');
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/--legacy-tasks: 2 of 2 tasks have no `wants`\. On those F1 is left to the reader and F4 is not checked \(recorded as false\)\./);
+    expect(r.rows).toMatchObject([{ case_id: 't1', F1: null, F4: false, by: { F1: 'reader' } }, { case_id: 't2', F1: null, F4: false }]);
+  });
+  it('a `wants` outside the five is refused, with or without --legacy-tasks', () => {
+    for (const flags of [[], ['--legacy-tasks']]) {
+      const r = run(`odd${String(flags.length)}`, [{ id: 't1', prompt: 'Write the test.', wants: 'tests' }, { id: 't2', prompt: 'Is it done?', wants: 'status' }], ...flags);
+      expect(r.code).toBe(2);
+      expect(r.out).toMatch(/task t1 has `wants` "tests", which is not one of code, command, fix, status, explain\./);
+      expect(r.rows).toEqual([]);
+    }
   });
 });

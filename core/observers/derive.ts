@@ -52,6 +52,17 @@ const conformanceOn = (pieces: readonly string[], m: Measurement): { applicable:
   return { applicable: rs.filter((r) => r.verdict !== 'NOT_APPLICABLE').length, present: rs.filter((r) => r.verdict === 'MET').length };
 };
 
+/**
+ * WHICH OF THE AUTHOR'S OWN PIECES BREAK A MEASURED RULE, by their place in `pieces`. A piece the rule cannot be
+ * measured on is not one that breaks it. This is the evidence for the question a held-out check does not ask: a
+ * target is set a little tighter than the author's average and checked rule by rule, on the few pieces held out,
+ * so each rule can pass its check while the rules together fail half of the very pieces they were read from
+ * (core/ratification/suggest.ts, `suggestAll`).
+ */
+export function piecesBreaking(pieces: readonly string[], m: Measurement): number[] {
+  return pieces.flatMap((t, i) => { const v = measure(t, m).verdict; return v !== 'NOT_APPLICABLE' && v !== 'MET' ? [i] : []; });
+}
+
 interface Piece { readonly id: string; readonly text: string }
 
 /**

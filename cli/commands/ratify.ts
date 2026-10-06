@@ -10,7 +10,7 @@
 // reconstructed from anything else in the store. Keeping the two jobs in one file made it easy to
 // read a machine proposal and a human ruling as steps in a single automated flow. They are not.
 
-import { suggest } from '../../core/ratification/suggest.js';
+import { suggestAll } from '../../core/ratification/suggest.js';
 import { validateMeasurement, observerFor } from '../../core/observers/registry.js';
 import type { Measurement, ObserverId } from '../../core/state/canonical-state.js';
 import { renderRatifyPage } from '../../renderers/ratify-page/render.js';
@@ -198,6 +198,8 @@ export function ratifyBatch(): void {
     const decidedSoFar = new Set(s.decided.map((d) => d.requirementId));
     const pending = s.proposals.filter((p) => !decidedSoFar.has(p.requirementId));
     if (!pending.length) return void die('nothing is awaiting a ruling.');
+    // The same suggestions as the terminal screen, read together against the author's own pieces (suggestAll).
+    const together = suggestAll(pending, s.proposalMeta, s.intent?.mode ?? 'GENERATE').suggestions;
     writeAtomic(pageOut, renderRatifyPage(pending, {
       corpusHash: s.evidence?.corpusHash ?? 'unknown',
       workType: s.evidence?.workType ?? 'work',
@@ -206,8 +208,8 @@ export function ratifyBatch(): void {
       // nothing against unread work, and the reader is entitled to know that while reading.
       heldOutChecked: s.run.heldOutChecked !== false,
       // The same suggestions the terminal screen shows, pre-selected: one review, two surfaces.
-      suggestions: Object.fromEntries(pending.map((p) => {
-        const x = suggest(p, s.proposalMeta?.[p.requirementId], s.intent?.mode ?? 'GENERATE');
+      suggestions: Object.fromEntries(pending.map((p, i) => {
+        const x = together[i];
         return [p.requirementId, { value: x.decision === 'REJECT' ? 'REJECT' : x.materiality ?? 'PREFERRED', why: x.why, needs: x.needs,
           measures: p.measurement ? observerFor(p.measurement.observer).describe(p.measurement.params) : null }];
       })),

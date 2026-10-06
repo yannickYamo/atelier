@@ -24,11 +24,17 @@ answers, support replies, contract clauses, financial report sections), each bui
 by its owner. **At least 60 sealed requests per skill**, written by someone who is not the builder. The sentence
 names the domains tested and claims nothing about any other.
 
+**The three skills are named: coding answers, code review, and contract clauses.** Each already holds its own corpus
+(none of its author's pieces breaks a REQUIRED rule of its standard), and strict delivery can promise nothing on a
+standard its author's own work fails. **Long-form writing (blog posts, speeches) is outside this claim,** and the
+README says so: in development every arm broke a counted rule in most long pieces, so under strict delivery it would
+be measuring refusals.
+
 ## The pilot
 
 Twenty other requests per skill, run first with `harness/strict-delivery.mjs --pilot`. It reports what was not
 delivered **by reason** (a broken rule, an invented claim, unconfirmed specifics, a copied run, a check that could
-not run). The R2 bar is sealed after the pilot and before the test requests are opened, and never above 15%.
+not run). The owner commits the R2 bar after the pilot and before any sealed request is opened, and never above 15%.
 
 For a skill that answers, a specific that is not in the task or the material is listed for the reader and is no
 reason to refuse; invented work or results are cut. For a skill that writes, a draft with a third or more of its

@@ -1,7 +1,8 @@
 # Pre-registration (draft): from an author's pieces and a prompt, is an Atelier skill better than a hand-written writing skill?
 
 **Status:** DRAFT, not sealed. Sealed by the tester with a public commit of this file, the brief file's hash and the
-sha256 of `bench/compare/closing-quality.mjs`, before any arm writes a test brief.
+sha256 of `bench/compare/closing-quality.mjs`, `bench/compare/axes.mjs` and `bench/compare/rubric-judge.mjs`, before
+any arm writes a test brief.
 [Decision 0012](../docs/decisions/0012-the-closing-rules.md), claim A-w.
 
 ## The bar
@@ -32,15 +33,33 @@ On voice, 20% fewer failures means readers choose the Atelier piece on at least 
 are reported beside the axes; W5's 0.40 line no longer decides anything. Development found stop-slop ahead on its
 own score by 2.4 to 3.5 points of 50 on two authors: the quality axis may well be missed, and a miss is published.
 
-**Readiness before the seal:** on development briefs for an author not in the test, each axis is measured once; the
-claim is sealed when rule anchor and voice reach the bar there. **Size:** at least 60 briefs per author, from the
-spread measured in development, not the 27-brief floor below.
+**The verdict comes from the four axes and from nothing else,** as in claim A: PASS when every axis is reached or is
+not applicable; FAIL when every axis is covered and one is not reached; UNRESOLVED when an axis is missing or does
+not cover exactly its sealed briefs, pieces and readers. W1 to W6 below are reported and decide nothing. The axis
+files for quality, rule anchor and repeatability are built by `bench/compare/axes.mjs` (`"claim": "A-w"`, the rubric's
+own threshold); the config seals `"requiredAxes"`, `"tasks"`, `"trials": 2` and `"readers": 5`.
+
+**The quality axis is the owner's to rule on before sealing.** stop-slop scores under its own line (35 of 50) about
+once in forty pieces in development, so "at least 20% fewer failures, and clearly fewer" cannot be shown on this
+axis at any size this test can afford: sealed as written, the claim will most likely miss on it. Two options:
+
+- (a) keep the axis as signed, and publish the miss. A published miss closes the claim.
+- (b) read it as a guard, "no clear loss on stop-slop's own score". That changes an axis of the signed bar, which
+  [decision 0012](../docs/decisions/0012-the-closing-rules.md) says does not change again, and so needs a decision
+  record of its own.
+
+**Readiness before the seal:** on 30 development briefs per author, rule anchor and repeatability are counted, and
+three people read ten pairs blind for voice, as in claim C; a model never reads voice. The claim is sealed when rule
+anchor and voice reach the bar there.
+
+**Size of the sealed test: 60 briefs per author.** That is the seal's size, from the spread measured in development.
+Fewer than 27 valid briefs for an author is UNRESOLVED.
 
 ## Material
 
 - **Two authors** who agreed, each with at least 20 pieces. The skill is built from the pieces it may read; the
   author ratifies the rules.
-- **30 writing briefs per author**, written by someone who is not the builder after the product commit is frozen,
+- **60 writing briefs per author**, written by someone who is not the builder after the product commit is frozen,
   each with the facts the piece may use.
 - **The writer model:** one priced model for every arm, frozen in the seal.
 
@@ -70,7 +89,7 @@ per author before the test opens.
   (never one a pasted arm was shown), then the plug-in's piece and the comparator's, sides seeded, and marks the one
   that reads more like the author.
 
-## Endpoints (the unit is the brief; `bench/compare/closing-quality.mjs` with `"claim": "A-w"`)
+## What is reported beside the axes (the unit is the brief; `bench/compare/closing-quality.mjs` with `"claim": "A-w"`)
 
 | | Endpoint | Kind | Rule |
 |---|---|---|---|
@@ -81,7 +100,7 @@ per author before the test opens.
 | W5 | readers do not prefer the comparator by a clear margin | show | share choosing the Atelier piece, lower 95% bound above 0.40 |
 | W6 | invented specifics | guard | fails only if the plug-in clearly delivers more than stop-slop: the 97.5% bound excludes zero |
 
-**PASS:** W1 to W6 all hold, pooled over both authors, and no author alone fails W2 or W5 on its point estimate.
+W1 to W6 are reported, pooled and per author, and decide nothing: the axes do.
 **Minimum valid units:** 27 briefs per author with every compared arm written and judged.
 
 ## Sentences

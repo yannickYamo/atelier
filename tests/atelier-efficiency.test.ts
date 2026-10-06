@@ -606,13 +606,13 @@ describe('through the binary: a skill built without asking is unchanged, and the
   const NEW = ['new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice'];
   // EVERY BUILD IS MADE ONCE, HERE, IN ORDER, and each test reads what its build said and exported: no test depends on
   // another having run, and one run alone (`-t`) sees the same state as the whole file.
-  const r = { earlyRefusal: '', built: '', full: '', exportSaid: '', noIndex: '', lean: { said: '', text: '', calls: 0 }, kept: { said: '', text: '' },
+  const r = { earlyRefusal: '', screen: '', built: '', full: '', afterRun: '', afterRunRebuilt: '', exportSaid: '', noIndex: '', lean: { said: '', text: '', calls: 0 }, kept: { said: '', text: '' },
     excerpts: { said: '', text: '', again: '', againText: '', auto: '' }, under: { said: '', text: '' }, none: { said: '', text: '' }, back: { said: '', text: '' },
     refusals: [] as string[], afterRefusals: '', moved: '', afterMoved: '' };
 
   beforeAll(async () => {
     r.earlyRefusal = run(data, proj, ...NEW, '--pieces', 'halves');
-    run(data, proj, ...NEW);
+    r.screen = run(data, proj, ...NEW);
     r.built = run(data, proj, ...NEW, '--accept');
     r.exportSaid = run(data, proj, 'export', '--skill', 'voice', '--out', out('full.md'));
     r.full = readFileSync(out('full.md'), 'utf8');
@@ -632,10 +632,27 @@ describe('through the binary: a skill built without asking is unchanged, and the
     renameSync(dir, `${dir}-away`);
     try { r.moved = build('--piece-budget', '500'); } finally { renameSync(`${dir}-away`, dir); }
     r.afterMoved = exported('unmoved.md');
+    run(data, proj, 'invoke', '--skill', 'voice', '--json', 'Write a short post about a decision we made.');
+    r.afterRun = exported('after-run.md');
+    build(); r.afterRunRebuilt = exported('after-run-rebuilt.md');
   }, 300_000);
 
   it('a mistyped form is refused on the first screen of `atelier new`, before any rule is approved', () => {
     expect(r.earlyRefusal).toMatch(/--pieces takes whole or excerpts, got "halves"/);
+  });
+  it('a golden corpus passes its own standard: the review and the build say how the author\'s own pieces fare', () => {
+    const shown = /Your own pieces: (\d+) of (\d+) meet every counted rule suggested as required\./.exec(r.screen);
+    expect(shown, r.screen).not.toBeNull();
+    const built = /Your own pieces: (\d+) of (\d+) meet every required rule that is counted\./.exec(r.built);
+    expect(built, r.built).not.toBeNull();
+    // at least nine of the author's own pieces in ten meet every rule that will fail an output
+    for (const m of [shown, built]) expect(Number(m?.[1]) / Number(m?.[2])).toBeGreaterThanOrEqual(0.9);
+  });
+  it('a rebuild that asks for nothing changes nothing: the description is kept, and runs made since add nothing', () => {
+    expect(r.back.text).toBe(r.full);
+    expect(r.kept.text).toContain('description: Use when asked to: write me a blog post in the voice and style of these.');
+    // an invoke ran in between (below, in `beforeAll`): a plain rebuild after it exports the same bytes
+    expect(r.afterRunRebuilt).toBe(r.afterRun);
   });
   it('the build\'s card states the size, stored and exported, with the export by part', () => {
     expect(r.built).toMatch(/SIZE {2}stored [\d,]+ words in \d+ files · exported [\d,]+ words \([\d,]+ bytes\)/);
@@ -793,7 +810,7 @@ describe('through the binary: a skill built without asking is unchanged, and the
     expect(copied.filter((x) => x.condition === 'lean-1500').map((x) => x.score)).toEqual(copied.filter((x) => x.condition === 'full').map((x) => x.score));
     // and a skill that is the reference under another name is not smaller, so it is nothing to select
     expect(script('efficiency-select.mjs', '--config', join(work, 'out2', 'ablation.json')).out).toMatch(/^NONE SELECTED/m);
-  });
+  }, 300_000);
   it('a run records where its cost went and what it sent: every call the backend served is on a line, the request\'s reading included', async () => {
     // With a context judge on, the request is read before any draft is written. The ledger starts where the run's
     // budget does, so that first call is counted too: the lines' calls are the calls the backend served.
@@ -814,7 +831,7 @@ describe('through the binary: a skill built without asking is unchanged, and the
     expect(report).toMatch(/cost and size\n(?: {4}.*\n)*? {4}writing: \$\d+\.\d{4} · \d+ calls?/);
     expect(report).toMatch(/sent to the writer: [\d,]+ words of skill · [\d,]+ added for this request \(your nearest passages, notes\) · [\d,]+ of request/);
     expect(report).not.toMatch(/not attributed|counted in the lines and not in the total/);
-  });
+  }, 120_000);
 });
 
 describe('through the binary: a rebuild never undoes an amendment', () => {
@@ -849,5 +866,36 @@ describe('through the binary: a rebuild never undoes an amendment', () => {
     // the same run built under a second name is the same owner's standard, amendments included
     expect(build('--name', 'other')).toContain(`Compiling the standard as you amended it (${minted?.[1]})`);
     expect(card('other').standardVersion).toBe(minted?.[1]);
-  });
+  }, 180_000);
 });
+
+describe('through the binary: a project that moved keeps its skill', () => {
+  const data = mkdtempSync(join(tmpdir(), 'atelier-moved-data-'));
+  const root = mkdtempSync(join(tmpdir(), 'atelier-moved-'));
+  const proj = join(root, 'first');
+  const dir = join(proj, 'posts');
+  mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
+  const exported = (p: string, name: string): string => { run(data, p, 'export', '--skill', 'voice', '--out', join(p, name)); return readFileSync(join(p, name), 'utf8'); };
+  let before = '';
+  beforeAll(() => {
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
+    before = exported(proj, 'before.md');
+  }, 300_000);
+
+  it('renamed with its pieces inside, a plain build finds the run that built the skill and gives the same skill', () => {
+    const moved = join(root, 'renamed');
+    renameSync(proj, moved);
+    const said = run(data, moved, 'build', '--name', 'voice');
+    expect(said).not.toMatch(/there is no standard to build from yet/);
+    expect(said).toMatch(/this project has no run of its own; took over the run that built "voice", which was at .*first/);
+    expect(exported(moved, 'after.md')).toBe(before);
+    // the folder of pieces came with the project, so the pieces can be chosen again from the new place
+    expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '1500')).toMatch(/within 1500 words/);
+    // polarity: a project that never built this skill, and a skill no run built, still get the plain answer
+    const stranger = join(root, 'stranger'); mkdirSync(stranger);
+    expect(run(data, stranger, 'build', '--name', 'nothing-built')).toMatch(/there is no standard to build from yet/);
+  }, 180_000);
+});
+

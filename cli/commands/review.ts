@@ -20,7 +20,7 @@ import { coverageOf, describeCoverage } from '../../core/taste/dimensions.js';
 import { createInterface } from 'node:readline';
 import { die, argv, flagAll, loadSession, orchestrated, type Session } from '../runtime.js';
 import { isGeneralScope, type Requirement } from '../../core/state/canonical-state.js';
-import { suggest, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
+import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
 import { applyDecisions, type RatificationDecision } from './ratify.js';
 import { describeMeasurement } from './verify.js';
 
@@ -104,9 +104,11 @@ export async function review(opts: ReviewOptions = {}): Promise<boolean> {
 function pendingRows(s: Session): Row[] {
   const done = new Set(s.decided.map((d) => d.requirementId));
   const mode: SkillMode = s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode;
-  return s.proposals
-    .filter((p) => !done.has(p.requirementId))
-    .map((p) => ({ id: p.requirementId, p, s: suggest(p, s.proposalMeta?.[p.requirementId], mode) }))
+  // Suggested together, so the rules suggested as required are ones the author's own pieces meet (suggestAll).
+  const pending = s.proposals.filter((p) => !done.has(p.requirementId));
+  const { suggestions } = suggestAll(pending, s.proposalMeta, mode);
+  return pending
+    .map((p, i) => ({ id: p.requirementId, p, s: suggestions[i] }))
     .sort((a, b) => b.s.strength - a.s.strength || a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
@@ -143,6 +145,14 @@ function printScreen(s: Session, rows: readonly Row[]): void {
   // ratified rather than discovered in the output (core/taste/dimensions.ts).
   const kept = rows.filter((r) => r.s.decision !== 'REJECT').map((r) => r.p);
   console.log(`\nWhat these rules cover:\n${describeCoverage(coverageOf(kept))}\n`);
+  // HOW THE AUTHOR'S OWN PIECES FARE against what will instruct as required: said on the screen the rules are
+  // accepted from, with what was moved to "shown" to get there (core/ratification/suggest.ts, `suggestAll`).
+  const done = new Set(s.decided.map((d) => d.requirementId));
+  const standing = suggestAll(s.proposals.filter((p) => !done.has(p.requirementId)), s.proposalMeta, s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode).corpus;
+  if (standing) {
+    console.log(`Your own pieces: ${standing.passing} of ${standing.pieces} meet every counted rule suggested as required.`
+      + (standing.moved.length ? ` ${standing.moved.length} rule(s) your own pieces break too often are suggested as shown, not required: ${standing.moved.join(', ')}.` : ''));
+  }
 }
 
 /** One rule in full: what it says, when, an example, what it needs, how it is measured, and the suggestion. */

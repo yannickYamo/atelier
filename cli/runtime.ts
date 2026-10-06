@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 // where data goes, how a run advances, and how a model is reached.
 
 import type { SkillMode } from '../core/ratification/suggest.js';
-import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync, cpSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
 import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -92,7 +92,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];
 
 export const argv = process.argv.slice(2);
@@ -626,6 +626,11 @@ export interface ProposalMeta {
   readonly needs: string | null;
   /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
   readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
+  /**
+   * for a measured rule: of the author's own pieces discovery could use (read and held out, never the reserve), how
+   * many there are and which break the rule. What `suggestAll` holds a REQUIRED suggestion to.
+   */
+  readonly corpus?: { readonly pieces: number; readonly breaking: readonly number[] } | null;
 }
 
 /**
@@ -733,6 +738,42 @@ export const saveSession = (s: Session): void => {
   mkdirSync(dirname(p), { recursive: true });
   writeAtomic(p, JSON.stringify({ ...s, projectDir: projectDir() }, null, 1));
 };
+
+/**
+ * A PROJECT THAT MOVED KEEPS ITS SKILL. A run's session and working files are keyed by the project's path, so a
+ * project folder renamed, moved or copied (with its store) is, to that key, a project that has never run: `build`
+ * answered "there is no standard to build from yet" beside a store that held the skill and its standard. When this
+ * project has no run of its own, the run that built `skillName` is looked for among the store's sessions and taken
+ * over: its session and working files are copied under this project's key (copied, so the old place still works if
+ * it is still there), and the folder of pieces is found again when it moved with the project. More than one run
+ * that built a skill of that name is not guessed between: they are named, and nothing is taken.
+ * Returns where the run was found, or null when this project has a run already or no run built that skill.
+ */
+export function adoptMovedRun(skillName: string): { readonly from: string | null } | null {
+  if (existsSync(sessionPath())) return null;
+  const dir = join(DATA, 'sessions');
+  if (!existsSync(dir)) return null;
+  const found = readdirSync(dir).filter((f) => f.endsWith('.json')).flatMap((f) => {
+    try { const s = readJson<Session>(join(dir, f), { what: 'a session', requireKeys: ['run'] }); return s.skillName === skillName ? [{ key: f.slice(0, -'.json'.length), s }] : []; } catch { return []; }
+  });
+  if (!found.length) return null;
+  if (found.length > 1) {
+    die(`${found.length} runs in this store built a skill called "${skillName}", and this project is none of them:\n`
+      + found.map((x) => `  ${x.s.projectDir ?? 'a project whose folder was not recorded'}`).join('\n')
+      + '\n  Run the build from one of those folders, or set ATELIER_PROJECT_DIR to it.');
+  }
+  const { key, s } = found[0];
+  const was = s.projectDir ?? null; const here = projectDir();
+  // The folder of pieces, when it sat inside the project and came with it.
+  const moved = was && s.source && (s.source === was || s.source.startsWith(`${was}/`)) ? join(here, s.source.slice(was.length)) : null;
+  const source = moved && existsSync(moved) ? moved : s.source;
+  const oldRun = join(DATA, 'runs', key);
+  if (existsSync(oldRun)) cpSync(oldRun, runDir(), { recursive: true });
+  saveSession({ ...s, ...(source === undefined ? {} : { source }) });
+  console.log(`(this project has no run of its own; took over the run that built "${skillName}"${was ? `, which was at ${was}` : ''}.`
+    + (source && !existsSync(source) ? ` Its folder of pieces (${source}) is not here: a build that chooses pieces again will need it.` : '') + ')');
+  return { from: was };
+}
 
 /** Runs in flight under this store, newest first, so an orphaned one can be found by eye. */
 export const listSessions = (): { file: string; projectDir: string | null; here: boolean }[] => {

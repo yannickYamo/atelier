@@ -57,9 +57,9 @@
 // alone. An earlier draft added tests for a "clear" loss inside the margin; at this size they could not fire on the
 // rule count (five discordant tasks, all worse, is already over the margin) and on the score they rejected any
 // loss that was merely consistent, however small, so the margins are the whole rule and are meant as tolerances.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { signTestOneSidedP } from '../../dist/core/stats/sign-test.js';
 
 const ALPHA = 0.05;
@@ -210,7 +210,11 @@ export function select(cfg, load) {
   return { reference: cfg.reference, referenceWords, margins: cfg.margins, minTasks: cfg.minTasks, ceiling: cfg.ceiling, trials: cfg.trials, alpha: ALPHA, domains, standing, selected: chosen?.arm ?? null, smallestStanding: leanest?.arm ?? null, sentence };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+// RUN AS A SCRIPT only when this file is the one node was started on, compared as real paths: node resolves a symlink
+// for the module and not for the argument, and on a path through one (macOS /tmp) a textual comparison never
+// matched, so the script exited 0 having written nothing. A path that does not exist is compared as written.
+const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.url))) {
   try {
     const configPath = arg('--config') ?? refuse('--config <ablation.json> is required');
     const base = dirname(resolve(configPath));

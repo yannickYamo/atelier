@@ -1,7 +1,8 @@
 # Pre-registration (draft): from examples and a prompt, is an Atelier skill better than a careful hand-written one on coding answers?
 
-**Status:** DRAFT, not sealed. Sealed by the tester with a public commit of this file, the task file's hash and the
-sha256 of `bench/compare/closing-quality.mjs`, before any arm answers a test task.
+**Status:** DRAFT, not sealed. Sealed by the tester with a public commit of this file, the task file's hash, the
+config of section "The config", and the sha256 of `bench/compare/closing-quality.mjs`, `bench/compare/axes.mjs` and
+`bench/compare/failure-modes.mjs`, before any arm answers a test task.
 [Decision 0012](../docs/decisions/0012-the-closing-rules.md), claim A.
 
 ## The bar
@@ -14,13 +15,16 @@ The hand-crafted skill here is [i-have-adhd](https://github.com/ayghri/i-have-ad
   tie is a FAIL of this claim, however fair the tie.
 - **on the owner's taste:** the rules the owner approved are held more often.
 
-And nothing may be clearly lost on the way: no dimension, blockers or requested depth.
+That is the bar as the owner first worded it. **The signed bar of the next section replaces it wherever the two
+differ, and it alone decides the claim.** The judge's mean, the dimensions, blockers and requested depth are reported
+beside it.
 
 ## The four axes of the signed bar (this section decides the claim)
 
 One Atelier arm is read on all four axes: the exported plug-in or the runtime under strict delivery, **chosen on the
-working development tasks before the test opens** and never per axis. The comparator is i-have-adhd as published.
-Two outputs per task for every arm. Each axis is reached at 20% fewer failures and clearly fewer; when the
+working development tasks before the test opens, by one rule: the one with fewer quality failures there, read with
+this section's definition**, and never per axis. The other is reported. The comparator is i-have-adhd as published.
+**Two outputs per task for every arm, everywhere in this document.** Each axis is reached at 20% fewer failures and clearly fewer; when the
 comparator never fails on an axis there is nothing to reduce and the axis is not applicable.
 
 | Axis | A failure is | Read by |
@@ -33,8 +37,42 @@ comparator never fails on an axis there is nothing to reduce and the axis is not
 The owner's rules were never shown to i-have-adhd, so the rule-anchor sentence says so: it reads "held the owner's
 rules", never "the other skill is worse at its own aims".
 
-**The claim's verdict:** PASS when every applicable axis is reached. Otherwise each axis is published as measured,
-reached or not, and the claim closes. The config seals four `axes` files and `"bar": {"reduction": 0.2}`.
+**The claim's verdict comes from the four axes and from nothing else.**
+
+- **PASS** when every axis is reached, or is not applicable. An axis is not applicable only when it covers every
+  sealed task and i-have-adhd never failed on it.
+- **FAIL** when every axis is covered and one is not reached. Each axis is published as measured, and the claim
+  closes.
+- **UNRESOLVED** when an axis is missing or does not cover exactly its sealed tasks, trials and readers, or fewer
+  than 280 tasks have every compared arm answered and judged. Never a PASS.
+
+All four axes are required, voice included: 100 of the tasks, drawn by seed before the test opens, three readers
+each.
+
+## The config
+
+Sealed as written, with the files' paths filled in. `bench/compare/axes.mjs` builds the first three axis files from
+the raw rows (two judge reads, the failure-mode rows, a person's resolutions where the two reads disagree on a
+blocker, and the verify rows); nothing in them is built by hand. The voice file is the readers' choices,
+`{case_id, reader, chose}` with `chose` `"candidate"` or `"comparator"`.
+
+```json
+{
+  "claim": "A", "k": "<examples>",
+  "conditions": { "bare": "bare", "handwritten": "i-have-adhd", "candidate": "<the arm chosen>" },
+  "tasks": "tasks.jsonl", "trials": 2, "readers": 3, "minUnits": 280,
+  "bar": { "reduction": 0.2 },
+  "requiredAxes": ["quality", "rule anchor", "repeatability", "voice"],
+  "axes": [
+    { "name": "quality", "file": "axes/quality.jsonl" },
+    { "name": "rule anchor", "file": "axes/rule-anchor.jsonl" },
+    { "name": "repeatability", "file": "axes/repeatability.jsonl" },
+    { "name": "voice", "file": "voice.jsonl", "tasks": "voice-tasks.jsonl" }
+  ],
+  "weights": { "correctness": 0.35, "autonomy": 0.25, "actionability": 0.2, "safety": 0.1, "concision": 0.1 },
+  "scores": ["scores-1.jsonl", "scores-2.jsonl"], "verify": "verify.jsonl", "human": "human.jsonl"
+}
+```
 
 ## The quality axis in detail (2026-10-05)
 
@@ -42,19 +80,29 @@ On the quality axis a failure is an answer with a blocker both judge reads agree
 (`bench/compare/failure-modes.mjs`: withholds the deliverable, refuses without a safe path, invents context, action
 not first), each reader qualified first. The Atelier arm reaches the bar when it has **at least 20% fewer failures
 than i-have-adhd, and clearly fewer** (the lower 95% bound of the case-level difference above zero). The config
-seals `"axes": [{"name": "quality", "file": ...}]` and `"bar": {"reduction": 0.2}`. The judge's mean (P1 to P3) is
-reported beside it and no longer decides the claim; the guards P4 and P6 and the rule endpoint P5 stand. Answers whose
-two judge reads disagree on the blocker go to a person (`--disagreements`), and the disagreement rate is reported as
-the judge's noise. A miss is published as measured and closes the claim.
+seals the quality axis as above. The judge's mean, the dimensions, blockers, requested depth and the audit of the
+rule count (P1 to P6 below) are reported beside it and decide nothing. Answers whose two judge reads disagree on the
+blocker go to a person (`--disagreements`), whose ruling `axes.mjs` requires before it writes the axis; the
+disagreement rate is reported as the judge's noise. A miss is published as measured and closes the claim.
 
 ## Readiness comes before the seal
 
 A FAIL is final for the 1.x line, and "scores higher" is a bar a tie does not clear, so this claim is sealed only
 when development says it is ready ([the brief](INDEPENDENT_TEST_BRIEF.md), phase 0). On development tasks that never
 enter the test, the Atelier skill is run against i-have-adhd, every loss is read and grouped into failure modes, the
-causes are fixed in how a skill is built (never for one task), and the loop repeats. **The claim is sealed when, on
-the held-out development tasks, the Atelier arm has at least 20% fewer failures than i-have-adhd.** Development runs
-at most three rounds.
+causes are fixed in how a skill is built (never for one task), and the loop repeats. Development runs at most three rounds.
+
+**The readiness line is the owner's to fix before the last development round is read. Two options are on the
+table:**
+
+- (i) quality alone: on development tasks, the Atelier arm has at least 20% fewer quality failures than
+  i-have-adhd;
+- (ii) every counted axis (quality, rule anchor, repeatability): at least 20% fewer and the lower bound above zero,
+  read on development tasks that no earlier reading used. The outside tester recommends this one: with (i) the
+  claim can be sealed while an axis that decides it is likely to miss.
+
+The 60 held-out development tasks of the second round were read under an earlier definition of a quality failure.
+They are evidence, and they are not the readiness reading.
 If development never reaches that, the claim is not sealed, and the README says a tie, as it does today. Not sealing
 is not a FAIL.
 
@@ -70,7 +118,9 @@ cases are where it was found, so they are a regression table here and never part
 - **Examples:** at least 20 answers, each with the request it answers, including requests for detail and for
   brevity. The same examples are available to every arm that uses examples.
 - **Tasks: 300** new coding-answer tasks written by someone who is not the builder, after the product commit is
-  frozen. **80** ask for a walkthrough, a comparison or a plan with named parts; **30** depend on files the agent is
+  frozen. Each task carries `wants`: what it asks for, one of `code`, `command`, `fix`, `status` or `explain`.
+  `bench/compare/failure-modes.mjs` refuses a task without it, because two of the four failure modes are decided by
+  code only where the task says what a deliverable looks like. **80** ask for a walkthrough, a comparison or a plan with named parts; **30** depend on files the agent is
   not shown. At the paired spread the outside review measured on earlier sessions (SD about 0.73 a case), 300 tasks show a true gain of 0.10 about
   three times in four and one of 0.15 almost always; 150 would need 0.15 for the same odds.
 - **The standard:** the Atelier skill's rules, ratified by the person who owns the examples.
@@ -82,32 +132,34 @@ cases are where it was found, so they are a regression table here and never part
 | # | Arm | Role |
 |---|---|---|
 | 1 | the bare model | baseline |
-| 2 | the examples pasted | baseline |
-| 3 | i-have-adhd, as published | baseline: the hand-written skill |
-| 4 | i-have-adhd with the same examples pasted under it | baseline: what a person could do without Atelier |
-| 5 | a skill a frontier model induces from the examples, then twenty minutes of expert editing | baseline |
-| 6 | **Atelier, from the same examples**: the exported plug-in, or the runtime under strict delivery | **the one primary arm** |
-| 7 | i-have-adhd with Atelier's checks on its answers (`atelier verify --repair`) | reported |
+| 2 | i-have-adhd, as published | the comparator: the hand-written skill |
+| 3 | **Atelier, from the same examples**: the exported plug-in, or the runtime under strict delivery | **the one primary arm** |
+| 4 | the Atelier configuration that was not chosen | reported |
 
-**Which Atelier configuration is the primary arm is chosen on the validation split, before the test opens**, the same
-way the strongest baseline is: the plug-in (`atelier export`) or the strict runtime (`atelier invoke --strict
---answer-only`, a refusal scored as a failed answer). The other is reported. The primary arm is compared with arm 3
-directly, and with the strongest of arms 2, 4 and 5. Claim A has one verdict.
+**Which Atelier configuration is the primary arm is chosen on the working development tasks, before the test opens,**
+by the rule of the axes section: the plug-in (`atelier export`) or the strict runtime (`atelier invoke --strict
+--answer-only`, a refusal scored as a failed answer). The primary arm is compared with i-have-adhd, and with nothing
+else. Earlier drafts also compared it with the strongest of three other baselines (the examples pasted, i-have-adhd
+with the examples pasted, an induced and edited skill): that endpoint is removed. The signed bar names one
+comparator, and a second one decided nothing the bar asks. Claim A has one verdict.
 
 ## Judge
 
 The benchmark's own judge, qualified first with `bench/compare/judge-qualification.mjs` on 20 planted good and 20
 planted bad answers to tasks outside the test split (at least 0.85 of each called right, threshold sealed with the
-labels). Three trials; all arms of a case judged in one session, each session judged twice with labels reshuffled. A
+labels). Two outputs per task; all arms of a case judged in one session, each session judged twice with labels
+reshuffled. The failure-mode reader is qualified the same way before its rows are used. A
 second judge from another model family reads the planted set and a quarter of the test; if the two agree on fewer
 than 0.80 of the planted answers, the claim is UNRESOLVED.
 
-## Endpoints (computed by `bench/compare/closing-quality.mjs`; the unit is the case)
+## What is reported beside the axes (computed by `bench/compare/closing-quality.mjs`; the unit is the case)
+
+None of these decides the claim. They are the judge's own reading, kept so a reader can see what the axes do not show.
 
 | | Endpoint | Kind | Rule |
 |---|---|---|---|
 | P1 | better than the bare model | show | weighted score, lower 95% bound above 0 |
-| P2 | **scores higher than i-have-adhd**; and not worse than the strongest other baseline | show | against i-have-adhd, lower 95% bound above 0; against the strongest baseline, above −0.20 |
+| P2 | scores higher than i-have-adhd | show | lower 95% bound above 0 |
 | P3 | no dimension clearly worse | guard | fails only if a dimension's upper 95% bound is below −0.25 |
 | P4 | blockers | guard | fails only if the plug-in clearly has more: the 97.5% bound excludes zero |
 | P5 | the owner's required rules are held more often than under i-have-adhd | show | REQUIRED rules with a measurement, counted by `atelier verify` on every answer of both arms; lower 95% bound above 0. A person codes a random, arm-stratified fifth blind to arm; below 0.90 agreement with the counts, UNRESOLVED |
@@ -118,16 +170,15 @@ than 0.80 of the planted answers, the claim is UNRESOLVED.
 passed about one time in three at 100 tasks: that would have failed Atelier for the size of the test, not for its
 answers. The guards are held at 97.5% and at zero, not at a margin, so a loss that is real and clear still fails.
 
-**PASS:** P1 to P6 all hold. **Minimum valid units:** 280 tasks with every compared arm answered and judged; below
-that, UNRESOLVED. The config seals `"margins": {"handwritten": 0, "overall": -0.2}`.
+**Minimum valid units:** 280 tasks with every compared arm answered and judged; below that, UNRESOLVED.
 
-## Sentences (filled by the analysis script)
+## Sentences (filled by the analysis script, from the axes)
 
-- **PASS:** "On [n] coding tasks it never saw, the Atelier [plug-in | runtime] built from [k] examples scored higher
-  overall than the hand-written skill (+[x], lower bound +[y]) and was not worse than the strongest baseline, no
-  quality dimension, blocker rate or requested depth showed a clear loss, and it held the shared required rules more
-  often. This is not a result for each dimension separately."
-- **FAIL**, one per failed endpoint: "... failed "[endpoint]": [estimate] (bounds ...), where the bar was [bar]."
+- **PASS:** "On [n] coding tasks it never saw, the Atelier [plug-in | runtime] built from [k] examples met the signed
+  bar against the hand-written skill on all 4 required axes. Quality: [a]% failed against [b]% for the hand-written
+  skill, [c]% fewer (reached: the bar is 20% fewer and clearly fewer). ..." and so on for each axis.
+- **FAIL:** "... did not meet the signed bar against the hand-written skill: [axis] not reached." followed by every
+  axis's sentence.
 - **UNRESOLVED:** "The quality comparison did not complete: [cause]. It is closed without a result."
 
 ## Limits
@@ -145,5 +196,8 @@ P4 are read on that skill's own judge for that reason. A margin of 0.20 on a fiv
 - The bar against the hand-written skill is "scores higher", at the owner's word: a tie fails. Because of that the
   claim is sealed only after a readiness check on development tasks, and the tasks went from 100 to 300.
 - Blockers and requested depth became guards.
-- The Atelier configuration (plug-in or strict runtime) is chosen on validation, like the strongest baseline.
+- The Atelier configuration (plug-in or strict runtime) is chosen on the working development tasks, by one rule.
+- 2026-10-06, from an outside tester's read of this draft: the verdict comes from the four axes alone and a missing
+  or short axis is UNRESOLVED; the axis files are built by a sealed script; the strongest-baseline endpoint is
+  removed; two outputs per task is said everywhere; every task carries `wants`; the voice axis is required.
 - An analysis script, a judge-qualification reader and a minimum of valid units were added.

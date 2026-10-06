@@ -7,6 +7,33 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: a golden corpus passes its own standard
+
+From an outside tester who ran the product as a user would and could not start the paid tests
+([decision 0015](docs/decisions/0015-a-golden-corpus-passes-its-own-standard.md)).
+
+- **Your own pieces are held against the rules suggested as required, together.** Each counted rule was checked
+  alone, on the few pieces held out, and set a little tighter than your average. The rules together could then fail
+  the work they were read from: 13 of 24 of one author's own posts broke a REQUIRED rule of their own standard. A
+  counted rule is now suggested REQUIRED only if at least 95% of your pieces meet it, and the rules suggested
+  REQUIRED must together be met by at least 90% of them; the rule most of your pieces break is suggested as shown
+  instead, and says why. It is still counted on every output and still used to choose between drafts. You can make
+  it required on the same screen.
+- **The review screen and every build say how your own pieces fare.** "Your own pieces: 22 of 24 meet every required
+  rule that is counted." Under nine in ten, the build names the rules they break most and the command that makes
+  each a preference: that is how a skill built before this is brought in line, with no new discovery.
+
+### Fixed
+
+- **A project folder that moved lost its skill.** Renamed, moved or copied with its store, a project was answered
+  "there is no standard to build from yet". The run that built the skill is now found in the store and taken over,
+  with a line saying where it was; more than one such run is named, never guessed between.
+- **A rebuild that asked for nothing changed the skill.** It chose its "write this, not that" pairs again from every
+  run in the store, so a rebuild after a benchmark carried pairs from benchmark answers, and it replaced the
+  skill's description with the default one. The pairs are now chosen at the first build and kept until
+  `--contrast auto` is given; the description is kept; and `atelier invoke --test-run` marks a run that is recorded
+  and never learned from (the benchmark runner passes it).
+
 ### Added: how big a skill is, and where a run's cost went
 
 Measuring tools only: no default of a build or a run changes, and a skill built before is served byte for byte as

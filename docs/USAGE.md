@@ -190,8 +190,14 @@ atelier export --skill posts --out skill.md --no-index            # leave out th
   them up with the voice, and `--piece-budget default` gives the budget up and keeps the form. Choosing the pieces
   again reads the pieces the skill was built from and calls no model. (A skill that answers reads which of its moves
   hold back once on every build, as it did before.)
-- **A rebuild compiles your standard as it stands.** If you amended a rule after the skill was built, a rebuild keeps
-  the amendment.
+- **A rebuild compiles your standard as it stands, and changes nothing you did not ask for.** If you amended a rule
+  after the skill was built, a rebuild keeps the amendment. It keeps the skill's description and its "write this,
+  not that" pairs (`--contrast auto` chooses those again), and a project folder you moved or renamed is found again
+  by the skill's name.
+- **Every build says how your own pieces fare:** "Your own pieces: 22 of 24 meet every required rule that is
+  counted." A standard your best work fails will fail drafts for things you do, so under nine in ten the build names
+  the rules your pieces break most and the command that makes each a preference. The review screen suggests a rule
+  as required only when your own pieces meet it, one by one and together.
 
 Nothing here is a default: a skill built without these options is chosen exactly as before. Whether a smaller skill
 holds your rules and your voice as well is a question for a measurement
