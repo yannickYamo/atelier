@@ -16,23 +16,38 @@ From an outside tester who ran the product as a user would and could not start t
   alone, on the few pieces held out, and set a little tighter than your average. The rules together could then fail
   the work they were read from: 13 of 24 of one author's own posts broke a REQUIRED rule of their own standard. A
   counted rule is now suggested REQUIRED only if at least 95% of your pieces meet it, and the rules suggested
-  REQUIRED must together be met by at least 90% of them; the rule most of your pieces break is suggested as shown
-  instead, and says why. It is still counted on every output and still used to choose between drafts. You can make
+  REQUIRED must together be met by at least 90% of them (one piece is always allowed, so a small corpus is not held
+  to "every piece"); the rule most of your pieces break is suggested as shown instead, and says why. It is still counted on every output and still used to choose between drafts. You can make
   it required on the same screen.
 - **The review screen and every build say how your own pieces fare.** "Your own pieces: 22 of 24 meet every required
   rule that is counted." Under nine in ten, the build names the rules they break most and the command that makes
   each a preference: that is how a skill built before this is brought in line, with no new discovery.
 
+### Added: a second voice gate, off by default
+
+- **`atelier fidelity --skill <name> --set voiceGate=reader`.** A voice rewrite is held by a fact ledger in code and
+  by word lists that read the strength of each claim. Offline, those lists refuse most faithful rewrites (32 of 112
+  kept on one author). With this setting a small model reads the rewrite for changed claims in their place, and the
+  word lists stay as the floor when no small model answers. It exists so that the voice-gate study
+  (studies/VOICE_GATE_PREREGISTRATION.md) can be acted on if that is the only gate it qualifies; it is not to be
+  turned on before.
+
 ### Fixed
 
 - **A project folder that moved lost its skill.** Renamed, moved or copied with its store, a project was answered
-  "there is no standard to build from yet". The run that built the skill is now found in the store and taken over,
-  with a line saying where it was; more than one such run is named, never guessed between.
+  "there is no standard to build from yet", and `atelier new` started a second, paid discovery of the same pieces.
+  The run that built the folder's skill is now found in the store before any command concludes there is none: a
+  folder that moved carries it on, a copy takes a copy.
 - **A rebuild that asked for nothing changed the skill.** It chose its "write this, not that" pairs again from every
   run in the store, so a rebuild after a benchmark carried pairs from benchmark answers, and it replaced the
-  skill's description with the default one. The pairs are now chosen at the first build and kept until
-  `--contrast auto` is given; the description is kept; and `atelier invoke --test-run` marks a run that is recorded
-  and never learned from (the benchmark runner passes it).
+  skill's description with the default one. Once a skill has pairs it now keeps them until `--contrast auto` is
+  given; the description is kept; and `atelier invoke --test-run` marks a run whose pairs are never taken (the
+  benchmark runner passes it).
+- **`atelier report` with nothing named shows the last run made in the project.** A run printed no id, and the
+  command asked for one.
+- **A first run prints less.** Under `atelier new`, how discovery got to its rules, an empty persona and a range
+  measured on no feature are no longer printed; the example of how to change a ruling names a rule that is on the
+  screen.
 
 ### Added: how big a skill is, and where a run's cost went
 

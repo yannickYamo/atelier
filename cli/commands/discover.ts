@@ -300,7 +300,8 @@ export async function discover(): Promise<void> {
       // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- `||` is deliberate:
       wouldBeAbsentIf: chain.proposed.find((f) => f.description === h.hypothesis.description)?.wouldBeAbsentIf?.trim() || null, materiality: null, realizationTolerance: null, outputShape: null }));
     const seen = chain.hypotheses.filter((h) => h.golden.some((g) => g.applicable && g.present)).length;
-    console.log(`${chain.proposed.length} proposed, ${proposals.length} survived validation, ${seen} seen again in held-out work.`);
+    // How discovery got to its rules is detail: under `atelier new` the review screen follows, and it is what matters.
+    if (!orchestrated()) console.log(`${chain.proposed.length} proposed, ${proposals.length} survived validation, ${seen} seen again in held-out work.`);
 
   }
 
@@ -403,7 +404,7 @@ export async function discover(): Promise<void> {
   // served to the writer, they would be compared with outputs written from them.
   writeAtomic(runFile('retrieval.json'), JSON.stringify(buildRetrievalIndex(read)));
   const steering = profile.bands.filter((b) => b.cls === 'all' && b.role !== 'MONITOR').length;
-  console.log(`Fidelity profile: ${profile.bands.filter((b) => b.cls === 'all').length} feature(s) measured on your pieces, ${steering} of them steer drafts${profile.detector ? `; a style detector trained against ${profile.detector.trainedOn.model} model drafts` : ''}.`);
+  if (!orchestrated()) console.log(`Fidelity profile: ${profile.bands.filter((b) => b.cls === 'all').length} feature(s) measured on your pieces, ${steering} of them steer drafts${profile.detector ? `; a style detector trained against ${profile.detector.trainedOn.model} model drafts` : ''}.`);
   if (contrast.length) {
     const from = drafts.length >= 2 ? `from comparing your writing with ${drafts.length} plain drafts by the model` : 'measured on your pieces alone (no plain drafts to compare with)';
     console.log(`${contrast.length} rule(s) ${from}: ${contrast.map((c) => c.requirement.requirementId).join(', ')}.`);
@@ -434,7 +435,8 @@ export async function discover(): Promise<void> {
   }
 
   const b = proposals.filter((p) => p.kind === 'BOUNDARY').length;
-  console.log(`\n${proposals.length} rule(s)${b ? `, ${b} of them boundaries` : ''}.  ($${budget.spentUsd.toFixed(3)})`);
+  // Under `atelier new` the review screen counts the rules next: only what discovery cost is said here.
+  console.log(orchestrated() ? `Read. Discovery cost $${budget.spentUsd.toFixed(2)}.` : `\n${proposals.length} rule(s)${b ? `, ${b} of them boundaries` : ''}.  ($${budget.spentUsd.toFixed(3)})`);
   // Under `atelier new` the review screen shows every rule next; listing them here too printed the
   // same twenty rules twice in a row.
   if (!process.env.ATELIER_ORCHESTRATED) {

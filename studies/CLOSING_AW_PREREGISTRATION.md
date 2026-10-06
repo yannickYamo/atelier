@@ -39,18 +39,44 @@ not cover exactly its sealed briefs, pieces and readers. W1 to W6 below are repo
 files for quality, rule anchor and repeatability are built by `bench/compare/axes.mjs` (`"claim": "A-w"`, the rubric's
 own threshold); the config seals `"requiredAxes"`, `"tasks"`, `"trials": 2` and `"readers": 5`.
 
-**The quality axis is the owner's to rule on before sealing.** stop-slop scores under its own line (35 of 50) about
-once in forty pieces in development, so "at least 20% fewer failures, and clearly fewer" cannot be shown on this
-axis at any size this test can afford: sealed as written, the claim will most likely miss on it. Two options:
-
-- (a) keep the axis as signed, and publish the miss. A published miss closes the claim.
-- (b) read it as a guard, "no clear loss on stop-slop's own score". That changes an axis of the signed bar, which
-  [decision 0012](../docs/decisions/0012-the-closing-rules.md) says does not change again, and so needs a decision
-  record of its own.
+**The quality axis is kept as signed (the owner, 2026-10-06).** stop-slop scores under its own line (35 of 50) about
+once in forty pieces in development, so "at least 20% fewer failures, and clearly fewer" can hardly be shown on this
+axis at any size this test can afford: the claim will most likely miss on it. The bar does not change for that. A
+miss is published as measured and closes the claim, as [decision 0012](../docs/decisions/0012-the-closing-rules.md)
+says, and the other three axes are published beside it.
 
 **Readiness before the seal:** on 30 development briefs per author, rule anchor and repeatability are counted, and
 three people read ten pairs blind for voice, as in claim C; a model never reads voice. The claim is sealed when rule
 anchor and voice reach the bar there.
+
+**From pieces to the verdict,** per author, run from the repository's root:
+
+```bash
+node bench/compare/run.mjs --tasks briefs.jsonl --arm none --condition bare --out answers/bare.jsonl --trials 2 --cap <cap>
+node bench/compare/run.mjs --tasks briefs.jsonl --arm skill:<pasted>.md --condition pasted --out answers/pasted.jsonl --trials 2 --cap <cap>
+node bench/compare/run.mjs --tasks briefs.jsonl --arm skill:<stop-slop>.md --condition stop-slop --out answers/stop-slop.jsonl --trials 2 --cap <cap>
+node bench/compare/run.mjs --tasks briefs.jsonl --arm skill:<stop-slop with pieces>.md --condition stop-slop-pasted --out answers/stop-slop-pasted.jsonl --trials 2 --cap <cap>
+node bench/compare/run.mjs --tasks briefs.jsonl --arm skill:<export>.md --condition atelier --out answers/atelier.jsonl --trials 2 --cap <cap>
+cat answers/*.jsonl > responses.jsonl
+node bench/compare/rubric-judge.mjs --responses responses.jsonl --tasks briefs.jsonl --rubric bench/compare/rubrics/stop-slop.json --out judged-1.jsonl --pass 1
+node bench/compare/rubric-judge.mjs --responses responses.jsonl --tasks briefs.jsonl --rubric bench/compare/rubrics/stop-slop.json --out judged-2.jsonl --pass 2
+node bench/compare/verify-rows.mjs --responses responses.jsonl --skill <skill> --data <ATELIER_DATA> --out verify.jsonl
+node bench/compare/axes.mjs --config axes.json --out axes
+node bench/compare/closing-quality.mjs --config closing-aw.json --out result.json
+```
+
+`axes.json`: `{"claim": "A-w", "tasks": "briefs.jsonl", "trials": 2, "candidate": "atelier", "handwritten":
+"stop-slop", "others": ["bare", "pasted", "stop-slop-pasted"], "reads": ["judged-1.jsonl", "judged-2.jsonl"],
+"rubric": "<repo>/bench/compare/rubrics/stop-slop.json", "verify": "verify.jsonl"}`.
+
+`closing-aw.json`: `{"claim": "A-w", "k": <pieces>, "conditions": {"bare": "bare", "handwritten": "stop-slop",
+"candidate": "atelier"}, "tasks": "briefs.jsonl", "trials": 2, "readers": 5, "minUnits": 27, "bar": {"reduction":
+0.2}, "requiredAxes": ["quality", "rule anchor", "repeatability", "voice"], "axes": [{"name": "quality", "file":
+"axes/quality.jsonl"}, {"name": "rule anchor", "file": "axes/rule-anchor.jsonl"}, {"name": "repeatability", "file":
+"axes/repeatability.jsonl"}, {"name": "voice", "file": "voice.jsonl"}], "weights": {"Directness": 1, "Rhythm": 1,
+"Trust": 1, "Authenticity": 1, "Density": 1}, "scores": ["judged-1.jsonl", "judged-2.jsonl"], "verify":
+"verify.jsonl", "preference": "voice.jsonl"}`. The voice file is the five readers' choices on every brief,
+`{case_id, reader, chose}`.
 
 **Size of the sealed test: 60 briefs per author.** That is the seal's size, from the spread measured in development.
 Fewer than 27 valid briefs for an author is UNRESOLVED.

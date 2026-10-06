@@ -67,7 +67,9 @@ A gate **PASSES** when it holds all four.
 
 - If `listsAndReader` passes, the gate stays as built and decision 0009's second condition is met.
 - If only `ledgerAndReader` passes, the reader takes the word lists' place when a small model is available, and
-  the word lists stay as the offline floor. That is a change of gate and is made only on this result.
+  the word lists stay as the offline floor. The product holds that gate behind a setting, off by default, and it is
+  turned on only on this result: `atelier fidelity --skill <name> --set voiceGate=reader`, for each author's skill,
+  before the voice pass is run. No code changes for it.
 - If no gate passes, the voice pass stays off by default with this result beside it, and the
   [voice pass study](VOICE_PASS_PREREGISTRATION.md) is not run: a gate that lets changed claims through, or keeps
   almost nothing, gives it nothing to measure.

@@ -7,6 +7,10 @@
 // One line per response: {case_id, trial, condition, arm, score, components}, then a summary per arm on
 // stdout (mean, and the spread between trials of a case when there is more than one). Deterministic and
 // offline: `atelier score` calls no model. Run `npm run build` first.
+//
+// A REFUSAL IS NOT SCORED HERE. A strict refusal is a row with `response: null` (as run.mjs writes it): there is no
+// text to score, and a zero for it would read as a very bad answer. Such rows are skipped and counted on stderr, so
+// an arm's mean is over the answers it delivered; how often it delivered nothing is read from the responses file.
 
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -21,9 +25,11 @@ if (!respPath || !tasksPath || !data || !skill || !out) die('usage: score.mjs --
 const cli = resolve(opt(args, 'cli', new URL('../../dist/cli/atelier.mjs', import.meta.url).pathname));
 const tasks = new Map(readJsonl(tasksPath).map((t) => [t.id, t]));
 const tmp = mkdtempSync(join(tmpdir(), 'compare-score-'));
-const rows = [];
+const rows = []; const refused = [];
 try {
   for (const r of readJsonl(respPath)) {
+    if (r.response === null || r.response === undefined) { refused.push(r); continue; }
+    if (typeof r.response !== 'string') die(`${r.case_id} trial ${r.trial} (${r.condition}): \`response\` is neither text nor null`);
     const t = tasks.get(r.case_id) ?? die(`${r.case_id} is not in ${tasksPath}`);
     writeFileSync(join(tmp, 'task.md'), t.prompt);
     writeFileSync(join(tmp, 'response.md'), r.response);
@@ -36,6 +42,7 @@ try {
   }
 } finally { rmSync(tmp, { recursive: true, force: true }); }
 writeJsonl(out, rows);
+if (refused.length) console.error(`${refused.length} row(s) with no answer (a strict refusal, \`response: null\`) were not scored: ${refused.slice(0, 5).map((r) => `${r.case_id} trial ${r.trial} (${r.condition})`).join(', ')}${refused.length > 5 ? ', …' : ''}. The means below are over delivered answers only.`);
 const byArm = new Map();
 for (const r of rows) { const k = `${r.condition} ${r.arm}`; byArm.set(k, [...(byArm.get(k) ?? []), r]); }
 for (const [k, rs] of byArm) {

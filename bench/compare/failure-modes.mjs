@@ -25,6 +25,11 @@
 // is refused even then.
 //   Writes {case_id, trial, condition, F1, F2, F3, F4, failed, by}: `by` says which checks code decided.
 //   A strict refusal (response null) is a failed answer: F1 and F2.
+//
+// AN ANSWER THE READER COULD NOT READ IS NOT WRITTEN. When the reader's call fails (the provider, the cap), no row is
+// written for that answer, so the same command reads it again; written with F3 null it was skipped as done by every
+// later run and then refused by bench/compare/axes.mjs. The run says how many answers are left unread and exits 3
+// while any remain. (`--code-only` asks no reader at all: there the checks code cannot decide are written as null.)
 import { readFileSync, appendFileSync, existsSync } from 'node:fs';
 import { spend } from '../../dist/core/inference/client.js';
 import { arg, has, fail, clientFor, budgetOf } from '../../studies/harness/study-client.mjs';
@@ -71,6 +76,7 @@ if (process.argv[1] && process.argv[1].endsWith('failure-modes.mjs')) {
   if (legacy) console.error(`--legacy-tasks: ${without} of ${TASKS.size} tasks have no \`wants\`. On those F1 is left to the reader and F4 is not checked (recorded as false).`);
   const done = new Set(existsSync(OUT) ? jsonl(OUT).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}`) : []);
   const reader = has('--code-only') ? null : clientFor(arg('--reader', 'claude-haiku-4-5')); const budget = budgetOf(Number(arg('--cap', '5')), 100000);
+  let leftUnread = 0; let firstUnread = null;
   for (const r of RESP) {
     const key = `${r.case_id}\u0000${r.trial}\u0000${r.condition}`;
     if (done.has(key)) continue;
@@ -78,12 +84,15 @@ if (process.argv[1] && process.argv[1].endsWith('failure-modes.mjs')) {
     const c = byCode(task, r.response); const by = Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v === null ? 'reader' : 'code']));
     let read = null;
     if (reader && r.response && (c.F1 === null || c.F3 === null)) {
-      try { read = await spend(budget, 0.01, async () => { const x = await reader.complete({ stableBlock: SYSTEM, variableBlock: '', userMessage: `<request>\n${task.prompt}\n</request>\n\n<answer>\n${r.response}\n</answer>`, toolName: 'emit_failures', toolDescription: 'Return the failures of this answer.', schema: SCHEMA, maxTokens: 300, temperature: 0 }); return { value: x.json, cost: x.cost }; }); } catch { read = null; }
+      try { read = await spend(budget, 0.01, async () => { const x = await reader.complete({ stableBlock: SYSTEM, variableBlock: '', userMessage: `<request>\n${task.prompt}\n</request>\n\n<answer>\n${r.response}\n</answer>`, toolName: 'emit_failures', toolDescription: 'Return the failures of this answer.', schema: SCHEMA, maxTokens: 300, temperature: 0 }); return { value: x.json, cost: x.cost }; }); } catch (e) { read = null; firstUnread ??= `${r.case_id} trial ${r.trial} (${r.condition}): ${String(e?.message ?? e).split('\n')[0]}`; }
+      // THE READER DID NOT ANSWER: nothing is written for this answer, so a rerun reads it again.
+      if (read === null || typeof read !== 'object') { leftUnread += 1; firstUnread ??= `${r.case_id} trial ${r.trial} (${r.condition}): the reader returned nothing`; continue; }
     }
     // A check nobody could read is recorded as unread, never as a pass.
     const F1 = c.F1 ?? (read ? read.F1 === true : null); const F3 = c.F3 ?? (read ? read.F3 === true : null);
     const row = { case_id: r.case_id, trial: r.trial, condition: r.condition, F1, F2: c.F2, F3, F4: c.F4, failed: [F1, c.F2, F3, c.F4].some((x) => x === true), unread: [F1, F3].filter((x) => x === null).length, by };
     appendFileSync(OUT, `${JSON.stringify(row)}\n`);
   }
+  if (leftUnread) { console.error(`${leftUnread} answer(s) left unread: the reader's call failed (first: ${firstUnread}). No row was written for them in ${OUT}; run the same command again to read them (with a higher --cap if the cap was reached).  $${budget.spentUsd.toFixed(3)}`); process.exit(3); }
   console.error(`done: ${OUT}  $${budget.spentUsd.toFixed(3)}`);
 }

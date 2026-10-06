@@ -22,7 +22,8 @@ import { skillCardFor } from '../skill-card.js';
 import { featureOf } from '../../core/observers/features.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
-import { DATA, die, argv, flag, positional, positionals } from '../runtime.js';
+import { DATA, die, argv, flag, positional, positionals, runFile } from '../runtime.js';
+import { readJson } from '../../core/state/read-json.js';
 
 /** The skill a run belongs to: named, or found by its id across the store. */
 function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
@@ -38,7 +39,9 @@ function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
 }
 
 export function report(): void {
-  const id = positional([]);
+  // With no run named and no skill either: the last run made in this project, which is the one a person means.
+  const last = runFile('last-invocation.json');
+  const id = positional([]) ?? (!flag('--skill') && existsSync(last) ? readJson<{ invocationId: string }>(last, { what: 'the last run' }).invocationId : undefined);
   // NO RUN NAMED: THE SKILL ITSELF. What every output of it is checked by, as recorded when it was built.
   if (!id) {
     const name = flag('--skill') ?? die('usage: atelier report <invocation> | atelier report --skill <name> [--json]');

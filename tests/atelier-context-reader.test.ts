@@ -168,6 +168,20 @@ describe('the voice gate\'s second read can only refuse', () => {
     // A quote that is nowhere in the rewrite is no finding.
     expect((await voicePass(writer, budget(), text, bank, null, scripted(() => ({ changes: [{ kind: 'added', quote: 'not in the text' }] })))).paragraphs[0].kept).toBe(true);
   });
+  it('with the reader as the gate, a faithful rewrite the word lists refuse is kept; a changed claim is still refused; and with no reader the word lists decide', async () => {
+    // "may continue" said as "might continue" keeps the claim and its strength. The word lists read the lost "may" as a hedge lost.
+    const faithful = scripted(() => ({ paragraph: rewrite.replace('which may continue', 'which might continue') }));
+    expect((await voicePass(faithful, budget(), text, bank, null)).paragraphs[0]).toMatchObject({ kept: false, check: 'strength' });
+    const finds = (changes: { kind: string; quote: string }[]) => scripted(() => ({ changes }));
+    expect((await voicePass(faithful, budget(), text, bank, null, finds([]), 'reader')).paragraphs[0].kept).toBe(true);
+    expect((await voicePass(faithful, budget(), text, bank, null, finds([{ kind: 'strength', quote: 'might continue' }]), 'reader')).paragraphs[0]).toMatchObject({ kept: false, check: 'reader' });
+    // no small model, or one that cannot answer: nothing passes unread, the word lists are the floor
+    expect((await voicePass(faithful, budget(), text, bank, null, null, 'reader')).paragraphs[0]).toMatchObject({ kept: false, check: 'strength' });
+    expect((await voicePass(faithful, budget(), text, bank, null, failing, 'reader')).paragraphs[0]).toMatchObject({ kept: false, check: 'strength' });
+    // and a fact changed is refused in code whatever the reader says
+    const wrong = scripted(() => ({ paragraph: rewrite.replace('40%', '60%') }));
+    expect((await voicePass(wrong, budget(), text, bank, null, finds([]), 'reader')).paragraphs[0]).toMatchObject({ kept: false, check: 'facts' });
+  });
 });
 
 describe('typicality says when a text is beyond every piece', () => {

@@ -7,9 +7,9 @@ import { parseArgs } from 'node:util';
 // where data goes, how a run advances, and how a model is reached.
 
 import type { SkillMode } from '../core/ratification/suggest.js';
-import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync, cpSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync, copyFileSync, statSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
@@ -730,8 +730,16 @@ export const loadSession = (): Session => {
     adoptLegacyRunFiles();
     return legacy;
   }
+  // A project folder that moved, or was copied, with the skill it built: its run is found and carried on, before any
+  // command concludes there is none (and before `atelier new` pays to discover the same pieces again).
+  if (!adopting) {
+    adopting = true;
+    try { if (adoptMovedRun() && existsSync(p)) return readJson<Session>(p, { what: "this project's session", requireKeys: ['run'] }); } finally { adopting = false; }
+  }
   return blankSession();
 };
+/** Set while a run is being taken over, so that saving the session it takes does not look for another. */
+let adopting = false;
 
 export const saveSession = (s: Session): void => {
   const p = sessionPath();
@@ -739,38 +747,79 @@ export const saveSession = (s: Session): void => {
   writeAtomic(p, JSON.stringify({ ...s, projectDir: projectDir() }, null, 1));
 };
 
+/** A run's working files that describe the run and not one place on disk: the only ones taken into another project. */
+const PORTABLE_RUN_FILES: readonly string[] = [
+  'pending-standard.json', 'ratification-ledger.json', 'import-plan.json', 'proposal.md', 'signals.json', 'fidelity.json',
+  'retrieval.json', 'typicality.json', 'contrast-drafts.json', 'method-findings.json', 'reference-pairs.json', 'corpus-paths.json',
+];
+
 /**
  * A PROJECT THAT MOVED KEEPS ITS SKILL. A run's session and working files are keyed by the project's path, so a
  * project folder renamed, moved or copied (with its store) is, to that key, a project that has never run: `build`
- * answered "there is no standard to build from yet" beside a store that held the skill and its standard. When this
- * project has no run of its own, the run that built `skillName` is looked for among the store's sessions and taken
- * over: its session and working files are copied under this project's key (copied, so the old place still works if
- * it is still there), and the folder of pieces is found again when it moved with the project. More than one run
- * that built a skill of that name is not guessed between: they are named, and nothing is taken.
- * Returns where the run was found, or null when this project has a run already or no run built that skill.
+ * answered "there is no standard to build from yet" beside a store that held the skill and its standard, and
+ * `atelier new` started a second, paid discovery of the same pieces.
+ *
+ * So when this project has no run of its own, the run that built its skill is looked for among the store's
+ * sessions. `skillName` names the skill (`build --name`); without one, a run is this project's when a skill of its
+ * name is installed here, or its folder of pieces came along.
+ *
+ *   the old folder is gone      the project MOVED: its session and working files are moved under this project's key,
+ *                               so no second session is left behind to be mistaken for another project's
+ *   the old folder still exists the project was COPIED: the session is copied, and of the working files only those
+ *                               that describe the run (PORTABLE_RUN_FILES). The undo record and the last invocation
+ *                               belong to the other folder and stay there
+ *
+ * A file already in this project's run is never replaced. Paths that pointed inside the old folder (the folder of
+ * pieces, the sealed list of pieces) are rewritten to this one. Several live projects that built a skill of the name
+ * are not guessed between: they are named, and nothing is taken.
+ * Returns where the run was found, or null when this project has a run already or no run is its own.
  */
-export function adoptMovedRun(skillName: string): { readonly from: string | null } | null {
+export function adoptMovedRun(skillName: string | null = null): { readonly from: string | null } | null {
   if (existsSync(sessionPath())) return null;
   const dir = join(DATA, 'sessions');
   if (!existsSync(dir)) return null;
-  const found = readdirSync(dir).filter((f) => f.endsWith('.json')).flatMap((f) => {
-    try { const s = readJson<Session>(join(dir, f), { what: 'a session', requireKeys: ['run'] }); return s.skillName === skillName ? [{ key: f.slice(0, -'.json'.length), s }] : []; } catch { return []; }
+  const here = resolve(projectDir());
+  const inside = (root: string, path: string): string | null => { const rel = relative(root, path); return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel)) ? rel : null; };
+  const remap = (was: string, path: string): string => { const rel = inside(was, path); return rel === null ? path : join(here, rel); };
+  const all = readdirSync(dir).filter((f) => f.endsWith('.json')).flatMap((f) => {
+    try {
+      const s = readJson<Session>(join(dir, f), { what: 'a session', requireKeys: ['run'] });
+      const was = s.projectDir ? resolve(s.projectDir) : null;
+      return s.skillName && was && was !== here ? [{ file: join(dir, f), key: f.slice(0, -'.json'.length), s, was, gone: !existsSync(was), at: statSync(join(dir, f)).mtimeMs }] : [];
+    } catch { return []; }
   });
-  if (!found.length) return null;
-  if (found.length > 1) {
-    die(`${found.length} runs in this store built a skill called "${skillName}", and this project is none of them:\n`
-      + found.map((x) => `  ${x.s.projectDir ?? 'a project whose folder was not recorded'}`).join('\n')
-      + '\n  Run the build from one of those folders, or set ATELIER_PROJECT_DIR to it.');
+  // This project's, by name; or, with no name given, by what came along with the folder.
+  const mine = all.filter((x) => (skillName !== null ? x.s.skillName === skillName
+    : existsSync(join(here, '.claude', 'skills', x.s.skillName ?? '', 'SKILL.md')) || (x.gone && Boolean(x.s.source) && inside(x.was, x.s.source ?? '') !== null && existsSync(remap(x.was, x.s.source ?? '')))));
+  // A run whose folder is gone can only be this project, moved; the newest of those, when a store holds leftovers.
+  const moved = mine.filter((x) => x.gone).sort((a, b) => b.at - a.at)[0];
+  const live = mine.filter((x) => !x.gone);
+  if (!moved && live.length > 1) {
+    if (skillName === null) return null;
+    die(`${live.length} projects in this store built a skill called "${skillName}", and this folder is none of them:\n`
+      + live.map((x) => `  ${x.was}`).join('\n') + '\n  Run the build from one of those folders.');
   }
-  const { key, s } = found[0];
-  const was = s.projectDir ?? null; const here = projectDir();
-  // The folder of pieces, when it sat inside the project and came with it.
-  const moved = was && s.source && (s.source === was || s.source.startsWith(`${was}/`)) ? join(here, s.source.slice(was.length)) : null;
-  const source = moved && existsSync(moved) ? moved : s.source;
+  const found = moved ?? live[0];
+  if (!found) return null;
+  const { s, was, key } = found;
+  const source = s.source ? remap(was, s.source) : s.source;
+  // The session first: a copy of the working files that stopped halfway must not leave files with no run to own them.
+  saveSession({ ...s, ...(source === undefined ? {} : { source: source && existsSync(source) ? source : s.source }) });
   const oldRun = join(DATA, 'runs', key);
-  if (existsSync(oldRun)) cpSync(oldRun, runDir(), { recursive: true });
-  saveSession({ ...s, ...(source === undefined ? {} : { source }) });
-  console.log(`(this project has no run of its own; took over the run that built "${skillName}"${was ? `, which was at ${was}` : ''}.`
+  if (existsSync(oldRun)) {
+    mkdirSync(runDir(), { recursive: true });
+    for (const f of readdirSync(oldRun)) {
+      const from = join(oldRun, f); const to = runFile(f);
+      // The undo record names files in the other folder by absolute path, and is never taken; a file already here stays.
+      if (f === 'undo.json' || existsSync(to) || !statSync(from).isFile() || (!found.gone && !PORTABLE_RUN_FILES.includes(f))) continue;
+      copyFileSync(from, to);
+    }
+    // The sealed list of pieces names each by its path: those under the old folder are under this one now.
+    const paths = runFile('corpus-paths.json');
+    if (existsSync(paths)) writeAtomic(paths, readFileSync(paths, 'utf8').split(JSON.stringify(was).slice(1, -1)).join(JSON.stringify(here).slice(1, -1)));
+  }
+  if (found.gone) { rmSync(found.file, { force: true }); rmSync(oldRun, { recursive: true, force: true }); }
+  console.log(`(this folder had no run of its own; ${found.gone ? 'it carries on the run' : 'it took a copy of the run'} that built "${s.skillName}", which was at ${was}.`
     + (source && !existsSync(source) ? ` Its folder of pieces (${source}) is not here: a build that chooses pieces again will need it.` : '') + ')');
   return { from: was };
 }

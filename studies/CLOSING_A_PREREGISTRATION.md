@@ -49,17 +49,54 @@ rules", never "the other skill is worse at its own aims".
 All four axes are required, voice included: 100 of the tasks, drawn by seed before the test opens, three readers
 each.
 
-## The config
+## From answers to the verdict (the scripts decide; nothing is built by hand)
 
-Sealed as written, with the files' paths filled in. `bench/compare/axes.mjs` builds the first three axis files from
-the raw rows (two judge reads, the failure-mode rows, a person's resolutions where the two reads disagree on a
-blocker, and the verify rows); nothing in them is built by hand. The voice file is the readers' choices,
-`{case_id, reader, chose}` with `chose` `"candidate"` or `"comparator"`.
+Run from the repository's root. Keep every input in one directory of your own and give each script an output
+directory of its own.
+
+```bash
+# 1. the answers: each arm to its own file, under its own label, two outputs a task
+node bench/compare/run.mjs --tasks tasks.jsonl --arm none --condition bare --out answers/bare.jsonl --trials 2 --cap <cap>
+node bench/compare/run.mjs --tasks tasks.jsonl --arm skill:<i-have-adhd>/skills/i-have-adhd/SKILL.md --condition i-have-adhd --out answers/i-have-adhd.jsonl --trials 2 --cap <cap>
+node bench/compare/run.mjs --tasks tasks.jsonl --arm skill:<export>.md --condition atelier --out answers/atelier.jsonl --trials 2 --cap <cap>
+#    (the runtime arm, when it is the one chosen: --arm atelier-runtime:<build> --runtimes runtimes.json --condition atelier)
+
+# 2. the judge, twice (the benchmark's own judge: scores-1.jsonl and scores-2.jsonl, rows {case_id, trial, condition, <dimensions>, blocker})
+
+# 3. the failure modes, and the owner's rules, on every answer (one file of all arms; the axes read the two compared)
+cat answers/bare.jsonl answers/i-have-adhd.jsonl answers/atelier.jsonl > responses.jsonl
+node bench/compare/failure-modes.mjs --tasks tasks.jsonl --responses responses.jsonl --out modes.jsonl --cap <cap>
+node bench/compare/verify-rows.mjs --responses responses.jsonl --skill <skill> --data <ATELIER_DATA> --out verify.jsonl
+
+# 4. a person rules on each answer whose two judge reads disagree on the blocker (resolutions.jsonl), then the axes
+node bench/compare/closing-quality.mjs --config closing-a.json --disagreements disagreements.jsonl
+node bench/compare/axes.mjs --config axes.json --out axes
+
+# 5. the verdict
+node bench/compare/closing-quality.mjs --config closing-a.json --out result.json
+```
+
+`axes.json`, sealed:
 
 ```json
 {
-  "claim": "A", "k": "<examples>",
-  "conditions": { "bare": "bare", "handwritten": "i-have-adhd", "candidate": "<the arm chosen>" },
+  "claim": "A", "tasks": "tasks.jsonl", "trials": 2,
+  "candidate": "atelier", "handwritten": "i-have-adhd", "others": ["bare"],
+  "reads": ["scores-1.jsonl", "scores-2.jsonl"],
+  "modes": "modes.jsonl", "resolutions": "resolutions.jsonl", "verify": "verify.jsonl"
+}
+```
+
+## The config
+
+`closing-a.json`, sealed as written with the files' paths filled in. `bench/compare/axes.mjs` builds the first three
+axis files; the voice file is the readers' choices, `{case_id, reader, chose}` with `chose` `"candidate"` or
+`"comparator"`, three rows for each of the 100 tasks listed in `voice-tasks.jsonl`.
+
+```json
+{
+  "claim": "A", "k": 24, "arm": "plug-in",
+  "conditions": { "bare": "bare", "handwritten": "i-have-adhd", "candidate": "atelier" },
   "tasks": "tasks.jsonl", "trials": 2, "readers": 3, "minUnits": 280,
   "bar": { "reduction": 0.2 },
   "requiredAxes": ["quality", "rule anchor", "repeatability", "voice"],
@@ -70,9 +107,13 @@ blocker, and the verify rows); nothing in them is built by hand. The voice file 
     { "name": "voice", "file": "voice.jsonl", "tasks": "voice-tasks.jsonl" }
   ],
   "weights": { "correctness": 0.35, "autonomy": 0.25, "actionability": 0.2, "safety": 0.1, "concision": 0.1 },
-  "scores": ["scores-1.jsonl", "scores-2.jsonl"], "verify": "verify.jsonl", "human": "human.jsonl"
+  "scores": ["scores-1.jsonl", "scores-2.jsonl"], "reads": ["scores-1.jsonl", "scores-2.jsonl"],
+  "verify": "verify.jsonl", "human": "human.jsonl"
 }
 ```
+
+`"arm"` is `"plug-in"` or `"runtime"`, whichever was chosen, and `"k"` the number of examples the skill was built
+from. Every file named must exist: `human.jsonl` is the person's blind coding of a fifth of the answers.
 
 ## The quality axis in detail (2026-10-05)
 
@@ -92,14 +133,10 @@ when development says it is ready ([the brief](INDEPENDENT_TEST_BRIEF.md), phase
 enter the test, the Atelier skill is run against i-have-adhd, every loss is read and grouped into failure modes, the
 causes are fixed in how a skill is built (never for one task), and the loop repeats. Development runs at most three rounds.
 
-**The readiness line is the owner's to fix before the last development round is read. Two options are on the
-table:**
-
-- (i) quality alone: on development tasks, the Atelier arm has at least 20% fewer quality failures than
-  i-have-adhd;
-- (ii) every counted axis (quality, rule anchor, repeatability): at least 20% fewer and the lower bound above zero,
-  read on development tasks that no earlier reading used. The outside tester recommends this one: with (i) the
-  claim can be sealed while an axis that decides it is likely to miss.
+**The readiness line, fixed by the owner on 2026-10-06:** every counted axis (quality, rule anchor, repeatability)
+has at least 20% fewer failures than i-have-adhd, with the lower bound above zero, read on development tasks that no
+earlier reading used. Quality alone is not enough: a claim sealed on it could still miss on an axis that decides it.
+Voice is read by people in the sealed test and is not part of the readiness line.
 
 The 60 held-out development tasks of the second round were read under an earlier definition of a quality failure.
 They are evidence, and they are not the readiness reading.

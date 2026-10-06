@@ -321,7 +321,9 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   it('new … --accept builds the profile and the first implementation release', () => {
     const out = run('new', join(proj, 'posts'), 'write a post like these', '--name', 'posts', '--accept', '--no-ai-assist');
     expect(out).not.toMatch(/^EXIT:/);
-    expect(out).toMatch(/Fidelity profile: \d+ feature\(s\) measured on your pieces, \d+ of them steer drafts/);
+    // the profile is said once, on the card (the line discovery printed about it is detail under `atelier new`)
+    expect(out).toMatch(/features\s+\d+ measured on your pieces, \d+ steer drafts/);
+    expect(out).not.toMatch(/Fidelity profile: /);
     expect(out).toMatch(/Implementation release [0-9a-f]{16}: 2 drafts, up to 0 structural edit\(s\)/);
     // the skill's evaluation, printed the moment it is built
     expect(out).toMatch(/── Atelier · skill posts · version [0-9a-f]{8} · standard [0-9a-f]{8}/);

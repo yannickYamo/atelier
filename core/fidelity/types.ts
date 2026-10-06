@@ -181,6 +181,14 @@ export interface ImplementationSettings {
    */
   readonly voice?: 'incontext';
   /**
+   * WHICH GATE A VOICE REWRITE MUST PASS (../voice/integrity.ts, ../voice/reader.ts). Absent: the fact ledger and the
+   * strength word lists, with a small model's second read when one is available, which can only refuse. 'reader': the
+   * fact ledger in code and the small model's read IN PLACE OF the word lists, which are kept as the floor for a run
+   * with no small model or a read that could not answer. Opt-in, and only for a gate the voice-gate study qualified
+   * (studies/VOICE_GATE_PREREGISTRATION.md): the word lists refuse most faithful rewrites, and a reader may not.
+   */
+  readonly voiceGate?: 'reader';
+  /**
    * HOW A DRAFT IS CHOSEN among those the rules cannot separate (./sampling.ts): absent, the best-scoring one;
    * 'sample', drawn in proportion to how much likelier it is the author's than the model's. Opt-in.
    */

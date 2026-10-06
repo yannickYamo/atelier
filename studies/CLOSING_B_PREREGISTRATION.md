@@ -51,6 +51,13 @@ pilot shows how much of the refusal rate it is.
 | R4 | long sessions | 20 ten-turn sessions per answering skill, each turn its own strict run with the session so far as material | REQUIRED misses delivered: 0; slope of flagged specifics per turn, 95% upper bound under 0.2 |
 
 **Claim B PASSES** when R1 and R2 hold for every skill. R3 and R4 have their own sentences, said beside it either way.
+
+**R3 and R4 have no harness in the repository.** `studies/harness/strict-delivery.mjs` reads R1 and R2. Repeatability
+against pasted examples and long sessions are run only if the tester builds their runs; where they are not run, the
+result says "not measured", and claim B's verdict does not wait on them.
+
+Run it from any directory, the backend flags last:
+`node studies/harness/strict-delivery.mjs --requests requests.jsonl --data <ATELIER_DATA> --project <project> --out out/b [--pilot]`.
 **Minimum valid units:** 55 requests per skill after retries.
 
 **Reported, deciding nothing:** the tasks of [claim A](CLOSING_A_PREREGISTRATION.md) run once under `--strict`

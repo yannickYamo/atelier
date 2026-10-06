@@ -442,8 +442,8 @@ changed, and how.
 
 When the loop in `atelier invoke` repairs a span and the pass is accepted, the before/after pair is
 recorded with the broken rule's key and its exact check. (In Claude Code the host rewrites the whole
-answer, so there is no verified span pair to record.) At build, up to six recent pairs (two per rule)
-ship with the skill as `examples/contrast.md`, and only pairs that still teach the current standard:
+answer, so there is no verified span pair to record.) While a skill has none, a build chooses up to six recent pairs (two per rule), which
+then ship with the skill as `examples/contrast.md` and are kept until `--contrast auto` chooses again, and only pairs that still teach the current standard:
 - the rule is still live
 - its check is unchanged
 - where the rule counts words, the "after" has fewer of them than the "before"

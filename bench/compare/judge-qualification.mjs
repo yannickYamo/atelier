@@ -15,6 +15,11 @@
 // Called right: a good answer at or above the threshold with no blocker; a bad answer below it, or marked a blocker.
 // THE BAR: at least 0.85 of each class. A second judge from another model family is read the same way, and its
 // agreement with the first, answer by answer, is reported.
+//
+// THE VERDICT. Without --second: QUALIFIED or NOT QUALIFIED by that bar, and UNRESOLVED when fewer than 20 answers of
+// a class were judged. With --second the pre-registration's own line is read too (studies/CLOSING_A_PREREGISTRATION.md,
+// "Judge"): when the two judges agree on fewer than 0.80 of the planted answers, the verdict is UNRESOLVED, whatever
+// the first judge scored alone. Two judges that do not call the same answers good are not one instrument.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { clopperPearson } from '../../dist/core/stats/sign-test.js';
 
@@ -49,6 +54,10 @@ if (arg('--second')) {
   result.second = { ...second, calls: undefined };
   result.agreement = rate(both.filter((k) => first.calls.get(k) === second.calls.get(k)).length, both.length);
 }
-result.verdict = !first.enough ? 'UNRESOLVED: fewer than 20 answers of a class were judged' : first.qualified ? 'QUALIFIED' : 'NOT QUALIFIED';
+const AGREEMENT = 0.8;
+const apart = result.agreement && !(result.agreement.share >= AGREEMENT);
+result.verdict = !first.enough ? 'UNRESOLVED: fewer than 20 answers of a class were judged'
+  : apart ? `UNRESOLVED: the two judges agree on ${result.agreement.share ?? 'none'} of the ${result.agreement.n} planted answers both judged, under the ${AGREEMENT.toFixed(2)} the pre-registration sets. The claim cannot be read with this pair of judges`
+    : first.qualified ? 'QUALIFIED' : 'NOT QUALIFIED';
 if (arg('--out')) writeFileSync(arg('--out'), JSON.stringify(result, null, 1));
 console.log(JSON.stringify(result, null, 1));

@@ -20,6 +20,7 @@ import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs, contrastFor } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { piecesBreaking } from '../../core/observers/derive.js';
+import { allowed, CORPUS_SET_SHARE } from '../../core/ratification/suggest.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { onCorpusReader } from './discover.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -223,7 +224,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
   try {
     const persona = reconcilePersona(await onCorpusReader((c) => derivePersona(c, budget, readable)), standardForbids(v));
-    console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
+    // Nothing to say about a persona with no point in it: it adds nothing to the skill.
+    if (persona.points.length) console.log(`Persona: ${persona.points.length} point(s) on how the author sounds, each with how often and a quote from their pieces`
       + (persona.dropped ? ` (${persona.dropped} dropped: their quote was not in the pieces)` : '')
       + `${persona.conflicting ? ` (${persona.conflicting} dropped: they describe a move your standard rules out)` : ''}; $${budget.spentUsd.toFixed(3)}. Turn off with --persona none.`);
     return { ...voice, persona };
@@ -352,11 +354,14 @@ export async function build(nameArg?: string): Promise<void> {
   const arch = compileArchitecture(v);
   // WHAT THE SKILL IS FOR IS KEPT THROUGH A REBUILD, like its voice and its class. A rebuild that changed nothing else
   // used to replace the owner's description with the default one, in the line a host decides to load the skill by.
-  // Kept only while the skill is still for the same kind of work: a standard for other work under an old name does
-  // not inherit a sentence written for the first.
+  // Kept only while the skill is still read from the same pieces: a standard from another corpus under an old name
+  // does not inherit a sentence written for the first. A second name for the same run takes the first's.
   const before = ((): string | undefined => {
-    const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null;
-    return sv?.description && store.getStandard(L, sv.standardVersionHash)?.workType === v.workType ? sv.description : undefined;
+    for (const layout of [L, ...(s.skillName && s.skillName !== name ? [{ root: DATA, skillName: s.skillName }] : [])]) {
+      const active = store.getActive(layout); const sv = active ? store.getSkillVersion(layout, active) : null;
+      if (sv?.description && store.getStandard(layout, sv.standardVersionHash)?.evidenceId === v.evidenceId) return sv.description;
+    }
+    return undefined;
   })();
   const desc = flag('--description') ?? before ?? defaultDescription(v.workType);
   // ── THE EXEMPLAR, WHEN THE OWNER NAMES ONE ──────────────────────────────────────────────────
@@ -399,20 +404,25 @@ export async function build(nameArg?: string): Promise<void> {
   // Chosen here, at build, and kept through every rebuild; `--contrast none` turns them off.
   const contrastFlag = flag('--contrast');
   if (contrastFlag !== undefined && contrastFlag.trim().toLowerCase() !== 'none' && contrastFlag.trim().toLowerCase() !== 'auto') {
-    die('--contrast takes none (ship no contrast examples) or auto (choose them from past repairs, the default)');
+    die('--contrast takes none (ship no contrast examples) or auto (choose them again from past repairs)');
   }
   const contrastOff = contrastFlag === undefined ? store.getContrast(L).off : contrastFlag.trim().toLowerCase() === 'none';
   const heldBack = { tasks: (s.reservation?.reserved ?? []).map((u) => u.task), texts: (s.reservation?.reserved ?? []).map((u) => u.artifact) };
   // CHOSEN ONCE AND KEPT. Pairs used to be chosen again on every build from every run in the store, so a rebuild
   // that asked for nothing changed the skill: after a benchmark, a plain rebuild added pairs taken from benchmark
-  // answers. A first build chooses them; a rebuild keeps the ones the skill has, checked again against this standard;
-  // `--contrast auto`, given, chooses again. A run made as a test (`invoke --test-run`) never feeds them.
-  const rechoose = !store.getActive(L) || contrastFlag?.trim().toLowerCase() === 'auto';
-  const contrast = { off: contrastOff, pairs: contrastOff ? [] : rechoose ? selectContrastPairs(store.listInvocations(L), v, heldBack) : contrastFor(store.getContrast(L).pairs, v) };
+  // answers. While the skill has none they are chosen (a first build has no runs to choose from, so the first pairs
+  // come at the first rebuild after a repair was accepted); once it has some, a rebuild keeps them, and
+  // `--contrast auto`, given, chooses again. The pairs of a run made as a test (`invoke --test-run`) are never taken.
+  const keptPairs = store.getContrast(L).pairs;
+  const rechoose = !keptPairs.length || contrastFlag?.trim().toLowerCase() === 'auto';
+  // What is kept is the choice; what ships is the part of it that still teaches this standard. Storing the shipped
+  // part would lose, for good, a pair that an amendment set aside and a later one brings back.
+  const chosenPairs = contrastOff ? [] : rechoose ? selectContrastPairs(store.listInvocations(L), v, heldBack) : keptPairs;
+  const contrast = { off: contrastOff, pairs: contrastOff ? [] : contrastFor(chosenPairs, v) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);
   const voice = await chooseVoice(L, v);
-  reportOwnPieces(v, name);
+  if (!argv.includes('--review')) reportOwnPieces(v, name, s);
   const pkg0 = renderAgentSkill(v, arch, name, desc, exemplar, shipped, voice);
   const skill = { skillVersionHash: sha(`${arch.architectureHash}|${pkg0.packageHash}`), skillName: name,
     standardVersionHash: v.standardVersionHash, architectureHash: arch.architectureHash, materializedHash: pkg0.packageHash, builtAt: new Date().toISOString(), description: desc };
@@ -453,7 +463,7 @@ export async function build(nameArg?: string): Promise<void> {
     store.putLedger(L, v.standardVersionHash, s.ledger);
   }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
-  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, voice); store.setDocClass(L, docClass); store.setContrast(L, contrast);
+  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, voice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward
@@ -536,29 +546,39 @@ export async function build(nameArg?: string): Promise<void> {
   showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0);
 }
 
-/** Below this share of the author's own pieces meeting every counted required rule, the build names the rules to look at. */
-const OWN_PIECES_SHARE = 0.9;
-
 /**
- * A GOLDEN CORPUS AGAINST ITS OWN STANDARD, said at every build: how many of the author's own pieces (the ones this
- * run could use, never the reserve) meet every REQUIRED rule that is counted. A standard the author's best work
- * fails is the wrong standard, and an output held to it is held to something the author does not do. Where fewer
- * than nine pieces in ten pass, the rules most of them break are named with the command that makes each a
- * preference. Nothing is changed here: what is required is the owner's to rule on.
+ * A GOLDEN CORPUS AGAINST ITS OWN STANDARD, said at every build in one line: how many of the author's own pieces
+ * meet every REQUIRED rule that is counted on every output. A standard the author's best work fails is the wrong
+ * standard, and an output held to it is held to something the author does not do. When more pieces break the set
+ * than the review would have allowed, a second line names the rules they break most and the one command that makes
+ * a rule a preference. Nothing is changed here: what is required is the owner's to rule on.
+ *
+ * The pieces are the ones discovery sealed (those read and those held out, never the reserve), by the count it
+ * recorded for each rule. A skill built before that count was kept is read from its folder of pieces instead, by
+ * content, so a file saved into that folder since (an export, a draft) is not taken for one of the author's.
+ * A rule that applies only under a condition is not counted: no piece is held to it without the condition.
  */
-function reportOwnPieces(v: StandardVersion, name: string): void {
-  const own = sessionCorpus();
-  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED');
-  if (own.length < 3 || !rules.length) return;
-  const breaking = rules.flatMap((r) => (r.measurement ? [{ id: r.requirementId, pieces: piecesBreaking(own, r.measurement) }] : []));
+function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof loadSession>): void {
+  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && isGeneralScope(r.appliesWhen));
+  if (!rules.length) return;
+  const recorded = rules.map((r) => s.proposalMeta?.[r.requirementId]?.corpus ?? null);
+  let pieces: number; let breaking: { id: string; pieces: readonly number[] }[];
+  if (recorded.every((c) => c !== null) && new Set(recorded.map((c) => c?.pieces)).size === 1) {
+    pieces = recorded[0]?.pieces ?? 0;
+    breaking = rules.map((r, i) => ({ id: r.requirementId, pieces: recorded[i]?.breaking ?? [] }));
+  } else {
+    const sealed = new Set((s.evidence?.items ?? []).map((i) => i.contentHash));
+    const own = sessionCorpus().filter((t) => !sealed.size || sealed.has(sha(t)));
+    pieces = own.length;
+    breaking = rules.flatMap((r) => (r.measurement ? [{ id: r.requirementId, pieces: piecesBreaking(own, r.measurement) }] : []));
+  }
+  if (pieces < 3) return;
   const failing = new Set(breaking.flatMap((b) => b.pieces));
-  const passing = own.length - failing.size;
-  console.log(`Your own pieces: ${passing} of ${own.length} meet every required rule that is counted.`);
-  if (passing / own.length >= OWN_PIECES_SHARE) return;
-  const worst = breaking.filter((b) => b.pieces.length).sort((a, b) => b.pieces.length - a.pieces.length).slice(0, 5);
-  console.log('  A standard your own best work fails will fail drafts for things you do. The rules they break most:');
-  for (const b of worst) console.log(`    ${b.id}  broken by ${b.pieces.length} of your ${own.length} pieces    atelier amend --skill ${name} --rule ${b.id} --materiality PREFERRED --reason "my own pieces break it"`);
-  console.log('  A rule made a preference is still shown, still counted and still used to choose between drafts.');
+  console.log(`Your own pieces: ${pieces - failing.size} of ${pieces} meet every required rule that is counted.`);
+  if (failing.size <= allowed(pieces, CORPUS_SET_SHARE)) return;
+  const worst = breaking.filter((b) => b.pieces.length).sort((a, b) => b.pieces.length - a.pieces.length).slice(0, 4);
+  console.log(`  They break ${worst.map((b) => `${b.id} (${b.pieces.length})`).join(', ')} most. A rule made a preference still counts and still chooses between drafts: `
+    + `atelier amend --skill ${name} --rule <id> --materiality PREFERRED --reason "<why>"`);
 }
 
 /**

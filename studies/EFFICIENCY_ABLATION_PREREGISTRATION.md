@@ -107,15 +107,15 @@ next major version starts from a number.
 file are one arm. Run each arm to its own `--out` file. Then:
 
 ```bash
-node bench/compare/efficiency-rows.mjs --plan plan.json --stage merge --out out     # every answer under its arm's label
-node bench/compare/rubric-judge.mjs --responses out/<domain>-responses.jsonl --tasks <tasks> --rubric bench/compare/rubrics/stop-slop.json --out <domain>-judged-1.jsonl --pass 1
-node bench/compare/rubric-judge.mjs ... --out <domain>-judged-2.jsonl --pass 2
-node bench/compare/efficiency-rows.mjs --plan plan.json --stage rows --out out      # sizes, rules, quality, ablation.json
-node bench/compare/efficiency-select.mjs --config out/ablation.json --out out/result.json
+node bench/compare/efficiency-rows.mjs --plan study/plan.json --stage merge --out study-out     # every answer under its arm's label
+node bench/compare/rubric-judge.mjs --responses study-out/<domain>-responses.jsonl --tasks study/<domain>/tasks.jsonl --rubric bench/compare/rubrics/stop-slop.json --out study/<domain>-judged-1.jsonl --pass 1
+node bench/compare/rubric-judge.mjs ... --out study/<domain>-judged-2.jsonl --pass 2
+node bench/compare/efficiency-rows.mjs --plan study/plan.json --stage rows --out study-out      # sizes, rules, quality, ablation.json
+node bench/compare/efficiency-select.mjs --config study-out/ablation.json --out study/result.json
 ```
 
-Run the commands from the repository's root, with `plan.json` and the files it names in one directory of their own
-and `out` another: the rows script clears and rewrites what it finds in `out`. A judging session that did not score
+Run the commands from the repository's root. `study/` holds `plan.json` and every file it names (paths in the plan
+are read from the plan's own directory, so the judge writes its files there); `study-out/` is the scripts' own: the rows script clears and rewrites what it finds there. A judging session that did not score
 every piece is not written by the judge; run it again until every task and trial is there, which the rows script
 checks: a judge's file must cover exactly the answers merged for it. Each answer is also checked against the export
 filed under its label, by the sha256 the runner recorded, and every arm must have been written with one model, one
@@ -217,7 +217,7 @@ The result is stated as "selected", "stood" and "rejected in", never as "equival
 1. The product commit, the sealing commit, the plan file, and the two scripts' sha256.
 2. Per domain and arm: the export's size line and sha256, the two byte-identity checks, the ceiling check on the
    second round's answers, and any arms declared the same.
-3. `out/result.json`, and what the selection script prints: each arm's standing, every rejection with its reason,
+3. `study/result.json`, and what the selection script prints: each arm's standing, every rejection with its reason,
    any domain where rules were unread, and the sentence.
 4. Per domain and arm: the share of answers breaking a rule and the rules broken per answer, as the rows script
    prints them.

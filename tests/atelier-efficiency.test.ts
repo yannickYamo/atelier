@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, renameSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, renameSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { skillSizeOf, countWords, describeParts, describeSize } from '../core/eval/size.js';
@@ -600,7 +600,7 @@ describe('through the binary: a skill built without asking is unchanged, and the
   /** The words the export counts for the author's pieces: each file, its opening line included. */
   const pieceWords = (text: string): number => [...text.matchAll(/(\[voice-\d+\][\s\S]*?)(?=\n\n- - -\n\n|\n\n=== END REFERENCE MATERIAL)/g)].reduce((n, m) => n + countWords(m[1]), 0);
   const files = (text: string): number => (text.match(/\[voice-\d+\]/g) ?? []).length;
-  // A rebuild writes the default description unless it is given again; these tests are about the body.
+  // These tests are about the body: the line a host loads the skill by is compared where it is the point.
   const body = (text: string): string => text.replace(/^description: .*$/m, 'description: (not compared)');
   const calls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__count`)).json()) as { count: number }).count;
   const NEW = ['new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice'];
@@ -884,18 +884,40 @@ describe('through the binary: a project that moved keeps its skill', () => {
     before = exported(proj, 'before.md');
   }, 300_000);
 
-  it('renamed with its pieces inside, a plain build finds the run that built the skill and gives the same skill', () => {
+  it('renamed with its pieces inside, the folder carries on its run: the same skill, again after a second rename, and no second discovery', async () => {
+    const calls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__count`)).json()) as { count: number }).count;
     const moved = join(root, 'renamed');
     renameSync(proj, moved);
     const said = run(data, moved, 'build', '--name', 'voice');
     expect(said).not.toMatch(/there is no standard to build from yet/);
-    expect(said).toMatch(/this project has no run of its own; took over the run that built "voice", which was at .*first/);
+    expect(said).toMatch(/this folder had no run of its own; it carries on the run that built "voice", which was at .*first/);
     expect(exported(moved, 'after.md')).toBe(before);
     // the folder of pieces came with the project, so the pieces can be chosen again from the new place
     expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '1500')).toMatch(/within 1500 words/);
-    // polarity: a project that never built this skill, and a skill no run built, still get the plain answer
+    expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', 'default', '--pieces', 'whole')).not.toMatch(/EXIT:/);
+    // MOVED, NOT COPIED: no second session is left behind, so a second rename is carried on like the first
+    const again = join(root, 'renamed-again');
+    renameSync(moved, again);
+    const second = run(data, again, 'build', '--name', 'voice');
+    expect(second).not.toMatch(/EXIT:|projects in this store built a skill/);
+    expect(exported(again, 'after2.md')).toBe(before);
+    // the documented accept command in a moved project continues the run: it never pays to discover the same pieces again
+    const third = join(root, 'third');
+    renameSync(again, third);
+    const n = await calls();
+    const accepted = run(data, third, 'new', join(third, 'posts'), 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
+    expect(accepted).not.toMatch(/Reading \d+ piece|Estimated discovery cost/);
+    expect(accepted).toMatch(/it carries on the run that built "voice"/);
+    expect(await calls()).toBe(n);
+    // a copy takes a copy of the run and leaves the first folder working
+    const copy = join(root, 'copy');
+    cpSync(third, copy, { recursive: true });
+    expect(run(data, copy, 'build', '--name', 'voice')).toMatch(/it took a copy of the run that built "voice"/);
+    expect(exported(copy, 'copy.md')).toBe(before);
+    expect(run(data, third, 'build', '--name', 'voice')).not.toMatch(/EXIT:/);
+    // polarity: a folder that built nothing, asking for a skill no run built, still gets the plain answer
     const stranger = join(root, 'stranger'); mkdirSync(stranger);
     expect(run(data, stranger, 'build', '--name', 'nothing-built')).toMatch(/there is no standard to build from yet/);
-  }, 180_000);
+  }, 300_000);
 });
 

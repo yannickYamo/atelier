@@ -291,6 +291,7 @@ atelier voice register --skill posts post            # the register your pieces 
 atelier voice transfer --skill posts --add c3        # this rule carries to any register (your ruling)
 atelier voice pairs --skill posts                    # build the pair bank: one model call per paragraph
 atelier fidelity --skill posts --set voice=incontext # turn the voice pass on
+atelier fidelity --skill posts --set voiceGate=reader # only if the gate study qualified it: a small model reads each rewrite in place of the word lists
 atelier voice status --skill posts                   # registers, what carries, the bank, the mode
 ```
 

@@ -26,7 +26,8 @@ const COMPARE = resolve(HERE, '..');
 const REPO = resolve(COMPARE, '..', '..');
 const CLI = join(REPO, 'dist', 'cli', 'atelier.mjs');
 const args = process.argv.slice(2);
-const work = resolve(opt(args, 'work', mkdtempSync(join(tmpdir(), 'compare-smoke-'))));
+// A temporary directory is made only when --work names none: made first and then not used, one was left behind by every run.
+const work = resolve(opt(args, 'work') ?? mkdtempSync(join(tmpdir(), 'compare-smoke-')));
 mkdirSync(work, { recursive: true });
 
 const need = (k) => process.env[k] || fail(`set ${k} (see the header of this file)`);

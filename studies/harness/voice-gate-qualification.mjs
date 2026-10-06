@@ -12,7 +12,16 @@
 //             words it changed; code checks they are there. Letting it through is a false negative: a changed claim
 //             delivered in the author's voice.
 //
-//   node studies/harness/voice-gate-qualification.mjs --bank <bank.json> --out <dir> [--cap 4] [--writer claude-sonnet-5-5] [--reader claude-haiku-4-5]
+//   node studies/harness/voice-gate-qualification.mjs --bank <bank.json> --out <dir> [--cap 4] [--writer claude-sonnet-5] [--reader claude-haiku-4-5]
+//        [--rejected <file> | --reviewed] [--base-url <url>]
+//
+// THE RUN IS MADE TWICE, AND THE FIRST VERDICT IS UNRESOLVED. The first run plants the changes and writes
+// plants-for-review.md. A person goes through it, and the same command is run again with `--rejected <file>` (or
+// `--reviewed` when nothing is rejected); what was planted and read is cached, so the second run costs nothing. Until
+// then, and whenever too few valid plants are left to read the bars on, every gate's verdict is UNRESOLVED with the
+// reason and the next command, never FAIL: FAIL is a reading of the gate, and there has been none. A `--rejected`
+// file that is not there stops the run (exit 2) before anything is spent, since read as "nothing rejected" a
+// mistyped path would count every plant the person threw out.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -38,12 +47,13 @@ const KINDS = {
 };
 const BANK = JSON.parse(readFileSync(arg('--bank') ?? fail('missing --bank'), 'utf8'));
 const OUT = arg('--out') ?? fail('missing --out');
+if (process.argv.includes('--rejected') && !(arg('--rejected') && existsSync(arg('--rejected')))) fail(`--rejected ${arg('--rejected') ?? ''}: no such file. It lists the plants a person rejected, one "<pair id>|<KIND>" a line; check the path, or pass --reviewed when none is rejected. Nothing was spent.`);
 mkdirSync(OUT, { recursive: true });
 const budget = budgetOf(Number(arg('--cap', '4')), 2000);
 const writer = clientFor(arg('--writer', 'claude-sonnet-5'));
 // PLANTS A PERSON REJECTED (`--rejected <file>`, one "<pair id>|<KIND>" a line): a plant that is not the kind it
 // declares, or changes nothing a reader would call a claim, is left out. The run writes plants-for-review.md first.
-const REJECTED = new Set(arg('--rejected') && existsSync(arg('--rejected')) ? readFileSync(arg('--rejected'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []); const reader = clientFor(arg('--reader', 'claude-haiku-4-5'));
+const REJECTED = new Set(arg('--rejected') ? readFileSync(arg('--rejected'), 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []); const reader = clientFor(arg('--reader', 'claude-haiku-4-5'));
 const CACHE = join(OUT, 'cache.json');
 const cache = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, 'utf8')) : {};
 const save = () => writeFileSync(CACHE, JSON.stringify(cache, null, 1));
@@ -117,8 +127,16 @@ const barsOf = (name) => { const s = m.sensitivity[name]; return { sensitivity: 
   enough: live.length >= 200 && Object.keys(KINDS).every((k) => s[k].n >= MIN_PER_KIND), reviewed: REJECTED.size > 0 || process.argv.includes('--reviewed') }; };
 const bars = { lists: barsOf('lists'), listsAndReader: barsOf('listsAndReader'), ledgerAndReader: barsOf('ledgerAndReader') };
 const passes = (name) => Object.values(bars[name]).every(Boolean);
-const result = { reader: VOICE_READER_VERSION, bank: BANK.hash, measures: m, bars, verdict: Object.fromEntries(Object.keys(bars).map((n) => [n, passes(n) ? 'PASS' : 'FAIL'])), spentUsd: Math.round(budget.spentUsd * 1000) / 1000, rows };
+// UNRESOLVED, NEVER FAIL, WHEN THERE IS NOTHING TO READ YET: the plants have not been through a person, or too few
+// valid ones are left. Both are the same for every gate, since the three are read on the same plants.
+const again = `node studies/harness/voice-gate-qualification.mjs --bank ${arg('--bank')} --out ${OUT}`;
+const thin = Object.keys(KINDS).filter((k) => live.filter((r) => r.kind === k).length < MIN_PER_KIND);
+const unresolved = !bars.lists.reviewed ? `the plants have not been reviewed by a person. Read ${join(OUT, 'plants-for-review.md')}, list the ones to reject in a file, and run: ${again} --rejected <file> (or --reviewed when none is rejected). What is cached is not paid for again.`
+  : !bars.lists.enough ? `too few valid plants to read the bars: ${live.length} in all (200 needed)${thin.length ? `, and fewer than ${MIN_PER_KIND} of ${thin.join(', ')}` : ''}. Give a bank with more pairs (${PLANTED_PARAGRAPHS} are planted, six kinds each) and run: ${again} --rejected <file> (or --reviewed).`
+    : null;
+if (unresolved) console.error(`UNRESOLVED: ${unresolved}`);
+const result = { reader: VOICE_READER_VERSION, bank: BANK.hash, measures: m, bars, verdict: Object.fromEntries(Object.keys(bars).map((n) => [n, unresolved ? 'UNRESOLVED' : passes(n) ? 'PASS' : 'FAIL'])), ...(unresolved ? { unresolved } : {}), spentUsd: Math.round(budget.spentUsd * 1000) / 1000, rows };
 writeFileSync(join(OUT, 'voice-gate.json'), JSON.stringify(result, null, 1));
 // FOR THE PERSON WHO CONFIRMS THE PLANTS: each one, its declared kind, the words changed, before and after.
 writeFileSync(join(OUT, 'plants-for-review.md'), `# Plants to confirm\n\nFor each, check that the change is the kind it declares and changes what is claimed. List the ones that are not in a file, one "<pair id>|<KIND>" a line, and run again with --rejected <file> (or --reviewed when none is rejected).\n\n${live.map((r) => `## ${r.id}|${r.kind}\n\nwords: ${r.words}\n\nbefore: ${r.original}\n\nafter: ${r.text}\n`).join('\n')}\n# Clean pairs to confirm\n\nFor each, check that the plain paragraph and the author's make the same claims. No gate's verdict is shown here on purpose. List a pair that truly differs as "<pair id>|CLEAN".\n\n${rows.clean.map((r) => `## ${r.id}|CLEAN\n\nplain: ${r.plain}\n\nauthor: ${r.author}\n`).join('\n')}`);
-console.log(JSON.stringify({ measures: m, bars, verdict: result.verdict, spentUsd: result.spentUsd }, null, 1));
+console.log(JSON.stringify({ measures: m, bars, verdict: result.verdict, ...(unresolved ? { unresolved } : {}), spentUsd: result.spentUsd }, null, 1));

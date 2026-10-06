@@ -12,6 +12,15 @@
 //   --pass           the label shuffle's seed: judge twice with --pass 1 and --pass 2 into two files, one session each
 //   --max-tokens     the judge's output limit for one session, a positive whole number, recorded on every row
 //                    (`max_tokens`). Checked before anything is read or any client is made
+//
+// A REFUSED ANSWER IS NOT JUDGED BY THIS RUBRIC. A row with `response: null` (a strict refusal, as run.mjs writes it)
+// has no piece to score, and sent as it stood the judge was handed the word "null" as that arm's piece. The run is
+// refused before any client is made (exit 2), naming the row: leave that task out for every arm, in every file this
+// judge and the analysis read, and say so in the report. How often an arm refuses is read from the responses file.
+//
+// EXIT 3 WHEN A SESSION WAS NOT WRITTEN. A session the judge cut short or scored out of range is not written, and the
+// run goes on to the next. At the end it says how many were left and exits 3; run the same command again (sessions
+// already written are skipped) until it exits 0, or the scores file is short and the analysis will refuse it.
 import { readFileSync, appendFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spend } from '../../dist/core/inference/client.js';
@@ -24,6 +33,8 @@ const MAX_TOKENS = Number(arg('--max-tokens', '6000'));
 if (!Number.isInteger(MAX_TOKENS) || MAX_TOKENS < 1) fail(`--max-tokens must be a positive whole number, and "${arg('--max-tokens')}" is not. Nothing was spent.`);
 const jsonl = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
 const RESP = jsonl(arg('--responses') ?? fail('missing --responses')); const TASKS = new Map(jsonl(arg('--tasks') ?? fail('missing --tasks')).map((t) => [t.id, t]));
+const unanswered = RESP.filter((r) => typeof r.response !== 'string' || !r.response.trim());
+if (unanswered.length) fail(`${unanswered[0].case_id} trial ${unanswered[0].trial} (${unanswered[0].condition}) has no answer (\`response\` is ${JSON.stringify(unanswered[0].response)})${unanswered.length > 1 ? `, and ${unanswered.length - 1} more row(s) like it` : ''}. Refused answers are not judged by this rubric and must be excluded for every arm of that task: remove ${[...new Set(unanswered.map((r) => r.case_id))].join(', ')} from the responses of every arm, then run again. Nothing was spent.`);
 const RUBRIC = JSON.parse(readFileSync(arg('--rubric') ?? fail('missing --rubric'), 'utf8'));
 const OUT = arg('--out') ?? fail('missing --out'); const PASS = arg('--pass', '1');
 const [LO, HI] = RUBRIC.scale; const DIMS = RUBRIC.dimensions.map((d) => d.name);
@@ -34,7 +45,7 @@ const SYSTEM = `You are judging pieces of writing against one rubric. You do not
 const SCHEMA = { type: 'object', properties: { pieces: { type: 'array', items: { type: 'object',
   properties: { label: { type: 'string' }, ...Object.fromEntries(DIMS.map((d) => [d, { type: 'number' }])), notes: { type: 'string' } }, required: ['label', ...DIMS, 'notes'], additionalProperties: false } } },
   required: ['pieces'], additionalProperties: false };
-const groups = new Map();
+const groups = new Map(); let notWritten = 0;
 for (const r of RESP) groups.set(`${r.case_id}\u0000${r.trial}`, [...(groups.get(`${r.case_id}\u0000${r.trial}`) ?? []), r]);
 for (const [key, rows] of groups) {
   if (done.has(key)) continue;
@@ -49,7 +60,8 @@ for (const [key, rows] of groups) {
   });
   const got = new Map((raw?.pieces ?? []).map((p) => [p.label, p]));
   // A CASE IS WRITTEN WHOLE OR NOT AT ALL: a session that scored only some arms compares nothing, and is run again.
-  if ([...labelOf.keys()].some((l) => !got.has(l) || DIMS.some((d) => !(got.get(l)[d] >= LO && got.get(l)[d] <= HI)))) { console.error(`${rows[0].case_id} trial ${rows[0].trial}: the judge did not score every piece in range (a session cut short at --max-tokens ${MAX_TOKENS} reads like this); not written`); continue; }
+  if ([...labelOf.keys()].some((l) => !got.has(l) || DIMS.some((d) => !(got.get(l)[d] >= LO && got.get(l)[d] <= HI)))) { console.error(`${rows[0].case_id} trial ${rows[0].trial}: the judge did not score every piece in range (a session cut short at --max-tokens ${MAX_TOKENS} reads like this); not written`); notWritten += 1; continue; }
   for (const [l, r] of labelOf) appendFileSync(OUT, `${JSON.stringify({ case_id: r.case_id, trial: r.trial, condition: r.condition, ...Object.fromEntries(DIMS.map((d) => [d, got.get(l)[d]])), notes: got.get(l).notes, pass: PASS, max_tokens: MAX_TOKENS })}\n`);
   console.error(`${rows[0].case_id} trial ${rows[0].trial}: ${labelOf.size} arms judged  $${budget.spentUsd.toFixed(3)}`);
 }
+if (notWritten) { console.error(`${notWritten} session(s) of this run were not written, so ${OUT} does not hold every case. Run the same command again (written sessions are skipped), with a higher --max-tokens if they were cut short.`); process.exit(3); }

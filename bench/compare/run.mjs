@@ -6,9 +6,24 @@
 //   node bench/compare/run.mjs --tasks splits/test.jsonl --arm atelier-runtime:<build> --runtimes runtimes.json --out out/rt.jsonl
 //
 // Options: --model <id> (default claude-opus-5, or BENCH_MODEL; it must have a price, or the cap cannot hold) · --max-tokens <n> (default 4096) ·
-// --trials <n> (1) · --condition baseline|candidate|comparator (none → baseline, other arms → candidate) ·
-// --placement system|harness · --sealed splits/SEALED.json · --cap <usd> (25) ·
-// --provider anthropic|openai-compatible --base-url <url> (the second for a local or scripted backend).
+// --trials <n> (1) · --condition <label> (none → baseline, other arms → candidate) ·
+// --placement system|harness · --sealed splits/SEALED.json · --cap <usd> (25) · --per-call <usd> (0.25).
+//
+// --condition IS THE ARM'S LABEL ON EVERY ROW, and what the judge, the axes and the closing analysis tell arms apart
+// by. Any label of lower-case letters, digits and hyphens, starting with a letter or digit (/^[a-z0-9][a-z0-9-]*$/):
+// the benchmark's own three (baseline, candidate, comparator) or a claim's own names when it has more arms than
+// three (bare, handwritten, gepa, plug-in, runtime). Give each arm its own label and its own --out file.
+//
+// THE BACKEND. The Anthropic API by default: ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) must be set, or the run
+// stops before the first call (exit 2). For any other backend, a local or scripted one included:
+//   --provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>
+// (the two prices in dollars per million tokens, so the cap can hold; the key, when the backend wants one, is
+// OPENAI_API_KEY). A runtime arm does not read those flags: it takes its backend from the runtimes file's "args",
+// which are handed to `atelier invoke` as written (["--provider", "openai-compatible", "--base-url", …, "--model", …]).
+//
+// THE CAP. --cap <usd> (25) is checked before every call with room for one more: the dearest call seen so far, and
+// never less than --per-call <usd> (0.25). So a --cap under --per-call stops before the first call (exit 3):
+// for a small cap, pass a smaller --per-call that one call of this arm will not pass.
 //
 // ARMS. Every model arm is the same writer model at the same max tokens, recorded on every line:
 //   none                     the bare model: the task as the only message
@@ -41,7 +56,8 @@ import { readJsonl, sha256, sha256File, validateTasks, opt, die, stripFrontmatte
 const RUNNER = 'atelier-compare';
 const args = process.argv.slice(2);
 const tasksPath = opt(args, 'tasks'); const arm = opt(args, 'arm'); const out = opt(args, 'out');
-if (!tasksPath || !arm || !out) die('usage: run.mjs --tasks <file> --arm none|skill:<file>|atelier-runtime:<build> --out <responses.jsonl> [--model <id>] [--max-tokens <n>]');
+const USAGE = 'usage: run.mjs --tasks <file> --arm none|skill:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]';
+if (!tasksPath || !arm || !out) die(USAGE);
 const model = opt(args, 'model', process.env.BENCH_MODEL ?? 'claude-opus-5');
 const maxTokens = Number(opt(args, 'max-tokens', '4096'));
 const trials = Number(opt(args, 'trials', '1'));
@@ -56,7 +72,7 @@ const [kind, ...rest] = arm.split(':');
 const armArg = rest.join(':');
 if (!['none', 'skill', 'atelier-runtime'].includes(kind) || (kind !== 'none' && !armArg)) die(`unknown arm ${arm}: none, skill:<file> or atelier-runtime:<build>`);
 const condition = opt(args, 'condition', kind === 'none' ? 'baseline' : 'candidate');
-if (!['baseline', 'candidate', 'comparator'].includes(condition)) die('--condition is baseline, candidate or comparator (the benchmark\'s three)');
+if (!/^[a-z0-9][a-z0-9-]*$/.test(condition)) die(`--condition "${condition}" is not a label: lower-case letters, digits and hyphens, starting with a letter or digit (baseline, candidate, comparator, or a claim's own arm names such as handwritten or plug-in).`);
 
 const tasks = readJsonl(tasksPath);
 const errors = validateTasks(tasks);
@@ -96,6 +112,7 @@ async function client() {
     const { ANTHROPIC_PRICING, priceFor } = await import('../../dist/providers/pricing.js');
     const price = priceFor(ANTHROPIC_PRICING, model);
     if (!price) die(`no price is known for "${model}", so the cap could not hold. Use a model in providers/pricing.ts. Nothing was spent.`);
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) die('ANTHROPIC_API_KEY is not set. Set it, or name another backend: --provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>. Nothing was spent.');
     return new AnthropicInferenceClient(model, undefined, price);
   }
   const baseUrl = opt(args, 'base-url') ?? die('--provider openai-compatible needs --base-url');
@@ -111,6 +128,7 @@ async function checkRuntimePrice(spec) {
   if (prov >= 0 && a[prov + 1] !== 'anthropic') return;
   const { ANTHROPIC_PRICING, priceFor } = await import('../../dist/providers/pricing.js');
   if (!priceFor(ANTHROPIC_PRICING, runtimeModel)) die(`no price is known for the runtime arm's model "${runtimeModel}", so the cap could not hold. Nothing was spent.`);
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) die(`ANTHROPIC_API_KEY is not set, and the runtime arm "${armArg}" names no other backend. Set it, or give the build its backend in the runtimes file: "args": ["--provider", "openai-compatible", "--base-url", "<url>", "--model", "<id>"]. Nothing was spent.`);
 }
 
 async function modelArm(c, t) {
@@ -167,7 +185,7 @@ for (let trial = 1; trial <= trials; trial++) {
   for (const t of tasks) {
     if (done.has(`${t.id}\u0000${trial}\u0000${condition}\u0000${RUNNER}`)) { console.error(`skip ${t.id} trial ${trial} (done)`); continue; }
     // BEFORE THE CALL, with room for it: the dearest call seen so far (or --per-call), so the cap is never passed by a whole call.
-    if (spent + perCall > cap) { console.error(`stopped: $${spent.toFixed(4)} spent, and one more call (about $${perCall.toFixed(4)}) would pass the --cap of $${cap}. Rerun with a higher cap to continue.`); process.exit(3); }
+    if (spent + perCall > cap) { console.error(`stopped: $${spent.toFixed(4)} spent, and one more call (about $${perCall.toFixed(4)}) would pass the --cap of $${cap}. Rerun with a higher --cap to continue (a --cap under --per-call, ${opt(args, 'per-call', '0.25')}, never starts: pass a smaller --per-call with it).`); process.exit(3); }
     let r; let last;
     for (let attempt = 0; attempt < 3 && !r; attempt++) {
       try { r = c ? await modelArm(c, t) : runtimeArm(t); } catch (e) { last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`); }

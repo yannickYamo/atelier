@@ -63,7 +63,7 @@ export function renderPairs(bank: PairBank, ids: readonly number[]): string {
  * that runs out, leaves the remaining paragraphs as they were and says so.
  */
 export async function voicePass(client: InferenceClient, budget: Budget, text: string, bank: PairBank,
-  copied: ReturnType<typeof overlapIndex> | null, reader: InferenceClient | null = null): Promise<VoicePassResult> {
+  copied: ReturnType<typeof overlapIndex> | null, reader: InferenceClient | null = null, gate: 'lists' | 'reader' = 'lists'): Promise<VoicePassResult> {
   const paragraphs = paragraphsOf(text);
   const records: VoiceParagraph[] = [];
   const replacements: { start: number; end: number; text: string }[] = [];
@@ -94,12 +94,15 @@ export async function voicePass(client: InferenceClient, budget: Budget, text: s
     }
     // One paragraph in, one paragraph out: a rewrite that came back as several is held to the same checks as one.
     const flat = voice.replace(/\s*\n+\s*/g, ' ').trim();
-    let verdict = voiceIntegrity(p.text, flat, copied);
-    // A SECOND READ, WHEN THERE IS A SMALL MODEL (./reader.ts): the word lists miss the phrasing nobody listed. It can
-    // only refuse; when it cannot answer, the word lists' verdict stands as it did before.
+    // THE GATE (core/fidelity/types.ts, `voiceGate`). By default the word lists read the strength of each claim, and a
+    // small model, when there is one, reads again and can only refuse. With `reader` the small model reads in place of
+    // the word lists; where it is absent or cannot answer, the word lists decide, so no rewrite passes unread.
+    const readerDecides = gate === 'reader' && reader !== null;
+    let verdict = voiceIntegrity(p.text, flat, copied, readerDecides ? { strength: false } : {});
     if (verdict.ok && reader) {
       const changes = await readClaimChanges(reader, budget, p.text, flat);
       if (changes?.length) verdict = { ok: false, check: 'reader', detail: `${VOICE_READER_VERSION} read ${changes.slice(0, 3).map((c) => `${c.kind}: "${c.quote}"`).join('; ')}` };
+      else if (changes === null && readerDecides) verdict = voiceIntegrity(p.text, flat, copied);
     }
     records.push(verdict.ok ? { index, contentHash, voiceHash: sha(flat), kept: true, why: 'kept: facts, strength, length and copying all held' }
       : { index, contentHash, voiceHash: sha(flat), kept: false, ...(verdict.check ? { check: verdict.check } : {}), why: `refused (${verdict.check}): ${verdict.detail ?? ''}` });

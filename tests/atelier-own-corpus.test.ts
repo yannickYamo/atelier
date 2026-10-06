@@ -7,7 +7,7 @@
 // (core/ratification/suggest.ts, `suggestAll`), and that a run made as a test is never learned from.
 import { describe, it, expect } from 'vitest';
 import { piecesBreaking } from '../core/observers/derive.js';
-import { suggest, suggestAll, CORPUS_RULE_SHARE, CORPUS_SET_SHARE, type ProposalEvidence } from '../core/ratification/suggest.js';
+import { suggest, suggestAll, allowed, CORPUS_RULE_SHARE, CORPUS_SET_SHARE, type ProposalEvidence } from '../core/ratification/suggest.js';
 import { selectContrastPairs } from '../core/compiler/contrast-examples.js';
 import { ruleKey, measurementId } from '../core/state/rule-key.js';
 import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
@@ -37,18 +37,18 @@ describe('the suggestions, read together against the author\'s own pieces', () =
     expect(r.suggestions.map((s) => s.materiality)).toEqual(['REQUIRED', 'PREFERRED']);
     expect(r.suggestions[1].decision).toBe('APPROVE');
     expect(r.suggestions[1].why).toMatch(/4 of your own 24 pieces break it, so it is shown and used to choose between drafts until you make it required$/);
-    expect(r.corpus).toEqual({ pieces: 24, passing: 24, moved: ['m2'] });
-    expect((24 - 4) / 24).toBeLessThan(CORPUS_RULE_SHARE);
+    expect(r.corpus).toEqual({ pieces: 24, passing: 24, moved: ['m2'], required: 1 });
   });
   it('rules that each pass on their own can fail the author together: the ones most pieces break are moved until nine pieces in ten pass', () => {
     // Thirteen rules, each broken by one different piece of 24: every rule holds in 96% of the pieces, and the set in 46%.
     const rules = Array.from({ length: 13 }, (_, i) => counted(`m${i + 1}`, [i]));
     for (const r of rules) expect(suggest(r.p, r.e, 'GENERATE').materiality).toBe('REQUIRED');
     const r = together(rules);
-    const required = r.suggestions.filter((s) => s.materiality === 'REQUIRED').length;
-    expect(required).toBe(2);
+    // on a tie the rule listed last goes first, so the two that stay required are the first two on the screen
+    expect(r.suggestions.map((s) => s.materiality === 'REQUIRED')).toEqual([true, true, ...Array.from({ length: 11 }, () => false)]);
     expect(r.corpus?.passing).toBe(22);
-    expect((r.corpus?.passing ?? 0) / 24).toBeGreaterThanOrEqual(CORPUS_SET_SHARE);
+    expect(r.corpus?.required).toBe(2);
+    expect(24 - (r.corpus?.passing ?? 0)).toBeLessThanOrEqual(allowed(24, CORPUS_SET_SHARE));
     // the rule a second piece also breaks goes first, whatever its place on the screen
     const uneven = together([counted('m1', [0], 40), counted('m2', [1, 2], 40), counted('m3', [3], 40), counted('m4', [4], 40)]);
     expect(uneven.corpus?.moved).toEqual(['m2']);
@@ -59,11 +59,23 @@ describe('the suggestions, read together against the author\'s own pieces', () =
     const clean = [counted('m1', []), counted('m2', [5]), counted('m3', [])];
     const r = together(clean);
     expect(r.suggestions).toEqual(clean.map((x) => suggest(x.p, x.e, 'GENERATE')));
-    expect(r.corpus).toEqual({ pieces: 24, passing: 23, moved: [] });
+    expect(r.corpus).toEqual({ pieces: 24, passing: 23, moved: [], required: 3 });
     const old = clean.map((x) => ({ p: x.p, e: { ...x.e, corpus: undefined } }));
     const before = suggestAll(old.map((x) => x.p), Object.fromEntries(old.map((x) => [x.p.requirementId, x.e])), 'GENERATE');
     expect(before.corpus).toBeNull();
     expect(before.suggestions).toEqual(old.map((x) => suggest(x.p, x.e, 'GENERATE')));
+  });
+  it('a small corpus always allows one piece: one unusual post in eight, or in nineteen, does not move a rule the rest keep', () => {
+    // A share alone would make "95%" mean "every piece" under twenty pieces.
+    expect([8, 19, 20, 39, 40, 100].map((n) => allowed(n, CORPUS_RULE_SHARE))).toEqual([1, 1, 1, 1, 2, 5]);
+    expect([8, 10, 19, 20, 24].map((n) => allowed(n, CORPUS_SET_SHARE))).toEqual([1, 1, 1, 2, 2]);
+    for (const n of [8, 19]) {
+      expect(together([counted('m1', [3], n)]).corpus).toEqual({ pieces: n, passing: n - 1, moved: [], required: 1 });
+      // polarity: two pieces of the same small corpus breaking it do move it
+      expect(together([counted('m1', [3, 5], n)]).corpus?.moved).toEqual(['m1']);
+    }
+    // and two different rules each broken by a different piece of eight cannot both stay required
+    expect(together([counted('m1', [3], 8), counted('m2', [5], 8)]).corpus).toEqual({ pieces: 8, passing: 7, moved: ['m2'], required: 1 });
   });
   it('only a rule suggested as required is ever moved: a preference, a rejection and a rule only a reading can check are untouched', () => {
     const weak = counted('m1', [1, 2, 3, 4, 5, 6]); const weakE = { ...weak.e, inSample: { applicable: 4, present: 2, independent: true } };

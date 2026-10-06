@@ -86,4 +86,6 @@ as well as voice.
 - Two authors and fifteen requests each, in place of one author and eight; one panel per author.
 - The unit is the request and the test is over requests: forty judgments on eight requests were not forty results.
 - Every voice output is shown. Dropping the ones with no rewrite made the old bar unreachable when any was dropped.
+- An answer that cannot be read is never left out: the scoring script lists each one, and while any remains the
+  result is UNRESOLVED. A reader writes `A` or `B` after each `ANSWER <id>:`.
 - Both arms are written in the same run.

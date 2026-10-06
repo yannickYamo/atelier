@@ -5,7 +5,7 @@
 // UNRESOLVED. The benchmark runner refuses to start when it could not see what a call costs.
 import { describe, it, expect } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, symlinkSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, symlinkSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { mulberry32 } from '../core/fidelity/qualify.js';
@@ -81,6 +81,70 @@ describe('the analysis of a closing quality claim', () => {
   });
 });
 
+/** A script run with no key in its environment, stdout and stderr both kept. */
+const bare = (script: string, args: readonly string[], env: Record<string, string> = {}): { code: number; out: string; err: string } => {
+  const r = spawnSync('node', [resolve(script), ...args], { encoding: 'utf8', env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(ANTHROPIC|OPENAI)_/.test(k))), ...env } });
+  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+};
+/** What node prints for an error nobody caught: a line of the stack. A message for a tester never holds one. */
+const STACK = /^\s+at .*\(?(node:|file:\/\/)/m;
+
+describe('the closing analysis says what it could not read, names the arm it read, and never ends as if it had written', () => {
+  const edit = (config: string, change: (c: Record<string, unknown>) => void): string => { const c = JSON.parse(readFileSync(config, 'utf8')) as Record<string, unknown>; change(c); writeFileSync(config, JSON.stringify(c)); return config; };
+  const config = (): string => fixture(150, 0, { candidate: 0.1, handwritten: 0.1 });
+  it('a file the config names that is not there is one line and exit 2, for every kind of file', () => {
+    for (const field of ['verify', 'human']) {
+      const r = bare('bench/compare/closing-quality.mjs', ['--config', edit(config(), (c) => { c[field] = 'not-there.jsonl'; })]);
+      expect(r.code, field).toBe(2);
+      expect(r.err, field).toMatch(/^closing-quality: the config names not-there\.jsonl, and it cannot be read \(ENOENT\)\. Paths are relative to the config \(.*\); check it and run again\. Nothing was written\.\n$/);
+      expect(r.err, field).not.toMatch(STACK);
+      expect(r.out, field).toBe('');
+    }
+    const scores = bare('bench/compare/closing-quality.mjs', ['--config', edit(config(), (c) => { c.scores = ['scores.jsonl', 'second-session.jsonl']; })]);
+    expect(scores.code).toBe(2);
+    expect(scores.err).toMatch(/the config names second-session\.jsonl, and it cannot be read \(ENOENT\)/);
+    const none = bare('bench/compare/closing-quality.mjs', ['--config', join(tmpdir(), 'no-such-config.json')]);
+    expect(none.code).toBe(2);
+    expect(none.err).toMatch(/^closing-quality: the config .*no-such-config\.json cannot be read \(ENOENT\)\. Nothing was written\.\n$/);
+    const broken = edit(config(), (c) => { c.verify = 'broken.jsonl'; });
+    writeFileSync(join(broken, '..', 'broken.jsonl'), '{"case_id": "c0"\n');
+    const notJson = bare('bench/compare/closing-quality.mjs', ['--config', broken, '--out', join(broken, '..', 'result.json')]);
+    expect(notJson.code).toBe(2);
+    expect(notJson.err).toMatch(/the config names broken\.jsonl, and it cannot be read \(/);
+    expect(notJson.err).not.toMatch(STACK);
+    expect(existsSync(join(broken, '..', 'result.json'))).toBe(false);
+  });
+  it('--disagreements without the two reads is refused, saying what to add; with them the file is written', () => {
+    const c = config(); const file = join(c, '..', 'disagreements.jsonl');
+    const r = bare('bench/compare/closing-quality.mjs', ['--config', c, '--disagreements', file, '--out', join(c, '..', 'result.json')]);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/--disagreements writes the answers on which two judge reads disagree, and the config has no "reads": \[fileA, fileB\] to compare\. Add the two reads to .*config\.json, or leave --disagreements out\. Nothing was written\./);
+    expect(existsSync(file)).toBe(false);
+    expect(existsSync(join(c, '..', 'result.json'))).toBe(false);
+    // a second read that differs on one answer's blocker: that answer is what a person is handed
+    const first = readFileSync(join(c, '..', 'scores.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { blocker: boolean });
+    writeFileSync(join(c, '..', 'second.jsonl'), jsonl(first.map((x, i) => (i === 4 ? { ...x, blocker: !x.blocker } : x))));
+    const ok = bare('bench/compare/closing-quality.mjs', ['--config', edit(c, (x) => { x.reads = ['scores.jsonl', 'second.jsonl']; }), '--disagreements', file]);
+    expect(ok.code, ok.err).toBe(0);
+    expect(readFileSync(file, 'utf8')).toBe('{"case_id":"c1","trial":1,"condition":"hand"}\n');
+  });
+  it('the sentence names the arm the config says is the candidate: the plug-in unless it is the runtime', () => {
+    const runtime = analyse(edit(fixture(150, 0.4, { candidate: 0.1, handwritten: 0.1 }), (c) => { c.arm = 'runtime'; }));
+    expect(runtime.verdict).toBe('PASS');
+    expect(runtime.sentence).toMatch(/^On 150 coding tasks it never saw, the Atelier runtime built from 20 examples scored higher overall than the hand-written skill/);
+    expect(runtime.sentence).not.toMatch(/plug-in/);
+    const worse = analyse(edit(fixture(150, -0.4, { candidate: 0.1, handwritten: 0.1 }), (c) => { c.arm = 'runtime'; }));
+    expect(worse.sentence).toMatch(/the Atelier runtime built from 20 examples failed "not worse than the hand-written skill"/);
+    expect(analyse(edit(config(), (c) => { c.arm = 'plug-in'; })).sentence).toMatch(/the Atelier plug-in built from 20 examples/);
+    // writing: "an Atelier skill" when the config does not say, the arm when it does
+    expect(analyse(edit(config(), (c) => { c.claim = 'A-w'; })).sentence).toMatch(/^On 150 writing briefs it never saw, an Atelier skill built from 20 pieces/);
+    expect(analyse(edit(config(), (c) => { c.claim = 'A-w'; c.arm = 'runtime'; })).sentence).toMatch(/^On 150 writing briefs it never saw, an Atelier runtime built from 20 pieces/);
+    const bad = bare('bench/compare/closing-quality.mjs', ['--config', edit(config(), (c) => { c.arm = 'plugin'; })]);
+    expect(bad.code).toBe(2);
+    expect(bad.err).toMatch(/the config's "arm" is "plugin": it is "plug-in" or "runtime"/);
+  });
+});
+
 describe('a judge is qualified on answers whose quality is known', () => {
   const dir = mkdtempSync(join(tmpdir(), 'atelier-judge-'));
   const labels = Array.from({ length: 40 }, (_, i) => ({ case_id: `p${i}`, condition: 'x', label: i < 20 ? 'good' : 'bad' }));
@@ -93,6 +157,23 @@ describe('a judge is qualified on answers whose quality is known', () => {
   it('0.85 of each class called right qualifies; fewer does not', () => {
     expect(run(2)).toMatchObject({ verdict: 'QUALIFIED', judge: { goodCalledGood: { share: 0.9 }, badCalledBad: { share: 0.9 } } });
     expect(run(5).verdict).toBe('NOT QUALIFIED');
+  });
+  it('with a second judge, agreement under 0.80 of the planted answers is UNRESOLVED; at 0.80 or more the first judge\'s reading stands', () => {
+    run(2);
+    const second = (disagreeOn: number, wrongFirst = 2): { verdict: string; agreement: { share: number; n: number } } => {
+      // the second judge calls the first `disagreeOn` answers the other way from the first judge
+      const first = rows(wrongFirst) as Record<string, unknown>[];
+      writeFileSync(join(dir, `s${wrongFirst}.jsonl`), jsonl(first));
+      writeFileSync(join(dir, `second${disagreeOn}.jsonl`), jsonl(first.map((r, i) => (i < disagreeOn ? { ...r, ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, r[k] === 2 ? 4.5 : 2])) } : r))));
+      return JSON.parse(node('bench/compare/judge-qualification.mjs', '--scores', join(dir, `s${wrongFirst}.jsonl`), '--second', join(dir, `second${disagreeOn}.jsonl`), '--labels', join(dir, 'labels.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5').out) as never;
+    };
+    expect(second(8)).toMatchObject({ verdict: 'QUALIFIED', agreement: { share: 0.8, n: 40 } });
+    const apart = second(9);
+    expect(apart.agreement.share).toBe(0.775);
+    expect(apart.verdict).toBe('UNRESOLVED: the two judges agree on 0.775 of the 40 planted answers both judged, under the 0.80 the pre-registration sets. The claim cannot be read with this pair of judges');
+    // a first judge that is not qualified is still said so when the two agree
+    expect(second(0, 5).verdict).toBe('NOT QUALIFIED');
+    expect(second(12, 5).verdict).toMatch(/^UNRESOLVED: the two judges agree on 0\.7 of the 40/);
   });
 });
 
@@ -108,6 +189,39 @@ describe('the benchmark runner refuses to start when it could not see what a cal
     expect(other.code).toBe(2);
     expect(other.out).toMatch(/needs --price-in and --price-out/);
     expect(existsSync(out)).toBe(false);
+  });
+  it('with no key it says so in one line, with the flags of another backend, and exits 2; so does a runtime arm', () => {
+    const none = bare('bench/compare/run.mjs', ['--tasks', join(dir, 'tasks.jsonl'), '--arm', 'none', '--out', out]);
+    expect(none.code).toBe(2);
+    expect(none.err).toBe('compare: ANTHROPIC_API_KEY is not set. Set it, or name another backend: --provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>. Nothing was spent.\n');
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ built: { cli: 'x', data: 'x', proj: 'x', skill: 'x' } }));
+    const runtime = bare('bench/compare/run.mjs', ['--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:built', '--runtimes', join(dir, 'runtimes.json'), '--out', out]);
+    expect(runtime.code).toBe(2);
+    expect(runtime.err).toMatch(/^compare: ANTHROPIC_API_KEY is not set, and the runtime arm "built" names no other backend\. Set it, or give the build its backend in the runtimes file: "args": \["--provider", "openai-compatible", "--base-url", "<url>", "--model", "<id>"\]\. Nothing was spent\.\n$/);
+    expect(existsSync(out)).toBe(false);
+  });
+  it('--condition takes any label of lower-case letters, digits and hyphens, and the usage names every flag', () => {
+    for (const label of ['handwritten', 'plug-in', 'gepa-2', 'baseline']) {
+      // a good label gets as far as the client, which has no key
+      const r = bare('bench/compare/run.mjs', ['--tasks', join(dir, 'tasks.jsonl'), '--arm', 'none', '--out', out, '--condition', label]);
+      expect(r.err, label).toMatch(/ANTHROPIC_API_KEY is not set/);
+    }
+    for (const label of ['Hand', 'plug_in', '-x', 'two words']) {
+      const r = bare('bench/compare/run.mjs', ['--tasks', join(dir, 'tasks.jsonl'), '--arm', 'none', '--out', out, '--condition', label]);
+      expect(r.code, label).toBe(2);
+      expect(r.err, label).toMatch(/is not a label: lower-case letters, digits and hyphens, starting with a letter or digit/);
+    }
+    const usage = bare('bench/compare/run.mjs', []);
+    expect(usage.code).toBe(2);
+    expect(usage.err).toBe('compare: usage: run.mjs --tasks <file> --arm none|skill:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]\n');
+  });
+  it('the smoke run makes no temporary directory when --work names one', () => {
+    const temp = mkdtempSync(join(tmpdir(), 'atelier-smoke-tmp-')); const work = mkdtempSync(join(tmpdir(), 'atelier-smoke-work-'));
+    // it stops at the first thing it needs (a checkout that is not there); by then the old version had made its directory
+    const r = bare('bench/compare/smoke/smoke.mjs', ['--work', work], { TMPDIR: temp, IHAVEADHD_DIR: '', GEPA_PYTHON: '', SKILLOPT_DIR: '', SKILLOPT_PYTHON: '' });
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/smoke: set IHAVEADHD_DIR/);
+    expect(readdirSync(temp)).toEqual([]);
   });
 });
 
@@ -143,6 +257,48 @@ describe('the voice read is scored over requests, never over single judgments', 
   });
   it('too few requests with every reader\'s answer is UNRESOLVED, whatever the preference', () => {
     expect(score(panel(10, 0.9, 3)).verdict).toBe('UNRESOLVED');
+  });
+  /** Rewrite every answer line of one reader's packet: `form` is given the letter the reader chose. */
+  const rewrite = (dir: string, file: string, form: (letter: string, id: string) => string): void => {
+    writeFileSync(join(dir, file), readFileSync(join(dir, file), 'utf8').replace(/^ANSWER ([^:\n]+): ([AB])$/gm, (_, id: string, letter: string) => form(letter, id)));
+  };
+  it('an answer is read in the forms readers write it: either case, in emphasis or brackets, or on the line under', () => {
+    const plain = panel(15, 0.8, 1); const mixed = panel(15, 0.8, 1);
+    rewrite(mixed, 'author-a-reader-1.md', (l, id) => `ANSWER ${id}: ${l.toLowerCase()}`);
+    rewrite(mixed, 'author-a-reader-2.md', (l, id) => `ANSWER ${id}: **${l}**`);
+    rewrite(mixed, 'author-a-reader-3.md', (l, id) => `ANSWER ${id}: (${l.toLowerCase()})`);
+    rewrite(mixed, 'author-a-reader-4.md', (l, id) => `ANSWER ${id}:\n${l}`);
+    rewrite(mixed, 'author-a-reader-5.md', (l, id) => `ANSWER ${id}: _${l}_, the second excerpt settles it`);
+    rewrite(mixed, 'author-b-reader-1.md', (l, id) => `ANSWER ${id}:  \n  *${l.toLowerCase()}*.`);
+    const r = bare('studies/harness/voice-pass-score.mjs', ['--dir', mixed]);
+    expect(r.err).toBe('');
+    expect(JSON.parse(r.out)).toEqual(score(plain));
+    expect(JSON.parse(r.out)).toMatchObject({ verdict: 'PASS', requests: 30, unreadable: { answers: 0, of: 150 } });
+  });
+  it('an answer nobody could read is listed by reader and request, and the verdict is UNRESOLVED naming how many, never a smaller n', () => {
+    const dir = panel(15, 0.8, 1);
+    // one reader wrote a word, not a letter, on one line; another left one blank; a third wrote a sentence that starts with "a"
+    rewrite(dir, 'author-a-reader-2.md', (l, id) => `ANSWER ${id}: ${id === 'author-a-03' ? 'first' : l}`);
+    rewrite(dir, 'author-b-reader-4.md', (l, id) => `ANSWER ${id}: ${id === 'author-b-07' ? '' : l}`);
+    rewrite(dir, 'author-b-reader-5.md', (l, id) => `ANSWER ${id}: ${id === 'author-b-07' ? 'a bit of both' : l}`);
+    const r = bare('studies/harness/voice-pass-score.mjs', ['--dir', dir]);
+    expect(r.code).toBe(0);
+    expect(r.err).toMatch(/^no readable answer: author-a reader 2, request author-a-03 \(no A or B could be read on its answer line\)$/m);
+    expect(r.err).toMatch(/^no readable answer: author-b reader 4, request author-b-07 /m);
+    expect(r.err).toMatch(/^no readable answer: author-b reader 5, request author-b-07 /m);
+    expect(r.err).toMatch(/^3 of 150 answers could not be read \(3 reader packet\(s\), 2 request\(s\)\)\. The verdict is UNRESOLVED until each is "ANSWER <id>: A" or "ANSWER <id>: B"; then run the same command again\.$/m);
+    const result = JSON.parse(r.out) as { verdict: string; sentence: string; requests: number; unreadable: { answers: number; list: object[] } };
+    // without the three lines this panel passes on 28 requests: that is the quiet smaller n
+    expect(result).toMatchObject({ verdict: 'UNRESOLVED', requests: 28, unreadable: { answers: 3 } });
+    expect(result.sentence).toBe('The voice read is not scored yet: 3 of 150 answers could not be read (3 reader packet(s), 2 request(s)), and a request is never left out for an answer nobody could read. Each is listed on stderr; fix them and score again.');
+    expect(result.unreadable.list[0]).toEqual({ author: 'author-a', reader: '2', request: 'author-a-03', why: 'no A or B could be read on its answer line' });
+  });
+  it('a packet that is not there counts for every request in it', () => {
+    const dir = panel(15, 0.8, 1);
+    rmSync(join(dir, 'author-b-reader-3.md'));
+    const r = bare('studies/harness/voice-pass-score.mjs', ['--dir', dir]);
+    expect(r.err).toMatch(/no readable answer: author-b reader 3, request author-b-01 \(author-b-reader-3\.md is not in /);
+    expect(JSON.parse(r.out)).toMatchObject({ verdict: 'UNRESOLVED', unreadable: { answers: 15, of: 150 } });
   });
 });
 
@@ -501,6 +657,15 @@ describe('the rubric judge\'s output limit is an argument, checked before anythi
       expect(r.out, bad).toMatch(/--max-tokens must be a positive whole number/);
       expect(r.out, bad).not.toMatch(/ANTHROPIC_API_KEY/);
     }
+  });
+  it('a refused answer (`response: null`) is not sent to the judge: the run is refused before a client is made, naming the row', () => {
+    const withRefusal = join(dir, 'with-refusal.jsonl');
+    writeFileSync(withRefusal, jsonl([{ case_id: 'b1', trial: 1, condition: 'a', response: 'One.' }, { case_id: 'b1', trial: 1, condition: 'b', response: null }]));
+    const r = judge('--responses', withRefusal, '--tasks', join(dir, 'tasks.jsonl'), '--rubric', resolve('bench/compare/rubrics/stop-slop.json'), '--out', out);
+    expect(r.code).toBe(2);
+    expect(r.out).toMatch(/^b1 trial 1 \(b\) has no answer \(`response` is null\)\. Refused answers are not judged by this rubric and must be excluded for every arm of that task: remove b1 from the responses of every arm, then run again\. Nothing was spent\.\n$/);
+    expect(r.out).not.toMatch(/ANTHROPIC_API_KEY/);
+    expect(existsSync(out)).toBe(false);
   });
   it('a valid limit, and the default, get as far as the client, which has no key', () => {
     for (const ok of [['--max-tokens', '2000'], []]) {

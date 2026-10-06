@@ -460,7 +460,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
-      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null } : null),
+      voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
       shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
@@ -829,7 +829,7 @@ function withEdits(refine: (draft: string) => Promise<Delivered>,
  * (the taste reader holds VETO, or the claim reader could not run).
  */
 function withVoice(refine: (draft: string) => Promise<Delivered>,
-  v: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; bank: PairBank; copied: ReturnType<typeof overlapIndex> | null; trace: FidelityTrace; taste: TasteSession | null; reader?: InferenceClient | null } | null) {
+  v: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; bank: PairBank; copied: ReturnType<typeof overlapIndex> | null; trace: FidelityTrace; taste: TasteSession | null; reader?: InferenceClient | null; gate?: 'lists' | 'reader' } | null) {
   if (!v) return refine;
   return async (draft: string) => {
     const r = await refine(draft);
@@ -837,7 +837,7 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
     if (v.taste?.acts) return notRun('not run: the taste reader holds VETO on this skill, and a rewrite would change the text it read');
     if (v.checks.claimSensor?.degraded) return notRun('not run: the claim reader could not run, so a rewrite could not be checked for invented claims');
     let passed: Awaited<ReturnType<typeof voicePass>>;
-    try { passed = await voicePass(v.client, v.budget, r.output, v.bank, v.copied, v.reader ?? null); } catch (err) {
+    try { passed = await voicePass(v.client, v.budget, r.output, v.bank, v.copied, v.reader ?? null, v.gate ?? 'lists'); } catch (err) {
       return notRun(`could not run (${(err as Error).message.split('\n')[0]})`);
     }
     v.trace.voice = { bank: v.bank.hash, paragraphs: passed.paragraphs };
@@ -1152,7 +1152,7 @@ function reportFidelity(report: RunReport, rec: Invocation): void {
   if (!f?.reading) return;
   const kept = (f.edits ?? []).filter((e) => e.kept).length;
   const out = f.reading.outside.slice(0, 3).map((o) => featureOf(o.id)?.label ?? o.id);
-  report.say(`In your range on ${f.reading.inBand} of ${f.reading.measured} measured features${out.length ? `; furthest outside: ${out.join('; ')}` : ''}${kept ? ` (${kept} structural edit(s) kept)` : ''}.`);
+  if (f.reading.measured > 0) report.say(`In your range on ${f.reading.inBand} of ${f.reading.measured} measured features${out.length ? `; furthest outside: ${out.join('; ')}` : ''}${kept ? ` (${kept} structural edit(s) kept)` : ''}.`);
   if (f.coverage) report.detail(`used ${f.coverage.used} of the ${f.coverage.supplied} fact(s) you supplied: ${f.coverage.per100} specifics per 100 words${f.coverage.authorPer100 !== null ? ` (your pieces carry ${f.coverage.authorPer100})` : ''}`);
   report.detail(`implementation release ${f.release ?? 'none'} · profile ${f.profileHash ?? 'none'}${f.reading.detector ? ` · style detector ${f.reading.detector.version}: P(model-written) ${f.reading.detector.p}` : ''}`);
   for (const e of f.edits ?? []) report.detail(`    ${e.actuator ?? 'edit'} on ${e.target}${e.before !== undefined ? ` (${e.before ?? '-'} to ${e.after ?? '-'})` : ''}: ${e.kept ? 'kept' : 'not kept'}, ${e.why}`);
@@ -1282,7 +1282,7 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
     const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
     if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
     if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
-    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} fixed by rewriting only the spans that broke them)` : ''}.`);
+    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : 'held once what could not be traced to your material was cut'})` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);

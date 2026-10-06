@@ -89,7 +89,8 @@ export async function review(opts: ReviewOptions = {}): Promise<boolean> {
   if (!accepted || !opts.shownBefore) printScreen(s, rows);
   if (!accepted && process.stdin.isTTY) accepted = await promptForChanges(rows, ids, changes);
   if (!accepted) {
-    printHowToAccept(opts.continueWith);
+    // The example names a rule that is on this screen: one that is not would be refused when copied.
+    printHowToAccept(opts.continueWith, rows[rows.length - 1]?.id);
     return false;
   }
   applyDecisions(rows.map((r) => decisionFor(r, changes)));
@@ -149,9 +150,11 @@ function printScreen(s: Session, rows: readonly Row[]): void {
   // accepted from, with what was moved to "shown" to get there (core/ratification/suggest.ts, `suggestAll`).
   const done = new Set(s.decided.map((d) => d.requirementId));
   const standing = suggestAll(s.proposals.filter((p) => !done.has(p.requirementId)), s.proposalMeta, s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode).corpus;
-  if (standing) {
-    console.log(`Your own pieces: ${standing.passing} of ${standing.pieces} meet every counted rule suggested as required.`
-      + (standing.moved.length ? ` ${standing.moved.length} rule(s) your own pieces break too often are suggested as shown, not required: ${standing.moved.join(', ')}.` : ''));
+  if (standing && (standing.required || standing.moved.length)) {
+    if (standing.required) console.log(`Your own pieces: ${standing.passing} of ${standing.pieces} meet every counted rule suggested as required.`);
+    // Why each was moved, here, since a rule only shown is listed in one line above and its reason is not.
+    for (const r of rows.filter((x) => standing.moved.includes(x.id))) console.log(`  ${r.id} is shown, not required: ${r.s.why.split('; ').slice(-1)[0]}.`);
+    console.log('');
   }
 }
 
@@ -188,11 +191,11 @@ async function promptForChanges(rows: readonly Row[], ids: ReadonlySet<string>, 
   } finally { rl.close(); }
 }
 
-function printHowToAccept(continueWith: string | undefined): void {
+function printHowToAccept(continueWith: string | undefined, example = 'p1'): void {
   const cmd = continueWith ? `${continueWith} --accept` : 'atelier review --accept';
   const ways: readonly (readonly [string, string])[] = [
     [cmd, `accept all as shown${continueWith ? ', and build' : ''}`],
-    [`${cmd} --set p3=reject`, 'accept, with changes'],
+    [`${cmd} --set ${example}=reject`, 'accept, with changes'],
     ['atelier ratify --page review.html', 'rule on each one in a browser, evidence beside it'],
   ];
   const width = Math.max(...ways.map(([c]) => c.length));

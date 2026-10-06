@@ -194,6 +194,11 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
 //   the set     of rules suggested REQUIRED must leave at least CORPUS_SET_SHARE of the pieces breaking none;
 //               while it does not, the rule the most pieces break is suggested PREFERRED instead
 //
+// On a small corpus a share is a blunt thing: one piece in nineteen is already more than a twentieth, so "95%"
+// would mean "every piece", and one unusual post would move a rule the rest of the author's work keeps. So each
+// check always allows one piece (`allowed`): a rule may be broken by one of the author's pieces, and one piece may
+// break the set, however few pieces there are.
+//
 // A rule moved this way is still approved, still shown, still counted on every output and still used to choose
 // between drafts. It stops failing an output on its own. The person can make it required on the same screen: this
 // changes a default, never a ruling. A session recorded before the corpus was counted has no such evidence, and
@@ -204,8 +209,13 @@ export const CORPUS_RULE_SHARE = 0.95;
 /** The rules suggested REQUIRED must, together, be met by at least this share of the author's own pieces. */
 export const CORPUS_SET_SHARE = 0.9;
 
+/** How many of `pieces` may fall short of a share: the share's own count, and never fewer than one. */
+export const allowed = (pieces: number, share: number): number => Math.max(1, Math.floor((1 - share) * pieces + 1e-9));
+
 /** How the author's own pieces fare against the rules suggested REQUIRED, for the screen and the build to say. */
-export interface CorpusStanding { readonly pieces: number; readonly passing: number; readonly moved: readonly string[] }
+export interface CorpusStanding { readonly pieces: number; readonly passing: number; readonly moved: readonly string[];
+  /** counted rules still suggested REQUIRED: with none, there is nothing for the pieces to meet and nothing is said */
+  readonly required: number }
 
 /**
  * EVERY SUGGESTION, THEN THE TWO CHECKS ABOVE. `suggest` rules on one proposal from its own evidence; this is the
@@ -226,16 +236,16 @@ export function suggestAll(proposals: readonly Requirement[], meta: Readonly<Rec
   proposals.forEach((_, i) => {
     const c = counted[i];
     if (!required(i) || !c) return;
-    if ((c.pieces - c.breaking.length) / c.pieces < CORPUS_RULE_SHARE) demote(i, `${c.breaking.length} of your own ${c.pieces} pieces break it, ${until}`);
+    if (new Set(c.breaking).size > allowed(c.pieces, CORPUS_RULE_SHARE)) demote(i, `${new Set(c.breaking).size} of your own ${c.pieces} pieces break it, ${until}`);
   });
   // Then the rules together: the pieces that break none of them.
   const breakingAny = (): Set<number> => new Set(proposals.flatMap((_, i) => (required(i) ? [...(counted[i]?.breaking ?? [])] : [])));
-  for (let failing = breakingAny(); (pieces - failing.size) / pieces < CORPUS_SET_SHARE; failing = breakingAny()) {
+  for (let failing = breakingAny(); failing.size > allowed(pieces, CORPUS_SET_SHARE); failing = breakingAny()) {
     // The rule the most pieces break; on a tie, the one listed last, so the order of the screen decides and nothing else.
     const worst = proposals.map((_, i) => i).filter(required).sort((a, b) => (counted[b]?.breaking.length ?? 0) - (counted[a]?.breaking.length ?? 0) || b - a)[0];
     if (worst === undefined || !counted[worst]?.breaking.length) break;
     demote(worst, `with it, only ${pieces - failing.size} of your own ${pieces} pieces would meet every required rule, ${until}`);
   }
-  return { suggestions: out, corpus: { pieces, passing: pieces - breakingAny().size, moved } };
+  return { suggestions: out, corpus: { pieces, passing: pieces - breakingAny().size, moved, required: proposals.filter((_, i) => required(i)).length } };
 }
 

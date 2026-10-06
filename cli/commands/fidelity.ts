@@ -186,6 +186,7 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
   const counts: Record<string, number> = { drafts: base.drafts, editBudget: base.editBudget, retrievalK: base.retrievalK, notesCap: base.notesCap };
   let diversity = base.diversity ?? false;
   let voice = base.voice;
+  let voiceGate = base.voiceGate;
   let selection = base.selection;
   let context = base.context;
   let nearness = base.nearness;
@@ -217,18 +218,23 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
       voice = v === 'incontext' ? 'incontext' : undefined;
       continue;
     }
+    if (k === 'voiceGate') {
+      if (!['reader', 'lists'].includes(v)) die(`"voiceGate" is reader or lists, got "${v}".`);
+      voiceGate = v === 'reader' ? 'reader' : undefined;
+      continue;
+    }
     if (k === 'diversity') {
       if (!['0', '1', 'on', 'off', 'true', 'false'].includes(v)) die(`"diversity" is on or off, got "${v}".`);
       diversity = ['1', 'on', 'true'].includes(v);
       continue;
     }
-    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, selection, context, nearness or delivery.`);
+    if (!(k in counts)) die(`unknown setting "${k}": drafts, editBudget, retrievalK, notesCap, diversity, voice, voiceGate, selection, context, nearness or delivery.`);
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) die(`"${k}" needs a number of 0 or more, got "${v}".`);
     counts[k] = Math.floor(n);
   }
   if (counts.drafts < 1) die('drafts must be at least 1.');
-  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}) };
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(voiceGate ? { voiceGate } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>

@@ -4,10 +4,17 @@
 // studies/CLOSING_AW_PREREGISTRATION.md (writing, against stop-slop): the tester seals this file's sha256 with the
 // pre-registration, so the rule that reads the result is written before the result exists. No model call.
 //
-//   node bench/compare/closing-quality.mjs --config <config.json> [--out <result.json>]
+//   node bench/compare/closing-quality.mjs --config <config.json> [--out <result.json>] [--disagreements <file>]
+//
+// A file the config names that cannot be read, or holds a line that is not JSON, stops the run with one line saying
+// which (exit 2), and nothing is written. `--disagreements <file>` needs the config's `reads`: without them there is
+// nothing to write, and the run says so (exit 2) instead of ending as if it had.
 //
 // config.json (every path relative to the config):
 //   claim        "A" or "A-w"; n and k for the sentence
+//   arm          "plug-in" (the default) or "runtime": which Atelier arm is the candidate. Every sentence names it
+//                ("the Atelier plug-in built from …", "the Atelier runtime built from …"), so a result for the
+//                runtime arm is never worded as the plug-in's
 //   weights      {dimension: weight}: the judge's own weighting; the weighted score is Σ weight × dimension
 //   scores       [files]: the judge's rows {case_id, trial, condition, <dimensions>, blocker?}. One file a judging
 //                session; a case's arms are compared only inside a session, then averaged over sessions
@@ -78,6 +85,9 @@ const fail = (m) => { console.error(`closing-quality: ${m}`); process.exit(2); }
 const jsonl = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/** How the candidate is named in a sentence: the arm the config says it is. Unset, claim A-w keeps "an Atelier skill". */
+const subjectOf = (cfg) => { const arm = cfg.arm === 'runtime' ? 'runtime' : 'plug-in'; return cfg.claim === 'A-w' ? `an Atelier ${cfg.arm === undefined ? 'skill' : arm} built from ${cfg.k ?? '[k]'} pieces` : `the Atelier ${arm} built from ${cfg.k ?? '[k]'} examples`; };
 
 /** One-sided bounds of the mean of paired differences: `lo95` is the lower 95% bound, `hi95` the upper, and the 97.5% pair. */
 export function bounds(diffs) {
@@ -272,7 +282,7 @@ export function analyse(cfg, load) {
               : tooFew;
     const missed = mine.filter((x) => x.pass === false);
     const verdict = unresolved ? 'UNRESOLVED' : missed.length ? 'FAIL' : 'PASS';
-    const subject = cfg.claim === 'A-w' ? `On ${sealedTasks?.length ?? 0} writing briefs it never saw, an Atelier skill built from ${cfg.k ?? '[k]'} pieces` : `On ${sealedTasks?.length ?? 0} coding tasks it never saw, the Atelier plug-in built from ${cfg.k ?? '[k]'} examples`;
+    const subject = `On ${sealedTasks?.length ?? 0} ${cfg.claim === 'A-w' ? 'writing briefs' : 'coding tasks'} it never saw, ${subjectOf(cfg)}`;
     const each = mine.map((x) => { const t = axisSentence(x); return t[0].toUpperCase() + t.slice(1); }).join(' ');
     const sentence = verdict === 'UNRESOLVED' ? closed(unresolved)
       : verdict === 'PASS' ? `${subject} met the signed bar against the hand-written skill on ${mine.length === 1 ? 'the one required axis' : `all ${mine.length} required axes`}. ${each}`
@@ -283,7 +293,7 @@ export function analyse(cfg, load) {
   const failed = all.filter((e) => e.pass === false);
   const unresolved = tooFew ?? E.P5?.unresolved ?? null;
   const verdict = unresolved ? 'UNRESOLVED' : failed.length ? 'FAIL' : 'PASS';
-  const subject = cfg.claim === 'A-w' ? `On ${valid} writing briefs it never saw, an Atelier skill built from ${cfg.k ?? '[k]'} pieces` : `On ${valid} coding tasks it never saw, the Atelier plug-in built from ${cfg.k ?? '[k]'} examples`;
+  const subject = `On ${valid} ${cfg.claim === 'A-w' ? 'writing briefs' : 'coding tasks'} it never saw, ${subjectOf(cfg)}`;
   const sentence = verdict === 'UNRESOLVED' ? closed(unresolved)
     // "Scored higher" is said only when it was shown: the lower bound of the difference against every baseline is above zero.
     : verdict === 'PASS' ? `${subject} ${E.P2[0].lo95 > 0 ? `scored higher overall than the hand-written skill (+${E.P2[0].mean}, lower bound +${E.P2[0].lo95})` : 'was not worse overall than the hand-written skill'}${E.P2[1] ? (E.P2[1].lo95 > 0 ? ` and higher than the strongest baseline (+${E.P2[1].mean})` : ' and was not worse than the strongest baseline') : ''}, no quality dimension${E.P4 ? ', blocker rate' : ''}${E.P6 ? ' or requested depth' : ''} showed a clear loss${E.PREF ? `, readers chose its piece ${Math.round((E.PREF.mean ?? 0) * 100)}% of the time` : ''}, and it held the shared required rules more often. This is not a result for each dimension separately.`
@@ -297,8 +307,21 @@ export function analyse(cfg, load) {
 const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
 if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.url))) {
   const file = arg('--config') ?? fail('missing --config');
-  const cfg = JSON.parse(readFileSync(file, 'utf8'));
-  const result = analyse(cfg, (f) => jsonl(resolve(dirname(file), f)));
+  let cfg;
+  try { cfg = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { fail(`the config ${file} cannot be read (${e.code ?? String(e.message).split('\n')[0]}). Nothing was written.`); }
+  if (cfg === null || typeof cfg !== 'object' || Array.isArray(cfg)) fail(`the config ${file} is not a JSON object. Nothing was written.`);
+  if (cfg.arm !== undefined && cfg.arm !== 'plug-in' && cfg.arm !== 'runtime') fail(`the config's "arm" is ${JSON.stringify(cfg.arm)}: it is "plug-in" or "runtime", the Atelier arm that is the candidate. Nothing was written.`);
+  if (process.argv.includes('--disagreements') && !arg('--disagreements')) fail('--disagreements needs a file to write. Nothing was written.');
+  if (arg('--disagreements') && cfg.reads?.length !== 2) fail(`--disagreements writes the answers on which two judge reads disagree, and the config has no "reads": [fileA, fileB] to compare. Add the two reads to ${file}, or leave --disagreements out. Nothing was written.`);
+  // EVERY FILE THE CONFIG NAMES IS READ THROUGH HERE, and a file that is not there is said in one line, by name. An
+  // axis file is the one exception: the analysis catches that itself and reports the axis as not covered.
+  class LoadError extends Error { constructor(f, e) { super(`the config names ${f}, and it cannot be read (${e.code ?? String(e.message).split('\n')[0]})`); this.code = e.code ?? 'not JSON'; } }
+  const load = (f) => { try { return jsonl(resolve(dirname(file), f)); } catch (e) { throw new LoadError(f, e); } };
+  let result;
+  try { result = analyse(cfg, load); } catch (e) {
+    if (e instanceof LoadError) fail(`${e.message}. Paths are relative to the config (${dirname(resolve(file))}); check it and run again. Nothing was written.`);
+    fail(`the config ${file} could not be analysed: ${String(e?.message ?? e).split('\n')[0]}. Check it against the fields in this script's header. Nothing was written.`);
+  }
   if (arg('--out')) writeFileSync(arg('--out'), JSON.stringify(result, null, 1));
   if (arg('--disagreements') && result.endpoints.judgeNoise) writeFileSync(arg('--disagreements'), `${result.endpoints.judgeNoise.toReview.map((r) => JSON.stringify(r)).join('\n')}\n`);
   console.log(JSON.stringify(result, null, 1));
