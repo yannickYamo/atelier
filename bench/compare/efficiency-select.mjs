@@ -25,15 +25,18 @@
 //   margins      { rules, quality }: how much worse than the reference an arm may MEASURE before it is rejected:
 //                `rules` in share of outputs (0.05 is five in a hundred), `quality` in points of the score
 //   minTasks     fewer tasks than this in a domain and no arm is read there
+//   trials       outputs per task per arm: every task has exactly this many, in every file
 //   ceiling      a share of outputs: where the reference itself breaks a required rule in more than this share of
 //                its outputs, a yes-or-no reading has no room left to show an arm is worse, so rules are unread
 //                in that domain and no arm can be selected on it. Sealed with the margins
 //
 // THE INPUT IS CHECKED BEFORE IT IS READ, and anything unexpected stops the run (exit 2) instead of thinning it. Every
 // row names the reference or a listed arm; `broken` is a boolean, `score` a number, `chose` one of two words; no
-// (task, trial, arm) appears twice; and in each file every arm has exactly the reference's tasks and trials. A task an
-// arm has no output for is not dropped in silence: it is listed in `excluded`, for every arm at once, or the run
-// stops. A reading that quietly lost its failing tasks would select the arm that failed.
+// (task, trial, arm) appears twice; every arm has exactly the reference's tasks and trials; every task has the sealed
+// number of trials; and the rules file and every judging session cover one and the same set of tasks and trials. A
+// task an arm has no output for is not dropped in silence: it is listed in `excluded`, for every arm at once, or the
+// run stops. A reading that quietly lost its failing tasks would select the arm that failed. Where voice is read,
+// it is one choice per task and arm, on the tasks of the rules file and no others.
 //
 // THE UNIT IS THE TASK for quality and voice, and THE OUTPUT for the rule count, which is compared as whole numbers.
 //
@@ -46,7 +49,7 @@
 //             than `minTasks` tasks of choices leaves that arm unread there
 //
 // THE ARM SELECTED is the defaultable arm with the fewest exported words summed over the domains, among arms read in
-// every domain and rejected in none. Domains are never pooled: an arm that loses in one is not saved by another. When
+// every domain, rejected in none, and smaller than the reference: an arm that is not smaller is nothing to select. Domains are never pooled: an arm that loses in one is not saved by another. When
 // no defaultable arm stands, the reference stays. The smallest standing arm of all is reported beside it.
 //
 // WHAT THIS IS NOT. A screen that picks a configuration, not a proof that two sizes are equivalent, and its error
@@ -64,7 +67,6 @@ const arg = (n) => { const i = process.argv.indexOf(n); return i === -1 ? null :
 /** A config or a row that cannot be read as written. The command prints it and exits 2. */
 export class Unreadable extends Error {}
 const refuse = (m) => { throw new Unreadable(m); };
-const jsonl = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const key = (r) => `${r.case_id}\u0000${r.trial}`;
@@ -73,10 +75,10 @@ const key = (r) => `${r.case_id}\u0000${r.trial}`;
  * One file's rows by arm, checked: known labels only, a valid value on every row, no (task, trial, arm) twice, and
  * every arm on exactly the reference's tasks and trials once the excluded tasks are set aside.
  */
-function byArm(rows, where, labels, reference, excluded, valid) {
+function byArm(rows, where, labels, reference, excluded, valid, trials) {
   const out = new Map(labels.map((l) => [l, new Map()]));
   for (const r of rows) {
-    if (typeof r.case_id !== 'string' || r.trial === undefined) refuse(`${where}: a row has no case_id or trial`);
+    if (r === null || typeof r !== 'object' || typeof r.case_id !== 'string' || !Number.isInteger(r.trial)) refuse(`${where}: a row has no case_id, or no whole-number trial`);
     if (!out.has(r.condition)) refuse(`${where}: a row's condition is "${r.condition}", which is neither the reference nor a listed arm (${labels.join(', ')})`);
     const v = valid(r);
     if (v === null) refuse(`${where}: ${r.case_id} trial ${r.trial} (${r.condition}) has no usable value`);
@@ -85,6 +87,9 @@ function byArm(rows, where, labels, reference, excluded, valid) {
     out.get(r.condition).set(key(r), { case_id: r.case_id, value: v });
   }
   const want = [...out.get(reference).keys()].sort();
+  const perTaskCount = new Map();
+  for (const x of out.get(reference).values()) perTaskCount.set(x.case_id, (perTaskCount.get(x.case_id) ?? 0) + 1);
+  for (const [task, n] of perTaskCount) if (n !== trials) refuse(`${where}: ${task} has ${n} output(s) for the reference where ${trials} are sealed`);
   for (const [label, m] of out) {
     const have = [...m.keys()].sort();
     const missing = want.filter((k) => !m.has(k)); const extra = have.filter((k) => !out.get(reference).has(k));
@@ -104,7 +109,7 @@ export function readRules(arm, ref, margin, minTasks, ceiling) {
   if (tasks < minTasks) return { read: false, tasks };
   const outputs = ref.size; const count = (m) => [...m.values()].filter((x) => x.value).length;
   const armBroken = count(arm); const refBroken = count(ref); const extra = armBroken - refBroken;
-  if (refBroken > ceiling * outputs) return { read: false, tasks, outputs, arm: armBroken, reference: refBroken, unread: `the reference breaks a required rule in ${refBroken} of ${outputs} outputs, over the ceiling of ${ceiling}: a yes-or-no reading cannot show an arm is worse` };
+  if (refBroken > Math.floor(ceiling * outputs + 1e-9)) return { read: false, tasks, outputs, arm: armBroken, reference: refBroken, unread: `the reference breaks a required rule in ${refBroken} of ${outputs} outputs, over the ceiling of ${ceiling}: a yes-or-no reading cannot show an arm is worse` };
   // Whole numbers on both sides: the most extra broken outputs the margin allows. (The small term keeps 0.05 × 60 at 3.)
   const allowed = Math.floor(margin * outputs + 1e-9);
   return { read: true, tasks, outputs, arm: armBroken, reference: refBroken, extra, allowed, rejected: extra > allowed,
@@ -121,25 +126,37 @@ export function readQuality(sessions, margin, minTasks) {
   return { read: true, tasks: diffs.length, difference: r3(m), rejected: m < -margin, why: m < -margin ? `scores ${r3(-m)} points lower than the reference, where ${margin} is allowed` : null };
 }
 
-/** VOICE, where a qualified reader read it: per task, which output was chosen more; the reference clearly ahead rejects. */
-export function readVoice(rows, arm, where, minTasks, excluded) {
-  const byTask = new Map();
+/**
+ * VOICE, where a qualified reader read it: one choice per task between the arm's output and the reference's; the
+ * reference clearly ahead rejects. `tasks` are the tasks of the rules file: a choice on any other is refused, and so
+ * is a second choice on one task, which would turn a loss into a tie.
+ */
+export function readVoice(rows, arm, where, minTasks, excluded, tasks) {
+  const chose = new Map();
   for (const r of rows) {
+    if (r === null || typeof r !== 'object' || typeof r.case_id !== 'string') refuse(`${where}: a row has no case_id`);
     if (r.chose !== 'arm' && r.chose !== 'reference') refuse(`${where}: ${r.case_id} (${r.condition}) has chose "${r.chose}"; it must be "arm" or "reference"`);
     if (r.condition !== arm || excluded.has(r.case_id)) continue;
-    byTask.set(r.case_id, [...(byTask.get(r.case_id) ?? []), r.chose === 'reference' ? 1 : 0]);
+    if (!tasks.has(r.case_id)) refuse(`${where}: ${r.case_id} (${arm}) is not a task of this domain's rules file`);
+    if (chose.has(r.case_id)) refuse(`${where}: ${r.case_id} has two choices for "${arm}"`);
+    chose.set(r.case_id, r.chose);
   }
-  const share = [...byTask.values()].map(mean);
-  if (share.length < minTasks) return { read: false, tasks: share.length };
-  const forReference = share.filter((s) => s > 0.5).length; const forArm = share.filter((s) => s < 0.5).length;
-  const p = signTestOneSidedP(forReference, forReference + forArm);
-  return { read: true, tasks: share.length, tasksForReference: forReference, tasksForArm: forArm, pReference: r3(p), rejected: p < ALPHA,
-    why: p < ALPHA ? `the reference was chosen on ${forReference} of the ${forReference + forArm} tasks with a majority (p = ${r3(p)})` : null };
+  if (chose.size < minTasks) return { read: false, tasks: chose.size };
+  const forReference = [...chose.values()].filter((c) => c === 'reference').length; const forArm = chose.size - forReference;
+  const p = signTestOneSidedP(forReference, chose.size);
+  return { read: true, tasks: chose.size, tasksForReference: forReference, tasksForArm: forArm, pReference: r3(p), rejected: p < ALPHA,
+    why: p < ALPHA ? `the reference was chosen on ${forReference} of the ${chose.size} tasks (p = ${r3(p)})` : null };
 }
 
 export function select(cfg, load) {
-  for (const k of ['reference', 'arms', 'defaultable', 'domains', 'margins', 'minTasks', 'ceiling']) if (cfg[k] === undefined || cfg[k] === null) refuse(`config needs "${k}"`);
+  if (cfg === null || typeof cfg !== 'object') refuse('the config is not an object');
+  for (const k of ['reference', 'arms', 'defaultable', 'domains', 'margins', 'minTasks', 'ceiling', 'trials']) if (cfg[k] === undefined || cfg[k] === null) refuse(`config needs "${k}"`);
   if (typeof cfg.margins.rules !== 'number' || typeof cfg.margins.quality !== 'number') refuse('config.margins needs numbers for "rules" and "quality"');
+  if (!(cfg.margins.rules >= 0 && cfg.margins.rules < 1)) refuse('config.margins.rules is a share of outputs, from 0 to under 1');
+  if (!(Number.isFinite(cfg.margins.quality) && cfg.margins.quality >= 0)) refuse('config.margins.quality is a number of points, 0 or more');
+  if (!Number.isInteger(cfg.trials) || cfg.trials < 1) refuse('config.trials must be a whole number of at least 1');
+  if (!Array.isArray(cfg.domains) || !cfg.domains.length) refuse('config.domains must list at least one domain');
+  if (cfg.domains.some((d) => d === null || typeof d !== 'object' || typeof d.name !== 'string' || !d.name) || new Set(cfg.domains.map((d) => d.name)).size !== cfg.domains.length) refuse('each domain needs a name of its own');
   if (typeof cfg.ceiling !== 'number' || !(cfg.ceiling > 0 && cfg.ceiling <= 1)) refuse('config.ceiling must be a share of outputs, above 0 and at most 1');
   if (!Number.isInteger(cfg.minTasks) || cfg.minTasks < 2) refuse('config.minTasks must be a whole number of at least 2');
   if (!Array.isArray(cfg.arms) || !cfg.arms.length || new Set(cfg.arms).size !== cfg.arms.length) refuse('config.arms must list each arm once');
@@ -148,17 +165,24 @@ export function select(cfg, load) {
   const labels = [cfg.reference, ...cfg.arms];
   const domains = cfg.domains.map((d) => {
     if (!Array.isArray(d.quality) || !d.quality.length) refuse(`${d.name}: "quality" must be a list of at least one file`);
+    if (d.excluded !== undefined && (!Array.isArray(d.excluded) || d.excluded.some((x) => typeof x !== 'string'))) refuse(`${d.name}: "excluded" must be a list of task ids`);
     const excluded = new Set(d.excluded ?? []);
     const sizes = load(d.sizes, 'json');
-    for (const l of labels) if (typeof sizes[l] !== 'number') refuse(`${d.name}: sizes has no number for "${l}"`);
-    const rules = byArm(load(d.rules, 'jsonl'), `${d.name} rules`, labels, cfg.reference, excluded, (r) => (typeof r.broken === 'boolean' ? r.broken : null));
-    const quality = d.quality.map((f, i) => byArm(load(f, 'jsonl'), `${d.name} quality (session ${i + 1})`, labels, cfg.reference, excluded, (r) => (typeof r.score === 'number' && Number.isFinite(r.score) ? r.score : null)));
+    if (sizes === null || typeof sizes !== 'object') refuse(`${d.name}: sizes is not an object`);
+    for (const l of labels) if (!(typeof sizes[l] === 'number' && sizes[l] > 0)) refuse(`${d.name}: sizes has no positive number for "${l}"`);
+    const rules = byArm(load(d.rules, 'jsonl'), `${d.name} rules`, labels, cfg.reference, excluded, (r) => (typeof r.broken === 'boolean' ? r.broken : null), cfg.trials);
+    const quality = d.quality.map((f, i) => byArm(load(f, 'jsonl'), `${d.name} quality (session ${i + 1})`, labels, cfg.reference, excluded, (r) => (typeof r.score === 'number' && Number.isFinite(r.score) ? r.score : null), cfg.trials));
+    // ONE SET OF TASKS AND TRIALS FOR EVERY READING. A judging session short of tasks, or on other tasks, would be read
+    // on what it has; the tasks it lacks may be the ones an arm lost on.
+    const want = [...rules.get(cfg.reference).keys()].sort().join('\u0001');
+    quality.forEach((q, i) => { if ([...q.get(cfg.reference).keys()].sort().join('\u0001') !== want) refuse(`${d.name} quality (session ${i + 1}): it does not cover the same tasks and trials as the rules file`); });
+    const tasks = new Set([...rules.get(cfg.reference).values()].map((x) => x.case_id));
     const voice = d.voice ? load(d.voice, 'jsonl') : null;
-    for (const r of voice ?? []) if (!cfg.arms.includes(r.condition)) refuse(`${d.name} voice: a row's condition is "${r.condition}", which is not a listed arm`);
+    for (const r of voice ?? []) if (!cfg.arms.includes(r?.condition)) refuse(`${d.name} voice: a row's condition is "${r?.condition}", which is not a listed arm`);
     return { name: d.name, sizes, excluded: [...excluded], arms: Object.fromEntries(cfg.arms.map((arm) => {
       const r = readRules(rules.get(arm), rules.get(cfg.reference), cfg.margins.rules, cfg.minTasks, cfg.ceiling);
       const q = readQuality(quality.map((s) => ({ arm: s.get(arm), ref: s.get(cfg.reference) })), cfg.margins.quality, cfg.minTasks);
-      const v = voice ? readVoice(voice, arm, `${d.name} voice`, cfg.minTasks, excluded) : { read: false, tasks: 0, unread: 'no qualified reader on this domain' };
+      const v = voice ? readVoice(voice, arm, `${d.name} voice`, cfg.minTasks, excluded, tasks) : { read: false, tasks: 0, unread: 'no qualified reader on this domain' };
       // Rules and quality must both be read. Voice must be read too wherever this domain reads voice at all.
       const read = r.read && q.read && (voice === null || v.read);
       const rejectedBy = [r.read && r.rejected ? `rules: ${r.why}` : null, q.read && q.rejected ? `quality: ${q.why}` : null, v.read && v.rejected ? `voice: ${v.why}` : null].filter(Boolean);
@@ -169,9 +193,11 @@ export function select(cfg, load) {
     const per = domains.map((d) => ({ domain: d.name, ...d.arms[arm] }));
     const unread = per.filter((x) => !x.read).map((x) => x.domain); const lost = per.filter((x) => x.rejected).map((x) => x.domain);
     return { arm, words: per.reduce((n, x) => n + x.words, 0), defaultable: cfg.defaultable.includes(arm),
-      state: lost.length ? 'rejected' : unread.length ? 'unread' : 'stands', unreadIn: unread, rejectedIn: lost };
+      unreadIn: unread, rejectedIn: lost };
   });
   const referenceWords = domains.reduce((n, d) => n + d.sizes[cfg.reference], 0);
+  // An arm that is not smaller than the reference is nothing to select, whatever it scored, and is said to be so.
+  for (const st of standing) st.state = st.rejectedIn.length ? 'rejected' : st.unreadIn.length ? 'unread' : st.words >= referenceWords ? 'not smaller' : 'stands';
   // The fewest words; on a tie, the arm listed first.
   const smallest = (xs) => [...xs].sort((a, b) => a.words - b.words || cfg.arms.indexOf(a.arm) - cfg.arms.indexOf(b.arm))[0] ?? null;
   const stands = standing.filter((s) => s.state === 'stands');
@@ -179,26 +205,28 @@ export function select(cfg, load) {
   const fewer = (s) => `${s.words.toLocaleString('en-US')} exported words over ${domains.length} domain(s) against ${referenceWords.toLocaleString('en-US')} for "${cfg.reference}" (${r3((1 - s.words / referenceWords) * 100)}% fewer)`;
   const sentence = (chosen
     ? `SELECTED: "${chosen.arm}", ${fewer(chosen)}. It was rejected in no domain. This selects a configuration; it does not show the two are equivalent.`
-    : `NONE SELECTED: no arm that may become the default stood in every domain, so "${cfg.reference}" stays the default. The study did not show that a smaller skill holds; at this size it could not have shown that it does not.`)
+    : `NONE SELECTED: no arm that may become the default stood in every domain and is smaller than the reference, so "${cfg.reference}" stays the default. The study did not show that a smaller skill holds; at this size it could not have shown that it does not.`)
     + (leanest && leanest.arm !== chosen?.arm ? ` The smallest arm that stood is "${leanest.arm}" (${fewer(leanest)}); it is reported and may not become the default in this version.` : '');
-  return { reference: cfg.reference, referenceWords, margins: cfg.margins, minTasks: cfg.minTasks, ceiling: cfg.ceiling, alpha: ALPHA, domains, standing, selected: chosen?.arm ?? null, smallestStanding: leanest?.arm ?? null, sentence };
+  return { reference: cfg.reference, referenceWords, margins: cfg.margins, minTasks: cfg.minTasks, ceiling: cfg.ceiling, trials: cfg.trials, alpha: ALPHA, domains, standing, selected: chosen?.arm ?? null, smallestStanding: leanest?.arm ?? null, sentence };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const configPath = arg('--config') ?? refuse('--config <ablation.json> is required');
     const base = dirname(resolve(configPath));
-    const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
-    const result = select(cfg, (f, kind) => (kind === 'json' ? JSON.parse(readFileSync(resolve(base, f), 'utf8')) : jsonl(resolve(base, f))));
+    // A file that is missing or is not what its name says is an input that cannot be read, like any other.
+    const open = (f, parse) => { if (typeof f !== 'string') refuse('a file name in the config is not a string'); try { return parse(readFileSync(resolve(base, f), 'utf8')); } catch (e) { return refuse(`${f}: ${e.code === 'ENOENT' ? 'no such file' : e.message.split('\n')[0]}`); } };
+    const cfg = open(resolve(configPath), JSON.parse);
+    const result = select(cfg, (f, kind) => open(f, kind === 'json' ? JSON.parse : (t) => t.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))));
     const out = arg('--out');
     if (out) writeFileSync(out, `${JSON.stringify(result, null, 1)}\n`);
-    for (const s of result.standing) console.log(`${s.state.padEnd(8)}  ${s.arm}  ${s.words.toLocaleString('en-US')} words${s.defaultable ? '' : '  (measured only)'}${s.rejectedIn.length ? `  rejected in: ${s.rejectedIn.join(', ')}` : ''}${s.unreadIn.length ? `  unread in: ${s.unreadIn.join(', ')}` : ''}`);
+    for (const s of result.standing) console.log(`${s.state.padEnd(11)}  ${s.arm}  ${s.words.toLocaleString('en-US')} words${s.defaultable ? '' : '  (measured only)'}${s.rejectedIn.length ? `  rejected in: ${s.rejectedIn.join(', ')}` : ''}${s.unreadIn.length ? `  unread in: ${s.unreadIn.join(', ')}` : ''}`);
     for (const d of result.domains) for (const [arm, x] of Object.entries(d.arms)) for (const why of x.rejectedBy) console.log(`  ${d.name} · ${arm} · ${why}`);
     for (const d of result.domains) { const u = Object.values(d.arms).find((x) => x.rules.unread)?.rules.unread; if (u) console.log(`  ${d.name} · rules unread: ${u}`); }
     for (const d of result.domains) if (d.excluded.length) console.log(`  ${d.name} · ${d.excluded.length} task(s) excluded for every arm: ${d.excluded.join(', ')}`);
     console.log(`\n${result.sentence}`);
   } catch (e) {
-    if (!(e instanceof Unreadable) && !(e instanceof SyntaxError)) throw e;
+    if (!(e instanceof Unreadable) && !(e instanceof SyntaxError) && !(e instanceof TypeError)) throw e;
     console.error(`efficiency-select: ${e.message}`); process.exit(2);
   }
 }

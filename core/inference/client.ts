@@ -353,7 +353,8 @@ export const processSpendByPurpose = (): readonly SpendLine[] => [...processLedg
 export function spendBetween(before: readonly SpendLine[], after: readonly SpendLine[]): SpendLine[] {
   const was = new Map(before.map((l) => [l.purpose, l]));
   return after.map((l) => { const b = was.get(l.purpose);
-    return { purpose: l.purpose, usd: l.usd - (b?.usd ?? 0), calls: l.calls - (b?.calls ?? 0), inputTokens: l.inputTokens - (b?.inputTokens ?? 0), outputTokens: l.outputTokens - (b?.outputTokens ?? 0) }; })
+    // Rounded to a millionth of a dollar: a difference of two running sums is otherwise recorded with float noise.
+    return { purpose: l.purpose, usd: Math.round((l.usd - (b?.usd ?? 0)) * 1e6) / 1e6, calls: l.calls - (b?.calls ?? 0), inputTokens: l.inputTokens - (b?.inputTokens ?? 0), outputTokens: l.outputTokens - (b?.outputTokens ?? 0) }; })
     .filter((l) => l.calls > 0).sort((a, b) => b.usd - a.usd || b.calls - a.calls || a.purpose.localeCompare(b.purpose));
 }
 

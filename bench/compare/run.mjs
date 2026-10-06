@@ -36,7 +36,7 @@ import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, write
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { readJsonl, sha256, sha256File, validateTasks, opt, die } from './lib.mjs';
+import { readJsonl, sha256, sha256File, validateTasks, opt, die, stripFrontmatter } from './lib.mjs';
 
 const RUNNER = 'atelier-compare';
 const args = process.argv.slice(2);
@@ -70,14 +70,6 @@ if (sealedPath) {
   const sealed = JSON.parse(readFileSync(sealedPath, 'utf8'));
   split = ['train', 'validation', 'test'].find((k) => sealed[k]?.sha256 === tasksSha) ?? 'not-in-SEALED';
 }
-
-/** Leading YAML front matter dropped, exactly as run_evals.py _strip_frontmatter does it. */
-const stripFrontmatter = (text) => {
-  const lines = text.split(/\r?\n/);
-  if (!lines.length || lines[0].trim() !== '---') return text;
-  for (let i = 1; i < lines.length; i++) if (lines[i].trim() === '---') return lines.slice(i + 1).join('\n').replace(/^\n+/, '');
-  return text;
-};
 
 let skillText = null;
 if (kind === 'skill') {

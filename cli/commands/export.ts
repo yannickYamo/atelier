@@ -28,12 +28,18 @@ export function exportSkill(): void {
   const out = flag('--out');
   if (!out) { process.stdout.write(`${servedText}\n`); return; }
   writeAtomic(out, `${servedText}\n`);
-  const words = countWords(servedText);
-  console.log(`wrote ${out}: ${name}, version ${sv.skillVersionHash}, ${words} words, examples inlined${noIndex ? ', reference index left out' : ''}.`);
-  // Where the words are, so a long export has a cause the person can act on (core/eval/size.ts).
   const pkg = store.getPackage(L, sv.materializedHash);
-  if (pkg) console.log(`  ${describeParts(skillSizeOf(noIndex ? { ...pkg.files, 'SKILL.md': withoutReferenceIndex(pkg.files['SKILL.md'] ?? '') } : pkg.files, servedText, delivery.servedExamples))}`);
+  const words = countWords(servedText);
+  console.log(`wrote ${out}: ${name}, version ${sv.skillVersionHash}, ${words} words, examples inlined${noIndex && /^## Reference material\s*$/m.test(pkg?.files['SKILL.md'] ?? '') ? ', reference index left out' : ''}.`);
+  // Where the words are, so a long export has a cause the person can act on (core/eval/size.ts).
+  const size = pkg ? skillSizeOf(noIndex ? { ...pkg.files, 'SKILL.md': withoutReferenceIndex(pkg.files['SKILL.md'] ?? '') } : pkg.files, servedText, delivery.servedExamples) : null;
+  if (size) console.log(`  ${describeParts(size)}`);
   // A long skill is not a better one: focused skills outperform comprehensive ones, and the hand-written skills this
-  // is measured against run to about 1,200 words. Said, never trimmed here: what is shown is chosen at build.
-  if (words > EXPORT_WORDS) console.log(`(${words} words is over ${EXPORT_WORDS}. Rebuild with --piece-budget <words>, without --full, or with --voice none, for a shorter skill.)`);
+  // is measured against run to about 1,200 words. Said, never trimmed here: what is shown is chosen at build. The
+  // budget is named only to a skill that serves pieces of its author's: it has nothing to act on otherwise.
+  if (words > EXPORT_WORDS) {
+    console.log(size?.parts.some((l) => l.part === 'your pieces')
+      ? `(${words} words is over ${EXPORT_WORDS}. For a shorter skill: atelier build --name ${name} --piece-budget <words>, or --voice none.)`
+      : `(${words} words is over ${EXPORT_WORDS}.)`);
+  }
 }

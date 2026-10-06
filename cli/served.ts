@@ -17,9 +17,9 @@ export function composeServed(files: Readonly<Record<string, string>>, context: 
   const skillMd = opts.index === false ? withoutReferenceIndex(files['SKILL.md'] ?? '') : files['SKILL.md'] ?? '';
   const ctxFlag = context.toLowerCase();
   const cmap = files['context-map.json']
-    ? (JSON.parse(files['context-map.json']) as { serveAll?: boolean; components: { requirementId: string; appliesWhen: string }[] })
-    : { components: [] };
-  const conditional = new Map(cmap.components.map((c) => [c.requirementId, c.appliesWhen]));
+    ? (JSON.parse(files['context-map.json']) as { serveAll?: boolean; components?: { requirementId: string; appliesWhen: string }[] })
+    : {};
+  const conditional = new Map((cmap.components ?? []).map((c) => [c.requirementId, c.appliesWhen]));
   const exampleFiles = Object.keys(files).filter((f) => f.startsWith('examples/'));
   const withheld: string[] = [];
   const servedExamples = exampleFiles.filter((f) => {

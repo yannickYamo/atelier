@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { selectVoicePieces, selectVoiceExcerpts, usualLength, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -82,6 +82,26 @@ export function revert(): void {
  * kept through later rebuilds, like the rest of the voice; neither changes a rule, and without them a build
  * chooses exactly as it did before they existed.
  */
+/**
+ * `--piece-budget` and `--pieces`, read and checked in one place, before anything is written. `atelier new` calls it
+ * on its first screen too, so a mistyped value is refused then and not after the rules have been approved.
+ * A budget is a whole number of words, or `default` to go back to the default choice. `budget` is undefined when
+ * none was given, null for `default`.
+ */
+export function pieceFlags(): { readonly budget: number | null | undefined; readonly form: PieceForm | undefined } {
+  const given = (name: string): string | undefined => {
+    const x = flag(name)?.trim().toLowerCase();
+    // Declared as taking a value: given last on the line with none, it would parse as absent and be ignored.
+    if (x === undefined && argv.includes(name)) die(`${name} needs a value.`);
+    return x;
+  };
+  const b = given('--piece-budget');
+  if (b !== undefined && b !== 'default' && !/^\d{1,9}$/.test(b)) die(`--piece-budget takes a whole number of words (0 serves none of your pieces), or default; got "${b}".`);
+  const f = given('--pieces');
+  if (f !== undefined && f !== 'whole' && f !== 'excerpts') die(`--pieces takes whole or excerpts, got "${f}".`);
+  return { budget: b === undefined ? undefined : b === 'default' ? null : Number(b), form: f as PieceForm | undefined };
+}
+
 async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Voice | null> {
   const choice = (name: string): 'none' | 'auto' | undefined => {
     const x = flag(name)?.trim().toLowerCase();
@@ -89,49 +109,61 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     return x as 'none' | 'auto' | undefined;
   };
   const voiceFlag = choice('--voice'); const personaFlag = choice('--persona');
-  const budgetFlag = flag('--piece-budget');
-  const pieceBudget = budgetFlag === undefined ? undefined : /^\d+$/.test(budgetFlag.trim()) ? Number(budgetFlag.trim()) : die(`--piece-budget takes a whole number of words (0 serves none of your pieces), got "${budgetFlag}".`);
-  const formFlag = flag('--pieces')?.trim().toLowerCase();
-  if (formFlag !== undefined && formFlag !== 'whole' && formFlag !== 'excerpts') die(`--pieces takes whole or excerpts, got "${formFlag}".`);
-  const pieceForm = formFlag as PieceForm | undefined;
-  const reselect = pieceBudget !== undefined || pieceForm !== undefined;
+  const asked = pieceFlags();
+  const reselect = asked.budget !== undefined || asked.form !== undefined;
   const answers = isReplyWork(v.workType);
   // Answers are short and are shown whole: an opening and a middle passage of a forty-word answer is the answer.
-  if (answers && pieceForm === 'excerpts') die('--pieces excerpts applies to a skill that writes: the answers this skill shows are short, and are shown whole. Use --piece-budget to show fewer of them.');
+  if (answers && asked.form === 'excerpts') die('--pieces excerpts applies to a skill that writes: the answers this skill shows are short, and are shown whole. Use --piece-budget to show fewer of them.');
   if (voiceFlag === 'none') {
     if (reselect) die('--voice none serves none of your pieces, so --piece-budget and --pieces have nothing to choose from: drop one of them.');
     return null;
   }
-  let voice: Voice | null = voiceFlag === undefined ? store.getVoice(L) : null;
+  const stored = store.getVoice(L);
+  let voice: Voice | null = voiceFlag === undefined ? stored : null;
+  // THE OWNER'S BUDGET AND FORM ARE KEPT UNTIL THE OWNER GIVES OTHERS: what was asked now, or what the skill holds,
+  // `--voice auto` included (it chooses the pieces again, it does not forget what it was told about them).
+  // `--piece-budget default` is how the budget is given up.
+  const wordBudget = asked.budget === undefined ? stored?.pieceBudget : asked.budget ?? undefined;
+  const form: PieceForm = asked.form ?? stored?.pieceForm ?? 'whole';
   // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
   // pieces again must never spend, nor bring back a persona the owner turned off.
   const derivesPersona = !voice || personaFlag === 'auto';
   // This run's pieces: the run being built is this skill's, whatever name it is built under.
   const readable = derivesPersona || reselect ? sessionCorpus() : [];
   // A budget or a form with no pieces to apply it to is refused, with or without a stored voice: never ignored.
-  if (reselect && readable.length < 3) die('--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here. Run it from the project the skill was built in, with its folder of pieces in place.');
+  if (reselect && readable.length < 3) {
+    die(loadSession().source
+      ? '--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here. Run it from the project the skill was built in, with its folder of pieces in place.'
+      : '--piece-budget and --pieces choose among your own pieces, and this skill was built from rules you stated, with no pieces to choose from.');
+  }
   // A skill that answers shows examples spread over the kinds of request (`spreadExamples`), so no whole pieces are
   // chosen for it here when that spread will replace them.
   const spreads = (x: Voice | null): boolean => answers && Boolean(x?.scope?.kinds) && voiceFlag === undefined && !argv.includes('--full');
-  const choose = (form: PieceForm, budget: number): string[] => (form === 'excerpts' ? selectVoiceExcerpts(readable, budget) : selectVoicePieces(readable, budget));
-  const chosen = (pieces: readonly string[], form: PieceForm, budget: number | undefined): string =>
-    `${form === 'excerpts' ? `passages from ${pieces.length} piece(s)` : `${pieces.length} whole piece(s)`} of the author's own served with the skill${budget === undefined ? '' : `, within ${budget} words`}, chosen to span how they write`;
+  // The default choice when no budget is set (as it has always been made); a budget the owner set is a ceiling.
+  const choose = (): string[] => (wordBudget === undefined && form === 'whole' ? selectVoicePieces(readable) : selectWithinBudget(readable, wordBudget ?? PIECE_BUDGET_WORDS, form));
+  const said = (pieces: readonly string[]): string => {
+    const cut = form === 'excerpts' ? pieces.filter(isExcerpt).length : 0;
+    const what = cut === 0 ? `${pieces.length} whole piece(s)` : cut === pieces.length ? `passages from ${pieces.length} piece(s)` : `passages from ${cut} piece(s) and ${pieces.length - cut} short one(s) whole`;
+    return `${what} of the author's own served with the skill${wordBudget === undefined ? '' : `, within ${wordBudget} words`}, chosen to span how they write`;
+  };
+  const none = (): string => `none of the author's pieces is served${wordBudget === undefined ? '' : `: none fits within ${wordBudget} words`}; how they sound and how long they write are kept`;
+  const prefs = { pieceForm: form === 'excerpts' ? form : undefined, pieceBudget: wordBudget };
   if (!voice && readable.length >= 3) {
-    const form = pieceForm ?? 'whole';
-    const pieces = choose(form, pieceBudget ?? PIECE_BUDGET_WORDS);
-    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(form === 'excerpts' ? { pieceForm: form } : {}), ...(pieceBudget === undefined ? {} : { pieceBudget }) };
-    if (pieces.length) console.log(`Voice: ${chosen(pieces, form, pieceBudget)}. Turn off with --voice none.`);
-    else if (pieceBudget !== undefined && !answers) console.log(`Voice: none of the author's pieces fits within ${pieceBudget} words, so none is served; how they sound and how long they write are kept.`);
+    const pieces = choose();
+    voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
+    if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
+    else if (wordBudget !== undefined && !answers) console.log(`Voice: ${none()}.`);
   } else if (voice && reselect) {
     // A skill built before keeps its pieces until the owner asks for others, and then they are chosen again from
     // the pieces it was built from: a budget cannot be met by cutting the ones already stored.
-    const form = pieceForm ?? voice.pieceForm ?? 'whole';
-    const budget = pieceBudget ?? voice.pieceBudget;
-    if (spreads(voice)) voice = { ...voice, pieceBudget: budget };
+    if (spreads(voice)) voice = { ...voice, ...prefs };
     else {
-      const pieces = choose(form, budget ?? PIECE_BUDGET_WORDS);
-      voice = { ...voice, pieces, pieceForm: form === 'excerpts' ? form : undefined, pieceBudget: budget };
-      console.log(pieces.length ? `Voice: ${chosen(pieces, form, budget)}.` : `Voice: none of the author's pieces is served${budget === undefined ? '' : ` within ${budget} words`}; how they sound and how long they write are kept.`);
+      // A skill of the first design serves short passages inline, which no budget of pieces reaches: saying "none of
+      // your pieces" over them would be false, and removing them could not be undone by `--piece-budget default`.
+      if (wordBudget === 0 && voice.passages.length) die('this skill was built by an early version and serves passages of yours inline, which --piece-budget does not reach. Choose its voice again first: atelier build --name <name> --voice auto, then set the budget.');
+      const pieces = choose();
+      voice = { ...voice, pieces, ...prefs };
+      console.log(`Voice: ${pieces.length ? said(pieces) : none()}.`);
     }
   }
   if (!voice) return null;
@@ -161,7 +193,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   }
   // A skill that answers, built before, asked for another budget: its examples are spread again over the kinds its
   // scope already holds. Nothing is read again, so nothing is spent.
-  else if (reselect && spreads(voice)) voice = spreadExamples(voice, sessionPairs());
+  else if (reselect && spreads(voice)) voice = spreadExamples(voice, sessionPairs(), true);
   // HOW EACH MOVE IS CARRIED (core/compiler/applicability.ts). The moves the standard holds and does not require are
   // counted against the pieces they were checked on; the ones that hold back what was asked are read by the corpus
   // reader (the word pattern is its floor) and stay examples until the owner rules on them. Said at build, move by
@@ -207,9 +239,15 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
  * whatever the budget, except at 0, which shows none. `--full` shows every example, and a scope that does not hold
  * a kind for each example leaves the pieces as they are; `chooseVoice` checks both before it relies on this.
  */
-function spreadExamples(voice: Voice, pairs: readonly { text: string }[]): Voice {
+function spreadExamples(voice: Voice, pairs: readonly { text: string }[], reselect = false): Voice {
   const kinds = voice.scope?.kinds;
-  if (kinds?.length !== pairs.length || argv.includes('--full')) return voice;
+  if (argv.includes('--full')) return voice;
+  if (kinds?.length !== pairs.length) {
+    // The kinds were read for the examples the skill was built from. With another number of examples here they say
+    // nothing about which is which, and a budget applied to the old choice would be recorded and not applied.
+    if (reselect) die(`--piece-budget chooses among the examples this skill was built from, and there are ${pairs.length} here where ${kinds?.length ?? 0} were read. Read them again first: atelier build --name <name> --persona auto.`);
+    return voice;
+  }
   if (voice.pieceBudget === 0) {
     console.log(`Examples shown: none of ${pairs.length} (--piece-budget 0). What you add beyond what was asked is still stated.`);
     return { ...voice, pieces: [] };
@@ -219,6 +257,24 @@ function spreadExamples(voice: Voice, pairs: readonly { text: string }[]): Voice
   for (const i of shown) mix.set(kinds[i] ?? 'unread', (mix.get(kinds[i] ?? 'unread') ?? 0) + 1);
   console.log(`Examples shown: ${shown.length} of ${pairs.length}, spread over the kinds of request you answer (${[...mix].map(([k, n]) => `${k} ${n}`).join(', ')}). --full shows them all.`);
   return { ...voice, pieces: shown.map((i) => pairs[i].text) };
+}
+
+/**
+ * A skill's active standard, when it supersedes `closed` through one or more amendments; null otherwise. The chain is
+ * read off each standard's own link to the one it superseded. That link is not part of a standard's hash, so two
+ * histories that arrive at the same rules share the first one's link, and an amendment that lands on a standard
+ * minted earlier is not seen as descending from `closed`: such a rebuild compiles `closed`, as it did before this
+ * check existed.
+ */
+function amendedFrom(L: store.StoreLayout, closed: StandardVersion): StandardVersion | null {
+  const active = store.getActive(L);
+  const current = active ? store.getSkillVersion(L, active) : null;
+  const top = current && current.standardVersionHash !== closed.standardVersionHash ? store.getStandard(L, current.standardVersionHash) : null;
+  // Followed back link by link; a chain longer than any history a person makes is not followed for ever.
+  for (let at = top, hops = 0; at && hops < 500; at = at.supersedes ? store.getStandard(L, at.supersedes) : null, hops++) {
+    if (at.standardVersionHash === closed.standardVersionHash) return top;
+  }
+  return null;
 }
 
 export async function build(nameArg?: string): Promise<void> {
@@ -238,6 +294,10 @@ export async function build(nameArg?: string): Promise<void> {
   // The document class is not part of the package, so changing it on a skill already built needs no
   // rebuild — and a rebuild of a BUILT run is refused by the run's state machine.
   const clsOnly = flag('--class');
+  const pieces = pieceFlags();
+  if (clsOnly !== undefined && s.run.state === 'BUILT' && (pieces.budget !== undefined || pieces.form !== undefined)) {
+    die('--class on a built skill changes its class without rebuilding it, so --piece-budget and --pieces would be ignored. Give them in a build of their own.');
+  }
   if (clsOnly !== undefined && s.run.state === 'BUILT') {
     const L0: store.StoreLayout = { root: DATA, skillName: name };
     if (!store.getActive(L0)) die(`no built skill called "${name}".`);
@@ -272,7 +332,17 @@ export async function build(nameArg?: string): Promise<void> {
   // identical content in another project would otherwise make the store refuse a body that differs
   // only by timestamp. Same rule as `amend`.
   const L: store.StoreLayout = { root: DATA, skillName: name };
-  const v = store.getStandard(L, pending.standardVersionHash) ?? pending;
+  // A REBUILD NEVER UNDOES AN AMENDMENT. The run holds the standard it closed; `amend`, `confirm` and `add` mint a
+  // later one that supersedes it and make it the skill's. Compiling the run's standard again would put the old rules
+  // back with nothing said, on the very command an export recommends for a smaller skill. So when the skill's
+  // active standard descends from the run's, that one is compiled; a standard that does not descend from it is
+  // another ratification under the same name, and is replaced as before.
+  const closed = store.getStandard(L, pending.standardVersionHash) ?? pending;
+  // The amendments were made to the skill this run built. Built under another name, they are that skill's and are
+  // carried too: a second name for the same run is the same owner's standard, not an earlier draft of it.
+  const built = s.skillName && s.skillName !== name ? { root: DATA, skillName: s.skillName } : null;
+  const v = amendedFrom(L, closed) ?? (built ? amendedFrom(built, closed) : null) ?? closed;
+  if (v !== closed) console.log(`Compiling the standard as you amended it (${v.standardVersionHash}), which supersedes the one this run closed (${closed.standardVersionHash}).`);
   // The arrangement is COMPILED, not derived from the requirement list. That is what lets a skill
   // improve while the standard stands still.
   const arch = compileArchitecture(v);

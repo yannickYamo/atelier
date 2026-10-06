@@ -9,7 +9,7 @@
 //               typical piece by Burrows' Delta first, then the piece least like any chosen, within a word
 //               budget (`selectVoicePieces`)
 //   excerpts    the same choice over more pieces, each shown by its opening and a passage from its middle
-//               (`selectVoiceExcerpts`): opt-in, for a smaller skill that still shows the author's range
+//               (`selectWithinBudget`): opt-in, for a smaller skill that still shows the author's range
 //   length      the author's usual piece length, the middle half of their pieces (`usualLength`), which a
 //               rules-only skill lost: its output ran 1,500 words where the author's run 2,000 or more
 //   passages    the first design, a few short passages served inline (`selectVoicePassages`); kept so
@@ -171,9 +171,10 @@ function spanningOrder(pieces: readonly string[], eligible: readonly number[], c
  * WHOLE PIECES THAT SPAN HOW THE AUTHOR WRITES. An author writes in modes (an essay, a list, a talk
  * transcript), and a short passage shows one paragraph of one of them. So: the most typical piece
  * first, then, while the word budget allows, the piece least like any already chosen (`spanningOrder`).
- * Pieces longer than half the budget are left out, so one long piece cannot use it all. The budget counts
- * words of prose, as it always has: code, tables and headings in a piece are served and not counted. Needs
- * three pieces or more; a budget of 0 chooses none.
+ * Pieces longer than half the budget are left out, so one long piece cannot use it all. This is the
+ * DEFAULT selection and is kept as it has always been, down to what it counts: words of prose, in Latin
+ * script, with code, tables and headings served and not counted. A budget the owner sets is held more
+ * strictly (`selectWithinBudget`). Needs three pieces or more; a budget of 0 chooses none.
  */
 export function selectVoicePieces(pieces: readonly string[], budgetWords = PIECE_BUDGET_WORDS): string[] {
   if (pieces.length < 3 || budgetWords <= 0) return [];
@@ -184,84 +185,154 @@ export function selectVoicePieces(pieces: readonly string[], budgetWords = PIECE
 
 /** About this many words for each of the two passages an excerpt shows. */
 export const EXCERPT_WORDS = 250;
-/** What stands between an excerpt's two passages, so a reader never takes them for one continuous text. */
+/** What stands where an excerpt leaves text out, so a reader never takes two passages for one continuous text. */
 export const EXCERPT_GAP = '[…]';
 
-/** One run of the author's text, and what stood between it and the run before it in the piece. */
-interface Unit { readonly text: string; readonly gap: string }
+/**
+ * Whether a piece chosen under `excerpts` was cut: it carries the mark. A short piece is served whole and is not.
+ * Only meaningful for a voice whose form is `excerpts`: an author may write the mark in a piece of their own.
+ */
+export const isExcerpt = (piece: string): boolean => piece.includes(EXCERPT_GAP);
 
 /**
- * A PIECE AS UNITS AN EXCERPT CAN BE BUILT FROM, in the author's order and words. A unit is a block as the author laid
- * it out (text between blank lines; a fenced code block is one unit, blank lines and all). A block longer than a
- * passage is taken apart, or a piece written as one long paragraph, or with single line breaks, would have no
- * excerpt shorter than itself: first at its line breaks, then, for a line still too long, at its sentence ends.
- * Each unit remembers what joined it to the one before, so units put back together read exactly as the piece did.
+ * THE LINE THAT OPENS A PIECE'S FILE in the compiled skill (renderers/agent-skill/render.ts). It lives here because
+ * a budget the owner sets is a ceiling on what the export counts, and the export counts this line. It says what the
+ * file holds: a model told it holds a whole piece takes a cut for the ending, and one told it holds passages looks
+ * for a cut that is not there.
+ */
+export const pieceLabel = (n: number, cut: boolean): string =>
+  `[voice-${n}] ${cut ? `Passages from one piece of mine (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : 'One whole piece of mine'}, for how I sound. Not content: never reuse its topic, facts, names, figures, sentences or coined terms.`;
+
+/**
+ * WORDS, IN ANY SCRIPT. The counted checks read English and count Latin words (`wordsOf`); measured that way a
+ * Russian piece is a handful of digits and a Chinese one is empty, so a budget in those words is no budget and an
+ * excerpt is never cut. Here a word is a run of letters or digits in any script, and each Han or kana character is
+ * one, since those scripts put no space between words.
+ */
+const scriptWords = (text: string): number => (text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]|[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ?? []).length;
+
+/**
+ * WHAT A PIECE COSTS OF A BUDGET THE OWNER SET: the larger of its words in any script and its words as an export
+ * counts them (runs of non-whitespace, so code, tables and marks count). The larger, so the budget is a ceiling on
+ * the number `atelier export` prints for "your pieces" whatever the piece is made of.
+ */
+const exportWords = (text: string): number => { const t = text.trim(); return Math.max(scriptWords(t), t ? t.split(/\s+/).length : 0); };
+
+/** A stretch of the piece, by its offsets in the text. */
+interface Unit { readonly start: number; readonly end: number; readonly words: number }
+
+/** A line that opens or closes a fenced code block: three or more backticks or tildes, alone on the line but for an info string on the opener. */
+const fenceOf = (line: string): { readonly mark: string; readonly bare: boolean } | null => {
+  const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!m || (m[1].startsWith('`') && m[2].includes('`'))) return null;     // ```code``` on one line is inline code, not a fence
+  return { mark: m[1], bare: m[2].trim() === '' };
+};
+
+/**
+ * A PIECE AS UNITS AN EXCERPT CAN BE BUILT FROM. A unit is a block as the author laid it out (text between blank
+ * lines; a fenced code block is one unit, blank lines and all). A block longer than a passage is taken apart, or a
+ * piece written as one long paragraph, or with single line breaks, would have no excerpt shorter than itself: first
+ * at its line breaks, then, for a line still too long, at its sentence ends. Units are offsets into the text, so a
+ * passage is always one unbroken stretch of the piece, byte for byte. A fence that is never closed is plain text.
+ * Sentence ends are found by punctuation alone (a mark and a space; in Chinese and Japanese, the mark), so a passage
+ * of one very long paragraph can stop after "Dr.".
  */
 function unitsOf(text: string): Unit[] {
-  const blocks: { text: string; fenced: boolean }[] = []; let held: string[] = []; let fence: string | null = null; let fenced = false;
-  const flush = (): void => { if (held.some((l) => l.trim())) blocks.push({ text: held.join('\n').replace(/\s+$/, ''), fenced }); held = []; fenced = false; };
-  for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
-    const mark = /^\s*(```|~~~)/.exec(line)?.[1] ?? null;
-    if (fence) { held.push(line); if (mark === fence) fence = null; continue; }
-    if (mark) { fence = mark; fenced = true; held.push(line); continue; }
-    if (line.trim()) held.push(line); else flush();
+  const lines: { start: number; end: number; text: string }[] = [];
+  for (let at = 0; at <= text.length;) { const nl = text.indexOf('\n', at); const end = nl === -1 ? text.length : nl; lines.push({ start: at, end, text: text.slice(at, end) }); at = end + 1; }
+  // Which lines are inside a fenced block that closes: an opener, then the first later line that closes it.
+  const fenced = new Array<boolean>(lines.length).fill(false);
+  const marks = lines.map((l) => fenceOf(l.text));
+  // The shortest opener of each character already found to have no closer after it: a later, longer one has none
+  // either, so a piece of many unclosed openers is scanned once and not once per opener.
+  const unclosed = new Map<string, number>();
+  for (let i = 0; i < lines.length; i++) {
+    const open = marks[i];
+    if (!open) continue;
+    const ch = open.mark.charAt(0);
+    if (open.mark.length >= (unclosed.get(ch) ?? Infinity)) continue;
+    let close = -1;
+    for (let j = i + 1; j < lines.length; j++) { const f = marks[j]; if (f?.bare && f.mark.startsWith(ch) && f.mark.length >= open.mark.length) { close = j; break; } }
+    if (close === -1) { unclosed.set(ch, open.mark.length); continue; }
+    for (let j = i; j <= close; j++) fenced[j] = true;
+    i = close;
   }
-  flush();
-  const long = (t: string): boolean => wordsOf(t).length > EXCERPT_WORDS;
   const out: Unit[] = [];
-  for (const b of blocks) {
-    // Code is never taken apart: half a block of code shows nothing of how the author writes it.
-    const lines = b.fenced || !long(b.text) ? [b.text] : b.text.split('\n');
-    lines.forEach((line, i) => {
-      const sentences = b.fenced || !long(line) ? [line] : line.split(/(?<=[.!?]["')\]]?)\s+(?=\S)/);
-      sentences.forEach((sentence, j) => out.push({ text: sentence, gap: j > 0 ? ' ' : i > 0 ? '\n' : '\n\n' }));
-    });
+  const push = (start: number, end: number): void => { const words = scriptWords(text.slice(start, end)); if (words > 0 || text.slice(start, end).trim()) out.push({ start, end, words }); };
+  for (let i = 0; i < lines.length;) {
+    if (!fenced[i] && !lines[i].text.trim()) { i++; continue; }
+    let j = i;
+    // A block runs to the next blank line outside code; code is never taken apart, and stays with the block it touches.
+    while (j + 1 < lines.length && (fenced[j + 1] || lines[j + 1].text.trim())) j++;
+    const block = { start: lines[i].start, end: lines[j].end };
+    const holdsCode = fenced.slice(i, j + 1).some(Boolean);
+    if (holdsCode || scriptWords(text.slice(block.start, block.end)) <= EXCERPT_WORDS) push(block.start, block.end);
+    else {
+      for (let k = i; k <= j; k++) {
+        const line = lines[k];
+        if (scriptWords(line.text) <= EXCERPT_WORDS) { push(line.start, line.end); continue; }
+        let from = line.start;
+        for (const m of line.text.matchAll(/(?:[.!?]["'”’)\]]?\s+|[。！？][”’」』）]?\s*)(?=\S)/gu)) {
+          const stop = line.start + (m.index ?? 0) + m[0].trimEnd().length;
+          push(from, stop); from = line.start + (m.index ?? 0) + m[0].length;
+        }
+        push(from, line.end);
+      }
+    }
+    i = j + 1;
   }
   return out;
 }
 
-/** Units put back together as they stood in the piece. */
-const joined = (units: readonly Unit[]): string => units.map((u, i) => (i === 0 ? u.text : `${u.gap}${u.text}`)).join('');
-
 /**
- * ONE PIECE SHOWN BY ITS OPENING AND A PASSAGE FROM ITS MIDDLE, about EXCERPT_WORDS each. The author's own words in
- * the author's order, never reworded, in whole units (`unitsOf`): the opening runs from the first unit until it has
- * the words, the middle starts at the unit the piece's midpoint falls in. A piece too short to leave anything out is
- * returned whole. A passage can run over EXCERPT_WORDS by its last unit, which is at most a paragraph of that
- * length, a sentence, or a block of code.
+ * ONE PIECE SHOWN BY ITS OPENING AND A PASSAGE FROM ITS MIDDLE, about EXCERPT_WORDS each. Each passage is one
+ * unbroken stretch of the piece, exactly as the author wrote it: the opening runs from the first unit until it has
+ * the words, the middle starts at the unit the piece's midpoint falls in. Front matter is not the author's prose and
+ * is left out. A piece too short to leave anything out is returned whole, with no mark, and is then not an excerpt
+ * (`isExcerpt`). A passage can run over EXCERPT_WORDS by its last unit, which is at most a paragraph of that length,
+ * a sentence, or a block of code.
  */
-export function excerptOf(text: string): string {
+export function excerptOf(piece: string): string {
+  const source = piece.replace(/\r\n?/g, '\n');
+  // Front matter is a block of `key: value` lines between two rules at the very top; a piece that merely opens with a
+  // rule, and has another further down, has none.
+  const front = /^---\n(?=[\w-]+[ \t]*:)[\s\S]*?\n---[ \t]*(?:\n|$)/.exec(source);
+  const text = front ? source.slice(front[0].length) : source;
   const units = unitsOf(text);
-  const words = units.map((u) => wordsOf(u.text).length);
-  const total = words.reduce((a, b) => a + b, 0);
-  if (total <= EXCERPT_WORDS * 3) return joined(units);
-  const run = (from: number): number => { let n = 0; let j = from; while (j < units.length && n < EXCERPT_WORDS) n += words[j++]; return j; };
+  const total = units.reduce((n, u) => n + u.words, 0);
+  const whole = text.trim();
+  if (!units.length || total <= EXCERPT_WORDS * 3) return whole;
+  const run = (from: number): number => { let n = 0; let j = from; while (j < units.length && n < EXCERPT_WORDS) n += units[j++].words; return j; };
+  const stretch = (from: number, to: number): string => text.slice(units[from].start, units[to - 1].end);
   const openEnd = run(0);
   // The unit the piece's midpoint falls in, or the first one after the opening when the opening already reached it.
   let seen = 0; let mid = 0;
-  while (mid < units.length - 1 && seen + words[mid] < total / 2) seen += words[mid++];
+  while (mid < units.length - 1 && seen + units[mid].words < total / 2) seen += units[mid++].words;
   const midStart = Math.max(mid, openEnd);
-  if (midStart >= units.length) return joined(units);
+  if (midStart >= units.length) return whole;
   const midEnd = run(midStart);
-  // Contiguous passages are one run of the piece and are joined as it joined them; a real cut is marked.
-  if (midStart === openEnd) return `${joined(units.slice(0, midEnd))}${midEnd < units.length ? `\n\n${EXCERPT_GAP}` : ''}`;
-  return `${joined(units.slice(0, openEnd))}\n\n${EXCERPT_GAP}\n\n${joined(units.slice(midStart, midEnd))}${midEnd < units.length ? `\n\n${EXCERPT_GAP}` : ''}`;
+  const tail = midEnd < units.length ? `\n\n${EXCERPT_GAP}` : '';
+  // Passages that touch are one stretch of the piece; a real cut is marked.
+  if (midStart === openEnd) return tail ? `${stretch(0, midEnd)}${tail}` : whole;
+  return `${stretch(0, openEnd)}\n\n${EXCERPT_GAP}\n\n${stretch(midStart, midEnd)}${tail}`;
 }
 
 /**
- * EXCERPTS FROM MORE PIECES, IN PLACE OF A FEW WHOLE ONES. Two or three whole essays show two or three of an
- * author's modes at length; for the same words, an opening and a middle passage from each of many pieces show more
- * of the range. Pieces are chosen exactly as whole ones are (`spanningOrder`), each costing its excerpt's words. A
- * piece of any length can be shown, but never one whose excerpt alone is over the budget: the budget is a ceiling,
- * for the first piece chosen as for the last. Opt-in (`--pieces excerpts`): whether it carries a voice as well as
- * whole pieces do is a question for a measured comparison, not for this function.
+ * THE AUTHOR'S PIECES WITHIN A BUDGET THE OWNER SET (`--piece-budget`), whole or as excerpts. Chosen in the same
+ * order as the default (`spanningOrder`: the most typical, then the least like any chosen), and held to the budget
+ * as a ceiling on what the export will count for them: each piece costs its words as exported, in any script, plus
+ * the line that opens its file (`pieceLabel`), and no piece is chosen that would pass the budget, the first
+ * included. A whole piece may use the whole budget: the owner who sets 3,000 words has said what one piece may
+ * take.
+ *
+ * `excerpts` shows each piece by its opening and a passage from its middle (`excerptOf`), so the same words reach
+ * more pieces. Whether that carries a voice as well as whole pieces do is a question for a measured comparison.
  */
-export function selectVoiceExcerpts(pieces: readonly string[], budgetWords = PIECE_BUDGET_WORDS): string[] {
+export function selectWithinBudget(pieces: readonly string[], budgetWords: number, form: PieceForm): string[] {
   if (pieces.length < 3 || budgetWords <= 0) return [];
-  const excerpts = pieces.map(excerptOf);
-  // Counted as an export counts them (runs of non-whitespace, the cut marks included), so the budget holds exactly
-  // on the number a person reads off `atelier export`.
-  const words = excerpts.map((t) => { const x = t.trim(); return x ? x.split(/\s+/).length : 0; });
-  const eligible = pieces.map((_, i) => i).filter((i) => words[i] > 0 && words[i] <= budgetWords);
-  return spanningOrder(pieces, eligible, (i) => words[i], budgetWords).map((i) => excerpts[i]);
+  const shown = form === 'excerpts' ? pieces.map(excerptOf) : pieces.map((t) => t);
+  // The label's length does not depend on the file's number beyond a digit: counted for the first file.
+  const cost = shown.map((t) => (t.trim() ? exportWords(t) + exportWords(pieceLabel(1, form === 'excerpts' && isExcerpt(t))) : 0));
+  const eligible = pieces.map((_, i) => i).filter((i) => cost[i] > 0 && cost[i] <= budgetWords);
+  return spanningOrder(pieces, eligible, (i) => cost[i], budgetWords).map((i) => shown[i]);
 }

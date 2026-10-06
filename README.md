@@ -141,13 +141,15 @@ A first head-to-head against GEPA and SkillOpt has been run, in development and 
 ## Install
 
 ```bash
-npm install -g @yannickyamo/atelier      # puts `atelier` on your PATH
-atelier setup                            # gives the coding agents in this project the Atelier MCP server
+git clone https://github.com/yannickYamo/atelier && cd atelier
+npm install && npm run build && npm link   # puts `atelier` on your PATH
+atelier setup                              # gives the coding agents in this project the Atelier MCP server
 ```
 
-Or with nothing installed: `npx @yannickyamo/atelier setup`. It finds Claude Code, Cursor, VS Code and Codex,
-adds one entry to each agent's config, and never replaces what is there. From source:
-`git clone https://github.com/yannickYamo/atelier && cd atelier && npm install && npm run build && npm link`.
+`atelier setup` finds Claude Code, Cursor, VS Code and Codex, adds one entry to each agent's config, and never
+replaces what is there. The npm package (`@yannickyamo/atelier`) is not published yet: once it is,
+`npm install -g @yannickyamo/atelier` replaces the first two lines, and `npx @yannickyamo/atelier setup` needs
+nothing installed.
 
 Node 22 or later. In Claude Code: `/plugin marketplace add yannickYamo/atelier`, then
 `/plugin install atelier@atelier`. For any agent that reads skills, `npx skills add yannickYamo/atelier`

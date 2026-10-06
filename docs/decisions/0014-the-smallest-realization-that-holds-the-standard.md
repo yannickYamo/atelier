@@ -58,20 +58,20 @@ before any seal. It is not a failure on any of the four signed axes, so 0012 as 
 5. **The selection rule is fixed in two scripts sealed with the pre-registration**
    (`bench/compare/efficiency-rows.mjs` builds the rows, `bench/compare/efficiency-select.mjs` reads them). Each
    domain is read on its own and domains are never pooled. Against today's skill, an arm is rejected in a domain when
-   it breaks the author's required rules in more than five more answers in a hundred, when it scores more than one
-   point of fifty lower on the comparator's own score, or, where a reader was qualified on that domain, when today's
-   skill is clearly preferred on voice. The smallest arm that may become the default and is rejected nowhere is
-   selected. If there is none, today's size stays.
+   it breaks the author's required rules in more than five more answers in a hundred, or when it scores more
+   than one point of fifty lower on the comparator's own score. The smallest arm that may become the default, is
+   rejected nowhere and is smaller than today's is selected. If there is none, today's size stays.
 
-6. **The study selects; it does not prove, and it says how often it is wrong.** At thirty tasks a domain's rule
-   reading rejects an arm that is truly level about one time in four, and passes one that is truly ten points worse
-   about three times in ten. So "none selected" means the study did not show that a smaller skill holds. It does not
+6. **The study selects; it does not prove, and it says how often it is wrong.** At thirty tasks, where today's
+   skill breaks a rule in three to five answers in ten, a domain's rule reading rejects an arm that is truly level
+   about one time in four and passes one that is truly ten points worse about three times in ten; the
+   pre-registration has the table. So "none selected" means the study did not show that a smaller skill holds. It does not
    mean the size was shown to buy something, and the README may not say so. The words for a result are "selected",
    "stood" and "rejected in", never "equivalent".
 
-7. **An unqualified reader decides nothing.** Voice is read by a model only on a domain where that exact reader was
-   qualified at 0012's bar for an instrument. Elsewhere it is unread and rejects no arm. The pieces are there for
-   voice and a model may not see their loss, so the owner reads ten blind pairs in the third round, the selected arm
+7. **An unqualified reader decides nothing.** No instrument here qualifies a reader choosing between two answers, so
+   voice is not read by a model in this study and rejects no arm. The pieces are there for voice, so the owner reads
+   ten blind pairs in the third round, the selected arm
    against today's skill, and today's size is kept if today's skill is chosen in eight or more.
 
 8. **The fallback is a commit prepared in advance.** Before the third round two commits exist that differ in one
@@ -83,7 +83,8 @@ before any seal. It is not a failure on any of the four signed axes, so 0012 as 
 9. **What a new default touches.** The budget of a new build of a skill that writes, and nothing else. A skill that
    answers shows its examples within its own budget and is exported byte for byte as before; the third round confirms
    it by sha256, and the second round's result on the held-out coding tasks stands only if that holds. A skill
-   already built keeps its pieces until they are chosen again. Today's configuration is `--piece-budget 9000`.
+   already built keeps its pieces until they are chosen again. Today's choice stays available under an option of its
+   own.
 
 10. **A skill states its size three ways:** stored (every file of the package), exported (what a run is served and
     what `atelier export` writes), and per run (what one run sent). The export is split by part. Sizes are counted

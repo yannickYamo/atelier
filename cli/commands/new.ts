@@ -26,7 +26,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { review } from './review.js';
 import { ratifyClose } from './ratify.js';
-import { build } from './build.js';
+import { build, pieceFlags } from './build.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 
 const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
@@ -44,6 +44,9 @@ const sealedFrom = (): string | null => {
 };
 
 export async function newSkill(): Promise<void> {
+  // Checked on the first screen, so a mistyped value is refused now and not after the rules are approved. The values
+  // themselves are read by the build: give them on the call that builds (`--accept`).
+  const pieces = pieceFlags();
   const corpus = positional([]) ?? die('usage: atelier new <folder-of-your-best-work> "<what the skill is for>"\n'
     + '  e.g.  atelier new ./posts "write me a blog post in the voice and style of these"');
   const path = resolve(corpus);
@@ -106,6 +109,10 @@ export async function newSkill(): Promise<void> {
       ...(flag('--name') ? { skillName: skillNameFrom(name) } : {}) });
     s = loadSession();
   } else {
+    // A run already built has nothing left for `new` to build: the flags would be checked and then dropped.
+    if (s.run.state === 'BUILT' && (pieces.budget !== undefined || pieces.form !== undefined)) {
+      die(`this run has already built its skill, so --piece-budget and --pieces would be ignored here. Rebuild it with them: atelier build --name ${s.skillName ?? '<name>'} --piece-budget <words>`);
+    }
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
     if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
     if (flag('--name') && s.skillName !== skillNameFrom(name)) { saveSession({ ...s, skillName: skillNameFrom(name) }); s = loadSession(); }

@@ -15,7 +15,7 @@ import { describeScope, groundScope } from '../../core/compiler/scope.js';
 import { moveEvidence, ownerWrote, HOLDS_BACK } from '../../core/compiler/applicability.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { renderContrastFile, type ContrastPair } from '../../core/compiler/contrast-examples.js';
-import { EXCERPT_GAP, type Voice } from '../../core/compiler/voice.js';
+import { EXCERPT_GAP, isExcerpt, pieceLabel, type Voice } from '../../core/compiler/voice.js';
 import { describePersona } from '../../core/compiler/persona.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { createHash } from 'node:crypto';
@@ -439,15 +439,17 @@ export function renderAgentSkill(
   // rounds found rules alone never produced it. The persona says how the author sounds and HOW OFTEN;
   // whole pieces show their modes; the length is theirs. Never their topics, facts or sentences.
   const pieceFiles = (voice?.pieces ?? []).map((_, i) => `examples/voice-${i + 1}.md`);
+  // Which served pieces were cut: under `excerpts`, the ones that carry the mark. A short piece is served whole.
+  const cutPieces = (voice?.pieces ?? []).map((t) => voice?.pieceForm === 'excerpts' && isExcerpt(t));
   const traits = voice?.persona ? { ...voice.persona, points: voice.persona.points.filter((x) => x.frequency === 'ALWAYS' || x.frequency === 'OFTEN') } : undefined;
   const voiceParts = [
     // A TRAIT IS WHAT HOLDS ACROSS PIECES. A point marked "sometimes" or "rarely" is a conditional habit, and served
     // under "How I sound" it reads as how I always am: the moves carry such habits, each with its condition.
     traits?.points.length ? `How I sound (each point is quoted from my own pieces and holds in most or all of them):\n\n${describePersona(traits)}` : '',
     // Whole pieces, or each piece shown by its opening and a passage from its middle (core/compiler/voice.ts,
-    // `selectVoiceExcerpts`). Said as what it is: a model told it holds a whole piece takes the cut for the ending.
-    pieceFiles.length ? (voice?.pieceForm === 'excerpts'
-      ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'holds passages from one piece' : 'each hold passages from one piece'} of mine: its opening and a part from its middle, with ${EXCERPT_GAP} where text is left out. They were chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content, and never the place where a passage stops.`
+    // `selectWithinBudget`). Said as what it is: a model told it holds a whole piece takes the cut for the ending.
+    pieceFiles.length ? (cutPieces.some(Boolean)
+      ? `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'holds passages from one piece' : cutPieces.every(Boolean) ? 'each hold passages from one piece' : 'each hold one piece, or passages from one,'} of mine: the opening and a part from the middle, with ${EXCERPT_GAP} where text is left out. They were chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content, and never the place where a passage stops.`
       : `${pieceFiles.map((f) => `\`${f}\``).join(', ')} ${pieceFiles.length === 1 ? 'is a whole piece' : 'are whole pieces'} of mine, chosen to show the different ways I write. Read them before drafting and take the voice from them, not the content.`) : '',
     voice?.passages.length ? `${voice.passages.length} passage(s) of my own, from different pieces:\n\n${voice.passages.map((x) => `> ${x.trim().replace(/\n/g, '\n> ')}`).join('\n\n* * *\n\n')}` : '',
     // AN ANSWER'S LENGTH BELONGS TO ITS REQUEST (core/compiler/scope.ts). "My answers usually run about 100 words,
@@ -662,7 +664,7 @@ mintedAt:        ${v.mintedAt}
   const runtime: Record<string, string> = { 'SKILL.md': skillMd, ...exampleFiles, ...contractFiles, ...contextMap,
     ...(exemplar ? { 'examples/exemplar.md': exemplar.text } : {}),
     ...Object.fromEntries((voice?.pieces ?? []).map((t, i) => [`examples/voice-${i + 1}.md`,
-      `[voice-${i + 1}] ${voice?.pieceForm === 'excerpts' ? `Passages from one piece of mine (its opening and a part from its middle; ${EXCERPT_GAP} marks what is left out)` : 'One whole piece of mine'}, for how I sound. Not content: never reuse its topic, facts, names, figures, sentences or coined terms.\n\n${t}`])),
+      `${pieceLabel(i + 1, cutPieces[i])}\n\n${t}`])),
     ...(contrast.length ? { 'examples/contrast.md': renderContrastFile(contrast, v) } : {}) };
 
   // ── MANIFEST + ASSURANCE ────────────────────────────────────────────────────────────────────
@@ -705,12 +707,12 @@ mintedAt:        ${v.mintedAt}
   // chosen within is the owner's preference for the next build, not something this package served: two budgets that
   // choose the same pieces render the same files, and recording it made the second build collide with the first. It
   // lives with the skill's stored voice (core/state/store.ts, `setVoice`). And the form of the pieces is written
-  // last, and only when there is a piece for it to describe, so its place in the record does not depend on which
-  // path of the build set it. Every other field is written as it always was, in the order it came.
+  // last, so its place in the record does not depend on which path of the build set it, and only when a piece was
+  // actually cut: asked of pieces too short to cut, `excerpts` serves the very files `whole` does. Every other field is written as it always was, in the order it came.
   const travelling = voice ? (() => {
     const { pieceBudget: _budget, pieceForm, ...rest } = voice;
     void _budget;
-    return { ...rest, ...(pieceForm && voice.pieces?.length ? { pieceForm } : {}) };
+    return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),
     ...(travelling ? { 'voice.json': `${JSON.stringify(travelling, null, 1)}\n` } : {}) };

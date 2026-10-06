@@ -171,13 +171,31 @@ served is yours to set, and neither option changes a rule:
 atelier build --name posts --piece-budget 3000                    # choose the pieces again, within 3,000 words
 atelier build --name posts --piece-budget 3000 --pieces excerpts  # an opening and a middle passage of each, from more pieces
 atelier build --name posts --piece-budget 0                       # none of your pieces; the persona and your usual length stay
+atelier build --name posts --piece-budget default --pieces whole  # back to the default choice
 atelier export --skill posts --out skill.md --no-index            # leave out the list naming files the export has inlined
 ```
 
-The budget is a ceiling, counted in words of prose for whole pieces and in every word for excerpts. Excerpts are
-for a skill that writes; answers are short and shown whole. A build keeps the budget and the form until you give others, and choosing again calls no model. Nothing here is a default: a skill built without
-these options is chosen exactly as before. Whether a smaller skill holds your rules and your voice as well is a
-question for a measurement ([the drafted pre-registration](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md),
+- **A budget you set is a ceiling** on what the export counts for your pieces: each piece with the line that opens
+  its file, in any script, code and tables included. One piece may use the whole budget. A budget smaller than your
+  shortest piece serves none, and says so.
+- **The default is not a ceiling of that kind.** With no budget set, a build chooses as it always has: whole pieces
+  within 9,000 words of English prose, none longer than half of that.
+- **An excerpt is your text, exactly.** Each passage is one unbroken stretch of the piece, about 250 words, with
+  `[…]` where text is left out. A paragraph longer than a passage is taken apart at its line breaks, then at its
+  sentence ends; a fenced block of code is never cut. A piece too short to cut is served whole and its file says so.
+  Excerpts are for a skill that writes: answers are short and are shown whole.
+- **For a skill that answers,** the budget is that of the examples shown: one of each kind of request whatever
+  the budget, and none at 0.
+- **A build keeps the budget and the form** until you give others, `--voice auto` included. `--voice none` gives
+  them up with the voice, and `--piece-budget default` gives the budget up and keeps the form. Choosing the pieces
+  again reads the pieces the skill was built from and calls no model. (A skill that answers reads which of its moves
+  hold back once on every build, as it did before.)
+- **A rebuild compiles your standard as it stands.** If you amended a rule after the skill was built, a rebuild keeps
+  the amendment.
+
+Nothing here is a default: a skill built without these options is chosen exactly as before. Whether a smaller skill
+holds your rules and your voice as well is a question for a measurement
+([the drafted pre-registration](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md),
 [decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)).
 
 `atelier report <run>` ends with where that run's cost went, one line per purpose with its calls and the tokens

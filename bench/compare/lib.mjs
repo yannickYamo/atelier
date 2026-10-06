@@ -85,3 +85,11 @@ export function opt(args, name, dflt) {
 }
 
 export function die(msg) { console.error(`compare: ${msg}`); process.exit(2); }
+
+/** Leading YAML front matter dropped, exactly as run_evals.py _strip_frontmatter does it. */
+export const stripFrontmatter = (text) => {
+  const lines = text.split(/\r?\n/);
+  if (!lines.length || lines[0].trim() !== '---') return text;
+  for (let i = 1; i < lines.length; i++) if (lines[i].trim() === '---') return lines.slice(i + 1).join('\n').replace(/^\n+/, '');
+  return text;
+};

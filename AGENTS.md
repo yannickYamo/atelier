@@ -12,17 +12,14 @@ standard. It installs the skill for Claude Code (`.claude/skills/<name>/`) or Co
 ## Set it up
 
 ```bash
-npm install -g @yannickyamo/atelier   # puts `atelier` on PATH
-atelier setup                         # adds the Atelier MCP server to the coding agents in this project
-```
-
-From source instead:
-
-```bash
 git clone https://github.com/yannickYamo/atelier && cd atelier
 npm install && npm run build
 npm link            # optional: puts `atelier` on PATH; otherwise use `node dist/cli/atelier.mjs`
+atelier setup       # adds the Atelier MCP server to the coding agents in this project
 ```
+
+The npm package (`@yannickyamo/atelier`) is not published yet. Once it is, `npm install -g @yannickyamo/atelier`
+replaces the clone, the build and the link.
 
 Node 22 or later. Anything that calls a model needs `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`, or an
 OpenAI-compatible backend: `--provider openai-compatible --base-url <url> --model <id>`). Run

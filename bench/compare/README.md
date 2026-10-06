@@ -234,3 +234,18 @@ not call the Anthropic provider (the model arms run against the fake through the
 provider), it does not run the i-have-adhd judge in a paired session, and the model calls of SkillOpt's
 slow-update and meta-skill stages, which start at the second epoch, are not reached by the one-epoch smoke
 config (the first epoch only injects the slow-update placeholder).
+
+## The study of size (decision 0014)
+
+Two scripts read one study and are sealed with its pre-registration
+([studies/EFFICIENCY_ABLATION_PREREGISTRATION.md](../../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md)), which has
+the commands in order:
+
+- `efficiency-rows.mjs` turns each arm's answers into rows: every answer under its arm's own label and checked
+  against the export filed under it, a broken rule read from `atelier verify` offline, the score as the sum of the
+  rubric's dimensions, a skill served under two labels read once.
+- `efficiency-select.mjs` applies the rule: each domain on its own, the rule count in whole answers, the score
+  against a tolerance, and nothing selected from rows it does not expect.
+
+Neither calls a model.
+

@@ -8,9 +8,9 @@
 //   per run    what one run actually sent (`RunSent`, recorded with the run): the served skill, the passages and
 //              notes added for the request, and the request
 //
-// The export is then split by part, so a size has a cause: on the two skills this was first measured on, seven
+// The export is then split by part, so a size has a cause: on the one skill this was first measured on, seven
 // words in ten were whole pieces of the author's, set by one budget (core/compiler/voice.ts), and the rules and
-// instructions were under a fifth. Counted in words and bytes, which need no model: a provider's token count is
+// their examples were a fifth. Counted in words and bytes, which need no model: a provider's token count is
 // exact only when the provider reports it, and a run records that (core/inference/client.ts, `SpendLine`).
 
 /** A part of an exported skill. Every word of the export belongs to exactly one. */

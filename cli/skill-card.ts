@@ -57,7 +57,9 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
   const perms = rulesRead.length ? tastePermissions(rulesRead, store.readEvents(L), readerModel()) : null;
   // The size of the package this version serves, measured on the text a run is served and an export writes.
   const pkg = store.getPackage(L, version.materializedHash);
-  const served = pkg?.files['SKILL.md'] !== undefined ? composeServed(pkg.files, '') : null;
+  // A card is read by `report`, the MCP tool and the end of every build: a package that cannot be composed costs the
+  // card its size, never the card.
+  const served = ((): ReturnType<typeof composeServed> | null => { try { return pkg?.files['SKILL.md'] !== undefined ? composeServed(pkg.files, '') : null; } catch { return null; } })();
   const card: SkillCard = {
     schema: 1, skill: L.skillName, skillVersion: sv, standardVersion: std.standardVersionHash,
     builtAt: stored?.builtAt ?? (opts.persist ? new Date().toISOString() : null),

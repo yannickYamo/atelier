@@ -8,12 +8,13 @@
 // without asking for it.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { skillSizeOf, countWords, describeParts, describeSize } from '../core/eval/size.js';
 import { spend, spendBetween, processSpendByPurpose, processSpentUsd, metered, type Budget, type SpendLine } from '../core/inference/client.js';
-import { selectVoicePieces, selectVoiceExcerpts, excerptOf, EXCERPT_GAP, EXCERPT_WORDS, PIECE_BUDGET_WORDS } from '../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, excerptOf, isExcerpt, pieceLabel, EXCERPT_GAP, EXCERPT_WORDS, PIECE_BUDGET_WORDS } from '../core/compiler/voice.js';
 import { composeServed, withoutReferenceIndex } from '../cli/served.js';
 import { costOf } from '../cli/commands/report.js';
 import { renderSkillCard, type SkillCard } from '../core/eval/skill-card.js';
@@ -135,25 +136,43 @@ describe('a budget for the author\'s pieces, set by the owner', () => {
     expect(chosen(1500)).toEqual([2, 3, 6, 4]);
     expect(chosen(400)).toEqual([]);
   });
-  it('a smaller budget serves fewer words, never more than it allows, and still whole pieces of the corpus', () => {
-    const lean = selectVoicePieces(corpus, 1900);
-    expect(lean.length).toBeGreaterThan(0);
-    expect(lean.length).toBeLessThan(selectVoicePieces(corpus).length);
-    expect(lean.reduce((n, t) => n + countWords(t), 0)).toBeLessThanOrEqual(1900);
-    for (const t of lean) expect(corpus).toContain(t);
+  it('a budget the owner sets is a ceiling on what the export counts, whole pieces included, and one piece may use it all', () => {
+    const exported = (chosen: readonly string[]): number => chosen.reduce((n, t, i) => n + countWords(`${pieceLabel(i + 1, false)}\n\n${t}`), 0);
+    for (const budget of [1000, 1500, 1900, 3000, 5000]) {
+      const lean = selectWithinBudget(corpus, budget, 'whole');
+      expect(exported(lean), `budget ${budget}`).toBeLessThanOrEqual(budget);
+      for (const t of lean) expect(corpus).toContain(t);
+    }
+    // a 900-word piece fits a 1,000-word budget: no rule of half a budget hides it from an owner who asked for 1,000
+    expect(selectWithinBudget(corpus, 1000, 'whole')).toHaveLength(1);
+    expect(selectWithinBudget(corpus, 300, 'whole')).toEqual([]);
+    expect(selectWithinBudget(corpus, 0, 'whole')).toEqual([]);
+    expect(selectWithinBudget(corpus, 0, 'excerpts')).toEqual([]);
+    expect(selectWithinBudget(corpus.slice(0, 2), 5000, 'whole')).toEqual([]);
   });
-  it('a budget of 0 serves none, for whole pieces and for excerpts alike', () => {
-    expect(selectVoicePieces(corpus, 0)).toEqual([]);
-    expect(selectVoiceExcerpts(corpus, 0)).toEqual([]);
+  it('the ceiling holds in any script and on code: a budget is not met by counting only English prose', () => {
+    // Counted as English prose, a Russian piece is a few digits and a piece of code is nothing: every one of these
+    // would "fit" a budget of 1,500 words, and a build would serve many times that and print "within 1500 words".
+    const russian = (id: number): string => Array.from({ length: 30 }, (_, k) => `Это абзац ${k} текста ${id}. Мы решили сначала и объяснили потом, и никто об этом не пожалел, потому что работа шла именно так на шаге ${k}.`).join('\n\n');
+    const code = (id: number): string => `Piece ${id}.\n\n\`\`\`ts\n${Array.from({ length: 400 }, (_, k) => `const value${k} = compute(${id}, ${k});`).join('\n')}\n\`\`\``;
+    for (const c of [[russian(1), russian(2), russian(3), russian(4)], [code(1), code(2), code(3), code(4)]]) {
+      const size = countWords(c[0]);
+      expect(size).toBeGreaterThan(500);
+      expect(selectWithinBudget(c, Math.floor(size / 2), 'whole')).toEqual([]);
+      const some = selectWithinBudget(c, size * 2 + 100, 'whole');
+      expect(some.length).toBeGreaterThan(0);
+      expect(some.reduce((n, t) => n + countWords(t), 0)).toBeLessThanOrEqual(size * 2 + 100);
+    }
   });
 });
 
 describe('excerpts: an opening and a middle passage, from more pieces', () => {
   const long = piece(7, 40);
+  const passagesOf = (ex: string): string[] => ex.split(EXCERPT_GAP).map((x) => x.trim()).filter(Boolean);
 
-  it('whole blocks in the author\'s order and words: the opening from the first line, the middle from the midpoint, the cut marked', () => {
+  it('each passage is one unbroken stretch of the piece: the opening from the first line, the middle from the midpoint, the cut marked', () => {
     const ex = excerptOf(long);
-    const passages = ex.split(`\n\n${EXCERPT_GAP}`).map((x) => x.trim()).filter(Boolean);
+    const passages = passagesOf(ex);
     expect(passages).toHaveLength(2);
     expect(ex.startsWith('Piece 7 paragraph 0 opens here.')).toBe(true);
     for (const passage of passages) {
@@ -163,55 +182,102 @@ describe('excerpts: an opening and a middle passage, from more pieces', () => {
     }
     expect(passages[1].startsWith('Piece 7 paragraph 20 opens here.') || passages[1].startsWith('Piece 7 paragraph 19 opens here.')).toBe(true);
     expect(ex.endsWith(EXCERPT_GAP)).toBe(true);
+    expect(isExcerpt(ex)).toBe(true);
   });
-  it('a piece too short to leave anything out is shown whole, with no mark', () => {
+  it('a piece too short to leave anything out is shown whole, with no mark, and is not called an excerpt', () => {
     const short = piece(8, 6);
     expect(excerptOf(short)).toBe(short);
-    expect(excerptOf(short)).not.toContain(EXCERPT_GAP);
+    expect(isExcerpt(excerptOf(short))).toBe(false);
+  });
+  it('a passage is the author\'s text byte for byte: runs of blank lines, double spaces and tabs are kept as written', () => {
+    const odd = `${piece(12, 5).replace(/\n\n/g, '\n\n\n\n')}\n\n${piece(12, 40).replace(/\. /g, '.  ').replace(/\n\n/g, '\t ')}`;
+    const ex = excerptOf(odd);
+    expect(isExcerpt(ex)).toBe(true);
+    for (const passage of passagesOf(ex)) expect(odd).toContain(passage);
   });
   it('a fenced code block is never cut through, even where a passage would otherwise end inside it', () => {
     // The block straddles the 250-word mark of the opening and holds a blank line: split there, half of it would be shown.
     const fence = `\`\`\`ts\n${Array.from({ length: 30 }, (_, k) => `const value${k} = compute(${k});`).join('\n')}\n\n${Array.from({ length: 30 }, (_, k) => `const other${k} = compute(${k});`).join('\n')}\n\`\`\``;
-    const withCode = `${piece(9, 5)}\n\n${fence}\n\n${piece(9, 40)}`;
-    const ex = excerptOf(withCode);
+    const ex = excerptOf(`${piece(9, 5)}\n\n${fence}\n\n${piece(9, 40)}`);
     expect(ex).toContain('const value0 = compute(0);');
     expect(ex).toContain(fence);
   });
-  it('a piece written as one long paragraph, or with single line breaks, still has an excerpt shorter than itself', () => {
-    const oneParagraph = piece(10, 40).replace(/\n\n/g, ' ');
-    const singleBreaks = piece(11, 40).replace(/\n\n/g, '\n');
-    for (const text of [oneParagraph, singleBreaks]) {
+  it('only a real fence is code: inline code on a line of its own, and a fence never closed, leave the piece excerptable', () => {
+    const inline = `${piece(13, 3)}\n\n\`\`\`npm install\`\`\` is all you need.\n\n${piece(13, 40)}`;
+    const unclosed = `${piece(14, 3)}\n\n\`\`\`\nconst a = 1;\n\n${piece(14, 40)}`;
+    for (const text of [inline, unclosed]) {
       const ex = excerptOf(text);
+      expect(isExcerpt(ex)).toBe(true);
       expect(countWords(ex)).toBeLessThan(countWords(text) / 2);
-      expect(ex).toContain(EXCERPT_GAP);
-      // every passage is the author's text exactly as it stood, line breaks and all
-      for (const passage of ex.split(EXCERPT_GAP).map((x) => x.trim()).filter(Boolean)) expect(text).toContain(passage);
     }
   });
-  it('the budget is a ceiling for the first piece chosen as for the last: under one excerpt, none is served', () => {
+  it('a piece written as one long paragraph, or with single line breaks, still has an excerpt shorter than itself', () => {
+    for (const text of [piece(10, 40).replace(/\n\n/g, ' '), piece(11, 40).replace(/\n\n/g, '\n')]) {
+      const ex = excerptOf(text);
+      expect(countWords(ex)).toBeLessThan(countWords(text) / 2);
+      expect(isExcerpt(ex)).toBe(true);
+      for (const passage of passagesOf(ex)) expect(text).toContain(passage);
+    }
+  });
+  it('text in a script with no Latin words is cut too, and one with no spaces between words', () => {
+    const russian = Array.from({ length: 40 }, (_, k) => `Это абзац ${k}. Мы решили сначала и объяснили потом, и никто об этом не пожалел, потому что работа шла именно так.`).join('\n\n');
+    const chinese = Array.from({ length: 40 }, (_, k) => `这是第${k}段。我们先做了决定，然后才解释原因，没有人为此后悔，因为工作就是这样一步一步进行的，每一步都很清楚。`).join('\n\n');
+    for (const text of [russian, chinese]) {
+      const ex = excerptOf(text);
+      expect(isExcerpt(ex)).toBe(true);
+      expect(ex.length).toBeLessThan(text.length * 0.7);
+      for (const passage of passagesOf(ex)) expect(text).toContain(passage);
+    }
+  });
+  it('front matter is not the author\'s prose and is left out; a piece that merely opens with a rule keeps what follows it', () => {
+    const ex = excerptOf(`---\ntitle: A post\nrequest: write it\n---\n\n${long}`);
+    expect(ex.startsWith('Piece 7 paragraph 0 opens here.')).toBe(true);
+    expect(ex).not.toContain('title: A post');
+    // two horizontal rules are not front matter: the paragraphs between them are the author's opening
+    const ruled = excerptOf(`---\n\n${piece(15, 10)}\n\n---\n\n${piece(16, 40)}`);
+    expect(ruled).toContain('Piece 15 paragraph 0 opens here.');
+  });
+  it('one long paragraph of Chinese is cut at its sentence marks, which no space follows', () => {
+    const paragraph = Array.from({ length: 80 }, (_, k) => `这是第${k}句话，我们先做了决定，然后才解释原因。`).join('');
+    const ex = excerptOf(paragraph);
+    expect(isExcerpt(ex)).toBe(true);
+    expect(ex.length).toBeLessThan(paragraph.length * 0.7);
+    for (const passage of passagesOf(ex)) expect(paragraph).toContain(passage);
+  });
+  it('a piece of many fence openers that never close is read in one pass, not once per opener', () => {
+    const text = `${Array.from({ length: 20000 }, () => '```js').join('\n')}\n\n${piece(17, 40)}`;
+    const started = Date.now();
+    expect(excerptOf(text)).toContain(EXCERPT_GAP);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+  it('the budget is a ceiling on what the export counts, for the first piece chosen as for the last', () => {
     const corpus = [piece(1, 40), piece(2, 40), piece(3, 40), piece(4, 40)];
-    expect(selectVoiceExcerpts(corpus, 100)).toEqual([]);
-    const one = selectVoiceExcerpts(corpus, 700);
-    expect(one).toHaveLength(1);
-    expect(countWords(one[0])).toBeLessThanOrEqual(700);
-    for (const budget of [1200, 2000, 3000]) expect(selectVoiceExcerpts(corpus, budget).reduce((n, t) => n + countWords(t), 0)).toBeLessThanOrEqual(budget);
+    const exported = (chosen: readonly string[]): number => chosen.reduce((n, t, i) => n + countWords(`${pieceLabel(i + 1, isExcerpt(t))}\n\n${t}`), 0);
+    expect(selectWithinBudget(corpus, 100, 'excerpts')).toEqual([]);
+    expect(selectWithinBudget(corpus, 700, 'excerpts')).toHaveLength(1);
+    for (const budget of [700, 1000, 1200, 2000, 3000]) expect(exported(selectWithinBudget(corpus, budget, 'excerpts')), `budget ${budget}`).toBeLessThanOrEqual(budget);
   });
   it('for the same words, excerpts reach more pieces than whole ones do', () => {
     const corpus = [piece(1, 40), piece(2, 40), piece(3, 40), piece(4, 40), list(1), piece(5, 40)];
-    const budget = 4000;
-    const whole = selectVoicePieces(corpus, budget);
-    const excerpts = selectVoiceExcerpts(corpus, budget);
-    expect(excerpts.length).toBeGreaterThan(whole.length);
-    expect(excerpts.reduce((n, t) => n + countWords(t), 0)).toBeLessThanOrEqual(budget);
-    expect(selectVoiceExcerpts(corpus.slice(0, 2), budget)).toEqual([]);
+    expect(selectWithinBudget(corpus, 4000, 'excerpts').length).toBeGreaterThan(selectWithinBudget(corpus, 4000, 'whole').length);
+    expect(selectWithinBudget(corpus.slice(0, 2), 4000, 'excerpts')).toEqual([]);
   });
-  it('the compiled skill says what the files are: passages, with the cut marked, never "a whole piece"', () => {
-    const pkg = packageWith([excerptOf(long), excerptOf(piece(6, 40))], 'excerpts');
-    expect(pkg.files['SKILL.md']).toContain('each hold passages from one piece of mine');
-    expect(pkg.files['SKILL.md']).not.toContain('whole piece');
-    expect(pkg.files['examples/voice-1.md']).toMatch(/^\[voice-1\] Passages from one piece of mine/);
-    // polarity: without the form, the same files are described as whole pieces, as every skill built before is
-    expect(packageWith([long, piece(6, 40)]).files['SKILL.md']).toContain('are whole pieces of mine');
+  it('the compiled skill says what each file holds: passages where a piece was cut, a whole piece where it was not', () => {
+    const cut = packageWith([excerptOf(long), excerptOf(piece(6, 40))], 'excerpts');
+    expect(cut.files['SKILL.md']).toContain('each hold passages from one piece of mine');
+    expect(cut.files['SKILL.md']).not.toContain('whole piece');
+    expect(cut.files['examples/voice-1.md']).toMatch(/^\[voice-1\] Passages from one piece of mine/);
+    // a short piece chosen beside a cut one is served whole, and its file says so: a model told to expect a cut looks for one
+    const mixed = packageWith([excerptOf(long), piece(8, 6)], 'excerpts');
+    expect(mixed.files['SKILL.md']).toContain('each hold one piece, or passages from one, of mine');
+    expect(mixed.files['examples/voice-1.md']).toMatch(/^\[voice-1\] Passages from one piece of mine/);
+    expect(mixed.files['examples/voice-2.md']).toMatch(/^\[voice-2\] One whole piece of mine/);
+    // every piece short: nothing was cut, and the skill reads as it does for whole pieces
+    expect(packageWith([piece(8, 6), piece(9, 6)], 'excerpts').files['SKILL.md']).toContain('are whole pieces of mine');
+    // polarity: without the form, a piece that happens to carry the mark is still a whole piece
+    const own = packageWith([`${piece(6, 6)}\n\n${EXCERPT_GAP}`]);
+    expect(own.files['SKILL.md']).toContain('is a whole piece of mine');
+    expect(own.files['examples/voice-1.md']).toMatch(/^\[voice-1\] One whole piece of mine/);
   });
   it('two budgets that choose the same pieces are one package: the budget is not part of what a package served', () => {
     const v = standard(); const pieces = [piece(1, 20)];
@@ -224,6 +290,10 @@ describe('excerpts: an opening and a middle passage, from more pieces', () => {
     const formFirst = { passages: [], lengthWords: [800, 1200] as const, pieces, pieceForm: 'excerpts' as const, persona: { points: [], dropped: 0 } };
     const formLast = { passages: [], lengthWords: [800, 1200] as const, pieces, persona: { points: [], dropped: 0 }, pieceForm: 'excerpts' as const };
     expect(JSON.stringify(renderAgentSkill(v, compileArchitecture(v), 'x', 'd', null, [], formFirst))).toBe(JSON.stringify(renderAgentSkill(v, compileArchitecture(v), 'x', 'd', null, [], formLast)));
+    // excerpts asked of pieces too short to cut serve the very files whole does: one package, so no form is recorded,
+    // and a build that switches the form over such pieces lands on the stored package and is not refused
+    const short = { passages: [], lengthWords: [800, 1200] as const, pieces: [piece(2, 6), piece(3, 6)] };
+    expect(JSON.stringify(renderAgentSkill(v, compileArchitecture(v), 'x', 'd', null, [], { ...short, pieceForm: 'excerpts' as const }))).toBe(JSON.stringify(renderAgentSkill(v, compileArchitecture(v), 'x', 'd', null, [], short)));
     // and a form with no piece to describe is not recorded either
     const none = renderAgentSkill(v, compileArchitecture(v), 'x', 'd', null, [], { ...voice, pieces: [] });
     expect(JSON.stringify(renderAgentSkill(v, compileArchitecture(v), 'x', 'd', null, [], { ...voice, pieces: [], pieceForm: 'excerpts' as const }))).toBe(JSON.stringify(none));
@@ -284,7 +354,7 @@ const jsonl = (rows: readonly object[]): string => `${rows.map((r) => JSON.strin
 
 describe('the rule that chooses which size becomes the default', () => {
   interface Arm { words: number; breaks: (task: number, trial: number) => boolean; score: (task: number) => number; chosen?: (task: number) => string }
-  interface Standing { arm: string; state: 'stands' | 'rejected' | 'unread'; rejectedIn: string[]; unreadIn: string[] }
+  interface Standing { arm: string; state: 'stands' | 'rejected' | 'unread' | 'not smaller'; rejectedIn: string[]; unreadIn: string[] }
   interface Selection { selected: string | null; smallestStanding: string | null; sentence: string; standing: Standing[]; domains: { name: string; arms: Record<string, { rejectedBy: string[]; voice: { read: boolean } }> }[] }
   interface Files { rules: object[]; quality: object[]; picks: object[] }
   /** One domain's files: `tasks` tasks, two outputs each, the reference and every arm. `edit` changes the rows before they are written. */
@@ -301,7 +371,7 @@ describe('the rule that chooses which size becomes the default', () => {
     return { name, sizes: `${name}-sizes.json`, rules: `${name}-rules.jsonl`, quality: [`${name}-quality.jsonl`], voice: opts.voice ? `${name}-voice.jsonl` : null, ...(opts.excluded ? { excluded: opts.excluded } : {}) };
   };
   const config = (dir: string, domains: object[], arms: string[], more: object = {}): string => {
-    writeFileSync(join(dir, 'config.json'), JSON.stringify({ reference: 'full', arms, defaultable: arms, domains, margins: { rules: 0.05, quality: 1 }, minTasks: 20, ceiling: 0.85, ...more }));
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ reference: 'full', arms, defaultable: arms, domains, margins: { rules: 0.05, quality: 1 }, minTasks: 20, ceiling: 0.85, trials: 2, ...more }));
     return join(dir, 'config.json');
   };
   const analyse = (dir: string, domains: object[], arms: string[], more: object = {}): Selection => {
@@ -371,7 +441,7 @@ describe('the rule that chooses which size becomes the default', () => {
     const arms = { full: { ...level, breaks: breaking(54), words: 13000 }, lean: { ...level, breaks: breaking(56), words: 4500 } };
     const r = script('efficiency-select.mjs', '--config', config(dir, [domain(dir, 'blog', 30, arms)], ['lean']));
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toMatch(/^unread {4}lean .* unread in: blog/m);
+    expect(r.out).toMatch(/^unread\s+lean .* unread in: blog/m);
     expect(r.out).toMatch(/blog · rules unread: the reference breaks a required rule in 54 of 60 outputs, over the ceiling of 0\.85/);
     expect(r.out).toMatch(/^NONE SELECTED/m);
     // polarity: at the ceiling exactly (51 of 60) the reading stands
@@ -428,6 +498,40 @@ describe('the rule that chooses which size becomes the default', () => {
     // a voice choice labelled with the arm's name
     expect(bad((f) => { f.picks = f.picks.map((r) => ({ ...r, chose: 'full' })); }, true, true)).toMatch(/has chose "full"; it must be "arm" or "reference"/);
   });
+  it('a judging session short of tasks, or on other tasks, is refused: a reading must not lose the tasks an arm lost on', () => {
+    const arms = { full: { ...level, words: 13000 }, lean: { ...level, score: (t: number) => level.score(t) - (t < 10 ? 4 : 0), words: 4500 } };
+    // complete, the arm is rejected on quality (1.33 points lower)
+    const d0 = tmp();
+    expect(analyse(d0, [domain(d0, 'blog', 30, arms)], ['lean']).domains[0].arms.lean.rejectedBy[0]).toMatch(/^quality: scores 1\.333 points lower/);
+    // the ten tasks it lost on missing from the judge's file, for every arm alike
+    const d1 = tmp();
+    expect(refused(d1, [domain(d1, 'blog', 30, arms, { edit: (f) => { f.quality = f.quality.filter((r) => Number((r as { case_id: string }).case_id.slice(1)) >= 10); } })], ['lean'])).toMatch(/blog quality \(session 1\): it does not cover the same tasks and trials as the rules file/);
+    // one output a task where two are sealed
+    const d2 = tmp();
+    expect(refused(d2, [domain(d2, 'blog', 30, arms, { edit: (f) => { f.quality = f.quality.filter((r) => (r as { trial: number }).trial === 1); f.rules = f.rules.filter((r) => (r as { trial: number }).trial === 1); } })], ['lean'])).toMatch(/has 1 output\(s\) for the reference where 2 are sealed/);
+  });
+  it('voice is one choice per task, on the tasks of the rules file: a second choice or a stray task is refused', () => {
+    const arms = { full: { ...level, words: 13000 }, lean: { ...level, words: 4500, chosen: (): string => 'reference' } };
+    const d1 = tmp();
+    expect(refused(d1, [domain(d1, 'blog', 30, arms, { voice: true, edit: (f) => { f.picks = [...f.picks, ...f.picks.map((r) => ({ ...r, chose: 'arm' }))]; } })], ['lean'])).toMatch(/t0 has two choices for "lean"/);
+    const d2 = tmp();
+    expect(refused(d2, [domain(d2, 'blog', 30, arms, { voice: true, edit: (f) => { f.picks = f.picks.map((r, i) => ({ ...r, case_id: `x${i}` })); } })], ['lean'])).toMatch(/x0 \(lean\) is not a task of this domain's rules file/);
+  });
+  it('an arm that is not smaller than the reference is nothing to select; no domains, or two of one name, are refused', () => {
+    const dir = tmp();
+    const same = analyse(dir, [domain(dir, 'blog', 30, { full: { ...level, words: 5000 }, lean: { ...level, words: 5000 }, bigger: { ...level, words: 6000 } })], ['lean', 'bigger']);
+    expect(same.selected).toBeNull();
+    expect(same.smallestStanding).toBeNull();
+    // and it is said to be not smaller, never printed as standing beside "none selected"
+    expect(same.standing.map((x) => x.state)).toEqual(['not smaller', 'not smaller']);
+    expect(same.sentence).toMatch(/^NONE SELECTED: no arm that may become the default stood in every domain and is smaller than the reference/);
+    const d2 = tmp();
+    const d = domain(d2, 'blog', 30, { full: { ...level, words: 5000 }, lean: { ...level, words: 4000 } });
+    expect(refused(d2, [], ['lean'])).toMatch(/domains must list at least one domain/);
+    expect(refused(d2, [d, d], ['lean'])).toMatch(/each domain needs a name of its own/);
+    expect(refused(d2, [d], ['lean'], { margins: { rules: 5, quality: 1 } })).toMatch(/margins\.rules is a share of outputs/);
+    expect(refused(d2, [{ ...d, rules: 'nowhere.jsonl' }], ['lean'])).toMatch(/nowhere\.jsonl: no such file/);
+  });
   it('a task excluded is excluded for every arm, and named', () => {
     const dir = tmp();
     const arms = { full: { ...level, words: 13000 }, lean: { ...level, words: 4500 } };
@@ -435,7 +539,7 @@ describe('the rule that chooses which size becomes the default', () => {
     const r = script('efficiency-select.mjs', '--config', config(dir, [d], ['lean']));
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/blog · 2 task\(s\) excluded for every arm: t0, t1/);
-    expect(r.out).toMatch(/^stands {4}lean/m);
+    expect(r.out).toMatch(/^stands\s+lean/m);
   });
   it('a config that lists the reference as an arm, leaves out a margin, or has no whole minTasks is refused', () => {
     const dir = tmp();
@@ -469,10 +573,14 @@ beforeAll(async () => {
 });
 afterAll(() => { backend.kill(); });
 
-const run = (data: string, proj: string, ...args: string[]): string => {
+// A developer's own ATELIER_* settings (a reader model, a claims mode) must not decide which calls reach the scripted backend.
+const cleanEnv = (): NodeJS.ProcessEnv => Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ATELIER_')));
+/** `last` goes after the provider flags, for a case where what ends the command line is the point. */
+const run = (data: string, proj: string, ...args: string[]): string => runWith(data, proj, args, []);
+const runWith = (data: string, proj: string, args: readonly string[], last: readonly string[]): string => {
   try {
-    return execFileSync('node', [CLI, ...args, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'], {
-      encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' },
+    return execFileSync('node', [CLI, ...args, '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', ...last], {
+      encoding: 'utf8', cwd: proj, env: { ...cleanEnv(), ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CLAIMS: 'pattern' },
     });
   } catch (e) {
     const err = e as { status?: number; stdout?: string; stderr?: string };
@@ -488,94 +596,113 @@ describe('through the binary: a skill built without asking is unchanged, and the
   for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
   const out = (name: string): string => join(proj, name);
   const exported = (name: string, ...flags: string[]): string => { run(data, proj, 'export', '--skill', 'voice', '--out', out(name), ...flags); return readFileSync(out(name), 'utf8'); };
-  const pieceWords = (text: string): number => [...text.matchAll(/\[voice-\d+\][^\n]*\n\n([\s\S]*?)(?=\n\n- - -\n\n|\n\n=== END REFERENCE MATERIAL)/g)].reduce((n, m) => n + countWords(m[1]), 0);
+  const build = (...flags: string[]): string => run(data, proj, 'build', '--name', 'voice', ...flags);
+  /** The words the export counts for the author's pieces: each file, its opening line included. */
+  const pieceWords = (text: string): number => [...text.matchAll(/(\[voice-\d+\][\s\S]*?)(?=\n\n- - -\n\n|\n\n=== END REFERENCE MATERIAL)/g)].reduce((n, m) => n + countWords(m[1]), 0);
+  const files = (text: string): number => (text.match(/\[voice-\d+\]/g) ?? []).length;
   // A rebuild writes the default description unless it is given again; these tests are about the body.
   const body = (text: string): string => text.replace(/^description: .*$/m, 'description: (not compared)');
   const calls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__count`)).json()) as { count: number }).count;
-  let built = ''; let full = ''; let wholeAt1500 = 0;
+  const NEW = ['new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice'];
+  // EVERY BUILD IS MADE ONCE, HERE, IN ORDER, and each test reads what its build said and exported: no test depends on
+  // another having run, and one run alone (`-t`) sees the same state as the whole file.
+  const r = { earlyRefusal: '', built: '', full: '', exportSaid: '', noIndex: '', lean: { said: '', text: '', calls: 0 }, kept: { said: '', text: '' },
+    excerpts: { said: '', text: '', again: '', againText: '', auto: '' }, under: { said: '', text: '' }, none: { said: '', text: '' }, back: { said: '', text: '' },
+    refusals: [] as string[], afterRefusals: '', moved: '', afterMoved: '' };
 
-  // Three runs of the binary; the default hook budget is blown under full-suite load.
-  beforeAll(() => {
-    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
-    built = run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
-    full = exported('full.md');
-  }, 120_000);
+  beforeAll(async () => {
+    r.earlyRefusal = run(data, proj, ...NEW, '--pieces', 'halves');
+    run(data, proj, ...NEW);
+    r.built = run(data, proj, ...NEW, '--accept');
+    r.exportSaid = run(data, proj, 'export', '--skill', 'voice', '--out', out('full.md'));
+    r.full = readFileSync(out('full.md'), 'utf8');
+    r.noIndex = exported('no-index.md', '--no-index');
+    const before = await calls();
+    r.lean.said = build('--piece-budget', '1500'); r.lean.calls = (await calls()) - before; r.lean.text = exported('b1500.md');
+    r.kept.said = build(); r.kept.text = exported('kept.md');
+    r.excerpts.said = build('--piece-budget', '1500', '--pieces', 'excerpts'); r.excerpts.text = exported('excerpts.md');
+    r.excerpts.again = build('--voice', 'auto', '--piece-budget', '1500', '--pieces', 'excerpts'); r.excerpts.againText = exported('excerpts-again.md');
+    build('--voice', 'auto'); r.excerpts.auto = exported('excerpts-auto.md');
+    r.under.said = build('--piece-budget', '100'); r.under.text = exported('under.md');
+    r.none.said = build('--piece-budget', '0', '--pieces', 'whole'); r.none.text = exported('none.md');
+    r.back.said = build('--piece-budget', 'default', '--pieces', 'whole'); r.back.text = exported('back.md');
+    r.refusals = [build('--piece-budget', 'small'), build('--pieces', 'halves'), build('--voice', 'none', '--piece-budget', '100'), runWith(data, proj, ['build', '--name', 'voice'], ['--piece-budget']), build('--class', 'blog-post', '--piece-budget', '500'),
+      run(data, proj, ...NEW, '--accept', '--piece-budget', '700')];
+    r.afterRefusals = exported('still.md');
+    renameSync(dir, `${dir}-away`);
+    try { r.moved = build('--piece-budget', '500'); } finally { renameSync(`${dir}-away`, dir); }
+    r.afterMoved = exported('unmoved.md');
+  }, 300_000);
 
+  it('a mistyped form is refused on the first screen of `atelier new`, before any rule is approved', () => {
+    expect(r.earlyRefusal).toMatch(/--pieces takes whole or excerpts, got "halves"/);
+  });
   it('the build\'s card states the size, stored and exported, with the export by part', () => {
-    expect(built).toMatch(/SIZE {2}stored [\d,]+ words in \d+ files · exported [\d,]+ words \([\d,]+ bytes\)/);
-    expect(built).toMatch(/the export\s+your pieces [\d,]+ \(\d+ files?\)/);
+    expect(r.built).toMatch(/SIZE {2}stored [\d,]+ words in \d+ files · exported [\d,]+ words \([\d,]+ bytes\)/);
+    expect(r.built).toMatch(/the export\s+your pieces [\d,]+ \(\d+ files?\)/);
     expect(run(data, proj, 'report', '--skill', 'voice', '--json')).toMatch(/"part": "your pieces"/);
   });
-  it('the export says where its words are, and --no-index drops only the index', () => {
-    const said = run(data, proj, 'export', '--skill', 'voice', '--out', out('again.md'));
-    expect(said).toMatch(/your pieces [\d,]+ \(\d+ files?\)/);
-    expect(readFileSync(out('again.md'), 'utf8')).toBe(full);
-    expect(full).toMatch(/\[voice-1\] One whole piece of mine/);
-    const lean = exported('lean.md', '--no-index');
-    if (full.includes('## Reference material')) {
-      expect(lean).not.toContain('## Reference material');
-      expect(countWords(lean)).toBeLessThan(countWords(full));
-    } else expect(lean).toBe(full);
-    expect(pieceWords(lean)).toBe(pieceWords(full));
+  it('the export says where its words are, and --no-index drops the index and nothing else', () => {
+    expect(r.exportSaid).toMatch(/your pieces [\d,]+ \(\d+ files?\)/);
+    expect(r.full).toMatch(/\[voice-1\] One whole piece of mine/);
+    expect(r.full).toContain('## Reference material');
+    expect(r.noIndex).not.toContain('## Reference material');
+    expect(countWords(r.noIndex)).toBeLessThan(countWords(r.full));
+    expect(pieceWords(r.noIndex)).toBe(pieceWords(r.full));
   });
-  it('--piece-budget chooses again within the budget, keeps how the author sounds and how long they write, and calls no model', async () => {
-    const before = await calls();
-    const said = run(data, proj, 'build', '--name', 'voice', '--piece-budget', '1500');
+  it('--piece-budget chooses again within the budget as the export counts it, keeps how the author sounds, and calls no model', () => {
     // Choosing pieces again is arithmetic on pieces already read: a persona is never derived for it, so it never spends.
-    expect(await calls()).toBe(before);
-    expect(said).not.toMatch(/Persona: /);
-    expect(said).toMatch(/Voice: \d+ whole piece\(s\) of the author's own served with the skill, within 1500 words/);
-    const lean = exported('b1500.md');
-    expect(pieceWords(lean)).toBeGreaterThan(0);
-    expect(pieceWords(lean)).toBeLessThanOrEqual(1500);
-    expect(pieceWords(lean)).toBeLessThan(pieceWords(full));
-    expect(lean).toContain('My pieces of this kind run about');
-    expect(lean).toContain('Lead with the decision');
-    wholeAt1500 = (lean.match(/\[voice-\d+\]/g) ?? []).length;
-    expect(wholeAt1500).toBeGreaterThan(0);
+    expect(r.lean.calls).toBe(0);
+    expect(r.lean.said).not.toMatch(/Persona: /);
+    expect(r.lean.said).toMatch(/Voice: \d+ whole piece\(s\) of the author's own served with the skill, within 1500 words/);
+    expect(pieceWords(r.lean.text)).toBeGreaterThan(0);
+    expect(pieceWords(r.lean.text)).toBeLessThanOrEqual(1500);
+    expect(pieceWords(r.lean.text)).toBeLessThan(pieceWords(r.full));
+    expect(r.lean.text).toContain('My pieces of this kind run about');
+    expect(r.lean.text).toContain('Lead with the decision');
   });
   it('the budget is kept by a later rebuild that does not repeat it, like the rest of the voice', () => {
-    expect(run(data, proj, 'build', '--name', 'voice')).not.toMatch(/EXIT:|STORE:/);
-    const kept = exported('kept.md');
-    expect(pieceWords(kept)).toBeLessThanOrEqual(1500);
-    expect((kept.match(/\[voice-\d+\]/g) ?? []).length).toBe(wholeAt1500);
+    expect(r.kept.said).not.toMatch(/EXIT:|STORE:/);
+    expect(files(r.kept.text)).toBe(files(r.lean.text));
+    expect(pieceWords(r.kept.text)).toBe(pieceWords(r.lean.text));
   });
   it('--pieces excerpts shows passages from more pieces for the same words, and says so in the skill', () => {
-    const said = run(data, proj, 'build', '--name', 'voice', '--piece-budget', '1500', '--pieces', 'excerpts');
-    expect(said).toMatch(/Voice: passages from \d+ piece\(s\) of the author's own served with the skill, within 1500 words/);
-    const ex = exported('excerpts.md');
-    expect(ex).toContain('passages from one piece of mine');
-    expect((ex.match(/\[voice-\d+\] Passages from one piece of mine/g) ?? []).length).toBeGreaterThan(wholeAt1500);
-    expect(ex).toContain(EXCERPT_GAP);
-    expect(pieceWords(ex)).toBeLessThanOrEqual(1500);
+    expect(r.excerpts.said).toMatch(/Voice: passages from \d+ piece\(s\)(?: and \d+ short one\(s\) whole)? of the author's own served with the skill, within 1500 words/);
+    expect(r.excerpts.text).toContain('passages from one');
+    expect(files(r.excerpts.text)).toBeGreaterThan(files(r.lean.text));
+    expect(r.excerpts.text).toContain(EXCERPT_GAP);
+    expect(pieceWords(r.excerpts.text)).toBeLessThanOrEqual(1500);
     // The same voice chosen afresh lands on the package already stored: one hash, one body, no refusal.
-    expect(run(data, proj, 'build', '--name', 'voice', '--voice', 'auto', '--piece-budget', '1500', '--pieces', 'excerpts')).not.toMatch(/EXIT:|STORE:/);
-    expect(body(exported('excerpts-again.md'))).toBe(body(ex));
-    // and a budget under one excerpt serves none, and says so
-    expect(run(data, proj, 'build', '--name', 'voice', '--piece-budget', '100')).toMatch(/Voice: none of the author's pieces is served within 100 words/);
-    expect(exported('under.md')).not.toMatch(/\[voice-\d+\]/);
+    expect(r.excerpts.again).not.toMatch(/EXIT:|STORE:/);
+    expect(body(r.excerpts.againText)).toBe(body(r.excerpts.text));
+    // `--voice auto` chooses the pieces again and does not forget the budget and the form it was given
+    expect(body(r.excerpts.auto)).toBe(body(r.excerpts.text));
   });
-  it('--piece-budget 0 serves none of the pieces and keeps the rest; --pieces whole and the default budget give the first build back', () => {
-    expect(run(data, proj, 'build', '--name', 'voice', '--piece-budget', '0')).toMatch(/Voice: none of the author's pieces is served within 0 words; how they sound and how long they write are kept\./);
-    const none = exported('none.md');
-    expect(none).not.toMatch(/\[voice-\d+\]/);
-    expect(none).toContain('My pieces of this kind run about');
+  it('a budget under one piece serves none and says so; 0 serves none and keeps the rest', () => {
+    expect(r.under.said).toMatch(/Voice: none of the author's pieces is served: none fits within 100 words; how they sound and how long they write are kept\./);
+    expect(files(r.under.text)).toBe(0);
+    expect(files(r.none.text)).toBe(0);
+    expect(r.none.text).toContain('My pieces of this kind run about');
+  });
+  it('--piece-budget default gives the default choice back: the first build, byte for byte', () => {
     // The same files as the first build, so the same package: a rebuild that lands on a package already stored is not an error.
-    expect(run(data, proj, 'build', '--name', 'voice', '--piece-budget', '9000', '--pieces', 'whole')).not.toMatch(/EXIT:|STORE:/);
-    expect(body(exported('back.md'))).toBe(body(full));
+    expect(r.back.said).not.toMatch(/EXIT:|STORE:/);
+    expect(body(r.back.text)).toBe(body(r.full));
   });
-  it('a budget that is not a number, a form that does not exist, and a budget with --voice none are refused before anything is written', () => {
-    expect(run(data, proj, 'build', '--name', 'voice', '--piece-budget', 'small')).toMatch(/--piece-budget takes a whole number of words/);
-    expect(run(data, proj, 'build', '--name', 'voice', '--pieces', 'halves')).toMatch(/--pieces takes whole or excerpts/);
-    expect(run(data, proj, 'build', '--name', 'voice', '--voice', 'none', '--piece-budget', '100')).toMatch(/--voice none serves none of your pieces/);
-    expect(body(exported('still.md'))).toBe(body(full));
+  it('a value that is not one, a flag with no value, a budget beside --voice none or --class: refused before anything is written', () => {
+    expect(r.refusals[0]).toMatch(/--piece-budget takes a whole number of words .* or default; got "small"/);
+    expect(r.refusals[1]).toMatch(/--pieces takes whole or excerpts/);
+    expect(r.refusals[2]).toMatch(/--voice none serves none of your pieces/);
+    expect(r.refusals[3]).toMatch(/--piece-budget needs a value\./);
+    expect(r.refusals[4]).toMatch(/--class on a built skill changes its class without rebuilding it, so --piece-budget and --pieces would be ignored/);
+    // `atelier new` on a run that already built its skill has nothing left to build: the flags are refused, not dropped
+    expect(r.refusals[5]).toMatch(/this run has already built its skill, so --piece-budget and --pieces would be ignored here\. Rebuild it with them: atelier build --name voice/);
+    expect(body(r.afterRefusals)).toBe(body(r.full));
   });
   it('a budget with no pieces to choose from is refused, never ignored', () => {
     // The folder the skill was built from is gone: there is nothing to choose again from, and the build says so.
-    renameSync(dir, `${dir}-away`);
-    try { expect(run(data, proj, 'build', '--name', 'voice', '--piece-budget', '500')).toMatch(/--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here/); }
-    finally { renameSync(`${dir}-away`, dir); }
-    expect(body(exported('unmoved.md'))).toBe(body(full));
+    expect(r.moved).toMatch(/--piece-budget and --pieces choose from the pieces this skill was built from, and fewer than three can be read here/);
+    expect(body(r.afterMoved)).toBe(body(r.full));
   });
   it('from each arm\'s answers to a selection: the rows are built by a sealed script, not by hand', () => {
     // Two arms of this skill as exported above, three tasks, two answers each, written as `run.mjs` writes them: every
@@ -583,10 +710,13 @@ describe('through the binary: a skill built without asking is unchanged, and the
     const work = join(proj, 'ablation'); mkdirSync(work, { recursive: true });
     const clean = 'We decided first, and explained after. The reasoning follows the decision, and it is short.';
     const breaks = 'Let us delve into the rich tapestry of this ever-evolving landscape. It\'s not a tool, it\'s a movement. Here\'s the thing: here\'s why. Here\'s how.';
-    const answers = (text: (task: number, trial: number) => string): string => jsonl([1, 2].flatMap((trial) => [0, 1, 2].map((t) => ({ case_id: `t${t}`, trial, condition: 'candidate', runner: 'compare', response: text(t, trial), cost_usd: 0.01 }))));
+    // What the runner records of the skill it sent: the sha256 of the export with its front matter stripped.
+    const sent = (file: string): string => createHash('sha256').update(readFileSync(out(file), 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, '')).digest('hex');
+    const answers = (skill: string, text: (task: number, trial: number) => string, more: object = {}): string => jsonl([1, 2].flatMap((trial) => [0, 1, 2].map((t) => ({ case_id: `t${t}`, trial, condition: 'candidate', runner: 'compare',
+      response: text(t, trial), cost_usd: 0.01, model: 'm', max_tokens: 4000, placement: 'system', tasks_sha256: 'tasks', skill_sha256: sent(skill), ...more }))));
     writeFileSync(join(work, 'tasks.jsonl'), jsonl([0, 1, 2].map((t) => ({ id: `t${t}`, prompt: `Write about decision ${t}.` }))));
-    writeFileSync(join(work, 'full.jsonl'), answers(() => clean));
-    writeFileSync(join(work, 'lean.jsonl'), answers((t) => (t === 0 ? breaks : clean)));
+    writeFileSync(join(work, 'full.jsonl'), answers('full.md', () => clean));
+    writeFileSync(join(work, 'lean.jsonl'), answers('b1500.md', (t) => (t === 0 ? breaks : clean)));
     writeFileSync(join(work, 'rubric.json'), JSON.stringify({ name: 'r', scale: [1, 10], dimensions: [{ name: 'Directness', question: '?' }, { name: 'Rhythm', question: '?' }] }));
     const plan = (more: object = {}, domain: object = {}): string => {
       writeFileSync(join(work, 'plan.json'), JSON.stringify({ reference: 'full', arms: ['lean-1500'], defaultable: ['lean-1500'], margins: { rules: 0.05, quality: 1 }, minTasks: 2, ceiling: 0.85, trials: 2, ...more,
@@ -619,17 +749,50 @@ describe('through the binary: a skill built without asking is unchanged, and the
     expect(chosen.code, chosen.out).toBe(0);
     expect(chosen.out).toMatch(/blog · lean-1500 · rules: breaks a required rule in 2 of 6 outputs against 0 for the reference: 2 more, where 0 are allowed/);
     expect(chosen.out).toMatch(/^NONE SELECTED/m);
+    const merge = (p: string, to = 'out'): { code: number; out: string } => script('efficiency-rows.mjs', '--plan', p, '--stage', 'merge', '--out', join(work, to));
+    // A JUDGE'S FILE SHORT OF ANSWERS IS REFUSED, AND A RUN THAT STOPS LEAVES NO OLDER RESULT TO READ.
+    writeFileSync(join(work, 'judged-1.jsonl'), jsonl(forJudge.filter((x) => x.case_id !== 't0').map((x) => ({ case_id: x.case_id, trial: x.trial, condition: x.condition, Directness: 8, Rhythm: 7, notes: '', pass: '1' }))));
+    const short = script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'rows', '--out', join(work, 'out'));
+    expect(short.code).toBe(2);
+    expect(short.out).toMatch(/blog judged-1\.jsonl: 4 of 12 answers have no score \(first: t0 1 full\)/);
+    expect(existsSync(join(work, 'out', 'ablation.json'))).toBe(false);
+    expect(script('efficiency-select.mjs', '--config', join(work, 'out', 'ablation.json'))).toMatchObject({ code: 2 });
     // an answer missing for one arm stops the run, with what to do
-    writeFileSync(join(work, 'lean.jsonl'), answers(() => clean).split('\n').slice(1).join('\n'));
-    expect(script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', join(work, 'out')).out).toMatch(/t0 trial 1 is missing for "lean-1500"\. Run it, or exclude the task for every arm/);
-    writeFileSync(join(work, 'lean.jsonl'), answers(() => clean));
-    // two arms with one export must be declared, and are then read once, on one set of answers
+    writeFileSync(join(work, 'lean.jsonl'), answers('b1500.md', () => clean).split('\n').slice(1).join('\n'));
+    expect(merge(plan()).out).toMatch(/t0 trial 1 is missing for "lean-1500"\. Run it, or exclude the task for every arm/);
+    // ANSWERS BELONG TO THE SKILL THAT WROTE THEM: two files swapped in the plan, or written with another setting, are refused
+    writeFileSync(join(work, 'lean.jsonl'), answers('b1500.md', () => clean));
+    expect(merge(plan({}, { responses: { full: 'lean.jsonl', 'lean-1500': 'full.jsonl' } })).out).toMatch(/t0 trial 1 was written with another skill than the export filed under "full"/);
+    writeFileSync(join(work, 'lean.jsonl'), answers('b1500.md', () => clean, { max_tokens: 8000 }));
+    expect(merge(plan()).out).toMatch(/has max_tokens 8000 where another answer of this domain has 4000/);
+    writeFileSync(join(work, 'lean.jsonl'), answers('b1500.md', () => clean));
+    // the output directory is the scripts' own: not the plan's, not a parent of it, and holding no file the plan names
+    expect(script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', work).out).toMatch(/--out must be a directory of its own/);
+    expect(script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', proj).out).toMatch(/--out must be a directory of its own/);
+    mkdirSync(join(work, 'kept'), { recursive: true });
+    writeFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'paid for\n');
+    expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['kept/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/kept\/blog-quality-1\.jsonl is inside --out, which this script clears and rewrites/);
+    expect(readFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'utf8')).toBe('paid for\n');
+    // answers merged again leave no rows of the answers they replace
+    writeFileSync(join(work, 'out', 'ablation.json'), '{}'); writeFileSync(join(work, 'out', 'blog-rules.jsonl'), '');
+    expect(merge(plan()).code).toBe(0);
+    expect(existsSync(join(work, 'out', 'ablation.json')) || existsSync(join(work, 'out', 'blog-rules.jsonl'))).toBe(false);
+    // two arms that serve one text must be declared, and are then read once, on one set of answers
     const twin = { exports: { full: out('full.md'), 'lean-1500': out('full.md') } };
-    expect(script('efficiency-rows.mjs', '--plan', plan({}, twin), '--stage', 'merge', '--out', join(work, 'out')).out).toMatch(/the exports of "full" and "lean-1500" are byte-identical\. Declare it/);
-    const declared = script('efficiency-rows.mjs', '--plan', plan({}, { ...twin, sameAs: { 'lean-1500': 'full' }, responses: { full: 'full.jsonl' } }), '--stage', 'merge', '--out', join(work, 'out2'));
+    expect(merge(plan({}, twin)).out).toMatch(/the exports of "full" and "lean-1500" serve the same text\. Declare it/);
+    expect(merge(plan({}, { ...twin, sameAs: { 'lean-1500': 'full', full: 'lean-1500' } })).out).toMatch(/"sameAs" goes round in a circle/);
+    const one = plan({}, { ...twin, sameAs: { 'lean-1500': 'full' }, responses: { full: 'full.jsonl' } });
+    const declared = merge(one, 'out2');
     expect(declared.code, declared.out).toBe(0);
-    const once = readFileSync(join(work, 'out2', 'blog-responses.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { condition: string; response: string });
-    expect(once.filter((r) => r.condition === 'lean-1500').map((r) => r.response)).toEqual(once.filter((r) => r.condition === 'full').map((r) => r.response));
+    // judged once: only the skill actually served goes to the judge, and its verdicts and scores are copied to the other label
+    const once = readFileSync(join(work, 'out2', 'blog-responses.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { case_id: string; trial: number; condition: string });
+    expect([...new Set(once.map((x) => x.condition))]).toEqual(['full']);
+    writeFileSync(join(work, 'judged-1.jsonl'), jsonl(once.map((x) => ({ case_id: x.case_id, trial: x.trial, condition: x.condition, Directness: 8, Rhythm: 7, notes: '', pass: '1' }))));
+    expect(script('efficiency-rows.mjs', '--plan', one, '--stage', 'rows', '--out', join(work, 'out2')).code).toBe(0);
+    const copied = readFileSync(join(work, 'out2', 'blog-quality-1.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { condition: string; score: number });
+    expect(copied.filter((x) => x.condition === 'lean-1500').map((x) => x.score)).toEqual(copied.filter((x) => x.condition === 'full').map((x) => x.score));
+    // and a skill that is the reference under another name is not smaller, so it is nothing to select
+    expect(script('efficiency-select.mjs', '--config', join(work, 'out2', 'ablation.json')).out).toMatch(/^NONE SELECTED/m);
   });
   it('a run records where its cost went and what it sent: every call the backend served is on a line, the request\'s reading included', async () => {
     // With a context judge on, the request is read before any draft is written. The ledger starts where the run's
@@ -651,5 +814,40 @@ describe('through the binary: a skill built without asking is unchanged, and the
     expect(report).toMatch(/cost and size\n(?: {4}.*\n)*? {4}writing: \$\d+\.\d{4} · \d+ calls?/);
     expect(report).toMatch(/sent to the writer: [\d,]+ words of skill · [\d,]+ added for this request \(your nearest passages, notes\) · [\d,]+ of request/);
     expect(report).not.toMatch(/not attributed|counted in the lines and not in the total/);
+  });
+});
+
+describe('through the binary: a rebuild never undoes an amendment', () => {
+  // Its own store and project: an amendment changes the skill's standard, which no other test here should see.
+  const data = mkdtempSync(join(tmpdir(), 'atelier-amend-data-'));
+  const proj = mkdtempSync(join(tmpdir(), 'atelier-amend-proj-'));
+  const dir = join(proj, 'posts');
+  mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
+  const build = (...flags: string[]): string => run(data, proj, 'build', ...flags);
+  beforeAll(() => {
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
+  }, 300_000);
+
+  it('the standard as the owner amended it is the one compiled, under the skill\'s name and under another', () => {
+    const card = (name = 'voice'): { standardVersion: string; rules: { required: number } } => JSON.parse(run(data, proj, 'report', '--skill', name, '--json')) as { standardVersion: string; rules: { required: number } };
+    const before = card();
+    const amended = run(data, proj, 'amend', '--skill', 'voice', '--rule', 'm1', '--materiality', 'PREFERRED', '--reason', 'a preference, not a requirement');
+    const minted = /StandardVersion ([0-9a-f]+) supersedes ([0-9a-f]+)/.exec(amended);
+    expect(minted, amended).not.toBeNull();
+    expect(minted?.[2]).toBe(before.standardVersion);
+    expect(card().rules.required).toBe(before.rules.required - 1);
+    // the command an export recommends for a smaller skill, on a run that closed the standard before the amendment
+    const rebuilt = build('--name', 'voice', '--piece-budget', '1500');
+    expect(rebuilt).toContain(`Compiling the standard as you amended it (${minted?.[1]}), which supersedes the one this run closed (${minted?.[2]}).`);
+    expect(card().standardVersion).toBe(minted?.[1]);
+    expect(card().rules.required).toBe(before.rules.required - 1);
+    // and a plain rebuild keeps it too
+    expect(build('--name', 'voice')).not.toMatch(/EXIT:/);
+    expect(card().standardVersion).toBe(minted?.[1]);
+    // the same run built under a second name is the same owner's standard, amendments included
+    expect(build('--name', 'other')).toContain(`Compiling the standard as you amended it (${minted?.[1]})`);
+    expect(card('other').standardVersion).toBe(minted?.[1]);
   });
 });

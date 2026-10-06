@@ -108,7 +108,7 @@ about seven times the plug-in.
 |---|---|---|
 | Every skill states its size, stored and exported, with the export by part | Built | On the one skill measured part by part, 9,201 of 13,173 words are the author's whole pieces, set by one budget |
 | Every run says where its cost went, by purpose | Built | Two drafts explain at most two of the seven times; the rest is unmeasured until real runs report it |
-| A word budget for the author's pieces, and excerpts from more pieces in place of a few whole ones | Built, opt-in | [One study, drafted](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md): four smaller configurations of each of two writing skills against today's. The smaller of two (none of the author's pieces, or whole pieces within 3,000 words) becomes the default if it is rejected in neither domain; excerpts are measured for the next version. If nothing is selected the size stays, and the study will not have shown that the size buys anything: its error rates are large both ways ([decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)) |
+| A word budget for the author's pieces, and excerpts from more pieces in place of a few whole ones | Built, opt-in | [One study, drafted](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md): four smaller configurations of each of two writing skills against today's, read on the author's rules and on quality. The smaller of two (none of the author's pieces, or whole pieces within 3,000 words) becomes the default if it is rejected in neither domain; excerpts are measured for the next version. If nothing is selected the size stays, and the study will not have shown that the size buys anything: its error rates are large both ways ([decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)) |
 | One draft first and a second only on evidence; a small model first and a strong one only on refusal | 2.0 | Each changes how a run spends, so each waits for the cost breakdown from real runs |
 | Sending only the rules that apply to a request | 2.0 | On the one skill measured, the rules and their examples are a fifth of the export, and a wrong "does not apply" silently drops a rule the owner required |
 
@@ -119,7 +119,7 @@ standard". Today a build proposes twenty to forty-odd rules and prints its inter
 
 | Solution | State | The evidence, or the test that decides |
 |---|---|---|
-| Install from npm, and one command that connects the agents in a project | Built | Ships with the next tagged release |
+| Install from npm, and one command that connects the agents in a project | Built, not yet published to npm | `atelier setup` works from a source install today; the package is published with the next tagged release |
 | A review that shows the few rules that decide most outputs first, and one line of output with the detail behind `atelier report` | 2.0, first | Time from a folder of examples to a first accepted output |
 | A check on pull requests: `atelier verify` on docs, release notes and changelogs | 2.0 | A broken REQUIRED rule fails the check, and the run's panel is the comment |
 | Ready-made standards from authors who agreed to be listed; one standard shared by a team and checked in CI | 2.0 | Whether a team keeps a standard in its repository |

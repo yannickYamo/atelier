@@ -25,21 +25,30 @@ it was ([decision 0014](docs/decisions/0014-the-smallest-realization-that-holds-
 
 ### Added: how much of your own writing a skill serves is yours to set (opt-in)
 
-- **`atelier build --piece-budget <words>`** (and on `atelier new`) chooses your pieces again within that many words
-  of prose. `0` serves none of them and keeps the persona and your usual length. Choosing again reads the pieces the
-  skill was built from and calls no model. For a skill that answers, it is the budget of the examples shown: one of
-  each kind of request whatever the budget, none at 0.
-- **`--pieces excerpts`** shows each chosen piece by its opening and a passage from its middle, about 250 words each,
-  in your order and your words, with `[…]` where text is left out; a paragraph longer than a passage is taken apart
-  at its line breaks, then its sentences, and code is never cut. The same budget reaches more of your pieces, and is
-  a ceiling. The skill says they are passages. For a skill that writes: answers are short and shown whole.
+- **`atelier build --piece-budget <words>`** chooses your pieces again with that many words as a ceiling on what the
+  export counts for them: each piece with the line that opens its file, in any script, code and tables included.
+  `0` serves none of them and keeps the persona and your usual length; `default` gives the budget up, and with
+  `--pieces whole` is the default choice again.
+  Choosing again reads the pieces the skill was built from and calls no model. For a skill that answers, it is the
+  budget of the examples shown: one of each kind of request whatever the budget, none at 0. On `atelier new`, give
+  it on the call that carries `--accept`.
+- **`--pieces excerpts`** shows each chosen piece by its opening and a passage from its middle, about 250 words each.
+  Each passage is one unbroken stretch of your text, with `[…]` where text is left out; a paragraph longer than a
+  passage is taken apart at its line breaks, then its sentence ends, and code is never cut. The same budget reaches
+  more of your pieces. A piece too short to cut is served whole, and each file says which it holds. For a skill that
+  writes: answers are short and shown whole.
 - **`atelier export --no-index`** leaves out the list that names each example file: an export has already inlined
   those files, each with its own condition.
-- A build keeps the budget and the form until you give others. Without these options a build chooses exactly as
-  before.
+- A build keeps the budget and the form until you give others, `--voice auto` included; `--voice none` gives them up
+  with the voice. Without these options a
+  build chooses exactly as before: the default choice is unchanged, down to what it counts.
 
 ### Fixed
 
+- **A rebuild could undo an amendment.** `atelier build` compiled the standard its run had closed. If a rule had been
+  amended, confirmed or added since, the rebuild put the earlier rules back and said nothing. A rebuild now compiles
+  the standard as amended, under the skill's name or another, and says so. A standard ratified afresh under the
+  same name replaces the old one, as before.
 - **A run's cost could leave out the reading of the request.** What a run spent was counted from its first draft,
   and the request is read before that. When the claim reader, on a meter of its own, cost more than those first
   calls, they were in no figure. The total and the lines by purpose are now both counted from where the run's budget
@@ -246,7 +255,8 @@ Defects found by an outside review of the build, each with what it broke.
   `bench/compare/efficiency-rows.mjs` builds the rows (each arm's answers under its own label, a broken rule by
   `atelier verify` offline, the score as the sum of the rubric's dimensions) and `bench/compare/efficiency-select.mjs`
   reads them: each domain on its own, the rule count in whole answers against a tolerance of five in a hundred, the
-  score against one point of fifty, voice only where a reader was qualified. Rows it does not expect stop the run. It
+  score against one point of fifty. Voice is not read by a model in it. Rows it does not expect stop the run: an
+  unknown label, a judge's file that does not cover the answers merged, answers filed under another skill's export. It
   selects a configuration and states its error rates, which are large both ways at this size; the selected arm is
   measured again beside today's skill in the last development round, with today's prepared as the fallback.
 
