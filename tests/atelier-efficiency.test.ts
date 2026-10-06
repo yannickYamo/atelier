@@ -894,7 +894,7 @@ describe('through the binary: a skill built without asking is unchanged, and the
     expect(script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', proj).out).toMatch(/--out must be a directory of its own/);
     mkdirSync(join(work, 'kept'), { recursive: true });
     writeFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'paid for\n');
-    expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['kept/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/kept\/blog-quality-1\.jsonl is inside --out, which this script clears and rewrites/);
+    expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['kept/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/kept\/blog-quality-1\.jsonl is inside --out(?: \(through a link[^)]*\))?, which this script clears and rewrites/);
     expect(readFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'utf8')).toBe('paid for\n');
     // A LINK TO THE PLAN'S FOLDER IS THAT FOLDER. An answers file there under a name this script clears (the tester's
     // case, with another script) would be removed before it was read: refused in both stages, every input byte for byte.
@@ -911,7 +911,7 @@ describe('through the binary: a skill built without asking is unchanged, and the
     }
     // a link to a folder inside --out makes the file reached through it an input inside --out
     execFileSync('ln', ['-s', join(work, 'kept'), join(work, 'shelf')]);
-    expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['shelf/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/shelf\/blog-quality-1\.jsonl is inside --out, which this script clears and rewrites/);
+    expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['shelf/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/shelf\/blog-quality-1\.jsonl is inside --out(?: \(through a link[^)]*\))?, which this script clears and rewrites/);
     expect(readFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'utf8')).toBe('paid for\n');
     plan();
     // answers merged again leave no rows of the answers they replace

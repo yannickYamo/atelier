@@ -738,7 +738,7 @@ describe('the axis files are built from the raw readings by a rule fixed before 
     writeFileSync(join(dir, 'in', 'axes2.json'), files['axes.json'].replace('"verify":"verify.jsonl"', '"verify":"kept/verify.jsonl"'));
     const through = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes2.json'), '--out', join(dir, 'axes'));
     expect(through.code, through.out).toBe(2);
-    expect(through.out).toMatch(/kept\/verify\.jsonl is inside --out, which this script clears and rewrites/);
+    expect(through.out).toMatch(/kept\/verify\.jsonl is inside --out(?: \(through a link[^)]*\))?, which this script clears and rewrites/);
     expect(readFileSync(join(dir, 'axes', 'verify.jsonl'), 'utf8')).toBe(files['verify.jsonl']);
     // an output name that is a link to an input kept elsewhere would be written through to it
     mkdirSync(join(dir, 'axes3'));
