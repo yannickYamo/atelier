@@ -3,7 +3,7 @@
 // A judge's mean hides what went wrong and moves with the judge. Round 1 of development read every loss and found
 // four ways an answer fails a coding request. Each is a yes or no on every answer, by code where code can tell and by
 // a small model otherwise; a reader is qualified on planted answers before its checks count
-// (bench/compare/judge-qualification.mjs, 0.85 of each class).
+// (bench/compare/modes-qualification.mjs reads this script's rows for them: 0.85 of each class, 20 of each).
 //
 //   F1 withholds the deliverable   the task asks for code, a command or a fix, and the answer holds none
 //   F2 refuses without a safe path the answer declines, and gives no command or step to take instead

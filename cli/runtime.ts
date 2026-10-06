@@ -625,7 +625,9 @@ export interface ProposalMeta {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
-  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean;
+    /** the limit was moved to where the author's own pieces are; the counts are the held-out pieces against the limit before it moved */
+    readonly fitted?: boolean } | null;
   /**
    * for a measured rule: of the author's own pieces discovery could use (read and held out, never the reserve), how
    * many there are and which break the rule. What `suggestAll` holds a REQUIRED suggestion to.

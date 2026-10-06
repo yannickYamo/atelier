@@ -31,7 +31,7 @@ comparator never fails on an axis there is nothing to reduce and the axis is not
 |---|---|---|
 | Quality | an answer with a blocker both judge reads agree on, or a named failure mode | the qualified judge, twice; `bench/compare/failure-modes.mjs` |
 | Rule anchor | an answer breaking a REQUIRED rule that has a measurement | `atelier verify` on every answer of both arms; a person audits a fifth |
-| Repeatability | a task whose two outputs differ on pass or fail, or on any REQUIRED rule's verdict; under strict delivery, also delivered against refused | counted |
+| Repeatability | a task whose two outputs differ on pass or fail, or on any REQUIRED rule's verdict, or, under strict delivery, one delivered and one refused whatever else they share | counted by `axes.mjs` from the rows `verify-rows.mjs` writes |
 | Voice | a task where most of three readers pick the other arm's answer as closer to the owner's examples | three people, blind, sides seeded, on 100 of the tasks |
 
 The owner's rules were never shown to i-have-adhd, so the rule-anchor sentence says so: it reads "held the owner's
@@ -67,6 +67,7 @@ node bench/compare/run.mjs --tasks tasks.jsonl --arm skill:<export>.md --conditi
 cat answers/bare.jsonl answers/i-have-adhd.jsonl answers/atelier.jsonl > responses.jsonl
 node bench/compare/failure-modes.mjs --tasks tasks.jsonl --responses responses.jsonl --out modes.jsonl --cap <cap>
 node bench/compare/verify-rows.mjs --responses responses.jsonl --skill <skill> --data <ATELIER_DATA> --out verify.jsonl
+#    (each row says whether the answer was delivered; `--out` for this and for the axes is a path of its own, never one of the inputs)
 
 # 4. a person rules on each answer whose two judge reads disagree on the blocker (resolutions.jsonl), then the axes
 node bench/compare/closing-quality.mjs --config closing-a.json --disagreements disagreements.jsonl
@@ -136,7 +137,11 @@ causes are fixed in how a skill is built (never for one task), and the loop repe
 **The readiness line, fixed by the owner on 2026-10-06:** every counted axis (quality, rule anchor, repeatability)
 has at least 20% fewer failures than i-have-adhd, with the lower bound above zero, read on development tasks that no
 earlier reading used. Quality alone is not enough: a claim sealed on it could still miss on an axis that decides it.
-Voice is read by people in the sealed test and is not part of the readiness line.
+Voice is read by people in the sealed test and is not part of the readiness line: readiness is a weaker gate than
+the bar, on purpose, and a claim that is ready can still miss on voice.
+
+**When this is sealed:** after the last development round has named the commit and the arm, and before the first
+test task is written.
 
 The 60 held-out development tasks of the second round were read under an earlier definition of a quality failure.
 They are evidence, and they are not the readiness reading.
@@ -185,7 +190,10 @@ comparator, and a second one decided nothing the bar asks. Claim A has one verdi
 The benchmark's own judge, qualified first with `bench/compare/judge-qualification.mjs` on 20 planted good and 20
 planted bad answers to tasks outside the test split (at least 0.85 of each called right, threshold sealed with the
 labels). Two outputs per task; all arms of a case judged in one session, each session judged twice with labels
-reshuffled. The failure-mode reader is qualified the same way before its rows are used. A
+reshuffled. The failure-mode reader is qualified before its rows are used, with its own script, because its rows are yes or no
+and carry no scores: `node bench/compare/modes-qualification.mjs --modes modes.jsonl --labels labels.jsonl`, labels
+`{case_id, condition, label: "good"|"bad", mode?}`, at least 20 of each and 0.85 of each called right. A labelled
+answer the reader could not read leaves it UNRESOLVED, not qualified. A
 second judge from another model family reads the planted set and a quarter of the test; if the two agree on fewer
 than 0.80 of the planted answers, the claim is UNRESOLVED.
 
@@ -226,13 +234,13 @@ P4 are read on that skill's own judge for that reason. A margin of 0.20 on a fiv
 
 ## What changed before sealing
 
-- One primary arm (the plug-in). The strict runtime moved to claim B as a reported measure: it refuses some
-  requests, a refusal is a failed answer, and it could not pass a quality bar by construction.
+- One primary arm. (An earlier draft fixed it as the plug-in and moved the strict runtime to claim B; it is now
+  chosen between the two on the working development tasks, as the axes section says.)
 - The hand-written skill is i-have-adhd as published, and as published with the examples pasted, since nobody will
   rewrite a public skill to another owner's rules.
-- The bar against the hand-written skill is "scores higher", at the owner's word: a tie fails. Because of that the
-  claim is sealed only after a readiness check on development tasks, and the tasks went from 100 to 300.
-- Blockers and requested depth became guards.
+- The claim is sealed only after a readiness check on development tasks, and the tasks went from 100 to 300.
+  ("Scores higher, a tie fails" was the owner's first wording; the signed bar of 20% fewer failures replaced it.)
+- Blockers and requested depth are reported, and decide nothing.
 - The Atelier configuration (plug-in or strict runtime) is chosen on the working development tasks, by one rule.
 - 2026-10-06, from an outside tester's read of this draft: the verdict comes from the four axes alone and a missing
   or short axis is UNRESOLVED; the axis files are built by a sealed script; the strongest-baseline endpoint is

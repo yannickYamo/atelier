@@ -10,14 +10,21 @@
 //   node bench/compare/efficiency-rows.mjs --plan <plan.json> --stage merge --out <dir>
 //       one file per domain, <dir>/<domain>-responses.jsonl, every arm's answers under its own label, for the judge
 //   node bench/compare/efficiency-rows.mjs --plan <plan.json> --stage rows  --out <dir>
-//       <dir>/<domain>-sizes.json, -rules.jsonl, -quality-<n>.jsonl, and <dir>/ablation.json for efficiency-select.mjs
+//       <dir>/<domain>-sizes.json, -exports.json, -rules.jsonl, -quality-<n>.jsonl, and <dir>/ablation.json for
+//       efficiency-select.mjs
 //
 // <dir> is the scripts' own: it must not hold the plan or any file the plan names, and each stage first removes what
 // an earlier run wrote there (the merge stage removes the rows stage's files too), so a run that stops, or answers
-// merged again, never leave an older, complete result for the next command to read.
+// merged again, never leave an older, complete result for the next command to read. The places are compared as real
+// paths, symlinks resolved: a <dir> that is a link to the plan's folder is that folder, and is refused as it.
 //
 // plan.json (every path relative to the plan):
 //   reference, arms, defaultable, margins, minTasks, ceiling   copied into ablation.json as sealed
+//   margins.rulesPerOutput   required here, a number of rules per output, 0 or more: every rules row this script
+//                            writes lists the rules broken, and efficiency-select.mjs then needs this tolerance. It is
+//                            asked for at the merge stage, before the judge is paid, and copied through with `margins`
+//   plannedTasks  (optional) the whole number of tasks per domain the study was planned at, copied into ablation.json.
+//                 `minTasks` under 90% of it (rounded down) is refused: a study planned at N is not read on far fewer
 //   trials       outputs per task per arm, numbered 1 to n
 //   domains      [{ name,                                letters, digits and hyphens: it names the files written
 //                   skill, data,                         the built skill and its ATELIER_DATA, for `atelier verify`
@@ -41,6 +48,14 @@
 // checked against the export filed under its label, and the settings must be one and the same across every arm of a
 // domain: two response files swapped in the plan would otherwise hand each arm the other's verdict.
 //
+// EVERY ARM OF A DOMAIN IS BUILT FROM ONE STANDARD (decision 0014: no standard may move between arms). An export
+// names the standard it was compiled from, on the line the renderer writes: "This is a compiled output; the authority
+// record is StandardVersion <hash>." The hash is read from each arm's export. An export without the line is refused,
+// and so is a domain whose arms name different hashes: arms of two standards differ in what they are held to, not
+// only in size, and the comparison would credit the size with it. The hash is written per domain into
+// <domain>-exports.json, {<label>: sha256 of the text served, ..., "standard": <hash>}, and printed on stdout, one
+// line a domain. An arm cannot be labelled "standard", which is that file's own key.
+//
 // TWO ARMS THAT SERVE THE SAME TEXT ARE ONE SKILL, compared with front matter stripped, as the model receives it.
 // Answers written twice for one skill would differ by chance and give its two labels different verdicts, so such
 // arms must be declared (`sameAs`) and are then read once: one set of answers, judged once, its verdicts and scores
@@ -54,9 +69,9 @@
 // most answers of every arm alike and would drown the reading. An answer verify cannot check stops the run, naming it.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readJsonl, writeJsonl, sha256, opt, die, stripFrontmatter } from './lib.mjs';
+import { readJsonl, writeJsonl, sha256, opt, die, stripFrontmatter, realPath, outputClash } from './lib.mjs';
 
 const USAGE = 'usage: efficiency-rows.mjs --plan <plan.json> --stage merge|rows --out <dir>';
 const args = process.argv.slice(2);
@@ -66,8 +81,10 @@ if (!['merge', 'rows'].includes(stage) || !outArg) die(USAGE);
 const CLI = fileURLToPath(new URL('../../dist/cli/atelier.mjs', import.meta.url));
 if (!existsSync(CLI)) die(`${CLI} is missing: run \`npm run build\` first`);
 const base = dirname(resolve(planPath)); const outDir = resolve(outArg);
-const inside = (dir, f) => f === dir || f.startsWith(dir + sep);
-if (inside(outDir, base)) die('--out must be a directory of its own: this script clears and rewrites what it finds there, and the plan\'s inputs are beside the plan');
+// Real paths on both sides: an --out that is a link to the plan's folder is that folder (see the header).
+const realOut = realPath(outDir);
+const through = realOut === outDir ? '' : ` (through a link, --out is ${realOut})`;
+if (outputClash({ dir: outDir, inputs: [base, resolve(planPath)] })?.how === 'holds') die(`--out must be a directory of its own${through}: this script clears and rewrites what it finds there, and the plan's inputs are beside the plan. Name a new directory, for instance one inside the plan's.`);
 const at = (f) => resolve(base, f);
 const read = (what, f) => { try { return readFileSync(at(f), 'utf8'); } catch (e) { return die(`${what}: cannot read ${f} (${e.code ?? e.message})`); } };
 const rowsOf = (what, f) => { try { return readJsonl(at(f)); } catch (e) { return die(`${what}: ${f} is not readable as one JSON object a line (${e.message.split('\n')[0]})`); } };
@@ -82,6 +99,15 @@ if (!Number.isInteger(plan.trials) || plan.trials < 1) die('plan.trials must be 
 if (!Array.isArray(plan.arms) || !plan.arms.length || plan.arms.some((a) => typeof a !== 'string') || new Set(plan.arms).size !== plan.arms.length || plan.arms.includes(plan.reference)) die('plan.arms must list each arm once, and not the reference');
 if (!Array.isArray(plan.domains) || !plan.domains.length) die('plan.domains must list at least one domain');
 const labels = [plan.reference, ...plan.arms];
+if (labels.includes('standard')) die('an arm cannot be labelled "standard": <domain>-exports.json keeps the standard\'s hash under that key. Give the arm another label.');
+// THE TOLERANCES THE RULE NEEDS ARE ASKED FOR NOW, at the merge stage, before a judge is paid for rows it could not read.
+const perOutput = plan.margins?.rulesPerOutput;
+if (perOutput === undefined) die('plan.margins needs "rulesPerOutput": how many more required rules per output than the reference an arm may break (for instance 0.25). The rows written here list the rules each answer breaks, and efficiency-select.mjs refuses them without this tolerance. Seal it with the other margins.');
+if (typeof perOutput !== 'number' || !Number.isFinite(perOutput) || perOutput < 0) die(`plan.margins.rulesPerOutput is ${JSON.stringify(perOutput)}: it must be a number of rules per output, 0 or more`);
+if (plan.plannedTasks !== undefined) {
+  if (!Number.isInteger(plan.plannedTasks) || plan.plannedTasks < 1) die(`plan.plannedTasks is ${JSON.stringify(plan.plannedTasks)}: it must be a whole number of tasks, at least 1`);
+  if (Number.isInteger(plan.minTasks) && plan.minTasks < Math.floor((plan.plannedTasks * 9) / 10)) die(`plan.minTasks is ${plan.minTasks} and the study was planned at ${plan.plannedTasks} tasks a domain: a study planned at ${plan.plannedTasks} must not be read on far fewer. Set minTasks to at least ${Math.floor((plan.plannedTasks * 9) / 10)} (90% of the plan, rounded down), or correct plannedTasks.`);
+}
 const names = new Set();
 for (const d of plan.domains) {
   if (typeof d?.name !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(d.name)) die('each domain needs a name of lower-case letters, digits and hyphens: it names the files written');
@@ -99,9 +125,17 @@ for (const d of plan.domains) {
 // NO INPUT OF THE PLAN MAY SIT IN --out. This script removes what an earlier run wrote there before it writes again,
 // and it writes files named after the domain: a judge's file a tester had put there under such a name would be
 // deleted before it was read, with the judging already paid for.
+const outputsOf = (name) => [`${name}-responses.jsonl`, `${name}-sizes.json`, `${name}-exports.json`, `${name}-rules.jsonl`, `${name}-voice.jsonl`, ...Array.from({ length: 9 }, (_, i) => `${name}-quality-${i + 1}.jsonl`)];
+const written = [...plan.domains.flatMap((d) => outputsOf(d.name)), 'ablation.json', 'result.json'].map((f) => join(outDir, f));
 for (const d of plan.domains) {
   const inputs = [d.tasks, ...Object.values(d.exports), ...Object.values(d.responses), ...(d.judged ?? []), d.rubric, d.voice].filter((f) => typeof f === 'string');
-  for (const f of inputs) if (inside(outDir, at(f))) die(`${d.name}: ${f} is inside --out, which this script clears and rewrites. Keep the plan's files outside it.`);
+  for (const f of inputs) {
+    const clash = outputClash({ dir: outDir, files: written, inputs: [at(f)] });
+    if (clash?.how === 'file') die(`${d.name}: ${f} is ${clash.real}, which is also one of the files this script writes in --out${through}. Nothing was written. Name another --out.`);
+    if (clash) die(`${d.name}: ${f} is inside --out${through}, which this script clears and rewrites. Keep the plan's files outside it, or name another --out. Nothing was written.`);
+  }
+  // The skill's ATELIER_DATA is an input too: --out is not put inside it, nor it inside --out.
+  if (outputClash({ dir: outDir, inputs: [at(d.data)] })) die(`${d.name}: --out${through} and the skill's data directory ${d.data} are one inside the other. This script clears and rewrites --out: name a directory outside the data.`);
 }
 
 /** Each label's root: itself, or the earlier arm it is declared the same as. Chains are followed; a cycle is refused. */
@@ -124,6 +158,16 @@ function answersOf(d) {
   const root = rootsOf(d);
   // The text each arm serves a model: the export with its front matter stripped, as `run.mjs` strips it.
   const served = new Map(labels.map((l) => [l, sha256(stripFrontmatter(read(`${d.name} export of "${l}"`, d.exports[l] ?? die(`${d.name}: no export for "${l}"`))))]));
+  // ONE STANDARD FOR EVERY ARM: the hash each export names as its authority record.
+  const STANDARD = /^This is a compiled output; the authority record is StandardVersion (\S+)\.[ \t]*\r?$/gm;
+  const standardOf = new Map(labels.map((l) => {
+    const found = [...new Set([...read(`${d.name} export of "${l}"`, d.exports[l]).matchAll(STANDARD)].map((m) => m[1]))];
+    if (!found.length) die(`${d.name}: the export of "${l}" (${d.exports[l]}) has no line "This is a compiled output; the authority record is StandardVersion <hash>.", so the standard it was built from cannot be read. File the export as \`atelier export --out\` wrote it, unedited.`);
+    if (found.length > 1) die(`${d.name}: the export of "${l}" (${d.exports[l]}) names ${found.length} standards (${found.join(', ')}). File the export as \`atelier export --out\` wrote it, unedited.`);
+    return [l, found[0]];
+  }));
+  const standard = standardOf.get(plan.reference);
+  if (labels.some((l) => standardOf.get(l) !== standard)) die(`${d.name}: the arms were not built from one standard (${labels.map((l) => `"${l}": ${standardOf.get(l)}`).join(', ')}). No standard may move between arms: decision 0014. Build every arm from the same approved standard and export it again.`);
   for (const l of labels) if (served.get(l) !== served.get(root.get(l))) die(`${d.name}: "${l}" is declared the same as "${root.get(l)}", and their exports serve different text`);
   for (let i = 0; i < labels.length; i++) for (let j = 0; j < i; j++) {
     const [a, b] = [labels[j], labels[i]];
@@ -151,7 +195,7 @@ function answersOf(d) {
     }
     for (const id of tasks) for (let t = 1; t <= plan.trials; t++) if (!seen.has(`${id}\u0000${t}`)) die(`${d.name} ${file}: ${id} trial ${t} is missing for "${label}". Run it, or exclude the task for every arm ("excluded").`);
   }
-  return { rows, served, root, roots, tasks };
+  return { rows, served, root, roots, tasks, standard };
 }
 
 /** The lines of `atelier verify` one answer breaks, offline, the claim check left out. */
@@ -171,14 +215,15 @@ mkdirSync(outDir, { recursive: true });
 // leave a complete older result for the next command to read. The merge stage removes the rows stage's files too,
 // since rows built from the answers it replaces describe nothing any more.
 for (const d of plan.domains) {
-  const rowsFiles = [`${d.name}-sizes.json`, `${d.name}-exports.json`, `${d.name}-rules.jsonl`, `${d.name}-voice.jsonl`, ...Array.from({ length: 9 }, (_, i) => `${d.name}-quality-${i + 1}.jsonl`)];
-  for (const f of stage === 'merge' ? [`${d.name}-responses.jsonl`, ...rowsFiles] : rowsFiles) rmSync(join(outDir, f), { force: true });
+  for (const f of outputsOf(d.name).filter((x) => stage === 'merge' || x !== `${d.name}-responses.jsonl`)) rmSync(join(outDir, f), { force: true });
 }
 for (const f of ['ablation.json', 'result.json']) rmSync(join(outDir, f), { force: true });
 
-const config = { reference: plan.reference, arms: plan.arms, defaultable: plan.defaultable, margins: plan.margins, minTasks: plan.minTasks, ceiling: plan.ceiling, trials: plan.trials, domains: [] };
+const config = { reference: plan.reference, arms: plan.arms, defaultable: plan.defaultable, margins: plan.margins, minTasks: plan.minTasks, ...(plan.plannedTasks === undefined ? {} : { plannedTasks: plan.plannedTasks }), ceiling: plan.ceiling, trials: plan.trials, domains: [] };
 for (const d of plan.domains) {
-  const { rows, served, root, roots, tasks } = answersOf(d);
+  const { rows, served, root, roots, tasks, standard } = answersOf(d);
+  // On stdout, alone there: the one line of this script a report quotes. Everything else it says is progress, on stderr.
+  console.log(`${d.name}: every arm was built from one standard, StandardVersion ${standard}`);
   if (stage === 'merge') {
     writeJsonl(join(outDir, `${d.name}-responses.jsonl`), rows);
     console.error(`${d.name}: ${rows.length} answers of ${roots.length} skill(s) served (${labels.length} arms), ${tasks.length} tasks, written for the judge`);
@@ -214,13 +259,13 @@ for (const d of plan.domains) {
     return `${d.name}-quality-${i + 1}.jsonl`;
   });
   writeFileSync(join(outDir, `${d.name}-sizes.json`), `${JSON.stringify(sizes, null, 1)}\n`);
-  writeFileSync(join(outDir, `${d.name}-exports.json`), `${JSON.stringify(Object.fromEntries(served), null, 1)}\n`);
+  writeFileSync(join(outDir, `${d.name}-exports.json`), `${JSON.stringify({ ...Object.fromEntries(served), standard }, null, 1)}\n`);
   writeJsonl(join(outDir, `${d.name}-rules.jsonl`), rules);
   // A skill read under two labels has one set of choices too: an alias reads its root's.
   if (d.voice) { const choices = rowsOf(`${d.name} voice`, d.voice).filter((r) => r !== null && typeof r === 'object'); writeJsonl(join(outDir, `${d.name}-voice.jsonl`), plan.arms.flatMap((l) => under(l, choices))); }
   config.domains.push({ name: d.name, sizes: `${d.name}-sizes.json`, rules: `${d.name}-rules.jsonl`, quality, voice: d.voice ? `${d.name}-voice.jsonl` : null, excluded: d.excluded ?? [] });
-  // `broken` is what the rule reads. The count of rules an answer breaks is printed for a person: where nearly every
-  // answer breaks one, it is the only thing left that can tell two arms apart.
+  // The rule reads both: `broken`, in whole outputs, and the rules each answer breaks, as a total held against
+  // `margins.rulesPerOutput`. Where nearly every answer breaks one, the total is what is left to tell two arms apart.
   for (const l of labels) { const mine = rules.filter((r) => r.condition === l); console.error(`${d.name} · ${l}: ${mine.filter((r) => r.broken).length} of ${mine.length} answers break a required rule, ${(mine.reduce((n, r) => n + r.rules.length, 0) / mine.length).toFixed(2)} rules an answer · ${sizes[l]} words exported${root.get(l) === l ? '' : ` · the same skill as "${root.get(l)}", read once`}`); }
 }
 if (stage === 'rows') {

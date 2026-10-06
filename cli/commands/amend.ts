@@ -14,7 +14,8 @@ import { join } from 'node:path';
 import { readJson } from '../../core/state/read-json.js';
 import { selectForProbing, prepareProbe, foldAnswer } from '../../core/discovery/run-probes.js';
 import type { Budget } from '../../core/inference/client.js';
-import type { StandardVersion } from '../../core/state/canonical-state.js';
+import type { Measurement, Requirement, StandardVersion } from '../../core/state/canonical-state.js';
+import { fitToCorpus, piecesBreaking, restateLimits } from '../../core/observers/derive.js';
 import { authorityStateOf, assertSupersessionRecorded } from '../../core/state/canonical-state.js';
 import { compileArchitecture } from '../../core/architecture/compile.js';
 import { renderAgentSkill, assertPortable, defaultDescription } from '../../renderers/agent-skill/render.js';
@@ -123,6 +124,86 @@ export function amend(): void {
     console.log(`\nEvery measurement taken against ${prev.standardVersionHash} describes the OLD wording of ${ruleId}.`);
     console.log(`Labels for that rule do not carry over.`);
   }
+}
+
+// ── a measurement, as `--measure` takes it ──────────────────────────────────────────────────
+/** What `--measure` accepts for each observer whose limit can be set where the author's pieces are (./ratify.ts, `parseMeasure`). */
+const MEASURE_KEYS: Readonly<Record<string, readonly string[]>> = {
+  SENTENCE_LENGTH: ['medianMax', 'p90Max'], PARAGRAPH_LENGTH: ['maxSentences'], HEDGE_RATE: ['maxPer1000'],
+  PATTERN_RATE: ['pattern', 'minPer1000', 'maxPer1000', 'prefer'], FRAGMENT_SHARE: ['maxWords', 'maxShare'],
+  TERM_RATE: ['terms', 'minPer1000', 'maxPer1000'], RATIO: ['numerator', 'denominator', 'minShare', 'maxShare'],
+  DISTRIBUTION: ['edges', 'shares', 'tolerance'], OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
+  RHYTHM: ['unit', 'minCv', 'maxCv'] };
+const UPPER_CASE_KEYS = new Set(['pattern', 'unit']);
+const WORD_LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid']);
+const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
+const PLAIN_NUMBER = /^\d+(\.\d+)?$/;
+
+/**
+ * A MEASUREMENT IN THE WORDS `--measure` TAKES (./ratify.ts, `parseMeasure`), so that parsing what this returns
+ * gives the same measurement back, or null when that grammar cannot say it. It cannot say a parameter the flag
+ * does not take (the `role` and `never` discovery records on some rules), a word the parser would change (it
+ * lower-cases word lists and trims them), or anything that would break out of the quotes the command is printed
+ * in. Null is the honest answer there: a command that silently dropped a rule's `never` list would loosen the
+ * rule by more than its limit. Only the observers whose limit `fitToCorpus` moves are written.
+ */
+export function formatMeasure(m: Measurement): string | null {
+  const keys = MEASURE_KEYS[m.observer] as readonly string[] | undefined;
+  if (!keys) return null;
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(m.params)) {
+    if (!keys.includes(k)) return null;
+    const strings = Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : null;
+    const numbers = Array.isArray(v) && v.every((x): x is number => typeof x === 'number') ? v : null;
+    if (k === 'prefer' || UPPER_CASE_KEYS.has(k)) {
+      // One value, kept as written for `prefer` (its spaces are the point of it) and upper-cased by the parser otherwise.
+      if (strings?.length !== 1 || (k !== 'prefer' && strings[0] !== strings[0].trim().toUpperCase())) return null;
+      parts.push(`${k}=${strings[0]}`);
+    } else if (WORD_LIST_KEYS.has(k)) {
+      if (!strings?.length || strings.some((x) => x === '' || x !== x.trim().toLowerCase() || x.includes('|'))) return null;
+      parts.push(`${k}=${strings.join('|')}`);
+    } else if (NUMBER_LIST_KEYS.has(k)) {
+      if (!numbers?.length || numbers.some((x) => !PLAIN_NUMBER.test(String(x)))) return null;
+      parts.push(`${k}=${numbers.join('/')}`);
+    } else {
+      if (typeof v !== 'number' || !PLAIN_NUMBER.test(String(v))) return null;
+      // Zero is a target the parser takes for a rate and a share, and for no length.
+      const zeroTaken = ['HEDGE_RATE', 'PATTERN_RATE', 'TERM_RATE'].includes(m.observer) || ['minShare', 'maxShare', 'minPer1000', 'maxPer1000', 'minWords'].includes(k);
+      if (v === 0 && !zeroTaken) return null;
+      parts.push(`${k}=${v}`);
+    }
+  }
+  // A comma ends a parameter and these characters end or reopen the quotes the command is printed in.
+  if (parts.some((x) => /[,"$`\\!]/.test(x))) return null;
+  return `${m.observer}:${parts.join(',')}`;
+}
+
+/** In double quotes where that is safe in a shell, in single quotes where that is, and null where neither is. */
+const quoted = (text: string): string | null => (!/["$`\\!]/.test(text) ? `"${text}"` : !text.includes('\'') ? `'${text}'` : null);
+
+/**
+ * THE COMMAND THAT SETS AN APPROVED RULE'S LIMIT WHERE ITS AUTHOR'S OWN PIECES ARE, or null when there is no such
+ * limit: the rule has no numeric limit to move, at most `allowedBreaking` pieces break it already, no loosening
+ * inside the bound brings it there (core/observers/derive.ts, `fitToCorpus`), or `--measure` cannot say the result.
+ *
+ * A new check under old words would leave the rule stating a number it is no longer checked against, so where the
+ * statement quotes the old limit the command carries the statement with the new one. Where which number to replace
+ * would be a guess, or the words cannot be quoted in a shell, the command holds a place for the owner's own wording.
+ * Nothing is amended here: the command is printed, and running it is the owner's ruling.
+ */
+export function amendToFit(name: string, rule: Requirement, pieces: readonly string[], allowedBreaking: number): string | null {
+  if (!rule.measurement) return null;
+  const fitted = fitToCorpus(rule.measurement, pieces, allowedBreaking);
+  const spec = fitted ? formatMeasure(fitted) : null;
+  if (!fitted || spec === null) return null;
+  const restated = restateLimits(rule.statement, rule.measurement, fitted);
+  const words = restated === null ? null : restated === rule.statement ? '' : quoted(restated);
+  const meet = pieces.length - piecesBreaking(pieces, fitted).length;
+  // A statement that could not be restated is asked for inside the command, as `--reason "<why>"` is elsewhere: a
+  // note after the command would be pasted into the shell with it, and the command without `--statement` would
+  // leave the rule quoting a number it is no longer checked against.
+  const statement = words === null ? ' --statement "<the rule, with its new limit>"' : words ? ` --statement ${words}` : '';
+  return `atelier amend --skill ${name} --rule ${rule.requirementId} --measure "${spec}"${statement} --reason "set where ${meet} of my ${pieces.length} pieces meet it"`;
 }
 
 

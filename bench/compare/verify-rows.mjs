@@ -12,15 +12,19 @@
 //   --responses   a file bench/compare/run.mjs wrote: {case_id, trial, condition, response}. Give it once per arm
 //                 (each arm is run to its own file under its own --condition), or once for a merged file.
 //   --skill       the built skill whose rules every arm is held to, and --data its ATELIER_DATA
-//   --out         the file to write. An existing file is refused unless --force, and it may not be one of the inputs.
+//   --out         the file to write. An existing file is refused unless --force, and it may not be one of the inputs:
+//                 the two are compared as real paths, symlinks resolved, so an --out reached through a link to the
+//                 responses' folder, or that is itself a link to a responses file, is refused as that file.
 //
-// ONE ROW AN ANSWER: {case_id, trial, condition, broken, rules, applicable, held}
+// ONE ROW AN ANSWER: {case_id, trial, condition, broken, rules, applicable, held, delivered}
 //   broken       true when the answer breaks at least one REQUIRED line
 //   rules        the ids of the REQUIRED lines it breaks ([] when none)
 //   applicable   how many REQUIRED lines `atelier verify` could read on this answer: those it reports as met or as
 //                violated. A line that does not apply to the answer (NOT_APPLICABLE) is not counted, and neither is
 //                the check for invented specifics (UNSOURCED)
 //   held         applicable minus the lines broken
+//   delivered    true when the person got an answer, false for a strict refusal. bench/compare/axes.mjs reads it:
+//                a task delivered on some outputs and refused on others is not repeated, whatever else its rows say
 //
 // WHAT COUNTS AS A BROKEN RULE is what bench/compare/efficiency-rows.mjs counts, by the same command:
 // `atelier verify --skill <name> --json --claims pattern --allow-unsourced`, the answer on stdin. A line verify reports
@@ -39,7 +43,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readJsonl, writeJsonl, opt, die } from './lib.mjs';
+import { readJsonl, writeJsonl, opt, die, outputClash } from './lib.mjs';
 
 const USAGE = 'usage: verify-rows.mjs --responses <file> [--responses <file> ...] --skill <name> --data <ATELIER_DATA> --out <verify.jsonl> [--force]';
 const args = process.argv.slice(2);
@@ -50,7 +54,8 @@ if (!inputs.length || inputs.some((f) => f === undefined || f.startsWith('--')) 
 const CLI = fileURLToPath(new URL('../../dist/cli/atelier.mjs', import.meta.url));
 if (!existsSync(CLI)) die(`${CLI} is missing: run \`npm run build\` first`);
 const out = resolve(outArg);
-for (const f of inputs) if (resolve(f) === out) die(`--out is ${f}, one of the responses files: it would be written over. Name another file.`);
+// Real paths on both sides: an --out under another name (a link to the folder, a link to the file) is the same file.
+for (const f of inputs) if (outputClash({ files: [out], inputs: [resolve(f)] })) die(`--out is ${f}, one of the responses files: it would be written over. Nothing was written. Name another file.`);
 if (!existsSync(resolve(data))) die(`--data ${data}: no such directory. It is the ATELIER_DATA the skill "${skill}" was built in.`);
 if (existsSync(out) && !args.includes('--force')) die(`${outArg} is already there. Rows of an earlier run are not written over: name another file, or pass --force to replace it.`);
 
@@ -91,7 +96,7 @@ function verified(r) {
 
 const rows = answers.map((r) => (r.response === null
   ? { case_id: r.case_id, trial: r.trial, condition: r.condition, broken: true, rules: ['NOT_DELIVERED'], applicable: 0, held: 0, delivered: false }
-  : { case_id: r.case_id, trial: r.trial, condition: r.condition, ...verified(r) }));
+  : { case_id: r.case_id, trial: r.trial, condition: r.condition, ...verified(r), delivered: true }));
 writeJsonl(out, rows);
 for (const label of [...new Set(rows.map((r) => r.condition))]) {
   const mine = rows.filter((r) => r.condition === label); const refused = mine.filter((r) => r.delivered === false).length;

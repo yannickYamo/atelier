@@ -74,7 +74,37 @@ byte for byte before anything else. [0008](0008-one-point-zero-is-the-floor.md) 
 no option is removed, and a run costs what it did. Two defaults of a rebuild change (the pairs and the description),
 each from "changes the skill without being asked" to "keeps it".
 
-**Not in this record.** Any change to how a limit is derived. Any rule dropped. Any change to a standard that its
-owner did not make.
+**Not in this record.** Any rule dropped. Any change to a standard that its owner did not make.
+
+## Amended 2026-10-06, after the tester's acceptance
+
+The tester accepted the parts above on stores built before this record and found four things. Each is a measured
+failure, and each fix is inside what this record already decided. The owner approved them the same day. This is the
+last change to the product in 1.x.
+
+1. **A limit is fitted to the author before a rule is moved.** The first text moved a rule to PREFERRED when the
+   author's pieces broke it, and left the limit alone. That kept the same too-tight number and only stopped
+   enforcing it. Now, at discovery, a counted limit that fewer than 95% of the author's pieces meet is widened to the
+   nearest value that 95% of them do meet (always allowing one piece; a ceiling at most doubled, a floor at most
+   halved, a ban never moved), and the rule says its limit was fitted and to what. A rule that no limit can fit, or that still fails the set check, or that was fitted with no piece held out
+   to check it on, is suggested PREFERRED. A build of a
+   standard approved earlier offers the same, in this order: the command that widens the limit, then the command
+   that makes the rule a preference. Both are the owner's rulings; neither is applied for them.
+2. **The set check moves the fewest rules.** "The rule the most pieces break" could move three rules where moving
+   one other rule was enough. The search now finds the smallest set of rules whose move brings the author's pieces
+   to 90%, and among equal sets the one that leaves the fewest pieces failing. The message gives how many pieces pass once the
+   moved rules are set aside.
+3. **Pairs are never chosen unasked.** The first text chose "write this, not that" pairs on a rebuild while a skill
+   had none. A store built earlier holds benchmark runs that nothing marked as tests, so a plain rebuild of such a
+   skill took pairs from them and changed four exports of five. A rebuild now keeps the pairs the skill has, none
+   included, and only `--contrast auto` chooses.
+4. **The reading of what an author holds back is made once.** A rebuild read it again with a model call whenever
+   the skill had rules that are not counted, which cost money and could change the skill. It is now kept with the
+   rules it covered and read again only when one of them is new, or when `--persona auto` asks. Two cases still
+   read: a skill built before the reading was kept reads it once, on its first rebuild, and a reading that failed
+   (no model reachable) is not kept, is said, and is made again by the next build.
+
+With these, a rebuild with no flag of a skill whose readings are kept makes no model call and writes the same
+bytes, except where the compiler itself changed since the commit that built it, which the changelog lists.
 
 **Approved:** the owner, 2026-10-06, on the condition stated at the top.

@@ -1,4 +1,5 @@
-// bench/compare/lib.mjs — what every compare script shares: the task file, hashes, and the overlap check.
+// bench/compare/lib.mjs — what every compare script shares: the task file, hashes, the overlap check,
+// and the check that an output is not written over an input.
 //
 // A task is one line of tasks.jsonl: {id, prompt, material?, category?} plus whatever the source benchmark
 // needs to judge it (i-have-adhd keeps `risk` and `criteria`, which its judge reads). Extra fields are kept.
@@ -6,9 +7,9 @@
 // The same normalisation lives in compare_common.py (normalise_text), so the Python optimizers and these
 // scripts agree on what counts as the same task.
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, readlinkSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 
 /** Read a JSONL file: one object per non-empty line, with the line number in any error. */
 export function readJsonl(path) {
@@ -82,6 +83,44 @@ export function opt(args, name, dflt) {
   const v = args[i + 1];
   if (v === undefined || v.startsWith('--')) throw new Error(`--${name} needs a value`);
   return v;
+}
+
+/**
+ * Where a path really is, with every symlink on the way resolved. A path that does not exist yet (an output not
+ * written so far) is its nearest existing parent, resolved, with the rest appended; a link whose target is not there
+ * yet is followed to that target. Two names for one place then compare equal, which two path strings do not.
+ */
+export function realPath(p, depth = 0) {
+  const abs = resolve(p);
+  try { return realpathSync(abs); } catch { /* not there yet: resolved from its parent below */ }
+  let target = null;
+  try { target = readlinkSync(abs); } catch { /* not a link */ }
+  if (target !== null && depth < 40) return realPath(resolve(dirname(abs), target), depth + 1);
+  const parent = dirname(abs);
+  return parent === abs ? abs : join(realPath(parent, depth), basename(abs));
+}
+
+/**
+ * Would writing here touch an input? Compared as real paths, because a script that clears and rewrites its output
+ * directory once overwrote a tester's input through an `--out` that was a symlink to the inputs' folder: the two
+ * path strings differed and the place was one. `dir` is an output directory the script clears and rewrites, `files`
+ * the output files it writes, `inputs` every file or directory it reads. Returns null when nothing clashes, or
+ * {input, real, how}:
+ *   'holds'   the output directory is that input, or holds it
+ *   'file'    an output file is that input (an output's name that is a link to a file kept elsewhere)
+ *   'within'  the output directory is inside that input, which is a directory
+ */
+export function outputClash({ dir, files = [], inputs }) {
+  const realDir = dir === undefined ? null : realPath(dir);
+  const outs = new Set(files.map((f) => realPath(f)));
+  const isDir = (f) => { try { return statSync(f).isDirectory(); } catch { return false; } };
+  for (const input of inputs) {
+    const real = realPath(input);
+    if (realDir !== null && (real === realDir || real.startsWith(realDir + sep))) return { input, real, how: 'holds' };
+    if (outs.has(real)) return { input, real, how: 'file' };
+    if (realDir !== null && realDir.startsWith(real + sep) && isDir(real)) return { input, real, how: 'within' };
+  }
+  return null;
 }
 
 export function die(msg) { console.error(`compare: ${msg}`); process.exit(2); }

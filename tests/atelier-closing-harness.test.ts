@@ -175,6 +175,108 @@ describe('a judge is qualified on answers whose quality is known', () => {
     expect(second(0, 5).verdict).toBe('NOT QUALIFIED');
     expect(second(12, 5).verdict).toMatch(/^UNRESOLVED: the two judges agree on 0\.7 of the 40/);
   });
+  it('a score row that lacks a finite number for a dimension stops the run, naming the row: it is never a correct "bad" call', () => {
+    // A judge that calls every answer good: every good answer right, every bad one wrong. NOT QUALIFIED.
+    const lenient = labels.map((l) => ({ case_id: l.case_id, trial: 1, condition: 'x', ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, 4.5])), blocker: false })) as Record<string, unknown>[];
+    const judge = (name: string, rowsOf: object[]): { code: number; out: string } => {
+      writeFileSync(join(dir, name), jsonl(rowsOf));
+      return node('bench/compare/judge-qualification.mjs', '--scores', join(dir, name), '--labels', join(dir, 'labels.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5');
+    };
+    const whole = judge('lenient.jsonl', lenient);
+    expect(whole.code).toBe(0);
+    expect(JSON.parse(whole.out)).toMatchObject({ verdict: 'NOT QUALIFIED', judge: { goodCalledGood: { share: 1 }, badCalledBad: { share: 0 } } });
+    // The same judge with the rows of its bad answers broken: each used to weigh as "not a number", which is under
+    // any threshold, so all twenty counted as called bad and the judge qualified on them.
+    const broken: [string, (r: Record<string, unknown>) => object, RegExp][] = [
+      ['a dimension left out', ({ correctness: _c, ...r }) => r, /broken0\.jsonl: row 21 \(p20, x, trial 1\) has no value for "correctness", where --weights needs a finite number for every dimension\. The row was not counted and no verdict was given: have the judge score that answer again/],
+      ['a dimension as text', (r) => ({ ...r, safety: 'high' }), /row 21 \(p20, x, trial 1\) has "high" for "safety"/],
+      ['a dimension that is null', (r) => ({ ...r, concision: null }), /row 21 \(p20, x, trial 1\) has null for "concision"/],
+    ];
+    broken.forEach(([what, edit, why], n) => {
+      const r = judge(`broken${n}.jsonl`, lenient.map((row, i) => (i >= 20 ? edit(row) : row)));
+      expect(r.code, what).toBe(2);
+      expect(r.out, what).toMatch(why);
+      expect(r.out, what).not.toMatch(/QUALIFIED/);
+    });
+    // a broken row for an answer nobody labelled is not read, as before
+    expect(JSON.parse(judge('stray.jsonl', [...lenient, { case_id: 'unlabelled', trial: 1, condition: 'x' }]).out)).toMatchObject({ verdict: 'NOT QUALIFIED' });
+    // weights or a threshold that are not numbers are refused too, instead of making every score "not a number"
+    expect(node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'lenient.jsonl'), '--labels', join(dir, 'labels.jsonl'), '--weights', '{"correctness":"heavy"}', '--threshold', '3.5')).toMatchObject({ code: 2 });
+    expect(node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'lenient.jsonl'), '--labels', join(dir, 'labels.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', 'high').out).toMatch(/--threshold is "high": it must be a number/);
+  });
+});
+
+describe('the failure-mode reader is qualified on answers planted good and planted bad', () => {
+  type Flag = boolean | null;
+  interface Label { case_id: string; condition: string; label: string; mode?: string }
+  interface Result { verdict: string; reader: { goodCalledGood: { k: number; n: number; share: number }; badCalledBad: { k: number; n: number; share: number }; noRow: number; unreadChecks: number; unlabelledRows: number; qualified: boolean }; byMode: Record<string, { planted: number; flagged: number; share: number }> }
+  const MODES = ['F1', 'F2', 'F3', 'F4'];
+  /** Twenty good answers, then twenty bad ones planted five to a mode. */
+  const LABELS: Label[] = Array.from({ length: 40 }, (_, i) => (i < 20 ? { case_id: `p${i}`, condition: 'planted', label: 'good' } : { case_id: `p${i}`, condition: 'planted', label: 'bad', mode: MODES[i % 4] }));
+  const row = (case_id: string, flags: Flag[]): object => ({ case_id, trial: 1, condition: 'planted', F1: flags[0], F2: flags[1], F3: flags[2], F4: flags[3], failed: flags.some((x) => x === true), unread: flags.filter((x) => x === null).length, by: { F1: 'code', F2: 'code', F3: 'reader', F4: 'code' } });
+  /** The reader's rows: a good answer flagged nowhere and a bad one on its own mode, except the first `wrongGood` good answers (flagged F3) and the first `wrongBad` bad ones (flagged nowhere). */
+  const reading = (wrongGood: number, wrongBad: number): object[] => LABELS.map((l, i) => row(l.case_id, l.label === 'good' ? [false, false, i < wrongGood, false] : MODES.map((m) => m === l.mode && i - 20 >= wrongBad)));
+  let n = 0;
+  const qualify = (modes: object[], labels: object[] = LABELS): { code: number; out: string; result: () => Result } => {
+    const dir = mkdtempSync(join(tmpdir(), `atelier-modes-${n++}-`));
+    writeFileSync(join(dir, 'modes.jsonl'), jsonl(modes)); writeFileSync(join(dir, 'labels.jsonl'), jsonl(labels));
+    const r = nodeAll('bench/compare/modes-qualification.mjs', '--modes', join(dir, 'modes.jsonl'), '--labels', join(dir, 'labels.jsonl'), '--out', join(dir, 'result.json'));
+    return { ...r, result: () => JSON.parse(readFileSync(join(dir, 'result.json'), 'utf8')) as Result };
+  };
+  const refusedBy = (r: { code: number; out: string }, why: RegExp): void => { expect(r.code, r.out).toBe(2); expect(r.out).toMatch(why); expect(r.out).not.toMatch(/"verdict"/); };
+
+  it('0.85 of each class called right qualifies, at the bar exactly; one fewer of either class does not', () => {
+    const at = qualify(reading(3, 3));
+    expect(at.code, at.out).toBe(0);
+    expect(at.result()).toMatchObject({ verdict: 'QUALIFIED', reader: { goodCalledGood: { k: 17, n: 20, share: 0.85 }, badCalledBad: { k: 17, n: 20, share: 0.85 }, noRow: 0, unreadChecks: 0, qualified: true } });
+    expect(at.out).toMatch(/^QUALIFIED: 17 of 20 good answers and 17 of 20 bad answers called right\. The reader's rows may be used\.$/m);
+    expect(qualify(reading(4, 0)).result()).toMatchObject({ verdict: 'NOT QUALIFIED', reader: { goodCalledGood: { share: 0.8 }, badCalledBad: { share: 1 }, qualified: false } });
+    const blind = qualify(reading(0, 4));
+    expect(blind.result().verdict).toBe('NOT QUALIFIED');
+    expect(blind.out).toMatch(/^NOT QUALIFIED: 20 of 20 good answers and 16 of 20 bad answers called right, where 0\.85 of each is needed\. The rows of this reader are not used/m);
+  });
+  it('per mode named in the labels: how many answers planted with it had that mode\'s own flag true', () => {
+    // every bad answer is caught, and the five planted as F3 are caught as F1: called right, with F3 never raised
+    const modes = LABELS.map((l) => row(l.case_id, l.label === 'good' ? [false, false, false, false] : MODES.map((m) => (l.mode === 'F3' ? m === 'F1' : m === l.mode))));
+    const r = qualify(modes).result();
+    expect(r.verdict).toBe('QUALIFIED');
+    expect(r.byMode).toEqual({ F1: { planted: 5, flagged: 5, share: 1 }, F2: { planted: 5, flagged: 5, share: 1 }, F3: { planted: 5, flagged: 0, share: 0 }, F4: { planted: 5, flagged: 5, share: 1 } });
+    // a mode no label names is not reported
+    expect(Object.keys(qualify(reading(0, 0), LABELS.map((l) => (l.mode === 'F4' ? { ...l, mode: 'F1' } : l))).result().byMode)).toEqual(['F1', 'F2', 'F3']);
+  });
+  it('a reading that is not whole is UNRESOLVED, never a verdict: too few of a class, an answer with no row, a check nobody read', () => {
+    const few = qualify(reading(0, 0).slice(0, 39), LABELS.slice(0, 39));
+    expect(few.code, few.out).toBe(0);
+    expect(few.result().verdict).toMatch(/^UNRESOLVED: fewer than 20 answers of a class were read \(20 good, 19 bad\)\. Run bench\/compare\/failure-modes\.mjs again .*and plant at least 20 good and 20 bad answers; then run this again$/);
+    const short = qualify(reading(0, 0).slice(1)).result();
+    expect(short.verdict).toMatch(/^UNRESOLVED: 1 labelled answer\(s\) have no row in .*modes\.jsonl \(first: p0 \(planted\)\); fewer than 20 answers of a class were read \(19 good, 20 bad\)/);
+    expect(short.reader).toMatchObject({ noRow: 1, qualified: false });
+    // 21 good answers, one with a check nobody read: the classes are large enough, the counts would qualify, and it is still not read
+    const labels = [...LABELS, { case_id: 'p40', condition: 'planted', label: 'good' }];
+    const unread = qualify([...reading(0, 0), row('p40', [false, false, null, false])], labels).result();
+    expect(unread.verdict).toMatch(/^UNRESOLVED: 1 labelled answer\(s\) have a check nobody read \(first: p40 \(planted\)\)\. Run bench\/compare\/failure-modes\.mjs again on the planted answers, with a reader, until every one has a row with every check read; then run this again$/);
+    expect(unread.reader).toMatchObject({ goodCalledGood: { k: 21, n: 21 }, unreadChecks: 1, qualified: false });
+    // a row for an answer nobody labelled is counted apart and decides nothing
+    expect(qualify([...reading(0, 0), row('stray', [true, false, false, false])]).result()).toMatchObject({ verdict: 'QUALIFIED', reader: { unlabelledRows: 1 } });
+  });
+  it('a label or a row that is not what it should be stops the run (exit 2), naming it', () => {
+    const labels = (edit: (l: Label[]) => object[]): object[] => edit(LABELS.map((l) => ({ ...l })));
+    refusedBy(qualify(reading(0, 0), labels((l) => { l[3].label = 'fine'; return l; })), /labels\.jsonl: row 4 \(p3, planted\) has label "fine": it must be "good" or "bad"/);
+    refusedBy(qualify(reading(0, 0), labels((l) => [...l, l[5]])), /labels\.jsonl: row 41: p5 \(planted\) is labelled twice\. Each planted answer has one label: remove one of the two rows\./);
+    refusedBy(qualify(reading(0, 0), labels((l) => { l[25].mode = 'F9'; return l; })), /row 26 \(p25, planted\) has mode "F9": it must be one of F1, F2, F3, F4, or left out/);
+    refusedBy(qualify(reading(0, 0), labels((l) => { l[2].mode = 'F1'; return l; })), /row 3 \(p2, planted\) is labelled good and names the failure mode F1/);
+    const rows = (edit: (r: Record<string, unknown>[]) => object[]): object[] => edit(reading(0, 0).map((r) => ({ ...r })));
+    refusedBy(qualify(rows((r) => { r[0].F2 = 'no'; return r; })), /modes\.jsonl: row 1 \(p0, planted\) has `F2` "no", which is not true, false or null/);
+    refusedBy(qualify(rows((r) => { r[30].failed = false; return r; })), /row 31 \(p30, planted\) has `failed` false, which is not what its checks F1 to F4 say/);
+    refusedBy(qualify(rows((r) => { delete r[7].failed; return r; })), /row 8 \(p7, planted\) has `failed` undefined, which is not true or false/);
+    refusedBy(qualify(rows((r) => { r[9].F3 = null; return r; })), /row 10 \(p9, planted\) has `unread` 0 and 1 check\(s\) that are null: the two must agree/);
+    refusedBy(qualify(rows((r) => { r[4].trial = '1'; return r; })), /row 5 \(p4, planted\) has trial "1"; trials are whole numbers from 1/);
+    refusedBy(qualify(rows((r) => [...r, { ...r[12], trial: 2 }])), /row 41 \(p12, planted\) is a second row for one labelled answer \(the first is row 13\)/);
+    refusedBy(qualify(rows((r) => [...r, 'not a row' as never])), /row 41 is not a row failure-modes\.mjs writes/);
+    // a file that is not there, and a flag left out, say so in one line
+    refusedBy(nodeAll('bench/compare/modes-qualification.mjs', '--modes', join(tmpdir(), 'no-such-modes.jsonl'), '--labels', join(tmpdir(), 'no-such-labels.jsonl')), /--labels .*no-such-labels\.jsonl: cannot be read \(ENOENT\)/);
+    refusedBy(nodeAll('bench/compare/modes-qualification.mjs', '--modes', 'x'), /missing --labels\nusage: modes-qualification\.mjs --modes <modes\.jsonl> --labels <labels\.jsonl> \[--out <result\.json>\]/);
+  });
 });
 
 describe('the benchmark runner refuses to start when it could not see what a call costs', () => {
@@ -606,6 +708,91 @@ describe('the axis files are built from the raw readings by a rule fixed before 
     expect(held.code).toBe(2);
     expect(held.out).toMatch(/\.\.\/out\/verify\.jsonl is inside --out/);
     expect(existsSync(join(dir, 'out', 'verify.jsonl'))).toBe(true);
+  });
+  it('--out that is a link to the inputs\' folder is that folder: refused, and every input is left byte for byte', () => {
+    // The tester's case: the judge read is called quality.jsonl, which is also a file this script writes. Through a
+    // link the two path strings differ, the folder is one, and the read was replaced by the axis file.
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-axes-link-'));
+    mkdirSync(join(dir, 'in')); mkdirSync(join(dir, 'elsewhere'));
+    const f = claimA(SMALL);
+    const files: Record<string, string> = { 'tasks.jsonl': jsonl(f.tasks), 'quality.jsonl': jsonl(f.one), 'two.jsonl': jsonl(f.two), 'modes.jsonl': jsonl(f.modes), 'resolutions.jsonl': jsonl(f.resolutions), 'verify.jsonl': jsonl(f.verify) };
+    files['axes.json'] = JSON.stringify({ claim: 'A', tasks: 'tasks.jsonl', trials: 2, candidate: 'plugin', handwritten: 'hand', others: ['bare'], reads: ['quality.jsonl', 'two.jsonl'], modes: 'modes.jsonl', resolutions: 'resolutions.jsonl', verify: 'verify.jsonl' });
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, 'in', name), text);
+    const unchanged = (): void => {
+      expect(readdirSync(join(dir, 'in')).sort()).toEqual(Object.keys(files).sort());
+      for (const [name, text] of Object.entries(files)) expect(readFileSync(join(dir, 'in', name), 'utf8'), name).toBe(text);
+    };
+    symlinkSync(join(dir, 'in'), join(dir, 'out'), 'dir');
+    const linked = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes.json'), '--out', join(dir, 'out'));
+    expect(linked.code, linked.out).toBe(2);
+    expect(linked.out).toMatch(/--out must be a directory of its own \(through a link, --out is .*in\): this script clears and rewrites what it finds there.* Name a new directory/);
+    unchanged();
+    // a link to a folder above the inputs holds them too
+    symlinkSync(dir, join(dir, 'elsewhere', 'up'), 'dir');
+    expect(node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes.json'), '--out', join(dir, 'elsewhere', 'up')).code).toBe(2);
+    unchanged();
+    // an input reached through a link is where it really is: here, inside --out
+    mkdirSync(join(dir, 'axes'));
+    writeFileSync(join(dir, 'axes', 'verify.jsonl'), files['verify.jsonl']);
+    symlinkSync(join(dir, 'axes'), join(dir, 'in', 'kept'), 'dir');
+    writeFileSync(join(dir, 'in', 'axes2.json'), files['axes.json'].replace('"verify":"verify.jsonl"', '"verify":"kept/verify.jsonl"'));
+    const through = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes2.json'), '--out', join(dir, 'axes'));
+    expect(through.code, through.out).toBe(2);
+    expect(through.out).toMatch(/kept\/verify\.jsonl is inside --out, which this script clears and rewrites/);
+    expect(readFileSync(join(dir, 'axes', 'verify.jsonl'), 'utf8')).toBe(files['verify.jsonl']);
+    // an output name that is a link to an input kept elsewhere would be written through to it
+    mkdirSync(join(dir, 'axes3'));
+    symlinkSync(join(dir, 'in', 'quality.jsonl'), join(dir, 'axes3', 'quality.jsonl'), 'file');
+    const name = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes.json'), '--out', join(dir, 'axes3'));
+    expect(name.code, name.out).toBe(2);
+    expect(name.out).toMatch(/quality\.jsonl is .*in\/quality\.jsonl, which is also one of the files this script writes in --out\. Nothing was written\. Name another --out\./);
+    expect(readFileSync(join(dir, 'in', 'quality.jsonl'), 'utf8')).toBe(files['quality.jsonl']);
+    // and a link to a folder of its own is a folder of its own: the run is made, and the inputs are as they were
+    mkdirSync(join(dir, 'real-out'));
+    symlinkSync(join(dir, 'real-out'), join(dir, 'elsewhere', 'fine'), 'dir');
+    const fine = node('bench/compare/axes.mjs', '--config', join(dir, 'in', 'axes.json'), '--out', join(dir, 'elsewhere', 'fine'));
+    expect(fine.code, fine.out).toBe(0);
+    expect(readdirSync(join(dir, 'real-out')).sort()).toEqual(['quality.jsonl', 'repeatability.jsonl', 'rule-anchor.jsonl']);
+    expect(readFileSync(join(dir, 'in', 'quality.jsonl'), 'utf8')).toBe(files['quality.jsonl']);
+  });
+  it('under strict delivery, a task delivered once and refused once is not repeated, whatever its verdicts; refused twice it is in one state', () => {
+    const clean: [boolean, boolean][] = [[false, false], [false, false]];
+    // every task of the candidate fails its named failure mode and breaks a rule on both outputs: alike on every verdict
+    const f = claimA({ t1: { blocker: clean, mode: [true, true], broken: [true, true] }, t2: { blocker: clean, mode: [true, true], broken: [true, true] }, t3: { blocker: clean, mode: [true, true], broken: [true, true] }, t4: { blocker: clean, broken: [false, false] } });
+    const refuse = (id: string, trial: number): void => {
+      Object.assign(f.verify.find((r) => r.case_id === id && r.trial === trial && r.condition === 'plugin')!, { broken: true, delivered: false });
+      // the benchmark's scorer skips a refusal: the judge reads hold no row for it
+      f.one = f.one.filter((r) => !(r.case_id === id && r.trial === trial && r.condition === 'plugin'));
+      f.two = f.two.filter((r) => !(r.case_id === id && r.trial === trial && r.condition === 'plugin'));
+    };
+    // t1: delivered twice (`delivered: true` on one row, no field on the other, as in a file written before)
+    Object.assign(f.verify.find((r) => r.case_id === 't1' && r.trial === 1 && r.condition === 'plugin')!, { delivered: true });
+    refuse('t2', 2);                    // t2: delivered and failing, then refused
+    refuse('t3', 1); refuse('t3', 2);   // t3: refused twice
+    // t4's refusal has no failure-mode flag and no blocker in this fixture: it is failed because it was not delivered
+    refuse('t4', 1); refuse('t4', 2);
+    const r = build(f);
+    expect(r.code, r.out).toBe(0);
+    //                                                        t1     t2    t3     t4
+    expect(r.read('repeatability.jsonl', 'plugin')).toEqual([false, true, false, false]);
+    expect(r.read('repeatability.jsonl', 'hand')).toEqual([false, false, false, false]);
+    // quality and the rule anchor count each refusal as a failed answer
+    expect(r.read('quality.jsonl', 'plugin')).toEqual([true, true, true, true, true, true, true, true]);
+    expect(r.read('rule-anchor.jsonl', 'plugin')).toEqual([true, true, true, true, true, true, true, true]);
+    expect(r.out).toMatch(/repeatability: "plugin" 1 of 4 tasks failed, "hand" 0 of 4 tasks failed · delivered on some outputs and refused on others: "plugin" 1 task\(s\)/);
+    expect(r.out).toMatch(/5 of 16 answers were not delivered \(`delivered: false` in verify\.jsonl\): each is a failed answer on quality and on the rule anchor\./);
+    // the same rows with no `delivered` field are the file as it was written before: t2's outputs then read alike
+    const before = claimA({ t2: { blocker: clean, mode: [true, true], broken: [true, true] } });
+    expect(build(before).read('repeatability.jsonl', 'plugin')).toEqual([false]);
+    // a delivered answer still needs its judge rows, and a refusal that is not a broken row is refused
+    const unjudged = claimA({ t1: { blocker: clean, broken: [false, false] } });
+    unjudged.one = unjudged.one.filter((x) => !(x.trial === 2 && x.condition === 'plugin'));
+    refused(build(unjudged), /judge read 1 one\.jsonl: t1 trial 2 is missing for "plugin"/);
+    const odd = claimA({ t1: { blocker: clean, broken: [false, false] } });
+    Object.assign(odd.verify[0], { delivered: false });
+    refused(build(odd), /verify verify\.jsonl: t1 trial 1 \(plugin\) has `delivered` false and `broken` false: a refusal is a failed answer on the rule anchor/);
+    Object.assign(odd.verify[0], { delivered: 'no', broken: true });
+    refused(build(odd), /t1 trial 1 \(plugin\) has `delivered` "no", which is not true or false/);
   });
   it('end to end: the files it writes are the axes closing-quality.mjs requires, and the claim is read on them', () => {
     // Thirty tasks. The hand-written skill has an agreed blocker on twenty and the candidate on three; rules are

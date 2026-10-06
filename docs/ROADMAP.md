@@ -129,7 +129,7 @@ standard". Today a build proposes twenty to forty-odd rules and prints its inter
 1. **One study of size.** The reviewer measures five configurations of two skills once, by a rule sealed first.
 2. **One build:** exactly the configuration the rule selects, with today's prepared beside it as the fallback.
 3. **The last development round,** on that commit: the strict-delivery fix, the final export on every held-out task,
-   the four axes, and ten blind pairs read by the owner.
+   the four axes, and twenty blind pairs read by the owner.
 4. **The closing test:** four claims, once each, by an independent tester, on one frozen commit.
 5. **Publish every result,** pass or miss, tag the release, and close the 1.x line.
 6. **2.0** starts from time to a working skill.

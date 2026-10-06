@@ -24,10 +24,9 @@ today's skill, in the last development round.
   words, spread over the kinds of request, so the 9,000-word budget this study varies does not shape it, and the
   3,000-word arm would make it longer. Record the coding skill's export size by part to confirm it. Whatever is selected applies to skills that write and leaves a skill that answers
   byte-identical, which the last round confirms by sha256.
-- **Tasks.** 30 development tasks per domain, or 60: the number is the owner's choice between cost and noise (see
-  the error rates below) and is written in the sealing commit, before any answer exists. The tasks were never used
-  for a held-out reading and were not written for a seal. With fewer than 20 tasks in a domain no arm is read there,
-  and an arm unread anywhere cannot be selected.
+- **Tasks: 60 development tasks per domain** (the owner, 2026-10-06), never used for a held-out reading and not
+  written for a seal. At least 55 must be valid in a domain: with fewer, no arm is read there, and an arm unread
+  anywhere cannot be selected. A study planned at 60 is not read on 20.
 - **A task is excluded only for one of three reasons, each decided before any score is read:** an arm returned no
   answer after the runner's three attempts; `atelier verify` could not check an answer; or the judge did not score
   a session in range after three runs. An excluded task is excluded for every arm of its domain.
@@ -65,6 +64,14 @@ within 1,500. On a corpus of shorter pieces each budget reaches more of them.
 study shows it helps. This study can show only that an arm was not rejected. The excerpt arms are measured so the
 next major version starts from a number.
 
+**The judge is qualified before this study reads a score.** The rubric judge decides the quality reading here, so
+it is qualified first, on 20 planted good and 20 planted bad pieces of each domain's kind
+(`bench/compare/judge-qualification.mjs`, threshold 35 of 50, at least 0.85 of each class), and the qualification
+file is named in the sealing commit. A judge that does not qualify stops the study.
+
+**One standard for every arm.** No standard may move between arms. The rows script reads the standard's hash from
+each export ("the authority record is StandardVersion ...") and refuses arms that do not share one.
+
 **Before any output is written:**
 
 1. Record each arm's export size line (`atelier export --out` prints the words and the words by part) and sha256.
@@ -98,7 +105,7 @@ next major version starts from a number.
   The same lines for every arm, and the same definition the closing test uses for its rule axis.
 - **Voice is not read by a model here.** The repository has no instrument that qualifies a reader choosing between
   two answers, and an unqualified reader decides nothing. The plan's `voice` is `null` for both domains. The only
-  reading of voice is the owner's ten blind pairs in the last round, and this document says below how little that
+  reading of voice is the owner's twenty blind pairs in the last round, and this document says below how little that
   can see. (The selection script can read a file of choices; it is not used in this study.)
 
 ## From answers to rows (the scripts decide; nothing here is done by hand)
@@ -131,8 +138,8 @@ Sealed as written, with the files' paths filled in:
   "reference": "full",
   "arms": ["no-pieces", "lean-3000", "excerpts-1500", "excerpts-3000"],
   "defaultable": ["no-pieces", "lean-3000"],
-  "margins": { "rules": 0.05, "quality": 1 },
-  "minTasks": 20,
+  "margins": { "rules": 0.05, "rulesPerOutput": 0.25, "quality": 1 },
+  "plannedTasks": 60, "minTasks": 55,
   "ceiling": 0.85,
   "trials": 2,
   "domains": [
@@ -148,13 +155,15 @@ Sealed as written, with the files' paths filled in:
 
 ## The rule that selects
 
-Each domain is read on its own. Against `full`, an arm is **rejected in a domain** when either of these holds:
+Each domain is read on its own. Against `full`, an arm is **rejected in a domain** when any of these holds:
 
 - **rules:** it breaks a required rule in more answers than `full` by more than 5 in a hundred of the answers
   compared. Counted in whole answers: at 60 answers, four or more extra; at 120, seven or more;
+- **rules, counted:** it breaks more required rules in all, by more than a quarter of a rule an answer. An answer
+  that breaks five rules and one that breaks one are the same to the yes-or-no count above, and are not the same;
 - **quality:** its mean score over tasks is more than 1 point of 50 lower. The margin is a tolerance: a smaller loss
-  does not reject, however steady;
-An arm is **unread in a domain**, and cannot be selected, when the domain has fewer than 20 tasks, or when `full`
+  does not reject, however steady.
+An arm is **unread in a domain**, and cannot be selected, when the domain has fewer than 55 valid tasks, or when `full`
 itself breaks a required rule in more than 85%
 of its answers, because a yes-or-no reading then has no room to show an arm is worse. The rows script prints, per
 arm, how many answers break a rule and how many rules an answer breaks, so a domain near that ceiling is seen.
@@ -206,10 +215,10 @@ The result is stated as "selected", "stood" and "rejected in", never as "equival
   that this study did not use, through the same two scripts with the same plan values. If the selected arm is
   rejected or unread in a domain there, the commit with today's budget is the one sealed. Naming one of two commits
   prepared in advance is not a product change.
-- **The owner reads ten blind pairs** from that round, the selected arm against `full`. If `full` is chosen in 8 or
-  more of the 10, the commit with today's budget is the one sealed. Eight of ten happens by chance about one time
-  in eighteen when the two are level, and a real preference of three in four reaches it only about half the time:
-  the read catches a large loss of voice, not a small one.
+- **The owner reads twenty blind pairs** from that round, the selected arm against `full`, ten from each domain. If
+  `full` is chosen in 14 or more of the 20, the commit with today's budget is the one sealed. Fourteen of twenty
+  happens by chance about one time in seventeen when the two are level, and a real preference of three in four
+  reaches it about four times in five. It is still one reader.
 - No arm is added, no margin is moved and no strategy is invented after the first answer is written.
 
 ## What to send back

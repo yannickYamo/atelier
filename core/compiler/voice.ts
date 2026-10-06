@@ -37,6 +37,8 @@ export interface Voice {
   readonly corpusPieces?: number;
   /** the moves a reader found to hold back what was asked (a refusal, a question before any answer), by requirement id */
   readonly holdsBack?: readonly string[];
+  /** the moves that reading covered, by requirement id: a build reads again only when a move is not among them */
+  readonly holdsBackOf?: readonly string[];
   /** pieces chosen to span the author's modes, served as reference files: whole (`selectVoicePieces`), or as excerpts */
   readonly pieces?: readonly string[];
   /** how `pieces` are shown. Absent: whole, which is every skill built before excerpts existed */

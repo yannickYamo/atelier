@@ -13,8 +13,9 @@
 //                it is measured and reported, and never selected
 //   domains      [{ name,
 //                   sizes:   file {arm: words}: what `atelier export` wrote for each arm in this domain
-//                   rules:   file of {case_id, trial, condition, broken (true|false)}: the output breaks a measured
-//                            REQUIRED rule of the author's
+//                   rules:   file of {case_id, trial, condition, broken (true|false), rules?: [ids]}: the output
+//                            breaks a measured REQUIRED rule of the author's, and which ones. Every row of a file
+//                            lists `rules` or none does; efficiency-rows.mjs always writes the list
 //                   quality: [files] of {case_id, trial, condition, score (number)}: the comparator's own score, one
 //                            file a judging session; a task's arms are compared inside a session, then sessions
 //                            averaged per task
@@ -22,9 +23,13 @@
 //                            between the arm's output and the reference's. A file ONLY where the reader was
 //                            qualified on that domain; null leaves voice unread there, and it then rejects nothing
 //                   excluded: [case ids] dropped for every arm in this domain, each with a reason in the report }]
-//   margins      { rules, quality }: how much worse than the reference an arm may MEASURE before it is rejected:
-//                `rules` in share of outputs (0.05 is five in a hundred), `quality` in points of the score
+//   margins      { rules, rulesPerOutput, quality }: how much worse than the reference an arm may MEASURE before it
+//                is rejected: `rules` in share of outputs (0.05 is five in a hundred), `rulesPerOutput` in required
+//                rules broken per output (0.25 is one more rule in every four outputs), `quality` in points of the
+//                score. `rulesPerOutput` is REQUIRED when any rules row lists `rules`, and sealed with the others
 //   minTasks     fewer tasks than this in a domain and no arm is read there
+//   plannedTasks (optional) the whole number of tasks a domain was planned at. A config whose `minTasks` is under 90%
+//                of it (rounded down) is refused: a study planned at N must not be read on far fewer
 //   trials       outputs per task per arm: every task has exactly this many, in every file
 //   ceiling      a share of outputs: where the reference itself breaks a required rule in more than this share of
 //                its outputs, a yes-or-no reading has no room left to show an arm is worse, so rules are unread
@@ -33,16 +38,27 @@
 // THE INPUT IS CHECKED BEFORE IT IS READ, and anything unexpected stops the run (exit 2) instead of thinning it. Every
 // row names the reference or a listed arm; `broken` is a boolean, `score` a number, `chose` one of two words; no
 // (task, trial, arm) appears twice; every arm has exactly the reference's tasks and trials; every task has the sealed
-// number of trials; and the rules file and every judging session cover one and the same set of tasks and trials. A
+// number of trials; a `rules` list is a list of ids that agrees with `broken` (empty exactly when it is false); and
+// the rules file and every judging session cover one and the same set of tasks and trials. A
 // task an arm has no output for is not dropped in silence: it is listed in `excluded`, for every arm at once, or the
 // run stops. A reading that quietly lost its failing tasks would select the arm that failed. Where voice is read,
 // it is one choice per task and arm, on the tasks of the rules file and no others.
 //
-// THE UNIT IS THE TASK for quality and voice, and THE OUTPUT for the rule count, which is compared as whole numbers.
+// THE UNIT IS THE TASK for quality and voice, and THE OUTPUT for the two rule counts, compared as whole numbers.
 //
 // AN ARM IS REJECTED IN A DOMAIN when, against the reference, any of these holds:
 //   rules     it breaks a required rule in more outputs than the reference by more than `margins.rules` of the
 //             outputs compared. Counted in outputs: at 60 outputs and 0.05, four or more extra broken outputs
+//   rules per output
+//             it breaks more required rules in all than the reference, by more than `margins.rulesPerOutput` rules
+//             an output. The first reading asks only whether an output broke ANY rule, so an arm that breaks five
+//             rules where the reference breaks one reads as level on it; this one counts the rules. Compared as
+//             exact totals over the outputs compared, in whole rules: rejected when
+//             armTotal - referenceTotal > floor(margins.rulesPerOutput * outputs + 1e-9). At 60 outputs and 0.25,
+//             sixteen or more extra broken rules. Both totals and both means are in the result. It is read wherever
+//             the rows list `rules` and the domain has `minTasks` tasks, the ceiling notwithstanding: a count still
+//             has room where a yes-or-no reading has none (the domain itself stays unread for selection there).
+//             Where a domain's rules rows list no `rules`, this reading is skipped there and the result says so
 //   quality   its mean score, over tasks, is lower by more than `margins.quality`
 //   voice     where read: the reference's output is chosen clearly more often, by an exact one-sided sign test at
 //             0.05 over the tasks with a majority (core/stats). A domain where voice is read and an arm has fewer
@@ -116,6 +132,22 @@ export function readRules(arm, ref, margin, minTasks, ceiling) {
     why: extra > allowed ? `breaks a required rule in ${armBroken} of ${outputs} outputs against ${refBroken} for the reference: ${extra} more, where ${allowed} are allowed` : null };
 }
 
+/**
+ * RULES PER OUTPUT: how many required rules each output breaks, summed, the arm against the reference, in whole
+ * rules. `arm` and `ref` hold, per output, the number of rules it breaks. The yes-or-no reading above cannot tell an
+ * arm that breaks five rules an output from one that breaks one.
+ */
+export function readRulesPerOutput(arm, ref, tolerance, minTasks) {
+  const tasks = perTask(ref).size;
+  if (tasks < minTasks) return { read: false, tasks };
+  const outputs = ref.size; const total = (m) => [...m.values()].reduce((n, x) => n + x.value, 0);
+  const armTotal = total(arm); const referenceTotal = total(ref); const extra = armTotal - referenceTotal;
+  // Whole rules on both sides, as the outputs are whole above: the most extra broken rules the tolerance allows.
+  const allowed = Math.floor(tolerance * outputs + 1e-9);
+  return { read: true, tasks, outputs, armTotal, referenceTotal, armMean: r3(armTotal / outputs), referenceMean: r3(referenceTotal / outputs), extra, allowed, tolerance, rejected: extra > allowed,
+    why: extra > allowed ? `breaks ${armTotal} required rules over ${outputs} outputs against ${referenceTotal} for the reference: ${extra} more, where ${allowed} are allowed` : null };
+}
+
 /** QUALITY: the comparator's own score, differenced inside each judging session, then averaged per task over sessions. */
 export function readQuality(sessions, margin, minTasks) {
   const byTask = new Map();
@@ -159,6 +191,13 @@ export function select(cfg, load) {
   if (cfg.domains.some((d) => d === null || typeof d !== 'object' || typeof d.name !== 'string' || !d.name) || new Set(cfg.domains.map((d) => d.name)).size !== cfg.domains.length) refuse('each domain needs a name of its own');
   if (typeof cfg.ceiling !== 'number' || !(cfg.ceiling > 0 && cfg.ceiling <= 1)) refuse('config.ceiling must be a share of outputs, above 0 and at most 1');
   if (!Number.isInteger(cfg.minTasks) || cfg.minTasks < 2) refuse('config.minTasks must be a whole number of at least 2');
+  const tolerance = cfg.margins.rulesPerOutput;
+  if (tolerance !== undefined && !(typeof tolerance === 'number' && Number.isFinite(tolerance) && tolerance >= 0)) refuse('config.margins.rulesPerOutput is a number of rules per output, 0 or more');
+  if (cfg.plannedTasks !== undefined) {
+    if (!Number.isInteger(cfg.plannedTasks) || cfg.plannedTasks < 1) refuse('config.plannedTasks must be a whole number of tasks, at least 1');
+    const least = Math.floor((cfg.plannedTasks * 9) / 10);
+    if (cfg.minTasks < least) refuse(`config.minTasks is ${cfg.minTasks} and the study was planned at ${cfg.plannedTasks} tasks a domain: a study planned at ${cfg.plannedTasks} must not be read on far fewer. Set minTasks to at least ${least} (90% of the plan, rounded down), or correct plannedTasks`);
+  }
   if (!Array.isArray(cfg.arms) || !cfg.arms.length || new Set(cfg.arms).size !== cfg.arms.length) refuse('config.arms must list each arm once');
   if (cfg.arms.includes(cfg.reference)) refuse('the reference is not one of the arms read against it: list it once, as "reference"');
   if (!Array.isArray(cfg.defaultable) || cfg.defaultable.some((a) => !cfg.arms.includes(a))) refuse('config.defaultable must be a list of arms from "arms"');
@@ -170,7 +209,20 @@ export function select(cfg, load) {
     const sizes = load(d.sizes, 'json');
     if (sizes === null || typeof sizes !== 'object') refuse(`${d.name}: sizes is not an object`);
     for (const l of labels) if (!(typeof sizes[l] === 'number' && sizes[l] > 0)) refuse(`${d.name}: sizes has no positive number for "${l}"`);
-    const rules = byArm(load(d.rules, 'jsonl'), `${d.name} rules`, labels, cfg.reference, excluded, (r) => (typeof r.broken === 'boolean' ? r.broken : null), cfg.trials);
+    const ruleRows = load(d.rules, 'jsonl');
+    const rules = byArm(ruleRows, `${d.name} rules`, labels, cfg.reference, excluded, (r) => (typeof r.broken === 'boolean' ? r.broken : null), cfg.trials);
+    // THE RULES EACH OUTPUT BREAKS, where the rows list them: on every row or on none, and agreeing with `broken`.
+    const listed = ruleRows.some((r) => r.rules !== undefined);
+    if (listed) {
+      for (const r of ruleRows) {
+        const which = `${d.name} rules: ${r.case_id} trial ${r.trial} (${r.condition})`;
+        if (r.rules === undefined) refuse(`${which} has no \`rules\` where other rows of the file list the rules broken. Every row lists them or none does: write the file again with bench/compare/efficiency-rows.mjs`);
+        if (!Array.isArray(r.rules) || r.rules.some((x) => typeof x !== 'string')) refuse(`${which} has \`rules\` that is not a list of rule ids`);
+        if (r.broken !== r.rules.length > 0) refuse(`${which} has \`broken\` ${r.broken} and ${r.rules.length} rule(s) listed`);
+      }
+      if (tolerance === undefined) refuse(`config.margins needs "rulesPerOutput": the rules rows of "${d.name}" list the rules each output breaks, and the tolerance on their number (rules per output, for instance 0.25) must be sealed with the other margins before they are read`);
+    }
+    const broke = listed ? byArm(ruleRows, `${d.name} rules`, labels, cfg.reference, excluded, (r) => r.rules.length, cfg.trials) : null;
     const quality = d.quality.map((f, i) => byArm(load(f, 'jsonl'), `${d.name} quality (session ${i + 1})`, labels, cfg.reference, excluded, (r) => (typeof r.score === 'number' && Number.isFinite(r.score) ? r.score : null), cfg.trials));
     // ONE SET OF TASKS AND TRIALS FOR EVERY READING. A judging session short of tasks, or on other tasks, would be read
     // on what it has; the tasks it lacks may be the ones an arm lost on.
@@ -185,7 +237,9 @@ export function select(cfg, load) {
       const v = voice ? readVoice(voice, arm, `${d.name} voice`, cfg.minTasks, excluded, tasks) : { read: false, tasks: 0, unread: 'no qualified reader on this domain' };
       // Rules and quality must both be read. Voice must be read too wherever this domain reads voice at all.
       const read = r.read && q.read && (voice === null || v.read);
-      const rejectedBy = [r.read && r.rejected ? `rules: ${r.why}` : null, q.read && q.rejected ? `quality: ${q.why}` : null, v.read && v.rejected ? `voice: ${v.why}` : null].filter(Boolean);
+      r.perOutput = broke ? readRulesPerOutput(broke.get(arm), broke.get(cfg.reference), tolerance, cfg.minTasks)
+        : { read: false, skipped: 'the rules rows of this domain list no `rules`, so the number of rules broken per output was not compared' };
+      const rejectedBy = [r.read && r.rejected ? `rules: ${r.why}` : null, r.perOutput.read && r.perOutput.rejected ? `rules per output: ${r.perOutput.why}` : null, q.read && q.rejected ? `quality: ${q.why}` : null, v.read && v.rejected ? `voice: ${v.why}` : null].filter(Boolean);
       return [arm, { words: sizes[arm], read, rejected: rejectedBy.length > 0, rejectedBy, rules: r, quality: q, voice: v }];
     })) };
   });
@@ -207,7 +261,7 @@ export function select(cfg, load) {
     ? `SELECTED: "${chosen.arm}", ${fewer(chosen)}. It was rejected in no domain. This selects a configuration; it does not show the two are equivalent.`
     : `NONE SELECTED: no arm that may become the default stood in every domain and is smaller than the reference, so "${cfg.reference}" stays the default. The study did not show that a smaller skill holds; at this size it could not have shown that it does not.`)
     + (leanest && leanest.arm !== chosen?.arm ? ` The smallest arm that stood is "${leanest.arm}" (${fewer(leanest)}); it is reported and may not become the default in this version.` : '');
-  return { reference: cfg.reference, referenceWords, margins: cfg.margins, minTasks: cfg.minTasks, ceiling: cfg.ceiling, trials: cfg.trials, alpha: ALPHA, domains, standing, selected: chosen?.arm ?? null, smallestStanding: leanest?.arm ?? null, sentence };
+  return { reference: cfg.reference, referenceWords, margins: cfg.margins, minTasks: cfg.minTasks, ...(cfg.plannedTasks === undefined ? {} : { plannedTasks: cfg.plannedTasks }), ceiling: cfg.ceiling, trials: cfg.trials, alpha: ALPHA, domains, standing, selected: chosen?.arm ?? null, smallestStanding: leanest?.arm ?? null, sentence };
 }
 
 // RUN AS A SCRIPT only when this file is the one node was started on, compared as real paths: node resolves a symlink
@@ -227,6 +281,7 @@ if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.
     for (const s of result.standing) console.log(`${s.state.padEnd(11)}  ${s.arm}  ${s.words.toLocaleString('en-US')} words${s.defaultable ? '' : '  (measured only)'}${s.rejectedIn.length ? `  rejected in: ${s.rejectedIn.join(', ')}` : ''}${s.unreadIn.length ? `  unread in: ${s.unreadIn.join(', ')}` : ''}`);
     for (const d of result.domains) for (const [arm, x] of Object.entries(d.arms)) for (const why of x.rejectedBy) console.log(`  ${d.name} · ${arm} · ${why}`);
     for (const d of result.domains) { const u = Object.values(d.arms).find((x) => x.rules.unread)?.rules.unread; if (u) console.log(`  ${d.name} · rules unread: ${u}`); }
+    for (const d of result.domains) { const skipped = Object.values(d.arms).find((x) => x.rules.perOutput.skipped)?.rules.perOutput.skipped; if (skipped) console.log(`  ${d.name} · rules per output not read: ${skipped}`); }
     for (const d of result.domains) if (d.excluded.length) console.log(`  ${d.name} · ${d.excluded.length} task(s) excluded for every arm: ${d.excluded.join(', ')}`);
     console.log(`\n${result.sentence}`);
   } catch (e) {

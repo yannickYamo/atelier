@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, renameSync, cpSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, renameSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { skillSizeOf, countWords, describeParts, describeSize } from '../core/eval/size.js';
@@ -22,6 +22,7 @@ import { renderAgentSkill } from '../renderers/agent-skill/render.js';
 import { compileArchitecture } from '../core/architecture/compile.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 import type { EvalSummary } from '../core/eval/summary.js';
+import { keysOf } from '../core/state/rule-key.js';
 import { aRequirement } from './fixtures.js';
 
 /** A piece of `paragraphs` distinct paragraphs, each about 45 words, so a passage can be traced to where it came from. */
@@ -355,7 +356,8 @@ const jsonl = (rows: readonly object[]): string => `${rows.map((r) => JSON.strin
 describe('the rule that chooses which size becomes the default', () => {
   interface Arm { words: number; breaks: (task: number, trial: number) => boolean; score: (task: number) => number; chosen?: (task: number) => string }
   interface Standing { arm: string; state: 'stands' | 'rejected' | 'unread' | 'not smaller'; rejectedIn: string[]; unreadIn: string[] }
-  interface Selection { selected: string | null; smallestStanding: string | null; sentence: string; standing: Standing[]; domains: { name: string; arms: Record<string, { rejectedBy: string[]; voice: { read: boolean } }> }[] }
+  interface PerOutput { read: boolean; skipped?: string; outputs?: number; armTotal?: number; referenceTotal?: number; armMean?: number; referenceMean?: number; extra?: number; allowed?: number; tolerance?: number; rejected?: boolean }
+  interface Selection { selected: string | null; smallestStanding: string | null; sentence: string; plannedTasks?: number; standing: Standing[]; domains: { name: string; arms: Record<string, { rejectedBy: string[]; rules: { perOutput: PerOutput }; voice: { read: boolean } }> }[] }
   interface Files { rules: object[]; quality: object[]; picks: object[] }
   /** One domain's files: `tasks` tasks, two outputs each, the reference and every arm. `edit` changes the rows before they are written. */
   const domain = (dir: string, name: string, tasks: number, arms: Record<string, Arm>, opts: { voice?: boolean; edit?: (f: Files) => void; excluded?: string[] } = {}): object => {
@@ -549,6 +551,81 @@ describe('the rule that chooses which size becomes the default', () => {
     expect(refused(dir, [d], ['lean'], { minTasks: null })).toMatch(/config needs "minTasks"/);
     expect(refused(dir, [d], ['lean'], { defaultable: ['other'] })).toMatch(/defaultable must be a list of arms/);
   });
+
+  // ── HOW MANY RULES AN OUTPUT BREAKS, NOT ONLY WHETHER IT BREAKS ONE ────────────────────────────────
+  /** The rows as efficiency-rows.mjs writes them: each lists the rules it breaks, `count` of them on a broken output. */
+  const listing = (count: (condition: string, task: number, trial: number) => number) => (f: Files): void => {
+    for (const r of f.rules as { case_id: string; trial: number; condition: string; broken: boolean; rules?: string[] }[]) r.rules = r.broken ? Array.from({ length: count(r.condition, Number(r.case_id.slice(1)), r.trial) }, (_, k) => `R${k + 1}`) : [];
+  };
+  const PER_OUTPUT = { margins: { rules: 0.05, rulesPerOutput: 0.25, quality: 1 } };
+  /** Both arms break a rule in the same thirty of sixty outputs: level on the yes-or-no count, whatever each output breaks. */
+  const half = { full: { ...level, breaks: breaking(30), words: 13000 }, lean: { ...level, breaks: breaking(30), words: 5000 } };
+
+  it('an arm level on the outputs that break a rule, and breaking five rules where the reference breaks one, is rejected on the count per output', () => {
+    const dir = tmp();
+    const d = domain(dir, 'blog', 30, half, { edit: listing((condition) => (condition === 'lean' ? 5 : 1)) });
+    const r = analyse(dir, [d], ['lean'], PER_OUTPUT);
+    expect(r.selected).toBeNull();
+    expect(r.standing[0]).toMatchObject({ state: 'rejected', rejectedIn: ['blog'] });
+    // the yes-or-no reading finds nothing: the only reason is the new one, with both totals in it
+    expect(r.domains[0].arms.lean.rejectedBy).toEqual(['rules per output: breaks 150 required rules over 60 outputs against 30 for the reference: 120 more, where 15 are allowed']);
+    expect(r.domains[0].arms.lean.rules.perOutput).toEqual({ read: true, tasks: 30, outputs: 60, armTotal: 150, referenceTotal: 30, armMean: 2.5, referenceMean: 0.5, extra: 120, allowed: 15, tolerance: 0.25, rejected: true,
+      why: 'breaks 150 required rules over 60 outputs against 30 for the reference: 120 more, where 15 are allowed' });
+    const printed = script('efficiency-select.mjs', '--config', join(dir, 'config.json'));
+    expect(printed.out).toMatch(/^ {2}blog · lean · rules per output: breaks 150 required rules over 60 outputs against 30 for the reference: 120 more, where 15 are allowed$/m);
+    expect(printed.out).toMatch(/^NONE SELECTED/m);
+  });
+  it('level on both counts it stands, and the boundary is in whole rules: fifteen more in sixty outputs stands at 0.25, sixteen more is rejected', () => {
+    const dir = tmp();
+    const same = analyse(dir, [domain(dir, 'blog', 30, half, { edit: listing(() => 2) })], ['lean'], PER_OUTPUT);
+    expect(same.selected).toBe('lean');
+    expect(same.domains[0].arms.lean.rules.perOutput).toMatchObject({ armTotal: 60, referenceTotal: 60, armMean: 1, referenceMean: 1, extra: 0, allowed: 15, rejected: false });
+    for (const [extra, state] of [[15, 'stands'], [16, 'rejected']] as const) {
+      // the arm breaks a second rule on its first `extra` broken outputs, all of them first trials
+      const d = domain(dir, 'blog', 30, half, { edit: listing((condition, task, trial) => (condition === 'lean' && trial === 1 && task < extra ? 2 : 1)) });
+      const r = analyse(dir, [d], ['lean'], PER_OUTPUT);
+      expect(r.standing[0].state, `${extra} more`).toBe(state);
+      expect(r.domains[0].arms.lean.rules.perOutput).toMatchObject({ armTotal: 30 + extra, referenceTotal: 30, extra, allowed: 15 });
+    }
+    // fewer rules than the reference is no loss, and a tolerance of 0 allows none more
+    const d = domain(dir, 'blog', 30, half, { edit: listing((condition, task, trial) => (condition === 'lean' && trial === 1 && task === 0 ? 2 : 1)) });
+    expect(analyse(dir, [d], ['lean'], { margins: { rules: 0.05, rulesPerOutput: 0, quality: 1 } }).domains[0].arms.lean.rejectedBy).toEqual(['rules per output: breaks 31 required rules over 60 outputs against 30 for the reference: 1 more, where 0 are allowed']);
+    expect(analyse(dir, [domain(dir, 'blog', 30, half, { edit: listing((condition) => (condition === 'lean' ? 1 : 3)) })], ['lean'], PER_OUTPUT).selected).toBe('lean');
+  });
+  it('rows that list the rules need the sealed tolerance; rows that list none skip the count, and the result says so', () => {
+    const dir = tmp();
+    const listed = domain(dir, 'blog', 30, half, { edit: listing(() => 1) });
+    expect(refused(dir, [listed], ['lean'])).toMatch(/config\.margins needs "rulesPerOutput": the rules rows of "blog" list the rules each output breaks, and the tolerance on their number \(rules per output, for instance 0\.25\) must be sealed/);
+    expect(refused(dir, [listed], ['lean'], { margins: { rules: 0.05, rulesPerOutput: -1, quality: 1 } })).toMatch(/config\.margins\.rulesPerOutput is a number of rules per output, 0 or more/);
+    expect(refused(dir, [listed], ['lean'], { margins: { rules: 0.05, rulesPerOutput: '0.25', quality: 1 } })).toMatch(/rulesPerOutput is a number of rules per output/);
+    // a list on some rows only, and a list that does not agree with `broken`, are refused
+    const some = domain(dir, 'blog', 30, half, { edit: (f) => { listing(() => 1)(f); delete (f.rules[5] as { rules?: string[] }).rules; } });
+    expect(refused(dir, [some], ['lean'], PER_OUTPUT)).toMatch(/blog rules: t1 trial 2 \(full\) has no `rules` where other rows of the file list the rules broken\. Every row lists them or none does/);
+    const odd = domain(dir, 'blog', 30, half, { edit: (f) => { listing(() => 1)(f); (f.rules[0] as { rules: string[] }).rules = []; } });
+    expect(refused(dir, [odd], ['lean'], PER_OUTPUT)).toMatch(/blog rules: t0 trial 1 \(full\) has `broken` true and 0 rule\(s\) listed/);
+    // no row lists rules: nothing to count, with or without the tolerance, and it is said in the result and on the screen
+    const bare = domain(dir, 'blog', 30, half);
+    for (const more of [{}, PER_OUTPUT]) {
+      const r = analyse(dir, [bare], ['lean'], more);
+      expect(r.selected).toBe('lean');
+      expect(r.domains[0].arms.lean.rules.perOutput).toEqual({ read: false, skipped: 'the rules rows of this domain list no `rules`, so the number of rules broken per output was not compared' });
+    }
+    expect(script('efficiency-select.mjs', '--config', join(dir, 'config.json')).out).toMatch(/^ {2}blog · rules per output not read: the rules rows of this domain list no `rules`/m);
+  });
+  it('a study planned at thirty tasks is not read on twenty: minTasks under 90% of plannedTasks is refused', () => {
+    const dir = tmp();
+    const d = domain(dir, 'blog', 30, { full: { ...level, words: 13000 }, lean: { ...level, words: 5000 } });
+    expect(refused(dir, [d], ['lean'], { plannedTasks: 30 })).toMatch(/config\.minTasks is 20 and the study was planned at 30 tasks a domain: a study planned at 30 must not be read on far fewer\. Set minTasks to at least 27 \(90% of the plan, rounded down\), or correct plannedTasks/);
+    expect(refused(dir, [d], ['lean'], { plannedTasks: 30, minTasks: 26 })).toMatch(/at least 27/);
+    const at = analyse(dir, [d], ['lean'], { plannedTasks: 30, minTasks: 27 });
+    expect(at).toMatchObject({ selected: 'lean', plannedTasks: 30 });
+    // 90% rounded down: 25 planned may be read on 22
+    expect(analyse(dir, [d], ['lean'], { plannedTasks: 25, minTasks: 22 }).selected).toBe('lean');
+    expect(refused(dir, [d], ['lean'], { plannedTasks: 25, minTasks: 21 })).toMatch(/at least 22/);
+    expect(refused(dir, [d], ['lean'], { plannedTasks: 29.5 })).toMatch(/config\.plannedTasks must be a whole number of tasks, at least 1/);
+    // without it nothing changes
+    expect(analyse(dir, [d], ['lean']).plannedTasks).toBeUndefined();
+  });
 });
 
 // ── THROUGH THE SHIPPED BINARY ──────────────────────────────────────────────────────────────────
@@ -736,13 +813,33 @@ describe('through the binary: a skill built without asking is unchanged, and the
     writeFileSync(join(work, 'lean.jsonl'), answers('b1500.md', (t) => (t === 0 ? breaks : clean)));
     writeFileSync(join(work, 'rubric.json'), JSON.stringify({ name: 'r', scale: [1, 10], dimensions: [{ name: 'Directness', question: '?' }, { name: 'Rhythm', question: '?' }] }));
     const plan = (more: object = {}, domain: object = {}): string => {
-      writeFileSync(join(work, 'plan.json'), JSON.stringify({ reference: 'full', arms: ['lean-1500'], defaultable: ['lean-1500'], margins: { rules: 0.05, quality: 1 }, minTasks: 2, ceiling: 0.85, trials: 2, ...more,
+      writeFileSync(join(work, 'plan.json'), JSON.stringify({ reference: 'full', arms: ['lean-1500'], defaultable: ['lean-1500'], margins: { rules: 0.05, rulesPerOutput: 0.25, quality: 1 }, minTasks: 2, plannedTasks: 2, ceiling: 0.85, trials: 2, ...more,
         domains: [{ name: 'blog', skill: 'voice', data, tasks: 'tasks.jsonl', exports: { full: out('full.md'), 'lean-1500': out('b1500.md') }, responses: { full: 'full.jsonl', 'lean-1500': 'lean.jsonl' },
           judged: ['judged-1.jsonl'], rubric: 'rubric.json', voice: null, ...domain }] }));
       return join(work, 'plan.json');
     };
+    // WHAT THE RULE WILL NEED IS ASKED FOR BEFORE THE JUDGE IS PAID: the tolerance on rules per output, and a floor that fits the plan
+    expect(script('efficiency-rows.mjs', '--plan', plan({ margins: { rules: 0.05, quality: 1 } }), '--stage', 'merge', '--out', join(work, 'out'))).toMatchObject({ code: 2, out: expect.stringMatching(/plan\.margins needs "rulesPerOutput": how many more required rules per output than the reference an arm may break \(for instance 0\.25\)/) as string });
+    expect(script('efficiency-rows.mjs', '--plan', plan({ margins: { rules: 0.05, rulesPerOutput: -0.5, quality: 1 } }), '--stage', 'merge', '--out', join(work, 'out')).out).toMatch(/plan\.margins\.rulesPerOutput is -0\.5: it must be a number of rules per output, 0 or more/);
+    expect(script('efficiency-rows.mjs', '--plan', plan({ plannedTasks: 30 }), '--stage', 'merge', '--out', join(work, 'out'))).toMatchObject({ code: 2, out: expect.stringMatching(/plan\.minTasks is 2 and the study was planned at 30 tasks a domain: a study planned at 30 must not be read on far fewer\. Set minTasks to at least 27/) as string });
+    expect(existsSync(join(work, 'out'))).toBe(false);
+    // EVERY ARM OF A DOMAIN IS BUILT FROM ONE STANDARD, read from the line each export carries
+    const STANDARD = /^This is a compiled output; the authority record is StandardVersion (\S+)\.$/m;
+    const hash = STANDARD.exec(readFileSync(out('full.md'), 'utf8'))![1];
+    expect(STANDARD.exec(readFileSync(out('b1500.md'), 'utf8'))![1]).toBe(hash);
+    writeFileSync(join(work, 'moved.md'), readFileSync(out('b1500.md'), 'utf8').replace(STANDARD, 'This is a compiled output; the authority record is StandardVersion another-standard.'));
+    const moved = script('efficiency-rows.mjs', '--plan', plan({}, { exports: { full: out('full.md'), 'lean-1500': 'moved.md' } }), '--stage', 'merge', '--out', join(work, 'out'));
+    expect(moved.code).toBe(2);
+    expect(moved.out).toContain(`blog: the arms were not built from one standard ("full": ${hash}, "lean-1500": another-standard). No standard may move between arms: decision 0014. Build every arm from the same approved standard and export it again.`);
+    writeFileSync(join(work, 'bare.md'), readFileSync(out('b1500.md'), 'utf8').replace(STANDARD, ''));
+    const bare = script('efficiency-rows.mjs', '--plan', plan({}, { exports: { full: out('full.md'), 'lean-1500': 'bare.md' } }), '--stage', 'merge', '--out', join(work, 'out'));
+    expect(bare.code).toBe(2);
+    expect(bare.out).toMatch(/blog: the export of "lean-1500" \(bare\.md\) has no line "This is a compiled output; the authority record is StandardVersion <hash>\.", so the standard it was built from cannot be read/);
+    expect(script('efficiency-rows.mjs', '--plan', plan({ arms: ['standard'], defaultable: ['standard'] }), '--stage', 'merge', '--out', join(work, 'out')).out).toMatch(/an arm cannot be labelled "standard"/);
+    expect(existsSync(join(work, 'out', 'blog-responses.jsonl'))).toBe(false);
     const merged = script('efficiency-rows.mjs', '--plan', plan(), '--stage', 'merge', '--out', join(work, 'out'));
     expect(merged.code, merged.out).toBe(0);
+    expect(merged.out).toContain(`blog: every arm was built from one standard, StandardVersion ${hash}`);
     const forJudge = readFileSync(join(work, 'out', 'blog-responses.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { case_id: string; trial: number; condition: string });
     // every answer carries its arm's own label, which is what the judge shuffles by and the rule reads
     expect(forJudge).toHaveLength(12);
@@ -761,10 +858,19 @@ describe('through the binary: a skill built without asking is unchanged, and the
     const sizes = JSON.parse(readFileSync(join(work, 'out', 'blog-sizes.json'), 'utf8')) as Record<string, number>;
     expect(sizes.full).toBe(countWords(readFileSync(out('full.md'), 'utf8')));
     expect(sizes['lean-1500']).toBeLessThan(sizes.full);
+    // the standard every arm was built from is on file beside what each arm served, and was printed
+    expect(JSON.parse(readFileSync(join(work, 'out', 'blog-exports.json'), 'utf8'))).toEqual({ full: sent('full.md'), 'lean-1500': sent('b1500.md'), standard: hash });
+    expect(rows.out).toContain(`blog: every arm was built from one standard, StandardVersion ${hash}`);
+    // the sealed tolerances and the plan's size reach the rule as written
+    expect(JSON.parse(readFileSync(join(work, 'out', 'ablation.json'), 'utf8'))).toMatchObject({ margins: { rules: 0.05, rulesPerOutput: 0.25, quality: 1 }, minTasks: 2, plannedTasks: 2 });
     // and the rule reads what the script wrote, with no step in between: two more broken outputs in six, rejected
     const chosen = script('efficiency-select.mjs', '--config', join(work, 'out', 'ablation.json'));
     expect(chosen.code, chosen.out).toBe(0);
     expect(chosen.out).toMatch(/blog · lean-1500 · rules: breaks a required rule in 2 of 6 outputs against 0 for the reference: 2 more, where 0 are allowed/);
+    // the same two answers are counted by the rules they break: over the one extra rule that 0.25 an output allows in six
+    const broke = (rules as unknown as { condition: string; rules: string[] }[]).filter((x) => x.condition === 'lean-1500').reduce((k, x) => k + x.rules.length, 0);
+    expect(broke).toBeGreaterThan(1);
+    expect(chosen.out).toContain(`blog · lean-1500 · rules per output: breaks ${broke} required rules over 6 outputs against 0 for the reference: ${broke} more, where 1 are allowed`);
     expect(chosen.out).toMatch(/^NONE SELECTED/m);
     const merge = (p: string, to = 'out'): { code: number; out: string } => script('efficiency-rows.mjs', '--plan', p, '--stage', 'merge', '--out', join(work, to));
     // A JUDGE'S FILE SHORT OF ANSWERS IS REFUSED, AND A RUN THAT STOPS LEAVES NO OLDER RESULT TO READ.
@@ -790,6 +896,24 @@ describe('through the binary: a skill built without asking is unchanged, and the
     writeFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'paid for\n');
     expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['kept/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/kept\/blog-quality-1\.jsonl is inside --out, which this script clears and rewrites/);
     expect(readFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'utf8')).toBe('paid for\n');
+    // A LINK TO THE PLAN'S FOLDER IS THAT FOLDER. An answers file there under a name this script clears (the tester's
+    // case, with another script) would be removed before it was read: refused in both stages, every input byte for byte.
+    writeFileSync(join(work, 'blog-responses.jsonl'), readFileSync(join(work, 'full.jsonl'), 'utf8'));
+    const inputs = ['plan.json', 'tasks.jsonl', 'full.jsonl', 'lean.jsonl', 'judged-1.jsonl', 'rubric.json', 'blog-responses.jsonl'];
+    const linkedPlan = plan({}, { responses: { full: 'blog-responses.jsonl', 'lean-1500': 'lean.jsonl' } });
+    const bytes = inputs.map((f) => readFileSync(join(work, f), 'utf8'));
+    execFileSync('ln', ['-s', work, join(proj, 'ablation-link')]);
+    for (const stage of ['merge', 'rows']) {
+      const linked = script('efficiency-rows.mjs', '--plan', linkedPlan, '--stage', stage, '--out', join(proj, 'ablation-link'));
+      expect(linked.code, linked.out).toBe(2);
+      expect(linked.out).toMatch(/--out must be a directory of its own \(through a link, --out is .*ablation\): this script clears and rewrites what it finds there/);
+      expect(inputs.map((f) => readFileSync(join(work, f), 'utf8')), stage).toEqual(bytes);
+    }
+    // a link to a folder inside --out makes the file reached through it an input inside --out
+    execFileSync('ln', ['-s', join(work, 'kept'), join(work, 'shelf')]);
+    expect(script('efficiency-rows.mjs', '--plan', plan({}, { judged: ['shelf/blog-quality-1.jsonl'] }), '--stage', 'rows', '--out', join(work, 'kept')).out).toMatch(/shelf\/blog-quality-1\.jsonl is inside --out, which this script clears and rewrites/);
+    expect(readFileSync(join(work, 'kept', 'blog-quality-1.jsonl'), 'utf8')).toBe('paid for\n');
+    plan();
     // answers merged again leave no rows of the answers they replace
     writeFileSync(join(work, 'out', 'ablation.json'), '{}'); writeFileSync(join(work, 'out', 'blog-rules.jsonl'), '');
     expect(merge(plan()).code).toBe(0);
@@ -921,3 +1045,43 @@ describe('through the binary: a project that moved keeps its skill', () => {
   }, 300_000);
 });
 
+
+describe('through the binary: a rebuild never takes "write this, not that" pairs unasked', () => {
+  // A store as an earlier build left it: a run that recorded a repair, and nothing marking it as a test.
+  const data = mkdtempSync(join(tmpdir(), 'atelier-pairs-data-'));
+  const proj = mkdtempSync(join(tmpdir(), 'atelier-pairs-proj-'));
+  const dir = join(proj, 'posts');
+  mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
+  const exported = (name: string): string => { run(data, proj, 'export', '--skill', 'voice', '--out', join(proj, name)); return readFileSync(join(proj, name), 'utf8'); };
+  const r = { before: '', plain: '', plainSaid: '', asked: '', keptAfter: '', none: '' };
+  beforeAll(() => {
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
+    run(data, proj, 'invoke', '--skill', 'voice', '--json', 'Write a short post about a decision we made.');
+    const skill = join(data, 'skills', 'voice');
+    const card = JSON.parse(run(data, proj, 'report', '--skill', 'voice', '--json')) as { standardVersion: string };
+    const v = JSON.parse(readFileSync(join(skill, 'standards', `${card.standardVersion}.json`), 'utf8')) as StandardVersion;
+    const hedges = keysOf(v.requirements)[v.requirements.findIndex((q) => q.measurement?.observer === 'HEDGE_RATE')];
+    const file = join(skill, 'invocations', readdirSync(join(skill, 'invocations'))[0]);
+    const record = JSON.parse(readFileSync(file, 'utf8')) as { repair?: object };
+    writeFileSync(file, JSON.stringify({ ...record, repair: { ...record.repair, pairs: [{ key: hedges, before: 'Perhaps this might possibly work, maybe.', after: 'This works.' }] } }, null, 1));
+    r.before = exported('before.md');
+    r.plainSaid = run(data, proj, 'build', '--name', 'voice'); r.plain = exported('plain.md');
+    run(data, proj, 'build', '--name', 'voice', '--contrast', 'auto'); r.asked = exported('asked.md');
+    run(data, proj, 'build', '--name', 'voice'); r.keptAfter = exported('kept.md');
+    run(data, proj, 'build', '--name', 'voice', '--contrast', 'none'); r.none = exported('none.md');
+  }, 300_000);
+
+  it('a plain rebuild of a skill with no pairs exports the same bytes, whatever its runs recorded', () => {
+    expect(r.plainSaid).not.toMatch(/EXIT:/);
+    expect(r.before).not.toContain('This works.');
+    expect(r.plain).toBe(r.before);
+  });
+  it('`--contrast auto` chooses them, a plain rebuild then keeps them, and `--contrast none` removes them', () => {
+    expect(r.asked).toContain('Perhaps this might possibly work, maybe.');
+    expect(r.asked).toContain('This works.');
+    expect(r.keptAfter).toBe(r.asked);
+    expect(r.none).toBe(r.before);
+  });
+});

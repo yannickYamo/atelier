@@ -710,8 +710,9 @@ mintedAt:        ${v.mintedAt}
   // last, so its place in the record does not depend on which path of the build set it, and only when a piece was
   // actually cut: asked of pieces too short to cut, `excerpts` serves the very files `whole` does. Every other field is written as it always was, in the order it came.
   const travelling = voice ? (() => {
-    const { pieceBudget: _budget, pieceForm, ...rest } = voice;
-    void _budget;
+    // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file.
+    const { pieceBudget: _budget, holdsBackOf: _covered, pieceForm, ...rest } = voice;
+    void _budget; void _covered;
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;
   const withPairs = { ...(contrast.length ? { ...assurance, 'contrast-pairs.json': `${JSON.stringify(contrast, null, 1)}\n` } : assurance),

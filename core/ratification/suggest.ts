@@ -67,7 +67,9 @@ export interface ProposalEvidence {
   readonly heldOut: { readonly applicable: number; readonly present: number } | null;
   readonly needs: string | null;
   /** a measured rule's conformance on the pieces it was counted from */
-  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean } | null;
+  readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean;
+    /** the proposed limit was moved to where the author's pieces are; the counts are against the limit before it was moved */
+    readonly fitted?: boolean } | null;
   /** a measured rule against the author's own pieces (read and held out): how many pieces, and which break it */
   readonly corpus?: { readonly pieces: number; readonly breaking: readonly number[] } | null;
 }
@@ -96,7 +98,16 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const r = present / applicable;
     const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
     const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
-    if (r < 0.5) {
+    // A FITTED LIMIT IS JUDGED ON THE CORPUS, NOT ON THE HELD-OUT PIECES. Its limit was moved to where the author's
+    // own pieces are (../observers/derive.ts, `fitToCorpus`), using the held-out pieces too, so they are no
+    // independent check of it, and the counts above are against the limit before it moved. What stands for the
+    // moved limit is the count of the author's pieces that meet it, which is the evidence a REQUIRED rule is held
+    // to anyway (`suggestAll`). It still needs pieces to have been held out: with none, a rule that was not fitted
+    // is shown rather than instructed, and a fitted one is treated no better.
+    const own = e.corpus ?? null;
+    const ownBreaking = new Set(own?.breaking ?? []).size;
+    const fittedHolds = e.inSample.fitted === true && independent && own !== null && own.pieces > 0 && ownBreaking <= allowed(own.pieces, CORPUS_RULE_SHARE);
+    if (r < 0.5 && !fittedHolds) {
       return applicable >= MIN_PIECES_TO_REJECT
         ? { decision: 'REJECT', materiality: null, needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it` }
         : { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 0, why: `only ${present} of ${applicable} ${where} meet it; ${TOO_FEW_TO_REJECT}` };
@@ -129,6 +140,10 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     // against the company's 15). The observer points repair at the sentences in the overfull band and names the
     // band to rewrite them into (../observers/balance.ts, DISTRIBUTION).
     const lexicon = p.measurement.observer === 'LEXICON';
+    if (fittedHolds && own !== null && !lexicon) {
+      return { decision: 'APPROVE', materiality: 'REQUIRED', needs, strength: 3,
+        why: `set where ${own.pieces - ownBreaking} of your ${own.pieces} pieces meet it; checked on every output` };
+    }
     const strong = independent && r >= 0.8 && !lexicon;
     return { decision: 'APPROVE', materiality: strong ? 'REQUIRED' : 'PREFERRED', needs, strength: strong ? 3 : 1,
       why: lexicon ? `${seen}; absence is weak evidence, so it is shown until you make it required` : seen };
@@ -192,7 +207,7 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
 //
 //   each rule   is suggested REQUIRED only if at least CORPUS_RULE_SHARE of the author's pieces meet it
 //   the set     of rules suggested REQUIRED must leave at least CORPUS_SET_SHARE of the pieces breaking none;
-//               while it does not, the rule the most pieces break is suggested PREFERRED instead
+//               when it does not, the fewest rules that bring it there are suggested PREFERRED instead
 //
 // On a small corpus a share is a blunt thing: one piece in nineteen is already more than a twentieth, so "95%"
 // would mean "every piece", and one unusual post would move a rule the rest of the author's work keeps. So each
@@ -211,6 +226,9 @@ export const CORPUS_SET_SHARE = 0.9;
 
 /** How many of `pieces` may fall short of a share: the share's own count, and never fewer than one. */
 export const allowed = (pieces: number, share: number): number => Math.max(1, Math.floor((1 - share) * pieces + 1e-9));
+
+/** Sets of rules tried before the search for the fewest to move gives way to one rule at a time. */
+const TRIES = 50_000;
 
 /** How the author's own pieces fare against the rules suggested REQUIRED, for the screen and the build to say. */
 export interface CorpusStanding { readonly pieces: number; readonly passing: number; readonly moved: readonly string[];
@@ -240,11 +258,43 @@ export function suggestAll(proposals: readonly Requirement[], meta: Readonly<Rec
   });
   // Then the rules together: the pieces that break none of them.
   const breakingAny = (): Set<number> => new Set(proposals.flatMap((_, i) => (required(i) ? [...(counted[i]?.breaking ?? [])] : [])));
-  for (let failing = breakingAny(); failing.size > allowed(pieces, CORPUS_SET_SHARE); failing = breakingAny()) {
-    // The rule the most pieces break; on a tie, the one listed last, so the order of the screen decides and nothing else.
-    const worst = proposals.map((_, i) => i).filter(required).sort((a, b) => (counted[b]?.breaking.length ?? 0) - (counted[a]?.breaking.length ?? 0) || b - a)[0];
-    if (worst === undefined || !counted[worst]?.breaking.length) break;
-    demote(worst, `with it, only ${pieces - failing.size} of your own ${pieces} pieces would meet every required rule, ${until}`);
+  const room = allowed(pieces, CORPUS_SET_SHARE);
+  if (breakingAny().size > room) {
+    // THE FEWEST RULES MOVED. Moving the rule the most pieces break, one at a time, can move more rules than it has
+    // to: a tester's replay kept 7 required rules of 13 on one author where 10 could have stayed. So the sets are
+    // tried smallest first, and the first size at which some set brings the corpus within the room is the answer.
+    // Among sets of that size: the one that leaves the fewest pieces breaking a rule, then the one whose rules the
+    // most pieces break, then the one listed latest. The search is exact while it is small; past TRIES it falls back
+    // to one rule at a time, which is never wrong, only sometimes larger.
+    const live = proposals.map((_, i) => i).filter(required).filter((i) => (counted[i]?.breaking.length ?? 0) > 0);
+    const failingWithout = (gone: ReadonlySet<number>): number => new Set(proposals.flatMap((_, i) => (required(i) && !gone.has(i) ? [...(counted[i]?.breaking ?? [])] : []))).size;
+    let best: number[] | null = null; let tried = 0;
+    const better = (a: readonly number[], b: readonly number[]): boolean => {
+      const fa = failingWithout(new Set(a)); const fb = failingWithout(new Set(b));
+      if (fa !== fb) return fa < fb;
+      const weight = (x: readonly number[]): number => x.reduce((n, i) => n + (counted[i]?.breaking.length ?? 0), 0);
+      if (weight(a) !== weight(b)) return weight(a) > weight(b);
+      for (let k = a.length - 1; k >= 0; k--) if (a[k] !== b[k]) return a[k] > b[k];
+      return false;
+    };
+    for (let size = 1; size <= live.length && best === null && tried < TRIES; size++) {
+      const pick = (from: number, chosen: number[]): void => {
+        if (tried >= TRIES) return;
+        if (chosen.length === size) { tried++; if (failingWithout(new Set(chosen)) <= room && (best === null || better(chosen, best))) best = [...chosen]; return; }
+        for (let k = from; k < live.length; k++) pick(k + 1, [...chosen, live[k]]);
+      };
+      pick(0, []);
+    }
+    if (best !== null) {
+      const left = pieces - failingWithout(new Set(best));
+      for (const i of best as number[]) demote(i, `with it, fewer than ${pieces - room} of your own ${pieces} pieces would meet every required rule (${left} do without it), ${until}`);
+    } else {
+      for (let failing = breakingAny(); failing.size > room; failing = breakingAny()) {
+        const worst = proposals.map((_, i) => i).filter(required).sort((x, y) => (counted[y]?.breaking.length ?? 0) - (counted[x]?.breaking.length ?? 0) || y - x)[0];
+        if (worst === undefined || !counted[worst]?.breaking.length) break;
+        demote(worst, `with it, only ${pieces - failing.size} of your own ${pieces} pieces would meet every required rule, ${until}`);
+      }
+    }
   }
   return { suggestions: out, corpus: { pieces, passing: pieces - breakingAny().size, moved, required: proposals.filter((_, i) => required(i)).length } };
 }

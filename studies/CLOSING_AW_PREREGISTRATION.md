@@ -30,7 +30,7 @@ clearly fewer (`bench/compare/closing-quality.mjs`, `axes`).
 | Voice | a brief where most of five readers pick stop-slop's piece as sounding more like the author | five people per author, blind |
 
 On voice, 20% fewer failures means readers choose the Atelier piece on at least five briefs in nine. W1 to W6 below
-are reported beside the axes; W5's 0.40 line no longer decides anything. Development found stop-slop ahead on its
+are reported beside the axes and decide nothing. Development found stop-slop ahead on its
 own score by 2.4 to 3.5 points of 50 on two authors: the quality axis may well be missed, and a miss is published.
 
 **The verdict comes from the four axes and from nothing else,** as in claim A: PASS when every axis is reached or is
@@ -78,6 +78,12 @@ node bench/compare/closing-quality.mjs --config closing-aw.json --out result.jso
 "verify.jsonl", "preference": "voice.jsonl"}`. The voice file is the five readers' choices on every brief,
 `{case_id, reader, chose}`.
 
+**The voice file says which piece was read.** Each brief has two pieces an arm. Readers compare the first of each
+(trial 1), and the file's rows say so: `{case_id, reader, chose, trial: 1}`.
+
+**When this is sealed:** after the last development round, with the two authors' agreement in hand, and before the
+first test brief is written.
+
 **Size of the sealed test: 60 briefs per author.** That is the seal's size, from the spread measured in development.
 Fewer than 27 valid briefs for an author is UNRESOLVED.
 
@@ -123,7 +129,7 @@ per author before the test opens.
 | W2 | not worse than stop-slop, and not worse than the stronger baseline, on stop-slop's score | show | lower 95% bound above −2.5 of 50, each |
 | W3 | no dimension clearly worse | guard | fails only if a dimension's upper 95% bound is below −1 of 10 |
 | W4 | the author's required rules are held more often than under stop-slop | show | lower 95% bound above 0; a person codes a fifth blind to arm, 0.90 agreement or UNRESOLVED |
-| W5 | readers do not prefer the comparator by a clear margin | show | share choosing the Atelier piece, lower 95% bound above 0.40 |
+| W5 | readers choosing the Atelier piece | report | the share, with its interval |
 | W6 | invented specifics | guard | fails only if the plug-in clearly delivers more than stop-slop: the 97.5% bound excludes zero |
 
 W1 to W6 are reported, pooled and per author, and decide nothing: the axes do.

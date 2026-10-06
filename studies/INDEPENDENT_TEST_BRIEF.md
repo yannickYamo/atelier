@@ -1,9 +1,10 @@
 # Brief for an independent test of Atelier
 
-**Read with the pre-registrations, which are the newer text.** Where this brief and a pre-registration differ on a
-bar, a size or a command, the pre-registration holds: the bar is 20% fewer failures and clearly fewer on each axis
-([decision 0012](../docs/decisions/0012-the-closing-rules.md)), claim A is ready when every counted axis reaches it
-on fresh development tasks, and the writing claim is sealed at 60 briefs an author.
+**SUPERSEDED on 2026-10-06. This brief is kept as the record of how the test was first described, and is not a
+protocol.** The protocol is the pre-registrations in this folder (CLOSING_A, CLOSING_AW, CLOSING_B, VOICE_GATE,
+VOICE_PASS, EFFICIENCY_ABLATION), each with its commands, its config and the moment it is sealed, under decisions
+[0012](../docs/decisions/0012-the-closing-rules.md), 0014 and 0015. Where this text differs from them on a bar, a
+size, an arm or a command, they hold and this does not.
 
 **For a tester who did not build Atelier.** Take `main`, your own key, your own corpora and your own readers, and find
 out whether what Atelier says holds. Report what you find at the same size whether it wins or loses.

@@ -126,6 +126,12 @@ Two guards apply to every proposal.
 
 - **It must not fail you.** At least four in five of your held-out pieces must meet it. A rule your
   own unseen work breaks is a rule against you, and it is dropped.
+- **Its limit must fit you.** The limit is then held against all your pieces, the ones read and the ones held
+  out. If fewer than 95% meet it (one piece is always allowed), the limit is moved to the nearest value that 95% do
+  meet: a ceiling only up, to at most twice what was computed, and a floor only down, to at least half. The rule
+  says so: "set at a median of 16 (not 13) so that all but one of your 24 pieces meet it". A ban (a limit of zero),
+  a word list and a band qualified as a detector are never moved. A rule no limit fits is suggested as a
+  preference. A cap fitted this way can sit above what the model's own drafts do; it is still your number.
 - **It must separate you from the model.** Mixes and pace are proposed only if most of the model's
   drafts fail them. A rule that passes everything measures nothing. Signature bands and the voice
   layer are the exception, on evidence: a model's plain drafts may meet them and a skill's output still
@@ -442,8 +448,9 @@ changed, and how.
 
 When the loop in `atelier invoke` repairs a span and the pass is accepted, the before/after pair is
 recorded with the broken rule's key and its exact check. (In Claude Code the host rewrites the whole
-answer, so there is no verified span pair to record.) While a skill has none, a build chooses up to six recent pairs (two per rule), which
-then ship with the skill as `examples/contrast.md` and are kept until `--contrast auto` chooses again, and only pairs that still teach the current standard:
+answer, so there is no verified span pair to record.) A build never takes pairs unasked: `atelier build --contrast auto` chooses up to six recent ones (two per rule),
+which then ship with the skill as `examples/contrast.md` and are kept by later builds until `--contrast auto`
+chooses again. Only pairs that still teach the current standard are chosen or kept:
 - the rule is still live
 - its check is unchanged
 - where the rule counts words, the "after" has fewer of them than the "before"

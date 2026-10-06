@@ -34,7 +34,7 @@ be measuring refusals.
 
 Twenty other requests per skill, run first with `harness/strict-delivery.mjs --pilot`. It reports what was not
 delivered **by reason** (a broken rule, an invented claim, unconfirmed specifics, a copied run, a check that could
-not run). The owner commits the R2 bar after the pilot and before any sealed request is opened, and never above 15%.
+not run). **The R2 bar is 15%, fixed by the owner on 2026-10-06, before the pilot.** A bar chosen after seeing the pilot's refusal rate would be a target picked after the result. The pilot now only says whether the test is worth running.
 
 For a skill that answers, a specific that is not in the task or the material is listed for the reader and is no
 reason to refuse; invented work or results are cut. For a skill that writes, a draft with a third or more of its
@@ -46,18 +46,30 @@ pilot shows how much of the refusal rate it is.
 | | Endpoint | Design | Pass |
 |---|---|---|---|
 | R1 | nothing nonconformant is delivered | every delivered output audited by a person against the measured REQUIRED rules; and no delivered output that the run's own verdict called not conformant | 0 audited failures, in every skill |
-| R2 | it still delivers | not delivered over **all** requests: a refusal, and an error that survives two retries, both count | per skill, upper 95% bound under the bar sealed after the pilot |
-| R3 | repeatability | 20 requests × 8 repetitions per skill, strict against the same model with the examples pasted; between-repetition SD of counted features that strict delivery does **not** gate (length, sentence and paragraph shape, the steering features), and separately of the gated ones | on the ungated features, Atelier's SD at most 0.80 of pasted's with the 95% upper bound under 1.0, request-level bootstrap |
-| R4 | long sessions | 20 ten-turn sessions per answering skill, each turn its own strict run with the session so far as material | REQUIRED misses delivered: 0; slope of flagged specifics per turn, 95% upper bound under 0.2 |
+| R2 | it still delivers | not delivered over **all** requests: a refusal, and an error that survives two retries, both count | per skill, upper 95% bound under 15% |
+| R3 | repeatability | 20 requests × 5 repetitions per skill under strict delivery (`--repeats 5`); a request is split when its runs are neither all delivered nor all refused | per skill, at most 10% of requests split |
 
-**Claim B PASSES** when R1 and R2 hold for every skill. R3 and R4 have their own sentences, said beside it either way.
+**Claim B PASSES** when R1, R2 and R3 hold for every skill. The claim is "delivery and repeatability", so
+repeatability decides it.
 
-**R3 and R4 have no harness in the repository.** `studies/harness/strict-delivery.mjs` reads R1 and R2. Repeatability
-against pasted examples and long sessions are run only if the tester builds their runs; where they are not run, the
-result says "not measured", and claim B's verdict does not wait on them.
+**R3, as it is read (the owner, 2026-10-06).** Twenty requests per skill, each run five times under strict delivery
+(`--repeats 5`). A request is **split** when its five runs are neither all delivered nor all refused. R3 holds for a
+skill when at most 10% of its requests are split (two of twenty). Under strict delivery every delivered answer is
+conformant, so the verdict on a required rule cannot differ between two delivered runs: what can differ is whether
+the same request is answered at all, and that is what a person relying on the skill would notice. A run that
+errors after its retries is neither, so it splits its request; a run still to be retried leaves R3 unread and the
+claim UNRESOLVED. The comparison of
+ungated features against pasted examples, which an earlier draft called R3, is not run and is not claimed.
+
+**R4, long sessions, has no harness and is not measured in 1.x.** The result says so.
 
 Run it from any directory, the backend flags last:
-`node studies/harness/strict-delivery.mjs --requests requests.jsonl --data <ATELIER_DATA> --project <project> --out out/b [--pilot]`.
+`node studies/harness/strict-delivery.mjs --requests requests.jsonl --data <ATELIER_DATA> --project <project> --out out/b [--pilot]`,
+and for R3 `--requests repeat-requests.jsonl --out out/b-r3 --repeats 5`. The bars are the script's defaults
+(`--bar 0.15`, `--repeat-bar 0.10`); it accepts a stricter one and refuses a looser R2 bar. Its result carries
+`r2`, `r3` and a `verdict`, which stays "PENDING THE AUDIT" until a person has read R1.
+
+**When this is sealed:** after the pilot, with the three skills frozen, and before the first sealed request is written.
 **Minimum valid units:** 55 requests per skill after retries.
 
 **Reported, deciding nothing:** the tasks of [claim A](CLOSING_A_PREREGISTRATION.md) run once under `--strict`
@@ -68,16 +80,15 @@ refusal scored as a failed answer.
 
 - **PASS:** "In [n] sealed requests across [the domains], through the CLI under strict delivery, no delivered output
   broke a measured required rule in a person's audit, and Atelier delivered [y]% of requests."
-- **R3:** "Across repeats, on features strict delivery does not gate, it varied [x]% as much as pasted examples." or
-  "... it varied as much as pasted examples."
-- **R4:** "Over ten-turn sessions no required rule was missed and flagged specifics did not grow." or what did.
+- **R3:** "Asked the same request five times, it answered or refused the same way on [x] of [n] requests."
 - **FAIL:** "[Endpoint] failed for [skill]: [estimate] against [threshold]."
 - **UNRESOLVED:** "The delivery test did not complete: [cause]. It is closed without a result."
 
 ## Limits
 
 A guarantee about measured rules is as wide as the measurements. On gated features strict delivery is repeatable by
-construction, which is why R3 is read on the ungated ones. A refusal is a safe failure and still a failure to the
+construction, which is why R3 reads whether a request is answered at all. Features it does not gate (length,
+shape) are not compared between repeats, and long sessions are not measured. A refusal is a safe failure and still a failure to the
 person waiting: R2 exists so that "nothing bad was delivered" cannot be bought by delivering nothing.
 
 ## What changed before sealing

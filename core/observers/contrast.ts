@@ -22,7 +22,8 @@ import { PATTERN_IDS, PATTERN_LABEL, patternRate, findPattern, fragmentShare, de
 import { quantile, sentencesOf, paragraphsOf, wordsOf } from './text.js';
 import { TELL_FAMILIES, BAN_ONLY_FAMILIES } from './tells.js';
 import { headingsOf, headingCase, OPENING_TROPES, CLOSING_TROPES, HEADING_TROPES } from './structure.js';
-import type { MeasuredProposal } from './derive.js';
+import { fitToCorpus, fitNote, type MeasuredProposal } from './derive.js';
+import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 
 interface Piece { readonly id: string; readonly text: string }
 
@@ -30,6 +31,8 @@ interface Piece { readonly id: string; readonly text: string }
 const overUsed = (author: number, model: number): boolean => model >= 1 && model >= Math.max(3 * author, author + 1.5);
 const underUsed = (author: number, model: number): boolean => author >= 1 && author >= Math.max(3 * model, model + 1.5);
 const r1 = (x: number): number => Math.round(x * 10) / 10;
+/** A limit as the measurement finally carries it: what a statement quotes, so the rule and its check cannot disagree. */
+const lim = (m: Measurement, key: string): number => m.params[key] as number;
 
 /** Patterns with a proposal of their own below, not the generic author-against-model comparison. */
 const VOICE_LAYER: ReadonlySet<PatternId> = new Set<PatternId>(['DASH_ASIDE', 'FIRST_PERSON', 'BRITISH_SPELLING', 'AMERICAN_SPELLING', 'CONTRACTION', 'FULL_FORM',
@@ -98,17 +101,20 @@ export function deriveContrastRules(
   const checkOn = held.length ? held.map((p) => p.text) : authorTexts;
   const out: MeasuredProposal[] = [];
   let n = 0;
-  const propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak = false, separate = false,
+  // THE AUTHOR'S OWN PIECES (read and held out, each once, never anything else): what a limit is fitted to.
+  const own = [...read, ...held.filter((h) => !read.some((r) => r.id === h.id))].map((p) => p.text);
+  const mayBreak = allowed(own.length, CORPUS_RULE_SHARE);
+  const failingDrafts = (m: Measurement): { of: number; failing: number } => {
+    const d = drafts.map((t) => measure(t, m)).filter((x) => x.verdict !== 'NOT_APPLICABLE');
+    return { of: d.length, failing: d.filter((x) => x.verdict === 'VIOLATED').length };
+  };
+  // At least three in five drafts, each measured on its own, must fail it.
+  const separates = (m: Measurement): boolean => { const x = failingDrafts(m); return x.of > 0 && x.failing / x.of >= 0.6; };
+  const propose = (said: Statement, kind: Requirement['kind'], computed: Measurement, evidence: string, weak = false, separate = false,
     /** a piece of the author's that breaks the rule but should still count as meeting it (see the machine-tell rule) */
     tolerated: (text: string) => boolean = () => false): void => {
-    // MUST SEPARATE. A proportion the model's own drafts already meet measures nothing about the voice:
-    // at least three in five drafts, each measured on its own, must fail it.
-    if (separate) {
-      const d = drafts.map((t) => measure(t, measurement)).filter((x) => x.verdict !== 'NOT_APPLICABLE');
-      const failing = d.filter((x) => x.verdict === 'VIOLATED').length;
-      if (!d.length || failing / d.length < 0.6) return;
-      evidence = `${evidence}; ${failing} of ${d.length} of its drafts fail it`;
-    }
+    // MUST SEPARATE. A proportion the model's own drafts already meet measures nothing about the voice.
+    if (separate && !separates(computed)) return;
     // THE FALSE-POSITIVE GUARD. A cap the author's own held-out writing breaks is a rule against them.
     // Where no held-out piece is long enough for the rule to apply (common for a ratio, which needs
     // several uses), the pieces it was counted from are the check, and the proposal says so; where none
@@ -120,9 +126,9 @@ export function deriveContrastRules(
     // applicable" here, a corpus of short pieces (answers, support replies) had no piece to check the
     // rule on, so the machine-tell floor was never proposed, and an answer skill shipped em dashes its
     // author never writes.
-    const bans = ((measurement.params.never as readonly string[] | undefined) ?? []).length > 0;
+    const bans = ((computed.params.never as readonly string[] | undefined) ?? []).length > 0;
     const measureOn = (t: string): ObserverResult => {
-      const x = measure(t, measurement);
+      const x = measure(t, computed);
       return bans && x.verdict === 'NOT_APPLICABLE' ? { ...x, verdict: 'MET' } : x;
     };
     let rs = on.map(measureOn);
@@ -130,11 +136,23 @@ export function deriveContrastRules(
     const applicable = rs.filter((x) => x.verdict !== 'NOT_APPLICABLE').length;
     const present = rs.filter((x, i) => x.verdict === 'MET' || (x.verdict === 'VIOLATED' && tolerated(on[i]))).length;
     if (!applicable || present / applicable < 0.8) return;
+    // THE LIMIT, SET WHERE THE AUTHOR'S OWN PIECES ARE (./derive.ts, `fitToCorpus`). Both guards above are passed
+    // by the limit as computed, so fitting never adds a proposal and never drops one: it only moves the number of
+    // a rule that is proposed anyway, and the counts kept with it stay those of the computed limit, because the
+    // held-out pieces helped set the moved one. Only a statement given as a function of its measurement is fitted:
+    // that is how a rule says its number is a limit one of the author's pieces can sit past. A weak rule is left
+    // alone (it is never suggested as required, and its band is the author's own range already). A fitted limit
+    // the model's drafts no longer fail is not taken either: the rule keeps the limit it was computed with.
+    const candidate = typeof said === 'function' && !weak ? fitToCorpus(computed, own, mayBreak) : null;
+    const fitted = candidate && (!separate || separates(candidate)) ? candidate : null;
+    const measurement = fitted ?? computed;
+    if (separate) { const x = failingDrafts(measurement); evidence = `${evidence}; ${x.failing} of ${x.of} of its drafts fail it`; }
+    if (fitted) evidence = `${evidence}; ${fitNote(computed, fitted, own)}`;
     n += 1;
     out.push({
-      requirement: { requirementId: `c${n}`, statement, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
+      requirement: { requirementId: `c${n}`, statement: typeof said === 'function' ? said(measurement) : said, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
         evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, measurement },
-      conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}) },
+      conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}), ...(fitted ? { fitted: true } : {}) },
     });
   };
 
@@ -159,9 +177,9 @@ export function deriveContrastRules(
       const cap = a === 0 ? 0 : r1(Math.max(perPiece(0.9) * 1.25, a * 1.5, 0.3));
       // Where the author has their own mark for the same job, the rule says to use it.
       const prefer = p === 'EM_DASH' && spacedHyphen >= 1 ? [' - '] : undefined;
-      const statement = cap === 0
+      const statement: Statement = cap === 0
         ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen (" - ") instead' : ''}.`
-        : `Keep ${PATTERN_LABEL[p]} to at most ${cap} per 1,000 words.`;
+        : (f) => `Keep ${PATTERN_LABEL[p]} to at most ${lim(f, 'maxPer1000')} per 1,000 words.`;
       propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } }, ev);
       // THE MOVE GETS A CAP, NOT JUST THE GLYPH. Told to write " - " where it would have written "—", a
       // model moves every aside onto the substitute: spaced hyphens went to 8.7 and then 8.9 per 1,000
@@ -173,7 +191,7 @@ export function deriveContrastRules(
         const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, 'DASH_ASIDE'), 0.5) * 1.5, aside * 1.5, 0.3));
         const moved = meanRate(drafts, 'DASH_ASIDE');
         if (moved > cap) {
-          propose(`Keep dash asides (—, – or " - ") to my rate: at most ${cap} per 1,000 words. A banned em dash is not to be moved onto another mark.`, 'BOUNDARY',
+          propose((f) => `Keep dash asides (—, – or " - ") to my rate: at most ${lim(f, 'maxPer1000')} per 1,000 words. A banned em dash is not to be moved onto another mark.`, 'BOUNDARY',
             { observer: 'PATTERN_RATE', params: { pattern: ['DASH_ASIDE'], maxPer1000: cap, role: ['dash-substitute'] } },
             `you: ${aside} dash asides per 1,000 words; the model on its own: ${moved}`);
         }
@@ -190,7 +208,7 @@ export function deriveContrastRules(
       // a company blog kept every one through a rewrite in that blog's voice. It is the move readers name first.
       const cap = r1(Math.max(perPiece(0.9) * 1.5, 0.5));
       const always = p === 'CONTRAST_VERDICT';
-      propose(`Keep ${PATTERN_LABEL[p]} ${always && a > 0.5 ? 'to my rate' : 'rare'}: at most ${cap} per 1,000 words.`, 'BOUNDARY',
+      propose((f) => `Keep ${PATTERN_LABEL[p]} ${always && a > 0.5 ? 'to my rate' : 'rare'}: at most ${lim(f, 'maxPer1000')} per 1,000 words.`, 'BOUNDARY',
         { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap } },
         `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model's plain drafts here: ${m} per 1,000`,
         !always && m <= cap);
@@ -207,7 +225,7 @@ export function deriveContrastRules(
       const floor = r1(perPiece(0.1) * 0.8);
       const ceiling = r1(Math.max(perPiece(0.9) * 1.5, a * 2));
       if (floor > 0) {
-        propose(`Use ${PATTERN_LABEL[p]} within my range: between ${floor} and ${ceiling} per 1,000 words (I use about ${a}).`, 'GENERATIVE',
+        propose((f) => `Use ${PATTERN_LABEL[p]} within my range: between ${lim(f, 'minPer1000')} and ${lim(f, 'maxPer1000')} per 1,000 words (I use about ${a}).`, 'GENERATIVE',
           { observer: 'PATTERN_RATE', params: { pattern: [p], minPer1000: floor, maxPer1000: ceiling } }, ev);
       }
     }
@@ -220,7 +238,7 @@ export function deriveContrastRules(
   const aFrag = fragmentShare(authorAll, 5); const mFrag = fragmentShare(modelAll, 5);
   if (mFrag >= 1.5 * aFrag && mFrag - aFrag >= 0.05) {
     const max = Math.min(0.95, Math.round(Math.max(perPieceP(authorTexts, (t) => fragmentShare(t, 5), 0.9) * 1.15, aFrag * 1.3) * 100) / 100);
-    propose(`Few very short sentences: at most ${Math.round(max * 100)}% of sentences are five words or fewer.`, 'BOUNDARY',
+    propose((f) => `Few very short sentences: at most ${Math.round(lim(f, 'maxShare') * 100)}% of sentences are five words or fewer.`, 'BOUNDARY',
       { observer: 'FRAGMENT_SHARE', params: { maxWords: 5, maxShare: max } },
       `you: ${Math.round(aFrag * 100)}% of sentences; the model on its own: ${Math.round(mFrag * 100)}%`);
   }
@@ -263,7 +281,9 @@ export function deriveContrastRules(
   return out;
 }
 
-type Propose = (statement: string, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean, separate?: boolean, tolerated?: (text: string) => boolean) => void;
+/** A rule's words: fixed, or written from its final measurement when it quotes a limit that may be fitted. */
+type Statement = string | ((m: Measurement) => string);
+type Propose = (statement: Statement, kind: Requirement['kind'], measurement: Measurement, evidence: string, weak?: boolean, separate?: boolean, tolerated?: (text: string) => boolean) => void;
 
 /**
  * Competing ways to say the same thing. The first list is the plain register, the second the one a
@@ -316,12 +336,12 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
     if (sa > sm) {
       const min = Math.max(0.05, Math.round((Math.min(perPiece.length ? quantile(perPiece, 0.1) : sa, sa) - 0.1) * 20) / 20);
       if (min <= sm) continue;
-      propose(`Prefer ${say(a)} to ${say(b)}: at least ${pct(min)} of the uses of either.`, 'GENERATIVE',
+      propose((f) => `Prefer ${say(a)} to ${say(b)}: at least ${pct(lim(f, 'minShare'))} of the uses of either.`, 'GENERATIVE',
         { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], minShare: min } }, ev, false, true);
     } else {
       const max = Math.min(0.95, Math.round((Math.max(perPiece.length ? quantile(perPiece, 0.9) : sa, sa) + 0.1) * 20) / 20);
       if (max >= sm) continue;
-      propose(`Prefer ${say(b)} to ${say(a)}: at most ${pct(max)} of the uses of either are ${say(a)}.`, 'GENERATIVE',
+      propose((f) => `Prefer ${say(b)} to ${say(a)}: at most ${pct(lim(f, 'maxShare'))} of the uses of either are ${say(a)}.`, 'GENERATIVE',
         { observer: 'RATIO', params: { numerator: [...a], denominator: [...b], maxShare: max } }, ev, false, true);
     }
   }
@@ -350,7 +370,7 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
     if (m >= 1 && m >= Math.max(3 * a, a + 1)) {
       const cap = r1(Math.max(perPieceP(authorTexts, (t) => rate(t, used), 0.9) * 1.5, 0.5));
       if (cap < m) {
-        propose(`Keep the model's stock vocabulary rare (${say(used)}): at most ${cap} per 1,000 words together.`, 'BOUNDARY',
+        propose((f) => `Keep the model's stock vocabulary rare (${say(used)}): at most ${lim(f, 'maxPer1000')} per 1,000 words together.`, 'BOUNDARY',
           { observer: 'TERM_RATE', params: { terms: used, maxPer1000: cap, role: ['model-vocabulary'] } },
           `you: ${a} per 1,000 words for these; the model on its own: ${m} per 1,000`, false, true);
       }
@@ -376,7 +396,8 @@ function proposeProportions(authorTexts: readonly string[], drafts: readonly str
     const shares = toHundredths(author);
     const show = (m: readonly number[]): string => m.map((x, i) => `${pct(x)} ${bandLabel(LENGTH_EDGES, i)}`).join(', ');
     const model = draftMixable.length >= 2 ? mean(draftMixable.map((t) => lengthMix(t, LENGTH_EDGES).shares)) : null;
-    propose(`Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
+    // The statement quotes the mix, which is never moved; what is fitted is the tolerance around it.
+    propose(() => `Mix sentence lengths as I do: about ${show(shares)}.`, 'GENERATIVE',
       { observer: 'DISTRIBUTION', params: { edges: [...LENGTH_EDGES], shares, tolerance } },
       `you: ${show(author)}${model ? `; the model on its own: ${show(model)} (${pct(mixDistance(author, model))} of its sentences in a different band)` : ''}`);
   }
@@ -423,7 +444,7 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
   const lens = authorTexts.filter((t) => paragraphsOf(t).length >= 2).map(openLen);
   if (lens.length >= 3) {
     const lo = Math.max(0, Math.floor(quantile(lens, 0.1) * 0.8)); const hi = Math.ceil(quantile(lens, 0.9) * 1.25);
-    propose(`Keep the opening paragraph to my length: ${lo}–${hi} words.`, 'GENERATIVE',
+    propose((f) => `Keep the opening paragraph to my length: ${lo}–${lim(f, 'maxWords')} words.`, 'GENERATIVE',
       { observer: 'OPENING', params: { minWords: lo, maxWords: hi } },
       `your openings run ${Math.min(...lens)}–${Math.max(...lens)} words; the model's: ${drafts.map(openLen).join(', ')}`, false, true);
   }
@@ -474,7 +495,7 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
     `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`, true);
   } else if (fp.a < 1 && mfp >= 3) {
     const cap = r1(Math.max(fp.hi, 0.5));
-    propose(`Keep myself out of the text, as I do: at most ${cap} "I", "my" or "me" per 1,000 words.`, 'BOUNDARY',
+    propose((f) => `Keep myself out of the text, as I do: at most ${lim(f, 'maxPer1000')} "I", "my" or "me" per 1,000 words.`, 'BOUNDARY',
       { observer: 'PATTERN_RATE', params: { pattern: ['FIRST_PERSON'], maxPer1000: cap } }, `you: ${fp.a} per 1,000 words; the model on its own: ${mfp}`);
   }
   const count = (p: PatternId): number => authorTexts.reduce((n, t) => n + findPattern(t, p).length, 0);
@@ -521,9 +542,9 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
     const other = share >= 0.6 ? 'FULL_FORM' as const : 'CONTRACTION' as const;
     const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, other), 0.9) * 1.5, 1));
     const m = meanRate(drafts, other);
-    propose(share >= 0.6
-      ? `Contract as I do ("don't", "it's", "you're"): at most ${cap} uncontracted forms ("do not", "it is") per 1,000 words.`
-      : `Write out what I write out ("do not", "it is"): at most ${cap} contractions per 1,000 words.`, 'BOUNDARY',
+    propose((f) => (share >= 0.6
+      ? `Contract as I do ("don't", "it's", "you're"): at most ${lim(f, 'maxPer1000')} uncontracted forms ("do not", "it is") per 1,000 words.`
+      : `Write out what I write out ("do not", "it is"): at most ${lim(f, 'maxPer1000')} contractions per 1,000 words.`), 'BOUNDARY',
     { observer: 'PATTERN_RATE', params: { pattern: [other], maxPer1000: cap } },
     `you contract ${Math.round(share * 100)}% of the forms that can be contracted; the model's plain drafts: ${m} ${other === 'FULL_FORM' ? 'uncontracted forms' : 'contractions'} per 1,000 words`);
     // AND NOT MORE THAN THE AUTHOR. A cap on the other form alone is one-sided: a repair told to cut
@@ -531,9 +552,9 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
     // them. The form the author prefers is capped at their own 90th-percentile piece too.
     const mine = share >= 0.6 ? 'CONTRACTION' as const : 'FULL_FORM' as const;
     const most = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, mine), 0.9) * 1.5, 1));
-    propose(share >= 0.6
-      ? `Contract as often as I do, not more: at most ${most} contractions per 1,000 words.`
-      : `Write out as often as I do, not more: at most ${most} uncontracted forms per 1,000 words.`, 'BOUNDARY',
+    propose((f) => (share >= 0.6
+      ? `Contract as often as I do, not more: at most ${lim(f, 'maxPer1000')} contractions per 1,000 words.`
+      : `Write out as often as I do, not more: at most ${lim(f, 'maxPer1000')} uncontracted forms per 1,000 words.`), 'BOUNDARY',
     { observer: 'PATTERN_RATE', params: { pattern: [mine], maxPer1000: most } },
     `your 90th-percentile piece: ${r1(perPieceP(authorTexts, (t) => patternRate(t, mine), 0.9))} ${mine === 'CONTRACTION' ? 'contractions' : 'uncontracted forms'} per 1,000 words`);
   }
@@ -542,7 +563,7 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
     : uk >= 10 && us <= 0.15 * (us + uk) ? { other: 'AMERICAN_SPELLING' as const, mine: 'British', eg: 'behaviour, organise, centre', not: 'behavior, organize, center' } : null;
   if (dialect) {
     const cap = r1(Math.max(perPieceP(authorTexts, (t) => patternRate(t, dialect.other), 0.9) * 1.5, 0.5));
-    propose(`Spell the ${dialect.mine} way, as I do (${dialect.eg}), not ${dialect.not}: at most ${cap} other spellings per 1,000 words.`, 'BOUNDARY',
+    propose((f) => `Spell the ${dialect.mine} way, as I do (${dialect.eg}), not ${dialect.not}: at most ${lim(f, 'maxPer1000')} other spellings per 1,000 words.`, 'BOUNDARY',
       { observer: 'PATTERN_RATE', params: { pattern: [dialect.other], maxPer1000: cap } },
       `your pieces: ${dialect.mine === 'American' ? us : uk} ${dialect.mine} spellings to ${dialect.mine === 'American' ? uk : us} of the other`);
   }
@@ -564,11 +585,11 @@ function proposePace(authorTexts: readonly string[], drafts: readonly string[], 
     const ev = `your ${label[unit]} lengths vary by ${am} on average (standard deviation over mean); the model's plain drafts by ${mm}`;
     if (am >= mm + 0.1) {
       const floor = r2(quantile(a, 0.1) * 0.95);
-      if (floor > mm) propose(`Vary ${label[unit]} length as I do: at least ${floor} variation, not one even length after another.`, 'GENERATIVE',
+      if (floor > mm) propose((f) => `Vary ${label[unit]} length as I do: at least ${lim(f, 'minCv')} variation, not one even length after another.`, 'GENERATIVE',
         { observer: 'RHYTHM', params: { unit: [unit], minCv: floor } }, ev, false, true);
     } else if (mm >= am + 0.1) {
       const cap = r2(quantile(a, 0.9) * 1.05);
-      if (cap < mm) propose(`Keep ${label[unit]} lengths as even as mine: at most ${cap} variation.`, 'GENERATIVE',
+      if (cap < mm) propose((f) => `Keep ${label[unit]} lengths as even as mine: at most ${lim(f, 'maxCv')} variation.`, 'GENERATIVE',
         { observer: 'RHYTHM', params: { unit: [unit], maxCv: cap } }, ev, false, true);
     }
   }

@@ -20,7 +20,9 @@ import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs, contrastFor } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
 import { piecesBreaking } from '../../core/observers/derive.js';
-import { allowed, CORPUS_SET_SHARE } from '../../core/ratification/suggest.js';
+import { allowed, CORPUS_SET_SHARE, CORPUS_RULE_SHARE } from '../../core/ratification/suggest.js';
+import { amendToFit } from './amend.js';
+import { measurementId } from '../../core/state/rule-key.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { onCorpusReader } from './discover.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -204,9 +206,18 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   if (moves.length && isReplyWork(v.workType)) {
     const pieces = loadSession().run?.heldOutPieces ?? voice.corpusPieces ?? null;
     const moveBudget: Budget = { spentUsd: 0, capUsd: 0.2, maxCalls: 1 };
-    const read = await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
-    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || HOLDS_BACK.test(r.statement)).map((r) => r.requirementId);
-    voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack };
+    // READ ONCE, THEN KEPT. Which moves hold back what was asked used to be read by a model on every build, so a
+    // rebuild that asked for nothing spent a call and could change the skill with whether a model was reachable. The
+    // reading is kept with the skill's voice and read again only when a move has appeared that it never covered, or
+    // when `--persona auto` asks for the readings to be made again. A skill built before the moves read were recorded
+    // is taken to have had all of its moves read.
+    const covered = new Set(voice.holdsBackOf ?? (voice.holdsBack ? moves.map((r) => r.requirementId) : []));
+    const reuse = voice.holdsBack !== undefined && personaFlag !== 'auto' && moves.every((r) => covered.has(r.requirementId));
+    const read = reuse ? voice.holdsBack ?? [] : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
+    if (!reuse && read === null) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
+    const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || (!reuse && HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
+    // A reading that could not be made is not recorded as one: the pattern's answer is used for this build only.
+    voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack, holdsBackOf: reuse || read !== null ? moves.map((r) => r.requirementId) : [] };
     const carried = moves.map((r) => ({ r, e: moveEvidence(r.observedRate, pieces, { answers: isReplyWork(v.workType), general: isGeneralScope(r.appliesWhen), holdsBack: holdsBack.includes(r.requirementId), ownerRuled: ownerWrote(r) }) }));
     const n = (c: string): number => carried.filter((x) => x.e.carrier === c).length;
     // One line, not one per move: what the owner needs is the count and the question below. `atelier plan` lists every rule.
@@ -408,13 +419,13 @@ export async function build(nameArg?: string): Promise<void> {
   }
   const contrastOff = contrastFlag === undefined ? store.getContrast(L).off : contrastFlag.trim().toLowerCase() === 'none';
   const heldBack = { tasks: (s.reservation?.reserved ?? []).map((u) => u.task), texts: (s.reservation?.reserved ?? []).map((u) => u.artifact) };
-  // CHOSEN ONCE AND KEPT. Pairs used to be chosen again on every build from every run in the store, so a rebuild
-  // that asked for nothing changed the skill: after a benchmark, a plain rebuild added pairs taken from benchmark
-  // answers. While the skill has none they are chosen (a first build has no runs to choose from, so the first pairs
-  // come at the first rebuild after a repair was accepted); once it has some, a rebuild keeps them, and
-  // `--contrast auto`, given, chooses again. The pairs of a run made as a test (`invoke --test-run`) are never taken.
+  // CHOSEN ONLY WHEN ASKED, AND KEPT. Pairs used to be chosen again on every build from every run in the store, so a
+  // rebuild that asked for nothing changed the skill: after a benchmark, a plain rebuild added pairs taken from
+  // benchmark answers. Choosing them "while the skill has none" did the same to every store built before runs could
+  // be marked as tests. So a build never chooses pairs on its own: `--contrast auto` chooses them, and every later
+  // build keeps what was chosen. The pairs of a run made as a test (`invoke --test-run`) are never taken.
   const keptPairs = store.getContrast(L).pairs;
-  const rechoose = !keptPairs.length || contrastFlag?.trim().toLowerCase() === 'auto';
+  const rechoose = contrastFlag?.trim().toLowerCase() === 'auto';
   // What is kept is the choice; what ships is the part of it that still teaches this standard. Storing the shipped
   // part would lose, for good, a pair that an amendment set aside and a later one brings back.
   const chosenPairs = contrastOff ? [] : rechoose ? selectContrastPairs(store.listInvocations(L), v, heldBack) : keptPairs;
@@ -550,25 +561,35 @@ export async function build(nameArg?: string): Promise<void> {
  * A GOLDEN CORPUS AGAINST ITS OWN STANDARD, said at every build in one line: how many of the author's own pieces
  * meet every REQUIRED rule that is counted on every output. A standard the author's best work fails is the wrong
  * standard, and an output held to it is held to something the author does not do. When more pieces break the set
- * than the review would have allowed, a second line names the rules they break most and the one command that makes
- * a rule a preference. Nothing is changed here: what is required is the owner's to rule on.
+ * than the review would have allowed, the rules they break most are named, at most four, each with one command:
+ * first the one that sets its limit where the author's pieces are (./amend.ts, `amendToFit`), so the rule stays
+ * required and becomes true of them, and only where no limit can be moved the one that makes the rule a preference.
+ * A limit is offered only when the pieces can still be read and are the ones the counts were taken on. Nothing is
+ * changed here: what is required is the owner's to rule on.
  *
  * The pieces are the ones discovery sealed (those read and those held out, never the reserve), by the count it
  * recorded for each rule. A skill built before that count was kept is read from its folder of pieces instead, by
- * content, so a file saved into that folder since (an export, a draft) is not taken for one of the author's.
- * A rule that applies only under a condition is not counted: no piece is held to it without the condition.
+ * content, so a file saved into that folder since (an export, a draft) is not taken for one of the author's. So is
+ * a skill one of whose checks was amended after discovery, when its pieces are still there: the kept count is of
+ * the check it had. A rule that applies only under a condition is not counted: no piece is held to it without the condition.
  */
 function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof loadSession>): void {
   const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && isGeneralScope(r.appliesWhen));
   if (!rules.length) return;
   const recorded = rules.map((r) => s.proposalMeta?.[r.requirementId]?.corpus ?? null);
   let pieces: number; let breaking: { id: string; pieces: readonly number[] }[];
-  if (recorded.every((c) => c !== null) && new Set(recorded.map((c) => c?.pieces)).size === 1) {
+  const sealed = new Set((s.evidence?.items ?? []).map((i) => i.contentHash));
+  const own = sessionCorpus().filter((t) => !sealed.size || sealed.has(sha(t)));
+  // A count kept at discovery is of the check the rule had then. Once the owner has amended a rule's check (the limit
+  // offered below, for one), every rule is counted afresh on the same pieces read again, so that the next build says
+  // where the pieces stand now and a piece has one place in every count. Pieces that can no longer be read, or are
+  // not the same number, leave the kept counts standing.
+  const proposed = new Map(s.proposals.map((p) => [p.requirementId, p.measurement ? measurementId(p.measurement) : null]));
+  const amended = rules.some((r) => r.measurement && proposed.get(r.requirementId) !== measurementId(r.measurement));
+  if (recorded.every((c) => c !== null) && new Set(recorded.map((c) => c?.pieces)).size === 1 && !(amended && own.length === recorded[0]?.pieces)) {
     pieces = recorded[0]?.pieces ?? 0;
     breaking = rules.map((r, i) => ({ id: r.requirementId, pieces: recorded[i]?.breaking ?? [] }));
   } else {
-    const sealed = new Set((s.evidence?.items ?? []).map((i) => i.contentHash));
-    const own = sessionCorpus().filter((t) => !sealed.size || sealed.has(sha(t)));
     pieces = own.length;
     breaking = rules.flatMap((r) => (r.measurement ? [{ id: r.requirementId, pieces: piecesBreaking(own, r.measurement) }] : []));
   }
@@ -577,8 +598,15 @@ function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof 
   console.log(`Your own pieces: ${pieces - failing.size} of ${pieces} meet every required rule that is counted.`);
   if (failing.size <= allowed(pieces, CORPUS_SET_SHARE)) return;
   const worst = breaking.filter((b) => b.pieces.length).sort((a, b) => b.pieces.length - a.pieces.length).slice(0, 4);
-  console.log(`  They break ${worst.map((b) => `${b.id} (${b.pieces.length})`).join(', ')} most. A rule made a preference still counts and still chooses between drafts: `
-    + `atelier amend --skill ${name} --rule <id> --materiality PREFERRED --reason "<why>"`);
+  console.log(`  They break ${worst.map((b) => `${b.id} (${b.pieces.length})`).join(', ')} most. For each, the limit your own pieces meet, which keeps the rule required; `
+    + 'where no limit can be moved, the rule as a preference, which still counts and still chooses between drafts:');
+  for (const b of worst) {
+    const rule = rules.find((r) => r.requirementId === b.id);
+    // Fitted only to the pieces the count was taken on: a folder that has moved or changed since offers no limit.
+    const same = own.length === pieces && rule?.measurement !== undefined && piecesBreaking(own, rule.measurement).length === b.pieces.length;
+    const fit = rule && same ? amendToFit(name, rule, own, allowed(pieces, CORPUS_RULE_SHARE)) : null;
+    console.log(`    ${b.id}: ${fit ?? `atelier amend --skill ${name} --rule ${b.id} --materiality PREFERRED --reason "<why>"`}`);
+  }
 }
 
 /**

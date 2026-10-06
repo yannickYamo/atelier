@@ -71,8 +71,10 @@ before any seal. It is not a failure on any of the four signed axes, so 0012 as 
 
 7. **An unqualified reader decides nothing.** No instrument here qualifies a reader choosing between two answers, so
    voice is not read by a model in this study and rejects no arm. The pieces are there for voice, so the owner reads
-   ten blind pairs in the third round, the selected arm
-   against today's skill, and today's size is kept if today's skill is chosen in eight or more.
+   twenty blind pairs in the third round, the selected arm
+   against today's skill, and today's size is kept if today's skill is chosen in fourteen or more (the owner,
+   2026-10-06: twenty pairs in place of ten, which catches a real preference of three in four about four times in
+   five where ten caught it about half the time).
 
 8. **The fallback is a commit prepared in advance.** Before the third round two commits exist that differ in one
    constant: the selected budget, and today's. The third round measures the selected arm beside today's skill, both

@@ -22,6 +22,22 @@ From an outside tester who ran the product as a user would and could not start t
 - **The review screen and every build say how your own pieces fare.** "Your own pieces: 22 of 24 meet every required
   rule that is counted." Under nine in ten, the build names the rules they break most and the command that makes
   each a preference: that is how a skill built before this is brought in line, with no new discovery.
+- **A limit is set where your own pieces meet it, before any rule is moved.** At discovery a counted limit that
+  fewer than 95% of your pieces meet is widened to the nearest value they do meet (a ceiling at most doubled, a
+  floor at most halved; a ban is never moved), and the rule says what it was set to and why. For a skill built
+  earlier, the build prints the `atelier amend --measure` command that does the same, ready to run, and only where
+  no limit can be moved the command that makes the rule a preference. Before this a too-tight limit was kept and
+  simply no longer enforced.
+- **Fewer rules are moved.** When your pieces fail the rules together, the smallest set of rules whose move brings
+  them to nine in ten is suggested as shown, where before the most-broken rule went first and more could follow
+  than were needed. The message says how many of your pieces pass once those rules are set aside.
+- **A rebuild takes no "write this, not that" pairs unless you ask** (`atelier build --contrast auto`). The first
+  version of this change chose them while a skill had none. A store built earlier holds benchmark runs that nothing
+  marks as tests, and the tester's plain rebuild of five such skills changed four of them. A rebuild now keeps what
+  the skill has, none included.
+- **A rebuild of a skill that answers calls no model.** Which of its moves hold back was read again on every build.
+  It is kept with the moves it covered and read again only when one is new, or when `--persona auto` asks. (A skill
+  built before the reading was kept reads it once more; a reading that failed is said and made again next build.)
 
 ### Added: a second voice gate, off by default
 
@@ -136,6 +152,13 @@ moves and a built-in paragraph. Rebuild a skill to get these.
 
 ### Added: the closing bar's instruments
 
+- **`bench/compare/modes-qualification.mjs`:** qualifies the failure-mode reader on planted good and bad answers,
+  0.85 of each class of twenty, UNRESOLVED when a planted answer was not read.
+- **`studies/harness/strict-delivery.mjs --repeats <n>`** reads claim B's repeatability, and the script now gives a
+  verdict against the fixed bars. The axes read delivered against refused; the size study refuses arms built from
+  different standards and reads rules broken per answer; a study planned at 60 tasks is not read on far fewer.
+- **Fixed in the harness:** a script given an `--out` that reached its own inputs through a link cleared them; a
+  judge row with a missing score was counted as a low one.
 - **`bench/compare/failure-modes.mjs`:** one yes or no per failure mode on every answer (withholds the deliverable,
   refuses without a safe path, invents context, action not first), by code where code can tell.
 - **`bench/compare/closing-quality.mjs` reads the signed bar:** per axis, both arms' failure rates, the reduction,
@@ -286,6 +309,19 @@ Defects found by an outside review of the build, each with what it broke.
 
 ### Studies
 
+- **The tester's acceptance of the first 0015 change, on stores built before it** (no spend; no sealed result). A
+  plain rebuild of five skills changed the export of four, because pairs were taken from benchmark runs nothing had
+  marked as tests; rebuilding a skill that answers made a model call; one harness script could clear its own inputs
+  through a link; the failure-mode reader had no qualification script; and claim B named a repeatability it did not
+  measure. Reproduced here on a store built by the round-two commit and fixed: that store, rebuilt online and
+  offline, exports the same bytes for a writing skill and an answering one. The reuse of the hold-back reading was
+  not exercised against a discovered move offline, and the tester's own stores are the ones that decide. Conclusion:
+  the product had been tested on fresh stores only, and is now also tested on a store an earlier commit built.
+- **Decided before the size study is run** (the owner, 2026-10-06): 60 tasks a domain and no reading under 55; a
+  second guard on the number of rules broken per answer; the rubric judge qualified first; twenty blind pairs for
+  the owner in the last round, today's size kept at fourteen or more; claim B's refusal bar fixed at 15% before its
+  pilot and its repeatability read as requests answered on some of five runs and refused on others, at most 10%.
+
 - **Size, measured** (development, by the reviewer and offline here; no sealed result). Exported Atelier skills ran
   5,035 words (code review), 5,760 (contracts) and 13,818 (speeches), against 189 to 361 for the hand-written seeds,
   863 to 1,240 for GEPA's and 308 to 1,037 for SkillOpt's: 16 to 38 times the seed. On one skill built from a technical author's posts, part
@@ -293,7 +329,7 @@ Defects found by an outside review of the build, each with what it broke.
   how I sound 471, moves 396, the reference index 282, framing 187.
 - **Drafted, not run: can a skill serve less of the author's writing and still hold its standard**
   (studies/EFFICIENCY_ABLATION_PREREGISTRATION.md, decision 0014). Four smaller configurations of each of two
-  writing skills against today's, on 30 or more development tasks per domain. Two scripts hold the rule:
+  writing skills against today's, on 60 development tasks per domain. Two scripts hold the rule:
   `bench/compare/efficiency-rows.mjs` builds the rows (each arm's answers under its own label, a broken rule by
   `atelier verify` offline, the score as the sum of the rubric's dimensions) and `bench/compare/efficiency-select.mjs`
   reads them: each domain on its own, the rule count in whole answers against a tolerance of five in a hundred, the

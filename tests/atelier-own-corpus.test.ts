@@ -52,8 +52,23 @@ describe('the suggestions, read together against the author\'s own pieces', () =
     // the rule a second piece also breaks goes first, whatever its place on the screen
     const uneven = together([counted('m1', [0], 40), counted('m2', [1, 2], 40), counted('m3', [3], 40), counted('m4', [4], 40)]);
     expect(uneven.corpus?.moved).toEqual(['m2']);
-    expect(uneven.suggestions[1].why).toMatch(/with it, only 35 of your own 40 pieces would meet every required rule/);
+    expect(uneven.suggestions[1].why).toMatch(/with it, fewer than 36 of your own 40 pieces would meet every required rule \(37 do without it\)/);
     expect(uneven.corpus?.passing).toBe(37);
+  });
+  it('the fewest rules are moved: not the rule most pieces break, when moving a smaller one is enough', () => {
+    // Four of 40 pieces may break the set. Here four do (pieces 0, 1, 4 and 5), so nothing is moved at all.
+    const r = together([counted('m1', [0, 1], 40), counted('m2', [0, 1], 40), counted('m3', [4, 5], 40), counted('m4', [0], 40), counted('m5', [1], 40)]);
+    expect(allowed(40, CORPUS_SET_SHARE)).toBe(4);
+    expect(r.corpus?.moved).toEqual([]);
+    const tight = together([counted('m1', [0, 1], 40), counted('m2', [0, 1], 40), counted('m3', [4, 5], 40), counted('m4', [2, 3], 40), counted('m5', [6], 40)]);
+    // seven pieces break a rule, four may: one rule cannot do it (the most any removes is two), two can, and of the pairs
+    // the one leaving the fewest pieces breaking is taken
+    expect(tight.corpus?.moved.length).toBe(2);
+    expect(40 - (tight.corpus?.passing ?? 0)).toBeLessThanOrEqual(4);
+    expect(tight.corpus?.required).toBe(3);
+    // m1 and m2 are broken by the same two pieces: moving one of them alone frees no piece, so neither is among the two moved
+    expect(tight.corpus?.moved).not.toContain('m1');
+    expect(tight.corpus?.moved).not.toContain('m2');
   });
   it('polarity: a corpus that meets its rules moves nothing, and a session with no count of the corpus is left exactly as it was', () => {
     const clean = [counted('m1', []), counted('m2', [5]), counted('m3', [])];

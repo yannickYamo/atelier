@@ -7,7 +7,7 @@
 // is written once, in a shape both accept.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -197,6 +197,95 @@ describe('strict delivery is run from any directory, and a run that could not st
     expect(existsSync(join(dir, 'out', 'cache.json'))).toBe(false);
     expect(existsSync(join(dir, 'out', 'strict-delivery.json'))).toBe(false);
   });
+
+  // ── R3: THE SAME REQUEST, RUN AGAIN, IS DELIVERED OR REFUSED THE SAME WAY ──────────────────────────
+  interface R3 { repeats: number; requests: number; split: number; splitShare: number | null; bar: number; allowed: number; incomplete: number; holds: boolean | null; splitRequests: string[] }
+  interface Skill { requests: number; runs?: number; delivered: number; refused: number; r2: { bar: number; upper95: number; holds: boolean }; r3?: R3 }
+  interface Whole { all: { requests: number; runs?: number; delivered: number }; perSkill: Record<string, Skill>; verdict: string; bar: number; repeats?: number; repeatBar?: number }
+  const whole = (dir: string): Whole => JSON.parse(readFileSync(join(dir, 'out', 'strict-delivery.json'), 'utf8')) as Whole;
+
+  it('--repeats runs each request again under its own cache key, and a cache written before is repetition 1', async () => {
+    await scripted();
+    const dir = tmp('strict-repeats');
+    // as today: one run a request, no R3 anywhere, and the cache keyed by the request's id alone
+    const once = strict(dir, '--base-url', url());
+    expect(once.code, once.all).toBe(0);
+    expect(Object.keys(JSON.parse(readFileSync(join(dir, 'out', 'cache.json'), 'utf8')) as object)).toEqual(['q1', 'q2']);
+    expect(whole(dir).perSkill.voice.r3).toBeUndefined();
+    expect(whole(dir).repeats).toBeUndefined();
+    expect(once.all).not.toMatch(/R3/);
+    expect(once.err).toMatch(/^R2 voice: not delivered on 0 of 2 run\(s\), upper bound 0\.842, bar 0\.15: does not hold$/m);
+    // then three times: only the two repetitions that are missing are run
+    const thrice = strict(dir, '--base-url', url(), '--repeats', '3');
+    expect(thrice.code, thrice.all).toBe(0);
+    expect(thrice.out).not.toMatch(/^q1 {2}delivered/m);
+    expect(thrice.out).toMatch(/^q1 repetition 2 {2}delivered {2}exit 0$/m);
+    expect(thrice.out).toMatch(/^q2 repetition 3 {2}delivered {2}exit 0$/m);
+    const cache = JSON.parse(readFileSync(join(dir, 'out', 'cache.json'), 'utf8')) as Record<string, { repetition?: number }>;
+    expect(Object.keys(cache).sort()).toEqual(['q1', 'q1#2', 'q1#3', 'q2', 'q2#2', 'q2#3']);
+    expect(cache.q1.repetition).toBeUndefined();
+    expect(cache['q2#3'].repetition).toBe(3);
+    const r = whole(dir);
+    expect(r.all).toMatchObject({ requests: 2, runs: 6, delivered: 6 });
+    expect(r.perSkill.voice.r3).toEqual({ repeats: 3, requests: 2, split: 0, splitShare: 0, bar: 0.1, allowed: 0, incomplete: 0, holds: true, splitRequests: [] });
+    expect(thrice.err).toMatch(/^R3 voice: 0 of 2 requests split between delivered and not over 3 repetitions \(share 0\), 0 allowed at 0\.1: holds$/m);
+    expect(readFileSync(join(dir, 'out', 'delivered-for-audit.md'), 'utf8')).toMatch(/^## q1#3 \(skill voice\)$/m);
+  }, 180_000);
+
+  /** A finished run's cache, written by hand: two skills, sixty requests each, three repetitions. `splitOn(skill, i)`: the second repetition of that request was refused. */
+  const finished = (name: string, splitOn: (skill: string, i: number) => boolean): { dir: string; args: string[] } => {
+    const dir = tmp(name); mkdirSync(join(dir, 'out'));
+    const reqs = ['alpha', 'beta'].flatMap((skill) => Array.from({ length: 60 }, (_, i) => ({ id: `${skill}-${i}`, skill, request: `Write about decision ${i}.` })));
+    writeFileSync(join(dir, 'requests.jsonl'), jsonl(reqs));
+    const cache: Record<string, object> = {};
+    for (const q of reqs) for (const k of [1, 2, 3]) {
+      const refused = k === 2 && splitOn(q.skill, Number(q.id.split('-')[1]));
+      cache[k === 1 ? q.id : `${q.id}#${k}`] = { skill: q.skill, request: q.request, code: refused ? 3 : 0, tries: 1, delivered: !refused, output: refused ? null : 'A delivered answer.', conformant: !refused, reasons: refused ? ['a required rule is broken'] : [], ...(k === 1 ? {} : { repetition: k }) };
+    }
+    writeFileSync(join(dir, 'out', 'cache.json'), JSON.stringify(cache));
+    return { dir, args: ['--requests', join(dir, 'requests.jsonl'), '--data', data, '--project', proj, '--out', join(dir, 'out'), '--base-url', 'http://127.0.0.1:1'] };
+  };
+  it('R3 counts the requests delivered on some repetitions and refused on others, and fails the verdict over the bar, in whole requests', () => {
+    // seven of alpha's sixty split, where floor(0.10 x 60) = 6 are allowed; every run is cached, so no model is asked
+    const over = finished('strict-split', (skill, i) => skill === 'alpha' && i < 7);
+    const r = run('studies/harness/strict-delivery.mjs', ...over.args, '--repeats', '3');
+    expect(r.code, r.all).toBe(0);
+    const result = whole(over.dir);
+    expect(result.perSkill.alpha.r3).toMatchObject({ requests: 60, split: 7, splitShare: 0.117, allowed: 6, holds: false, splitRequests: Array.from({ length: 7 }, (_, i) => `alpha-${i}`) });
+    expect(result.perSkill.beta.r3).toMatchObject({ requests: 60, split: 0, splitShare: 0, holds: true });
+    // R1 and R2 are read over every run: 180 a skill, seven of alpha's not delivered, and that is still under the bar
+    expect(result.perSkill.alpha).toMatchObject({ requests: 60, runs: 180, delivered: 173, refused: 7, r2: { bar: 0.15, holds: true } });
+    expect(result).toMatchObject({ bar: 0.15, repeats: 3, repeatBar: 0.1 });
+    expect(result.verdict).toBe('FAIL: R3 (alpha): 7 of 60 requests were delivered on some repetitions and not on others, where 6 are allowed');
+    expect(r.err).toMatch(/^R3 alpha: 7 of 60 requests split between delivered and not over 3 repetitions \(share 0\.117\), 6 allowed at 0\.1: does not hold$/m);
+    expect(r.err).toMatch(/^FAIL: R3 \(alpha\)/m);
+    // six is at the bar and holds; nothing has failed, and R1 is still a person's
+    const at = finished('strict-at-bar', (skill, i) => skill === 'alpha' && i < 6);
+    expect(run('studies/harness/strict-delivery.mjs', ...at.args, '--repeats', '3').code).toBe(0);
+    expect(whole(at.dir).perSkill.alpha.r3).toMatchObject({ split: 6, allowed: 6, holds: true });
+    expect(whole(at.dir).verdict).toMatch(/^PENDING THE AUDIT: R2 and R3 hold for every skill\. R1 is read by a person: audit .*delivered-for-audit\.md/);
+    // a stricter sealed bar fails the same runs, and so does a stricter refusal bar
+    expect(run('studies/harness/strict-delivery.mjs', ...at.args, '--repeats', '3', '--repeat-bar', '0.05').code).toBe(0);
+    expect(whole(at.dir).verdict).toBe('FAIL: R3 (alpha): 6 of 60 requests were delivered on some repetitions and not on others, where 3 are allowed');
+    expect(run('studies/harness/strict-delivery.mjs', ...at.args, '--repeats', '3', '--bar', '0.05').code).toBe(0);
+    expect(whole(at.dir).verdict).toMatch(/^FAIL: R2 \(alpha\): not delivered on 0\.033 of its runs, upper bound 0\.071, where under 0\.05 is needed$/);
+    // the same cache read once a request is the first repetition alone: nothing split, and no R3 in the result
+    expect(run('studies/harness/strict-delivery.mjs', ...over.args).code).toBe(0);
+    expect(whole(over.dir).perSkill.alpha.r3).toBeUndefined();
+    expect(whole(over.dir).perSkill.alpha).toMatchObject({ requests: 60, delivered: 60, refused: 0 });
+    expect(whole(over.dir).verdict).toMatch(/^PENDING THE AUDIT: R2 holds for every skill\./);
+  });
+  it('a number of repetitions or a bar that is not one is refused before anything is run (exit 2)', () => {
+    const f = finished('strict-flags', () => false);
+    for (const n of ['0', '21', '1.5', 'many']) {
+      const r = run('studies/harness/strict-delivery.mjs', ...f.args, '--repeats', n);
+      expect(r.code, n).toBe(2);
+      expect(r.err).toMatch(/--repeats is .*: it must be a whole number from 1 to 20, the times each request is run\. Nothing was spent\./);
+    }
+    expect(run('studies/harness/strict-delivery.mjs', ...f.args, '--bar', '0.2').err).toMatch(/--bar is "0\.2": it must be a share above 0 and at most 0\.15, the most the pre-registration allows/);
+    expect(run('studies/harness/strict-delivery.mjs', ...f.args, '--repeat-bar', '0').code).toBe(2);
+    expect(existsSync(join(f.dir, 'out', 'strict-delivery.json'))).toBe(false);
+  });
 });
 
 describe('the voice gate\'s first verdict is UNRESOLVED, never FAIL, until a person has been through the plants', () => {
@@ -296,8 +385,10 @@ describe('the benchmark runner labels any number of arms, and a strict refusal i
     }
     const refusal = plugin.find((x) => x.case_id === 't2' && x.trial === 2);
     expect(refusal).toEqual({ case_id: 't2', trial: 2, condition: 'plug-in', broken: true, rules: ['NOT_DELIVERED'], applicable: 0, held: 0, delivered: false });
+    // every answer a person got says so: axes.mjs reads delivered against refused from this field
+    expect(hand.every((x) => x.delivered === true)).toBe(true);
     for (const x of plugin.filter((y) => y !== refusal)) {
-      expect(x).toMatchObject({ broken: false, rules: [] });
+      expect(x).toMatchObject({ broken: false, rules: [], delivered: true });
       expect(x.applicable).toBeGreaterThan(0);
       expect(x.held).toBe(x.applicable);
     }
@@ -354,6 +445,22 @@ describe('the benchmark runner labels any number of arms, and a strict refusal i
     expect(unknown.code).toBe(2);
     expect(unknown.err).toMatch(/t0 trial 1 \(plug-in\): atelier verify could not check this answer/);
     expect(existsSync(join(work, 'no.jsonl'))).toBe(false);
+  }, 120_000);
+
+  it('verify-rows.mjs refuses an --out that is a responses file under another name: through a linked folder, or as a link to the file', () => {
+    const before = readFileSync(join(work, 'hand.jsonl'), 'utf8');
+    const links = tmp('links');
+    symlinkSync(work, join(links, 'folder'), 'dir');
+    symlinkSync(join(work, 'hand.jsonl'), join(links, 'rows.jsonl'), 'file');
+    for (const out of [join(links, 'folder', 'hand.jsonl'), join(links, 'rows.jsonl')]) {
+      const r = verifyRows('--responses', join(work, 'hand.jsonl'), '--responses', join(work, 'plugin.jsonl'), '--out', out, '--force');
+      expect(r.code, r.all).toBe(2);
+      expect(r.err).toMatch(/--out is .*hand\.jsonl, one of the responses files: it would be written over\. Nothing was written\. Name another file\./);
+      expect(readFileSync(join(work, 'hand.jsonl'), 'utf8')).toBe(before);
+    }
+    // a new file in the linked folder is no input, and is written
+    expect(verifyRows('--responses', join(work, 'plugin.jsonl'), '--out', join(links, 'folder', 'linked-verify.jsonl')).code).toBe(0);
+    expect(rowsOf(join(work, 'linked-verify.jsonl'))).toHaveLength(6);
   }, 120_000);
 
   it('score.mjs skips a refusal and says how many, instead of crashing on it', () => {
