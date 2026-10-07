@@ -217,8 +217,11 @@ import { bindingHash, type RuntimeBinding } from '../core/runtime/binding.js';
 // Both are overridable, and neither is Anthropic-specific by design: `modelFor` refuses to hand an
 // Anthropic default to a provider it was not chosen for, rather than quietly sending a name that
 // backend has never heard of.
-export const MODEL = process.env.ATELIER_MODEL ?? 'claude-opus-5';
-export const PROPOSER = process.env.ATELIER_PROPOSER_MODEL ?? 'claude-fable-5';
+/** The built-in defaults themselves, whatever the environment names: where a refusal falls back to when one model was named for every role. */
+export const MODEL_DEFAULT = 'claude-opus-5';
+export const PROPOSER_DEFAULT = 'claude-fable-5';
+export const MODEL = process.env.ATELIER_MODEL ?? MODEL_DEFAULT;
+export const PROPOSER = process.env.ATELIER_PROPOSER_MODEL ?? PROPOSER_DEFAULT;
 
 export type ProviderId = 'anthropic' | 'openai-compatible';
 export const PROVIDERS: readonly ProviderId[] = ['anthropic', 'openai-compatible'];

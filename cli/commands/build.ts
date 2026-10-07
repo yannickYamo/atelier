@@ -9,6 +9,7 @@ import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, PIECE_BU
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
+import { standardWordingOf } from '../../core/observers/overlap.js';
 import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../../core/compiler/scope.js';
 
 /** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
@@ -474,7 +475,14 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
     store.putLedger(L, v.standardVersionHash, s.ledger);
   }
   store.putStandard(L, v); store.putSkillVersion(L, skill); store.putArchitecture(L, arch); store.putPackage(L, pkg0); store.setActive(L, skill.skillVersionHash);
-  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, voice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
+  // THE AUTHOR'S STANDARD WORDING, read over every piece of theirs that can still be read (those held back
+  // included: a clause they use anywhere is theirs). Kept with the stored voice for the copying check and never
+  // written into a package. Where the pieces cannot be read, what an earlier build found is kept.
+  const everyPiece = sessionCorpus(null, { includeReserved: true });
+  const standardWording = everyPiece.length ? standardWordingOf(everyPiece) : voice?.standardWording ?? [];
+  const { standardWording: _was, ...voiceWithout } = voice ?? {}; void _was;
+  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}) } : voice;
+  store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
   // The fidelity profile and the first implementation release (cli/fidelity.ts): what steers drafts toward

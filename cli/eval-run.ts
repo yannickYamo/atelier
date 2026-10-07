@@ -80,7 +80,8 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // COPYING: the longest run of words shared with a piece of the author's the skill serves.
   const voice = store.getVoice(x.L);
   const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
-  const longest = served.length ? overlapIndex(served)(rec.output).longestShared : null;
+  // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
+  const longest = served.length ? overlapIndex(served, voice?.standardWording ?? [])(rec.output).longestShared : null;
   const formatLine = line('FORMAT');
 
   const reasons: string[] = [];
