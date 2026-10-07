@@ -5,7 +5,8 @@
 // different rules for when the project's run was this skill's; one rule now.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join, extname, basename } from 'node:path';
+import { join, extname, basename, resolve, dirname } from 'node:path';
+import { inMaterialDir } from '../core/golden/case.js';
 import { extract, looksLikeUnsplitPair, READABLE, META_NAME } from '../core/intake/extract.js';
 import { walk } from './commands/intake.js';
 import { die, loadSession } from './runtime.js';
@@ -21,18 +22,23 @@ export function readCorpus(path: string, what = '--corpus'): string[] {
 /** The same pieces, each with the request it answers when its file carries one (core/intake/extract.ts, `splitRequest`). */
 export function readCorpusPairs(path: string, what = '--corpus'): { text: string; request: string | null }[] {
   if (!existsSync(path)) die(`${what}: there is nothing at ${path}.`);
-  const files = statSync(path).isDirectory() ? walk(path).map((r) => join(path, r)) : [path];
+  // What an example was made from is not the author's work (core/golden/case.ts): a `.material` folder, and any
+  // file an example names as its material, are left out here as they are at intake.
+  const rels = statSync(path).isDirectory() ? walk(path).filter((r) => !inMaterialDir(r)) : null;
+  const files = rels ? rels.map((r) => join(path, r)) : [path];
   const reserved = new Set((loadSession().reservation?.reserved ?? []).map((u) => u.artifact.trim()));
-  return files
+  const pieces = files
     .filter((f) => (READABLE as readonly string[]).includes(extname(f).toLowerCase()) && !META_NAME.test(basename(f)))
-    .flatMap((f) => { const r = extract(f); return r.ok ? [{ text: r.text, request: r.request ?? null }] : []; })
-    .filter((p) => !reserved.has(p.text.trim()));
+    .flatMap((f) => { const r = extract(f); return r.ok ? [{ file: f, text: r.text, request: r.request ?? null, refs: (r.materialRefs ?? []).map((ref) => resolve(dirname(f), ref)) }] : []; });
+  // A piece that names itself is still a piece, as at intake; names are matched without regard to case.
+  const named = new Set(pieces.flatMap((p) => p.refs.filter((r) => r.toLowerCase() !== resolve(p.file).toLowerCase()).map((r) => r.toLowerCase())));
+  return pieces.filter((p) => !named.has(resolve(p.file).toLowerCase()) && !reserved.has(p.text.trim())).map((p) => ({ text: p.text, request: p.request }));
 }
 
 /** The files at `path` that look like a request and an answer and were read whole (core/intake/extract.ts, `looksLikeUnsplitPair`). */
 export function unsplitPairs(path: string): string[] {
   if (!existsSync(path)) return [];
-  const files = statSync(path).isDirectory() ? walk(path).map((r) => join(path, r)) : [path];
+  const files = statSync(path).isDirectory() ? walk(path).filter((r) => !inMaterialDir(r)).map((r) => join(path, r)) : [path];
   return files.filter((f) => ['.md', '.markdown', '.txt'].includes(extname(f).toLowerCase()) && !META_NAME.test(basename(f)) && looksLikeUnsplitPair(readFileSync(f, 'utf8'))).map((f) => basename(f));
 }
 

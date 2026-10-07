@@ -7,6 +7,35 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: an example may carry its task and what it was made from
+
+The first step toward a skill built from a method and examples of good output. Nothing changes for a folder of
+finished work alone.
+
+- **An example can say what was asked and what it was made from.** The task as before (`request:` in the front
+  matter, or the `## Request` / `## Answer` layouts). The material in a folder named after the example
+  (`acme.md` and `acme.material/`), or named in the front matter (`material: filing.md, notes/call.txt`, paths from
+  the example's own folder). Material is read as that example's sources and never as your finished work.
+- **Each example has a class, and intake says what you gave:** "8 examples: 2 with the task and the material it was
+  made from, 1 with the task, 5 finished work only." Every example teaches the standard. Only one that carries both
+  its task and its material can test whether a skill reproduces your work, because only then can a candidate be
+  given what you were given and nothing of what you wrote.
+- **A piece held back is one that can be tested.** The automatic reserve puts half of the examples that carry both
+  their task and their material first in line, and leaves the rest to be learned from; among examples of one kind
+  it chooses as it always did.
+- **A held-back example that carries its request is tested on that request.** `atelier reference` gives each arm,
+  and shows the blind reader, what was actually asked, where it gave "produce <file>". A skill built before is
+  unchanged.
+- Material stays inside the folder you point at: a name that leaves it is said and not read. A `materials:` key of
+  your own, whose values are not file names, is left alone.
+
+### Fixed
+
+- **`atelier reference` pasted the held-back pieces into the arm it compared them with.** The arm that is given
+  your work in its prompt read every piece intake had sealed, those held back included, so each held-back reference
+  was in front of the model that was then asked to reproduce it. That arm is now given the pieces discovery read
+  and no others. A comparison made with it before this is not a blind one for that arm.
+
 ### Fixed: the last fixes before 1.x is frozen
 
 Six defects, named in [decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), and no

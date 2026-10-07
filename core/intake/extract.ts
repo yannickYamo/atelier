@@ -25,11 +25,14 @@ import { readFileSync } from 'node:fs';
 import { inflateRawSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { extname, basename } from 'node:path';
+import { splitMaterialRefs } from '../golden/case.js';
 
 export type Extraction =
   | { readonly ok: true; readonly text: string; readonly via: string;
       /** the request this example answers, when the file carries one (`splitRequest`): never part of `text` */
-      readonly request?: string }
+      readonly request?: string;
+      /** the files this example names as what it was made from (../golden/case.ts, `splitMaterialRefs`): never part of `text` */
+      readonly materialRefs?: readonly string[] }
   | { readonly ok: false; readonly reason: string; readonly remedy: string | null };
 
 /**
@@ -146,8 +149,9 @@ export function extract(path: string): Extraction {
   const ext = extname(path).toLowerCase();
   switch (ext) {
     case '.md': case '.markdown': case '.txt': {
-      const { text, request } = splitRequest(readFileSync(path, 'utf8'));
-      return { ok: true, text, via: 'utf8', ...(request ? { request } : {}) };
+      const named = splitMaterialRefs(readFileSync(path, 'utf8'));
+      const { text, request } = splitRequest(named.text);
+      return { ok: true, text, via: 'utf8', ...(request ? { request } : {}), ...(named.refs.length ? { materialRefs: named.refs } : {}) };
     }
     case '.docx': return extractDocx(path);
     case '.rtf': return { ok: true, text: stripRtf(readFileSync(path, 'utf8')), via: 'rtf (control-word strip — formatting is discarded, and so is anything encoded as a field)' };
