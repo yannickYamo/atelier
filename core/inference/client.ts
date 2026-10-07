@@ -358,6 +358,28 @@ export function spendBetween(before: readonly SpendLine[], after: readonly Spend
     .filter((l) => l.calls > 0).sort((a, b) => b.usd - a.usd || b.calls - a.calls || a.purpose.localeCompare(b.purpose));
 }
 
+/**
+ * A CONNECTION THAT DROPPED, as against a backend that answered with an error. Three builds at once on one gateway
+ * ended a paid discovery on "Connection error." after the transport's own two quick retries. A dropped connection
+ * (reset, hung up, the SDK's connection error) is tried again here, slowly, at the one place every call passes. A
+ * backend that is not there (refused, unknown host), an HTTP error, a refusal and a call that ran out its own time
+ * limit are not: each is an answer, or has already waited as long as it is allowed, and is reported as it was. Read
+ * off the error's own name, code and message, never off a response body.
+ */
+export function isDroppedConnection(e: unknown): boolean {
+  const seen = new Set<unknown>(); let text = '';
+  for (let x: unknown = e; x && typeof x === 'object' && !seen.has(x) && seen.size < 5; x = (x as { cause?: unknown }).cause) {
+    seen.add(x);
+    text += ` ${(x as { name?: string }).name ?? ''} ${(x as { code?: string }).code ?? ''} ${(x as { message?: string }).message ?? ''}`;
+  }
+  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN/.test(text)) return false;
+  if (/\bHTTP \d{3}\b|timed out/i.test(text)) return false;
+  return /APIConnectionError|Connection error|ECONNRESET|EPIPE|UND_ERR_SOCKET|socket hang up|other side closed|network socket disconnected/i.test(text);
+}
+/** How many times a dropped connection is tried again at this seam, and the first wait; each wait is three times the last. */
+export const CONNECTION_RETRIES = 3;
+const retryBaseMs = (): number => { const x = Number(process.env.ATELIER_RETRY_BASE_MS); return Number.isFinite(x) && x >= 0 && process.env.ATELIER_RETRY_BASE_MS !== undefined ? x : 1000; };
+
 export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Promise<{ value: T; cost: InferenceCost; usage?: CallUsage }>, purpose: SpendPurpose = 'other'): Promise<T> {
   const inFlight = budget.inFlightUsd ?? 0;
   if (budget.spentUsd + inFlight + estimateUsd > budget.capUsd) throw new BudgetExceeded(budget.spentUsd + inFlight + estimateUsd, budget.capUsd);
@@ -368,7 +390,16 @@ export async function spend<T>(budget: Budget, estimateUsd: number, fn: () => Pr
   budget.calls = used + 1;
   budget.inFlightUsd = inFlight + estimateUsd;
   let result: { value: T; cost: InferenceCost; usage?: CallUsage };
-  try { result = await fn(); } finally { budget.inFlightUsd = (budget.inFlightUsd ?? 0) - estimateUsd; }
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try { result = await fn(); break; } catch (e) {
+        // The budget is held before each further attempt: a failed call cost nothing, but calls made beside this one may
+        // have spent what was left while it waited.
+        if (attempt >= CONNECTION_RETRIES || !isDroppedConnection(e) || budget.spentUsd + (budget.inFlightUsd ?? 0) > budget.capUsd) throw e;
+        await new Promise((ok) => { setTimeout(ok, retryBaseMs() * 3 ** attempt); });
+      }
+    }
+  } finally { budget.inFlightUsd = (budget.inFlightUsd ?? 0) - estimateUsd; }
   const { value, cost, usage } = result;
   budget.spentUsd += budgetUsd(cost);
   processSpent += budgetUsd(cost);

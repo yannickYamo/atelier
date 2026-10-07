@@ -116,7 +116,7 @@ const pending = (r) => Boolean(r?.errored && r.transient && !r.final);
 /** The run says itself that no model was reached: the CLI did not load, there is no key, or nothing answers at the backend's address. */
 const unreachable = (text) => /Cannot find module|ERR_MODULE_NOT_FOUND|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|API_KEY is not set/i.test(text);
 /** An error worth trying again: the provider was busy or slow. Anything else is the run's own failure. */
-const transient = (text) => /\b(429|5\d\d)\b|rate.?limit|overloaded|timed? ?out|ETIMEDOUT|ECONNRESET|socket hang up/i.test(text);
+const transient = (text) => /\b(429|5\d\d)\b|rate.?limit|overloaded|timed? ?out|ETIMEDOUT|ECONNRESET|socket hang up|Connection error/i.test(text);
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 function once(q) {
   let out = ''; let code = 0; let err = '';

@@ -47,6 +47,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords } from '../../core/eval/size.js';
+import { statedLength, againstStated } from '../../core/intake/length.js';
 import { composeServed } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -379,8 +380,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // withheld from this run's prompt when the request asks for detail or brevity, and said in the record.
   // Read by the context judge above when there is one; the word patterns are the floor.
   // The judge's reading and the word pattern together: either one finding a stated length or format counts.
+  // A NUMBER IN THE REQUEST IS A LENGTH TOO (core/intake/length.ts). "About 2,000 words" was not seen: only words
+  // like "detailed" were, so the usual length stayed in the prompt and the chapter came back short.
+  const stated = statedLength(asked);
   const lengthAsked = intent?.length ?? requestedLength(asked);
-  const lengthLine = lengthAsked ? servedText.split('\n').find((l) => /^My (?:pieces of this kind|answers usually) run about /.test(l.trim())) : undefined;
+  const lengthLine = lengthAsked || stated ? servedText.split('\n').find((l) => /^My (?:pieces of this kind|answers usually) run about /.test(l.trim())) : undefined;
   if (lengthLine) withheld.push(lengthLine.trim());
   // AND ITS FORMAT, WHEN IT STATES ONE. "Return only the code block" met a learned "end every piece with a
   // line starting Next:" and lost in 3 of 3 trials. The request is the one thing in the room written today:
@@ -435,7 +439,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   };
   // The facts the person supplied, in the request and the bound material: what a draft may be specific with.
   const ledger = factLedger(materialText);
-  const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}`;
+  // Said to the writer in so many words, after the pieces it is shown: they run at the author's length, and without
+  // this line they set the length whatever the request says.
+  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${stated.raw}. Write to that length. The length my own pieces run does not apply to this request.` : '';
+  const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${lengthNote}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
     : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
@@ -490,6 +497,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
+  if (stated?.unit === 'words' && contractFile === null) {
+    const written = countWords(rec.output); const how = againstStated(written, stated);
+    report.say(`Length asked: ${stated.raw}. Written: ${written.toLocaleString('en-US')} words${how === 'met' ? '' : ` (${how} of what was asked)`}.`);
+  }
   reportRestyle(report, rec.output, material);
   const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
   // Taken where the total is, so the lines by purpose sum to it: what the evaluation below reads is not this run's writing.
@@ -1376,7 +1387,8 @@ function reportIntegrity(report: RunReport, rec: Invocation, classNote: string |
   const voice = store.getVoice(L);
   const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
   if (served.length) {
-    const lifted = overlapIndex(served)(rec.output).longestShared;
+    const overlap = overlapIndex(served, voice?.standardWording ?? [])(rec.output); const lifted = overlap.longestShared;
+    if (overlap.standard) report.detail(`(${overlap.standard} six-word run(s) shared with three or more of your pieces: your standard wording, not counted as copying)`);
     if (lifted >= LIFTED_RUN) report.say(`(the output repeats ${lifted} words in a row from one of your passages the skill carries: that is copying, not voice. Rewrite that sentence.)`);
   }
   // Checked on the OUTPUT, never the served bytes — those legitimately contain every marker, and

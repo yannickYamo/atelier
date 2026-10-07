@@ -80,7 +80,13 @@ describe('contrast: rules from the gap, guarded by the author\'s own held-out wo
   it('a cap the author\'s held-out work would break is never proposed', () => {
     const heldWithDashes = [{ id: 'h.md', text: `${author(9).text} ${'A dash — here. '.repeat(20)}` }];
     const guarded = deriveContrastRules(read, heldWithDashes, [model(0), model(1), model(2)], 'MACHINE_DISCOVERED');
-    expect(guarded.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'EM_DASH')).toBeUndefined();
+    // The held-out piece shows the dash is the author's: no ban is proposed, and the cap that is proposed is one that
+    // piece meets (decision 0016). Before, the ban was dropped and nothing held the dash at all.
+    const dash = guarded.find((r) => (r.requirement.measurement?.params.pattern as string[] | undefined)?.[0] === 'EM_DASH');
+    expect(dash?.requirement.statement).not.toMatch(/^Never use/);
+    expect(dash?.requirement.measurement?.params.maxPer1000 as number).toBeGreaterThan(0);
+    expect(dash?.conformance).toMatchObject({ applicable: 1, present: 1 });
+    expect(dash?.requirement.evidence).toMatch(/^you: none in the pieces read, and up to [\d.]+ per 1,000 words in a piece held out/);
   });
   it('style distance puts the author\'s unseen piece nearer the author than the model', () => {
     const ref = deltaReference(read.map((p) => p.text), [model(0), model(1), model(2)]);

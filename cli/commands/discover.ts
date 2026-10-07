@@ -38,7 +38,7 @@ import * as store from '../../core/state/store.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { mapLimit } from '../../core/inference/concurrency.js';
 import { GenerationIncomplete, ModelUnavailable } from '../../core/inference/client.js';
-import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA } from '../runtime.js';
+import { sha, die, argv, orchestrated, proposerModel, proposerIsDefault, diagnoserModel, modelFor, providerFor, MODEL_DEFAULT, PROPOSER_DEFAULT, type ProposalMeta, clientFor, clientAndBinding, loadSession, saveSession, sourceProvenance, numericFlag, priceOverrideFor, runFile, flag, DATA } from '../runtime.js';
 import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/pricing.js';
 
 // ── discover ─────────────────────────────────────────────────────────────────────────────────
@@ -46,6 +46,9 @@ import { priceFor, ANTHROPIC_PRICING, PRICES_CHECKED_ON } from '../../providers/
 // derived from `framing.ts`. Nothing called them. They are removed rather than kept: a second
 // prompt that no path reaches is a prompt that drifts from the real one in silence, and the
 // next person to wire it would have bypassed the framing owner without noticing.
+
+/** The first of `candidates` that is not the model that just answered, or null when every one is. */
+export const nextDistinctModel = (used: string, candidates: readonly string[]): string | null => candidates.find((m) => m && m !== used) ?? null;
 
 /**
  * Why discovery may retry on its other configured model, or null when it may not: the proposer REFUSED
@@ -199,8 +202,14 @@ export async function discover(): Promise<void> {
     chain = await runDiscoveryChain(client, budget, 'skill', openItems, openGoldens, { standardDimensions: [ev.workType] }, usedModel);
   } catch (e) {
     const retry = discoveryRetry(e, proposerIsDefault());
-    const fallbackModel = retry === 'UNSERVED' ? modelFor('target') : diagnoserModel();
-    if (!retry || fallbackModel === usedModel) throw e;
+    // THE NEXT MODEL THAT IS NOT THE ONE THAT DECLINED. With one model named for everything (ATELIER_MODEL, --model),
+    // the fallback resolved to the model that had just refused, and the discovery ended there.
+    // Read only for a refusal, and only from names that are already settled: a call that stops the process on a
+    // missing setting must not replace the error that brought us here.
+    if (!retry) throw e;
+    const fallbackModel = retry === 'UNSERVED' ? modelFor('target')
+      : nextDistinctModel(usedModel, [diagnoserModel(), ...(providerFor('discovery') === 'anthropic' ? [MODEL_DEFAULT, PROPOSER_DEFAULT] : [])]);
+    if (fallbackModel === null || fallbackModel === usedModel) throw e;
     console.log(retry === 'REFUSED'
       ? `\n${usedModel} declined the request (a refusal, not an error in your work). Retrying once with ${fallbackModel}.`
       : `\n${usedModel}, the default reader, is not served by this backend; reading your work with ${fallbackModel} instead. The record names the model that read it.`);

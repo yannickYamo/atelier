@@ -7,6 +7,33 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: the last fixes before 1.x is frozen
+
+Six defects, named in [decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), and no
+others. A standard approved before this reads and checks exactly as it did.
+
+- **A length stated in numbers sets the length.** "About 2,000 words" was not seen: a run recognised "detailed" and
+  "brief" and no number, so the author's usual length stayed in the prompt and chapters asked at 2,000 words came
+  back at about 1,550. A stated length (a target, a range, "at least", "at most", "exactly"; words, sentences,
+  paragraphs, pages) is read off the request where the request introduces it as a length ("the 500 words I pasted"
+  states none), said to the writer after the author's pieces, and the run reports
+  "Length asked: 2,000 words. Written: 1,960 words."
+- **An em dash you write is yours.** A dash found in fewer than half your pieces was read as one you never use: it
+  was banned, and every dash in an output was replaced. It is banned now only if no piece of yours has one, the
+  pieces held out included; otherwise a rule of its own holds it to your rate. Applies to a new discovery.
+- **A refusal no longer ends a discovery when one model is named for every role.** The retry went to the model that
+  had just declined. It goes to the next model that is not that one, and the run says which model read the work.
+- **A dropped connection is tried again.** Up to three more times, waiting longer each time, wherever a call is
+  made. A backend that is not there, an error it answers with, a refusal and a call that timed out are reported as
+  before.
+- **Your standard wording is not copying.** A run of words found in three or more separate pieces of yours (a clause
+  you use in every contract) is left out of the copying count and listed apart in the run's details. It is read at
+  build over all your pieces, so a skill built before gains it at its next build. Words lifted from one or two
+  pieces are still copying. Under strict delivery 44 of 100 contract clauses had been refused, most for
+  wording of this kind.
+- **"No section headings" is proposed where you write none**, as shown: it is counted on every output and used to
+  choose between drafts, and it is required only if you say so.
+
 ### Fixed: a read of the whole product and of the scripts that decide the closing claims
 
 - **A reply with no text was delivered as a draft that broke no rule.** When the model's reply held no piece, the run

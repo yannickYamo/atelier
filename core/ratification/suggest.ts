@@ -120,7 +120,10 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     }
     if (e.inSample.weak) {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
-        why: `${seen}; the model's plain drafts did not show this habit clearly, so it is shown and used to choose between drafts until you make it required` };
+        // A rule read from what the pieces never do says so: its evidence may show the model doing it in every draft.
+        why: p.measurement.observer === 'HEADINGS' && p.measurement.params.maxPer1000 === 0
+          ? `${seen}; that none of your pieces does it does not make it forbidden, so it is shown and used to choose between drafts until you make it required`
+          : `${seen}; the model's plain drafts did not show this habit clearly, so it is shown and used to choose between drafts until you make it required` };
     }
     // A COUNTED FEATURE qualified as a DETECTOR: its band told the author's pieces from the model's plain
     // drafts. Nothing measured whether holding a draft to it makes the draft better, so it is never

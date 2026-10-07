@@ -168,19 +168,24 @@ export function deriveContrastRules(
     const per = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
     return { a, lo: r1(per(0.25) * 0.6), hi: r1(Math.max(per(0.9) * 1.5, a * 2)) };
   };
+  const everyPiece = [...authorTexts, ...held.map((h) => h.text)];
+  const dashAnywhere = everyPiece.some((t) => t.includes('—'));
   for (const p of PATTERN_IDS) {
     if (VOICE_LAYER.has(p) || (!compared && p !== 'CONTRAST_VERDICT')) continue;
     const a = authorRate(p); const m = meanRate(drafts, p);
     const perPiece = (q: number): number => perPieceP(authorTexts, (t) => patternRate(t, p), q);
     const ev = `you: ${a === 0 ? `none in ${words.toLocaleString()} words` : `${a} per 1,000 words`}; the model on its own: ${m} per 1,000`;
     if (overUsed(a, m)) {
-      const cap = a === 0 ? 0 : r1(Math.max(perPiece(0.9) * 1.25, a * 1.5, 0.3));
+      // A dash in a piece held out is the author's too: none in the pieces read is then not "never".
+      const theirs = p === 'EM_DASH' && a === 0 && dashAnywhere;
+      const cap = theirs ? r1(Math.max(perPieceP(everyPiece, (t) => patternRate(t, p), 0.9) * 1.25, 0.3)) : a === 0 ? 0 : r1(Math.max(perPiece(0.9) * 1.25, a * 1.5, 0.3));
       // Where the author has their own mark for the same job, the rule says to use it.
       const prefer = p === 'EM_DASH' && spacedHyphen >= 1 ? [' - '] : undefined;
       const statement: Statement = cap === 0
         ? `Never use ${PATTERN_LABEL[p]}${prefer ? '; I write a spaced hyphen (" - ") instead' : ''}.`
         : (f) => `Keep ${PATTERN_LABEL[p]} to at most ${lim(f, 'maxPer1000')} per 1,000 words.`;
-      propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } }, ev);
+      propose(statement, 'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: [p], maxPer1000: cap, ...(prefer ? { prefer } : {}) } },
+        theirs ? `you: none in the pieces read, and up to ${r1(Math.max(...everyPiece.map((t) => patternRate(t, p))))} per 1,000 words in a piece held out; the model on its own: ${m} per 1,000` : ev);
       // THE MOVE GETS A CAP, NOT JUST THE GLYPH. Told to write " - " where it would have written "—", a
       // model moves every aside onto the substitute: spaced hyphens went to 8.7 and then 8.9 per 1,000
       // words against the author's 4.0 and 2.9. So every dash aside, whatever the character, is held
@@ -231,7 +236,10 @@ export function deriveContrastRules(
     }
   }
 
-  proposeVoice(authorTexts, held.map((p) => p.text), drafts, propose, bandOf, meanRate);
+  // Whether a rule on em dashes came through the guard above, not whether one was offered to it: a proposal the
+  // author's held-out pieces break is dropped, and the dash would then be held by nothing.
+  const dashCapped = (): boolean => out.some((r) => r.requirement.measurement?.observer === 'PATTERN_RATE' && (r.requirement.measurement.params.pattern as readonly string[] | undefined)?.join() === 'EM_DASH');
+  proposeVoice(authorTexts, held.map((p) => p.text), drafts, propose, bandOf, meanRate, dashCapped);
   // Many small counts, selected by this author's pieces against the model's drafts (./features.ts).
   if (compared) proposeFeatureRules(authorTexts, held.map((p) => p.text), drafts, propose);
 
@@ -463,6 +471,16 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
         `you: ${want === 'SENTENCE' ? a.sentence : a.title} of ${aN} headings; the model: ${want === 'SENTENCE' ? m.sentence : m.title} of ${mN}`, false, true);
     }
   }
+
+  // NO SECTION HEADINGS, WHERE THE AUTHOR WRITES NONE. A model asked for a long piece divides it under headings; an
+  // author whose pieces have none got chapters with them. Read from absence, so it is proposed as shown and counted,
+  // and is required only when the owner says so: that none of a few pieces has a heading does not make one forbidden.
+  const long = authorTexts.filter((t) => proseWords(t) >= 300);
+  if (long.length >= 3 && long.every((t) => headingsOf(t).length === 0)) {
+    const headed = drafts.filter((t) => headingsOf(t).length > 0).length;
+    propose('Write a piece without section headings, as I do.', 'BOUNDARY', { observer: 'HEADINGS', params: { maxPer1000: 0 } },
+      `none of your ${long.length} pieces of 300 words or more has a section heading${drafts.length ? `; ${headed} of the model's ${drafts.length} plain drafts have one` : ''}`, true);
+  }
 }
 
 /**
@@ -482,7 +500,9 @@ function proposeStructure(authorTexts: readonly string[], drafts: readonly strin
  *                   15% of them) gets a cap on the other dialect's spellings.
  */
 function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string[], drafts: readonly string[], propose: Propose,
-  bandOf: (p: PatternId) => { lo: number; hi: number; a: number }, meanRate: (texts: readonly string[], p: PatternId) => number): void {
+  bandOf: (p: PatternId) => { lo: number; hi: number; a: number }, meanRate: (texts: readonly string[], p: PatternId) => number,
+  /** whether the comparison with the model's drafts already capped the author's em dashes */
+  dashCapped: () => boolean = () => false): void {
   // How much a first-person author says "I" depends on the piece (a workflow diary against an analysis:
   // 0.7 to 36 per 1,000 words in one real corpus), so the floor sits near their lightest pieces. What
   // it must catch is a text with no first person at all, which is what a rules-only skill produced.
@@ -520,7 +540,26 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   // this: a family they show in half the pieces is allowed, never one they lack.
   const all = [...authorTexts, ...heldTexts];
   const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.family === f)).length;
-  const never = TELL_FAMILIES.filter((f) => usedIn(f.id) * 2 < all.length).map((f) => f.id);
+  // AN EM DASH THE AUTHOR WRITES IS THEIRS, HOWEVER FEW OF THEIR PIECES HOLD ONE. Under the half rule an author at two
+  // dashes per 1,000 words, in a minority of pieces, was read as never using one: the family was banned and every
+  // dash in an output was replaced. The dash is banned only for an author with none anywhere; otherwise it is held to
+  // the author's own rate by a cap of its own, below.
+  const dashIsTheirs = usedIn('EM_DASH') > 0;
+  const never = TELL_FAMILIES.filter((f) => (f.id === 'EM_DASH' ? !dashIsTheirs : usedIn(f.id) * 2 < all.length)).map((f) => f.id);
+  if (dashIsTheirs && !dashCapped()) {
+    const rate = (t: string): number => patternRate(t, 'EM_DASH');
+    const cap = r1(Math.max(perPieceP(all, rate, 0.9) * 1.25, meanRate(all, 'EM_DASH') * 1.5, 0.3));
+    propose((f) => `Keep ${PATTERN_LABEL.EM_DASH} to at most ${lim(f, 'maxPer1000')} per 1,000 words, as I do.`, 'BOUNDARY',
+      { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: cap } },
+      `you: ${meanRate(all, 'EM_DASH')} per 1,000 words, in ${usedIn('EM_DASH')} of ${all.length} pieces`);
+    // Still held by nothing (the pieces held out break even their own cap): the author's heaviest piece is the limit.
+    if (!dashCapped()) {
+      const most = r1(Math.max(...all.map(rate), 0.3));
+      propose((f) => `Keep ${PATTERN_LABEL.EM_DASH} to at most ${lim(f, 'maxPer1000')} per 1,000 words, as I do.`, 'BOUNDARY',
+        { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: most } },
+        `your piece with the most: ${most} per 1,000 words; in ${usedIn('EM_DASH')} of ${all.length} pieces`);
+    }
+  }
   // Output is held to the typical piece. The author's own pieces are checked with their occasional moves
   // tolerated: the rule targets the model's habit, and a writer who sometimes writes "let me be clear"
   // has not shown that the rule is against them.
@@ -530,7 +569,7 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   const ownCounts = all.map((t) => findPattern(t, 'MACHINE_TELL').length).sort((a, b) => a - b);
   const ownTolerance = Math.max(1, ownCounts[Math.min(ownCounts.length - 1, Math.ceil(ownCounts.length * 0.9) - 1)] ?? 1);
   const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= ownTolerance;
-  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line, an em dash, a run of three or more very short sentences)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
+  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line${never.includes('EM_DASH') ? ', an em dash' : ''}, a run of three or more very short sentences)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
     'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
     `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words, in ${all.filter((t) => findPattern(t, 'MACHINE_TELL').length).length} of ${all.length} pieces; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`,
     false, false, occasional);
