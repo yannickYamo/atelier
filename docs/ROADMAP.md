@@ -28,6 +28,7 @@ flowchart TD
   O --> P4["It doesn't sound like me"]
   O --> P5["The skill is too big and the<br/>checked run costs too much"]
   O --> P6["It takes too long to get<br/>a working skill"]
+  O --> P7["I have a method and examples of<br/>good work, not a voice to copy"]
 
   P1 --> S1a["A standard approved once,<br/>hashed, checked on every output"]:::shipped
   P1 --> S1b["Strict delivery:<br/>only a conformant output ships"]:::testing
@@ -43,6 +44,8 @@ flowchart TD
   P6 --> S6a["Install from npm,<br/>one command to connect an agent"]:::testing
   P6 --> S6b["Review the few rules that decide<br/>most outputs, accept the rest"]:::later
   P6 --> S6c["Ready-made standards,<br/>a check on pull requests"]:::later
+  P7 --> S7a["Rules stated by the owner,<br/>examples read for the rest"]:::shipped
+  P7 --> S7b["A skill from a methodology and<br/>examples of good output"]:::later
 
   classDef shipped fill:#d7f0dd,stroke:#2f7d45,color:#12351d;
   classDef testing fill:#fdf1c7,stroke:#a67c00,color:#3d2e00;
@@ -124,6 +127,16 @@ standard". Today a build proposes twenty to forty-odd rules and prints its inter
 | A check on pull requests: `atelier verify` on docs, release notes and changelogs | 2.0 | A broken REQUIRED rule fails the check, and the run's panel is the comment |
 | Ready-made standards from authors who agreed to be listed; one standard shared by a team and checked in CI | 2.0 | Whether a team keeps a standard in its repository |
 
+### 7. "I have a method and examples of good work, not a voice to copy"
+
+**Why it matters.** Much of what people want from an agent is a piece of work done their way: an analysis by their
+method, to their idea of a finished one. That is a standard too, and it is not a style.
+
+| Solution | State | The evidence, or the test that decides |
+|---|---|---|
+| Rules the owner states (`atelier skill`, `atelier add`) beside rules read from examples | Shipped | Both paths are tested; they have not been measured together on a method |
+| A skill from a methodology and examples of good output | Exploration, after the closing test | First an experiment with no code on one real method; see [Exploration](#exploration-after-the-closing-test) |
+
 ## The order from here
 
 1. **One study of size.** The reviewer measures five configurations of two skills once, by a rule sealed first.
@@ -193,6 +206,44 @@ Nothing here is built, and nothing here starts before the closing test's results
   on; and a feasibility read comes first, on one consenting author with a large body of work, using a hosted
   fine-tune so that no infrastructure is built to find out whether people prefer the result. If they do not, this
   stops there.
+
+- **A skill from a methodology and examples of good output.** The request, in the owner's words: give Atelier a
+  method we like for an analysis (a competitive analysis, a market-entry analysis), show it what a good one looks
+  like, and have it build the skill an agent then works by. Today's skills carry how someone writes or answers. This
+  one would carry how a piece of work is done and what the finished piece must contain.
+
+  **What is already there.** Most of it, in two halves that do not yet meet. `atelier new <folder>` reads examples of
+  good work and proposes the rules behind them, and would read ten good analyses as it reads ten posts.
+  `atelier skill "<your rules>"` builds from rules the owner states, and `atelier add` puts an owner's rule into a
+  standard read from examples. The claim check already cuts or lists any figure, quotation or source that cannot be
+  traced to material the owner supplied, which for an analysis is the check that matters most. Approval, versions,
+  `verify`, repair and export do not change.
+
+  **What is missing.**
+
+  | Gap | Why it is one |
+  |---|---|
+  | Checks on the deliverable, not on the prose | A counted rule today measures writing: sentence length, hedging, how a piece opens. A method needs "every competitor has pricing, positioning and a source", "the market size shows its arithmetic", "the recommendation follows from the scoring table". Only the beginnings exist: a heading check, a presence check, a coverage reading that is not yet qualified |
+  | One intake for both | A methodology document and a folder of examples go in by two separate paths. One command should take both and, where the examples do not follow the method, ask the owner which holds |
+  | The research is not Atelier's | The skill instructs and checks. The agent that runs it does the searching, and the result depends on the material it brings back and binds |
+
+  **What it could claim, and what it could not.** That the method was followed, the deliverable is complete, and no
+  figure is unsourced. Not that the analysis is right: no check here reads whether a conclusion is correct, and none
+  should be described as if it did.
+
+  **The order, each step deciding the next.**
+
+  1. *An experiment with no code.* One method the owner uses, eight to ten analyses they consider good, a skill built
+     from the examples with the method added as the owner's rules, run on two real briefs. About a day and a few
+     dollars. It says whether the gap is the first row of the table or something not guessed here.
+  2. *A thin feature, if the experiment earns it.* The combined intake, a rule kind for the deliverable (required
+     sections, required fields for each item, sourced figures), and its checker.
+  3. *A test like the closing test.* Against hand-written skills for the same method, on briefs held out, read blind.
+     Until then it is not described as better than anything.
+
+  **Why it waits.** Nothing new enters the 1.x line ([decision 0012](decisions/0012-the-closing-rules.md)), and the
+  closing test has not yet said whether an Atelier skill beats a careful hand-written one for writing. That result
+  comes first: it is the evidence this idea would stand on.
 
 ## Not doing
 
