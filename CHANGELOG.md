@@ -28,6 +28,9 @@ From an outside tester who ran the product as a user would and could not start t
   earlier, the build prints the `atelier amend --measure` command that does the same, ready to run, and only where
   no limit can be moved the command that makes the rule a preference. Before this a too-tight limit was kept and
   simply no longer enforced.
+- **The build names the rulings that get there, and no others.** Under nine in ten it said which rules your pieces
+  break most and gave a command for each, which left you to find the right set by trial. It now gives the limits
+  that can be widened, then the fewest rules to make preferences, and says what the count becomes.
 - **Fewer rules are moved.** When your pieces fail the rules together, the smallest set of rules whose move brings
   them to nine in ten is suggested as shown, where before the most-broken rule went first and more could follow
   than were needed. The message says how many of your pieces pass once those rules are set aside.
@@ -49,6 +52,12 @@ From an outside tester who ran the product as a user would and could not start t
   turned on before.
 
 ### Fixed
+
+- **One empty answer no longer ends a discovery.** A rule check that came back with no usable answer stopped the
+  whole run, after it had been paid for. It is asked again, up to three times, and only then refused; the answer is
+  still never invented. A run that stops partway now says what it had spent.
+- **A reader was reported as "could not run" on a model that takes no temperature.** Its calls go out together
+  and are all refused at once; only the first was sent again. Each is now.
 
 - **A project folder that moved lost its skill.** Renamed, moved or copied with its store, a project was answered
   "there is no standard to build from yet", and `atelier new` started a second, paid discovery of the same pieces.
@@ -309,6 +318,17 @@ Defects found by an outside review of the build, each with what it broke.
 
 ### Studies
 
+- **The user path on a real model, once** (acceptance by the builder with the owner's key; $4.79 recorded, and two
+  discovery attempts that failed before any cost was recorded; no sealed result). A skill that answers, from twelve examples: discovery $0.55, one answer
+  $0.18, conformant, the cost block adding up, and a rebuild with and without a key identical with no call made. A
+  blog skill from twenty posts of a technical author: discovery $2.33 against an estimate of $3.47 to $9.24, 16 of
+  the 17 pieces read meeting every rule suggested as required with no ruling from the owner, two posts written at
+  $0.79 and $0.94, both conformant, and a rebuild identical. It found three defects, fixed below: one rule check
+  that came back empty stopped a discovery that had already cost dollars; a reader's calls made side by side to a
+  model that takes no temperature were reported as "could not run"; and the build's advice named every rule a
+  piece broke, not the rulings that reach nine in ten. On an older skill of the same author, those rulings (one
+  limit widened, three rules made preferences) take its own pieces from 9 of 17 to 16 of 17, with 12 rules
+  required where 15 were. Not learned: anything about quality against another skill.
 - **The tester's acceptance of the first 0015 change, on stores built before it** (no spend; no sealed result). A
   plain rebuild of five skills changed the export of four, because pairs were taken from benchmark runs nothing had
   marked as tests; rebuilding a skill that answers made a model call; one harness script could clear its own inputs

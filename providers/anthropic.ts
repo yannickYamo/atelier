@@ -124,16 +124,22 @@ export class AnthropicInferenceClient implements InferenceClient {
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
     let res: Anthropic.Message;
+    // What THIS call was sent with, read before it leaves. Calls made side by side (the taste reader's, a claim
+    // reader's) are all refused for the same reason at once: the first to come back records it, and the others must
+    // still be sent again. Judged by what the set says on return, they were taken for a second refusal and thrown,
+    // and a reader was reported as "could not run" on a model that only takes no temperature.
+    const withTemperature = !noTemperature.has(this.modelId) && (req.temperature ?? this.defaultTemperature) !== undefined;
+    const forced = !noForcedChoice.has(this.modelId);
     try {
-      res = await this.create(req, !noForcedChoice.has(this.modelId));
+      res = await this.create(req, forced);
     } catch (e) {
       // A model that takes no temperature: remembered, and the same call sent again without one.
-      if (refusesTemperature(e) && !noTemperature.has(this.modelId)) {
+      if (refusesTemperature(e) && withTemperature) {
         noTemperature.add(this.modelId);
         return this.complete(req);
       }
-      // Once only: a model already asked without forced choice that still refuses it is an error, not a loop of paid calls.
-      if (!refusesForcedChoice(e) || noForcedChoice.has(this.modelId)) throw plainFailure(e, this.modelId) ?? e;
+      // Once only: a call already sent without forced choice that is still refused for it is an error, not a loop of paid calls.
+      if (!refusesForcedChoice(e) || !forced) throw plainFailure(e, this.modelId) ?? e;
       // A model can refuse both, one 400 at a time: the call without forced choice may then be refused for its
       // temperature. Asked again from the top, each refusal is remembered once, so this ends.
       noForcedChoice.add(this.modelId);

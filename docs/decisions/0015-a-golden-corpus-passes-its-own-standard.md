@@ -108,3 +108,9 @@ With these, a rebuild with no flag of a skill whose readings are kept makes no m
 bytes, except where the compiler itself changed since the commit that built it, which the changelog lists.
 
 **Approved:** the owner, 2026-10-06, on the condition stated at the top.
+
+**After the user path was run on a real model, 2026-10-06** (the owner's instruction: run it, and correct what it
+finds). Three measured failures, each fixed with a test and none a new feature: a discovery stopped by one empty
+answer; a reader's parallel calls refused for a temperature and not all sent again; and the advice in item 1, which
+now gives only the rulings that bring the author's pieces to nine in ten (limits first, then the fewest rules as
+preferences). The changelog has the run.

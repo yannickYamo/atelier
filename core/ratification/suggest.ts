@@ -230,6 +230,35 @@ export const allowed = (pieces: number, share: number): number => Math.max(1, Ma
 /** Sets of rules tried before the search for the fewest to move gives way to one rule at a time. */
 const TRIES = 50_000;
 
+/**
+ * THE FEWEST RULES TO MOVE so that at most `room` pieces still break a rule. `breaking[k]` is the pieces rule `k`
+ * breaks; the answer is positions in that list, ascending, or null when the search ran past TRIES (the caller then
+ * moves one rule at a time, which is never wrong, only sometimes larger). Sets are tried smallest first. Among sets
+ * of the first size that works: the one that leaves the fewest pieces breaking a rule, then the one whose rules the
+ * most pieces break, then the one listed latest.
+ */
+export function fewestToMove(breaking: readonly (readonly number[])[], room: number): number[] | null {
+  const failingWithout = (gone: ReadonlySet<number>): number => new Set(breaking.flatMap((b, k) => (gone.has(k) ? [] : [...b]))).size;
+  let best: number[] | null = null; let tried = 0;
+  const better = (a: readonly number[], b: readonly number[]): boolean => {
+    const fa = failingWithout(new Set(a)); const fb = failingWithout(new Set(b));
+    if (fa !== fb) return fa < fb;
+    const weight = (x: readonly number[]): number => x.reduce((n, k) => n + breaking[k].length, 0);
+    if (weight(a) !== weight(b)) return weight(a) > weight(b);
+    for (let k = a.length - 1; k >= 0; k--) if (a[k] !== b[k]) return a[k] > b[k];
+    return false;
+  };
+  for (let size = 0; size <= breaking.length && best === null && tried < TRIES; size++) {
+    const pick = (from: number, chosen: number[]): void => {
+      if (tried >= TRIES) return;
+      if (chosen.length === size) { tried++; if (failingWithout(new Set(chosen)) <= room && (best === null || better(chosen, best))) best = [...chosen]; return; }
+      for (let k = from; k < breaking.length; k++) pick(k + 1, [...chosen, k]);
+    };
+    pick(0, []);
+  }
+  return best;
+}
+
 /** How the author's own pieces fare against the rules suggested REQUIRED, for the screen and the build to say. */
 export interface CorpusStanding { readonly pieces: number; readonly passing: number; readonly moved: readonly string[];
   /** counted rules still suggested REQUIRED: with none, there is nothing for the pieces to meet and nothing is said */
@@ -268,26 +297,11 @@ export function suggestAll(proposals: readonly Requirement[], meta: Readonly<Rec
     // to one rule at a time, which is never wrong, only sometimes larger.
     const live = proposals.map((_, i) => i).filter(required).filter((i) => (counted[i]?.breaking.length ?? 0) > 0);
     const failingWithout = (gone: ReadonlySet<number>): number => new Set(proposals.flatMap((_, i) => (required(i) && !gone.has(i) ? [...(counted[i]?.breaking ?? [])] : []))).size;
-    let best: number[] | null = null; let tried = 0;
-    const better = (a: readonly number[], b: readonly number[]): boolean => {
-      const fa = failingWithout(new Set(a)); const fb = failingWithout(new Set(b));
-      if (fa !== fb) return fa < fb;
-      const weight = (x: readonly number[]): number => x.reduce((n, i) => n + (counted[i]?.breaking.length ?? 0), 0);
-      if (weight(a) !== weight(b)) return weight(a) > weight(b);
-      for (let k = a.length - 1; k >= 0; k--) if (a[k] !== b[k]) return a[k] > b[k];
-      return false;
-    };
-    for (let size = 1; size <= live.length && best === null && tried < TRIES; size++) {
-      const pick = (from: number, chosen: number[]): void => {
-        if (tried >= TRIES) return;
-        if (chosen.length === size) { tried++; if (failingWithout(new Set(chosen)) <= room && (best === null || better(chosen, best))) best = [...chosen]; return; }
-        for (let k = from; k < live.length; k++) pick(k + 1, [...chosen, live[k]]);
-      };
-      pick(0, []);
-    }
+    const chosen = fewestToMove(live.map((i) => counted[i]?.breaking ?? []), room);
+    const best = chosen === null ? null : chosen.map((k) => live[k]);
     if (best !== null) {
       const left = pieces - failingWithout(new Set(best));
-      for (const i of best as number[]) demote(i, `with it, fewer than ${pieces - room} of your own ${pieces} pieces would meet every required rule (${left} do without it), ${until}`);
+      for (const i of best) demote(i, `with it, fewer than ${pieces - room} of your own ${pieces} pieces would meet every required rule (${left} do without it), ${until}`);
     } else {
       for (let failing = breakingAny(); failing.size > room; failing = breakingAny()) {
         const worst = proposals.map((_, i) => i).filter(required).sort((x, y) => (counted[y]?.breaking.length ?? 0) - (counted[x]?.breaking.length ?? 0) || y - x)[0];

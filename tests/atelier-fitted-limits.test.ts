@@ -473,7 +473,7 @@ describe('through the binary: a new skill is true of its author, and one built b
   });
   it('a skill built before: the build offers the limit the pieces meet, with the statement saying the new number, as a ready command', () => {
     expect(r.before).toMatch(/Your own pieces: 19 of 23 meet every required rule that is counted\./);
-    expect(r.before).toMatch(/^ {2}They break m1 \(4\) most\. For each, the limit your own pieces meet, which keeps the rule required; where no limit can be moved, the rule as a preference, which still counts and still chooses between drafts:$/m);
+    expect(r.before).toMatch(/^ {2}They break m1 \(4\) most\. These rulings bring it to 22 of 23, and each is yours to make:\n {2}The limit your own pieces meet, which keeps the rule required:$/m);
     expect(r.offered).toBe('--skill limits --rule m1 --measure "SENTENCE_LENGTH:medianMax=16,p90Max=16" '
       + '--statement "I keep sentences short: a median under 16 words, and nine in ten under 16." --reason "set where 22 of my 23 pieces meet it"');
   });
@@ -481,11 +481,12 @@ describe('through the binary: a new skill is true of its author, and one built b
     expect(r.after).toMatch(/Your own pieces: 22 of 23 meet every required rule that is counted\./);
     expect(r.after).not.toMatch(/They break/);
   });
-  it('polarity: a rule with no limit to move is offered as a preference, on its own line, and nothing else is', () => {
+  it('polarity: a rule with no limit to move is offered as a preference, on its own line, and a rule that need not move is not', () => {
     expect(r.noLimit).toMatch(/Your own pieces: 0 of 23 meet every required rule that is counted\./);
     expect(r.noLimit).toMatch(/^ {2}They break m2 \(23\), m1 \(1\) most\./m);
     expect(r.noLimit).toMatch(/^ {4}m2: atelier amend --skill limits --rule m2 --materiality PREFERRED --reason "<why>"$/m);
-    // m1 is within what a rule is allowed (one piece), so there is no limit to move for it either
-    expect(r.noLimit).toMatch(/^ {4}m1: atelier amend --skill limits --rule m1 --materiality PREFERRED --reason "<why>"$/m);
+    // only the rulings that get there are listed: with m2 moved, the one piece m1 breaks is within what is allowed
+    expect(r.noLimit).toMatch(/These rulings bring it to 22 of 23, and each is yours to make:\n {2}The rule as a preference, which still counts and still chooses between drafts:$/m);
+    expect(r.noLimit).not.toMatch(/--rule m1 /);
   });
 });

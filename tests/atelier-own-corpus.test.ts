@@ -113,3 +113,16 @@ describe('a run made as a test is never learned from', () => {
     expect(selectContrastPairs([run(false)], v).map((p) => p.before)).toEqual(['We leverage A.']);
   });
 });
+
+describe('the fewest rules to move, as the screen and the build both ask it', () => {
+  it('nothing is moved when the pieces are already within the room, and the smallest set is found when they are not', async () => {
+    const { fewestToMove } = await import('../core/ratification/suggest.js');
+    expect(fewestToMove([[1], [2]], 2)).toEqual([]);
+    // three rules each break one piece, two of them the same one: moving the rule with a piece of its own is enough
+    expect(fewestToMove([[1], [1], [2]], 1)).toEqual([2]);
+    // one rule four pieces break, three that break one each, room for one: the big one and two of the small
+    expect(fewestToMove([[1, 2, 3, 4], [5], [6], [7]], 1)).toHaveLength(3);
+    expect(fewestToMove([[1, 2, 3, 4], [5], [6], [7]], 1)).toContain(0);
+  });
+});
+

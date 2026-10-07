@@ -24,6 +24,9 @@ let byTool = null;
 let when = [];
 let count = 0;
 let failNext = 0;
+// `emptyNext: { <tool>: k }` answers the next k calls of that tool with an empty object: a model that returned no
+// usable answer, where `failNext` is a server that returned an error.
+let emptyNext = {};
 
 const server = createServer((req, res) => {
   let body = '';
@@ -38,6 +41,7 @@ const server = createServer((req, res) => {
       const parsed = JSON.parse(body);
       when = Array.isArray(parsed.when) ? parsed.when : [];
       failNext = typeof parsed.failNext === 'number' ? parsed.failNext : 0;
+      emptyNext = parsed.emptyNext && typeof parsed.emptyNext === 'object' ? { ...parsed.emptyNext } : {};
       if (parsed.byTool) { byTool = parsed.byTool; } else { payload = parsed; byTool = null; }
       res.end('{"ok":true}'); return;
     }
@@ -49,6 +53,7 @@ const server = createServer((req, res) => {
       const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name;
       if (tool && byTool[tool] !== undefined) answer = byTool[tool];
     }
+    { const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name; if (tool && emptyNext[tool] > 0) { emptyNext[tool] -= 1; answer = {}; } }
     const hit = when.find((w) => body.includes(w.contains));
     if (hit) answer = hit.answer;
     // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`

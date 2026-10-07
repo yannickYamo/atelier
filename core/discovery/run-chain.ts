@@ -29,6 +29,8 @@ import { planDiscovery, ingestProbeResults, type ProbeResults, type InferenceReq
 /** The plan emits a union; observeRequestsFor only ever produces this arm. Narrowed, not cast. */
 type ObserveRequest = Extract<InferenceRequest, { readonly kind: 'OBSERVE' }>;
 const isObserve = (r: InferenceRequest): r is ObserveRequest => r.kind === 'OBSERVE';
+/** How many times one observation is asked for before the discovery refuses to go on without it. */
+const OBSERVE_ATTEMPTS = 3;
 import type { GoldenRef, ProposedFactor } from './chain/discovery-contract.js';
 import type { GoldenObservation } from './chain/taste-discovery.js';
 import type { ConstructScope } from './chain/construct-scope.js';
@@ -242,7 +244,7 @@ export async function runDiscoveryChain(
   const byDoc = new Map<string, ObserveRequest[]>();
   for (const req of requests) byDoc.set(req.contextId, [...(byDoc.get(req.contextId) ?? []), req]);
   const observeOne = async (req: ObserveRequest): Promise<{ proposedId: string; observation: GoldenObservation }> => {
-    const r = await spend(budget, 0.02, async () => {
+    const ask = () => spend(budget, 0.02, async () => {
       const x = await client.complete({
         // the DOCUMENT is the stable block — it repeats across factors and is the expensive half
         stableBlock: req.contextPrompt, variableBlock: req.systemPrompt,
@@ -256,7 +258,12 @@ export async function runDiscoveryChain(
       });
       return { value: x, cost: x.cost };
     });
-    const j = r.json as { applicable?: boolean; present?: boolean } | null;
+    // ASKED AGAIN BEFORE REFUSING. One call in a few hundred comes back with no object (a truncation, a declined
+    // request), and on a real corpus that one call used to end a discovery that had already cost dollars. The
+    // answer is still never invented: it is asked for up to three times, each paid and counted, and only then refused.
+    const usable = (x: unknown): x is { applicable: boolean; present: boolean } => typeof (x as { applicable?: unknown } | null)?.applicable === 'boolean' && typeof (x as { present?: unknown }).present === 'boolean';
+    let j: unknown = null;
+    for (let attempt = 0; attempt < OBSERVE_ATTEMPTS && !usable(j); attempt++) j = (await ask()).json;
     // ── AN ABSENT ANSWER IS NOT A NEGATIVE ANSWER ──────────────────────────────────────────────
     //
     // This read was `j?.applicable === true`, which is indistinguishable from a confident NO when
@@ -264,9 +271,9 @@ export async function runDiscoveryChain(
     // "not observed", so a missing field HAD to become "the rule does not apply here" — and that
     // biases held-out confirmation downward, silently, in the direction that under-reports the
     // expert's own standard. Refusing is the only honest option the type allows.
-    if (typeof j?.applicable !== 'boolean' || typeof j.present !== 'boolean') {
+    if (!usable(j)) {
       throw new Error(
-        `the observer returned no usable answer for ${req.proposedId} on ${req.contextId}. `
+        `the observer returned no usable answer for ${req.proposedId} on ${req.contextId}, asked ${OBSERVE_ATTEMPTS} times. `
         + 'Recording it as "not applicable" would turn a missing observation into evidence against '
         + 'a rule the expert may well hold.');
     }

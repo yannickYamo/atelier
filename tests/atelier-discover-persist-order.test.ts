@@ -54,7 +54,7 @@ describe('a missing observation never becomes a negative observation', () => {
     // the object never arrived — and GoldenObservation has only two booleans, so there is no
     // "unobserved" to fall back to. Truncation therefore became evidence AGAINST a rule.
     expect(src).not.toMatch(/applicable: j\?\.applicable === true/);
-    expect(src).toMatch(/typeof j\?\.applicable !== 'boolean'/);
+    expect(src).toMatch(/if \(!usable\(j\)\) \{\s+throw new Error/);
   });
 
   it('bounds the only unbounded field at the schema rather than hoping the model is brief', () => {

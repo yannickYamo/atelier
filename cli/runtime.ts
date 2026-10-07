@@ -19,7 +19,7 @@ import type { ExpertEvidence, Requirement, StandardVersion } from '../core/state
 import { contrastFor, type ContrastPair } from '../core/compiler/contrast-examples.js';
 import type { Reservation } from '../core/golden/reservation.js';
 import type { RatificationLedger } from '../core/ratification/decision-record.js';
-import type { InferenceClient } from '../core/inference/client.js';
+import { processSpentUsd, type InferenceClient } from '../core/inference/client.js';
 import { AnthropicInferenceClient, accountRefusal } from '../providers/anthropic.js';
 import { ClaudeCodeAdapter } from '../adapters/claude-code/adapter.js';
 import { CodexAdapter } from '../adapters/codex/adapter.js';
@@ -37,7 +37,9 @@ const plainProviderError = (m: string): string => {
   const raw = /\b(40[013]) (\{[\s\S]*\})/.exec(m);
   return (raw && accountRefusal(Number(raw[1]), raw[2])) ?? m;
 };
-export const die = (m: string): never => { console.error(`atelier: ${plainProviderError(m)}`); process.exit(1); };
+// A run that stops partway has still been paid for, and nothing else records it: the refusal says how much.
+const spentSoFar = (): string => { const usd = processSpentUsd(); return usd > 0 ? `\n  This run had spent ${usd < 0.01 ? 'under $0.01' : `$${usd.toFixed(2)}`} when it stopped.` : ''; };
+export const die = (m: string): never => { console.error(`atelier: ${plainProviderError(m)}${spentSoFar()}`); process.exit(1); };
 
 /**
  * WHEN `atelier new` DRIVES A STEP, THE STEP REPORTS IN A LINE.

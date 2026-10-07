@@ -1085,3 +1085,36 @@ describe('through the binary: a rebuild never takes "write this, not that" pairs
     expect(r.none).toBe(r.before);
   });
 });
+
+describe('through the binary: a rule check that comes back empty is asked again before a discovery stops', () => {
+  const factor = (description: string) => ({ description, appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['post-0.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' });
+  const script = (emptyNext: Record<string, number>): Promise<unknown> => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ emptyNext, byTool: {
+    emit_factors: { factors: [factor('Lead with the decision, then the reasoning.')] },
+    emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }] },
+    emit_observation: { applicable: true, present: true, why: 'seen' },
+    emit_persona: { points: [] },
+    emit_piece: { piece: 'We decided first, and explained after. The reasoning follows the decision, and it is short.' },
+  } }) });
+  const project = (): { data: string; proj: string; dir: string } => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-ask-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-ask-proj-'));
+    const dir = join(proj, 'posts'); mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
+    return { data, proj, dir };
+  };
+  afterAll(async () => { await script({}); });
+
+  it('empty answers are asked again and the discovery completes; a check never answered stops it, saying how often it asked', async () => {
+    const ok = project();
+    await script({ emit_observation: 2 });
+    const screen = run(ok.data, ok.proj, 'new', ok.dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
+    expect(screen).not.toMatch(/EXIT:/);
+    expect(screen).toMatch(/Nothing was decided\. When you are ready:/);
+    const stopped = project();
+    // every check empty: pieces are read side by side, so a few empty answers land on different checks and each is asked again
+    await script({ emit_observation: 10_000 });
+    const refused = run(stopped.data, stopped.proj, 'new', stopped.dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
+    expect(refused).toMatch(/EXIT:1/);
+    expect(refused).toMatch(/the observer returned no usable answer for p\d+ on .*, asked 3 times\./);
+    // (what the run had spent is added to the refusal when it is above zero; a local backend is unmetered, so not here)
+  }, 300_000);
+});

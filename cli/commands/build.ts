@@ -19,8 +19,8 @@ import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs, contrastFor } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
-import { piecesBreaking } from '../../core/observers/derive.js';
-import { allowed, CORPUS_SET_SHARE, CORPUS_RULE_SHARE } from '../../core/ratification/suggest.js';
+import { piecesBreaking, fitToCorpus } from '../../core/observers/derive.js';
+import { allowed, fewestToMove, CORPUS_SET_SHARE, CORPUS_RULE_SHARE } from '../../core/ratification/suggest.js';
 import { amendToFit } from './amend.js';
 import { measurementId } from '../../core/state/rule-key.js';
 import { describeBackup } from '../../adapters/install-tree.js';
@@ -561,9 +561,10 @@ export async function build(nameArg?: string): Promise<void> {
  * A GOLDEN CORPUS AGAINST ITS OWN STANDARD, said at every build in one line: how many of the author's own pieces
  * meet every REQUIRED rule that is counted on every output. A standard the author's best work fails is the wrong
  * standard, and an output held to it is held to something the author does not do. When more pieces break the set
- * than the review would have allowed, the rules they break most are named, at most four, each with one command:
- * first the one that sets its limit where the author's pieces are (./amend.ts, `amendToFit`), so the rule stays
- * required and becomes true of them, and only where no limit can be moved the one that makes the rule a preference.
+ * than the review would have allowed, the rules they break most are named, at most four, and then the rulings that
+ * bring the pieces back within it, each with one command: first the limits that can be set where the author's
+ * pieces are (./amend.ts, `amendToFit`), so those rules stay required and become true of them, then the fewest
+ * rules to make preferences. A rule whose move would change nothing is not listed.
  * A limit is offered only when the pieces can still be read and are the ones the counts were taken on. Nothing is
  * changed here: what is required is the owner's to rule on.
  *
@@ -597,16 +598,31 @@ function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof 
   const failing = new Set(breaking.flatMap((b) => b.pieces));
   console.log(`Your own pieces: ${pieces - failing.size} of ${pieces} meet every required rule that is counted.`);
   if (failing.size <= allowed(pieces, CORPUS_SET_SHARE)) return;
-  const worst = breaking.filter((b) => b.pieces.length).sort((a, b) => b.pieces.length - a.pieces.length).slice(0, 4);
-  console.log(`  They break ${worst.map((b) => `${b.id} (${b.pieces.length})`).join(', ')} most. For each, the limit your own pieces meet, which keeps the rule required; `
-    + 'where no limit can be moved, the rule as a preference, which still counts and still chooses between drafts:');
-  for (const b of worst) {
+  // THE RULINGS THAT GET THERE, AND NO OTHERS. First each limit that can be set where the pieces are, which keeps its
+  // rule required; then, of what the pieces still break, the fewest rules whose move to a preference leaves at most
+  // the allowed number failing (core/ratification/suggest.ts, `fewestToMove`, as the review screen does). A rule
+  // that neither helps is not listed: listing every broken rule left the owner to find the set by trial.
+  const room = allowed(pieces, CORPUS_SET_SHARE);
+  const broken = breaking.filter((b) => b.pieces.length).sort((a, b) => b.pieces.length - a.pieces.length);
+  const plan = broken.map((b) => {
     const rule = rules.find((r) => r.requirementId === b.id);
     // Fitted only to the pieces the count was taken on: a folder that has moved or changed since offers no limit.
-    const same = own.length === pieces && rule?.measurement !== undefined && piecesBreaking(own, rule.measurement).length === b.pieces.length;
-    const fit = rule && same ? amendToFit(name, rule, own, allowed(pieces, CORPUS_RULE_SHARE)) : null;
-    console.log(`    ${b.id}: ${fit ?? `atelier amend --skill ${name} --rule ${b.id} --materiality PREFERRED --reason "<why>"`}`);
-  }
+    const now = own.length === pieces && rule?.measurement ? piecesBreaking(own, rule.measurement) : null;
+    const same = now !== null && now.length === b.pieces.length;
+    const fit = rule?.measurement && same ? fitToCorpus(rule.measurement, own, allowed(pieces, CORPUS_RULE_SHARE)) : null;
+    const command = rule && fit ? amendToFit(name, rule, own, allowed(pieces, CORPUS_RULE_SHARE)) : null;
+    // Counted on the pieces as read now wherever they can be, so that one piece has one place in every rule's count.
+    return { id: b.id, command, after: command && fit ? piecesBreaking(own, fit) : same ? now : b.pieces };
+  });
+  const move = fewestToMove(plan.map((x) => x.after), room);
+  const moved = new Set((move ?? plan.map((_, k) => k)).map((k) => plan[k].id));
+  const fitted = plan.filter((x) => x.command && !moved.has(x.id));
+  const left = new Set(plan.filter((x) => !moved.has(x.id)).flatMap((x) => x.after)).size;
+  console.log(`  They break ${broken.slice(0, 4).map((b) => `${b.id} (${b.pieces.length})`).join(', ')} most. These rulings bring it to ${pieces - left} of ${pieces}, and each is yours to make:`);
+  if (fitted.length) console.log('  The limit your own pieces meet, which keeps the rule required:');
+  for (const x of fitted) console.log(`    ${x.id}: ${x.command}`);
+  if (moved.size) console.log('  The rule as a preference, which still counts and still chooses between drafts:');
+  for (const x of plan.filter((y) => moved.has(y.id))) console.log(`    ${x.id}: atelier amend --skill ${name} --rule ${x.id} --materiality PREFERRED --reason "<why>"`);
 }
 
 /**

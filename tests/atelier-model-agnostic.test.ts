@@ -635,6 +635,11 @@ describe('a model that refuses forced tool choice is asked in words, and a model
             ? 'tool_choice: type "tool" and "any" are not supported for this model.' : '`temperature` is deprecated for this model.' } }));
           return;
         }
+        if (b.model === 'cool-model' && t !== undefined) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: '`temperature` is deprecated for this model.' } }));
+          return;
+        }
         if (b.model === 'stubborn-model') {
           res.statusCode = 400;
           res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'tool_choice: type "tool" and "any" are not supported for this model.' } }));
@@ -671,6 +676,20 @@ describe('a model that refuses forced tool choice is asked in words, and a model
     expect(r.json).toEqual({ ok: true });
     expect(r.temperatureSent).toBeNull();
     expect(seen.filter((x) => x.model === 'strict-model').map((x) => x.choice)).toEqual(['tool', 'auto', 'auto']);
+  });
+  it('calls made side by side to a model that takes no temperature all answer: each is sent again, not only the first refused', async () => {
+    // A reader fires its calls together. All are refused at once; the first back records the model, and the others
+    // were then taken for a second refusal and thrown ("the taste reader could not run"), seen on a real model.
+    const client = new AnthropicInferenceClient('cool-model', 'sk-test', null);
+    const one = () => client.complete({ stableBlock: 's', variableBlock: '', userMessage: 'q', toolName: 'emit_answer', toolDescription: 'd',
+      schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }, maxTokens: 100, temperature: 0 });
+    const all = await Promise.all([one(), one(), one(), one()]);
+    expect(all.map((r) => r.json)).toEqual([{ ok: true }, { ok: true }, { ok: true }, { ok: true }]);
+    expect(all.every((r) => r.temperatureSent === null)).toBe(true);
+    // and once known, a later call is sent once, without one
+    const before = seen.filter((x) => x.model === 'cool-model').length;
+    await one();
+    expect(seen.filter((x) => x.model === 'cool-model').length).toBe(before + 1);
   });
   it('a model that refuses forced choice even when it is not forced fails after one retry: no loop of paid calls', async () => {
     await expect(new AnthropicInferenceClient('stubborn-model', 'sk-test', null).complete({

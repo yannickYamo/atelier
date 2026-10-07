@@ -196,7 +196,7 @@ atelier export --skill posts --out skill.md --no-index            # leave out th
   by the skill's name.
 - **Every build says how your own pieces fare:** "Your own pieces: 22 of 24 meet every required rule that is
   counted." A standard your best work fails will fail drafts for things you do, so under nine in ten the build names
-  the rules your pieces break most and, for each, a command ready to run: first the limit your own pieces meet
+  the rules your pieces break most and the rulings that bring it back to nine in ten, each a command ready to run: first the limit your own pieces meet
   (`atelier amend --rule m1 --measure "SENTENCE_LENGTH:medianMax=16,p90Max=16" ...`), which keeps the rule required,
   and where no limit can be moved, the rule as a preference. Each is your ruling and mints a new standard; nothing is
   applied for you. The review screen suggests a rule as required only when your own pieces meet it, one by one and
