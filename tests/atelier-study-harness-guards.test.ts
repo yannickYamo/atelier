@@ -286,6 +286,67 @@ describe('strict delivery is run from any directory, and a run that could not st
     expect(run('studies/harness/strict-delivery.mjs', ...f.args, '--repeat-bar', '0').code).toBe(2);
     expect(existsSync(join(f.dir, 'out', 'strict-delivery.json'))).toBe(false);
   });
+  // ── A FOLDER'S ROWS ARE THIS RUN'S OWN, AND A RUN STILL TO BE TRIED AGAIN IS NOT A RESULT ──────────
+  it('a cache whose rows are another run\'s is refused before anything is run: another request under an id, a pilot\'s rows, a request not in the file', () => {
+    const cacheOf = (dir: string): Record<string, Record<string, unknown>> => JSON.parse(readFileSync(join(dir, 'out', 'cache.json'), 'utf8')) as Record<string, Record<string, unknown>>;
+    const edited = (name: string, edit: (c: Record<string, Record<string, unknown>>) => void): { r: Ran; dir: string; before: string } => {
+      const f = finished(name, () => false); const c = cacheOf(f.dir); edit(c);
+      writeFileSync(join(f.dir, 'out', 'cache.json'), JSON.stringify(c));
+      const before = readFileSync(join(f.dir, 'out', 'cache.json'), 'utf8');
+      return { r: run('studies/harness/strict-delivery.mjs', ...f.args), dir: f.dir, before };
+    };
+    const other = edited('strict-other', (c) => { c['alpha-3'].request = 'Write about something else.'; });
+    expect(other.r.code, other.r.all).toBe(2);
+    expect(other.r.err).toMatch(/the row "alpha-3" was made for another request or another skill under the same id\. This --out holds another run's results: give this run a folder of its own\. Nothing was spent, and nothing was changed\./);
+    expect(readFileSync(join(other.dir, 'out', 'cache.json'), 'utf8')).toBe(other.before);
+    expect(existsSync(join(other.dir, 'out', 'strict-delivery.json'))).toBe(false);
+    const pilot = edited('strict-pilot-rows', (c) => { for (const row of Object.values(c)) row.pilot = true; });
+    expect(pilot.r.code).toBe(2);
+    expect(pilot.r.err).toMatch(/the row "alpha-0" was made by the pilot\./);
+    const stray = edited('strict-stray', (c) => { c['gamma-1'] = { ...c['alpha-1'] }; });
+    expect(stray.r.code).toBe(2);
+    expect(stray.r.err).toMatch(/the row "gamma-1" is for a request that is not in --requests\./);
+    // an id written as a number is the same request as its row, whose key is text
+    const numbered = finished('strict-numbers', () => false);
+    const asNumbers = (id: string): number => (id.startsWith('alpha-') ? 0 : 1000) + Number(id.split('-')[1]);
+    writeFileSync(join(numbered.dir, 'requests.jsonl'), readFileSync(join(numbered.dir, 'requests.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => { const q = JSON.parse(l) as { id: string }; return JSON.stringify({ ...q, id: asNumbers(q.id) }); }).join('\n'));
+    writeFileSync(join(numbered.dir, 'out', 'cache.json'), JSON.stringify(Object.fromEntries(Object.entries(cacheOf(numbered.dir)).filter(([k]) => !k.includes('#')).map(([k, v]) => [String(asNumbers(k)), v]))));
+    expect(run('studies/harness/strict-delivery.mjs', ...numbered.args).code).toBe(0);
+    expect(whole(numbered.dir).verdict).toMatch(/^PENDING THE AUDIT/);
+    // a requests file that is not there is one line and exit 2, not a stack trace
+    const none = run('studies/harness/strict-delivery.mjs', '--requests', join(other.dir, 'no-such.jsonl'), '--data', data, '--project', proj, '--out', join(other.dir, 'out2'));
+    expect(none.code).toBe(2);
+    expect(none.err).toMatch(/^--requests .*no-such\.jsonl cannot be read \(ENOENT\)\. Nothing was spent\.$/m);
+  });
+  it('a run that was busy on two commands is final and counts as not delivered; the verdict is then a FAIL', () => {
+    const busy = { errored: 'the provider is overloaded', transient: true, tries: 3, code: 1, final: true };
+    const f = finished('strict-final', () => false);
+    const c = JSON.parse(readFileSync(join(f.dir, 'out', 'cache.json'), 'utf8')) as Record<string, Record<string, unknown>>;
+    for (const i of [0, 1, 2, 3]) c[`alpha-${i}`] = { skill: 'alpha', request: c[`alpha-${i}`].request, ...busy };
+    writeFileSync(join(f.dir, 'out', 'cache.json'), JSON.stringify(c));
+    expect(run('studies/harness/strict-delivery.mjs', ...f.args).code).toBe(0);
+    expect(whole(f.dir).verdict).toMatch(/^FAIL: R2 \(alpha\): not delivered on 0\.067 of its runs, upper bound 0\.162, where under 0\.15 is needed$/);
+  });
+  it('a run that ended on a busy provider is tried again once by the same command, and the verdict is UNRESOLVED until it has been', async () => {
+    await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ failNext: 100000, byTool: { emit_piece: { piece: CLEAN } } }) });
+    const dir = tmp('strict-busy');
+    try {
+      const first = strict(dir, '--base-url', url());
+      expect(first.code, first.all).toBe(0);
+      const rows = (): Record<string, { errored?: string; transient?: boolean; final?: boolean; pilot?: boolean }> => JSON.parse(readFileSync(join(dir, 'out', 'cache.json'), 'utf8')) as never;
+      expect(rows().q1).toMatchObject({ transient: true, pilot: true });
+      expect(rows().q1.final).toBeUndefined();
+      expect(whole(dir).verdict).toMatch(/^UNRESOLVED: 2 run\(s\) ended on a busy provider and are tried again once by the same command\. Run it again: nothing is read as a result until then \(as it stands, with those runs counted as not delivered: R2 \(voice\)/);
+      expect(first.err).toMatch(/^PILOT, not the sealed run\. UNRESOLVED: 2 run\(s\)/m);
+      // the same command again: still busy, so both rows are final and the reading is a result
+      const second = strict(dir, '--base-url', url());
+      expect(second.code, second.all).toBe(0);
+      expect(rows().q1).toMatchObject({ transient: true, final: true });
+      expect(whole(dir).verdict).toMatch(/^FAIL: R2 \(voice\)/);
+      // and a third makes no run at all
+      expect(strict(dir, '--base-url', url()).out).not.toMatch(/^q1 {2}/m);
+    } finally { await scripted(); }
+  }, 240_000);
 });
 
 describe('the voice gate\'s first verdict is UNRESOLVED, never FAIL, until a person has been through the plants', () => {

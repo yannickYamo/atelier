@@ -75,8 +75,8 @@ import { readJsonl, writeJsonl, sha256, opt, die, stripFrontmatter, realPath, ou
 
 const USAGE = 'usage: efficiency-rows.mjs --plan <plan.json> --stage merge|rows --out <dir>';
 const args = process.argv.slice(2);
-const planPath = opt(args, 'plan') ?? die(USAGE);
-const stage = opt(args, 'stage'); const outArg = opt(args, 'out');
+let planPath; let stage; let outArg;
+try { planPath = opt(args, 'plan') ?? die(USAGE); stage = opt(args, 'stage'); outArg = opt(args, 'out'); } catch (e) { die(`${e.message}\n${USAGE}`); }
 if (!['merge', 'rows'].includes(stage) || !outArg) die(USAGE);
 const CLI = fileURLToPath(new URL('../../dist/cli/atelier.mjs', import.meta.url));
 if (!existsSync(CLI)) die(`${CLI} is missing: run \`npm run build\` first`);
@@ -262,7 +262,14 @@ for (const d of plan.domains) {
   writeFileSync(join(outDir, `${d.name}-exports.json`), `${JSON.stringify({ ...Object.fromEntries(served), standard }, null, 1)}\n`);
   writeJsonl(join(outDir, `${d.name}-rules.jsonl`), rules);
   // A skill read under two labels has one set of choices too: an alias reads its root's.
-  if (d.voice) { const choices = rowsOf(`${d.name} voice`, d.voice).filter((r) => r !== null && typeof r === 'object'); writeJsonl(join(outDir, `${d.name}-voice.jsonl`), plan.arms.flatMap((l) => under(l, choices))); }
+  if (d.voice) {
+    const choices = rowsOf(`${d.name} voice`, d.voice).filter((r) => r !== null && typeof r === 'object');
+    // A CHOICE UNDER A LABEL NO ARM HAS IS NOT LEFT OUT: left out, eight misspelt rows of thirty turned a miss into a selection.
+    const known = new Set(plan.arms.map((l) => root.get(l)));   // a choice is recorded under the arm it was read for
+    const stray = choices.findIndex((r) => !known.has(r.condition));
+    if (stray !== -1) die(`${d.name} ${d.voice}: row ${stray + 1} has condition ${JSON.stringify(choices[stray].condition)}, which is no arm of this domain (${[...known].join(', ')}). Nothing was read from it: correct the label and run this again.`);
+    writeJsonl(join(outDir, `${d.name}-voice.jsonl`), plan.arms.flatMap((l) => under(l, choices)));
+  }
   config.domains.push({ name: d.name, sizes: `${d.name}-sizes.json`, rules: `${d.name}-rules.jsonl`, quality, voice: d.voice ? `${d.name}-voice.jsonl` : null, excluded: d.excluded ?? [] });
   // The rule reads both: `broken`, in whole outputs, and the rules each answer breaks, as a total held against
   // `margins.rulesPerOutput`. Where nearly every answer breaks one, the total is what is left to tell two arms apart.

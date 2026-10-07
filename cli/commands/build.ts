@@ -291,7 +291,7 @@ function amendedFrom(L: store.StoreLayout, closed: StandardVersion): StandardVer
   return null;
 }
 
-export async function build(nameArg?: string): Promise<void> {
+export async function build(nameArg?: string, opts: { closing?: boolean } = {}): Promise<void> {
   let s = loadSession();
   const name = skillNameFrom(nameArg ?? flag('--name') ?? die('--name required'));
   // THE FIRST THING A NEW USER HITS IF THEY RUN THIS TOO EARLY, so it says what to do rather than
@@ -540,7 +540,7 @@ export async function build(nameArg?: string): Promise<void> {
         (id) => byId.get(id)?.statement ?? id));
     }
   }
-    showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0);
+    showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0, opts.closing !== false);
     return;
   }
 
@@ -554,7 +554,7 @@ export async function build(nameArg?: string): Promise<void> {
   saveSession({ ...s, skillName: name });
   reportInstalled(host, inst.installedAt, name, v, arch, pkg.packageHash);
   reportObservedBoundaries(arch, v, name);
-  showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0);
+  showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0, opts.closing !== false);
 }
 
 /**
@@ -630,9 +630,10 @@ function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof 
  * trusted, printed now and stored with this version (atelier report --skill <name>; the MCP tool). On every
  * build path, the one that writes into the person's own skill included.
  */
-function showSkillCard(L: store.StoreLayout, skillVersion: string, heldBack: number): void {
+/** `next` false: the caller ends on its own list of what to do next (`atelier new`), so the card does not print a second. */
+function showSkillCard(L: store.StoreLayout, skillVersion: string, heldBack: number, next = true): void {
   const card = skillCardFor(L, { heldBack, skillVersion, persist: true });
-  if (card && !argv.includes('--quiet')) console.log(`\n${renderSkillCard(card, process.stdout.columns || 110)}\n`);
+  if (card && !argv.includes('--quiet')) console.log(`\n${renderSkillCard(card, process.stdout.columns || 110, { next })}\n`);
 }
 
 /**

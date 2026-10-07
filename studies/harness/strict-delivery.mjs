@@ -25,13 +25,17 @@
 //       `splitShare` is split over those requests. R3 holds when split <= floor(bar * requests + 1e-9) with
 //       `--repeat-bar <share>` (default 0.10), in whole requests. A request with a run still to try again (a
 //       transient error) is not done: R3 is then not read for that skill, and the same command finishes it.
+//       While any run waits to be tried again the verdict is UNRESOLVED, whatever R2 reads so far; a run that is
+//       busy again on that second command is final and counts as not delivered.
 //       R1 and R2 are read over every run of every request.
 //   The verdict line names every reading that failed. With every one holding it is still PENDING THE AUDIT, since R1
 //   is a person's to finish. With `--repeats 1` there is no R3 anywhere in the result or the verdict.
 //
 // THE CACHE. <dir>/cache.json holds one row a run, so a stopped study resumes. The first run of a request is keyed by
 // its id, as it always was, and repetition k above 1 by "<id>#<k>": a cache written before repetitions existed is
-// read as repetition 1 of each request, and `--repeats n` then adds the n - 1 runs that are missing.
+// read as repetition 1 of each request, and `--repeats n` then adds the n - 1 runs that are missing. Each row holds
+// its skill, its request and whether it was a pilot's; a folder whose rows are another run's is refused (exit 2). The
+// pilot and the sealed run each need an --out of their own.
 //
 // Run it from any directory: the CLI it drives is found beside this file (dist/cli/atelier.mjs, so `npm run build`
 // first), never from where the command was typed.
@@ -53,7 +57,10 @@ import { execFileSync } from 'node:child_process';
 import { clopperPearson } from '../../dist/core/stats/sign-test.js';
 import { arg, has, fail } from './study-client.mjs';
 
-const REQS = readFileSync(arg('--requests') ?? fail('missing --requests'), 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+const REQS = (() => {
+  const f = arg('--requests') ?? fail('missing --requests');
+  try { return readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)); } catch (e) { return fail(`--requests ${f} cannot be read (${e.code ?? String(e.message).split('\n')[0]}). Nothing was spent.`); }
+})();
 const DATA = arg('--data') ?? fail('missing --data'); const PROJECT = arg('--project') ?? fail('missing --project');
 const OUT = arg('--out') ?? fail('missing --out');
 const PILOT = process.argv.includes('--pilot'); const RETRIES = 2;
@@ -90,6 +97,22 @@ const RUNS = REQS.flatMap((q) => Array.from({ length: REPEATS }, (_, i) => ({ q,
 mkdirSync(OUT, { recursive: true });
 const CACHE = join(OUT, 'cache.json');
 const cache = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, 'utf8')) : {};
+// A CACHED ROW IS THIS REQUEST'S OWN, OR THE FOLDER IS NOT THIS STUDY'S. A row was once believed by its id alone: the
+// sealed run, given the pilot's --out, took the pilot's rows for every id the two shared and made fewer runs than it
+// reported. A row for another skill or another request, a row of a pilot in a sealed run (or the reverse), and a row
+// for a request this file does not hold all stop the run before anything is spent.
+{
+  const byId = new Map(REQS.map((q) => [String(q.id), q]));   // a cache key is text, whatever the id was written as
+  for (const [key, row] of Object.entries(cache)) {
+    const q = byId.get(key) ?? byId.get(key.replace(/#\d+$/, ''));
+    const why = !q ? 'is for a request that is not in --requests'
+      : row.skill !== q.skill || row.request !== q.request ? 'was made for another request or another skill under the same id'
+        : row.pilot !== undefined && row.pilot !== PILOT ? `was made ${row.pilot ? 'by the pilot' : 'by a run that was not the pilot'}` : null;
+    if (why) fail(`${CACHE}: the row "${key}" ${why}. This --out holds another run's results: give this run a folder of its own. Nothing was spent, and nothing was changed.`);
+  }
+}
+/** A run that ended on a busy provider and has not yet been tried again by a later command: not a final row. */
+const pending = (r) => Boolean(r?.errored && r.transient && !r.final);
 /** The run says itself that no model was reached: the CLI did not load, there is no key, or nothing answers at the backend's address. */
 const unreachable = (text) => /Cannot find module|ERR_MODULE_NOT_FOUND|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|API_KEY is not set/i.test(text);
 /** An error worth trying again: the provider was busy or slow. Anything else is the run's own failure. */
@@ -104,8 +127,9 @@ function once(q) {
 }
 for (const { q, k, key } of RUNS) {
   const name = REPEATS > 1 ? `${q.id} repetition ${k}` : q.id;
-  // A cached transient error is tried again on resume; every other cached row is final.
-  if (cache[key] && !(cache[key].errored && cache[key].transient)) continue;
+  // A cached transient error is tried again on resume, once; every other cached row is final.
+  const again = pending(cache[key]);
+  if (cache[key] && !again) continue;
   const t0 = Date.now(); let r = once(q); let tries = 1;
   while (!r.j && transient(r.err) && tries <= RETRIES) { await wait(2000 * 2 ** (tries - 1) * (process.env.STRICT_RETRY_MS ? 0 : 1) + Number(process.env.STRICT_RETRY_MS ?? 0)); r = once(q); tries += 1; }
   const { j, code, err } = r;
@@ -117,10 +141,13 @@ for (const { q, k, key } of RUNS) {
   }
   // THREE OUTCOMES: delivered conformant (exit 0), refused (exit 3, no text), and errored after its retries. An
   // errored run delivered nothing to the person waiting: it counts as NOT DELIVERED in availability, and apart as an error.
-  const row = !j ? { skill: q.skill, request: q.request, errored: err.split('\n').filter(Boolean).slice(-2).join(' ') || 'no output', transient: transient(err), tries, code }
+  const row = !j ? { skill: q.skill, request: q.request, errored: err.split('\n').filter(Boolean).slice(-2).join(' ') || 'no output', transient: transient(err), tries, code,
+    // TRIED AGAIN ONCE, BY ONE LATER COMMAND. A busy provider on that command too is an error that survived its retries:
+    // the row is final and counts as not delivered, so a study always ends.
+    ...(again && transient(err) ? { final: true } : {}) }
     : { skill: q.skill, request: q.request, code, tries, delivered: j.delivered === true, output: j.output ?? null, invocationId: j.invocationId, costUsd: j.costUsd ?? 0,
       conformant: j.eval?.result?.conformant ?? null, reasons: j.eval?.result?.reasons ?? [], redrawn: j.eval?.fidelity?.shape?.written ?? null, coverage: j.eval?.monitors?.coverage ?? null };
-  cache[key] = k === 1 ? row : { ...row, repetition: k };
+  cache[key] = { ...row, pilot: PILOT, ...(k === 1 ? {} : { repetition: k }) };
   writeFileSync(CACHE, JSON.stringify(cache, null, 1));
   console.log(`${name}  ${cache[key].errored ? 'ERRORED' : cache[key].delivered ? 'delivered' : 'refused'}  exit ${code}${tries > 1 ? `  (${tries} tries)` : ''}`);
 }
@@ -149,7 +176,7 @@ const r2Of = (s) => { const upper = s.notDelivered ? s.notDelivered.ci95[1] : nu
 const r3Of = (rs) => {
   const byRequest = new Map();
   for (const r of rs) byRequest.set(r.of, [...(byRequest.get(r.of) ?? []), r]);
-  const done = [...byRequest].filter(([, runs]) => runs.length === REPEATS && runs.every((r) => !(r.errored && r.transient)));
+  const done = [...byRequest].filter(([, runs]) => runs.length === REPEATS && runs.every((r) => !pending(r)));
   const state = (r) => (r.errored ? 'errored' : r.delivered ? 'delivered' : 'refused');
   const split = done.filter(([, runs]) => !(runs.every((r) => state(r) === 'delivered') || runs.every((r) => state(r) === 'refused'))).map(([id]) => id);
   const incomplete = byRequest.size - done.length; const allowed = Math.floor(REPEAT_BAR * done.length + 1e-9);
@@ -167,7 +194,13 @@ const failed = SKILLS.flatMap((k) => { const s = perSkill[k]; return [
   s.r3 && s.r3.holds === false ? `R3 (${k}): ${s.r3.split} of ${s.r3.requests} requests were delivered on some repetitions and not on others, where ${s.r3.allowed} are allowed` : null,
 ].filter(Boolean); });
 const unread = SKILLS.filter((k) => perSkill[k].r3 && perSkill[k].r3.holds === null);
-const verdict = failed.length ? `FAIL: ${failed.join('; ')}`
+// A RUN STILL TO BE TRIED AGAIN COMES BEFORE ANY FAIL. Counted as not delivered while it waits, four busy calls in
+// sixty read "FAIL: R2", and the same command run again read "PENDING THE AUDIT": the first line was not a result.
+const waiting = rows.filter(pending).length;
+// R1 does not wait on them: an output delivered against the run's own verdict is a failure whatever the rest becomes.
+const r1Failed = failed.filter((f) => f.startsWith('R1 '));
+const verdict = waiting && !r1Failed.length ? `UNRESOLVED: ${waiting} run(s) ended on a busy provider and are tried again once by the same command. Run it again: nothing is read as a result until then${failed.length ? ` (as it stands, with those runs counted as not delivered: ${failed.join('; ')})` : ''}`
+  : failed.length ? `FAIL: ${failed.join('; ')}`
   : unread.length ? `UNRESOLVED: R3 was not read for ${unread.join(', ')}: ${unread.map((k) => perSkill[k].r3.incomplete).reduce((a, b) => a + b, 0)} request(s) have a repetition still to run. Run the same command again`
     : `PENDING THE AUDIT: R2${REPEATS > 1 ? ' and R3 hold' : ' holds'} for every skill. R1 is read by a person: audit ${join(OUT, 'delivered-for-audit.md')} against the REQUIRED measured rules`;
 const result = { pilot: PILOT, all: summarise(rows), perSkill,

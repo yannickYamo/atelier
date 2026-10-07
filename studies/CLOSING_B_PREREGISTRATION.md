@@ -46,7 +46,7 @@ pilot shows how much of the refusal rate it is.
 | | Endpoint | Design | Pass |
 |---|---|---|---|
 | R1 | nothing nonconformant is delivered | every delivered output audited by a person against the measured REQUIRED rules; and no delivered output that the run's own verdict called not conformant | 0 audited failures, in every skill |
-| R2 | it still delivers | not delivered over **all** requests: a refusal, and an error that survives two retries, both count | per skill, upper 95% bound under 15% |
+| R2 | it still delivers | not delivered over **all** requests: a refusal, and an error that survives two retries, both count. A run that ended on a busy provider is tried again once by the same command, and the verdict is UNRESOLVED until it has been | per skill, upper 95% bound under 15% |
 | R3 | repeatability | 20 requests × 5 repetitions per skill under strict delivery (`--repeats 5`); a request is split when its runs are neither all delivered nor all refused | per skill, at most 10% of requests split |
 
 **Claim B PASSES** when R1, R2 and R3 hold for every skill. The claim is "delivery and repeatability", so
@@ -64,7 +64,8 @@ ungated features against pasted examples, which an earlier draft called R3, is n
 **R4, long sessions, has no harness and is not measured in 1.x.** The result says so.
 
 Run it from any directory, the backend flags last:
-`node studies/harness/strict-delivery.mjs --requests requests.jsonl --data <ATELIER_DATA> --project <project> --out out/b [--pilot]`,
+`node studies/harness/strict-delivery.mjs --requests requests.jsonl --data <ATELIER_DATA> --project <project> --out out/b`
+(the pilot: its own requests, `--out out/b-pilot --pilot`; the script refuses a folder that holds another run's rows),
 and for R3 `--requests repeat-requests.jsonl --out out/b-r3 --repeats 5`. The bars are the script's defaults
 (`--bar 0.15`, `--repeat-bar 0.10`); it accepts a stricter one and refuses a looser R2 bar. Its result carries
 `r2`, `r3` and a `verdict`, which stays "PENDING THE AUDIT" until a person has read R1.

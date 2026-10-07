@@ -89,7 +89,9 @@ describe('atelier new: a folder and a sentence', () => {
     expect(second).toMatch(/── Atelier · skill voice · version [0-9a-f]{8}/);
     expect(second).toMatch(/EVERY OUTPUT IS CHECKED BY/);
     expect(second).toMatch(/not measured: /);
-    const card = /── Atelier · skill [\s\S]*?\n {2}next: .*(?:\n {22}.*)*/.exec(second)?.[0] ?? '';
+    // the card ends on what is not measured: under `new` the command's own list of what to do next is the only one
+    const card = /── Atelier · skill [\s\S]*?\n {2}not measured: .*(?:\n {22}.*)*/.exec(second)?.[0] ?? '';
+    expect(second).not.toMatch(/^ {2}next: /m);
     expect(second.replace(card, '').split(/\s+/).length, second).toBeLessThan(300);
     const md = readFileSync(join(proj, '.claude', 'skills', 'voice', 'SKILL.md'), 'utf8');
     expect(md).toMatch(/Lead with the decision/);

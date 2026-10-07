@@ -50,7 +50,7 @@ const capturing = (): { client: InferenceClient; seen: () => InferenceRequest } 
   let seen: InferenceRequest | null = null;
   return {
     seen: () => seen ?? (() => { throw new Error('nothing was requested'); })(),
-    client: { complete: async (r: InferenceRequest) => { seen = r; return anInferenceResult({ json: { verdict: 'ok', confidence: 1 } }); } },
+    client: { complete: async (r: InferenceRequest) => { seen = r; return anInferenceResult({ json: r.toolName === 'emit_piece' ? { piece: 'The verdict is ok.' } : { verdict: 'ok', confidence: 1 } }); } },
   };
 };
 

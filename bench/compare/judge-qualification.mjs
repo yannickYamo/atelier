@@ -21,6 +21,9 @@
 // THE BAR: at least 0.85 of each class. A second judge from another model family is read the same way, and its
 // agreement with the first, answer by answer, is reported.
 //
+// EVERY LABELLED ANSWER MUST HAVE A ROW, from the judge and from the second judge when one is given: an answer left
+// unjudged makes the verdict UNRESOLVED. The bar is read on the counts, not on the rounded share that is printed.
+//
 // THE VERDICT. Without --second: QUALIFIED or NOT QUALIFIED by that bar, and UNRESOLVED when fewer than 20 answers of
 // a class were judged. With --second the pre-registration's own line is read too (studies/CLOSING_A_PREREGISTRATION.md,
 // "Judge"): when the two judges agree on fewer than 0.80 of the planted answers, the verdict is UNRESOLVED, whatever
@@ -31,14 +34,25 @@ import { outputClash } from './lib.mjs';
 
 const arg = (n) => { const i = process.argv.indexOf(n); return i === -1 ? null : process.argv[i + 1]; };
 const fail = (m) => { console.error(`judge-qualification: ${m}`); process.exit(2); };
-const jsonl = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+// A file that is not there, or a line that is not JSON, is an input that cannot be read: one line and exit 2.
+const jsonl = (f) => { try { return readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l)); } catch (e) { return fail(`${f} cannot be read (${e.code ?? String(e.message).split('\n')[0]}). No verdict was given.`); } };
 let weights;
 try { weights = JSON.parse(arg('--weights') ?? fail('missing --weights')); } catch (e) { fail(`--weights is not a JSON object of dimension to weight (${e.message.split('\n')[0]})`); }
 const dimensions = weights !== null && typeof weights === 'object' && !Array.isArray(weights) ? Object.keys(weights) : [];
 if (!dimensions.length || dimensions.some((d) => typeof weights[d] !== 'number' || !Number.isFinite(weights[d]))) fail('--weights must be a JSON object naming at least one dimension, each with a number for its weight');
 const threshold = Number(arg('--threshold') ?? fail('missing --threshold'));
 if (!Number.isFinite(threshold)) fail(`--threshold is ${JSON.stringify(arg('--threshold'))}: it must be a number, the weighted score at or above which an answer counts as called good`);
-const labels = new Map(jsonl(arg('--labels') ?? fail('missing --labels')).map((r) => [`${r.case_id}\u0000${r.condition}`, r.label]));
+const labels = new Map();
+jsonl(arg('--labels') ?? fail('missing --labels')).forEach((r, i) => {
+  const k = `${r?.case_id}\u0000${r?.condition}`;
+  if (r?.label !== 'good' && r?.label !== 'bad') fail(`${arg('--labels')}: row ${i + 1} (${r?.case_id}, ${r?.condition}) has label ${JSON.stringify(r?.label)}: it must be "good" or "bad"`);
+  // ONE LABEL AN ANSWER. A second row used to replace the first without a word.
+  if (labels.has(k)) fail(`${arg('--labels')}: row ${i + 1}: ${r.case_id} (${r.condition}) is labelled twice. Each planted answer has one label: remove one of the two rows.`);
+  labels.set(k, r.label);
+});
+const BAR = 0.85;
+// THE BAR IS READ ON THE COUNTS. The share printed is rounded to three places, and 96 of 113 (0.8496) printed as 0.85.
+const reaches = (x, bar) => x.n > 0 && x.k >= bar * x.n - 1e-9;
 const rate = (k, n) => { const c = clopperPearson(k, n); return { k, n, share: n ? Math.round((k / n) * 1000) / 1000 : null, ci95: [Math.round(c.lo * 1000) / 1000, Math.round(c.hi * 1000) / 1000] }; };
 /** Per answer: whether this judge called it good (trials averaged). */
 function calls(file) {
@@ -58,7 +72,8 @@ function read(file) {
   const c = calls(file); const of = (label) => [...c].filter(([k]) => labels.get(k) === label);
   const good = rate(of('good').filter(([, g]) => g).length, of('good').length); const bad = rate(of('bad').filter(([, g]) => !g).length, of('bad').length);
   const enough = good.n >= 20 && bad.n >= 20;
-  return { goodCalledGood: good, badCalledBad: bad, unjudged: labels.size - c.size, enough, qualified: enough && good.share >= 0.85 && bad.share >= 0.85, calls: c };
+  const unjudged = labels.size - c.size;
+  return { goodCalledGood: good, badCalledBad: bad, unjudged, enough, qualified: enough && unjudged === 0 && reaches(good, BAR) && reaches(bad, BAR), calls: c };
 }
 const first = read(arg('--scores') ?? fail('missing --scores'));
 const result = { threshold, judge: { ...first, calls: undefined } };
@@ -69,8 +84,12 @@ if (arg('--second')) {
   result.agreement = rate(both.filter((k) => first.calls.get(k) === second.calls.get(k)).length, both.length);
 }
 const AGREEMENT = 0.8;
-const apart = result.agreement && !(result.agreement.share >= AGREEMENT);
+const apart = result.agreement && !reaches(result.agreement, AGREEMENT);
+// EVERY PLANTED ANSWER IS JUDGED, BY EACH JUDGE. A judge that scored 40 of 60 planted answers qualified on the 40, and a
+// second judge that scored five agreed on five of five: a set read in part is not the set that was sealed.
+const left = first.unjudged > 0 ? `${first.unjudged} labelled answer(s) have no row in ${arg('--scores')}` : result.second?.unjudged > 0 ? `${result.second.unjudged} labelled answer(s) have no row in ${arg('--second')}` : null;
 result.verdict = !first.enough ? 'UNRESOLVED: fewer than 20 answers of a class were judged'
+  : left ? `UNRESOLVED: ${left}. Have the judge score every planted answer, then run this again`
   : apart ? `UNRESOLVED: the two judges agree on ${result.agreement.share ?? 'none'} of the ${result.agreement.n} planted answers both judged, under the ${AGREEMENT.toFixed(2)} the pre-registration sets. The claim cannot be read with this pair of judges`
     : first.qualified ? 'QUALIFIED' : 'NOT QUALIFIED';
 if (arg('--out')) {

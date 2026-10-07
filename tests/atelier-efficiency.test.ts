@@ -438,6 +438,21 @@ describe('the rule that chooses which size becomes the default', () => {
     expect(none.selected).toBeNull();
     expect(none.sentence).toMatch(/^NONE SELECTED: .*"full" stays the default\. The study did not show that a smaller skill holds; at this size it could not have shown that it does not\./);
   });
+  it('--out is never the config or a file it names (exit 2, the file intact), and a flag with no value is one line', () => {
+    const dir = tmp();
+    const arms = { full: { ...level, breaks: breaking(10), words: 13000 }, lean: { ...level, breaks: breaking(10), words: 4500 } };
+    const cfg = config(dir, [domain(dir, 'blog', 30, arms)], ['lean']);
+    const before = readFileSync(cfg, 'utf8');
+    const r = script('efficiency-select.mjs', '--config', cfg, '--out', cfg);
+    expect(r.code, r.out).toBe(2);
+    expect(r.out).toMatch(/--out is .*, a file this run reads: it would be written over\. Nothing was written\./);
+    expect(readFileSync(cfg, 'utf8')).toBe(before);
+    expect(script('efficiency-select.mjs', '--config', cfg, '--out', join(dir, 'result.json')).code).toBe(0);
+    const bare = script('efficiency-rows.mjs', '--plan');
+    expect(bare.code).toBe(2);
+    expect(bare.out).toMatch(/--plan needs a value/);
+    expect(bare.out).not.toMatch(/\n\s+at /);
+  });
   it('where the reference itself breaks a rule in nearly every output, rules are unread: no arm is selected on a reading with no room', () => {
     const dir = tmp();
     const arms = { full: { ...level, breaks: breaking(54), words: 13000 }, lean: { ...level, breaks: breaking(56), words: 4500 } };

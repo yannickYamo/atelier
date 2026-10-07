@@ -153,7 +153,9 @@ export async function newSkill(): Promise<void> {
   }
 
   if (s.run.state === 'RATIFIED') {
-    await build(name);
+    // ONE LIST OF WHAT TO DO NEXT, the one this command ends on: the card's own is left out, and the floor says its
+    // command on its own line.
+    await build(name, { closing: false });
     s = loadSession();
   }
 
@@ -226,6 +228,5 @@ function proposeFloor(skill: string): void {
   const proposals = proposeMargins(dims, texts);
   if (!proposals.length) return;
   store.setFloor(L, { ...store.getFloor(L), contract: buildContract(proposals, dims, null) });
-  console.log(`\nRegression floor: margins proposed for ${proposals.length} measured rule(s) from your own spread, all watched, none blocking yet.`);
-  console.log(`  See and set it:  atelier floor --skill ${skill}`);
+  console.log(`\nRegression floor: margins proposed for ${proposals.length} measured rule(s) from your own spread, all watched, none blocking yet (atelier floor --skill ${skill}).`);
 }

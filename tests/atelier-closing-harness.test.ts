@@ -175,6 +175,38 @@ describe('a judge is qualified on answers whose quality is known', () => {
     expect(second(0, 5).verdict).toBe('NOT QUALIFIED');
     expect(second(12, 5).verdict).toMatch(/^UNRESOLVED: the two judges agree on 0\.7 of the 40/);
   });
+  it('every labelled answer is judged, by each judge, or the verdict is UNRESOLVED; a label given twice stops the run', () => {
+    // sixty labelled, forty judged: the judge used to qualify on the forty
+    const more = [...labels, ...Array.from({ length: 20 }, (_, i) => ({ case_id: `m${i}`, condition: 'x', label: i < 10 ? 'good' : 'bad' }))];
+    writeFileSync(join(dir, 'labels60.jsonl'), jsonl(more));
+    writeFileSync(join(dir, 'part.jsonl'), jsonl(rows(0)));
+    const part = JSON.parse(node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'part.jsonl'), '--labels', join(dir, 'labels60.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5').out) as { verdict: string; judge: { unjudged: number; qualified: boolean } };
+    expect(part.judge).toMatchObject({ unjudged: 20, qualified: false });
+    expect(part.verdict).toMatch(/^UNRESOLVED: 20 labelled answer\(s\) have no row in .*part\.jsonl\. Have the judge score every planted answer, then run this again$/);
+    // a second judge that scored five of the forty agreed on five of five
+    writeFileSync(join(dir, 'five.jsonl'), jsonl(rows(0).slice(0, 5)));
+    const five = JSON.parse(node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'part.jsonl'), '--second', join(dir, 'five.jsonl'), '--labels', join(dir, 'labels.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5').out) as { verdict: string };
+    expect(five.verdict).toMatch(/^UNRESOLVED: 35 labelled answer\(s\) have no row in .*five\.jsonl/);
+    writeFileSync(join(dir, 'twice.jsonl'), jsonl([...labels, { case_id: 'p3', condition: 'x', label: 'bad' }]));
+    const twice = node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'part.jsonl'), '--labels', join(dir, 'twice.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5');
+    expect(twice.code).toBe(2);
+    expect(twice.out).toMatch(/row 41: p3 \(x\) is labelled twice/);
+    // a file that is not there is one line and exit 2
+    const gone = node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'no-such.jsonl'), '--labels', join(dir, 'labels.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5');
+    expect(gone.code).toBe(2);
+    expect(gone.out).toMatch(/^judge-qualification: .*no-such\.jsonl cannot be read \(ENOENT\)\. No verdict was given\.$/m);
+  });
+  it('the bar is read on the counts, not on the share as printed: 96 of 113 is under 0.85', () => {
+    const big = Array.from({ length: 226 }, (_, i) => ({ case_id: `b${i}`, condition: 'x', label: i < 113 ? 'good' : 'bad' }));
+    writeFileSync(join(dir, 'big-labels.jsonl'), jsonl(big));
+    const scored = (wrongGood: number): object[] => big.map((l, i) => ({ case_id: l.case_id, trial: 1, condition: 'x', ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, l.label === 'good' && i >= wrongGood ? 4.5 : 2])), blocker: false }));
+    const at = (wrongGood: number): { verdict: string; judge: { goodCalledGood: { k: number; share: number } } } => {
+      writeFileSync(join(dir, 'big.jsonl'), jsonl(scored(wrongGood)));
+      return JSON.parse(node('bench/compare/judge-qualification.mjs', '--scores', join(dir, 'big.jsonl'), '--labels', join(dir, 'big-labels.jsonl'), '--weights', JSON.stringify(WEIGHTS), '--threshold', '3.5').out) as never;
+    };
+    expect(at(17)).toMatchObject({ verdict: 'NOT QUALIFIED', judge: { goodCalledGood: { k: 96, share: 0.85 } } });
+    expect(at(16).verdict).toBe('QUALIFIED');
+  });
   it('a score row that lacks a finite number for a dimension stops the run, naming the row: it is never a correct "bad" call', () => {
     // A judge that calls every answer good: every good answer right, every bad one wrong. NOT QUALIFIED.
     const lenient = labels.map((l) => ({ case_id: l.case_id, trial: 1, condition: 'x', ...Object.fromEntries(Object.keys(WEIGHTS).map((k) => [k, 4.5])), blocker: false })) as Record<string, unknown>[];
@@ -426,6 +458,25 @@ describe('the signed bar: 20% fewer failures than the hand-written skill, and cl
     const r = run(axis(200, 30, 60));
     expect(r.endpoints.AXES[0]).toMatchObject({ pass: true, reduction: 0.5, candidate: 0.15, handwritten: 0.3 });
     expect(r.axes[0]).toBe('quality: 15% failed against 30% for the hand-written skill, 50% fewer (reached: the bar is 20% fewer and clearly fewer).');
+  });
+  it('exactly 20% fewer is at the bar and reaches it; one failure more does not', () => {
+    // 1 - 40/50 is 0.19999999999999996 in floating point, and read bare against 0.2 it missed the bar it had reached
+    expect(run(axis(200, 40, 50)).endpoints.AXES[0]).toMatchObject({ pass: true, reduction: 0.2 });
+    expect(run(axis(200, 80, 100)).endpoints.AXES[0]).toMatchObject({ pass: true, reduction: 0.2 });
+    expect(run(axis(200, 41, 50)).endpoints.AXES[0]).toMatchObject({ pass: false, reduction: 0.18 });
+  });
+  it('--out and --disagreements are never a file the run reads, under any name for it (exit 2, the file intact)', () => {
+    const config = axis(200, 30, 60); const dir = resolve(config, '..');
+    const link = join(mkdtempSync(join(tmpdir(), 'atelier-axis-link-')), 'in'); symlinkSync(dir, link);
+    for (const [flag, target] of [['--out', config], ['--out', join(dir, 'axis.jsonl')], ['--out', join(link, 'scores.jsonl')], ['--out', join(link, 'config.json')]] as const) {
+      const before = readFileSync(target, 'utf8');
+      const r = node('bench/compare/closing-quality.mjs', '--config', config, flag, target);
+      expect(r.code, target).toBe(2);
+      expect(r.out).toMatch(/--out is .*, a file this run reads: it would be written over\. Nothing was written\. Name another file\./);
+      expect(readFileSync(target, 'utf8')).toBe(before);
+    }
+    expect(node('bench/compare/closing-quality.mjs', '--config', config, '--out', join(dir, 'result.json')).code).toBe(0);
+    expect(existsSync(join(dir, 'result.json'))).toBe(true);
   });
   it('an axis the hand-written skill never failed has nothing to reduce: not applicable when neither failed, a miss when only the candidate did', () => {
     const none = run(axis(50, 0, 0));
