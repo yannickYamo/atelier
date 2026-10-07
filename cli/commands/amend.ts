@@ -178,8 +178,12 @@ export function formatMeasure(m: Measurement): string | null {
   return `${m.observer}:${parts.join(',')}`;
 }
 
-/** In double quotes where that is safe in a shell, in single quotes where that is, and null where neither is. */
-const quoted = (text: string): string | null => (!/["$`\\!]/.test(text) ? `"${text}"` : !text.includes('\'') ? `'${text}'` : null);
+/**
+ * In double quotes where that is safe in a shell, in single quotes otherwise, with each single quote inside closed,
+ * escaped and reopened. A rule that quotes both kinds ("don't", "it's") had no form, and its command was
+ * printed with a placeholder where the rule's words go: pasted as printed, the placeholder became the rule.
+ */
+const quoted = (text: string): string => (!/["$`\\!]/.test(text) ? `"${text}"` : `'${text.replace(/'/g, '\'\\\'\'')}'`);
 
 /**
  * THE COMMAND THAT SETS AN APPROVED RULE'S LIMIT WHERE ITS AUTHOR'S OWN PIECES ARE, or null when there is no such
@@ -188,7 +192,7 @@ const quoted = (text: string): string | null => (!/["$`\\!]/.test(text) ? `"${te
  *
  * A new check under old words would leave the rule stating a number it is no longer checked against, so where the
  * statement quotes the old limit the command carries the statement with the new one. Where which number to replace
- * would be a guess, or the words cannot be quoted in a shell, the command holds a place for the owner's own wording.
+ * would be a guess, the command holds a place for the owner's own wording.
  * Nothing is amended here: the command is printed, and running it is the owner's ruling.
  */
 export function amendToFit(name: string, rule: Requirement, pieces: readonly string[], allowedBreaking: number): string | null {

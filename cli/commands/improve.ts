@@ -308,6 +308,10 @@ export async function spendOneWithResult(
   const piece = contract
     ? JSON.stringify(r.json ?? null, null, 2)
     : asText((r.json as { piece?: unknown } | null)?.piece);
+  // NO TEXT IS NOT A DRAFT. A reply with no piece in it was once taken as an empty draft: no rule can be broken by
+  // nothing, so it was checked clean and delivered, under strict delivery too. It is a failed call, like any other:
+  // with several drafts the others stand, and with none there is nothing to deliver.
+  if (contract === null && !piece.trim()) throw new Error('the model returned no text for the draft');
   return { piece, reportedModel: r.modelId || null, schemaSent: schema, servedTask, temperatureSent: r.temperatureSent ?? null };
 }
 

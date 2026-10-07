@@ -77,6 +77,7 @@ import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { signTestOneSidedP } from '../../dist/core/stats/sign-test.js';
+import { outputClash } from './lib.mjs';
 
 const ALPHA = 0.05;
 const arg = (n) => { const i = process.argv.indexOf(n); return i === -1 ? null : process.argv[i + 1]; };
@@ -273,10 +274,14 @@ if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.
     const configPath = arg('--config') ?? refuse('--config <ablation.json> is required');
     const base = dirname(resolve(configPath));
     // A file that is missing or is not what its name says is an input that cannot be read, like any other.
-    const open = (f, parse) => { if (typeof f !== 'string') refuse('a file name in the config is not a string'); try { return parse(readFileSync(resolve(base, f), 'utf8')); } catch (e) { return refuse(`${f}: ${e.code === 'ENOENT' ? 'no such file' : e.message.split('\n')[0]}`); } };
+    const read = new Set();
+    const open = (f, parse) => { if (typeof f !== 'string') refuse('a file name in the config is not a string'); read.add(resolve(base, f)); try { return parse(readFileSync(resolve(base, f), 'utf8')); } catch (e) { return refuse(`${f}: ${e.code === 'ENOENT' ? 'no such file' : e.message.split('\n')[0]}`); } };
     const cfg = open(resolve(configPath), JSON.parse);
     const result = select(cfg, (f, kind) => open(f, kind === 'json' ? JSON.parse : (t) => t.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))));
     const out = arg('--out');
+    // AN OUTPUT IS NEVER AN INPUT, compared as real paths: --out named the config once and wrote over it.
+    const clash = out ? outputClash({ files: [resolve(out)], inputs: [...read] }) : null;
+    if (clash) refuse(`--out is ${clash.input}, a file this run reads: it would be written over. Nothing was written. Name another file`);
     if (out) writeFileSync(out, `${JSON.stringify(result, null, 1)}\n`);
     for (const s of result.standing) console.log(`${s.state.padEnd(11)}  ${s.arm}  ${s.words.toLocaleString('en-US')} words${s.defaultable ? '' : '  (measured only)'}${s.rejectedIn.length ? `  rejected in: ${s.rejectedIn.join(', ')}` : ''}${s.unreadIn.length ? `  unread in: ${s.unreadIn.join(', ')}` : ''}`);
     for (const d of result.domains) for (const [arm, x] of Object.entries(d.arms)) for (const why of x.rejectedBy) console.log(`  ${d.name} · ${arm} · ${why}`);

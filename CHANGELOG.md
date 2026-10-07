@@ -7,6 +7,44 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: a read of the whole product and of the scripts that decide the closing claims
+
+- **A reply with no text was delivered as a draft that broke no rule.** When the model's reply held no piece, the run
+  took it as an empty draft, checked it clean and delivered it, under `--strict` too. It is now a failed draft call:
+  with several drafts the others stand, and with none the run says so and delivers nothing.
+- **With one piece or two, "one piece is always allowed" allowed every piece.** A rule the only piece broke stayed
+  required. One piece is allowed from three pieces up, and none below.
+- **A command printed to fit a limit could not be pasted when the rule quoted both `"` and `'`.** It carried a
+  placeholder where the rule's words go, and run as printed the placeholder became the rule. The words are now
+  quoted in a form any shell reads back as written.
+- **The skill's card said two things about reserved pieces.** "3 more reserved unseen, for the baseline below" and
+  "no reserved piece to compare with" could stand together. With pieces reserved and nothing steering yet, the card
+  says that.
+- **`atelier new --accept` ended on three lists of what to do next.** It ends on one.
+
+The scripts, each sealed with a study before it runs:
+
+- **Exactly 20% fewer failures read as a miss** (`bench/compare/closing-quality.mjs`). 40 failures against 50 is 20%
+  fewer and is 0.19999999999999996 in floating point. The bar "at least 20%" now includes 20%.
+- **`studies/harness/strict-delivery.mjs` believed a cached row by its id.** Given the folder of another run (the
+  pilot's, for the sealed run), it took that run's rows for every id the two shared and made fewer runs than it
+  reported. Each row now holds its skill, its request and whether it was a pilot's, and a folder whose rows are
+  another run's is refused before anything is spent. The pilot and the sealed run each take a folder of their own.
+- **It printed FAIL while runs were still to be tried again.** A run that ends on a busy provider is tried again once
+  by the same command. Until it has been, the verdict is UNRESOLVED; busy again, it is final and counts as not
+  delivered.
+- **A judge qualified on part of the planted answers** (`bench/compare/judge-qualification.mjs`). Every labelled answer
+  must now have a row, from the judge and from the second judge, or the verdict is UNRESOLVED. A label given twice
+  stops the run. In both qualification scripts the bar is read on the counts, where it was read on a share rounded to
+  three places.
+- **`closing-quality.mjs` and `efficiency-select.mjs` could write over their own inputs.** `--out` (and
+  `--disagreements`) naming the config or a file it names, under any name for it, is refused with the file intact, as
+  the other scripts already did.
+- **A reader's choice under a label no arm has was left out** (`bench/compare/efficiency-rows.mjs`). It stops the run,
+  naming the row.
+- A file that is not there, or a flag with no value, is one line and exit 2 in `judge-qualification.mjs`,
+  `strict-delivery.mjs` and `efficiency-rows.mjs`, where it was a stack trace and exit 1.
+
 ### Changed: a golden corpus passes its own standard
 
 From an outside tester who ran the product as a user would and could not start the paid tests

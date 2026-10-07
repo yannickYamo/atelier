@@ -52,12 +52,13 @@ const pad = (s: string, n: number): string => (s.length >= n ? s : s + ' '.repea
 const fmt = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 
 /** The card, in the panel's style: plain text, PASS-free (nothing has run yet), wrapped to `width`. */
-export function renderSkillCard(c: SkillCard, width = 110): string {
+/** `next: false` leaves the closing "next" line out, for a caller that ends on its own list of what to do next. */
+export function renderSkillCard(c: SkillCard, width = 110, opts: { next?: boolean } = {}): string {
   const w = Math.max(60, Math.min(width, 140));
   const out: string[] = [];
   const head = `── Atelier · skill ${c.skill} · version ${c.skillVersion.slice(0, 8)} · standard ${c.standardVersion.slice(0, 8)} `;
   out.push(head + '─'.repeat(Math.max(2, w - head.length)));
-  if (c.corpus) out.push(`  built from ${c.corpus.pieces} of your pieces${c.corpus.heldBack ? `; ${c.corpus.heldBack} more reserved unseen, for a blind comparison and the baseline below` : ''}`);
+  if (c.corpus) out.push(`  built from ${c.corpus.pieces} of your pieces${c.corpus.heldBack ? `; ${c.corpus.heldBack} more reserved unseen, for a blind comparison${c.fidelity?.baseline ? ' and the baseline below' : ''}` : ''}`);
   out.push('');
   out.push('  EVERY OUTPUT IS CHECKED BY');
   const r = c.rules;
@@ -72,7 +73,7 @@ export function renderSkillCard(c: SkillCard, width = 110): string {
     out.push(`    ${pad('features', 18)}${f.features} measured on your pieces, ${f.steering} steer drafts, the rest monitored`);
     out.push(`    ${pad('by layer', 18)}${f.layers.map((l) => `${l.layer} ${l.steering}/${l.steering + l.monitored}`).join(' · ')}`);
     if (f.classes.length) out.push(`    ${pad('by length', 18)}bands of their own for ${f.classes.join(', ')} pieces, where they qualified`);
-    out.push(`    ${pad('baseline', 18)}${f.baseline ? `your reserved pieces sit in range on a median ${fmt(f.baseline.medianInBand)} of ${fmt(f.baseline.medianMeasured)} (n=${f.baseline.n})` : 'none: no reserved piece to compare with (reserve some with atelier new --reserve)'}`);
+    out.push(`    ${pad('baseline', 18)}${f.baseline ? `your reserved pieces sit in range on a median ${fmt(f.baseline.medianInBand)} of ${fmt(f.baseline.medianMeasured)} (n=${f.baseline.n})` : (c.corpus?.heldBack ? (f.steering ? `none: no steering feature could be measured on your ${c.corpus.heldBack} reserved piece(s)` : `none: no feature steers drafts yet, so your ${c.corpus.heldBack} reserved piece(s) have nothing to be read against`) : 'none: no reserved piece to compare with (reserve some with atelier new --reserve)')}`);
     out.push(`    ${pad('operators', 18)}${f.operators ? 'effects measured on the model\'s drafts (used when the loop runs: --fidelity, or a release with edits)' : 'not measured: rebuild to use them'}`);
     if (f.detector) out.push(`    ${pad('style detector', 18)}a monitor · cross-validated AUC ${f.detector.cvAuc ?? 'not computed'} · valid for ${f.detector.families.join(', ') || 'the model it was trained against'} · ${f.detector.qualified === true ? 'qualified on the hold-outs atelier qualify could run' : f.detector.qualified === false ? 'did not qualify' : 'not qualified yet (atelier qualify)'}`);
   }
@@ -92,7 +93,7 @@ export function renderSkillCard(c: SkillCard, width = 110): string {
   }
   out.push('');
   out.push(`  not measured: ${c.notMeasured.join('; ')}`);
-  out.push(`  next: ${c.next.join(' · ')}`);
+  if (opts.next !== false) out.push(`  next: ${c.next.join(' · ')}`);
   return out.flatMap((l) => wrapLine(l, w)).join('\n');
 }
 

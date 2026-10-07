@@ -79,6 +79,7 @@ import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tCrit } from '../../dist/core/stats/t.js';
+import { outputClash } from './lib.mjs';
 
 const arg = (n) => { const i = process.argv.indexOf(n); return i === -1 ? null : process.argv[i + 1]; };
 const fail = (m) => { console.error(`closing-quality: ${m}`); process.exit(2); };
@@ -248,9 +249,12 @@ export function analyse(cfg, load) {
     const fc = ids.length ? mean(ids.map((k) => cand.get(k))) : null; const fh = ids.length ? mean(ids.map((k) => hand.get(k))) : null;
     const b = bounds(ids.map((k) => hand.get(k) - cand.get(k)));   // positive: the candidate fails less
     const Rel = fh ? 1 - fc / fh : null;
+    // "AT LEAST" INCLUDES THE BAR ITSELF. 40 failures against 50 is 20% fewer, and 1 - 40/50 is 0.19999999999999996 in
+    // floating point: read bare against 0.2 it missed the bar it had reached.
+    const reaches = Rel !== null && Rel >= reduction - 1e-9;
     // THE ZERO-DENOMINATOR RULE. When the hand-written skill never failed on an axis there is nothing to reduce:
     // the axis is not applicable (pass null), unless the candidate did fail, which is a plain miss.
-    const pass = fh === 0 ? (fc === 0 ? null : false) : (Rel !== null && Rel >= reduction && b.lo95 !== null && b.lo95 > 0);
+    const pass = fh === 0 ? (fc === 0 ? null : false) : (reaches && b.lo95 !== null && b.lo95 > 0);
     (E.AXES ??= []).push({ what, axis: ax.name, n: ids.length,
       candidate: fc === null ? null : r3(fc), handwritten: fh === null ? null : r3(fh), reduction: Rel === null ? null : r3(Rel), mean: b.mean, lo95: b.lo95, hi95: b.hi95,
       bar, pass, state: !covered ? 'not checked' : pass === null ? 'not applicable' : pass ? 'reached' : 'not reached' });
@@ -316,12 +320,19 @@ if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.
   // EVERY FILE THE CONFIG NAMES IS READ THROUGH HERE, and a file that is not there is said in one line, by name. An
   // axis file is the one exception: the analysis catches that itself and reports the axis as not covered.
   class LoadError extends Error { constructor(f, e) { super(`the config names ${f}, and it cannot be read (${e.code ?? String(e.message).split('\n')[0]})`); this.code = e.code ?? 'not JSON'; } }
-  const load = (f) => { try { return jsonl(resolve(dirname(file), f)); } catch (e) { throw new LoadError(f, e); } };
+  const read = new Set([resolve(file)]);
+  const load = (f) => { read.add(resolve(dirname(file), f)); try { return jsonl(resolve(dirname(file), f)); } catch (e) { throw new LoadError(f, e); } };
   let result;
   try { result = analyse(cfg, load); } catch (e) {
     if (e instanceof LoadError) fail(`${e.message}. Paths are relative to the config (${dirname(resolve(file))}); check it and run again. Nothing was written.`);
     fail(`the config ${file} could not be analysed: ${String(e?.message ?? e).split('\n')[0]}. Check it against the fields in this script's header. Nothing was written.`);
   }
+  // AN OUTPUT IS NEVER AN INPUT. Compared as real paths, so a link to the config or to a file it names is that file.
+  for (const flag of ['--out', '--disagreements']) {
+    const clash = arg(flag) ? outputClash({ files: [resolve(arg(flag))], inputs: [...read] }) : null;
+    if (clash) fail(`${flag} is ${clash.input}, a file this run reads: it would be written over. Nothing was written. Name another file.`);
+  }
+  if (arg('--out') && arg('--disagreements') && outputClash({ files: [resolve(arg('--out'))], inputs: [resolve(arg('--disagreements'))] })) fail('--out and --disagreements name the same file. Nothing was written.');
   if (arg('--out')) writeFileSync(arg('--out'), JSON.stringify(result, null, 1));
   if (arg('--disagreements') && result.endpoints.judgeNoise) writeFileSync(arg('--disagreements'), `${result.endpoints.judgeNoise.toReview.map((r) => JSON.stringify(r)).join('\n')}\n`);
   console.log(JSON.stringify(result, null, 1));

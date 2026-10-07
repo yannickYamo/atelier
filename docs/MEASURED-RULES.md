@@ -127,7 +127,7 @@ Two guards apply to every proposal.
 - **It must not fail you.** At least four in five of your held-out pieces must meet it. A rule your
   own unseen work breaks is a rule against you, and it is dropped.
 - **Its limit must fit you.** The limit is then held against all your pieces, the ones read and the ones held
-  out. If fewer than 95% meet it (one piece is always allowed), the limit is moved to the nearest value that 95% do
+  out. If fewer than 95% meet it (one piece is always allowed, from three pieces up), the limit is moved to the nearest value that 95% do
   meet: a ceiling only up, to at most twice what was computed, and a floor only down, to at least half. The rule
   says so: "set at a median of 16 (not 13) so that all but one of your 24 pieces meet it". A ban (a limit of zero),
   a word list and a band qualified as a detector are never moved. A rule no limit fits is suggested as a

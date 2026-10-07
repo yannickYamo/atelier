@@ -83,6 +83,8 @@ jsonl('--modes').forEach((r, i) => {
 });
 
 // ── THE READING ────────────────────────────────────────────────────────────────────────────────────
+// THE BAR IS READ ON THE COUNTS, not on the share as printed, which is rounded to three places.
+const reaches = (x) => x.n > 0 && x.k >= BAR * x.n - 1e-9;
 const rate = (k, n) => { const c = clopperPearson(k, n); return { k, n, share: n ? Math.round((k / n) * 1000) / 1000 : null, ci95: [Math.round(c.lo * 1000) / 1000, Math.round(c.hi * 1000) / 1000] }; };
 const name = (k) => k.split('\u0000').join(' (') + ')';
 const read = [...labels].filter(([k]) => rows.has(k)).map(([k, l]) => ({ ...l, ...rows.get(k) }));
@@ -105,10 +107,10 @@ const why = [
 ].filter(Boolean);
 const result = {
   bar: BAR, minPerClass: MIN_PER_CLASS,
-  reader: { goodCalledGood: good, badCalledBad: bad, labelled: labels.size, noRow: missing.length, unreadChecks: unread.length, unlabelledRows: unlabelled, enough, qualified: whole && good.share >= BAR && bad.share >= BAR },
+  reader: { goodCalledGood: good, badCalledBad: bad, labelled: labels.size, noRow: missing.length, unreadChecks: unread.length, unlabelledRows: unlabelled, enough, qualified: whole && reaches(good) && reaches(bad) },
   byMode,
   verdict: !whole ? `UNRESOLVED: ${why.join('; ')}. Run bench/compare/failure-modes.mjs again on the planted answers, with a reader, until every one has a row with every check read${enough ? '' : `, and plant at least ${MIN_PER_CLASS} good and ${MIN_PER_CLASS} bad answers`}; then run this again`
-    : good.share >= BAR && bad.share >= BAR ? 'QUALIFIED' : 'NOT QUALIFIED',
+    : reaches(good) && reaches(bad) ? 'QUALIFIED' : 'NOT QUALIFIED',
 };
 if (arg('--out')) {
   if (outputClash({ files: [arg('--out')], inputs: [arg('--modes'), arg('--labels')] })) fail(`--out is ${arg('--out')}, one of the files this script reads: it would be written over. Nothing was written. Name another file.`);

@@ -31,7 +31,8 @@ tests. Three things stood in the way, all measured, none new to the size work.
    - The rules suggested REQUIRED must, together, be met by at least 90% of the pieces. While they are not, the rule
      the most pieces break is suggested PREFERRED instead.
    - Each check always allows one piece. Under twenty pieces a share alone would mean "every piece", and one unusual
-     post would move a rule the rest of the author's work keeps.
+     post would move a rule the rest of the author's work keeps. With one piece or two, one allowed would be all of
+     them, so none is.
    - A rule moved this way is still approved, still shown, still counted on every output and still used to choose
      between drafts. It no longer fails an output on its own.
    - This changes a suggestion, never a ruling. The owner can make any rule required on the same screen.
@@ -85,7 +86,7 @@ last change to the product in 1.x.
 1. **A limit is fitted to the author before a rule is moved.** The first text moved a rule to PREFERRED when the
    author's pieces broke it, and left the limit alone. That kept the same too-tight number and only stopped
    enforcing it. Now, at discovery, a counted limit that fewer than 95% of the author's pieces meet is widened to the
-   nearest value that 95% of them do meet (always allowing one piece; a ceiling at most doubled, a floor at most
+   nearest value that 95% of them do meet (allowing one piece, from three pieces up; a ceiling at most doubled, a floor at most
    halved, a ban never moved), and the rule says its limit was fitted and to what. A rule that no limit can fit, or that still fails the set check, or that was fitted with no piece held out
    to check it on, is suggested PREFERRED. A build of a
    standard approved earlier offers the same, in this order: the command that widens the limit, then the command
