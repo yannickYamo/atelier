@@ -7,6 +7,23 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: sentence length is a rule only where it is the writer's own rhythm
+
+- **A count is not a style.** How long sentences run follows the piece: its format, its reader, what it is for. A
+  rule on sentence length, on the share of short sentences, on the mix of lengths or on how much they vary is now
+  suggested as required only when the writer's rhythm is detected as theirs: the same in piece after piece, and
+  apart from what the model writes on the same topics (a monologue that runs a hundred words before it stops, or
+  prose cut to the bone). Otherwise the rule is counted, shown and used to choose between drafts, and the review
+  says why: "how long your sentences run changes from piece to piece, so it follows the piece". You can still make
+  it required.
+- The rhythm is read on prose sentences only. A heading, a line that is only a bold label, a list item and a table
+  row are not sentences of the writer's prose.
+- Found on a real corpus: every output written to a standard, and the author's own held-back piece, failed on a
+  required mix of sentence lengths that the format, not the author, had set.
+- Applies to a new discovery. A standard approved before is unchanged; `atelier amend --rule <id> --materiality
+  PREFERRED` makes the same ruling on it. The counted checks themselves still read a bold label line as a
+  sentence: changing what an approved rule counts needs its own decision.
+
 ### Added, for 2.0: `atelier reproduce`, whether a skill reproduces work it never saw
 
 - **`atelier reproduce --skill <name>`** runs each piece that was held back with its task and its material: the

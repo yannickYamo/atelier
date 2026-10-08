@@ -446,7 +446,9 @@ describe('through the binary: a new skill is true of its author, and one built b
     } }) });
     const NEW = ['new', dir, 'write me a blog post in the voice and style of these', '--name', 'limits', '--reserve', 'post-00.md'];
     r.screen = run(...NEW);
-    r.built = run(...NEW, '--accept');
+    // The owner makes the sentence rule required: on these pieces the rhythm is not read as a signature, so the
+    // suggestion is to show it (core/observers/rhythm-signature.ts), and what is tested here is a required limit.
+    r.built = run(...NEW, '--accept', '--set', 'm1=required');
     // A SKILL BUILT BEFORE: the sentence rule as the pooled margin alone set it, which four of the author's pieces break.
     run('amend', '--skill', 'limits', '--rule', 'm1', '--measure', 'SENTENCE_LENGTH:medianMax=12,p90Max=14',
       '--statement', 'I keep sentences short: a median under 12 words, and nine in ten under 14.', '--reason', 'as an earlier build set it');
@@ -465,8 +467,10 @@ describe('through the binary: a new skill is true of its author, and one built b
 
   it('a new skill: the sentence rule is proposed at the limit the author\'s pieces meet, suggested required, and the build finds the pieces meeting it', () => {
     expect(r.screen).toMatch(/^ {2}m1 {3}I keep sentences short: a median under 16 words, and nine in ten under \d+\.$/m);
-    expect(r.screen).toMatch(/REQUIRED.*set where 22 of your 23 pieces meet it; checked on every output/);
-    expect(r.screen).toMatch(/Your own pieces: 22 of 23 meet every counted rule suggested as required\./);
+    // suggested as shown, with the reason: sentence length is required only where it is the writer's own rhythm
+    expect(r.screen).not.toMatch(/REQUIRED.*set where 22 of your 23 pieces meet it/);
+    expect(r.screen.slice(r.screen.indexOf('Shown to the model as examples'))).toMatch(/^ {2}m1 {3}I keep sentences short/m);
+    expect(r.screen).toMatch(/Your own pieces: \d+ of 23 meet every counted rule suggested as required\./);
     expect(r.built).toMatch(/Your own pieces: 22 of 23 meet every required rule that is counted\./);
     // polarity: within what the review allows, the build offers nothing
     expect(r.built).not.toMatch(/They break/);

@@ -983,7 +983,7 @@ describe('through the binary: a rebuild never undoes an amendment', () => {
   const build = (...flags: string[]): string => run(data, proj, 'build', ...flags);
   beforeAll(() => {
     run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
-    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept');
+    run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice', '--accept', '--set', 'm1=required');
   }, 300_000);
 
   it('the standard as the owner amended it is the one compiled, under the skill\'s name and under another', () => {
