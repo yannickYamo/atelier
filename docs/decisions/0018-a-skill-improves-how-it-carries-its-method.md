@@ -26,15 +26,15 @@ hashed, and changed by nobody else. The implementation is how that standard is c
    change what "good" means would improve its score by changing the question.
 3. **What may change is how the method is carried, and only two things:** how many drafts are written, and a note
    to the writer naming what earlier drafts missed. The note is built in code from the required steps of the standard
-   as approved, in the standard's words, with how often each was missed. No model writes it. It is served under a
+   as approved, in the standard's words, with how often each was missed: up to six, the newest misses first. No model writes it. It is served under a
    heading that says it is not a rule of the standard, and a run records the note it was served by its hash.
 4. **Five things hold the search back.**
 
    | | |
    |---|---|
    | Noise band | The unchanged skill is run twice first. A candidate must beat the better run by more than the two differed, and by more than one case. |
-   | One change | Each candidate changes one thing, at most two candidates a round, one kept a round. Within a search, a change that did not hold is not tried again. |
-   | Cost | A change may cost a third more for each tenth of the cases it gains. A change that saves cost must lose no case and save a tenth. |
+   | One change | Each candidate changes one thing, at most two candidates a round, one kept a round. Within a search, no way of carrying the method is run twice, the one it started from included. |
+   | Cost | A change may cost a third more for each tenth of the cases it gains. A draft fewer is the one change kept without a gain: it must lose no case and save a tenth. Where the model is not priced, cost is not read as measured. |
    | Leakage | A candidate that names a brief, or repeats six words in a row of one that are not the standard's own, is refused before anything is spent on it. |
    | Held-back briefs | A fifth of the briefs, at least two, are set aside before the first run, by a hash of their names. In a search they are run once, at the end, on the skill as it started and as the search left it. |
 
@@ -45,7 +45,9 @@ hashed, and changed by nobody else. The implementation is how that standard is c
 7. **No run of the search is something the skill learns from elsewhere.** Each is marked as a test (see the
    changelog on test runs), so `tend`, `mine` and `eval` do not read it.
 8. **A run that ends with no verdict stops the search.** A run that broke (no key, a backend error, a cap too
-   small for it) is never read as a case that failed. The search stops, adopts nothing, and says why.
+   small for it) is never read as a case that failed. The search stops, adopts nothing, says why, and exits 2. A
+   round it stopped in keeps nothing. A signal stops it the same way: the run in flight is ended, what the search
+   moved is put back, nothing is adopted, and no record is written.
 9. **What was adopted is bound to the standard it was adopted under.** Its note quotes that standard's steps. When
    the owner changes the standard, the adoption is no longer used, and a new search starts from the skill as built.
 
@@ -62,8 +64,11 @@ hashed, and changed by nobody else. The implementation is how that standard is c
 - The same briefs are set aside by every search over the same folder, and one search does not remember what
   another tried. Searching again and again over one folder reads the held-back briefs more than once.
 - An adoption is bound to the standard, not to the skill version: it stays in force after `atelier fix`.
+- Where a skill has a release, the number of drafts is the release's: the search leaves it alone and searches the
+  note only, and `--fidelity` and a later release keep their own number.
 - `--cap` is what the search starts runs within. No run is started that what is left cannot cover. A run in flight
-  can pass it by a call, and what a run spent is not known if it is killed from outside.
+  can pass it by a call, and what a run spent is not known if it is killed from outside or ended for not answering
+  in twenty minutes.
 - The brief split is by name, so adding or renaming briefs between two searches can move a brief from one side to
   the other. Each record lists which briefs were on which side.
 

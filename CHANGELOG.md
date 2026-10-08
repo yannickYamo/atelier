@@ -24,7 +24,9 @@ Built and tested offline against a scripted model. It has not been run against a
   change is adopted only if it is no worse there.
 - **Every search is kept, adopted or not,** with what was tried and why each change was or was not kept.
   `atelier evolve --skill <name> --rollback` goes back one adoption at a time.
-- **A run that breaks stops the search.** It is never counted as a case that failed, and nothing is adopted.
+- **A run that breaks stops the search.** It is never counted as a case that failed, nothing is adopted, and the
+  command exits 2. A signal stops it the same way and puts back what the search moved.
+- Where a skill has a release, the number of drafts stays the release's and only the note is searched.
 - **What it cannot improve, it says.** It is scored on what the checks read. A judgement step is scored by nothing.
 - An adoption is bound to the standard it was made under, and is not used after you change the standard.
 

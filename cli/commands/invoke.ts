@@ -295,13 +295,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const subjectCards = nearnessWanted && fid?.index ? fstore.getSubjects(L, fid.index.hash) : null;
   if (nearnessFlag === 'reader' && !subjectCards) die(`--nearness reader needs your pieces read for their subjects first: atelier fidelity --skill ${name} --read-subjects`);
   // HOW THE METHOD IS CARRIED, as the self-improvement loop left it (`atelier evolve`): a default for the drafts and a
-  // note on what earlier drafts missed. A flag on this run wins; the carry was measured after any release, so it
-  // wins over a release's own number of drafts.
+  // note on what earlier drafts missed. A flag on this run wins. Where the skill has a release, the number of drafts
+  // is the release's (and `--fidelity`'s): the search does not change it there, and nothing here overrides it.
   // One adopted under another standard is not used: its note quotes requirements as they then were.
   const adoptedCarry = store.getCarry(L); const methodCarry = adoptedCarry?.standardVersion === sv.standardVersionHash ? adoptedCarry : null;
   const carryNoteFile = flag('--carry-note');
   const carryNote = (carryNoteFile !== undefined ? (existsSync(carryNoteFile) ? readFileSync(carryNoteFile, 'utf8') : die(`--carry-note ${carryNoteFile}: there is no such file.`)) : methodCarry?.note ?? '').trim();
-  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', methodCarry?.drafts ?? (runSettings ? runSettings.drafts : store.getVoice(L)?.pieces?.length ? 2 : 1))));
+  const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? (store.getVoice(L)?.pieces?.length ? 2 : 1))));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
   const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is

@@ -17,7 +17,7 @@ import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
-import { readJson } from './read-json.js';
+import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
@@ -166,7 +166,13 @@ export interface StoredCarry {
 const carryFile = (l: StoreLayout): string => join(dirs(l).base, 'carry.json');
 export function getCarry(l: StoreLayout): StoredCarry | null {
   const p = carryFile(l);
-  return existsSync(p) ? readJson<StoredCarry>(p, { what: 'how the skill carries its method' }) : null;
+  if (!existsSync(p)) return null;
+  const c = readJson<Partial<StoredCarry>>(p, { what: 'how the skill carries its method' });
+  // Written only by an adoption. One that is not whole is said, never half-used: its history is filed by when it was adopted.
+  if (typeof c.drafts !== 'number' || typeof c.note !== 'string' || typeof c.adoptedAt !== 'string' || typeof c.standardVersion !== 'string') {
+    throw new MalformedStoreFile(`${p} is not a whole record of how the skill carries its method (drafts, note, adoptedAt, standardVersion). Remove it to run the skill as built.`);
+  }
+  return c as StoredCarry;
 }
 /** Every carry that is replaced or gone back from is kept, in the order it was left. */
 function keepCarry(l: StoreLayout, was: StoredCarry): void {

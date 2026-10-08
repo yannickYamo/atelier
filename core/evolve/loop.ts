@@ -23,6 +23,7 @@
 // anything unsupported was delivered. A judgement step is scored by nothing here, so nothing here improves it.
 
 import { createHash } from 'node:crypto';
+import type { EvalSummary } from '../eval/summary.js';
 
 /** How the method is carried on a run: the only things the search may change. Never a rule. */
 export interface Carry {
@@ -37,7 +38,7 @@ export interface Brief { readonly id: string; readonly task: string; readonly ma
 /** One run of one brief under one way of carrying the method, as the run's own verdict read it. */
 export interface BriefResult {
   readonly id: string;
-  /** the run's verdict was "conformant"; false also when the run ended with no result */
+  /** the run's verdict was "conformant". A run that ended with no verdict is not a result at all: it stops the search */
   readonly ok: boolean;
   /** the required method things this run left out, by requirement id */
   readonly missing: readonly string[];
@@ -50,6 +51,43 @@ export function scoreOf(results: readonly BriefResult[]): Scored {
   const missing: Record<string, number> = {};
   for (const r of results) for (const id of r.missing) missing[id] = (missing[id] ?? 0) + 1;
   return { ok: results.filter((r) => r.ok).length, n: results.length, costUsd: Math.round(results.reduce((s, r) => s + r.costUsd, 0) * 1e6) / 1e6, missing };
+}
+
+/** Less than this left of the cap, and no further run is started. */
+export const MIN_TO_START = 0.6;
+/** What one draft is allowed for: the floor a run refuses under. */
+export const PER_DRAFT = 0.2;
+/** The most of what is left that the reader of claims may have. */
+export const CLAIMS_MOST = 0.5;
+
+/**
+ * WHAT THE NEXT RUN MAY SPEND, of what is left of the cap: a part for the reader of claims, the rest for the
+ * writer. Or why no run is started: too little is left, or the writer's part would not cover the drafts.
+ */
+export function allowance(cap: number, spent: number, drafts: number): { readonly forRun: number; readonly claims: number } | { readonly stop: string } {
+  const r4 = (x: number): number => Math.round(x * 1e4) / 1e4;
+  const left = r4(cap - spent);
+  const claims = Math.min(CLAIMS_MOST, r4(left * 0.3));
+  const forRun = r4(left - claims);
+  if (left < MIN_TO_START || forRun < drafts * PER_DRAFT) return { stop: `$${left.toFixed(2)} of the $${cap} cap was left, too little to start another run of ${drafts} draft(s)` };
+  return { forRun, claims };
+}
+
+/**
+ * WHAT ONE RUN SAID, read from what it printed. What it spent is counted whether or not it reached a verdict. A run
+ * with no verdict is not a case that failed: `result` is null and `stopped` says why, in the run's own last words.
+ */
+export function readRun(id: string, out: string, err: string, timedOut: boolean, tracked: ReadonlySet<string>, timeoutMinutes: number): { readonly result: BriefResult | null; readonly paid: number; readonly invocationId: string | null; readonly stopped: string | null } {
+  interface Printed { costUsd?: number; invocationId?: string; eval?: EvalSummary | null }
+  const parse = (): Printed | null => { try { return JSON.parse(out.slice(out.indexOf('{'))) as Printed; } catch { return null; } };
+  const j = parse();
+  const paid = j?.costUsd ?? Number(/had spent (?:under )?\$([\d.]+) when it stopped/.exec(err)?.[1] ?? 0);
+  const ev = j?.eval ?? null;
+  if (ev) return { result: { id, ok: ev.result.conformant, missing: ev.gates.required.broken.map((x) => x.id).filter((x) => tracked.has(x)), costUsd: paid }, paid, invocationId: j?.invocationId ?? null, stopped: null };
+  // The error is the last thing a run says, before the line on what it had spent; what comes earlier is its own notes.
+  const said = err.split('\n').map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("This run had spent ")).at(-1) ?? 'it gave no reason';
+  return { result: null, paid, invocationId: j?.invocationId ?? null,
+    stopped: timedOut ? `the run of "${id}" had not answered in ${timeoutMinutes} minutes and was ended; what it had spent is not known` : `the run of "${id}" ended with no verdict (${said.slice(0, 240)})` };
 }
 
 const order = (id: string): string => createHash('sha256').update(id).digest('hex');
@@ -80,38 +118,54 @@ export interface Candidate {
   readonly carry: Carry;
   /** what the change is expected to do, said before it is run */
   readonly hypothesis: string;
-  /** one key per change, so a change that did not hold is not tried again */
+  /** the way of carrying the method it would give, whole (carryKey): the same one is not run twice in a search */
   readonly key: string;
 }
 
 export const MAX_DRAFTS = 4;
 /** How a note opens. Fixed wording: the only words in a note that are not the standard's own. */
 export const NOTE_HEAD = 'Earlier drafts of this work missed these. Each is required: check it before you finish.';
-/** A note names no more than this many things: a list of everything is a list of nothing. */
+/** A note names no more than this many things, the newest misses first: a list of everything is a list of nothing. */
 export const MAX_NAMED = 6;
+
+const oneLine = (t: string): string => t.replace(/\s+/g, ' ').trim();
+const NAMED = /^- (.*) \(missed in \d+ of \d+\)$/;
+/** The statements a note names, in the order it names them. */
+const namedIn = (note: string): string[] => note.split('\n').flatMap((l) => { const m = NAMED.exec(l); return m ? [m[1]] : []; });
+
+/**
+ * ONE WAY OF CARRYING THE METHOD, AS A KEY: the drafts, and which things the note names. Not the order they are
+ * named in and not the counts beside them, so a note that says the same things again is the same note.
+ */
+export function carryKey(carry: Carry, statements: ReadonlyMap<string, string>): string {
+  const idOf = new Map([...statements].map(([id, st]) => [oneLine(st), id]));
+  return `${carry.drafts}d|${namedIn(carry.note).map((st) => idOf.get(st) ?? st).sort().join(',')}`;
+}
 
 /**
  * THE CHANGES WORTH TRYING NOW, one thing each, read off what the last runs got wrong. At most two a round.
  * A note is proposed when drafts miss things the standard requires: it names them, in the standard's own words,
- * most-missed first, and keeps what an earlier note named. More drafts when cases still fail and there is nothing to name. Fewer drafts when every case
- * holds: a draft that buys nothing is cost.
+ * most-missed first, and keeps what an earlier note named, up to MAX_NAMED. More drafts when cases still fail.
+ * Fewer drafts when every case holds: a draft that buys nothing is cost. `tried` holds every way of carrying the
+ * method that was already run, the one the search started from included. Where the number of drafts belongs to
+ * something else (`drafts: false`), only the note is searched.
  */
-export function proposals(incumbent: Carry, last: Scored, statements: ReadonlyMap<string, string>, tried: ReadonlySet<string>): Candidate[] {
+export function proposals(incumbent: Carry, last: Scored, statements: ReadonlyMap<string, string>, tried: ReadonlySet<string>, search: { readonly drafts?: boolean } = {}): Candidate[] {
   const out: Candidate[] = [];
+  const push = (gene: Gene, carry: Carry, hypothesis: string): void => { out.push({ gene, carry, hypothesis, key: carryKey(carry, statements) }); };
   const missed = Object.entries(last.missing).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).filter(([id]) => statements.has(id)).slice(0, 4);
   if (missed.length) {
-    const fresh = missed.map(([id, n]) => ({ statement: statements.get(id) ?? id, line: `- ${statements.get(id) ?? id} (missed in ${n} of ${last.n})` }));
-    // What an earlier note named stays named: a thing the note got written is not dropped from it for being written.
-    const named = incumbent.note.split('\n').filter((l) => l.startsWith('- ') && !fresh.some((f) => l.startsWith(`- ${f.statement} (`)));
-    const note = `${NOTE_HEAD}\n${[...fresh.map((f) => f.line), ...named].slice(0, MAX_NAMED).join('\n')}`;
-    if (note !== incumbent.note) out.push({ gene: 'NOTE', carry: { ...incumbent, note }, key: `NOTE:${missed.map(([id]) => id).join(',')}`,
-      hypothesis: `naming what drafts missed (${missed.map(([id]) => id).join(', ')}) gets it written` });
+    const fresh = missed.map(([id, n]) => ({ statement: oneLine(statements.get(id) ?? id), n }));
+    const earlier = incumbent.note.split('\n').filter((l) => { const m = NAMED.exec(l); return m !== null && !fresh.some((f) => f.statement === m[1]); });
+    const note = `${NOTE_HEAD}\n${[...fresh.map((f) => `- ${f.statement} (missed in ${f.n} of ${last.n})`), ...earlier].slice(0, MAX_NAMED).join('\n')}`;
+    push('NOTE', { ...incumbent, note }, `naming what drafts missed (${missed.map(([id]) => id).join(', ')}) gets it written`);
   }
-  if (last.ok < last.n && incumbent.drafts < MAX_DRAFTS) out.push({ gene: 'MORE_DRAFTS', carry: { ...incumbent, drafts: incumbent.drafts + 1 }, key: `DRAFTS:${incumbent.drafts + 1}${incumbent.note ? '+NOTE' : ''}`,
-    hypothesis: `one more draft to choose from (${incumbent.drafts + 1}) gives a conformant one more often` });
-  if (last.ok === last.n && incumbent.drafts > 1) out.push({ gene: 'FEWER_DRAFTS', carry: { ...incumbent, drafts: incumbent.drafts - 1 }, key: `DRAFTS:${incumbent.drafts - 1}${incumbent.note ? '+NOTE' : ''}`,
-    hypothesis: `one draft fewer (${incumbent.drafts - 1}) holds every case at less cost` });
-  return out.filter((c) => !tried.has(c.key)).slice(0, 2);
+  if (search.drafts !== false) {
+    if (last.ok < last.n && incumbent.drafts < MAX_DRAFTS) push('MORE_DRAFTS', { ...incumbent, drafts: incumbent.drafts + 1 }, `one more draft to choose from (${incumbent.drafts + 1}) gives a conformant one more often`);
+    if (last.ok === last.n && incumbent.drafts > 1) push('FEWER_DRAFTS', { ...incumbent, drafts: incumbent.drafts - 1 }, `one draft fewer (${incumbent.drafts - 1}) holds every case at less cost`);
+  }
+  const now = carryKey(incumbent, statements);
+  return out.filter((c) => c.key !== now && !tried.has(c.key)).slice(0, 2);
 }
 
 /** A change may cost this much more for each tenth of the cases it gains: a third more for a tenth more. */
@@ -124,14 +178,18 @@ export interface Ruling { readonly keep: boolean; readonly why: string }
 /**
  * WHETHER A CANDIDATE IS BETTER, against the best the incumbent has done and the noise band.
  *   A gain is kept when it is beyond the band, and its extra cost is within what the gain buys.
- *   A saving is kept when no case is lost against the incumbent's best and the cost falls by a tenth or more.
+ *   A saving is kept when no case is lost against the incumbent's best and the cost falls by a tenth or more;
+ *   it is the one change kept without a gain, so the noise band does not apply to it.
  * Anything else is not kept, and the reason says which test it missed.
  */
 export function rule(candidate: Scored, incumbentBest: number, incumbentCost: number, band: number, gene: Gene): Ruling {
   const gain = candidate.ok - incumbentBest;
-  const costRatio = incumbentCost > 0 ? candidate.costUsd / incumbentCost : 1;
+  // Where neither was charged for, the model is not priced here: cost is not read as if it had been measured.
+  const unpriced = incumbentCost <= 0 && candidate.costUsd <= 0;
+  const costRatio = incumbentCost > 0 ? candidate.costUsd / incumbentCost : unpriced ? 1 : Infinity;
   if (gene === 'FEWER_DRAFTS') {
     if (gain < 0) return { keep: false, why: `it loses ${-gain} case(s) against ${incumbentBest} of ${candidate.n}` };
+    if (unpriced) return { keep: true, why: `it holds ${candidate.ok} of ${candidate.n} with a draft fewer (this model is not priced, so the saving is not measured)` };
     if (costRatio > 1 - MIN_SAVING) return { keep: false, why: `it loses no case, and saves under a tenth of the cost (${Math.round((1 - costRatio) * 100)}%)` };
     return { keep: true, why: `it holds ${candidate.ok} of ${candidate.n} at ${Math.round((1 - costRatio) * 100)}% less cost` };
   }
@@ -154,7 +212,8 @@ export const LEAK_WORDS = 6;
  */
 export function leak(note: string, briefs: readonly Brief[], own: readonly string[] = []): string | null {
   if (!note.trim()) return null;
-  const n = wordsOf(note);
+  // The counts a note carries are its own, not a brief's: "(missed in 5 of 8)" names no brief called "5 of 8".
+  const n = wordsOf(note.replace(/\(missed in \d+ of \d+\)/g, ' '));
   const text = ` ${n.join(' ')} `;
   const mine = ` ${own.map((o) => wordsOf(o).join(' ')).join(' | ')} `;
   for (const b of briefs) {
@@ -181,8 +240,8 @@ export interface EvolveRecord {
   readonly skill: string; readonly skillVersion: string; readonly standardVersion: string; readonly at: string;
   readonly briefs: { readonly dev: readonly string[]; readonly heldBack: readonly string[] };
   readonly start: Carry;
-  /** the unchanged skill, twice, on the working briefs, and the band read from the two */
-  readonly baseline: { readonly first: Scored; readonly second: Scored; readonly band: number };
+  /** the unchanged skill, twice, on the working briefs, and the band read from the two. `second` is null when the search stopped before the second run was whole; `first` may then be a part of the briefs */
+  readonly baseline: { readonly first: Scored; readonly second: Scored | null; readonly band: number };
   readonly trials: readonly Trial[];
   readonly end: Carry;
   /** the held-back briefs, read once at the end: the skill as it started, and as the search left it */
@@ -199,8 +258,9 @@ export function renderEvolve(r: EvolveRecord): string {
   const out: string[] = [];
   const say = (c: Carry): string => `${c.drafts} draft(s)${c.note ? ', with a note on what drafts leave out' : ''}`;
   out.push(`SELF-IMPROVEMENT · ${r.skill} · ${r.briefs.dev.length} working brief(s), ${r.briefs.heldBack.length} held back`);
-  out.push(`  as it started   ${say(r.start)}: ${r.baseline.first.ok} and ${r.baseline.second.ok} of ${r.baseline.first.n} conformant on two runs. Noise band: ${r.baseline.band} case(s).`);
-  if (!r.trials.length) out.push('  nothing was tried: no change the checks can score was left to try.');
+  out.push(r.baseline.second ? `  as it started   ${say(r.start)}: ${r.baseline.first.ok} and ${r.baseline.second.ok} of ${r.baseline.first.n} conformant on two runs. Noise band: ${r.baseline.band} case(s).`
+    : `  as it started   ${say(r.start)}: ${r.baseline.first.ok} of ${r.baseline.first.n} conformant on the one run that was made.`);
+  if (!r.trials.length && r.verdict !== 'STOPPED') out.push('  nothing was tried: no change the checks can score was left to try.');
   for (const t of r.trials) {
     out.push(`  round ${t.round}  ${t.kept ? 'kept    ' : 'not kept'}  ${t.gene === 'NOTE' ? 'name what drafts leave out' : t.gene === 'MORE_DRAFTS' ? `${t.carry.drafts} drafts` : `${t.carry.drafts} draft(s), one fewer`}: ${t.why}`);
   }

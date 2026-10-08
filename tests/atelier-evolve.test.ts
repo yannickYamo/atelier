@@ -5,11 +5,12 @@
 // change at a time and none tried twice, a cost a change must buy, a refusal of any candidate that carries a brief,
 // and adoption only when the change is no worse on the briefs set aside.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createHash } from 'node:crypto';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { splitBriefs, noiseBand, proposals, rule, leak, scoreOf, renderEvolve, MIN_BRIEFS, NOTE_HEAD, type Carry, type Scored, type EvolveRecord } from '../core/evolve/loop.js';
+import { splitBriefs, noiseBand, proposals, rule, leak, scoreOf, renderEvolve, carryKey, allowance, readRun, MIN_BRIEFS, NOTE_HEAD, type Carry, type Scored, type EvolveRecord } from '../core/evolve/loop.js';
 
 const scored = (ok: number, n: number, costUsd = 1, missing: Record<string, number> = {}): Scored => ({ ok, n, costUsd, missing });
 const plain: Carry = { drafts: 1, note: '' };
@@ -51,6 +52,40 @@ describe('a gain inside what two runs of the same skill differ by is not a gain'
   });
 });
 
+describe('what a search spends is counted run by run, and no run is started that what is left cannot cover', () => {
+  it('of what is left, the reader of claims has three tenths and never more than half a dollar; the writer has the rest', () => {
+    expect(allowance(10, 0, 1)).toEqual({ forRun: 9.5, claims: 0.5 });
+    expect(allowance(10, 9, 1)).toEqual({ forRun: 0.7, claims: 0.3 });
+  });
+  it('under sixty cents left, or a writer\'s part that would not cover twenty cents a draft, starts nothing and says so', () => {
+    expect(allowance(10, 9.5, 1)).toEqual({ stop: '$0.50 of the $10 cap was left, too little to start another run of 1 draft(s)' });
+    // seventy cents left is forty-nine for the writer: enough for two drafts, not for three
+    expect(allowance(10, 9.3, 2)).toEqual({ forRun: 0.49, claims: 0.21 });
+    expect(allowance(10, 9.3, 3)).toEqual({ stop: '$0.70 of the $10 cap was left, too little to start another run of 3 draft(s)' });
+  });
+  const verdict = (conformant: boolean, broken: string[]): string => JSON.stringify({ costUsd: 0.12, invocationId: 'inv-1', eval: { result: { conformant }, gates: { required: { broken: broken.map((id) => ({ id })) } } } });
+  const tracked = new Set(['x1', 'x2']);
+  it('a run that reached a verdict is a case, with what it cost and which tracked steps it missed', () => {
+    expect(readRun('a.md', `a note before\n${verdict(false, ['x2', 'other'])}`, '', false, tracked, 20)).toEqual({ result: { id: 'a.md', ok: false, missing: ['x2'], costUsd: 0.12 }, paid: 0.12, invocationId: 'inv-1', stopped: null });
+  });
+  it('a run with no verdict is not a case: what it spent is still counted, and the reason is its last words', () => {
+    expect(readRun('a.md', '', 'No notes of yours are bound.\natelier: the backend answered 500.\n  This run had spent $0.31 when it stopped.', false, tracked, 20))
+      .toEqual({ result: null, paid: 0.31, invocationId: null, stopped: 'the run of "a.md" ended with no verdict (atelier: the backend answered 500.)' });
+    // a result with a cost and no evaluation: the cost is the run's own figure
+    expect(readRun('a.md', JSON.stringify({ costUsd: 0.4, invocationId: 'inv-2', eval: null }), 'atelier: the evaluation could not be built.', false, tracked, 20))
+      .toEqual({ result: null, paid: 0.4, invocationId: 'inv-2', stopped: 'the run of "a.md" ended with no verdict (atelier: the evaluation could not be built.)' });
+    expect(readRun('a.md', '', '', true, tracked, 20).stopped).toBe('the run of "a.md" had not answered in 20 minutes and was ended; what it had spent is not known');
+  });
+});
+
+describe('where the model is not priced, cost is not read as if it were measured', () => {
+  it('a gain is judged on cases alone, and a draft fewer that loses no case is kept as a draft fewer', () => {
+    expect(rule(scored(7, 8, 0), 5, 0, 1, 'MORE_DRAFTS').keep).toBe(true);
+    expect(rule(scored(8, 8, 0), 8, 0, 1, 'FEWER_DRAFTS')).toEqual({ keep: true, why: 'it holds 8 of 8 with a draft fewer (this model is not priced, so the saving is not measured)' });
+    expect(rule(scored(7, 8, 0), 8, 0, 1, 'FEWER_DRAFTS').keep).toBe(false);
+  });
+});
+
 describe('one change at a time, read off what the last runs got wrong, and none tried twice', () => {
   it('drafts that leave required things out get a note that names them, in the owner\'s words, most-missed first', () => {
     const c = proposals(plain, scored(2, 8, 1, { x2: 5, x1: 3 }), statements, new Set());
@@ -61,18 +96,39 @@ describe('one change at a time, read off what the last runs got wrong, and none 
     expect(c[0].hypothesis).toMatch(/naming what drafts missed \(x2, x1\) gets it written/);
   });
   it('a change that was tried is not tried again; when every case holds, a draft fewer is the only thing left to try', () => {
-    expect(proposals(plain, scored(2, 8, 1, { x2: 5 }), statements, new Set(['NOTE:x2', 'DRAFTS:2']))).toEqual([]);
+    expect(proposals(plain, scored(2, 8, 1, { x2: 5 }), statements, new Set(['1d|x2', '2d|']))).toEqual([]);
     expect(proposals({ drafts: 2, note: '' }, scored(8, 8), statements, new Set()).map((x) => [x.gene, x.carry.drafts])).toEqual([['FEWER_DRAFTS', 1]]);
     expect(proposals(plain, scored(8, 8), statements, new Set())).toEqual([]);
+  });
+  it('a change is one way of carrying the method, whole: the same one is not tried twice however it was reached', () => {
+    const both = `${NOTE_HEAD}\n- Include the price table. (missed in 5 of 8)\n- Open with a Verdict section. (missed in 3 of 8)`;
+    expect(carryKey({ drafts: 1, note: both }, statements)).toBe('1d|x1,x2');
+    expect(carryKey(plain, statements)).toBe('1d|');
+    // the same two things named, in another order and with other counts, is the note it already carries
+    expect(proposals({ drafts: 1, note: both }, scored(6, 8, 1, { x1: 2 }), statements, new Set()).map((c) => c.key)).toEqual(['2d|x1,x2']);
+    // a draft fewer that would be the skill as it started, which was run twice already, is not run again
+    expect(proposals({ drafts: 2, note: '' }, scored(8, 8), statements, new Set(['1d|']))).toEqual([]);
+    // the note that did not hold at one draft is another change at two
+    expect(proposals({ drafts: 2, note: '' }, scored(2, 8, 1, { x2: 5 }), statements, new Set(['1d|x2'])).map((c) => c.key)).toEqual(['2d|x2', '3d|']);
+  });
+  it('a step whose words begin another step does not take its place in the note', () => {
+    const two = new Map([['y1', 'Include a table'], ['y2', 'Include a table (with the columns A and B)']]);
+    const first = proposals(plain, scored(2, 8, 1, { y2: 4 }), two, new Set())[0].carry;
+    const second = proposals(first, scored(5, 8, 1, { y1: 3 }), two, new Set())[0].carry;
+    expect(second.note).toBe(`${NOTE_HEAD}\n- Include a table (missed in 3 of 8)\n- Include a table (with the columns A and B) (missed in 4 of 8)`);
+  });
+  it('where the number of drafts belongs to a release, only the note is searched', () => {
+    expect(proposals(plain, scored(2, 8, 1, { x2: 5 }), statements, new Set(), { drafts: false }).map((c) => c.gene)).toEqual(['NOTE']);
+    expect(proposals({ drafts: 3, note: '' }, scored(8, 8), statements, new Set(), { drafts: false })).toEqual([]);
   });
   it('what an earlier note named stays named when a later one names something else', () => {
     const first = proposals(plain, scored(2, 8, 1, { x2: 5 }), statements, new Set())[0].carry;
     const second = proposals(first, scored(6, 8, 1, { x1: 2 }), statements, new Set())[0].carry;
     expect(second.note).toBe(`${NOTE_HEAD}\n- Open with a Verdict section. (missed in 2 of 8)\n- Include the price table. (missed in 5 of 8)`);
     // and with a note carried, one more draft is a change of its own
-    expect(proposals(first, scored(6, 8, 1, { x1: 2 }), statements, new Set()).map((c) => c.key)).toEqual(['NOTE:x1', 'DRAFTS:2+NOTE']);
+    expect(proposals(first, scored(6, 8, 1, { x1: 2 }), statements, new Set()).map((c) => c.key)).toEqual(['1d|x1,x2', '2d|x2']);
   });
-  it('never more than two a round, and never more than four drafts', () => {
+  it('never more than four drafts', () => {
     expect(proposals({ drafts: 4, note: '' }, scored(2, 8), statements, new Set())).toEqual([]);
   });
 });
@@ -91,6 +147,8 @@ describe('a candidate that carries a brief is refused before anything is spent',
     const quoting = [{ id: 'lot-1.md', task: 'Compare them, and open with a Verdict section that says who wins, please.', material: [] }];
     expect(leak(note, quoting, own)).toBeNull();
     expect(leak(`${note}\n- In lot-1 the cheaper one wins.`, quoting, own)).toBe('it names the brief "lot-1.md"');
+    // a brief named like a count is not named by the counts a note carries
+    expect(leak(note, [{ id: '5 of 8.md', task: 'Compare them.', material: [] }], own)).toBeNull();
   });
   it('the name of a brief, or six words in a row of its task or material, is a leak', () => {
     expect(leak('For cygnus-pricing, add the table.', briefs)).toBe('it names the brief "cygnus-pricing.md"');
@@ -111,6 +169,7 @@ describe('the record says what was tried, what was kept and why, and whether it 
     expect(text).toMatch(/round 1 {2}not kept {2}2 drafts: 2 of 6 against 2: a gain of 0 is inside the noise band/);
     expect(text).toMatch(/held back {7}as it started 0 of 2; as the search left it 2 of 2\./);
     expect(text).toMatch(/A judgement step is scored by nothing here\./);
+    expect(renderEvolve({ ...r, baseline: { first: scored(1, 3), second: null, band: 1 }, trials: [], heldBack: null, verdict: 'STOPPED', why: 'w' })).toMatch(/as it started {3}1 draft\(s\): 1 of 3 conformant on the one run that was made\./);
     expect(scoreOf([{ id: 'a', ok: true, missing: [], costUsd: 0.1 }, { id: 'b', ok: false, missing: ['x1'], costUsd: 0.2 }])).toEqual({ ok: 1, n: 2, costUsd: 0.3, missing: { x1: 1 } });
   });
 });
@@ -127,14 +186,22 @@ const url = (): string => `http://127.0.0.1:${port}`;
 const root = realpathSync(mkdtempSync(join(tmpdir(), 'atelier-evolve-')));
 const data = join(root, 'data'); const proj = join(root, 'proj'); const briefDir = join(proj, 'briefs');
 const BACKEND = (): string[] => ['--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted'];
+const extraEnv: NodeJS.ProcessEnv = {};
+const envIn = (dir: string): NodeJS.ProcessEnv => ({ ...ENV, ATELIER_DATA: data, ATELIER_PROJECT_DIR: dir, ...extraEnv });
 const atelierIn = (dir: string, ...args: string[]): { code: number; out: string; err: string } => {
-  const r = spawnSync(process.execPath, [CLI, ...args, ...BACKEND()], { encoding: 'utf8', cwd: dir, env: { ...ENV, ATELIER_DATA: data, ATELIER_PROJECT_DIR: dir }, maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(process.execPath, [CLI, ...args, ...BACKEND()], { encoding: 'utf8', cwd: dir, env: envIn(dir), maxBuffer: 64 * 1024 * 1024 });
   return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
 };
 const atelier = (...args: string[]): { code: number; out: string; err: string } => atelierIn(proj, ...args);
 // A second skill from the same method has a folder of its own: one folder holds one standard.
 const projB = join(root, 'proj-b');
 const atelierB = (...args: string[]): { code: number; out: string; err: string } => atelierIn(projB, ...args);
+/** What `atelier fix` and `atelier report` point at for a project: the last run made in it. */
+const pointerOf = (dir: string): string | null => {
+  const runs = join(data, 'runs');
+  const d = existsSync(runs) ? readdirSync(runs).find((x) => new RegExp(`^${dir.split('/').at(-1) ?? ''}-[0-9a-f]+$`).test(x)) : undefined;
+  return d && existsSync(join(runs, d, 'last-invocation.json')) ? readFileSync(join(runs, d, 'last-invocation.json'), 'utf8') : null;
+};
 const served = async (): Promise<string[]> => (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies;
 
 describe('through the binary: a skill that leaves required things out learns to name them, and keeps the change only because it carried', () => {
@@ -241,8 +308,13 @@ describe('through the binary: a skill that leaves required things out learns to 
       ...held.map((h) => ({ containsAll: ['Earlier drafts of this work missed these', h], answer: { piece: BLAND } })),
       { contains: 'Earlier drafts of this work missed these', answer: { piece: piece('Cygnus', 'Dorado') } },
       ...held.map((h) => ({ contains: h, answer: { piece: piece('Cygnus', 'Dorado') } }))], byTool: { emit_piece: { piece: BLAND } } }) });
+    // the person's own last run, which a search must leave as what `atelier fix` points at
+    atelierB('invoke', '--skill', 'vendors-b', '--task=Compare the two vendors in lot 77 on price for a small team.', '--with', `prices=${join(briefDir, 'vendor-0.material', 'prices.md')}`, '--json');
+    const mine = pointerOf(projB);
+    expect(mine).toContain('lot 77');
     const r = atelierB('evolve', '--skill', 'vendors-b', '--briefs', briefDir, '--json');
     const rec = JSON.parse(r.out) as EvolveRecord;
+    expect(pointerOf(projB)).toBe(mine);
     expect(rec.trials[0]).toMatchObject({ gene: 'NOTE', kept: true });
     expect(rec.heldBack).toMatchObject({ start: { ok: 2, n: 2 }, end: { ok: 0, n: 2 } });
     expect(rec.verdict).toBe('NOT_CARRIED');
@@ -252,7 +324,10 @@ describe('through the binary: a skill that leaves required things out learns to 
   }, 300_000);
 
   it('a search the cap cannot start is stopped, adopts nothing, and is still kept', () => {
-    const rec = JSON.parse(atelierB('evolve', '--skill', 'vendors-b', '--briefs', briefDir, '--cap', '0.5', '--json').out) as EvolveRecord;
+    const stoppedRun = atelierB('evolve', '--skill', 'vendors-b', '--briefs', briefDir, '--cap', '0.5', '--json');
+    const rec = JSON.parse(stoppedRun.out) as EvolveRecord;
+    expect(stoppedRun.code).toBe(2);
+    expect(rec.baseline.second).toBeNull();
     expect(rec.verdict).toBe('STOPPED');
     expect(rec.trials).toEqual([]);
     expect(rec.why).toMatch(/of the \$0\.5 cap was left, too little to start another run of 1 draft\(s\)\. Nothing was adopted/);
@@ -294,7 +369,25 @@ describe('through the binary: a skill that leaves required things out learns to 
   it('a run records the note it was served by its hash, so two runs of one skill version can be told apart', async () => {
     const store = await import('../core/state/store.js');
     const runs = store.listInvocations({ root: data, skillName: 'vendors' });
-    expect(runs.some((r) => typeof r.settings?.flags.carryNoteHash === 'string')).toBe(true);
-    expect(runs.some((r) => r.settings?.flags.carryNoteHash === undefined)).toBe(true);
+    const adopted = JSON.parse(readFileSync(join(data, 'skills', 'vendors', 'carry-history', readdirSync(join(data, 'skills', 'vendors', 'carry-history'))[0]), 'utf8')) as { note: string };
+    const hash = createHash('sha256').update(adopted.note).digest('hex').slice(0, 16);
+    const withNote = runs.filter((r) => r.settings?.flags.carryNoteHash !== undefined);
+    // the note's candidate on six briefs, the two held back, the plain run after, and the second search's runs
+    expect(withNote.length).toBeGreaterThanOrEqual(9);
+    expect(new Set(withNote.map((r) => r.settings?.flags.carryNoteHash))).toEqual(new Set([hash]));
+    expect(runs.filter((r) => r.settings?.flags.carryNoteHash === undefined).length).toBeGreaterThanOrEqual(14);
   });
+
+  it('a signal to the search alone stops it: nothing is adopted, and the person\'s last run is still what is pointed at', async () => {
+    await fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ when: [{ contains: 'Earlier drafts of this work missed these', answer: { piece: piece('Cygnus', 'Dorado') } }], byTool: { emit_piece: { piece: BLAND } } }) });
+    const mine = pointerOf(projB);
+    const child = spawn(process.execPath, [CLI, 'evolve', '--skill', 'vendors-b', '--briefs', briefDir, ...BACKEND()], { cwd: projB, env: envIn(projB), stdio: ['ignore', 'pipe', 'pipe'] });
+    const code = await new Promise<number | null>((ok) => {
+      child.stdout.once('data', () => { setTimeout(() => { child.kill('SIGTERM'); }, 1500); });
+      child.on('exit', (c) => { ok(c); });
+    });
+    expect(code).toBe(130);
+    expect(existsSync(join(data, 'skills', 'vendors-b', 'carry.json'))).toBe(false);
+    expect(pointerOf(projB)).toBe(mine);
+  }, 120_000);
 });

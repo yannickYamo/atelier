@@ -12,30 +12,26 @@
 // THE STANDARD IS NEVER IN THE SEARCH. What changes is how many drafts are written and what the writer is told its
 // earlier drafts left out, in the owner's own words. Every run here is marked as a test, so nothing else learns
 // from it. Every search is kept in a file of its own, adopted or not.
-import { execFileSync } from 'node:child_process';
+import { execFile, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
-import type { EvalSummary } from '../../core/eval/summary.js';
 import { readCase } from '../corpus.js';
 import { releaseFor } from '../fidelity.js';
 import { DATA, argv, die, flag, numericFlag, skillArg, runFile } from '../runtime.js';
-import { MIN_BRIEFS, NOTE_HEAD, leak, noiseBand, proposals, renderEvolve, rule, scoreOf, splitBriefs,
+import { MIN_BRIEFS, NOTE_HEAD, allowance, carryKey, leak, noiseBand, readRun, proposals, renderEvolve, rule, scoreOf, splitBriefs,
   type Brief, type BriefResult, type Carry, type EvolveRecord, type Scored, type Trial } from '../../core/evolve/loop.js';
 
 const HANDED_ON = ['--provider', '--base-url', '--model', '--target-model', '--target-provider', '--target-base-url', '--price-in', '--price-out', '--claims', '--max-tokens'] as const;
 const handedOn = (): string[] => HANDED_ON.flatMap((f) => { const v = flag(f); return v === undefined ? [] : [`${f}=${v}`]; });
-/** Less than this left of the cap, and no further run is started. */
-const MIN_TO_START = 0.6;
-/** What one draft is allowed for, the floor a run refuses under (cli/commands/invoke.ts). */
-const PER_DRAFT = 0.2;
 /** A run that has not answered in this long is ended: an unattended search must not wait for ever. */
 const RUN_TIMEOUT_MS = 20 * 60 * 1000;
 
-interface InvokeJson { output?: string | null; costUsd?: number; eval?: EvalSummary | null }
+/** What the search exits with when it stopped before it could conclude: an unattended caller reads it without parsing. */
+const EXIT_STOPPED = 2;
 
 /** The briefs in a folder: each `.md` file that carries a task. A file with none is said, never guessed at. */
 export function readBriefs(folder: string, say: (line: string) => void = () => undefined): Brief[] {
@@ -49,7 +45,7 @@ export function readBriefs(folder: string, say: (line: string) => void = () => u
   return out;
 }
 
-export function evolve(): void {
+export async function evolve(): Promise<void> {
   const name = skillArg('--skill <name> required: atelier evolve --skill <name> --briefs <folder>');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
@@ -81,31 +77,35 @@ export function evolve(): void {
   const cap = numericFlag('--cap', 10);
   // A carry adopted under another standard quotes requirements that may no longer be the owner's: the search starts from as built.
   const adopted = store.getCarry(L); const stored = adopted?.standardVersion === sv.standardVersionHash ? adopted : null;
-  // As it stands: what a plain run of it does today.
-  const start: Carry = { drafts: stored?.drafts ?? (releaseFor(L, sv)?.release.settings.drafts ?? (store.getVoice(L)?.pieces?.length ? 2 : 1)), note: stored?.note ?? '' };
+  // As it stands: what a plain run of it does today. Where the skill has a release, the number of drafts is the
+  // release's to set (cli/commands/invoke.ts), so the search leaves it alone and searches the note only.
+  const release = releaseFor(L, sv);
+  const start: Carry = { drafts: release ? release.release.settings.drafts : stored?.drafts ?? (store.getVoice(L)?.pieces?.length ? 2 : 1), note: stored?.note ?? '' };
   const own = [NOTE_HEAD, ...statements.values()];
 
   if (argv.includes('--dry-run')) {
     const most = dev.length * (2 + 2 * rounds) + heldBack.length * 2;
     say(`${briefs.length} briefs: ${dev.length} to work on, ${heldBack.length} set aside (${heldBack.map((b) => b.id).join(', ')}).`);
     say(`Scored on ${scoredOn.length} required step(s) that code reads: ${scoredOn.map((r) => r.requirementId).join(', ')}.`);
-    say(`As it stands: ${start.drafts} draft(s)${start.note ? ', with a note' : ''}. Up to ${rounds} round(s), two changes a round at most.`);
+    say(`As it stands: ${start.drafts} draft(s)${start.note ? ', with a note' : ''}. Up to ${rounds} round(s), two changes a round at most.${release ? ' The number of drafts is its release\'s, so only the note is searched.' : ''}`);
     say(`At most ${most} runs, each what a run of this skill costs, within --cap $${cap}. --dry-run: nothing was called.`);
     return;
   }
 
   // A search is not the person's last piece of work: what `atelier fix` and `atelier report` point at is put back
-  // as it was, unless a run that is not this search's has moved it since.
+  // as it was, when what it points at now is one of this search's own runs.
   const pointers = ['last-invocation.json', 'last-invocation.txt'].map((f) => runFile(f)).map((f) => ({ f, was: existsSync(f) ? readFileSync(f, 'utf8') : null }));
   const tmp = mkdtempSync(join(tmpdir(), 'atelier-evolve-'));
-  const tasks = new Set(briefs.map((b) => b.task));
+  const mine = new Set<string>();
   const tidy = (): void => {
     rmSync(tmp, { recursive: true, force: true });
-    let ours = true;
-    try { ours = !existsSync(pointers[0].f) || tasks.has(readJson<{ input?: string }>(pointers[0].f, { what: 'the last run' }).input ?? ''); } catch { /* unreadable: ours to put back */ }
+    let ours = false;
+    try { ours = mine.has(readJson<{ invocationId?: string }>(pointers[0].f, { what: 'the last run' }).invocationId ?? ''); } catch { /* gone or unreadable: not this search's to put back */ }
     if (ours) for (const p of pointers) { if (p.was === null) rmSync(p.f, { force: true }); else writeAtomic(p.f, p.was); }
   };
-  const interrupted = (): void => { tidy(); process.exit(130); };
+  // A SIGNAL STOPS THE SEARCH: the run in flight is ended, what the search moved is put back, and nothing is adopted.
+  let running: ChildProcess | null = null;
+  const interrupted = (): void => { running?.kill('SIGTERM'); tidy(); process.exit(130); };
   process.once('SIGINT', interrupted); process.once('SIGTERM', interrupted);
   let spent = 0; const state: { stopped: string | null } = { stopped: null };
   const tracked = new Set(scoredOn.map((r) => r.requirementId));
@@ -114,34 +114,27 @@ export function evolve(): void {
    * One brief under one way of carrying the method, or null when there is nothing to read: the cap could not cover
    * the run, or the run ended with no verdict. Null stops the search. A run that broke is never a case that failed.
    */
-  const runOne = (b: Brief, carry: Carry): BriefResult | null => {
-    const left = Math.round((cap - spent) * 1e4) / 1e4;
-    const claims = Math.min(0.5, Math.round(left * 0.3 * 1e4) / 1e4);
-    const forRun = Math.round((left - claims) * 1e4) / 1e4;
-    if (left < MIN_TO_START || forRun < carry.drafts * PER_DRAFT) { state.stopped = `$${left.toFixed(2)} of the $${cap} cap was left, too little to start another run of ${carry.drafts} draft(s)`; return null; }
+  const runOne = async (b: Brief, carry: Carry): Promise<BriefResult | null> => {
+    const may = allowance(cap, spent, carry.drafts);
+    if ('stop' in may) { state.stopped = may.stop; return null; }
     const noteFile = join(tmp, 'note.md'); writeAtomic(noteFile, carry.note);
     const withArgs = b.material.map((m, k) => { const f = join(tmp, `${k}-${m.name.replace(/[^A-Za-z0-9._-]+/g, '_')}`); writeAtomic(f, m.text); return `--with=material-${k + 1}=${f}`; });
-    let out: string; let err = '';
-    try {
-      out = execFileSync(process.execPath, [...process.execArgv, process.argv[1], 'invoke', '--skill', name, `--task=${b.task}`, ...withArgs, '--json', '--test-run',
-        `--drafts=${carry.drafts}`, `--carry-note=${noteFile}`, `--cap=${forRun}`, ...handedOn()],
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], timeout: RUN_TIMEOUT_MS, env: { ...process.env, ATELIER_CLAIMS_CAP: String(claims) } });
-    } catch (e) { const x = e as { stdout?: string; stderr?: string; message?: string }; out = x.stdout ?? ''; err = [x.stderr, x.message].find((v) => v) ?? ''; }
-    let j: InvokeJson | null = null;
-    try { j = JSON.parse(out.slice(out.indexOf('{'))) as InvokeJson; } catch { /* no result */ }
-    const paid = j?.costUsd ?? Number(/had spent (?:under )?\$([\d.]+) when it stopped/.exec(err)?.[1] ?? 0);
-    spent += paid;
-    const ev = j?.eval ?? null;
-    if (!ev) {
-      const said = err.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? 'it gave no reason';
-      state.stopped = `the run of "${b.id}" ended with no verdict (${said.slice(0, 240)})`;
-      return null;
-    }
-    return { id: b.id, ok: ev.result.conformant, missing: ev.gates.required.broken.map((x) => x.id).filter((id) => tracked.has(id)), costUsd: paid };
+    const ran = await new Promise<{ out: string; err: string; timedOut: boolean }>((done) => {
+      running = execFile(process.execPath, [...process.execArgv, process.argv[1], 'invoke', '--skill', name, `--task=${b.task}`, ...withArgs, '--json', '--test-run',
+        `--drafts=${carry.drafts}`, `--carry-note=${noteFile}`, `--cap=${may.forRun}`, ...handedOn()],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: RUN_TIMEOUT_MS, env: { ...process.env, ATELIER_CLAIMS_CAP: String(may.claims) } },
+      (e, out, err) => { done({ out, err: err || (e?.message ?? ''), timedOut: e?.killed === true }); });
+    });
+    running = null;
+    const read = readRun(b.id, ran.out, ran.err, ran.timedOut, tracked, RUN_TIMEOUT_MS / 60000);
+    if (read.invocationId) mine.add(read.invocationId);
+    spent += read.paid;
+    if (read.stopped) state.stopped = read.stopped;
+    return read.result;
   };
-  const runAll = (bs: readonly Brief[], carry: Carry, what: string): Scored => {
+  const runAll = async (bs: readonly Brief[], carry: Carry, what: string): Promise<Scored> => {
     const results: BriefResult[] = [];
-    for (const b of bs) { const r = state.stopped ? null : runOne(b, carry); if (!r) break; results.push(r); }
+    for (const b of bs) { const r = state.stopped ? null : await runOne(b, carry); if (!r) break; results.push(r); }
     const s = scoreOf(results);
     say(`  ${what}: ${s.ok} of ${s.n} conformant · $${s.costUsd.toFixed(2)}${results.length < bs.length ? ` (stopped after ${results.length} of ${bs.length})` : ''}`);
     return s;
@@ -151,12 +144,16 @@ export function evolve(): void {
   try {
     say(`${briefs.length} briefs: ${dev.length} to work on, ${heldBack.length} set aside before anything is run.`);
     // THE UNCHANGED SKILL, TWICE: what it does, and how far two runs of the same thing differ.
-    const first = runAll(dev, start, 'as it stands, first run'); const second = state.stopped ? first : runAll(dev, start, 'as it stands, second run');
-    const band = noiseBand(first, second);
-    let best = Math.max(first.ok, second.ok); let bestCost = (first.costUsd + second.costUsd) / 2; let last = first.ok >= second.ok ? first : second;
-    const tried = new Set<string>();
+    const first = await runAll(dev, start, 'as it stands, first run');
+    const again = state.stopped ? null : await runAll(dev, start, 'as it stands, second run');
+    // A second run that stopped part-way is not a reading of the band.
+    const second = state.stopped ? null : again;
+    const band = second ? noiseBand(first, second) : 1;
+    let best = Math.max(first.ok, second?.ok ?? 0); let bestCost = second ? (first.costUsd + second.costUsd) / 2 : first.costUsd; let last = second && second.ok > first.ok ? second : first;
+    // Every way of carrying the method that was run, the one it started from included: none is run twice.
+    const tried = new Set<string>([carryKey(start, statements)]);
     for (let round = 1; round <= rounds && !state.stopped; round++) {
-      const candidates = proposals(incumbent, last, statements, tried);
+      const candidates = proposals(incumbent, last, statements, tried, { drafts: !release });
       if (!candidates.length) break;
       let winner: { c: (typeof candidates)[number]; s: Scored } | null = null;
       for (const c of candidates) {
@@ -164,26 +161,31 @@ export function evolve(): void {
         // THE LEAKAGE CHECK, before anything is spent: a candidate that carries a brief is not run.
         const leaked = leak(c.carry.note, briefs, own);
         if (leaked) { say(`  round ${round}, a note was not tried: ${leaked}`); trials.push({ round, gene: c.gene, key: c.key, hypothesis: c.hypothesis, carry: c.carry, scored: null, kept: false, why: `refused before any run: ${leaked}` }); continue; }
-        const s = runAll(dev, c.carry, `round ${round}, ${c.gene === 'NOTE' ? 'naming what drafts leave out' : `${c.carry.drafts} draft(s)`}`);
+        const s = await runAll(dev, c.carry, `round ${round}, ${c.gene === 'NOTE' ? 'naming what drafts miss' : `${c.carry.drafts} draft(s)`}`);
         if (state.stopped) { trials.push({ round, gene: c.gene, key: c.key, hypothesis: c.hypothesis, carry: c.carry, scored: s, kept: false, why: `not read: ${state.stopped}` }); break; }
         const r = rule(s, best, bestCost, band, c.gene);
         trials.push({ round, gene: c.gene, key: c.key, hypothesis: c.hypothesis, carry: c.carry, scored: s, kept: false, why: r.why });
         if (r.keep && (!winner || s.ok > winner.s.ok)) winner = { c, s };
       }
-      if (!winner) break;
+      // A round the search stopped in keeps nothing: its candidates were not all read.
+      if (!winner || state.stopped) break;
       // One change is kept a round: the one that held the most cases.
-      const at = trials.findIndex((t) => t.round === round && t.key === winner.c.key);
+      const won = winner;
+      const at = trials.findIndex((t) => t.round === round && t.key === won.c.key);
       trials[at] = { ...trials[at], kept: true };
-      incumbent = winner.c.carry; best = Math.max(best, winner.s.ok); bestCost = winner.s.costUsd; last = winner.s;
+      incumbent = won.c.carry; best = Math.max(best, won.s.ok); bestCost = won.s.costUsd; last = won.s;
     }
     const changed = incumbent.drafts !== start.drafts || incumbent.note !== start.note;
     // THE BRIEFS SET ASIDE, READ ONCE: the skill as it started, and as the search left it.
-    const held = changed && !state.stopped ? { start: runAll(heldBack, start, 'held back, as it started'), end: runAll(heldBack, incumbent, 'held back, as the search left it') } : null;
+    const heldStart = changed && !state.stopped ? await runAll(heldBack, start, 'held back, as it started') : null;
+    const heldEnd = heldStart && !state.stopped ? await runAll(heldBack, incumbent, 'held back, as the search left it') : null;
+    const held = heldStart && heldEnd && !state.stopped ? { start: heldStart, end: heldEnd } : null;
     const verdict: EvolveRecord['verdict'] = state.stopped ? 'STOPPED' : !changed ? 'UNCHANGED' : held && held.end.ok >= held.start.ok ? 'ADOPTED' : 'NOT_CARRIED';
     const why = state.stopped ? `${state.stopped}. Nothing was adopted; what was run is kept.`
       : !changed ? 'no change was plainly better than the skill as it stands, so it is left as it is.'
         : verdict === 'ADOPTED' ? `the change held on the briefs set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}), so the skill now carries its method this way. atelier evolve --skill ${name} --rollback goes back.`
           : `better on the briefs it worked on, and worse on the ones set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}): the gain did not carry, and the skill is left as it was.`;
+    // `end` is what the search arrived at. After a stop that is where it had got to, with no reading on the briefs set aside.
     record = { schema: 1, skill: name, skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(),
       briefs: { dev: dev.map((b) => b.id), heldBack: heldBack.map((b) => b.id) }, start, baseline: { first, second, band }, trials, end: incumbent, heldBack: held, verdict, why,
       costUsd: Math.round(spent * 1e6) / 1e6 };
@@ -195,6 +197,7 @@ export function evolve(): void {
   const kept = join(DATA, 'skills', name, 'evolve', `${record.at.replace(/[:.]/g, '-')}.json`);
   writeAtomic(kept, `${JSON.stringify(record, null, 1)}\n`);
   if (record.verdict === 'ADOPTED') store.setCarry(L, { ...record.end, adoptedAt: record.at, from: kept, standardVersion: record.standardVersion });
+  if (record.verdict === 'STOPPED') process.exitCode = EXIT_STOPPED;
   if (json) { console.log(JSON.stringify({ ...record, file: kept }, null, 1)); return; }
   console.log(`\n${renderEvolve(record)}\n\n$${spent.toFixed(2)} · the whole search is kept at ${kept}`);
 }
