@@ -7,6 +7,104 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: a test run is never something a skill learns from
+
+- **A run marked as a test is a measurement, and nothing that learns reads it.** A held-back case run by `atelier
+  reproduce`, or a benchmark answer, was recorded with every other run, and `tend`, `mine`, the learned list of
+  machine-writing phrases, the search over implementations, the optimizer and `eval` all read it. A skill changed
+  on what a held-back case showed has seen that case, and its next run of it tested nothing. The runs a skill may
+  learn from are now read in one place, which leaves test runs out; `eval` leaves them out of its counts.
+- **A reproduction is bound to the run that held its cases back.** The skill under test must hold the standard that
+  run closed, or one that supersedes it; otherwise nothing is run. The record carries the run, its sealed corpus, a
+  hash of the cases as they stood, and how many times they have been run on each version.
+- **`--cap` is the total for the command.** Each case's run is given what is left of it, split between the run and
+  its claim reader, and a case is not started on less than sixty cents. It was checked only between cases, so the
+  last run could pass it. A run that stops partway is counted at what it had spent.
+- **A reading of a test run by the taste reader is not kept,** `atelier fix` refuses a run marked as a test, and
+  observations made on one are not evidence a skill is changed on.
+- **A held-back piece that has been read is never run as reproduction,** and whether one has been read is part of
+  what the reserve is identified by.
+- **Every reproduction is kept and none is written over.** Each run is its own file; the first look at a set of
+  cases is the only one that is a test, and a later run says it is a repeat and where the first is kept. Exposure is
+  counted for one set of cases and never carried to another.
+- **Each case can be walked back to its run:** the invocation, the output by hash, the rules it broke by id, the
+  longest run it shares with a piece the skill carries. Where a rule the output broke is one the expert's own
+  held-back piece breaks too, the record says the standard asked more than the work does.
+- **A case on which no required rule is checked by code is "not observed",** never "reproduced".
+- **A reproduction never accepts a new runtime for the skill.** A measurement does not change how a skill is run.
+- **`--bare` is called what it is: a one-shot floor.** One plain call a case, checked afterwards. The skill's run
+  drafts more than once, chooses, repairs and has its claims read, so the gap between the two is the runtime and
+  the skill together and is never offered as what the skill adds. Each case now records its own cost.
+
+### Changed, for 2.0: sentence length is a rule only where it is the writer's own rhythm
+
+- **A count is not a style.** How long sentences run follows the piece: its format, its reader, what it is for. A
+  rule on sentence length, on the share of short sentences, on the mix of lengths or on how much they vary is now
+  suggested as required only when the writer's rhythm is detected as theirs: the same in piece after piece, and
+  apart from what the model writes on the same topics (a monologue that runs a hundred words before it stops, or
+  prose cut to the bone). Otherwise the rule is counted, shown and used to choose between drafts, and the review
+  says why: "how long your sentences run changes from piece to piece, so it follows the piece". You can still make
+  it required.
+- The rhythm is read on prose sentences only. A heading, a line that is only a bold label, a list item and a table
+  row are not sentences of the writer's prose.
+- Found on a real corpus: every output written to a standard, and the author's own held-back piece, failed on a
+  required mix of sentence lengths that the format, not the author, had set.
+- Applies to a new discovery. A standard approved before is unchanged; `atelier amend --rule <id> --materiality
+  PREFERRED` makes the same ruling on it. The counted checks themselves still read a bold label line as a
+  sentence: changing what an approved rule counts needs its own decision.
+
+### Added, for 2.0: `atelier reproduce`, whether a skill reproduces work it never saw
+
+- **`atelier reproduce --skill <name>`** runs each piece that was held back with its task and its material: the
+  skill is given the task and the material and never the piece, writes through the same checked path as any run,
+  and the output is read by that run's own verdict.
+- **A case is checked before it is run and its output after.** A case whose task repeats the finished work's own
+  wording, or whose material holds the finished work, is not run and is said. An output that carries wording of the
+  held-back piece that its material does not hold is not a reproduction, whatever else it met.
+- **What it reports is a count of cases.** A case is reproduced when the run's verdict was "conformant"; a refusal
+  under strict delivery is a case that was run and not reproduced. Under the count: unsupported specifics (read
+  only when a qualified reader read every case, and "not read" otherwise), required rules met, and your own
+  held-back work on the counted rules that apply to every piece. There is no total and no label, and the number of
+  cases is beside every count. Required rules no code can check are counted apart and are in none of it.
+- **It counts how many times the held-back cases have been run on a skill**, and says so from the second time: a
+  piece held back is unseen once.
+- **`--bare` is a one-shot floor:** the same cases, one plain call each, given the task and the material alone and
+  read with `atelier verify` against the same standard. Its record is kept apart.
+- `--dry-run` shows what each case would be given and calls nothing. `--cap <usd>` holds the total (5 by default).
+  The record is kept with the skill and shown by `atelier report --skill <name>`. A reproduction does not become
+  "the last run" that `atelier fix` and `atelier report` point at.
+- Run it from the project the skill was built in: the held-back pieces are kept with that run.
+- Known limit: `atelier_skill_report` (MCP) does not carry the record yet.
+
+### Added, for 2.0: an example may carry its task and what it was made from
+
+The first step toward a skill built from a method and examples of good output. Nothing changes for a folder of
+finished work alone.
+
+- **An example can say what was asked and what it was made from.** The task as before (`request:` in the front
+  matter, or the `## Request` / `## Answer` layouts). The material in a folder named after the example
+  (`acme.md` and `acme.material/`), or named in the front matter (`material: filing.md, notes/call.txt`, paths from
+  the example's own folder). Material is read as that example's sources and never as your finished work.
+- **Each example has a class, and intake says what you gave:** "8 examples: 2 with the task and the material it was
+  made from, 1 with the task, 5 finished work only." Every example teaches the standard. Only one that carries both
+  its task and its material can test whether a skill reproduces your work, because only then can a candidate be
+  given what you were given and nothing of what you wrote.
+- **A piece held back is one that can be tested.** The automatic reserve puts half of the examples that carry both
+  their task and their material first in line, and leaves the rest to be learned from; among examples of one kind
+  it chooses as it always did.
+- **A held-back example that carries its request is tested on that request.** `atelier reference` gives each arm,
+  and shows the blind reader, what was actually asked, where it gave "produce <file>". A skill built before is
+  unchanged.
+- Material stays inside the folder you point at: a name that leaves it is said and not read. A `materials:` key of
+  your own, whose values are not file names, is left alone.
+
+### Fixed
+
+- **`atelier reference` pasted the held-back pieces into the arm it compared them with.** The arm that is given
+  your work in its prompt read every piece intake had sealed, those held back included, so each held-back reference
+  was in front of the model that was then asked to reproduce it. That arm is now given the pieces discovery read
+  and no others. A comparison made with it before this is not a blind one for that arm.
+
 ### Fixed: the last fixes before 1.x is frozen
 
 Six defects, named in [decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), and no

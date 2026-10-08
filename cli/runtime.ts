@@ -631,6 +631,8 @@ export interface ProposalMeta {
   readonly needs: string | null;
   /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
   readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean;
+    /** a rule on sentence length where the writer's rhythm is not a signature of theirs (core/observers/rhythm-signature.ts): why, in words */
+    readonly contextual?: string;
     /** the limit was moved to where the author's own pieces are; the counts are the held-out pieces against the limit before it moved */
     readonly fitted?: boolean } | null;
   /**

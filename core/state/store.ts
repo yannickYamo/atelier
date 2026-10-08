@@ -414,6 +414,25 @@ export const getInvocation = (l: StoreLayout, id: string): InvocationRecord | nu
   return existsSync(p) ? readJson<InvocationRecord>(p, { what: 'an invocation record' }) : null;
 };
 /** Newest first. */
+/**
+ * THE RUNS A SKILL MAY LEARN FROM: every recorded run that was not marked as a test. `listInvocations` is the
+ * history, for audit and for looking one run up; anything that changes what a skill does next (recurrence mining,
+ * break rates, the learned tell list, the search over implementations, the contrast pairs) reads through here.
+ *
+ * A run marked as a test is a measurement of the skill: a benchmark answer, or a held-back case run by
+ * `atelier reproduce`. Read back into what the skill learns, the next run of the same held-back case is no longer a
+ * test of anything, and nobody would have been told. The exclusion is made once, here, so that a new consumer gets
+ * it by using the function that says what it wants.
+ */
+export function listLearningInvocations(l: StoreLayout): readonly InvocationRecord[] {
+  return listInvocations(l).filter((r) => r.settings?.flags.testRun !== true);
+}
+
+/** The ids of the runs marked as tests: what a reader of feedback, observations or evaluations leaves out. */
+export function testRunIds(l: StoreLayout): ReadonlySet<string> {
+  return new Set(listInvocations(l).filter((r) => r.settings?.flags.testRun === true).map((r) => r.invocationId));
+}
+
 export function listInvocations(l: StoreLayout): readonly InvocationRecord[] {
   const d = dirs(l).invocations;
   if (!existsSync(d)) return [];

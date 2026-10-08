@@ -14,6 +14,7 @@
 // and not applied under another. The voice pass itself is turned on with
 // `atelier fidelity --skill <name> --set voice=incontext`, or for one run with `invoke --voice incontext`.
 
+import { namedAsMaterial } from '../../core/golden/case.js';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
@@ -78,7 +79,9 @@ function register(L: store.StoreLayout, std: StandardVersion, profile: FidelityP
   }
   if (!existsSync(dir) || !statSync(dir).isDirectory()) die(`${dir} is not a folder.`);
   const byRegister = new Map<string, string[]>();
-  for (const f of readdirSync(dir).filter((x) => /\.(md|markdown|txt)$/i.test(x)).sort()) {
+  const pieceFiles = readdirSync(dir).filter((x) => /\.(md|markdown|txt)$/i.test(x)).sort();
+  const material = namedAsMaterial(pieceFiles.map((f) => ({ name: f, raw: readFileSync(join(dir, f), 'utf8') })));
+  for (const f of pieceFiles.filter((x) => !material.has(x))) {
     const raw = readFileSync(join(dir, f), 'utf8');
     const r = frontMatterRegister(raw) ?? die(`${f} names no register: add "register: <name>" to its front matter. A register is never guessed.`);
     byRegister.set(normaliseRegister(r), [...(byRegister.get(normaliseRegister(r)) ?? []), raw]);

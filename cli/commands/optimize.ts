@@ -235,7 +235,7 @@ export async function optimize(opts: { readonly promote?: boolean } = {}): Promi
 async function reflect(L: store.StoreLayout, v: StandardVersion, legal: readonly Mutation[], attempts: readonly Attempt[], budget: Budget) {
   const rules = new Map(v.requirements.map((r) => [r.requirementId, r]));
   const failures: Failure[] = [];
-  for (const inv of store.listInvocations(L).filter((i) => i.standardVersionHash === v.standardVersionHash).slice(-8)) {
+  for (const inv of store.listLearningInvocations(L).filter((i) => i.standardVersionHash === v.standardVersionHash).slice(-8)) {
     const report = checkDraft(L.skillName, v, inv.repair?.draft ?? inv.output, { guardClaims: false });
     for (const c of report.checked) {
       if (c.result.verdict !== 'VIOLATED') continue;

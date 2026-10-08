@@ -1,0 +1,336 @@
+// tests/atelier-reproduce.test.ts — `atelier reproduce`: A HELD-BACK CASE IS RUN ON ITS TASK AND MATERIAL, NEVER ON ITSELF.
+//
+// Through the binary, against the scripted backend: a skill is built from a folder of cases, one full case is held
+// back, and the command runs it. What is asserted is the rule (no request carries the reference), the count (binary
+// per case, the expert's own piece read beside it), and what is said when nothing can be run.
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { renderReproduction, countsOf, type ReproductionRecord, type CaseOutcome } from '../core/eval/reproduce.js';
+import { goldenCase, whyNotRunnable, repeatsReference, CARRIED_RUN, HOLDS_THE_WORK } from '../core/golden/case.js';
+
+const CLI = resolve('dist/cli/atelier.mjs');
+const ENV: NodeJS.ProcessEnv = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(ATELIER|ANTHROPIC|OPENAI)_/.test(k))), ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1', ATELIER_CLAIMS: 'pattern' };
+const CLEAN = 'We compared the two on the same terms. The filing gives the figures, and the order follows from them.';
+const BREAKS = 'Let us delve into the rich tapestry of this ever-evolving landscape. It\'s not a tool, it\'s a movement. Here\'s the thing: here\'s why. Here\'s how.';
+
+let backend: ChildProcess; let port = 0;
+const url = (): string => `http://127.0.0.1:${port}`;
+const factor = { description: 'Lead with the verdict, then the comparison.', appliesWhen: [{ id: 'w', describe: 'GENERAL' }], readFrom: ['plain-3.md'], wouldBeAbsentIf: 'the opposite shows', needsFromUser: '', quote: '' };
+const scripted = (piece: string): Promise<unknown> => fetch(`${url()}/__set`, { method: 'POST', body: JSON.stringify({ byTool: {
+  emit_factors: { factors: [factor] }, emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }] }, emit_observation: { applicable: true, present: true, why: 'seen' },
+  emit_persona: { points: [] }, emit_piece: { piece }, emit_answer: { answer: piece } } }) });
+const served = async (): Promise<string[]> => (await (await fetch(`${url()}/__log`)).json() as { bodies: string[] }).bodies;
+
+const root = realpathSync(mkdtempSync(join(tmpdir(), 'atelier-reproduce-')));
+const data = join(root, 'data'); const proj = join(root, 'proj'); const dir = join(proj, 'reports');
+const atelier = (...args: string[]): { code: number; out: string; err: string } => {
+  const r = spawnSync(process.execPath, [CLI, ...args, '--provider', 'openai-compatible', '--base-url', url(), '--model', 'scripted'], { encoding: 'utf8', cwd: proj, env: { ...ENV, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj }, maxBuffer: 64 * 1024 * 1024 });
+  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+};
+// Each piece its own words, so no rule is read from a repeated sentence; each reference ends on a line no task or material holds.
+const W = ['quiet', 'plain', 'early', 'late', 'slow', 'brisk', 'narrow', 'broad', 'steady', 'loose', 'careful', 'blunt'];
+const N = ['plan', 'draft', 'review', 'launch', 'budget', 'meeting', 'handover', 'estimate', 'rollback', 'release', 'audit', 'brief'];
+const body = (i: number): string => Array.from({ length: 14 }, (_, k) => `We set the ${W[(i + k) % 12]} ${N[k % 12]} beside the ${W[(i * 5 + k * 7) % 12]} ${N[(i + k * 5) % 12]} and wrote down which one the filing supports. I think the order matters, and I do not say it lightly.`).join('\n\n');
+const SECRET = (who: string): string => `The verdict nobody was told: ${who} wins only once the seat minimum is counted against the other.`;
+
+beforeAll(async () => {
+  if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` first.`);
+  backend = spawn(process.execPath, [resolve('tests/fixtures/scripted-backend.mjs')], { stdio: ['ignore', 'pipe', 'inherit'] });
+  port = await new Promise<number>((ok, bad) => {
+    backend.stdout!.on('data', (d: Buffer) => { const m = /PORT (\d+)/.exec(d.toString()); if (m) ok(Number(m[1])); });
+    backend.on('exit', () => { bad(new Error('scripted backend exited before listening')); });
+  });
+  await scripted(CLEAN);
+  mkdirSync(data); mkdirSync(dir, { recursive: true });
+  // two full cases, six of finished work alone: one of the two full cases is held back
+  for (const who of ['acme', 'borealis']) {
+    mkdirSync(join(dir, `${who}.material`));
+    writeFileSync(join(dir, `${who}.md`), `---\nrequest: Compare ${who} with its nearest rival on price for a team of ten.\n---\n${body(who === 'acme' ? 0 : 1)}\n\n${SECRET(who)}`);
+    writeFileSync(join(dir, `${who}.material`, 'filing.md'), `${who} lists twelve dollars a seat with a fifty seat minimum, and its rival lists fifteen with none. `.repeat(6));
+  }
+  for (let i = 3; i < 9; i++) writeFileSync(join(dir, `plain-${i}.md`), body(i));
+  const NEW = ['new', dir, 'competitive analysis, the way these are done', '--name', 'analysis'];
+  const first = atelier(...NEW); if (first.code !== 0) throw new Error(`new: ${first.err}${first.out}`);
+  const built = atelier(...NEW, '--accept'); if (built.code !== 0) throw new Error(`accept: ${built.err}${built.out}`);
+}, 300_000);
+afterAll(() => { backend.kill(); });
+
+describe('through the binary: one full case held back, run on its task and material', () => {
+  let firstLook = { file: '', bytes: '' };
+  const held = (): string => { const s = JSON.parse(readFileSync(join(data, 'skills', 'analysis', 'reproduction.json'), 'utf8')) as ReproductionRecord; return s.cases[0].id.replace(/\.md$/, ''); };
+
+  it('--dry-run says what would be served and calls nothing', async () => {
+    const before = (await served()).length;
+    const r = atelier('reproduce', '--skill', 'analysis', '--dry-run');
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toMatch(/^would run {2}(acme|borealis)\.md\n {2}task: Compare (acme|borealis) with its nearest rival on price for a team of ten\.\n {2}material: (acme|borealis)\.material\/filing\.md \(\d+ words\)$/m);
+    expect(r.out).toMatch(/--dry-run: 1 of 1 case\(s\) would be run; nothing was called and nothing was written\./);
+    const plan = JSON.parse(atelier('reproduce', '--skill', 'analysis', '--dry-run', '--json').out) as { cases: { id: string; runs: boolean; task?: string }[] };
+    expect(plan.cases).toHaveLength(1);
+    expect(plan.cases[0]).toMatchObject({ runs: true });
+    expect((await served()).length).toBe(before);
+    expect(existsSync(join(data, 'skills', 'analysis', 'reproduction.json'))).toBe(false);
+  });
+
+  it('runs the held-back case, and no request it makes carries the reference', async () => {
+    const before = (await served()).length;
+    const r = atelier('reproduce', '--skill', 'analysis');
+    expect(r.code, `${r.err}${r.out}`).toBe(0);
+    expect(r.out).toMatch(/^reproduced {5} (acme|borealis)\.md$/m);
+    expect(r.out).toMatch(/REPRODUCTION ON WORK THE SKILL NEVER SAW · analysis · 1 case\n {2}1 of 1 {3}reproduced: the run's own verdict was "conformant"/);
+    // the pattern check is not a qualified reader, and the record does not say facts were read
+    expect(r.out).toMatch(/not read {3}unsupported specifics: no qualified reader read every case, so the pattern check decided/);
+    expect(r.out).toMatch(/\(patterns only\)/);
+    expect(r.out).toMatch(/1 case: a count, not a rate\./);
+    expect(r.out).not.toMatch(/READY|CERTIFIED|score/i);
+    const who = held();
+    const bodies = (await served()).slice(before);
+    expect(bodies.length).toBeGreaterThan(0);
+    // the task and the material reached the writer; the held-back piece did not, in any request of the run
+    expect(bodies.some((b) => b.includes(`Compare ${who} with its nearest rival`))).toBe(true);
+    expect(bodies.some((b) => b.includes(`${who} lists twelve dollars a seat`))).toBe(true);
+    // (the other full case was learned from, and its piece may be served as the author's: only the held-back one is tested)
+    for (const b of bodies) expect(b).not.toContain(`${who} wins only once the seat minimum`);
+    // and it was never in any request since the build either: not at discovery, not in the skill
+    for (const b of await served()) expect(b).not.toContain(`${who} wins only once the seat minimum`);
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'analysis', 'reproduction.json'), 'utf8')) as ReproductionRecord;
+    expect(rec).toMatchObject({ schema: 1, skill: 'analysis', heldBack: { full: 1, taskOnly: 0, referenceOnly: 0 } });
+    expect(rec.cases[0]).toMatchObject({ state: 'ran', conformant: true, claims: { qualified: false } });
+    expect(rec.cases[0].sharedWithReference).toBeLessThan(CARRIED_RUN);
+    expect(rec.cases[0].words.reference).toBeGreaterThan(300);
+    expect(rec.timesRun).toBe(1);
+    // bound by identity to the run, its sealed corpus and the cases as they stood
+    expect(rec.runId).toMatch(/\S+/);
+    expect(rec.corpusHash).toMatch(/^[0-9a-f]+$/);
+    expect(rec.reservationHash).toMatch(/^[0-9a-f]{16}$/);
+    expect(rec).toMatchObject({ standardAmendedSinceRun: false });
+    expect(Object.values(rec.runsByVersion ?? {})).toEqual([1]);
+    // the first look, kept in a file of its own that no later run writes over
+    expect(rec.look).toBe('FIRST');
+    expect(rec.file).toBe(rec.firstLook);
+    firstLook = { file: rec.file ?? '', bytes: readFileSync(rec.file ?? '', 'utf8') };
+    // and each case can be walked back to the run that made it
+    expect(rec.cases[0].invocationId).toMatch(/^i[0-9a-f]+$/);
+    expect(rec.cases[0].outputHash).toMatch(/^[0-9a-f]{16}$/);
+    expect(rec.cases[0].required?.broken).toEqual([]);
+    expect(typeof rec.cases[0].sharedWithCarriedPieces).toBe('number');
+    // a reproduction is not the person's last piece of work: the pointer a bare `atelier report` follows is as it was
+    expect(existsSync(join(data, 'runs')) ? atelier('report').out : '').not.toMatch(new RegExp(`Compare ${who} with its nearest rival`));
+  }, 120_000);
+
+  it('an output that breaks a required rule is not reproduced, and the count says so', async () => {
+    await scripted(BREAKS);
+    try {
+      const r = atelier('reproduce', '--skill', 'analysis', '--json');
+      expect(r.code, r.err).toBe(0);
+      const rec = JSON.parse(r.out) as ReproductionRecord & { counts: ReturnType<typeof countsOf> };
+      expect(rec.cases[0]).toMatchObject({ state: 'ran', conformant: false });
+      expect(rec.counts).toMatchObject({ ran: 1, reproduced: 0 });
+      // the same held-back case, run a second time on this skill: said, because it is no longer unseen
+      expect(rec.timesRun).toBe(2);
+      expect(rec.look).toBe('REPEAT_SAME_VERSION');
+      // the first look is where it was, byte for byte, and the latest says where
+      expect(rec.firstLook).toBe(firstLook.file);
+      expect(readFileSync(firstLook.file, 'utf8')).toBe(firstLook.bytes);
+      expect(rec.file).not.toBe(firstLook.file);
+      expect(rec.cases[0].required?.broken?.length).toBeGreaterThan(0);
+      expect(atelier('report', '--skill', 'analysis').out).toMatch(/These cases have now been run 2 times on this skill\. A piece held back is unseen once/);
+    } finally { await scripted(CLEAN); }
+  }, 120_000);
+
+  it('the skill\'s report carries the last reproduction', () => {
+    const r = atelier('report', '--skill', 'analysis');
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toMatch(/REPRODUCTION ON WORK THE SKILL NEVER SAW · analysis · 1 case/);
+    expect((JSON.parse(atelier('report', '--skill', 'analysis', '--json').out) as { reproduction?: { schema: number } }).reproduction?.schema).toBe(1);
+  });
+  it('--bare is a one-shot floor: the same case, one plain call, read with verify, its record kept apart', async () => {
+    const before = (await served()).length;
+    const r = atelier('reproduce', '--skill', 'analysis', '--bare');
+    expect(r.code, `${r.err}${r.out}`).toBe(0);
+    expect(r.out).toMatch(/ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against analysis · 1 case\n {2}1 of 1 {3}reproduced: no required counted rule broken and nothing flagged as unsourced, by atelier verify/);
+    // and it is never offered as what the skill adds
+    expect(r.out).toMatch(/A floor, not an ablation: the skill's run drafts more than once, chooses, repairs and has its claims read/);
+    expect(r.out).not.toMatch(/without the skill/i);
+    const bodies = (await served()).slice(before);
+    // one plain call: the task and the material, and nothing of the skill or of the held-back piece
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatch(/Compare (acme|borealis) with its nearest rival/);
+    expect(bodies[0]).toMatch(/lists twelve dollars a seat/);
+    expect(bodies[0]).not.toMatch(/wins only once the seat minimum|Lead with the verdict/);
+    expect(existsSync(join(data, 'skills', 'analysis', 'reproduction-bare.json'))).toBe(true);
+    // the skill's own record is untouched by it
+    expect((JSON.parse(readFileSync(join(data, 'skills', 'analysis', 'reproduction.json'), 'utf8')) as ReproductionRecord).arm).toBeUndefined();
+    await scripted(BREAKS);
+    try {
+      const broke = JSON.parse(atelier('reproduce', '--skill', 'analysis', '--bare', '--json').out) as ReproductionRecord;
+      expect(broke).toMatchObject({ arm: 'bare' });
+      expect(broke.cases[0]).toMatchObject({ state: 'ran', conformant: false });
+    } finally { await scripted(CLEAN); }
+  }, 120_000);
+
+  it('--cap is the total: with too little of it left to start a run, the case is not run and nothing is called', async () => {
+    const before = (await served()).length;
+    const r = atelier('reproduce', '--skill', 'analysis', '--cap', '0.01', '--json');
+    expect(r.code, r.err).toBe(0);
+    const rec = JSON.parse(r.out) as ReproductionRecord;
+    expect(rec.cases[0]).toMatchObject({ state: 'not-run' });
+    expect(rec.cases[0].why).toMatch(/^\$0\.01 of the \$0\.01 cap was left after 0 run\(s\), too little to start another\. Raise it with --cap$/);
+    // and with room for one run: the run is given what is left, split between itself and its claim reader, never more
+    expect(readFileSync(resolve('cli/commands/reproduce.ts'), 'utf8')).toMatch(/`--cap=\$\{split\(left\)\.run\}`[\s\S]{0,400}ATELIER_CLAIMS_CAP: String\(split\(left\)\.claims\)/);
+    expect((await served()).length).toBe(before);
+  });
+
+  it('a reproduction run is never something the skill learns from: no reader of runs that learns can see it', async () => {
+    const store = await import('../core/state/store.js');
+    const L = { root: data, skillName: 'analysis' };
+    const all = store.listInvocations(L); const tests = all.filter((r) => r.settings?.flags.testRun === true);
+    // every run made so far in this file came from `atelier reproduce`, and each is marked
+    expect(tests.length).toBeGreaterThanOrEqual(2);
+    expect(tests.length).toBe(all.length);
+    expect(store.listLearningInvocations(L)).toEqual([]);
+    // through the binary: the commands that learn from runs find nothing to learn from
+    expect(atelier('status', '--skill', 'analysis').out).toMatch(/uses {11}0 recorded/);
+    // a complaint about a test run is refused: a skill is not corrected on what it is tested with
+    const fix = atelier('fix', '--skill', 'analysis', '--invocation', tests[0].invocationId, 'too long');
+    expect(fix.code).not.toBe(0);
+    expect(`${fix.err}${fix.out}`).toMatch(/was a test \(a benchmark answer, or a held-back case run by atelier reproduce\)\. A skill is not corrected on what it is tested with/);
+    // and no reading of a test run was kept for labelling
+    expect(store.readEvents(L).filter((e) => (e as { kind?: string }).kind === 'TASTE_READING')).toEqual([]);
+    const ev = atelier('eval', '--skill', 'analysis');
+    expect(`${ev.out}${ev.err}`).toMatch(/No evaluated runs of "analysis" yet/);
+  });
+
+  it('a held-back piece that has been read is never run as reproduction, and the reserve is then another reserve', async () => {
+    // the session records that the builder read the held-back reference
+    const sessions = join(data, 'sessions');
+    const file = join(sessions, readdirSync(sessions).find((f) => f.endsWith('.json')) ?? ''); const original = readFileSync(file, 'utf8');
+    const session = JSON.parse(original) as { reservation: { reserved: { caseClass?: string; provenance: { consumedBy: string[] } }[] } };
+    for (const u of session.reservation.reserved) if (u.caseClass === 'FULL_REPRO_CASE') u.provenance.consumedBy = ['BUILDER_VIEWED'];
+    writeFileSync(file, JSON.stringify(session));
+    try {
+      const before = (await served()).length;
+      const r = atelier('reproduce', '--skill', 'analysis', '--json');
+      expect(r.code, r.err).toBe(0);
+      const rec = JSON.parse(r.out) as ReproductionRecord;
+      expect(rec.cases[0]).toMatchObject({ state: 'not-run' });
+      expect(rec.cases[0].why).toBe('its finished work has already been read (BUILDER_VIEWED), so it is no longer held back. It can serve development, never reproduction');
+      expect((await served()).length).toBe(before);
+      // read, it is another reserve than the one the earlier runs were counted on
+      expect(rec.reservationHash).not.toBe((JSON.parse(readFileSync(join(data, 'skills', 'analysis', 'reproduction.json'), 'utf8')) as ReproductionRecord).reservationHash);
+    } finally { writeFileSync(file, original); }
+  });
+
+  it('under strict delivery a refusal is a case that was run and not reproduced, never one left out of the count', async () => {
+    await scripted(BREAKS);
+    try {
+      const r = atelier('reproduce', '--skill', 'analysis', '--strict', '--json');
+      expect(r.code, r.err).toBe(0);
+      const rec = JSON.parse(r.out) as ReproductionRecord & { counts: ReturnType<typeof countsOf> };
+      expect(rec.cases[0]).toMatchObject({ state: 'ran', conformant: false, refused: true });
+      expect(rec.counts).toMatchObject({ ran: 1, reproduced: 0, refused: 1 });
+    } finally { await scripted(CLEAN); }
+  }, 120_000);
+
+  it('a skill that is not there, and a folder whose run did not build the skill, are each refused in so many words', () => {
+    const none = atelier('reproduce', '--skill', 'no-such-skill');
+    expect(none.code).not.toBe(0);
+    expect(`${none.err}${none.out}`).toMatch(/no built skill called "no-such-skill"/);
+    const elsewhere = mkdtempSync(join(tmpdir(), 'atelier-reproduce-else-'));
+    const r = spawnSync(process.execPath, [CLI, 'reproduce', '--skill', 'analysis'], { encoding: 'utf8', cwd: elsewhere, env: { ...ENV, ATELIER_DATA: data, ATELIER_PROJECT_DIR: elsewhere } });
+    expect(r.status).not.toBe(0);
+    expect(`${r.stderr}${r.stdout}`).toMatch(/this folder's run did not build "analysis"|carries on the run|took a copy/);
+  });
+});
+
+describe('a case is audited before it is run, and its output after', () => {
+  const material = [{ name: 'filing.md', text: 'Acme lists twelve dollars a seat with a fifty seat minimum, and its rival lists fifteen with none.' }];
+  const reference = `${Array.from({ length: 12 }, (_, k) => `We set point ${k} beside the filing and wrote down which vendor it favours.`).join(' ')} Acme wins only once the seat minimum is counted against the other vendor in the pair.`;
+  it('a case with a task and honest material may be run', () => {
+    expect(whyNotRunnable(goldenCase('a', reference, 'Compare Acme with its rival on price.', material))).toBeNull();
+    expect(whyNotRunnable(goldenCase('a', reference, null, material))).toBe('it carries no task');
+  });
+  it('a task that repeats the finished work is not run', () => {
+    const why = whyNotRunnable(goldenCase('a', reference, 'Compare them. Acme wins only once the seat minimum is counted against the other vendor.', material));
+    expect(why).toMatch(/^its task repeats 1[0-9] words in a row of the finished work, so running it would give the skill part of the answer\. Word the task as it was asked/);
+  });
+  it('material that holds the finished work is not run: the audit\'s exemption for material must not cover a copy', () => {
+    const filed = [...material, { name: 'final-report.md', text: reference }];
+    expect(whyNotRunnable(goldenCase('a', reference, 'Compare Acme with its rival on price.', filed))).toMatch(/^its material \(final-report\.md\) holds \d+ words in a row of the finished work, so the skill would be handed the answer/);
+    const withNotes = [{ name: 'notes.md', text: `My notes first. ${reference} And a closing remark.` }];
+    expect(whyNotRunnable(goldenCase('a', reference, 'Compare Acme with its rival on price.', withNotes))).toMatch(/holds \d+ words in a row/);
+    // an expert quoting a source is not that: a sentence shared is far under the line
+    const quoting = `${reference} As the filing says: ${material[0].text}`;
+    expect(whyNotRunnable(goldenCase('a', quoting, 'Compare Acme with its rival on price.', material))).toBeNull();
+    expect(HOLDS_THE_WORK).toBeGreaterThan(material[0].text.split(' ').length);
+  });
+  it('an output that carries the held-back piece\'s own wording is caught after the run; the material\'s wording is not', () => {
+    const c = goldenCase('a', reference, 'Compare Acme with its rival on price.', material);
+    expect(repeatsReference('We found that Acme wins only once the seat minimum is counted against the other vendor in the pair.', c)).toBeGreaterThanOrEqual(CARRIED_RUN);
+    expect(repeatsReference(`Our reading: ${material[0].text}`, goldenCase('a', `${reference} ${material[0].text}`, 't', material))).toBeLessThan(CARRIED_RUN);
+    expect(repeatsReference('Acme is cheaper for a large team and dearer for a small one.', c)).toBeLessThan(CARRIED_RUN);
+  });
+});
+
+describe('the record is a count of cases, read beside the expert\'s own work', () => {
+  const one = (over: Partial<CaseOutcome>): CaseOutcome => ({ id: 'a.md', state: 'ran', conformant: true, required: { held: 5, applicable: 5 }, claims: { qualified: true, instrument: 'reader', unsupported: 0 }, reference: { met: 5, applicable: 5 }, words: { output: 900, reference: 1000 }, costUsd: 0.2, ...over });
+  const rec = (cases: CaseOutcome[], heldBack = { full: cases.length, taskOnly: 0, referenceOnly: 0 }, timesRun = 1): ReproductionRecord => ({ schema: 1, skill: 'x', skillVersion: 'a', standardVersion: 'b', at: '', heldBack, cases, notCheckable: 2, timesRun, costUsd: 0 });
+  it('binary per case; rules and facts are never added into one number', () => {
+    const r = rec([one({}), one({ id: 'b.md', conformant: false, required: { held: 4, applicable: 5 } }), one({ id: 'c.md', conformant: false, claims: { qualified: true, instrument: 'reader', unsupported: 2 } }), one({ id: 'd.md', reference: { met: 4, applicable: 5 } })]);
+    expect(countsOf(r)).toEqual({ ran: 4, reproduced: 2, notObserved: 0, refused: 0, factSafe: 3, required: { held: 19, applicable: 20 }, reference: { met: 19, applicable: 20, whole: 3 } });
+    const text = renderReproduction(r);
+    expect(text).toMatch(/· 4 cases\n {2}2 of 4 {3}reproduced: the run's own verdict was "conformant"\n {2}3 of 4 {3}with no unsupported specific, read by a qualified reader\n {2}19 of 20 {3}required rules met, over the 4 cases\n {2}19 of 20 {3}on your own held-back work, for the counted required rules that apply to every piece; 3 of 4 of your pieces meet every one/);
+    expect(text).toMatch(/2 required rules cannot be checked by code, and are in none of these counts/);
+    expect(text).toMatch(/Where your own piece breaks such a rule, the rule asks for more than your work does/);
+    expect(text).toMatch(/4 cases: a count, not a rate\./);
+    expect(text).not.toMatch(/%|\bscore\b|READY|CERTIFIED|These cases have now been run/i);
+  });
+  it('a refusal is counted as run and not reproduced; a case that could not be run is listed and is in no count', () => {
+    const r = rec([one({}), one({ id: 'b.md', conformant: false, refused: true, claims: null }), one({ id: 'c.md', state: 'not-run', why: 'its task repeats 12 words in a row of the finished work', conformant: null, required: null, claims: null })]);
+    expect(countsOf(r)).toMatchObject({ ran: 2, reproduced: 1, refused: 1, factSafe: 1 });
+    const text = renderReproduction(r);
+    expect(text).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant" \(1 refused under strict delivery, counted as not reproduced\)/);
+    expect(text).toMatch(/not run: c\.md: its task repeats 12 words in a row of the finished work/);
+    expect(text).toMatch(/not reproduced {2}b\.md {2}· {2}5\/5 rules · refused, nothing delivered/);
+  });
+  it('facts are "not read" unless a qualified reader read every case, and one piece is "meets"', () => {
+    const r = rec([one({ claims: { qualified: false, instrument: 'pattern check', unsupported: 0 } })]);
+    expect(countsOf(r)).toMatchObject({ ran: 1, reproduced: 1, factSafe: null });
+    expect(renderReproduction(r)).toMatch(/not read {3}unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds/);
+    expect(renderReproduction(r)).toMatch(/1 of 1 of your pieces meets every one/);
+    expect(renderReproduction(r)).toMatch(/0 unsupported \(patterns only\)/);
+  });
+  it('a case with no required rule checked by code is "not observed", never "reproduced"', () => {
+    const r = rec([one({ conformant: null, required: { held: 0, applicable: 0 }, reference: { met: 0, applicable: 0 }, why: 'no required rule is checked by code on this case' })]);
+    expect(countsOf(r)).toMatchObject({ ran: 1, reproduced: 0, notObserved: 1 });
+    const text = renderReproduction(r);
+    expect(text).toMatch(/0 of 1 {3}reproduced/);
+    expect(text).toMatch(/1 of 1 {3}not observed: no required rule is checked by code on it, so it is read as neither/);
+    expect(text).toMatch(/^ {4}not observed {4}a\.md/m);
+    expect(text).not.toMatch(/0 of 0/);
+    const failed = renderReproduction(rec([one({ state: 'not-run', why: 'the run ended with no result: boom', conformant: null, required: null, claims: null })]));
+    expect(failed).toBe('REPRODUCTION · x: no case could be run.\n  not run: a.md: the run ended with no result: boom');
+  });
+  it('a rule the output broke that the expert\'s own piece breaks too is laid at the standard, not at the skill', () => {
+    const text = renderReproduction(rec([one({ conformant: false, required: { held: 4, applicable: 5, broken: ['c15'] }, reference: { met: 4, applicable: 5, broken: ['c15'] }, alsoBrokenByReference: ['c15'] })]));
+    expect(text).toMatch(/In 1 case a rule the output broke is one your own held-back piece breaks too \(c15\): there the standard asks more than your work does, and the skill is not what failed\./);
+  });
+  it('a repeat says it is one, and where the first look is kept', () => {
+    const text = renderReproduction({ ...rec([one({})], undefined, 2), look: 'REPEAT_AFTER_CHANGE', firstLook: '/store/reproductions/first.json' });
+    expect(text).toMatch(/This is a repeat after the skill changed, not the first look at these cases: the first is kept at \/store\/reproductions\/first\.json\./);
+  });
+  it('run more than once on a skill, it says the cases are no longer unseen', () => {
+    expect(renderReproduction(rec([one({})], undefined, 3))).toMatch(/These cases have now been run 3 times on this skill\. A piece held back is unseen once: if the skill was changed between runs because of what they showed, read this as work in progress, not as a test\./);
+  });
+  it('an output that carried the reference\'s wording is not reproduced, and its line says why', () => {
+    const text = renderReproduction(rec([one({ conformant: false, sharedWithReference: 18, why: 'the output repeats 18 words in a row of the held-back piece that are not in its material: something served them, and this is not a reproduction' })]));
+    expect(text).toMatch(/not reproduced {2}a\.md .* · the output repeats 18 words in a row of the held-back piece/);
+  });
+  it('with nothing that can be run it says why, and what to add', () => {
+    expect(renderReproduction(rec([], { full: 0, taskOnly: 1, referenceOnly: 2 }))).toBe('REPRODUCTION · x: not tested.\n  3 pieces held back, and none carries both its task and the material it was made from. A candidate can only be given what you were given when both are there.\n  Add the task (`request:` in the front matter) and the material (a folder `<example>.material` beside it) to some examples, and build again.');
+    expect(renderReproduction(rec([], { full: 0, taskOnly: 0, referenceOnly: 0 }))).toMatch(/No piece was held back when this skill was built\./);
+  });
+});

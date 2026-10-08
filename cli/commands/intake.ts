@@ -4,12 +4,16 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
-import { readdirSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, existsSync, readFileSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
-import { join, resolve, basename, dirname } from 'node:path';
+import { join, resolve, basename, dirname, extname, posix } from 'node:path';
 import { planImport, MIN_GOLDEN_CHARS, MIN_ANSWER_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { reserve, type Reservation } from '../../core/golden/reservation.js';
 import { describeGoldenEvidence, clusterAssignment, type GoldenUnit } from '../../core/golden/golden-unit.js';
+import { classOf, describeCases, inMaterialDir, materialDirOf, preferredForReserve, staysInside, MATERIAL_DIR, type CaseMaterial } from '../../core/golden/case.js';
+
+/** What a source is often kept as, beside the formats a piece is read from: read as the text it is. */
+const MATERIAL_TEXT = ['.csv', '.tsv', '.json', '.jsonl', '.yaml', '.yml', '.xml', '.html', '.htm'] as const;
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
@@ -45,10 +49,13 @@ export function walk(root: string, rel = '', depth = 0): string[] {
  * piece is needed to find and check rules at all. Content-blind: chosen by a hash of the name, so
  * neither the files' order nor their contents decide which are held back.
  */
-export function autoReserveIds(ids: readonly string[]): string[] {
+export function autoReserveIds(ids: readonly string[], rank: (id: string) => number = () => 0): string[] {
   if (ids.length < 6) return [];
   const k = Math.max(1, Math.round(ids.length * 0.15));
-  return [...ids].sort((a, b) => sha(a).localeCompare(sha(b))).slice(0, k);
+  // Still blind to what a piece says. Among pieces of one kind the order is the one it always was; a piece that
+  // carries its task and its material is held back before one that does not (core/golden/case.ts), since
+  // reproduction can be tested on no other kind.
+  return [...ids].sort((a, b) => rank(a) - rank(b) || sha(a).localeCompare(sha(b))).slice(0, k);
 }
 
 export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND'): void {
@@ -62,7 +69,9 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   const excl = flagAll('--exclude');
   const isDir = statSync(dir).isDirectory();
   const base = isDir ? dir : dirname(dir);
-  const all = isDir ? walk(dir) : [basename(dir)];
+  // One file named alone still has its material folder beside it.
+  const besideOne = isDir ? [] : (existsSync(join(base, materialDirOf(basename(dir)))) ? walk(join(base, materialDirOf(basename(dir)))).map((f) => `${materialDirOf(basename(dir))}/${f}`) : []);
+  const all = isDir ? walk(dir) : [basename(dir), ...besideOne];
 
   // Everything the user pointed at gets one of three fates, and ALL THREE ARE PRINTED. The first
   // version silently kept .md/.txt and dropped the rest, so a folder of PDFs looked identical to an
@@ -83,18 +92,63 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   const docsWorkType = /\b(doc|docs|documentation|readme|guide|manual|reference|tutorial|writing about)\b/i
     .test(flag('--work-type') ?? '');
   const meta = all.filter((f) => (META_NAME.test(basename(f)) && !docsWorkType) || excl.includes(f));
-  const candidates = all.filter((f) => !meta.includes(f)).sort();
+  // WHAT AN EXAMPLE WAS MADE FROM IS NOT AN EXAMPLE. A folder `<example>.material` beside a piece holds its sources,
+  // data and notes (core/golden/case.ts): read as that piece's material, and never as the author's finished work.
+  const candidates = all.filter((f) => !meta.includes(f) && !inMaterialDir(f)).sort();
   // NOTE: the metadata filter runs before the package is known, so a README inside a skill folder is
   // skipped as "about the work". For a corpus that is right; for a package it undercounts by one.
   // Left as-is rather than reordered — the package is identified from the files we could READ, and
   // moving that identification above the read loop is a larger change than this buys.
-  const read: { file: string; text: string; via: string }[] = [];
+  const read: { file: string; text: string; via: string; request?: string; materialRefs?: readonly string[] }[] = [];
   const refused: { file: string; reason: string; remedy: string | null }[] = [];
   for (const f of candidates) {
     const r = extract(join(base, f));
-    if (r.ok) read.push({ file: f, text: r.text, via: r.via });
+    if (r.ok) read.push({ file: f, text: r.text, via: r.via, ...(r.request ? { request: r.request } : {}), ...(r.materialRefs ? { materialRefs: r.materialRefs } : {}) });
     else refused.push({ file: f, reason: r.reason, remedy: r.remedy });
   }
+  // THE MATERIAL OF EACH EXAMPLE: the files in its `.material` folder, and the files its front matter names
+  // (relative to its own folder). A file an example names as its material is taken out of the examples: it is what
+  // the work was made from. One that cannot be read is said, and the example is then not a full case.
+  const materialOf = new Map<string, CaseMaterial[]>(); const named = new Set<string>(); const unreadMaterial: string[] = [];
+  const outside: string[] = [];
+  // A name is matched as written, and failing that without regard to case: on a file system that ignores case
+  // `Filing.md` is `filing.md`, and matched by spelling alone the file was read as material and stayed an example.
+  const fileNamed = (rel: string): string | null => all.find((f) => f === rel) ?? (all.filter((f) => f.toLowerCase() === rel.toLowerCase()).length === 1 ? all.find((f) => f.toLowerCase() === rel.toLowerCase()) ?? null : null);
+  const materialText = (f: string): string | null => {
+    const already = read.find((x) => x.file === f);
+    if (already) return already.text;
+    // Sources are often data: a table or a record is read as the text it is.
+    if ((MATERIAL_TEXT as readonly string[]).includes(extname(f).toLowerCase())) { try { return readFileSync(join(base, f), 'utf8'); } catch { return null; } }
+    const x = extract(join(base, f));
+    return x.ok ? x.text : null;
+  };
+  for (const r of [...read]) {
+    const folder = materialDirOf(r.file).toLowerCase();
+    const inFolder = all.filter((f) => f.toLowerCase().startsWith(`${folder}/`)).sort();
+    const refs: string[] = [];
+    for (const ref of r.materialRefs ?? []) {
+      const rel = posix.normalize(posix.join(posix.dirname(r.file), ref));
+      // MATERIAL LIVES IN THE FOLDER THE PERSON POINTED AT. A name that climbs out of it, or an absolute path, is
+      // not read: nothing outside what was named for reading is read on an example's say-so.
+      if (/^([/\\]|[A-Za-z]:)/.test(ref) || !staysInside(rel)) { outside.push(`${ref} (for ${r.file})`); continue; }
+      refs.push(fileNamed(rel) ?? rel);
+    }
+    const texts: CaseMaterial[] = [];
+    for (const f of [...new Set([...inFolder, ...refs])]) {
+      if (f === r.file) continue;
+      const text = existsSync(join(base, f)) ? materialText(f) : null;
+      if (text?.trim()) { texts.push({ name: f, text }); if (refs.includes(f)) named.add(f); } else unreadMaterial.push(`${f} (for ${r.file})`);
+    }
+    if (texts.length) materialOf.set(r.file, texts);
+  }
+  for (const f of named) { const i = read.findIndex((x) => x.file === f); if (i >= 0) read.splice(i, 1); }
+  // A material folder whose example is not here would otherwise be dropped with nothing said.
+  const claimed = new Set(read.map((r) => materialDirOf(r.file).toLowerCase()));
+  const orphans = [...new Set(all.filter(inMaterialDir).map((f) => f.split('/').slice(0, f.split('/').findIndex((d) => MATERIAL_DIR.test(d)) + 1).join('/')))].filter((d) => !claimed.has(d.toLowerCase()));
+  if (materialOf.size) console.log(`${orchestrated() ? '' : '\n'}Material read for ${materialOf.size} example(s): ${[...materialOf.values()].flat().length} file(s). It is what the work was made from, and is never read as your finished work.`);
+  if (orphans.length) console.log(`Material folder(s) with no example of the same name beside them, not read: ${orphans.join(', ')}. A folder \`acme.material\` belongs to \`acme.md\`.`);
+  if (outside.length) console.log(`Material named outside the folder you pointed at, not read: ${outside.join(', ')}. Put it inside the folder.`);
+  if (unreadMaterial.length) console.log(`\nMaterial that could not be read, so its example is not counted as having it: ${unreadMaterial.join(', ')}`);
 
   if (read.length) reportReading(read);
   if (meta.length) console.log(`\nSkipped as metadata (they are ABOUT the work, not the work): ${meta.join(', ')}\n  If these ARE the work — you are learning how this author writes documentation — pass --work-type documentation.`);
@@ -204,19 +258,25 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   const goldenFiles = usableRead.filter((r) => r.kind === 'GOLDEN');
   const clusters = clusterAssignment(goldenFiles.map((r) => r.file), argv.includes('--cluster-per-file'));
   const goldenUnits: GoldenUnit[] = goldenFiles.map((r) => ({
-    unitId: r.file, kind: 'PROSE_SECTION', context: workType, task: `produce ${r.file}`,
+    unitId: r.file, kind: 'PROSE_SECTION', context: workType, task: r.request ?? `produce ${r.file}`,
     expertAction: 'the expert produced this artefact as it stands', artifact: r.text,
+    // What the example carries beside the finished work decides what it can test (core/golden/case.ts). Written
+    // only where it carries something, so a corpus of finished work alone is recorded exactly as it always was.
+    ...(r.request || materialOf.has(r.file) ? { caseClass: classOf(r.request ?? null, materialOf.get(r.file) ?? []), ...(materialOf.has(r.file) ? { material: materialOf.get(r.file) } : {}) } : {}),
     provenance: { sourceRef: join(base, r.file), clusterId: clusters.clusterOf(r.file),
       contextId: r.file, clusterBasis: clusters.basis, consumedBy: [] } }));
   reportClusters(goldenUnits.length, new Set(goldenUnits.map((u) => u.provenance.clusterId)).size, clusters);
+  // Said only where an example carries its task or its material: a folder of finished work reads as it always did.
+  if (goldenUnits.some((u) => u.caseClass)) console.log(`${orchestrated() ? '' : '\n'}${describeCases(goldenUnits)}`);
   //
   // DECIDED BEFORE THE SPLIT, so the split is made over what discovery may read. A reserve applied
   // after roles were assigned let a reserved piece hold a proposal slot and left the proposer short.
   // `--auto-reserve` (what `atelier new` passes) holds back about 15% when the corpus can spare it,
   // chosen content-blind, so a first-time user gets a held-out check without knowing what one is.
+  const firstInLine = preferredForReserve(goldenUnits, sha);
   const explicitReserve = flagAll('--reserve');
   const auto = !explicitReserve.length && argv.includes('--auto-reserve');
-  const reserveIds = explicitReserve.length ? explicitReserve : auto ? autoReserveIds(goldenUnits.map((u) => u.unitId)) : [];
+  const reserveIds = explicitReserve.length ? explicitReserve : auto ? autoReserveIds(goldenUnits.map((u) => u.unitId), (id) => (firstInLine.has(id) ? 0 : 1)) : [];
   let reservation: Reservation | null = null;
   if (reserveIds.length) {
     const unknown = reserveIds.filter((id) => !goldenUnits.some((u) => u.unitId === id));

@@ -26,6 +26,7 @@
 // earns its place, naming, API shape, error strategy, how much to generalize.
 
 import type { Consumption } from '../reference/holdout-integrity.js';
+import type { CaseClass, CaseMaterial } from './case.js';
 
 /**
  * What kind of decision this is — an OPEN string, deliberately.
@@ -103,6 +104,12 @@ export interface GoldenUnit {
   readonly artifact: string;
   readonly outcome?: string;
   readonly rationale?: string;
+  /**
+   * What the expert worked from, when the example carries it, and what the unit can be used for (./case.ts). A
+   * unit recorded before cases had classes has neither, and is read as the finished work alone.
+   */
+  readonly material?: readonly CaseMaterial[];
+  readonly caseClass?: CaseClass;
   readonly provenance: UnitProvenance;
 }
 

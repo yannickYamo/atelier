@@ -35,7 +35,7 @@ export async function mine(): Promise<void> {
   const proposals: ProposalEvent[] = store.readEvents(L).filter((e) => e.kind === 'PROPOSED_CHANGE')
     .map((e) => ({ proposal: String(e.proposal), at: String(e.at), accepted: (e.accepted ?? null) as boolean | null,
       ...(Array.isArray(e.feedbackIds) ? { feedbackIds: e.feedbackIds as string[] } : {}) }));
-  let items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listInvocations(L), requirements: v.requirements,
+  let items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listLearningInvocations(L), requirements: v.requirements,
     standardVersionHash: v.standardVersionHash, proposals });
   if (argv.includes('--phrase')) {
     // One budget for the whole command, however many gaps.
