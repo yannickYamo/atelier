@@ -504,6 +504,19 @@ Defects found by an outside review of the build, each with what it broke.
 
 ### Studies
 
+- **A skill from one method and one finished example, on a real model, once** (exploratory, by the builder; $1.60;
+  no sealed result). One house method for a kind of analysis, written as a template of 16 steps, and one finished
+  example of it; two new subjects, each with a page of material written for another purpose. Of the 16 steps, 2
+  could be checked on the output (the example held them), 11 were judgement, and 3 template tables the finished
+  example does not hold were left as questions. Against the same method and example pasted into one plain call:
+  both met the 2 required things on both subjects, so **on what is enforced the two did not differ.** Beside
+  that: the skill's outputs were longer (2,765 and 3,209 words against 2,027 and 1,674), carried more of the
+  example's own section headings (5 and 4 of 17 against 2 and 0) and of the tables the example shows (1 and 2 of 5
+  against none), and the qualified claim reader cut 7 and 13 invented specifics from them; the pasted outputs were
+  read by the pattern check only, which found none. What it does not show: that either is better work. Nobody
+  read them, two subjects is two, and a method whose steps are mostly judgement gives the checks little to hold.
+  It found one defect, fixed: the build's closing line counted what the example shows as if it were required.
+
 - **The user path on a real model, once** (acceptance by the builder with the owner's key; $4.79 recorded, and two
   discovery attempts that failed before any cost was recorded; no sealed result). A skill that answers, from twelve examples: discovery $0.55, one answer
   $0.18, conformant, the cost block adding up, and a rebuild with and without a key identical with no call made. A

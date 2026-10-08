@@ -107,7 +107,10 @@ export async function method(): Promise<void> {
   if (!argv.includes('--persona')) argv.push('--persona', 'none');
   ratifyClose();
   await build(name);
-  const n = (k: Requirement['obligation']): number => decided.filter((r) => r.obligation === k && r.measurement).length;
-  console.log(`\nHeld to your method on every run: ${n('DELIVERABLE')} thing(s) the work must contain, ${n('EXECUTION')} it must be made from; ${decided.filter((r) => !r.measurement).length} judgement step(s) shown and reported as not measured.`);
+  // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
+  // so that the count of what is enforced is never larger than it is.
+  const n = (k: Requirement['obligation']): number => decided.filter((r) => r.obligation === k && r.measurement && r.materiality === 'REQUIRED').length;
+  const shown = decided.filter((r) => r.measurement && r.materiality !== 'REQUIRED').length;
+  console.log(`\nHeld to your method on every run: ${n('DELIVERABLE')} thing(s) the work must contain, ${n('EXECUTION')} it must be made from; ${decided.filter((r) => !r.measurement).length} judgement step(s) shown and reported as not measured.${shown ? ` ${shown} more thing(s) your example shows are checked and reported, and required only if you say so.` : ''}`);
   console.log(`Use it:  atelier invoke --skill ${name} "<the task>" --with <name>=<material file>`);
 }
