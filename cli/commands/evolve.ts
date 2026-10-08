@@ -96,16 +96,26 @@ export async function evolve(): Promise<void> {
   // as it was, when what it points at now is one of this search's own runs.
   const pointers = ['last-invocation.json', 'last-invocation.txt'].map((f) => runFile(f)).map((f) => ({ f, was: existsSync(f) ? readFileSync(f, 'utf8') : null }));
   const tmp = mkdtempSync(join(tmpdir(), 'atelier-evolve-'));
-  const mine = new Set<string>();
+  const mine = new Set<string>(); const began = new Date().toISOString();
   const tidy = (): void => {
     rmSync(tmp, { recursive: true, force: true });
     let ours = false;
-    try { ours = mine.has(readJson<{ invocationId?: string }>(pointers[0].f, { what: 'the last run' }).invocationId ?? ''); } catch { /* gone or unreadable: not this search's to put back */ }
+    try {
+      // This search's own: a run it read the id of, or one made since it began on one of its briefs (a run that was
+      // ended before it could say its id has still moved the pointer).
+      const at = readJson<{ invocationId?: string; input?: string; at?: string }>(pointers[0].f, { what: 'the last run' });
+      ours = mine.has(at.invocationId ?? '') || ((at.at ?? '') >= began && briefs.some((b) => (at.input ?? '').startsWith(b.task)));
+    } catch { /* gone or unreadable: not this search's to put back */ }
     if (ours) for (const p of pointers) { if (p.was === null) rmSync(p.f, { force: true }); else writeAtomic(p.f, p.was); }
   };
   // A SIGNAL STOPS THE SEARCH: the run in flight is ended, what the search moved is put back, and nothing is adopted.
   let running: ChildProcess | null = null;
-  const interrupted = (): void => { running?.kill('SIGTERM'); tidy(); process.exit(130); };
+  const interrupted = (): void => {
+    const leave = (): void => { tidy(); process.exit(130); };
+    // The run in flight is ended first and waited for: one still writing would move the pointer after it was put back.
+    const inFlight: ChildProcess | null = running;
+    if (inFlight?.exitCode === null) { inFlight.once('exit', leave); inFlight.kill('SIGTERM'); } else leave();
+  };
   process.once('SIGINT', interrupted); process.once('SIGTERM', interrupted);
   let spent = 0; const state: { stopped: string | null } = { stopped: null };
   const tracked = new Set(scoredOn.map((r) => r.requirementId));
