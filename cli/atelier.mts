@@ -168,7 +168,7 @@ const main = async (): Promise<void> => {
     case 'rate': { rate(); return; }
     case 'eval': { evaluate(); return; }
     case 'qualify': { qualify(); return; }
-    case 'reproduce': { reproduce(); return; }
+    case 'reproduce': { await reproduce(); return; }
     case 'voice': { await voice(); return; }
     case 'setup': { setup(); return; }
     case 'rollback': { rollback(); return; }

@@ -22,6 +22,9 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   cases is beside every count. Required rules no code can check are counted apart and are in none of it.
 - **It counts how many times the held-back cases have been run on a skill**, and says so from the second time: a
   piece held back is unseen once.
+- **`--bare` runs the same cases on the model without the skill**, given the task and the material alone and read
+  with `atelier verify` against the same standard. It is what the skill's count is read against: a skill that
+  reproduces no more cases than the model alone has added nothing these cases can show. Its record is kept apart.
 - `--dry-run` shows what each case would be given and calls nothing. `--cap <usd>` holds the total (5 by default).
   The record is kept with the skill and shown by `atelier report --skill <name>`. A reproduction does not become
   "the last run" that `atelier fix` and `atelier report` point at.

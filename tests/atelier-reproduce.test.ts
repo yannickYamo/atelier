@@ -125,6 +125,28 @@ describe('through the binary: one full case held back, run on its task and mater
     expect(r.out).toMatch(/REPRODUCTION ON WORK THE SKILL NEVER SAW · analysis · 1 case/);
     expect((JSON.parse(atelier('report', '--skill', 'analysis', '--json').out) as { reproduction?: { schema: number } }).reproduction?.schema).toBe(1);
   });
+  it('--bare runs the same case on the model without the skill, read with verify, and keeps its record apart', async () => {
+    const before = (await served()).length;
+    const r = atelier('reproduce', '--skill', 'analysis', '--bare');
+    expect(r.code, `${r.err}${r.out}`).toBe(0);
+    expect(r.out).toMatch(/THE SAME HELD-BACK CASES, THE MODEL WITHOUT THE SKILL · read against analysis · 1 case\n {2}1 of 1 {3}reproduced: no required counted rule broken and nothing flagged as unsourced, by atelier verify/);
+    const bodies = (await served()).slice(before);
+    // one plain call: the task and the material, and nothing of the skill or of the held-back piece
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatch(/Compare (acme|borealis) with its nearest rival/);
+    expect(bodies[0]).toMatch(/lists twelve dollars a seat/);
+    expect(bodies[0]).not.toMatch(/wins only once the seat minimum|Lead with the verdict/);
+    expect(existsSync(join(data, 'skills', 'analysis', 'reproduction-bare.json'))).toBe(true);
+    // the skill's own record is untouched by it
+    expect((JSON.parse(readFileSync(join(data, 'skills', 'analysis', 'reproduction.json'), 'utf8')) as ReproductionRecord).arm).toBeUndefined();
+    await scripted(BREAKS);
+    try {
+      const broke = JSON.parse(atelier('reproduce', '--skill', 'analysis', '--bare', '--json').out) as ReproductionRecord;
+      expect(broke).toMatchObject({ arm: 'bare' });
+      expect(broke.cases[0]).toMatchObject({ state: 'ran', conformant: false });
+    } finally { await scripted(CLEAN); }
+  }, 120_000);
+
   it('under strict delivery a refusal is a case that was run and not reproduced, never one left out of the count', async () => {
     await scripted(BREAKS);
     try {

@@ -37,6 +37,8 @@ export interface CaseOutcome {
 
 export interface ReproductionRecord {
   readonly schema: 1;
+  /** `bare`: the same cases written by the model without the skill, and read with `atelier verify`. Absent for the skill's own run */
+  readonly arm?: 'bare';
   readonly skill: string; readonly skillVersion: string; readonly standardVersion: string; readonly at: string;
   /** what was held back, by what it carries: only the first kind can be run */
   readonly heldBack: { readonly full: number; readonly taskOnly: number; readonly referenceOnly: number };
@@ -91,8 +93,8 @@ export function renderReproduction(r: ReproductionRecord): string {
     for (const x of not) out.push(`  not run: ${x.id}: ${x.why ?? 'no reason recorded'}`);
     return out.join('\n');
   }
-  out.push(`REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
-  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: the run's own verdict was "conformant"${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
+  out.push(r.arm === 'bare' ? `THE SAME HELD-BACK CASES, THE MODEL WITHOUT THE SKILL · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
+  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : 'the run\'s own verdict was "conformant"'}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
     : `  ${c.factSafe} of ${c.ran}   with no unsupported specific, read by a qualified reader`);

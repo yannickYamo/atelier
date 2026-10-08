@@ -22,7 +22,9 @@ import { countWords } from '../../core/eval/size.js';
 import { goldenCase, servedFor, whyNotRunnable, repeatsReference, CARRIED_RUN, countClasses } from '../../core/golden/case.js';
 import { renderReproduction, countsOf, type CaseOutcome, type ReproductionRecord } from '../../core/eval/reproduce.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
-import { DATA, argv, die, flag, loadSession, numericFlag, skillArg, runFile } from '../runtime.js';
+import { DATA, argv, die, flag, loadSession, numericFlag, skillArg, runFile, clientAndBinding } from '../runtime.js';
+import { spendOneWithResult } from './improve.js';
+import type { Budget } from '../../core/inference/client.js';
 
 /** What a run is told about its backend and its limits, handed on to each case's run as it was given here. */
 const HANDED_ON = ['--provider', '--base-url', '--model', '--target-model', '--target-provider', '--target-base-url', '--price-in', '--price-out', '--claims', '--max-tokens'] as const;
@@ -34,7 +36,10 @@ export const reproductionFile = (L: store.StoreLayout): string => join(L.root, '
 
 interface InvokeJson { output?: string | null; delivered?: boolean; costUsd?: number; eval?: EvalSummary | null }
 
-export function reproduce(): void {
+/** A text checked by `atelier verify`, as that command prints it with --json. */
+interface VerifyJson { failed?: boolean; checked?: { requirementId: string; materiality: string; result: { verdict: string } }[] }
+
+export async function reproduce(): Promise<void> {
   const name = skillArg('--skill <name> required: atelier reproduce --skill <name>');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
@@ -56,6 +61,13 @@ export function reproduce(): void {
   const notCheckable = required.filter((r) => !r.measurement).length;
   const cases = reserved.filter((u) => u.caseClass === 'FULL_REPRO_CASE').map((u) => goldenCase(u.unitId, u.artifact, u.task, u.material ?? []));
   const json = argv.includes('--json'); const dry = argv.includes('--dry-run');
+  // THE SAME CASES, THE MODEL WITHOUT THE SKILL (`--bare`). Given the task and the material and nothing else, then
+  // read with `atelier verify` against the same standard. It is what a reproduction count is read against: a skill
+  // that reproduces no more cases than the model alone has added nothing that these cases can show.
+  const bare = argv.includes('--bare');
+  const bareClient = bare && !dry ? clientAndBinding('target').client : null;
+  // One call a case: bounded by count as well as by dollars, so a backend that reports no cost is still bound.
+  const bareBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 5), maxCalls: Math.max(1, cases.length) };
   const cap = numericFlag('--cap', 5);
   const say = (line: string): void => { if (!json) console.log(line); };
   const blank = (id: string, reference: string): Pick<CaseOutcome, 'id' | 'reference' | 'words' | 'costUsd'> => {
@@ -95,6 +107,29 @@ export function reproduce(): void {
         writeAtomic(file, m.text);
         return [`--with=material-${k + 1}=${file}`];
       });
+      if (bareClient) {
+        let text: string;
+        try {
+          text = (await spendOneWithResult(bareClient, bareBudget, '', `${served.task}\n\n${served.material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`)).piece;
+        } catch (e) { outcomes.push(notRun(c.id, c.reference, `the run ended with no result: ${(e as Error).message.split('\n')[0]}`)); say(`not run         ${c.id}`); continue; }
+        spent = bareBudget.spentUsd;
+        const file = join(tmp ?? tmpdir(), 'bare-output.md'); writeAtomic(file, text);
+        let vout = '';
+        try { vout = execFileSync(process.execPath, [...process.execArgv, process.argv[1], 'verify', '--skill', name, file, ...withArgs, '--json', ...handedOn().filter((f) => f !== '--strict')], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }); }
+        catch (e) { vout = (e as { stdout?: string }).stdout ?? ''; }
+        let v: VerifyJson | null = null;
+        try { v = JSON.parse(vout.slice(vout.indexOf('{'))) as VerifyJson; } catch { /* verify printed no result */ }
+        if (!v?.checked) { outcomes.push(notRun(c.id, c.reference, 'its output could not be checked')); say(`not run         ${c.id}`); continue; }
+        const req = v.checked.filter((x) => x.materiality === 'REQUIRED' && x.result.verdict !== 'NOT_APPLICABLE' && x.requirementId !== 'UNSOURCED');
+        const unsourced = v.checked.some((x) => x.requirementId === 'UNSOURCED' && x.result.verdict === 'VIOLATED');
+        const shared = repeatsReference(text, c);
+        const ok = v.failed !== true && shared < CARRIED_RUN;
+        outcomes.push({ ...blank(c.id, c.reference), state: 'ran', conformant: ok, required: { held: req.filter((x) => x.result.verdict === 'MET').length, applicable: req.length },
+          claims: { qualified: false, instrument: 'atelier verify', unsupported: unsourced ? 1 : 0 }, sharedWithReference: shared,
+          words: { output: countWords(text), reference: countWords(c.reference) }, costUsd: 0 });
+        say(`${ok ? 'reproduced    ' : 'not reproduced'}  ${c.id}`);
+        continue;
+      }
       let out = ''; let err = '';
       try {
         // The task goes by flag and `=`, so one that begins with a dash is still the task.
@@ -133,16 +168,16 @@ export function reproduce(): void {
     for (const p of pointers) { if (p.was === null) rmSync(p.f, { force: true }); else writeAtomic(p.f, p.was); }
   }
 
-  const file = reproductionFile(L);
+  const file = bare ? reproductionFile(L).replace(/\.json$/, '-bare.json') : reproductionFile(L);
   const before = existsSync(file) ? readJson<ReproductionRecord>(file, { what: 'the reproduction record' }) : null;
   const anyRan = outcomes.some((o) => o.state === 'ran');
   // Counted per skill, across its versions: the same held-back pieces run again after a change is the thing to know.
   const timesRun = (before?.timesRun ?? (before ? 1 : 0)) + (anyRan ? 1 : 0);
-  const record: ReproductionRecord = { schema: 1, skill: name, skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(), heldBack, cases: outcomes, notCheckable, timesRun, costUsd: Math.round(spent * 1e6) / 1e6 };
+  const record: ReproductionRecord = { schema: 1, skill: name, ...(bare ? { arm: 'bare' as const } : {}), skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(), heldBack, cases: outcomes, notCheckable, timesRun, costUsd: Math.round(spent * 1e6) / 1e6 };
   // A run in which no case came back does not replace a record of one in which they did.
   if (anyRan) writeAtomic(file, `${JSON.stringify(record, null, 1)}\n`);
   if (json) { console.log(JSON.stringify({ ...record, counts: countsOf(record) }, null, 1)); return; }
   console.log(`\n${renderReproduction(record)}`);
-  if (anyRan) console.log(`\n$${spent.toFixed(2)} · kept with the skill: atelier report --skill ${name}`);
+  if (anyRan) console.log(bare ? `\n$${spent.toFixed(2)} · the model without the skill, on the same cases. Read the skill's own count beside it: atelier report --skill ${name}` : `\n$${spent.toFixed(2)} · kept with the skill: atelier report --skill ${name}`);
   else if (before && cases.length) console.log(`\nNothing was run this time, so the record of ${before.at.slice(0, 10)} is kept as it was.`);
 }
