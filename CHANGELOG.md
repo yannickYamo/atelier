@@ -7,6 +7,28 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: `atelier reproduce`, whether a skill reproduces work it never saw
+
+- **`atelier reproduce --skill <name>`** runs each piece that was held back with its task and its material: the
+  skill is given the task and the material and never the piece, writes through the same checked path as any run,
+  and the output is read by that run's own verdict.
+- **A case is checked before it is run and its output after.** A case whose task repeats the finished work's own
+  wording, or whose material holds the finished work, is not run and is said. An output that carries wording of the
+  held-back piece that its material does not hold is not a reproduction, whatever else it met.
+- **What it reports is a count of cases.** A case is reproduced when the run's verdict was "conformant"; a refusal
+  under strict delivery is a case that was run and not reproduced. Under the count: unsupported specifics (read
+  only when a qualified reader read every case, and "not read" otherwise), required rules met, and your own
+  held-back work on the counted rules that apply to every piece. There is no total and no label, and the number of
+  cases is beside every count. Required rules no code can check are counted apart and are in none of it.
+- **It counts how many times the held-back cases have been run on a skill**, and says so from the second time: a
+  piece held back is unseen once.
+- `--dry-run` shows what each case would be given and calls nothing. `--cap <usd>` holds the total (5 by default).
+  The record is kept with the skill and shown by `atelier report --skill <name>`. A reproduction does not become
+  "the last run" that `atelier fix` and `atelier report` point at.
+- Run it from the project the skill was built in: the held-back pieces are kept with that run.
+- Known limits: a reproduction run is recorded like any run marked as a test, so `tend`, `fidelity` and `eval` still
+  count it; and `atelier_skill_report` (MCP) does not carry the record yet.
+
 ### Added, for 2.0: an example may carry its task and what it was made from
 
 The first step toward a skill built from a method and examples of good output. Nothing changes for a folder of

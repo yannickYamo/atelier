@@ -150,6 +150,39 @@ export function leakedRun(served: string, reference: string, material: readonly 
   return longest;
 }
 
+/** A run of this many words shared by a case's material and its reference: the material holds the finished work. */
+export const HOLDS_THE_WORK = 50;
+
+/**
+ * WHETHER A CASE MAY BE RUN, decided before any call. Three ways it may not:
+ *   it has no task;
+ *   its task repeats the finished work's own wording (LEAK_RUN words in a row that its material does not hold);
+ *   its material holds the finished work itself, or a long stretch of it. The audit above leaves the material's own
+ *     wording alone, as it must; with the report filed in its own material folder that exemption covered everything,
+ *     and a copy of the report came back as a reproduction. An expert quotes a source; a source does not hold
+ *     HOLDS_THE_WORK words in a row of what was written from it.
+ * Returns null when the case may be run, or the reason, in words a person can act on.
+ */
+export function whyNotRunnable(c: Pick<GoldenCase, 'task' | 'material' | 'reference'>): string | null {
+  const served = servedFor(c);
+  if (!served) return 'it carries no task';
+  const texts = served.material.map((m) => m.text);
+  const held = served.material.map((m) => ({ name: m.name, run: leakedRun(m.text, c.reference) })).sort((a, b) => b.run - a.run)[0];
+  if (held && held.run >= HOLDS_THE_WORK) return `its material (${held.name}) holds ${held.run} words in a row of the finished work, so the skill would be handed the answer. Material is what the work was made from, never the work`;
+  const leak = leakedRun(served.task, c.reference, texts);
+  if (leak >= LEAK_RUN) return `its task repeats ${leak} words in a row of the finished work, so running it would give the skill part of the answer. Word the task as it was asked, before the work existed`;
+  return null;
+}
+
+/**
+ * THE LAST CHECK, AFTER A RUN: the longest run of words an output shares with the held-back reference that its
+ * material does not hold. Nothing served should have carried them, so a long one means something did, by a path
+ * the audit before the run does not read. The case is then not a reproduction, whatever else it met.
+ */
+export const repeatsReference = (output: string, c: Pick<GoldenCase, 'material' | 'reference'>): number => leakedRun(output, c.reference, c.material.map((m) => m.text));
+/** An output may share this many words in a row with the reference by chance of subject; more is carried wording. */
+export const CARRIED_RUN = 12;
+
 /** How many cases of each class, in the order that matters to a person: what can be tested first. */
 export function countClasses(cases: readonly { readonly caseClass?: CaseClass }[]): Record<CaseClass, number> {
   const n = (c: CaseClass): number => cases.filter((x) => (x.caseClass ?? 'REFERENCE_ONLY') === c).length;

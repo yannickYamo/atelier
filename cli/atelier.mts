@@ -33,6 +33,7 @@ import { fidelity } from './commands/fidelity.js';
 import { report as reportRun, rate } from './commands/report.js';
 import { evaluate } from './commands/eval.js';
 import { qualify } from './commands/qualify.js';
+import { reproduce } from './commands/reproduce.js';
 import { voice } from './commands/voice.js';
 import { setup } from './commands/setup.js';
 import { create, improve } from './commands/improve.js';
@@ -109,6 +110,7 @@ export const COMMANDS: readonly string[] = [
   'rate',
   'eval',
   'qualify',
+  'reproduce',
   'voice',
   'setup',
   'tells',
@@ -166,6 +168,7 @@ const main = async (): Promise<void> => {
     case 'rate': { rate(); return; }
     case 'eval': { evaluate(); return; }
     case 'qualify': { qualify(); return; }
+    case 'reproduce': { reproduce(); return; }
     case 'voice': { await voice(); return; }
     case 'setup': { setup(); return; }
     case 'rollback': { rollback(); return; }
