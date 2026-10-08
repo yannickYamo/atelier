@@ -68,12 +68,37 @@ describe('a table with the columns the method names', () => {
     expect(lacking).toMatchObject({ verdict: 'VIOLATED', detail: 'the table lacks the column(s) "minimum"' });
     expect(measure(BLAND, m)).toMatchObject({ verdict: 'VIOLATED', detail: 'no table; one with the column(s) "vendor", "price per seat", "minimum" is required' });
     expect(TABLE.validate({})).toBe('needs columns=<name>|<name>');
+    // a column is met by a header cell that holds every word of its name, never by letters inside another word
+    const t = '| Provider | Price per seat |\n|---|---|\n| Acme | 12 |';
+    expect(measure(t, { observer: 'TABLE', params: { columns: ['price'], minRows: 1 } }).verdict).toBe('MET');
+    expect(measure(t, { observer: 'TABLE', params: { columns: ['id', 'price'], minRows: 1 } })).toMatchObject({ verdict: 'VIOLATED', detail: 'the table lacks the column(s) "id"' });
+    // a line with a bar above a rule is not a table
+    expect(tablesOf('Either a | b works.\n---\nNext.')).toEqual([]);
   });
 });
 
 describe('every figure is one the writer was given', () => {
   it('a figure is a number with a unit or of two digits or more; a list marker and a lone digit are not', () => {
     expect(figuresOf('1. We saw 3 options, at $12,400 and 15%, over 50 seats.').map((f) => f.raw)).toEqual(['$12,400', '15%', '50']);
+  });
+  it('a year, a date, a time, a page or standard number, a footnote mark and a numbered heading are not figures', () => {
+    const honest = 'In 2026, on the 21st at 10:30, see page 14 and ISO 27001 [12]. Reported in Q3 2024.\n\n## 12. Appendix\n\nNothing else.';
+    expect(figuresOf(honest)).toEqual([]);
+  });
+  it('the same quantity however it is written, and never a percentage for a count', () => {
+    const m = { observer: 'CITED' as const, params: { allow: 0 } };
+    const given = (text: string) => ({ material: [{ name: 'm.md', text }] });
+    expect(measure('Revenue was 12.4k and costs $5m.', m, given('Revenue was 12,400 and costs were $5,000,000.')).verdict).toBe('MET');
+    expect(measure('Growth was 12.0%.', m, given('Growth was 12 percent.')).verdict).toBe('MET');
+    expect(measure('It lost 12 deals.', m, given('It lost twelve deals.')).verdict).toBe('MET');
+    expect(measure('Churn was 15%.', m, given('It has 15 employees.')).verdict).toBe('VIOLATED');
+    expect(measure('It has 15 customers.', m, given('It raised $15m.')).verdict).toBe('VIOLATED');
+  });
+  it('a figure that follows from two given figures by one step of arithmetic is the writer reading the material', () => {
+    const m = { observer: 'CITED' as const, params: { allow: 0 } };
+    const given = { material: [{ name: 'm.md', text: 'It won 10 of 20 deals, and lost 30 others.' }] };
+    expect(measure('It won 50% of them, 40 deals lost or won beyond the 10.', m, given).verdict).toBe('MET');
+    expect(measure('It won 73% of them.', m, given).verdict).toBe('VIOLATED');
   });
   it('met when each is in the request or the material; names the ones that are not', () => {
     const m = { observer: 'CITED' as const, params: { allow: 0 } };
@@ -94,6 +119,10 @@ describe('the steps of a method note', () => {
     expect(stepsOf(NOTE).map((s) => s.text)).toEqual([
       'Open with a Verdict section that says who wins, and for whom.', 'Include a table with the columns Vendor, Price per seat and Minimum.',
       'Every figure must be sourced from the material you were given.', 'Weigh switching cost before recommending anything.', 'End with a Risks section.']);
+  });
+  it('a comment is no step; "Sources of error" is not a list of inputs; a sentence beside a list is a step only when it says must or never', () => {
+    const note = '<!-- QUICK_MODE\nfocus: tables\n-->\n\n## Purpose\n\nThis describes the landscape for the reader. Never rank a vendor before stating the market.\n\n## Sources of error\n\n- Check each price against the list.\n';
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Check each price against the list.', 'Never rank a vendor before stating the market.']);
   });
   it('a note with no list is read by its sentences', () => {
     expect(stepsOf('Lead with the verdict. Then show the comparison in a table. Never recommend without the price.').map((s) => s.text)).toHaveLength(3);
@@ -135,6 +164,31 @@ describe('a method and one example become requirements of three kinds', () => {
     expect(p?.demoted).toMatch(/^your example does not hold it as a check would read it \(the table lacks the column\(s\) "contract length", "exit fee"\)$/);
     expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/Yours to settle: your method says it, and your example does not hold it \(1\)/);
   });
+  it('a step that only mentions a section in passing is a judgement, never a check on the work\'s shape', () => {
+    const ps2 = methodProposals('1. Move to the Next section only after the Verdict is settled.\n2. Never give a Verdict before the comparison is read.\n', { task: TASK, material: context.material, reference: EXAMPLE });
+    expect(ps2.filter((p) => p.origin === 'STATED').map((p) => [p.obligation, p.measurement])).toEqual([['JUDGEMENT', null], ['JUDGEMENT', null]]);
+  });
+  it('the template\'s section order is the owner\'s: where the example orders them otherwise it is asked, never taken from the example', () => {
+    const template = '## Risks\n\nWhat could go wrong.\n\n## Verdict\n\nWho wins.\n\n- Weigh switching cost.\n';
+    const p = methodProposals(template, { task: TASK, material: context.material, reference: EXAMPLE }).find((x) => x.statement.includes('these sections') && x.origin === 'STATED');
+    expect(p?.statement).toBe('The work has these sections, in this order: Risks, Verdict.');
+    expect(p).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
+    expect(p?.demoted).toMatch(/sections out of order/);
+    // in the example's order it is held, and stated sections are not proposed again from the example
+    const agree = methodProposals('## Verdict\n\nWho wins.\n\n## Risks\n\nWhat could go wrong.\n\n- Weigh switching cost.\n', { task: TASK, material: context.material, reference: EXAMPLE });
+    expect(agree.find((x) => x.origin === 'STATED' && x.statement.includes('these sections'))).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Verdict', 'Risks'] } } });
+    expect(agree.filter((x) => x.origin === 'SHOWN_BY_EXAMPLE' && x.statement.includes('these sections'))).toEqual([]);
+  });
+  it('one step that names a section does not stop the other sections being required', () => {
+    const two = methodProposals('1. Open with a Verdict section.\n2. End with a Risks section.\n', { task: TASK, material: context.material, reference: EXAMPLE });
+    expect(two.filter((p) => p.obligation === 'DELIVERABLE' && p.origin === 'STATED').map((p) => p.measurement?.params.sections)).toEqual([['Verdict'], ['Risks']]);
+  });
+  it('a table the example has whose columns are this case\'s own names is not proposed as a rule for the next case', () => {
+    const named = `${EXAMPLE}\n| Dimension | Acme | Borealis |\n|---|---|---|\n| Price | lower | higher |\n`;
+    const shown = methodProposals('1. Weigh switching cost.\n', { task: TASK, material: context.material, reference: named }).filter((p) => p.origin === 'SHOWN_BY_EXAMPLE').map((p) => p.statement);
+    expect(shown.some((x) => x.includes('acme'))).toBe(false);
+    expect(shown).toContain('The work includes a table with the columns vendor, price per seat, minimum.');
+  });
   it('what the example shows and no step said is proposed, never assumed', () => {
     const silent = methodProposals('1. Weigh switching cost before recommending anything.\n', { task: TASK, material: context.material, reference: EXAMPLE });
     expect(silent.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE').map((p) => p.statement)).toEqual([
@@ -171,6 +225,9 @@ describe('a run says what of the method was held, by kind, and a missing section
   });
   it('the sentence repair leaves a method requirement alone', () => {
     expect(planRepair(BLAND, verifyText('s', v, BLAND, context))).toEqual([]);
+    // a figure the material does not hold is the other kind: its sentence is rewritten without it
+    const invented = `${EXAMPLE}\nAcme has 4,200 paying customers today.`;
+    expect(planRepair(invented, verifyText('s', v, invented, context)).map((t) => t.reasons.join(' '))).toEqual([expect.stringMatching(/^x3: Every figure is sourced\. \(the figure 4,200 is in neither the request nor the material\)/)]);
     expect(methodReading([aRequirement({ requirementId: 'c1' })], verifyText('s', v, EXAMPLE))).toBeNull();
   });
 });
@@ -211,7 +268,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('shows the owner their steps by kind, and builds nothing until they say yes; it calls no model', async () => {
     const before = await count();
-    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis');
+    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', ...BACKEND());
     expect(r.code, r.err).toBe(0);
     expect(r.out).toMatch(/^Method: method\.md {2}· {2}example: acme\.md with 1 file\(s\) of material$/m);
     expect(r.out).toMatch(/5 step\(s\) from your method\./);
@@ -225,7 +282,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('--yes builds the skill from exactly that, with the example as its one worked example, and still calls no model', async () => {
     const before = await count();
-    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes');
+    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes', ...BACKEND());
     expect(r.code, `${r.err}${r.out}`).toBe(0);
     expect(r.out).toMatch(/Held to your method on every run: 3 thing\(s\) the work must contain, 1 it must be made from; 1 judgement step\(s\) shown and reported as not measured\./);
     expect(await count()).toBe(before);
@@ -263,13 +320,19 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(j.eval.result.conformant).toBe(true);
   }, 120_000);
 
-  it('a figure the material does not hold is not delivered as sourced', async () => {
+  it('a figure the material does not hold is never delivered as sourced: with the claim check off, the method\'s own check decides', async () => {
     await script(`${NEW_PIECE}\nCygnus has 4,200 paying customers today.`);
-    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
+    const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--allow-unsourced', '--json', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
-    // either the claim check cut the sentence, or the run is not conformant and says the figure is not from the material
-    const delivered = j.output.includes('4,200');
-    expect(delivered ? j.eval.result.conformant : true).toBe(delivered ? false : true);
-    if (delivered) expect(j.report.join('\n')).toMatch(/made from what was given 0 of 1/);
+    expect(j.output).toContain('4,200');
+    expect(j.eval.result.conformant).toBe(false);
+    expect(j.report.join('\n')).toMatch(/made from what was given 0 of 1 \(not: x\d+\)/);
   }, 120_000);
+
+  it('a second method in the same folder is refused before anything is written: one project, one standard', () => {
+    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'again', '--yes', ...BACKEND());
+    expect(r.code).not.toBe(0);
+    expect(`${r.err}${r.out}`).toMatch(/this folder already holds a standard \(the skill "analysis"\): a method's steps would be added to its rules/);
+    expect(existsSync(join(data, 'skills', 'again'))).toBe(false);
+  });
 });

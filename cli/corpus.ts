@@ -4,9 +4,9 @@
 // and `atelier tells` compares a skill's drafts with them. Each used to read them its own way, with three
 // different rules for when the project's run was this skill's; one rule now.
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, extname, basename, resolve, dirname } from 'node:path';
-import { inMaterialDir, materialDirOf, staysInside, goldenCase, type GoldenCase } from '../core/golden/case.js';
+import { inMaterialDir, materialDirOf, staysInside, goldenCase, MATERIAL_TEXT, type GoldenCase } from '../core/golden/case.js';
 import { extract, looksLikeUnsplitPair, READABLE, META_NAME } from '../core/intake/extract.js';
 import { walk } from './commands/intake.js';
 import { die, loadSession } from './runtime.js';
@@ -40,17 +40,29 @@ export function readCorpusPairs(path: string, what = '--corpus'): { text: string
  * `<example>.material` beside it and from the files its front matter names (inside the example's own folder). The
  * same reading intake makes of each example in a folder, for a command that is given one file.
  */
-export function readCase(file: string): GoldenCase {
+export function readCase(file: string, say: (line: string) => void = () => undefined): GoldenCase {
   const read = extract(file);
   if (!read.ok) return die(`${basename(file)}: ${read.reason}`);
   const r = read;
-  const dir = dirname(file); const folder = join(dir, materialDirOf(basename(file)));
-  const inFolder = existsSync(folder) && statSync(folder).isDirectory() ? walk(folder).sort().map((f) => join(folder, f)) : [];
-  const named = (r.materialRefs ?? []).filter(staysInside).map((ref) => resolve(dir, ref)).filter((f) => f !== resolve(file) && existsSync(f));
+  const dir = dirname(file);
+  // The folder is found without regard to case, as intake finds it.
+  const wanted = materialDirOf(basename(file)).toLowerCase();
+  const folderName = readdirSync(dir).find((f) => f.toLowerCase() === wanted && statSync(join(dir, f)).isDirectory());
+  const inFolder = folderName ? walk(join(dir, folderName)).sort().map((f) => join(dir, folderName, f)) : [];
+  const refs = r.materialRefs ?? [];
+  const outside = refs.filter((ref) => !staysInside(ref));
+  if (outside.length) say(`Material named outside the example's folder, not read: ${outside.join(', ')}.`);
+  const named = refs.filter(staysInside).map((ref) => resolve(dir, ref)).filter((f) => f !== resolve(file));
+  const unread: string[] = [];
   const material = [...new Set([...inFolder, ...named])].flatMap((f) => {
-    const x = (READABLE as readonly string[]).includes(extname(f).toLowerCase()) ? extract(f) : { ok: true as const, text: readFileSync(f, 'utf8') };
-    return x.ok && x.text.trim() ? [{ name: f.startsWith(`${dir}/`) ? f.slice(dir.length + 1) : basename(f), text: x.text }] : [];
+    const ext = extname(f).toLowerCase(); const name = f.startsWith(`${dir}/`) ? f.slice(dir.length + 1) : basename(f);
+    // Only what can be read as text is material: a picture read as text is noise that would vouch for any figure.
+    const text = !existsSync(f) ? null : (READABLE as readonly string[]).includes(ext) ? (() => { const x = extract(f); return x.ok ? x.text : null; })()
+      : (MATERIAL_TEXT as readonly string[]).includes(ext) ? readFileSync(f, 'utf8') : null;
+    if (!text?.trim()) { unread.push(name); return []; }
+    return [{ name, text }];
   });
+  if (unread.length) say(`Material that could not be read, and is not counted: ${unread.join(', ')}.`);
   return goldenCase(basename(file), r.text, r.request ?? null, material);
 }
 

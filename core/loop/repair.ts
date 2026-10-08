@@ -90,8 +90,9 @@ export function planRepair(text: string, report: VerifyReport,
     // WHAT A METHOD REQUIRES IS NEVER REPAIRED BY REWRITING A SENTENCE. A missing section or table is not a sentence
     // that went wrong: rewritten into the last paragraph it becomes prose that mentions the section, which reads as
     // done and is not. It is answered by writing the piece again with what is missing named (cli/commands/invoke.ts,
-    // `withMethod`), and a figure the material does not hold is cut by the claim check, never reworded here.
-    if (c.obligation) continue;
+    // `withMethod`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
+    // which takes the figure out and claims nothing in its place.
+    if (c.obligation === 'DELIVERABLE') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
       // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not

@@ -43,7 +43,7 @@ export interface MethodStep {
  * tables are left out.
  */
 export function stepsOf(note: string): MethodStep[] {
-  const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '');
+  const body = (note.charCodeAt(0) === 0xFEFF ? note.slice(1) : note).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');
   const lines = body.split(/\r?\n/);
   const items: MethodStep[] = []; const prose: MethodStep[] = [];
   let under: string | null = null; let open: string[] | null = null; let para: string[] = [];
@@ -58,7 +58,7 @@ export function stepsOf(note: string): MethodStep[] {
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
     if (heading) { closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim(); continue; }
     // What the work needs before it starts is not a step of it: a list of inputs says what to bind, not what to do.
-    if (under !== null && /^(?:required\s+)?(?:inputs?|prerequisites?|materials?|sources?)\b/i.test(under)) continue;
+    if (under !== null && /^(?:required\s+)?(?:inputs?|prerequisites?)$/i.test(under.trim())) continue;
     if (/^\s*\|/.test(line)) { closeItem(); closePara(); continue; }
     if (item) { closeItem(); closePara(); open = [item[1]]; continue; }
     if (!line.trim()) { closeItem(); closePara(); continue; }
@@ -66,7 +66,13 @@ export function stepsOf(note: string): MethodStep[] {
   }
   closeItem(); closePara();
   const clean = (s: MethodStep): MethodStep => ({ ...s, text: s.text.replace(/\*\*|__|`/g, '').replace(/^\[[ x]\]\s*/i, '').trim() });
-  return (items.length ? items : prose).map(clean).filter((s) => s.text.length >= 8);
+  // WHERE A NOTE HAS A LIST, ITS PROSE IS MOSTLY EXPLANATION, and a sentence of it is a step only when it says so
+  // (must, never, always, do not, required). Taken whole, a template's description became a dozen judgement steps;
+  // dropped whole, an instruction written as a sentence under a heading was lost.
+  const RULE = /\b(?:must|never|always|do not|don't|required?|shall|only)\b/i;
+  const steps = items.length ? [...items, ...prose.filter((s) => RULE.test(s.text))] : prose;
+  const seen = new Set<string>();
+  return steps.map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
 }
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
@@ -108,10 +114,11 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   const columns = /\btable\b[^.]*?\bcolumns?\s+(?:of\s+|named\s+|called\s+|:\s*)?(.+?)\s*(?:[.;]|$)/i.exec(step)?.[1]
     ?.split(/\s*,\s*(?:and\s+)?|\s+and\s+/).map((c) => norm(c)).filter((c) => c.length >= 2 && c.split(' ').length <= 5) ?? [];
   if (columns.length >= 2) return { observer: 'TABLE', params: { columns, minRows: 1 } };
-  const section = /\b(?:an?|the)\s+((?:[A-Z][\w'-]*\s?){1,5})\s*section\b/.exec(step)?.[1]?.trim();
-  if (section && section.length >= 3) return { observer: 'PRESENCE', params: { sections: [section] } };
-  const named = outline.sections.filter((s) => norm(s).length >= 5 && said.includes(` ${norm(s)} `));
-  if (named.length) return { observer: 'PRESENCE', params: { sections: named } };
+  // A section the step says the work has, by a verb that says so: "open with a Verdict section", "end with the Risks
+  // section", "include a Sources section". A step that only mentions a section's name in passing ("move to the Next
+  // section", "never rank before the market definition") names no requirement on the work's shape, and is a judgement.
+  const sections = [...step.matchAll(/\b(?:open|start|begin|lead|end|close|finish|include|add|write|have|has|contain|contains|with|then)\w*\s+(?:with\s+)?(?:an?|the)\s+((?:[A-Z][\w'-]*\s?){1,5})\s*section\b/g)].map((m) => m[1].trim()).filter((x) => x.length >= 3);
+  if (sections.length) return { observer: 'PRESENCE', params: { sections } };
   if (/\btables?\b/i.test(step) && outline.tables.length) {
     const columnsSaid = (t: (typeof outline.tables)[number]): number => t.header.filter((h) => h.length >= 3 && said.includes(` ${norm(h)} `)).length;
     const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
@@ -129,7 +136,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   const outline = outlineOf(example.reference);
   const context: CheckContext = { ...(example.task ? { request: example.task } : {}), material: example.material };
   const read = (m: Measurement): { verdict: string; detail: string } => { const r = measure(example.reference, m, context); return { verdict: r.verdict, detail: r.detail }; };
-  const out: MethodProposal[] = []; const claimed = new Set<string>();
+  const out: MethodProposal[] = []; const claimed = new Set<string>(); const claimedSections = new Set<string>();
   for (const step of stepsOf(note)) {
     const m = checkNamedBy(step.text, outline);
     if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, demoted: null }); continue; }
@@ -140,17 +147,23 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
       continue;
     }
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
+    if (m.observer === 'PRESENCE') for (const sec of (m.params.sections as readonly string[])) claimedSections.add(norm(sec));
     out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the
   // work contains, as plainly as a sentence would. Each is held against the example like any stated step: sections
   // the example also has become one requirement, and a table whose columns the example's tables do not carry is kept
   // as a question, because the template and the finished work disagree and only the owner knows which is right.
+  // In the NOTE's order: the owner wrote the template in that order. Where the example holds the same sections in
+  // another order, the two disagree, and that is asked, not settled here.
   const noteSections = headingsOf(note).map((h) => sectionName(h.text.replace(/^(?:part|step|section)\s+\d+\s*[:.)-]\s*/i, ''))).filter((n) => n.length >= 5);
-  const shared = outline.sections.filter((sec) => noteSections.some((n) => norm(n) === norm(sec)));
-  if (shared.length >= 2 && !claimed.has('PRESENCE')) {
+  const shared = noteSections.filter((n, i) => noteSections.findIndex((x) => norm(x) === norm(n)) === i).filter((n) => outline.sections.some((sec) => norm(sec) === norm(n)) && !claimedSections.has(norm(n)));
+  if (shared.length >= 2) {
     const m: Measurement = { observer: 'PRESENCE', params: { sections: shared } };
-    if (read(m).verdict === 'MET') { claimed.add('PRESENCE'); out.push({ statement: `The work has these sections, in this order: ${shared.join(', ')}.`, origin: 'STATED', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, demoted: null }); }
+    const r = read(m); const statement = `The work has these sections, in this order: ${shared.join(', ')}.`;
+    for (const n of shared) claimedSections.add(norm(n));
+    if (r.verdict === 'MET') out.push({ statement, origin: 'STATED', obligation: 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null });
+    else out.push({ statement, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: r.detail, demoted: `your example does not hold it as a check would read it (${r.detail})` });
   }
   for (const t of tablesOf(note)) {
     // A template's cells are placeholders; its header is the statement.
@@ -162,14 +175,23 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     else out.push({ statement, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: r.detail, demoted: `your example does not hold it as a check would read it (${r.detail})` });
   }
   // WHAT THE EXAMPLE SHOWS AND NO STEP SAID. Proposed in plain words, each with the check it would carry.
-  if (outline.sections.length >= 2 && !claimed.has('PRESENCE')) {
-    const m: Measurement = { observer: 'PRESENCE', params: { sections: outline.sections } };
-    if (read(m).verdict === 'MET') out.push({ statement: `The work has these sections, in this order: ${outline.sections.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, demoted: null });
+  const unsaid = outline.sections.filter((sec) => !claimedSections.has(norm(sec)) && ![...claimedSections].some((c) => norm(sec).includes(c)));
+  if (unsaid.length >= 2) {
+    const m: Measurement = { observer: 'PRESENCE', params: { sections: unsaid } };
+    if (read(m).verdict === 'MET') out.push({ statement: `The work has these sections, in this order: ${unsaid.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, demoted: null });
   }
   for (const t of outline.tables) {
     const columns = t.header.filter(Boolean);
     const stated = [...claimed].filter((c) => c.startsWith('TABLE:')).map((c) => c.slice(6).split('|'));
     if (!columns.length || stated.some((cols) => cols.every((c) => columns.some((h) => h.includes(c))))) continue;
+    // A column named after something in this example's own task or material (a company, a product) belongs to this
+    // piece of work, not to the method: the next piece will have other names.
+    const given = ` ${norm([example.task ?? '', ...example.material.map((x) => x.text)].join(' '))} `;
+    // A name is a word the task and the material never write in lower case.
+    const givenRaw = [example.task ?? '', ...example.material.map((x) => x.text)].join(' ');
+    const lower = new Set(givenRaw.match(/\b[a-z][a-zA-Z]{3,}\b/g) ?? []);
+    const proper = new Set((givenRaw.match(/\b[A-Z][a-zA-Z]{3,}\b/g) ?? []).map((w) => w.toLowerCase()).filter((w) => !lower.has(w)));
+    if (columns.some((c) => norm(c).split(' ').some((w) => proper.has(w) && given.includes(` ${w} `)))) continue;
     const m: Measurement = { observer: 'TABLE', params: { columns, minRows: 1 } };
     out.push({ statement: `The work includes a table with the columns ${columns.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, demoted: null });
   }

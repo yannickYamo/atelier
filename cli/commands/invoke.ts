@@ -303,7 +303,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
-    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0)
+    // A skill built from a method may write once more with what is missing named, and check that draft like the first.
+    maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0) + (std?.requirements.some((r) => r.obligation === 'DELIVERABLE' && r.measurement) ? 6 : 0)
       + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)
       + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0)) };
   // FROM HERE ON, EVERYTHING SPENT IS THIS RUN'S. Taken where the budget is made, before the first call that can
@@ -915,7 +916,10 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
       const piece = (await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, note, {})).piece;
       const d2 = await refine(piece);
       const missing2 = missingIn(d2);
-      const better = missing2.length < missing.length && brokenIn(d2.report).length <= brokenIn(d.report).length;
+      // Fewer of the method's things left out, and no more of any OTHER required rule broken: counted apart, since a
+      // draft that adds a section and breaks another rule would otherwise read as no worse.
+      const others = (x: Delivered): number => brokenIn(x.report).filter((id) => !must.has(id)).length;
+      const better = missing2.length < missing.length && others(d2) <= others(d);
       c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${missing.join(', ')}); it now leaves out ${missing2.length}.`
         : `The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); one more draft did not do better, so the first is kept.`);
       if (better && !d2.repair) return { ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } };

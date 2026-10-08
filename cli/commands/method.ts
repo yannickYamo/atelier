@@ -53,7 +53,7 @@ export async function method(): Promise<void> {
   for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (!existsSync(p)) die(`${what}: there is nothing at ${p}.`);
   const note = readFileSync(notePath, 'utf8');
   if (!stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
-  const example = readCase(resolve(goldenPath));
+  const example = readCase(resolve(goldenPath), (line) => { console.log(line); });
   if (!example.reference.trim()) die(`${goldenPath} is empty.`);
   const proposals = methodProposals(note, example);
   console.log(`Method: ${basename(notePath)}  ·  example: ${basename(goldenPath)}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
@@ -69,7 +69,12 @@ export async function method(): Promise<void> {
   // ── ACCEPTED: THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   // A stated step is the owner's sentence, so it is authored by them and required. A step read off the example is
   // the machine's reading that they approved: ratified, and shown rather than required until they declare it.
+  // ONE PROJECT, ONE STANDARD. A folder that already holds rules (a run of `atelier new`, an earlier `atelier method`)
+  // would have these added to them, and the skill built would be held to both. Refused before anything is written.
   let s = loadSession();
+  if (s.decided.length || s.proposals.length || s.run.standardVersionHash) {
+    die(`this folder already holds a standard${s.skillName ? ` (the skill "${s.skillName}")` : ''}: a method's steps would be added to its rules, and the skill would be held to both. Build a method's skill from a folder of its own.`);
+  }
   const nextId = authoredIdAllocator(s);
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
