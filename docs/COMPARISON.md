@@ -37,6 +37,18 @@ change installs only when your measured rules improve and none regresses beyond 
 count reads are listed, not guarded. Atelier hasn't been benchmarked against these systems on a shared
 task yet. The difference is in the architecture, and you can check it in the code.
 
+**Against automated harness evolution** ([RRSI](https://github.com/google-research/rrsi), Google Research,
+September 2026): a search that rewrites an agent's whole harness (prompts, control flow, tools, skills, memory)
+around a frozen model, scored on a benchmark, with regularizers so that gains carry to tasks it was not scored on.
+It and Atelier distrust the same thing, a gain measured on the cases it was tuned on, and both hold cases back and
+check in code before asking a model. They differ in who owns the objective. RRSI's is a benchmark's automatic
+score, and no person approves anything in the loop; given a wrong objective it optimizes that. Atelier's is a
+standard a person approved, which no automated step may change, and its search (where it runs one) is over how
+that standard is carried. RRSI needs a scored task set of some size; Atelier starts from a handful of a person's
+own pieces, or one method and one example, and no scorer. RRSI is ahead where Atelier is thin: sample sizes,
+confidence intervals, a measured noise band before a change is believed, and an account of what each added step
+costs. The two are not benchmarked against each other, and are not solving the same problem.
+
 **Against voice tools that learn from your samples** (Every's Spiral, Writer's voice, Jasper IQ, Typeface,
 Lex, Claude Styles, Noren): learning a voice from samples is now common, and several check or score every
 draft. Noren cites examples from your writing for each pattern it finds; Spiral checks each draft with a

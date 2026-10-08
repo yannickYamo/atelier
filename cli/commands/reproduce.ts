@@ -106,10 +106,12 @@ export async function reproduce(): Promise<void> {
   const bareBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 5), maxCalls: Math.max(1, cases.length) };
   const cap = numericFlag('--cap', 5);
   const say = (line: string): void => { if (!json) console.log(line); };
+  const contextOf = new Map(cases.map((c) => [c.id, { ...(c.task ? { request: c.task } : {}), material: c.material }]));
   const blank = (id: string, reference: string): Pick<CaseOutcome, 'id' | 'reference' | 'words' | 'costUsd'> => {
+    // Read with what the expert had in front of them: a rule about the material is read against that case's own.
     // By rule, not only by count: which rules the expert's own piece breaks is what tells a standard that asks too
     // much from a skill that did not do the work.
-    const read = everyPiece.map((r) => ({ id: r.requirementId, verdict: r.measurement ? measure(reference, r.measurement).verdict : 'NOT_APPLICABLE' })).filter((x) => x.verdict !== 'NOT_APPLICABLE');
+    const read = everyPiece.map((r) => ({ id: r.requirementId, verdict: r.measurement ? measure(reference, r.measurement, contextOf.get(id)).verdict : 'NOT_APPLICABLE' })).filter((x) => x.verdict !== 'NOT_APPLICABLE');
     return { id, reference: { met: read.filter((x) => x.verdict === 'MET').length, applicable: read.length, broken: read.filter((x) => x.verdict === 'VIOLATED').map((x) => x.id) }, words: { output: null, reference: countWords(reference) }, costUsd: 0 };
   };
   const notRun = (id: string, reference: string, why: string): CaseOutcome => ({ ...blank(id, reference), state: 'not-run', why, conformant: null, required: null, claims: null });

@@ -5,6 +5,7 @@
 // checked here — whether its condition holds for a given text is a judgement, and applying it to every
 // text would be exactly the over-application this project has measured — so it is listed instead.
 
+import type { CheckContext } from './registry.js';
 import { measure, observerFor, type ObserverResult } from './registry.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
@@ -21,6 +22,8 @@ export interface RuleCheck {
   readonly pattern?: string;
   /** ACCURACY rules are repaired before STYLE ones; unset reads as STYLE */
   readonly phase?: 'ACCURACY' | 'STYLE';
+  /** for a requirement that comes from a method: what kind of thing it asks (core/method/standard.ts). It decides the repair */
+  readonly obligation?: 'DELIVERABLE' | 'EXECUTION' | 'JUDGEMENT';
   /** for the invented-claim line: which instrument found its spans, which decides whether they may be cut (run-repair.ts, cutBy) */
   readonly authority?: CutAuthority;
 }
@@ -37,12 +40,12 @@ export interface VerifyReport {
   readonly failed: boolean;
 }
 
-export function verifyText(skill: string, v: StandardVersion, text: string): VerifyReport {
+export function verifyText(skill: string, v: StandardVersion, text: string, context?: CheckContext): VerifyReport {
   const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL');
   const measured = live.filter((r): r is Requirement & { measurement: NonNullable<Requirement['measurement']> } => Boolean(r.measurement));
   const checked: RuleCheck[] = measured.filter((r) => isGeneralScope(r.appliesWhen))
-    .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, result: measure(text, r.measurement),
-      observer: r.measurement.observer, phase: r.phase ?? 'STYLE',
+    .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, result: measure(text, r.measurement, context),
+      observer: r.measurement.observer, phase: r.phase ?? 'STYLE', ...(r.obligation ? { obligation: r.obligation } : {}),
       ...(r.measurement.observer === 'PATTERN_RATE' && Array.isArray(r.measurement.params.pattern) ? { pattern: String(r.measurement.params.pattern[0]) } : {}) }));
   return {
     skill, standardVersionHash: v.standardVersionHash, checked,

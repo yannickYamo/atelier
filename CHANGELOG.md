@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: a skill from one method and one finished example
+
+A second way in, beside `atelier new` ([decision 0017](docs/decisions/0017-a-skill-from-one-method-and-one-example.md)).
+Nothing changes for a skill built from a body of work.
+
+- **`atelier method <note> --golden <example>`** reads what you say is done (steps, a template, both) and one piece
+  of work where it was done, and builds a skill held to the method. It calls no model, and `--yes` accepts exactly
+  what the screen showed.
+- **Each step is yours, in your words, and is one of three things.** Something the work must contain (these
+  sections, this table), read by code on every output. Something it must be made from (every figure is in the
+  material), read against what was bound. Or a judgement, shown to the writer and reported as not measured.
+- **A step gets a check only when your own example passes it.** A step your example does not hold is kept as yours
+  and asked about: your template and your finished work disagree, and only you know which is right.
+- **What your example shows and your method did not say is proposed, and shown, never required.**
+- **No taste is read from one piece.** How you sound is read from a body of work, with `atelier new`.
+- **Every run says what was held:** "Method: contains 3 of 3 thing(s) it must · made from what was given 1 of 1 · 1
+  judgement step(s) not measured."
+- **What a draft left out is written again with it named.** A missing section or table is never patched into a
+  sentence. An output that follows the easy rules and says nothing is not conformant: it lacks what the work must
+  contain.
+- Two new checks, usable by any standard: `TABLE` (a table with these columns) and `CITED` (every figure is in the
+  request or the material). A check may now read the request and the named material, not only the output.
+
 ### Fixed, for 2.0: a test run is never something a skill learns from
 
 - **A run marked as a test is a measurement, and nothing that learns reads it.** A held-back case run by `atelier
@@ -480,6 +503,19 @@ Defects found by an outside review of the build, each with what it broke.
   and says so.
 
 ### Studies
+
+- **A skill from one method and one finished example, on a real model, once** (exploratory, by the builder; $1.60;
+  no sealed result). One house method for a kind of analysis, written as a template of 16 steps, and one finished
+  example of it; two new subjects, each with a page of material written for another purpose. Of the 16 steps, 2
+  could be checked on the output (the example held them), 11 were judgement, and 3 template tables the finished
+  example does not hold were left as questions. Against the same method and example pasted into one plain call:
+  both met the 2 required things on both subjects, so **on what is enforced the two did not differ.** Beside
+  that: the skill's outputs were longer (2,765 and 3,209 words against 2,027 and 1,674), carried more of the
+  example's own section headings (5 and 4 of 17 against 2 and 0) and of the tables the example shows (1 and 2 of 5
+  against none), and the qualified claim reader cut 7 and 13 invented specifics from them; the pasted outputs were
+  read by the pattern check only, which found none. What it does not show: that either is better work. Nobody
+  read them, two subjects is two, and a method whose steps are mostly judgement gives the checks little to hold.
+  It found one defect, fixed: the build's closing line counted what the example shows as if it were required.
 
 - **The user path on a real model, once** (acceptance by the builder with the owner's key; $4.79 recorded, and two
   discovery attempts that failed before any cost was recorded; no sealed result). A skill that answers, from twelve examples: discovery $0.55, one answer

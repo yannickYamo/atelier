@@ -10,10 +10,7 @@ import { join, resolve, basename, dirname, extname, posix } from 'node:path';
 import { planImport, MIN_GOLDEN_CHARS, MIN_ANSWER_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { reserve, type Reservation } from '../../core/golden/reservation.js';
 import { describeGoldenEvidence, clusterAssignment, type GoldenUnit } from '../../core/golden/golden-unit.js';
-import { classOf, describeCases, inMaterialDir, materialDirOf, preferredForReserve, staysInside, MATERIAL_DIR, type CaseMaterial } from '../../core/golden/case.js';
-
-/** What a source is often kept as, beside the formats a piece is read from: read as the text it is. */
-const MATERIAL_TEXT = ['.csv', '.tsv', '.json', '.jsonl', '.yaml', '.yml', '.xml', '.html', '.htm'] as const;
+import { classOf, describeCases, inMaterialDir, materialDirOf, preferredForReserve, staysInside, MATERIAL_DIR, MATERIAL_TEXT, type CaseMaterial } from '../../core/golden/case.js';
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';

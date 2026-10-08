@@ -67,6 +67,8 @@ export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === 
 // said so. A census test proves every option the codebase reads is declared, which is what stops the
 // table going stale one flag at a time.
 export const VALUED_OPTIONS: readonly string[] = [
+  // `atelier method`: the one finished example, and what the skill is for
+  'golden', 'for',
   'with',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',

@@ -103,7 +103,9 @@ export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
  */
 export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE'
   | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
-  | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE';
+  | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
+  // what a method requires of the work itself (core/observers/obligations.ts)
+  | 'TABLE' | 'CITED';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
@@ -231,6 +233,14 @@ export interface Requirement {
    * sometimes makes, with this rate, rather than as something every piece must do.
    */
   readonly observedRate?: { readonly present: number; readonly applicable: number };
+  /**
+   * FOR A REQUIREMENT THAT COMES FROM A METHOD (core/method/standard.ts): what kind of thing it asks, which decides
+   * how it can be checked and what a failure is answered with. DELIVERABLE is something the output must hold, read
+   * by code on the output. EXECUTION is something the work must have been made from or done with, counted only
+   * where an artifact shows it (a figure found in the bound material). JUDGEMENT is the rest: stated, shown to the
+   * writer, and reported as not measured. Absent on a rule that describes how an author writes.
+   */
+  readonly obligation?: 'DELIVERABLE' | 'EXECUTION' | 'JUDGEMENT';
 }
 
 /**
