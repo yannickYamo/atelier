@@ -43,11 +43,11 @@ around a frozen model, scored on a benchmark, with regularizers so that gains ca
 It and Atelier distrust the same thing, a gain measured on the cases it was tuned on, and both hold cases back and
 check in code before asking a model. They differ in who owns the objective. RRSI's is a benchmark's automatic
 score, and no person approves anything in the loop; given a wrong objective it optimizes that. Atelier's is a
-standard a person approved, which no automated step may change, and its search (where it runs one) is over how
-that standard is carried. RRSI needs a scored task set of some size; Atelier starts from a handful of a person's
+standard a person approved, which no automated step may change, and its search (`atelier evolve`, which borrows
+RRSI's noise band, one change at a time, cost rule, leakage check and held-back cases) is over how that standard is
+carried: two settings, where RRSI searches the whole harness. RRSI needs a scored task set of some size; Atelier starts from a handful of a person's
 own pieces, or one method and one example, and no scorer. RRSI is ahead where Atelier is thin: sample sizes,
-confidence intervals, a measured noise band before a change is believed, and an account of what each added step
-costs. The two are not benchmarked against each other, and are not solving the same problem.
+confidence intervals, and an account of what each added step costs. The two are not benchmarked against each other, and are not solving the same problem.
 
 **Against voice tools that learn from your samples** (Every's Spiral, Writer's voice, Jasper IQ, Typeface,
 Lex, Claude Styles, Noren): learning a voice from samples is now common, and several check or score every

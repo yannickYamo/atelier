@@ -519,7 +519,9 @@ export interface InvocationSettings {
   readonly temperature?: number;
   readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean;
     /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
-    readonly testRun?: boolean };
+    readonly testRun?: boolean;
+    /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
+    readonly carryNoteHash?: string };
 }
 
 export interface InvocationRecord {

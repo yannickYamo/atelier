@@ -17,7 +17,7 @@ import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
 import { mkdirSync, readFileSync, existsSync, readdirSync, appendFileSync, rmSync } from 'node:fs';
 import { writeAtomic } from './fs-atomic.js';
-import { readJson } from './read-json.js';
+import { readJson, MalformedStoreFile } from './read-json.js';
 import { join, dirname } from 'node:path';
 import type { Observation } from '../measurement/observation.js';
 import type { ExpertEvidence, StandardVersion, SkillVersion, EvidenceEvent, InvocationRecord, FeedbackRecord } from './canonical-state.js';
@@ -147,6 +147,57 @@ export function setTells(l: StoreLayout, t: StoredTells): void {
 }
 /** The phrases every draft is checked against: learned and added, less what the owner struck. */
 export const activeTells = (t: StoredTells): string[] => [...new Set([...t.learned, ...t.added])].filter((x) => !t.struck.includes(x));
+
+/**
+ * HOW THE METHOD IS CARRIED ON A RUN, as the self-improvement loop last left it (core/evolve/loop.ts): how many
+ * drafts, and what the writer is told earlier drafts left out. An implementation setting, never a rule: it is kept
+ * beside the skill, changed only by a search that showed it better, and each earlier one is kept so that it can be
+ * gone back to.
+ */
+export interface StoredCarry {
+  readonly drafts: number; readonly note: string; readonly adoptedAt: string;
+  /** the search record that showed it better */
+  readonly from: string;
+  /** the standard the note's wording was taken from: under any other standard the carry is not used */
+  readonly standardVersion: string;
+  /** what it replaced, whole, or null when the skill carried its method as built: what a rollback puts back */
+  readonly before: StoredCarry | null;
+}
+const carryFile = (l: StoreLayout): string => join(dirs(l).base, 'carry.json');
+export function getCarry(l: StoreLayout): StoredCarry | null {
+  const p = carryFile(l);
+  if (!existsSync(p)) return null;
+  const c = readJson<Partial<StoredCarry>>(p, { what: 'how the skill carries its method' });
+  // Written only by an adoption. One that is not whole is said, never half-used: its history is filed by when it was adopted.
+  if (typeof c.drafts !== 'number' || typeof c.note !== 'string' || typeof c.adoptedAt !== 'string' || typeof c.standardVersion !== 'string') {
+    throw new MalformedStoreFile(`${p} is not a whole record of how the skill carries its method (drafts, note, adoptedAt, standardVersion). Remove it to run the skill as built.`);
+  }
+  return c as StoredCarry;
+}
+/** Every carry that is replaced or gone back from is kept, in the order it was left. */
+function keepCarry(l: StoreLayout, was: StoredCarry): void {
+  const d = join(dirs(l).base, 'carry-history');
+  const n = existsSync(d) ? readdirSync(d).length : 0;
+  writeAtomic(join(d, `${String(n + 1).padStart(4, '0')}-${was.adoptedAt.replace(/[:.]/g, '-')}.json`), `${JSON.stringify(was, null, 1)}\n`);
+}
+/** Adopt a way of carrying the method. The one it replaces is kept inside it, whole, so that it can be put back. */
+export function setCarry(l: StoreLayout, carry: Omit<StoredCarry, 'before'>): void {
+  const was = getCarry(l);
+  if (was) keepCarry(l, was);
+  writeAtomic(carryFile(l), `${JSON.stringify({ ...carry, before: was }, null, 1)}\n`);
+}
+/**
+ * Go back one adoption: what the current carry replaced is put back exactly as it was, with the standard it was
+ * adopted under and what it had replaced in turn, so going back again goes further back and ends at as built.
+ * Returns what is now in force, or null for as built.
+ */
+export function restoreCarry(l: StoreLayout): StoredCarry | null {
+  const now = getCarry(l);
+  if (!now) return null;
+  keepCarry(l, now);
+  if (now.before) writeAtomic(carryFile(l), `${JSON.stringify(now.before, null, 1)}\n`); else rmSync(carryFile(l));
+  return now.before;
+}
 
 /** The author's passages a skill serves (core/compiler/voice.ts), chosen at build; null when off or never chosen. */
 export function getVoice(l: StoreLayout): Voice | null {

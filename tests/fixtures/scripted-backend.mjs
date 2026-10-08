@@ -6,7 +6,7 @@
 // wearing a hang's clothes. Out of process, the server answers while the test process blocks.
 //
 //   POST /chat/completions  → the scripted payload, as a forced tool call
-//                             (`when`: [{ contains, answer }] answers a request whose body contains
+//                             (`when`: [{ contains, containsAll, answer }], first match wins, answers a request whose body contains
 //                              the text first, so a candidate and its champion can answer differently)
 //   POST /__set             → replace the scripted payload (JSON body); `failNext: k` answers the
 //                             next k completions with HTTP 500, so a failed call can be scripted
@@ -58,7 +58,7 @@ const server = createServer((req, res) => {
       if (tool && byTool[tool] !== undefined) answer = byTool[tool];
     }
     { const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name; if (tool && emptyNext[tool] > 0) { emptyNext[tool] -= 1; answer = {}; } }
-    const hit = when.find((w) => body.includes(w.contains));
+    const hit = when.find((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)));
     if (hit) answer = hit.answer;
     // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`
     // answers with one label per "[n]" the request carries, cycling through the moves given.

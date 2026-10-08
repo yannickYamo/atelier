@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: a skill improves how it carries its method, with nobody guiding it
+
+On top of `atelier method` ([decision 0018](docs/decisions/0018-a-skill-improves-how-it-carries-its-method.md)).
+Built and tested offline against a scripted model. It has not been run against a real one.
+
+- **`atelier evolve --skill <name> --briefs <folder>`** runs the skill on briefs you give (a task and its material
+  each, no reference answer), reads what its drafts keep leaving out, tries one change at a time and keeps a change
+  only when it is plainly better. `--dry-run` says what it would run and calls nothing. No run is started that
+  what is left of `--cap` cannot cover.
+- **Your standard is never changed by it.** What changes is how many drafts are written, and a note to the writer
+  naming what earlier drafts missed, in the words of your standard's required steps. No model writes the note.
+- **It is held back from fooling itself.** The unchanged skill is run twice, and a gain inside what those two runs
+  differ by is not a gain. A change that costs more must buy it with cases. A candidate that carries a brief is
+  refused before it is run. A fifth of the briefs are set aside before the first run and read once at the end, and a
+  change is adopted only if it is no worse there.
+- **Every search is kept, adopted or not,** with what was tried and why each change was or was not kept.
+  `atelier evolve --skill <name> --rollback` goes back one adoption at a time.
+- **A run that breaks stops the search.** It is never counted as a case that failed, nothing is adopted, and the
+  command exits 2. A signal stops it the same way and puts back what the search moved.
+- Where a skill has a release, the number of drafts stays the release's and only the note is searched.
+- **What it cannot improve, it says.** It is scored on what the checks read. A judgement step is scored by nothing.
+- An adoption is bound to the standard it was made under, and is not used after you change the standard.
+
 ### Added, for 2.0: a skill from one method and one finished example
 
 A second way in, beside `atelier new` ([decision 0017](docs/decisions/0017-a-skill-from-one-method-and-one-example.md)).
