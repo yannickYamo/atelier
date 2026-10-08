@@ -35,6 +35,7 @@ import { evaluate } from './commands/eval.js';
 import { qualify } from './commands/qualify.js';
 import { reproduce } from './commands/reproduce.js';
 import { method } from './commands/method.js';
+import { evolve } from './commands/evolve.js';
 import { voice } from './commands/voice.js';
 import { setup } from './commands/setup.js';
 import { create, improve } from './commands/improve.js';
@@ -113,6 +114,7 @@ export const COMMANDS: readonly string[] = [
   'qualify',
   'reproduce',
   'method',
+  'evolve',
   'voice',
   'setup',
   'tells',
@@ -172,6 +174,7 @@ const main = async (): Promise<void> => {
     case 'qualify': { qualify(); return; }
     case 'reproduce': { await reproduce(); return; }
     case 'method': { await method(); return; }
+    case 'evolve': { evolve(); return; }
     case 'voice': { await voice(); return; }
     case 'setup': { setup(); return; }
     case 'rollback': { rollback(); return; }
