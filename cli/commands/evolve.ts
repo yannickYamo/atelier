@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
+import { readJson } from '../../core/state/read-json.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { readCase } from '../corpus.js';
 import { releaseFor } from '../fidelity.js';
@@ -101,7 +102,7 @@ export function evolve(): void {
   const tidy = (): void => {
     rmSync(tmp, { recursive: true, force: true });
     let ours = true;
-    try { ours = !existsSync(pointers[0].f) || tasks.has((JSON.parse(readFileSync(pointers[0].f, 'utf8')) as { input?: string }).input ?? ''); } catch { /* unreadable: ours to put back */ }
+    try { ours = !existsSync(pointers[0].f) || tasks.has(readJson<{ input?: string }>(pointers[0].f, { what: 'the last run' }).input ?? ''); } catch { /* unreadable: ours to put back */ }
     if (ours) for (const p of pointers) { if (p.was === null) rmSync(p.f, { force: true }); else writeAtomic(p.f, p.was); }
   };
   const interrupted = (): void => { tidy(); process.exit(130); };
