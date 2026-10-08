@@ -98,8 +98,10 @@ export async function reproduce(): Promise<void> {
   const bareBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 5), maxCalls: Math.max(1, cases.length) };
   const cap = numericFlag('--cap', 5);
   const say = (line: string): void => { if (!json) console.log(line); };
+  const contextOf = new Map(cases.map((c) => [c.id, { ...(c.task ? { request: c.task } : {}), material: c.material }]));
   const blank = (id: string, reference: string): Pick<CaseOutcome, 'id' | 'reference' | 'words' | 'costUsd'> => {
-    const read = everyPiece.map((r) => (r.measurement ? measure(reference, r.measurement).verdict : 'NOT_APPLICABLE')).filter((v) => v !== 'NOT_APPLICABLE');
+    // Read with what the expert had in front of them: a rule about the material is read against that case's own.
+    const read = everyPiece.map((r) => (r.measurement ? measure(reference, r.measurement, contextOf.get(id)).verdict : 'NOT_APPLICABLE')).filter((v) => v !== 'NOT_APPLICABLE');
     return { id, reference: { met: read.filter((v) => v === 'MET').length, applicable: read.length }, words: { output: null, reference: countWords(reference) }, costUsd: 0 };
   };
   const notRun = (id: string, reference: string, why: string): CaseOutcome => ({ ...blank(id, reference), state: 'not-run', why, conformant: null, required: null, claims: null });

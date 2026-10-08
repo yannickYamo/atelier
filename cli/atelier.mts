@@ -34,6 +34,7 @@ import { report as reportRun, rate } from './commands/report.js';
 import { evaluate } from './commands/eval.js';
 import { qualify } from './commands/qualify.js';
 import { reproduce } from './commands/reproduce.js';
+import { method } from './commands/method.js';
 import { voice } from './commands/voice.js';
 import { setup } from './commands/setup.js';
 import { create, improve } from './commands/improve.js';
@@ -111,6 +112,7 @@ export const COMMANDS: readonly string[] = [
   'eval',
   'qualify',
   'reproduce',
+  'method',
   'voice',
   'setup',
   'tells',
@@ -169,6 +171,7 @@ const main = async (): Promise<void> => {
     case 'eval': { evaluate(); return; }
     case 'qualify': { qualify(); return; }
     case 'reproduce': { await reproduce(); return; }
+    case 'method': { await method(); return; }
     case 'voice': { await voice(); return; }
     case 'setup': { setup(); return; }
     case 'rollback': { rollback(); return; }

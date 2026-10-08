@@ -4,6 +4,7 @@
 // if it breaks nothing that held and fixes at least one thing that did not (`acceptRepair`). Every
 // call is metered through the caller's budget. The standard is read, never written.
 
+import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
@@ -52,6 +53,8 @@ function cutClaim(text: string, start: number, end: number): string {
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
 export interface CheckOptions {
+  /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
+  readonly context?: CheckContext;
   /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
   readonly material?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
@@ -98,7 +101,7 @@ export interface CheckOptions {
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const base = waive(verifyText(skill, v, text), opts.waived);
+  const base = waive(verifyText(skill, v, text, opts.context), opts.waived);
   const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];

@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
@@ -403,7 +404,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     withheld.push(...p.prose.map((q) => q.statement));
     report.say(`The request states its own format ("${formatAsked}"): ${p.measured.length + p.prose.length} presentation rule(s) withheld for this run.`);
   }
-  const checks = { ...checksFor(L, { material: materialText, task: asked, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
+  const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
@@ -479,7 +480,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
-    fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld), ledger,
+    fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context), ledger,
       { ...(runSettings ?? fid.release.settings), drafts: nDrafts, editBudget, ...(voiceMode === 'incontext' ? { voice: 'incontext' as const } : { voice: undefined }),
         ...(sampling ? { selection: 'sample' as const } : { selection: undefined }), ...(contextWanted ? { context: 'local' as const } : { context: undefined }), ...(nearnessWanted ? { nearness: 'reader' as const } : { nearness: undefined }),
         ...(strict ? { delivery: 'strict' as const } : { delivery: undefined }) }, overridden,
@@ -524,7 +525,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       spend: spentBy,
       sent: { skill: countWords(servedForRun) - countWords(impl.text), added: countWords(impl.text) + perDraftWords, request: countWords(taskForRun) },
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
-      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld) : []),
+      applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context) : []),
       // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when
       // the loop already read this text. A monitor on the panel: it never decides the verdict.
       coverage: strict && judge?.covers ? await judge.covers(asked, rec.output).catch(() => null) : null,
@@ -1144,8 +1145,8 @@ function fidelityRecord(fid: NonNullable<ReturnType<typeof releaseFor>>, output:
  * otherwise, served and, where it carries a measurement, checked. A study that finds a rule missing from
  * this list, or waived without a reason, has found a confound.
  */
-export function applicability(name: string, std: Standard, output: string, waived: ReadonlyMap<string, string>, withheld: readonly string[]): NonNullable<FidelityRecord['applicability']> {
-  const v = verifyText(name, std, output);
+export function applicability(name: string, std: Standard, output: string, waived: ReadonlyMap<string, string>, withheld: readonly string[], context?: CheckContext): NonNullable<FidelityRecord['applicability']> {
+  const v = verifyText(name, std, output, context);
   const verdict = new Map(v.checked.map((c) => [c.requirementId, c.result.verdict]));
   const conditional = new Map(v.conditional.map((c) => [c.requirementId, c.appliesWhen]));
   return std.requirements.filter((q) => q.authority !== 'EXPERT_REJECTED').map((q) => {

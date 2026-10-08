@@ -6,7 +6,7 @@
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, extname, basename, resolve, dirname } from 'node:path';
-import { inMaterialDir } from '../core/golden/case.js';
+import { inMaterialDir, materialDirOf, staysInside, goldenCase, type GoldenCase } from '../core/golden/case.js';
 import { extract, looksLikeUnsplitPair, READABLE, META_NAME } from '../core/intake/extract.js';
 import { walk } from './commands/intake.js';
 import { die, loadSession } from './runtime.js';
@@ -33,6 +33,25 @@ export function readCorpusPairs(path: string, what = '--corpus'): { text: string
   // A piece that names itself is still a piece, as at intake; names are matched without regard to case.
   const named = new Set(pieces.flatMap((p) => p.refs.filter((r) => r.toLowerCase() !== resolve(p.file).toLowerCase()).map((r) => r.toLowerCase())));
   return pieces.filter((p) => !named.has(resolve(p.file).toLowerCase()) && !reserved.has(p.text.trim())).map((p) => ({ text: p.text, request: p.request }));
+}
+
+/**
+ * ONE EXAMPLE FILE AS A CASE: its finished work, the task it carries, and its material, from the folder
+ * `<example>.material` beside it and from the files its front matter names (inside the example's own folder). The
+ * same reading intake makes of each example in a folder, for a command that is given one file.
+ */
+export function readCase(file: string): GoldenCase {
+  const read = extract(file);
+  if (!read.ok) return die(`${basename(file)}: ${read.reason}`);
+  const r = read;
+  const dir = dirname(file); const folder = join(dir, materialDirOf(basename(file)));
+  const inFolder = existsSync(folder) && statSync(folder).isDirectory() ? walk(folder).sort().map((f) => join(folder, f)) : [];
+  const named = (r.materialRefs ?? []).filter(staysInside).map((ref) => resolve(dir, ref)).filter((f) => f !== resolve(file) && existsSync(f));
+  const material = [...new Set([...inFolder, ...named])].flatMap((f) => {
+    const x = (READABLE as readonly string[]).includes(extname(f).toLowerCase()) ? extract(f) : { ok: true as const, text: readFileSync(f, 'utf8') };
+    return x.ok && x.text.trim() ? [{ name: f.startsWith(`${dir}/`) ? f.slice(dir.length + 1) : basename(f), text: x.text }] : [];
+  });
+  return goldenCase(basename(file), r.text, r.request ?? null, material);
 }
 
 /** The files at `path` that look like a request and an answer and were read whole (core/intake/extract.ts, `looksLikeUnsplitPair`). */

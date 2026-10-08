@@ -5,6 +5,7 @@
 // MCP tool and the stop hook never checked the machine-writing phrases a skill had learned, although the
 // README said "the same check runs" there. One constructor, so a new check reaches every surface at once.
 
+import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
 import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
@@ -102,6 +103,8 @@ export function checksFor(L: store.StoreLayout, opts: {
   readonly placeholders?: boolean;
   /** the task the person typed, when there is one: the claim reader's context, beside the material */
   readonly task?: string;
+  /** the request and the material by name, for the rules that are about what the work was made from */
+  readonly context?: CheckContext;
   /** the context judge, when the caller already made one (invoke asks it about the request first) */
   readonly judge?: ContextJudge;
   /**
@@ -121,7 +124,7 @@ export function checksFor(L: store.StoreLayout, opts: {
   const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
     : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false));
-  return { material, guardClaims, placeholders, format, ...(judge ? { judge } : {}),
+  return { material, guardClaims, placeholders, format, ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }
