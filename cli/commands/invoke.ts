@@ -50,7 +50,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords } from '../../core/eval/size.js';
-import { statedLength, againstStated } from '../../core/intake/length.js';
+import { statedLength, statedLengths, againstStated } from '../../core/intake/length.js';
 import { composeServed } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -452,7 +452,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ledger = factLedger(materialText);
   // Said to the writer in so many words, after the pieces it is shown: they run at the author's length, and without
   // this line they set the length whatever the request says.
-  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${stated.raw}. Write to that length. The length my own pieces run does not apply to this request.` : '';
+  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${statedLengths(asked).map((x) => x.raw).join(', ')}. Write to that length. The length my own pieces run does not apply to this request.` : '';
   // Served under its own heading, as what it is: what earlier runs showed, not a rule of the standard.
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;

@@ -4,7 +4,7 @@
 // a number went unseen, the author's usual length stayed in the prompt beside pieces of that length, and chapters
 // asked at 2,000 words came back at about 1,550. The length belongs to the request, never to the author's rules, so
 // it is read here, off the request alone, and kept with it: the words as written, the unit, and what kind of limit
-// they state. Nothing is inferred: a request that names no number has no stated length.
+// they state. Nothing is inferred: a request that names no number, in digits or in words, has no stated length.
 
 export type LengthUnit = 'words' | 'pages' | 'paragraphs' | 'sentences';
 export type LengthKind = 'target' | 'exact' | 'min' | 'max' | 'range';
@@ -62,17 +62,57 @@ const FORMS: readonly Form[] = [
   form(String.raw`${NUMBER}\s+${UNIT}\b`, (m) => ({ unit: unitOf(m[2]), kind: 'target', min: null, max: null, target: toNumber(m[1]) }), true),
 ];
 
+/** What a count of words can stand before as the length of it: "a 20,000 word book". */
+const PIECE = String.raw`(?:book|chapter|post|essay|article|report|piece|brief|memo|story|draft|summary|section|intro(?:duction)?|conclusion|email|letter|note|speech|script|answer|reply|review|bio|description|overview|doc(?:ument)?)`;
+// "a 20,000 word book": the unit in the singular, then the kind of piece. The kind of piece is what makes it a length.
+const PIECE_FORM = form(String.raw`${NUMBER}\s+(word|page|paragraph|sentence)(?=\s+${PIECE}\b)`, (m) => ({ unit: unitOf(m[2]), kind: 'target', min: null, max: null, target: toNumber(m[1]) }));
+const ALL_FORMS: readonly Form[] = [...FORMS.slice(0, 7), PIECE_FORM, ...FORMS.slice(7)];
+
+// WHAT IS INSIDE QUOTATION MARKS IS A TITLE OR A QUOTATION, never the length to write to: a post titled "10 words
+// that changed our roadmap" was read as a post of ten words. Blanked, at the same length, so every place stays put.
+const unquoted = (s: string): string => s.replace(/"[^"\n]*"|“[^”\n]*”/g, (m) => ' '.repeat(m.length));
+
+// A NUMBER SPELLED OUT IS A NUMBER: "two thousand", "fifteen hundred", "twenty-five hundred", "a thousand", "three".
+const SMALL: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+  fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const NUMBER_WORD = `(?:${Object.keys(SMALL).join('|')}|hundred|thousand)`;
+const SPELLED = new RegExp(String.raw`\b(?:an?\s+(?=(?:hundred|thousand)\b))?${NUMBER_WORD}(?:(?:\s+and\s+|[\s-]+)${NUMBER_WORD})*\b`, 'gi');
+function valueOf(spelled: string): number {
+  let total = 0; let current = 0;
+  for (const w of spelled.toLowerCase().match(/[a-z]+/g) ?? []) {
+    if (w === 'hundred') current = (current || 1) * 100;
+    else if (w === 'thousand') { total += (current || 1) * 1000; current = 0; } else current += SMALL[w] ?? 0;
+  }
+  return total + current;
+}
+/** The request with its spelled numbers in digits, and for each place in it, the place in the request it came from. */
+function inDigits(request: string): { text: string; from: number[] } {
+  let text = ''; const from: number[] = []; let at = 0;
+  const copy = (to: number): void => { for (; at < to; at++) { text += request[at]; from.push(at); } };
+  for (const m of request.matchAll(SPELLED)) {
+    const value = valueOf(m[0]);
+    if (value <= 0) continue;
+    copy(m.index);
+    for (const d of String(value)) { text += d; from.push(m.index); }
+    at = m.index + m[0].length;
+  }
+  copy(request.length);
+  from.push(request.length);
+  return { text, from };
+}
+
 /**
- * The length the request states in numbers, or null. Where it states more than one (a title that holds a number,
- * then the length), the last is the length, as the plan of a piece already reads it; of two readings of the same
- * words, the more specific.
+ * Every length the request states, one for each unit, in the order they were said: "a 500-word introduction in 3
+ * paragraphs" states two. Of two said in the same unit (a first thought, then the length), the later is the length;
+ * of two readings of the same words, the more specific. `raw` is the request's own words.
  */
-export function statedLength(request: string): StatedLength | null {
-  let best: { at: number; rank: number; stated: StatedLength } | null = null;
-  FORMS.forEach((f, rank) => {
+export function statedLengths(request: string): StatedLength[] {
+  const { text, from } = inDigits(unquoted(request));
+  const best = new Map<LengthUnit, { at: number; start: number; rank: number; stated: StatedLength }>();
+  ALL_FORMS.forEach((f, rank) => {
     f.re.lastIndex = 0;
-    for (let m = f.re.exec(request); m; m = f.re.exec(request)) {
-      const before = request.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = request.slice(m.index + m[0].length);
+    for (let m = f.re.exec(text); m; m = f.re.exec(text)) {
+      const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
       if (POINTS_AT.test(before) || REPORTS.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
       // something else.
@@ -82,11 +122,20 @@ export function statedLength(request: string): StatedLength | null {
       if (!numbers.length || numbers.some((x) => !Number.isFinite(x) || x <= 0)) continue;
       if (read.kind === 'range' && (read.min ?? 0) > (read.max ?? 0)) continue;
       // Later in the request wins; where two forms end on the same word, the one listed first.
-      const end = m.index + m[0].length;
-      if (best === null || end > best.at || (end === best.at && rank < best.rank)) best = { at: end, rank, stated: { raw: m[0].trim(), ...read } };
+      const end = m.index + m[0].length; const was = best.get(read.unit);
+      if (!was || end > was.at || (end === was.at && rank < was.rank)) best.set(read.unit, { at: end, start: m.index, rank, stated: { raw: request.slice(from[m.index], from[end]).trim(), ...read } });
     }
   });
-  return (best as { stated: StatedLength } | null)?.stated ?? null;
+  return [...best.values()].sort((a, b) => a.start - b.start).map((b) => b.stated);
+}
+
+/**
+ * The length a draft is held to, or null: the count of words where the request states one, since that is what can
+ * be counted on a draft, and otherwise the last length it states.
+ */
+export function statedLength(request: string): StatedLength | null {
+  const all = statedLengths(request);
+  return all.find((s) => s.unit === 'words') ?? all.at(-1) ?? null;
 }
 
 /** How a count sits against a stated length: inside it, or short or long of it. A target is met within a tenth. */
