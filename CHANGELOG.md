@@ -22,6 +22,16 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   last run could pass it. A run that stops partway is counted at what it had spent.
 - **A reading of a test run by the taste reader is not kept,** `atelier fix` refuses a run marked as a test, and
   observations made on one are not evidence a skill is changed on.
+- **A held-back piece that has been read is never run as reproduction,** and whether one has been read is part of
+  what the reserve is identified by.
+- **Every reproduction is kept and none is written over.** Each run is its own file; the first look at a set of
+  cases is the only one that is a test, and a later run says it is a repeat and where the first is kept. Exposure is
+  counted for one set of cases and never carried to another.
+- **Each case can be walked back to its run:** the invocation, the output by hash, the rules it broke by id, the
+  longest run it shares with a piece the skill carries. Where a rule the output broke is one the expert's own
+  held-back piece breaks too, the record says the standard asked more than the work does.
+- **A case on which no required rule is checked by code is "not observed",** never "reproduced".
+- **A reproduction never accepts a new runtime for the skill.** A measurement does not change how a skill is run.
 - **`--bare` is called what it is: a one-shot floor.** One plain call a case, checked afterwards. The skill's run
   drafts more than once, chooses, repairs and has its claims read, so the gap between the two is the runtime and
   the skill together and is never offered as what the skill adds. Each case now records its own cost.
@@ -64,8 +74,7 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   The record is kept with the skill and shown by `atelier report --skill <name>`. A reproduction does not become
   "the last run" that `atelier fix` and `atelier report` point at.
 - Run it from the project the skill was built in: the held-back pieces are kept with that run.
-- Known limits: a reproduction run is recorded like any run marked as a test, so `tend`, `fidelity` and `eval` still
-  count it; and `atelier_skill_report` (MCP) does not carry the record yet.
+- Known limit: `atelier_skill_report` (MCP) does not carry the record yet.
 
 ### Added, for 2.0: an example may carry its task and what it was made from
 

@@ -24,13 +24,19 @@ export interface CaseOutcome {
   readonly conformant: boolean | null;
   /** strict delivery refused to deliver: counted as not reproduced */
   readonly refused?: boolean;
-  readonly required: { readonly held: number; readonly applicable: number } | null;
+  readonly required: { readonly held: number; readonly applicable: number; /** the rules this run broke, by id */ readonly broken?: readonly string[] } | null;
+  /** the run that produced this case's output, and the output by hash: a count that can be walked back to its bytes */
+  readonly invocationId?: string | null; readonly outputHash?: string;
+  /** the longest run of words the output shares with a piece the skill carries (the run's own copying check) */
+  readonly sharedWithCarriedPieces?: number | null;
+  /** of the rules this run broke, the ones the expert's own held-back piece breaks too: the standard asks more than their work does */
+  readonly alsoBrokenByReference?: readonly string[];
   /** `qualified`: a qualified reader decided what is unsupported; otherwise the pattern check did, and the count says so */
   readonly claims: { readonly qualified: boolean; readonly instrument: string | null; readonly unsupported: number } | null;
   /** the longest run of words the output shares with the held-back piece and not with its material */
   readonly sharedWithReference?: number;
   /** the expert's own reference, on the counted required rules that apply to every piece */
-  readonly reference: { readonly met: number; readonly applicable: number };
+  readonly reference: { readonly met: number; readonly applicable: number; readonly broken?: readonly string[] };
   readonly words: { readonly output: number | null; readonly reference: number };
   readonly costUsd: number;
 }
@@ -51,6 +57,10 @@ export interface ReproductionRecord {
   readonly cases: readonly CaseOutcome[];
   /** required rules no code checks: outside every count here, and said */
   readonly notCheckable: number;
+  /** FIRST: the first run of these cases, the only one that is a test. A repeat on the same version, or after the skill changed, is development */
+  readonly look?: 'FIRST' | 'REPEAT_SAME_VERSION' | 'REPEAT_AFTER_CHANGE';
+  /** where this run is kept, and where the first run of these cases is: neither is ever written over */
+  readonly file?: string; readonly firstLook?: string;
   /** how many times these held-back cases have been run on this skill, this time included */
   readonly timesRun: number;
   readonly costUsd: number;
@@ -61,6 +71,8 @@ const ran = (r: ReproductionRecord): CaseOutcome[] => r.cases.filter((c) => c.st
 /** The counts the record is read by. Nothing here is a rate, and nothing is added across kinds. */
 export function countsOf(r: ReproductionRecord): {
   readonly ran: number; readonly reproduced: number; readonly refused: number;
+  /** ran, and no required rule was checked by code on them: read as neither reproduced nor not */
+  readonly notObserved: number;
   /** cases with no unsupported specific, by a qualified reader on every case; null when any case was read by patterns alone */
   readonly factSafe: number | null;
   readonly required: { readonly held: number; readonly applicable: number };
@@ -71,6 +83,7 @@ export function countsOf(r: ReproductionRecord): {
   return {
     ran: done.length,
     reproduced: done.filter((c) => c.conformant === true).length,
+    notObserved: done.filter((c) => c.conformant === null).length,
     refused: done.filter((c) => c.refused).length,
     factSafe: qualified ? done.filter((c) => !c.refused && c.claims?.unsupported === 0).length : null,
     required: { held: done.reduce((n, c) => n + (c.required?.held ?? 0), 0), applicable: done.reduce((n, c) => n + (c.required?.applicable ?? 0), 0) },
@@ -104,9 +117,8 @@ export function renderReproduction(r: ReproductionRecord): string {
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
     : `  ${c.factSafe} of ${c.ran}   with no unsupported specific, read by a qualified reader`);
-  out.push(c.required.applicable
-    ? `  ${c.required.held} of ${c.required.applicable}   required rules met, over the ${s(c.ran, 'case')}`
-    : '  No required rule is checked by code on these cases: "reproduced" says only that nothing unsupported was found.');
+  if (c.notObserved) out.push(`  ${c.notObserved} of ${c.ran}   not observed: no required rule is checked by code on ${c.notObserved === 1 ? 'it' : 'them'}, so ${c.notObserved === 1 ? 'it is' : 'they are'} read as neither`);
+  if (c.required.applicable) out.push(`  ${c.required.held} of ${c.required.applicable}   required rules met, over the ${s(c.ran, 'case')}`);
   if (c.reference.applicable) {
     out.push(`  ${c.reference.met} of ${c.reference.applicable}   on your own held-back work, for the counted required rules that apply to every piece; ${c.reference.whole} of ${c.ran} of your ${c.ran === 1 ? 'pieces meets' : 'pieces meet'} every one`);
     if (c.reference.whole < c.ran) out.push('  Where your own piece breaks such a rule, the rule asks for more than your work does: atelier build names the ruling.');
@@ -118,12 +130,15 @@ export function renderReproduction(r: ReproductionRecord): string {
   out.push(`  ${s(c.ran, 'case')}: a count, not a rate.${c.ran < 10 ? ' Hold back more examples that carry their task and material to read more from it.' : ''}`);
   if (r.arm === 'bare') out.push('  A floor, not an ablation: the skill\'s run drafts more than once, chooses, repairs and has its claims read. The gap to it is the runtime and the skill together.');
   if (r.standardAmendedSinceRun) out.push('  The standard was amended after these pieces were held back: they were not read to amend it only if you did not read them.');
+  const both = ran(r).filter((x) => x.alsoBrokenByReference?.length);
+  if (both.length) out.push(`  In ${s(both.length, 'case')} a rule the output broke is one your own held-back piece breaks too (${[...new Set(both.flatMap((x) => x.alsoBrokenByReference ?? []))].join(', ')}): there the standard asks more than your work does, and the skill is not what failed.`);
+  if (r.look && r.look !== 'FIRST') out.push(`  This is a repeat${r.look === 'REPEAT_AFTER_CHANGE' ? ' after the skill changed' : ' on the same version'}, not the first look at these cases${r.firstLook ? `: the first is kept at ${r.firstLook}` : ''}.`);
   if (r.timesRun > 1) out.push(`  These cases have now been run ${r.timesRun} times on this skill. A piece held back is unseen once: if the skill was changed between runs because of what they showed, read this as work in progress, not as a test.`);
   for (const x of ran(r)) {
     const req = x.required ? `${x.required.held}/${x.required.applicable} rules` : 'rules not read';
     const cl = x.refused ? 'refused, nothing delivered' : x.claims ? `${x.claims.unsupported} unsupported${x.claims.qualified ? '' : ' (patterns only)'}` : '';
     const carried = x.sharedWithReference !== undefined && x.conformant === false && !x.refused && x.why ? ` · ${x.why}` : '';
-    out.push(`    ${x.conformant ? 'reproduced    ' : 'not reproduced'}  ${x.id}  ·  ${req}${cl ? ` · ${cl}` : ''} · ${x.words.output ?? 0} words (yours: ${x.words.reference}) · your piece: ${x.reference.met}/${x.reference.applicable}${carried}`);
+    out.push(`    ${x.conformant === null ? 'not observed  ' : x.conformant ? 'reproduced    ' : 'not reproduced'}  ${x.id}  ·  ${req}${cl ? ` · ${cl}` : ''} · ${x.words.output ?? 0} words (yours: ${x.words.reference}) · your piece: ${x.reference.met}/${x.reference.applicable}${carried}`);
   }
   return out.join('\n');
 }
