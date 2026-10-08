@@ -47,10 +47,10 @@ export async function tend(): Promise<void> {
   const proposals = events.filter((e) => e.kind === 'PROPOSED_CHANGE')
     .map((e) => ({ proposal: String(e.proposal), at: String(e.at), accepted: (e.accepted ?? null) as boolean | null,
       ...(Array.isArray(e.feedbackIds) ? { feedbackIds: e.feedbackIds as string[] } : {}) }));
-  const items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listInvocations(L), requirements: v.requirements,
+  const items = findRecurrences({ feedback: store.listFeedback(L), invocations: store.listLearningInvocations(L), requirements: v.requirements,
     standardVersionHash: v.standardVersionHash, proposals });
   // Internal: each measured rule's break rate per version, for the loop, not for the person (below).
-  const breakRates = ruleBreakRates(store.listInvocations(L), v.standardVersionHash);
+  const breakRates = ruleBreakRates(store.listLearningInvocations(L), v.standardVersionHash);
   store.setMining(L, { at: new Date().toISOString(), standardVersionHash: v.standardVersionHash, items, breakRates });
   const healed = undoOwnRegression(L, active, events, breakRates);
   if (healed) digest.push(healed);
@@ -120,7 +120,7 @@ export function skillDashboard(name: string): void {
   console.log(`  covers         ${[...Object.keys(DIMENSION_LABEL)].filter((d) => d !== 'UNSORTED' && !cov.gaps.includes(d as never)).length} of ${DIMENSIONS.length} dimensions${cov.gaps.length ? `; nothing about ${cov.gaps.map((d) => DIMENSION_LABEL[d]).join(', ')}` : ''}`);
   console.log(`  taste reader   ${perms.veto.size ? `acts on ${perms.veto.size} rule(s)` : 'reports only'}; ${calibrationQueue(rules, events, readerModel()).length} reading(s) to label`);
   console.log(`  floor          ${st.state}`);
-  console.log(`  uses           ${store.listInvocations(L).length} recorded`);
+  console.log(`  uses           ${store.listLearningInvocations(L).length} recorded`);
   console.log(`  waiting        ${pending.length} candidate(s)`);
   console.log(`  last tended    ${lastTend ? String(lastTend.at) : 'never (atelier tend --skill ' + name + ')'}`);
 }

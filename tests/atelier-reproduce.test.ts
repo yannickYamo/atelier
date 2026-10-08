@@ -101,6 +101,12 @@ describe('through the binary: one full case held back, run on its task and mater
     expect(rec.cases[0].sharedWithReference).toBeLessThan(CARRIED_RUN);
     expect(rec.cases[0].words.reference).toBeGreaterThan(300);
     expect(rec.timesRun).toBe(1);
+    // bound by identity to the run, its sealed corpus and the cases as they stood
+    expect(rec.runId).toMatch(/\S+/);
+    expect(rec.corpusHash).toMatch(/^[0-9a-f]+$/);
+    expect(rec.reservationHash).toMatch(/^[0-9a-f]{16}$/);
+    expect(rec).toMatchObject({ standardAmendedSinceRun: false });
+    expect(Object.values(rec.runsByVersion ?? {})).toEqual([1]);
     // a reproduction is not the person's last piece of work: the pointer a bare `atelier report` follows is as it was
     expect(existsSync(join(data, 'runs')) ? atelier('report').out : '').not.toMatch(new RegExp(`Compare ${who} with its nearest rival`));
   }, 120_000);
@@ -125,11 +131,14 @@ describe('through the binary: one full case held back, run on its task and mater
     expect(r.out).toMatch(/REPRODUCTION ON WORK THE SKILL NEVER SAW · analysis · 1 case/);
     expect((JSON.parse(atelier('report', '--skill', 'analysis', '--json').out) as { reproduction?: { schema: number } }).reproduction?.schema).toBe(1);
   });
-  it('--bare runs the same case on the model without the skill, read with verify, and keeps its record apart', async () => {
+  it('--bare is a one-shot floor: the same case, one plain call, read with verify, its record kept apart', async () => {
     const before = (await served()).length;
     const r = atelier('reproduce', '--skill', 'analysis', '--bare');
     expect(r.code, `${r.err}${r.out}`).toBe(0);
-    expect(r.out).toMatch(/THE SAME HELD-BACK CASES, THE MODEL WITHOUT THE SKILL · read against analysis · 1 case\n {2}1 of 1 {3}reproduced: no required counted rule broken and nothing flagged as unsourced, by atelier verify/);
+    expect(r.out).toMatch(/ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against analysis · 1 case\n {2}1 of 1 {3}reproduced: no required counted rule broken and nothing flagged as unsourced, by atelier verify/);
+    // and it is never offered as what the skill adds
+    expect(r.out).toMatch(/A floor, not an ablation: the skill's run drafts more than once, chooses, repairs and has its claims read/);
+    expect(r.out).not.toMatch(/without the skill/i);
     const bodies = (await served()).slice(before);
     // one plain call: the task and the material, and nothing of the skill or of the held-back piece
     expect(bodies).toHaveLength(1);
@@ -146,6 +155,38 @@ describe('through the binary: one full case held back, run on its task and mater
       expect(broke.cases[0]).toMatchObject({ state: 'ran', conformant: false });
     } finally { await scripted(CLEAN); }
   }, 120_000);
+
+  it('--cap is the total: with too little of it left to start a run, the case is not run and nothing is called', async () => {
+    const before = (await served()).length;
+    const r = atelier('reproduce', '--skill', 'analysis', '--cap', '0.01', '--json');
+    expect(r.code, r.err).toBe(0);
+    const rec = JSON.parse(r.out) as ReproductionRecord;
+    expect(rec.cases[0]).toMatchObject({ state: 'not-run' });
+    expect(rec.cases[0].why).toMatch(/^\$0\.01 of the \$0\.01 cap was left after 0 run\(s\), too little to start another\. Raise it with --cap$/);
+    // and with room for one run: the run is given what is left, split between itself and its claim reader, never more
+    expect(readFileSync(resolve('cli/commands/reproduce.ts'), 'utf8')).toMatch(/`--cap=\$\{split\(left\)\.run\}`[\s\S]{0,400}ATELIER_CLAIMS_CAP: String\(split\(left\)\.claims\)/);
+    expect((await served()).length).toBe(before);
+  });
+
+  it('a reproduction run is never something the skill learns from: no reader of runs that learns can see it', async () => {
+    const store = await import('../core/state/store.js');
+    const L = { root: data, skillName: 'analysis' };
+    const all = store.listInvocations(L); const tests = all.filter((r) => r.settings?.flags.testRun === true);
+    // every run made so far in this file came from `atelier reproduce`, and each is marked
+    expect(tests.length).toBeGreaterThanOrEqual(2);
+    expect(tests.length).toBe(all.length);
+    expect(store.listLearningInvocations(L)).toEqual([]);
+    // through the binary: the commands that learn from runs find nothing to learn from
+    expect(atelier('status', '--skill', 'analysis').out).toMatch(/uses {11}0 recorded/);
+    // a complaint about a test run is refused: a skill is not corrected on what it is tested with
+    const fix = atelier('fix', '--skill', 'analysis', '--invocation', tests[0].invocationId, 'too long');
+    expect(fix.code).not.toBe(0);
+    expect(`${fix.err}${fix.out}`).toMatch(/was a test \(a benchmark answer, or a held-back case run by atelier reproduce\)\. A skill is not corrected on what it is tested with/);
+    // and no reading of a test run was kept for labelling
+    expect(store.readEvents(L).filter((e) => (e as { kind?: string }).kind === 'TASTE_READING')).toEqual([]);
+    const ev = atelier('eval', '--skill', 'analysis');
+    expect(`${ev.out}${ev.err}`).toMatch(/No evaluated runs of "analysis" yet/);
+  });
 
   it('under strict delivery a refusal is a case that was run and not reproduced, never one left out of the count', async () => {
     await scripted(BREAKS);

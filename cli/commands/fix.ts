@@ -95,6 +95,9 @@ export async function fix(): Promise<void> {
   const complaint = flag('--complaint') ?? positional([]) ?? die('say what was wrong:  atelier fix "<what was wrong>"');
   const L: store.StoreLayout = { root: DATA, skillName: name };
   let inv = store.getInvocation(L, invId) ?? die(`no invocation ${invId} for ${name}.`);
+  // A RUN MARKED AS A TEST IS NOT SOMETHING TO FIX THE SKILL ON. It is a benchmark answer or a held-back case: a
+  // complaint about it, mined later, would teach the skill from the work it is tested on.
+  if (inv.settings?.flags.testRun) die(`run ${invId} was a test (a benchmark answer, or a held-back case run by atelier reproduce). A skill is not corrected on what it is tested with: say what was wrong about a run of your own work.`);
   console.log(`About your last run of /${name}: "${inv.input.slice(0, 70)}${inv.input.length > 70 ? '…' : ''}"`);
   console.log(`You said: "${complaint}"\n`);
 

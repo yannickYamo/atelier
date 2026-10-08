@@ -68,7 +68,7 @@ export async function fidelity(): Promise<void> {
   }
   // ONLY WHAT THIS STANDARD AND THIS PROFILE PRODUCED. Outputs under an earlier standard, or read against an
   // earlier profile, are about another target.
-  const records = store.listInvocations(L).flatMap((r) => (r.fidelity?.reading && r.standardVersionHash === from.standardVersionHash && r.fidelity.profileHash === profile.hash
+  const records = store.listLearningInvocations(L).flatMap((r) => (r.fidelity?.reading && r.standardVersionHash === from.standardVersionHash && r.fidelity.profileHash === profile.hash
     ? [{ ...r, reading: r.fidelity.reading }] : []));
   if (argv.includes('--distill')) { await distill(L, from, records); return; }
   if (argv.includes('--typicality')) { reportCloseness(L, profile.hash, records); return; }

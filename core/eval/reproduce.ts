@@ -37,7 +37,13 @@ export interface CaseOutcome {
 
 export interface ReproductionRecord {
   readonly schema: 1;
-  /** `bare`: the same cases written by the model without the skill, and read with `atelier verify`. Absent for the skill's own run */
+  /** what was run against what, by identity; absent on a record written before these were kept */
+  readonly runId?: string; readonly corpusHash?: string | null; readonly reservationHash?: string;
+  /** the owner amended the standard after the run that held these pieces back closed it */
+  readonly standardAmendedSinceRun?: boolean;
+  /** runs of these cases on each skill version, this one included */
+  readonly runsByVersion?: Readonly<Record<string, number>>;
+  /** `bare`: a one-shot floor. The same cases, one plain call each, read with `atelier verify`: not the skill's runtime with the skill taken away. Absent for the skill's own run */
   readonly arm?: 'bare';
   readonly skill: string; readonly skillVersion: string; readonly standardVersion: string; readonly at: string;
   /** what was held back, by what it carries: only the first kind can be run */
@@ -93,7 +99,7 @@ export function renderReproduction(r: ReproductionRecord): string {
     for (const x of not) out.push(`  not run: ${x.id}: ${x.why ?? 'no reason recorded'}`);
     return out.join('\n');
   }
-  out.push(r.arm === 'bare' ? `THE SAME HELD-BACK CASES, THE MODEL WITHOUT THE SKILL · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
+  out.push(r.arm === 'bare' ? `ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
   out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : 'the run\'s own verdict was "conformant"'}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
@@ -110,6 +116,8 @@ export function renderReproduction(r: ReproductionRecord): string {
   const rest = r.heldBack.taskOnly + r.heldBack.referenceOnly;
   if (rest) out.push(`  ${s(rest, 'more held-back piece')} ${rest === 1 ? 'does' : 'do'} not carry both task and material, and cannot be run.`);
   out.push(`  ${s(c.ran, 'case')}: a count, not a rate.${c.ran < 10 ? ' Hold back more examples that carry their task and material to read more from it.' : ''}`);
+  if (r.arm === 'bare') out.push('  A floor, not an ablation: the skill\'s run drafts more than once, chooses, repairs and has its claims read. The gap to it is the runtime and the skill together.');
+  if (r.standardAmendedSinceRun) out.push('  The standard was amended after these pieces were held back: they were not read to amend it only if you did not read them.');
   if (r.timesRun > 1) out.push(`  These cases have now been run ${r.timesRun} times on this skill. A piece held back is unseen once: if the skill was changed between runs because of what they showed, read this as work in progress, not as a test.`);
   for (const x of ran(r)) {
     const req = x.required ? `${x.required.held}/${x.required.applicable} rules` : 'rules not read';

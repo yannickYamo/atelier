@@ -7,6 +7,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: a test run is never something a skill learns from
+
+- **A run marked as a test is a measurement, and nothing that learns reads it.** A held-back case run by `atelier
+  reproduce`, or a benchmark answer, was recorded with every other run, and `tend`, `mine`, the learned list of
+  machine-writing phrases, the search over implementations, the optimizer and `eval` all read it. A skill changed
+  on what a held-back case showed has seen that case, and its next run of it tested nothing. The runs a skill may
+  learn from are now read in one place, which leaves test runs out; `eval` leaves them out of its counts.
+- **A reproduction is bound to the run that held its cases back.** The skill under test must hold the standard that
+  run closed, or one that supersedes it; otherwise nothing is run. The record carries the run, its sealed corpus, a
+  hash of the cases as they stood, and how many times they have been run on each version.
+- **`--cap` is the total for the command.** Each case's run is given what is left of it, split between the run and
+  its claim reader, and a case is not started on less than sixty cents. It was checked only between cases, so the
+  last run could pass it. A run that stops partway is counted at what it had spent.
+- **A reading of a test run by the taste reader is not kept,** `atelier fix` refuses a run marked as a test, and
+  observations made on one are not evidence a skill is changed on.
+- **`--bare` is called what it is: a one-shot floor.** One plain call a case, checked afterwards. The skill's run
+  drafts more than once, chooses, repairs and has its claims read, so the gap between the two is the runtime and
+  the skill together and is never offered as what the skill adds. Each case now records its own cost.
+
 ### Changed, for 2.0: sentence length is a rule only where it is the writer's own rhythm
 
 - **A count is not a style.** How long sentences run follows the piece: its format, its reader, what it is for. A
@@ -39,9 +58,8 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
   cases is beside every count. Required rules no code can check are counted apart and are in none of it.
 - **It counts how many times the held-back cases have been run on a skill**, and says so from the second time: a
   piece held back is unseen once.
-- **`--bare` runs the same cases on the model without the skill**, given the task and the material alone and read
-  with `atelier verify` against the same standard. It is what the skill's count is read against: a skill that
-  reproduces no more cases than the model alone has added nothing these cases can show. Its record is kept apart.
+- **`--bare` is a one-shot floor:** the same cases, one plain call each, given the task and the material alone and
+  read with `atelier verify` against the same standard. Its record is kept apart.
 - `--dry-run` shows what each case would be given and calls nothing. `--cap <usd>` holds the total (5 by default).
   The record is kept with the skill and shown by `atelier report --skill <name>`. A reproduction does not become
   "the last run" that `atelier fix` and `atelier report` point at.

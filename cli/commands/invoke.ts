@@ -1341,7 +1341,7 @@ async function reportTaste(report: RunReport, t: TasteContext): Promise<TasteMon
   const rules = new Map(t.std.requirements.map((q) => [q.requirementId, q]));
   try {
     const taken = t.tasteTaken ?? t.readings.get(t.rec.output) ?? null;
-    const { readings: read, permissions: earned, held } = await recordTaste(t.L, t.std, t.rec.output, t.asked, t.rec.invocationId, t.budget, taken);
+    const { readings: read, permissions: earned, held } = await recordTaste(t.L, t.std, t.rec.output, t.asked, t.rec.invocationId, t.budget, taken, !argv.includes('--test-run'));
     // A held-back reading shows nothing that names a rule, the taste repair included.
     if (t.rec.repair?.taste) report.say(held ? 'taste repair: details held back with the reading.' : `taste repair: ${t.rec.repair.taste.why}.`);
     report.detail(describeTaste(read, rules, t.permissions?.veto ?? earned.veto, held, t.waiting));
