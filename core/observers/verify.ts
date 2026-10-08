@@ -22,6 +22,8 @@ export interface RuleCheck {
   readonly pattern?: string;
   /** ACCURACY rules are repaired before STYLE ones; unset reads as STYLE */
   readonly phase?: 'ACCURACY' | 'STYLE';
+  /** for a requirement that comes from a method: what kind of thing it asks (core/method/standard.ts). It decides the repair */
+  readonly obligation?: 'DELIVERABLE' | 'EXECUTION' | 'JUDGEMENT';
   /** for the invented-claim line: which instrument found its spans, which decides whether they may be cut (run-repair.ts, cutBy) */
   readonly authority?: CutAuthority;
 }
@@ -43,7 +45,7 @@ export function verifyText(skill: string, v: StandardVersion, text: string, cont
   const measured = live.filter((r): r is Requirement & { measurement: NonNullable<Requirement['measurement']> } => Boolean(r.measurement));
   const checked: RuleCheck[] = measured.filter((r) => isGeneralScope(r.appliesWhen))
     .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, result: measure(text, r.measurement, context),
-      observer: r.measurement.observer, phase: r.phase ?? 'STYLE',
+      observer: r.measurement.observer, phase: r.phase ?? 'STYLE', ...(r.obligation ? { obligation: r.obligation } : {}),
       ...(r.measurement.observer === 'PATTERN_RATE' && Array.isArray(r.measurement.params.pattern) ? { pattern: String(r.measurement.params.pattern[0]) } : {}) }));
   return {
     skill, standardVersionHash: v.standardVersionHash, checked,

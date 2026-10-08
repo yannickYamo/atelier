@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
@@ -467,7 +468,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(refineDraft({ client, budget, name, std, checks, taste }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withMethod(refineDraft({ client, budget, name, std, checks, taste }), { client, budget, std, servedText: servedForRun, task: taskForRun, notes: completions }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
       shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
@@ -891,6 +892,41 @@ export const STRICT_EXIT = 3;
  * kept only if it breaks no more REQUIRED rules and leaves fewer parts out. The instruction never asks for
  * content the writer does not have: a part it cannot give, it must say so. A reader that cannot answer changes nothing.
  */
+/**
+ * WHAT THE METHOD REQUIRES THE WORK TO CONTAIN, AND THE DRAFT LEFT OUT: WRITTEN AGAIN, WITH IT NAMED. A missing
+ * section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone). One more draft is
+ * written with each missing thing named in the owner's own words, put through the same checks, and kept only if it
+ * leaves fewer of them out and breaks no more REQUIRED rules. It is told never to fill a table or a section with
+ * what it was not given: a figure the material does not hold is cut by the claim check either way.
+ */
+function withMethod(refine: (draft: string) => Promise<Delivered>,
+  c: { client: InferenceClient; budget: Budget; std: Standard; servedText: string; task: string; notes: string[] } | null) {
+  const must = new Map((c?.std.requirements ?? []).filter((r) => r.obligation === 'DELIVERABLE' && r.measurement && r.materiality === 'REQUIRED').map((r) => [r.requirementId, r.statement]));
+  if (!c || !must.size) return refine;
+  const missingIn = (d: Delivered): string[] => d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
+  return async (draft: string) => {
+    const d = await refine(draft);
+    const missing = missingIn(d);
+    if (!missing.length) return d;
+    try {
+      const said = missing.map((id) => `- ${must.get(id) ?? id} (${d.report.checked.find((x) => x.requirementId === id)?.result.detail ?? 'missing'})`).join('\n');
+      const note = `An earlier draft left out what this work must contain:\n${said}\nWrite the whole piece again with each of them in it, in the order the method gives. `
+        + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.';
+      const piece = (await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, note, {})).piece;
+      const d2 = await refine(piece);
+      const missing2 = missingIn(d2);
+      const better = missing2.length < missing.length && brokenIn(d2.report).length <= brokenIn(d.report).length;
+      c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${missing.join(', ')}); it now leaves out ${missing2.length}.`
+        : `The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); one more draft did not do better, so the first is kept.`);
+      if (better && !d2.repair) return { ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } };
+      return better ? d2 : d;
+    } catch (err) {
+      c.notes.push(`The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
+      return d;
+    }
+  };
+}
+
 function withCoverage(refine: (draft: string) => Promise<Delivered>,
   c: { client: InferenceClient; budget: Budget; judge: ContextJudge; asked: string; servedText: string; task: string; notes: string[] } | null) {
   if (!c?.judge.covers) return refine;
@@ -1282,6 +1318,9 @@ function reportDrift(report: RunReport, L: store.StoreLayout, sv: SkillVersion, 
 
 /** The counted checks and the invented-claim check: a rule still broken is always said, and so is a cut. */
 function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, checks: Checks): void {
+  // A SKILL BUILT FROM A METHOD says on every run what of the method was held, by kind (core/eval/obligations.ts).
+  const held = std ? methodReading(std.requirements, verifyText(rec.skillName, std, rec.output, checks.context)) : null;
+  if (held) report.say(methodLine(held));
   if (rec.selection) report.detail(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);
   const repairOff = argv.includes('--no-repair');
   const r = rec.repair;

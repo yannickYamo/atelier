@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: a skill from one method and one finished example
+
+A second way in, beside `atelier new` ([decision 0017](docs/decisions/0017-a-skill-from-one-method-and-one-example.md)).
+Nothing changes for a skill built from a body of work.
+
+- **`atelier method <note> --golden <example>`** reads what you say is done (steps, a template, both) and one piece
+  of work where it was done, and builds a skill held to the method. It calls no model, and `--yes` accepts exactly
+  what the screen showed.
+- **Each step is yours, in your words, and is one of three things.** Something the work must contain (these
+  sections, this table), read by code on every output. Something it must be made from (every figure is in the
+  material), read against what was bound. Or a judgement, shown to the writer and reported as not measured.
+- **A step gets a check only when your own example passes it.** A step your example does not hold is kept as yours
+  and asked about: your template and your finished work disagree, and only you know which is right.
+- **What your example shows and your method did not say is proposed, and shown, never required.**
+- **No taste is read from one piece.** How you sound is read from a body of work, with `atelier new`.
+- **Every run says what was held:** "Method: contains 3 of 3 thing(s) it must · made from what was given 1 of 1 · 1
+  judgement step(s) not measured."
+- **What a draft left out is written again with it named.** A missing section or table is never patched into a
+  sentence. An output that follows the easy rules and says nothing is not conformant: it lacks what the work must
+  contain.
+- Two new checks, usable by any standard: `TABLE` (a table with these columns) and `CITED` (every figure is in the
+  request or the material). A check may now read the request and the named material, not only the output.
+
 ### Fixed, for 2.0: a test run is never something a skill learns from
 
 - **A run marked as a test is a measurement, and nothing that learns reads it.** A held-back case run by `atelier

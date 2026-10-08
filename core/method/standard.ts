@@ -102,6 +102,14 @@ const ABOUT_FIGURES = /\b(?:figure|number|statistic|stat|data|claim|metric|price
  */
 function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Measurement | null {
   const said = ` ${norm(step)} `;
+  // WHAT THE STEP NAMES OUTRIGHT COMES FIRST, whether or not the example has it: "a Risks section", "a table with the
+  // columns A, B and C". Read only from the example, a step that names a column the example lacks was given the
+  // example's own table and marked as held.
+  const columns = /\btable\b[^.]*?\bcolumns?\s+(?:of\s+|named\s+|called\s+|:\s*)?(.+?)\s*(?:[.;]|$)/i.exec(step)?.[1]
+    ?.split(/\s*,\s*(?:and\s+)?|\s+and\s+/).map((c) => norm(c)).filter((c) => c.length >= 2 && c.split(' ').length <= 5) ?? [];
+  if (columns.length >= 2) return { observer: 'TABLE', params: { columns, minRows: 1 } };
+  const section = /\b(?:an?|the)\s+((?:[A-Z][\w'-]*\s?){1,5})\s*section\b/.exec(step)?.[1]?.trim();
+  if (section && section.length >= 3) return { observer: 'PRESENCE', params: { sections: [section] } };
   const named = outline.sections.filter((s) => norm(s).length >= 5 && said.includes(` ${norm(s)} `));
   if (named.length) return { observer: 'PRESENCE', params: { sections: named } };
   if (/\btables?\b/i.test(step) && outline.tables.length) {
@@ -171,10 +179,4 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     if (r.verdict === 'MET') out.push({ statement: 'Every figure in the work is one the request or the material gives.', origin: 'SHOWN_BY_EXAMPLE', obligation: 'EXECUTION', measurement: m, onExample: r.detail, demoted: null });
   }
   return out;
-}
-
-/** The count a person reads on the screen and on every run: by kind, and how many no code can check. */
-export function countByObligation(reqs: readonly Pick<Requirement, 'obligation' | 'measurement'>[]): { deliverable: number; execution: number; judgement: number } {
-  const of = (k: Obligation): number => reqs.filter((r) => r.obligation === k).length;
-  return { deliverable: of('DELIVERABLE'), execution: of('EXECUTION'), judgement: of('JUDGEMENT') };
 }
