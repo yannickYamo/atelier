@@ -21,7 +21,7 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { measure } from '../../core/observers/registry.js';
 import { countWords } from '../../core/eval/size.js';
 import { goldenCase, servedFor, whyNotRunnable, repeatsReference, CARRIED_RUN, countClasses } from '../../core/golden/case.js';
-import { renderReproduction, countsOf, type CaseOutcome, type ReproductionRecord } from '../../core/eval/reproduce.js';
+import { renderReproduction, countsOf, type CaseOutcome, type ReproductionRecord, shapeAgainst } from '../../core/eval/reproduce.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, argv, die, flag, loadSession, numericFlag, skillArg, runFile, clientAndBinding, sha } from '../runtime.js';
 import { spendOneWithResult } from './improve.js';
@@ -167,8 +167,9 @@ export async function reproduce(): Promise<void> {
         const req = v.checked.filter((x) => x.materiality === 'REQUIRED' && x.result.verdict !== 'NOT_APPLICABLE' && x.requirementId !== 'UNSOURCED');
         const unsourced = v.checked.some((x) => x.requirementId === 'UNSOURCED' && x.result.verdict === 'VIOLATED');
         const shared = repeatsReference(text, c);
-        const ok = v.failed !== true && shared < CARRIED_RUN;
-        outcomes.push({ ...blank(c.id, c.reference), state: 'ran', conformant: ok, required: { held: req.filter((x) => x.result.verdict === 'MET').length, applicable: req.length },
+        const bareShape = shapeAgainst(text, c.reference);
+        const ok = v.failed !== true && shared < CARRIED_RUN && bareShape.sections.missing.length === 0;
+        outcomes.push({ ...blank(c.id, c.reference), state: 'ran', conformant: ok, shape: bareShape, required: { held: req.filter((x) => x.result.verdict === 'MET').length, applicable: req.length },
           claims: { qualified: false, instrument: 'atelier verify', unsupported: unsourced ? 1 : 0 }, sharedWithReference: shared,
           words: { output: countWords(text), reference: countWords(c.reference) }, costUsd: costOfThis });
         say(`${ok ? 'reproduced    ' : 'not reproduced'}  ${c.id}`);
@@ -206,17 +207,22 @@ export async function reproduce(): Promise<void> {
       const claims = { qualified: ev.gates.claims.state === 'checked' && ev.gates.claims.measured !== null, instrument: ev.gates.claims.instrument, unsupported: ev.gates.claims.delivered + ev.gates.claims.unconfirmed };
       // WITH NO REQUIRED RULE CHECKED BY CODE, NOTHING WAS OBSERVED. A verdict of "conformant" then says only that no
       // unsupported specific was found, and that is not a reproduction: the case is counted as run and as neither.
-      const observed = rules.applicable > 0;
-      const conformant = observed ? ev.result.conformant && !carried : null;
+      // THE SHAPE OF THE PIECE HELD BACK, read on the output in code. A skill with two rules of style calls anything
+      // tidy conformant; a reproduction also has the sections the expert's own answer to this task has.
+      const shape = shapeAgainst(j.output, c.reference);
+      const lacks = shape.sections.missing;
+      const observed = rules.applicable > 0 || shape.sections.of > 0;
+      const conformant = observed ? ev.result.conformant && !carried && lacks.length === 0 : null;
       const brokenIds = ev.gates.required.broken.map((b) => b.id);
       const mine = blank(c.id, c.reference);
-      outcomes.push({ ...mine, state: 'ran', conformant, required: { ...rules, broken: brokenIds }, claims, sharedWithReference: shared,
+      outcomes.push({ ...mine, state: 'ran', conformant, shape, required: { ...rules, broken: brokenIds }, claims, sharedWithReference: shared,
         invocationId: j.invocationId ?? null, outputHash: sha(j.output), sharedWithCarriedPieces: ev.gates.copying?.longest ?? null,
         alsoBrokenByReference: brokenIds.filter((id) => (mine.reference.broken ?? []).includes(id)),
         ...(!observed ? { why: 'no required rule is checked by code on this case, so it is not read as reproduced or not' } : {}),
+        ...(lacks.length && !carried ? { why: `it lacks ${lacks.length} section(s) your held-back piece has: ${lacks.join(', ')}` } : {}),
         ...(carried ? { why: `the output repeats ${shared} words in a row of the held-back piece that are not in its material: something served them, and this is not a reproduction` } : {}),
         words: { output: countWords(j.output), reference: countWords(c.reference) }, costUsd: j.costUsd ?? 0 });
-      say(`${conformant === null ? 'not observed  ' : conformant ? 'reproduced    ' : 'not reproduced'}  ${c.id}`);
+      say(`${conformant === null ? 'not observed  ' : conformant ? 'reproduced    ' : 'not reproduced'}  ${c.id}${lacks.length ? `  (lacks: ${lacks.join(', ')})` : ''}`);
     }
   } finally {
     if (tmp) rmSync(tmp, { recursive: true, force: true });
