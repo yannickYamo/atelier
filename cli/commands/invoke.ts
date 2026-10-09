@@ -1347,7 +1347,7 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
     const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
     if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
     if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
-    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : 'held once what could not be traced to your material was cut'})` : ''}.`);
+    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : r.violatedBefore.includes('UNSOURCED') ? 'held once what could not be traced to your material was cut' : 'held once the draft was corrected'})` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);

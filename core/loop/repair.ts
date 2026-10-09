@@ -91,7 +91,8 @@ export function planRepair(text: string, report: VerifyReport,
     // that went wrong: rewritten into the last paragraph it becomes prose that mentions the section, which reads as
     // done and is not. It is answered by writing the piece again with what is missing named (cli/commands/invoke.ts,
     // `withMethod`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
-    // which takes the figure out and claims nothing in its place.
+    // which takes the figure out and claims nothing in its place. So its figures are meant to go (`specifics`), as an
+    // invented story's are: held to keep every figure, the rewrite that cut it was refused and the figure delivered.
     if (c.obligation === 'DELIVERABLE') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
@@ -112,7 +113,7 @@ export function planRepair(text: string, report: VerifyReport,
         drop: c.observer && REMOVES_SPAN.has(c.observer) && (move !== undefined || !(sent && sp.start <= sent.start && sp.end >= sent.end))
           ? sp.text.trim().toLowerCase() : null,
         swap: c.observer && SWAPS_SPAN.has(c.observer) ? sp.text.trim().toLowerCase() : null,
-        specifics: c.requirementId === 'UNSOURCED', claim: c.requirementId === 'UNSOURCED' ? sp.text : null, recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
+        specifics: c.requirementId === 'UNSOURCED' || c.observer === 'CITED', claim: c.requirementId === 'UNSOURCED' || c.observer === 'CITED' ? sp.text : null, recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
     }
   }
   raw.sort((a, b) => a.start - b.start || b.end - a.end);

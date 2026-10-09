@@ -96,7 +96,7 @@ describe('every figure is one the writer was given', () => {
   });
   it('a figure that follows from two given figures by one step of arithmetic is the writer reading the material', () => {
     const m = { observer: 'CITED' as const, params: { allow: 0 } };
-    const given = { material: [{ name: 'm.md', text: 'It won 10 of 20 deals, and lost 30 others.' }] };
+    const given = { material: [{ name: 'm.md', text: 'It won 10 of 20 deals, and lost 30 deals elsewhere.' }] };
     expect(measure('It won 50% of them, 40 deals lost or won beyond the 10.', m, given).verdict).toBe('MET');
     expect(measure('It won 73% of them.', m, given).verdict).toBe('VIOLATED');
   });
@@ -108,8 +108,8 @@ describe('every figure is one the writer was given', () => {
     expect(invented.spans.map((s) => s.text)).toEqual(['4,200']);
     expect(measure(`${EXAMPLE}\nAcme has 4,200 customers.`, { observer: 'CITED', params: { allow: 1 } }, context).verdict).toBe('MET');
   });
-  it('with no material it cannot be read, and says so: it is never a rule that held', () => {
-    expect(measure(EXAMPLE, { observer: 'CITED', params: { allow: 0 } })).toMatchObject({ verdict: 'NOT_APPLICABLE' });
+  it('with no material it is read against the request alone: a figure nobody gave was not given', () => {
+    expect(measure(EXAMPLE, { observer: 'CITED', params: { allow: 0 } })).toMatchObject({ verdict: 'VIOLATED', detail: '0 of 3 figure(s) are in the request (no material was bound)' });
     expect(CITED.validate({ allow: -1 })).toMatch(/allow is a count/);
   });
 });
@@ -220,8 +220,8 @@ describe('a run says what of the method was held, by kind, and a missing section
     expect(bland.failed).toBe(true);
     expect(methodLine(methodReading(reqs, bland)!)).toBe('Method: contains 0 of 2 thing(s) it must (missing: x1, x2) · made from what was given 1 of 1 · 1 judgement step(s) not measured.');
   });
-  it('with no material bound, the check on it is said as not read', () => {
-    expect(methodLine(methodReading(reqs, verifyText('s', v, EXAMPLE))!)).toMatch(/1 check\(s\) on the material not read: none was bound/);
+  it('with no material bound, what the work was made from is read against the request, and is not held', () => {
+    expect(methodLine(methodReading(reqs, verifyText('s', v, EXAMPLE))!)).toMatch(/made from what was given 0 of 1/);
   });
   it('the sentence repair leaves a method requirement alone', () => {
     expect(planRepair(BLAND, verifyText('s', v, BLAND, context))).toEqual([]);
