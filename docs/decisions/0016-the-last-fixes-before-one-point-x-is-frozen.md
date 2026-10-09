@@ -67,3 +67,15 @@ output begins as a new version with its own tests, and takes nothing from this r
   an earlier product, and are labelled so.
 - An author whose few dashes were being removed will see them again, up to their own rate.
 - A contract skill under strict delivery refuses less. How much less is measured on the frozen commit, not assumed.
+
+**Amended, 8 October 2026: one more fix, by the owner's ruling.** A defect found after the freeze is a finding, and
+this one was reported as one. The owner reopened 1.x for it alone, because it can stop a sealed run:
+
+7. **The copying check is read in one pass, in any script.** Each shared run was extended a word at a time by
+   searching every piece again, so the output the check exists for, a long copied stretch, was the one it was
+   slowest on: 600 copied words took seconds, and 4,000 did not finish. Under strict delivery that check runs on
+   every output. It also read only unaccented Latin letters, so an exact copy in another script read as no copy.
+   On unaccented text the numbers are the same, held by generated cases against the earlier reading.
+   Three pieces that are one clause ending three ways are now three pieces.
+
+Nothing else enters. The commit that carries this amendment is the one the closing claims are tested on.
