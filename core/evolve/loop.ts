@@ -258,8 +258,8 @@ export function leak(note: string, briefs: readonly Brief[], own: readonly strin
 export function priorSearches(records: readonly unknown[], standardVersion: string, skillVersion: string, working: readonly string[] = [], heldBack: readonly string[] = []): { tried: string[]; heldBackReads: number } {
   const sameSet = (a: unknown, b: readonly string[]): boolean => { if (!Array.isArray(a)) return false; const mine = a.filter((x): x is string => typeof x === 'string'); return mine.length === b.length && [...mine].sort().join('\n') === [...b].sort().join('\n'); };
   // Only what is plainly a record of a search is read: a file that is something else says nothing.
-  const whole = (r: unknown): r is EvolveRecord => typeof r === 'object' && r !== null && Array.isArray((r as EvolveRecord).trials) && typeof (r as EvolveRecord).briefs === 'object'
-    && (r as EvolveRecord).trials.every((t) => typeof t === 'object' && typeof t.key === 'string' && typeof t.why === 'string');
+  const whole = (r: unknown): r is EvolveRecord => typeof r === 'object' && r !== null && Array.isArray((r as EvolveRecord).trials) && typeof (r as EvolveRecord).briefs === 'object' && (r as { briefs: unknown }).briefs !== null
+    && (r as { trials: unknown[] }).trials.every((t) => typeof t === 'object' && t !== null && typeof (t as Trial).key === 'string' && typeof (t as Trial).why === 'string');
   const same = records.filter(whole).filter((r) => r.standardVersion === standardVersion && r.skillVersion === skillVersion);
   // WHAT WAS TRIED ON THESE WORKING BRIEFS. On other briefs, or more of them, the same change is another question:
   // a note that was inside the noise on eight briefs may be plainly better on sixteen.

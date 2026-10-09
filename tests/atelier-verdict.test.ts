@@ -131,6 +131,54 @@ describe('what an independent review found the first version of this got wrong',
   });
 });
 
+describe('what a second review found in the figure check', () => {
+  it('a round figure is not sourced because two given figures come near it', () => {
+    expect(cited('He takes metoprolol 100 mg twice daily.', 'Metoprolol 50 mg twice daily. Furosemide 40 mg IV.').verdict).toBe('VIOLATED');
+    expect(cited('A refund of $1,000.', 'A refund of $700 and a fee of $150.').verdict).toBe('VIOLATED');
+    expect(cited('Cure period is 30 days.', 'Notice 45 days. Cure period 12 days.').verdict).toBe('VIOLATED');
+    expect(cited('About 10,000 seats sold.', 'There were 12,400 seats sold and 300 seats returned.').verdict).toBe('VIOLATED');
+  });
+  it('a given figure rounded to two figures or more is that figure', () => {
+    expect(cited('About 12,000 seats sold.', 'There were 12,400 seats sold.').verdict).toBe('MET');
+    expect(cited('About 20,000 seats sold.', 'There were 12,400 seats sold.').verdict).toBe('VIOLATED');
+  });
+  it('a measured figure restated without its unit, or with the unit spelled out, was given', () => {
+    expect(cited('Potassium is 3.4.', 'Potassium 3.4 mmol/L.').verdict).toBe('MET');
+    expect(cited('Weight is 82 kilos and latency 310 milliseconds on 50 gigabytes.', 'Weight 82 kg. Latency 310 ms. Disk 50 GB.').verdict).toBe('MET');
+  });
+  it('a unit is taken from a table only where that column says it', () => {
+    const table = '| Drug | Dose (mg) | NPS |\n|---|---|---|\n| Atorvastatin | 80 | 47 |\n';
+    expect(cited('Atorvastatin 80 mg.', table).verdict).toBe('MET');
+    expect(cited('The dose is 47 mg.', table).verdict).toBe('VIOLATED');
+  });
+  it('two cells of one row of a table are amounts of the same thing', () => {
+    expect(cited('We added 90 customers over two quarters.', '| Metric | Q2 | Q3 |\n|---|---|---|\n| New customers | 38 | 52 |\n| NPS | 41 | 47 |\n').verdict).toBe('MET');
+    expect(cited('That is 99 in all.', '| Metric | Q2 | Q3 |\n|---|---|---|\n| New customers | 38 | 52 |\n| NPS | 41 | 47 |\n').verdict).toBe('VIOLATED');
+    expect(cited('Headcount is now 91.', 'Headcount 84.\nWe hired 7 people.').verdict).toBe('MET');
+  });
+  it('what a number counts is the noun, not the next word that ends in s', () => {
+    expect(cited('That leaves 298 customers outside the EU.', 'It has 312 customers across regions, 14 customers in the EU.').verdict).toBe('MET');
+    expect(cited('We have 20 customers.', 'There are 12 customers plus 8 customers on trial.').verdict).toBe('MET');
+    expect(cited('That is 25%, so 18 nodes were unaffected.', 'The outage hit 6 of 24 nodes.').verdict).toBe('MET');
+  });
+  it('a number after a hyphen or a minus sign is a number', () => {
+    expect(cited('Delivery takes 10-99 days.', 'Delivery in 10-15 days.')).toEqual({ verdict: 'VIOLATED', missing: ['99'] });
+    expect(cited('Delivery takes 10 to 15 days.', 'Delivery in 10-15 days.').verdict).toBe('MET');
+    expect(cited('Revenue changed by -40%.', 'Nothing here.')).toEqual({ verdict: 'VIOLATED', missing: ['40%'] });
+    expect(cited('It follows ISO-9001 and covid-19 rules.', 'Nothing here.').verdict).toBe('MET');
+  });
+});
+
+describe('what a second review found in the repair of a figure', () => {
+  const original = 'In 2040 the firm sold 40 seats to Acme.';
+  it('the figure is taken out where it stands, not where its digits first appear', () => {
+    expect(spanIntegrity(original, 'In 2040 the firm sold seats to Acme.', new Set(), false, new Set(), false, ['40']).ok).toBe(true);
+    expect(spanIntegrity('It cost $1,200, of which 200 was tax.', 'It cost $1,200, some of which was tax.', new Set(), false, new Set(), false, ['200']).ok).toBe(true);
+    expect(spanIntegrity('We lost 40 seats in May and 40 seats in June.', 'We lost seats in May and in June.', new Set(), false, new Set(), false, ['40', '40']).ok).toBe(true);
+    expect(spanIntegrity(original, 'The firm sold seats to Acme.', new Set(), false, new Set(), false, ['40']).ok).toBe(false);
+  });
+});
+
 describe('sections, as the review found them misread', () => {
   it('a short section is still a section; only a bare heading is empty', () => {
     expect(presence('## Risks\n\nNone.\n\n## Total\n\n$4,200\n\n## Owners\n\n- Priya\n- Tom\n', { sections: ['Risks', 'Total', 'Owners'], body: 1 }).verdict).toBe('MET');
@@ -149,6 +197,27 @@ describe('sections, as the review found them misread', () => {
     const r = measure('## Owners\n', { observer: 'PRESENCE', params: { sections: ['Owners'], body: 1 } });
     expect(r.verdict).toBe('VIOLATED');
     expect(r.spans.length).toBeGreaterThan(0);
+  });
+});
+
+describe('what a second review found in sections', () => {
+  it('a memo\'s header block and a signature are not what the work opens or ends with', () => {
+    const memo = 'MEMORANDUM\nTo: the board\nFrom: the finance team\nDate: 12 May\nSubject: cash\n\nSummary: We are short of cash this quarter and need a bridge.\n\nPlan: Draw on the facility and cut travel until June.\n\nPhone: 555 0100\nDr Li: aware.\n';
+    expect(presence(memo, { sections: ['Summary'], opens: 1, labels: 1 }).verdict).toBe('MET');
+    expect(presence(memo, { sections: ['Plan'], closes: 1, labels: 1 }).verdict).toBe('MET');
+  });
+  it('a section is named by its words, not by letters inside another word', () => {
+    const doc = '## Planning context\n\nWe looked at three options over the spring.\n\n## Summary\n\nOption two is cheapest.\n';
+    expect(presence(doc, { sections: ['Plan'], body: 1 })).toEqual({ verdict: 'VIOLATED', detail: 'no "Plan" section' });
+    expect(presence(doc, { sections: ['Summary'], body: 1 }).verdict).toBe('MET');
+  });
+  it('a label in a list item, a numbered clause in title case and a line in capitals are sections', () => {
+    const review = '- **Blocking:** the handle is never closed on the error path.\n- **Nits:** rename the flag to say what it does.\n';
+    expect(presence(review, { sections: ['Blocking', 'Nits'], labels: 1, body: 1 }).verdict).toBe('MET');
+    const contract = '3. Fees and Payment.\n\nThe customer pays within thirty days.\n\n4. Limitation of Liability\n\nNeither party is liable for indirect loss.\n';
+    expect(presence(contract, { sections: ['Fees and Payment', 'Limitation of Liability'], labels: 1, body: 1 }).verdict).toBe('MET');
+    expect(presence('SITUATION\n\nShe is bleeding again.\n\nPLAN\n\nReview within the hour.\n', { sections: ['Situation', 'Plan'], labels: 1, body: 1 }).verdict).toBe('MET');
+    expect(presence('1. Open the file and read it.\n2. Close the file.\n', { sections: ['Open'], labels: 1 }).verdict).toBe('VIOLATED');
   });
 });
 

@@ -74,7 +74,7 @@ export const TABLE: Observer = {
 const WORDS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
   thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100 };
 const SCALE: Readonly<Record<string, number>> = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 };
-const FIGURE = /(?<![\w.,:/-])(?:[$€£]\s?)?\d(?:[\d,]*\d)?(?:\.\d+)?(?:\s?(?:%|percent\b|bps\b|(?:k|m|mn|b|bn)\b|thousand\b|million\b|billion\b|x\b))?(?![\d:/]|(?:st|nd|rd|th)\b)/gi;
+const FIGURE = /(?<![\w.,:/])(?<!\p{L}-)(?:[$€£]\s?)?\d(?:[\d,]*\d)?(?:\.\d+)?(?:\s?(?:%|percent\b|bps\b|(?:k|m|mn|b|bn)\b|thousand\b|million\b|billion\b|x\b))?(?![\d:/]|(?:st|nd|rd|th)\b)/giu;
 const WORD_FIGURE = new RegExp(String.raw`\b(${Object.keys(WORDS).join('|')})\b(?=\s+(?:percent|dollars?|euros?|seats?|customers?|users?|employees?|people|months?|years?|days?|weeks?|deals?|accounts?|points?|times)\b)`, 'gi');
 /**
  * Two numbers of two digits or more with a slash between them are one reading: a blood pressure, a score out of a
@@ -92,18 +92,22 @@ const DATE_BEFORE = new RegExp(String.raw`\b${MONTH}\.?\s+$`); const DATE_AFTER 
  */
 const UNIT_NAMES: Readonly<Record<string, string>> = { mcg: 'mcg', 'µg': 'mcg', microgram: 'mcg', micrograms: 'mcg', mg: 'mg', milligram: 'mg', milligrams: 'mg', g: 'g', gram: 'g', grams: 'g',
   kg: 'kg', kilogram: 'kg', kilograms: 'kg', ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml', dl: 'dl', l: 'l', litre: 'l', litres: 'l', liter: 'l', liters: 'l',
-  mmol: 'mmol', mol: 'mol', iu: 'iu', mmhg: 'mmhg', bpm: 'bpm', cm: 'cm', mm: 'mm', km: 'km', kb: 'kb', mb: 'mb', gb: 'gb', ms: 'ms' };
-const MEASURE = new RegExp(String.raw`^[\s-]?(${Object.keys(UNIT_NAMES).sort((x, y) => y.length - x.length).join('|')})\b`, 'i');
+  mmol: 'mmol', mol: 'mol', iu: 'iu', mmhg: 'mmhg', bpm: 'bpm', cm: 'cm', mm: 'mm', km: 'km', kb: 'kb', mb: 'mb', gb: 'gb', ms: 'ms',
+  kilo: 'kg', kilos: 'kg', millisecond: 'ms', milliseconds: 'ms', kilobyte: 'kb', kilobytes: 'kb', megabyte: 'mb', megabytes: 'mb', gigabyte: 'gb', gigabytes: 'gb',
+  kilometre: 'km', kilometres: 'km', kilometer: 'km', kilometers: 'km', centimetre: 'cm', centimetres: 'cm', centimeter: 'cm', centimeters: 'cm', millimetre: 'mm', millimetres: 'mm', millimeter: 'mm', millimeters: 'mm' };
+const MEASURE = new RegExp(String.raw`^[ \t-]?(${Object.keys(UNIT_NAMES).sort((x, y) => y.length - x.length).join('|')})\b`, 'i');
 /** Money is one thing whether it is written with its sign or its name. */
 const MONEY: Readonly<Record<string, string>> = { $: 'dollar', '€': 'euro', '£': 'pound', dollar: 'dollar', euro: 'euro', pound: 'pound' };
 /** A small word after a number that is not what the number counts. */
-const NOT_A_UNIT = new Set(['of', 'and', 'or', 'to', 'in', 'on', 'at', 'the', 'a', 'an', 'for', 'from', 'by', 'with', 'is', 'are', 'was', 'were', 'per', 'out', 'more', 'less', 'than', 'that', 'which', 'who', 'as', 'but', 'so', 'if', 'it', 'this', 'may', 'will', 'would', 'can', 'could', 'should', 'did', 'do', 'have', 'has', 'had', 'not', 'now', 'then', 'each', 'every', 'all', 'in', 'old', 'total', 'times']);
+const NOT_A_UNIT = new Set(['of', 'and', 'or', 'to', 'in', 'on', 'at', 'the', 'a', 'an', 'for', 'from', 'by', 'with', 'is', 'are', 'was', 'were', 'per', 'out', 'more', 'less', 'than', 'that', 'which', 'who', 'as', 'but', 'so', 'if', 'it', 'this', 'may', 'will', 'would', 'can', 'could', 'should', 'did', 'do', 'have', 'has', 'had', 'not', 'now', 'then', 'each', 'every', 'all', 'total', 'times', 'across', 'versus', 'plus', 'minus', 'over', 'under', 'into', 'onto', 'ones', 'outside', 'inside', 'since', 'during', 'after', 'before']);
 
 interface Figure { readonly key: string; readonly raw: string; readonly start: number; readonly end: number; readonly value: number; readonly percent: boolean;
   /** what the number counts ("seat", "mg", "dollar"), or null: two figures are added or subtracted only when this is the same */
   readonly unit: string | null;
   /** it stands in a row of a table, where the unit is in the column's heading and not beside the number */
-  readonly inTable?: boolean }
+  readonly inTable?: boolean;
+  /** in a table: where its row starts, and the unit its column's heading names in brackets ("Dose (mg)"), if any */
+  readonly row?: number; readonly columnUnit?: string | null }
 
 /**
  * What a number counts, read from the words after it: the unit of measure if one follows, else the noun of the
@@ -114,7 +118,8 @@ function thingAfter(after: string): string | null {
   const stop = phrase.findIndex((w) => NOT_A_UNIT.has(w));
   const words = stop === -1 ? phrase : phrase.slice(0, stop);
   if (!words.length) return null;
-  const noun = [...words].reverse().find((w) => w.length > 3 && w.endsWith('s')) ?? words[0];
+  // The first plural is the noun: "12 enterprise customers", "64 years old", "312 customers across regions".
+  const noun = words.find((w) => w.length > 3 && w.endsWith('s')) ?? words[0];
   const one = noun.length > 3 ? noun.replace(/s$/, '') : noun;
   return MONEY[one] ?? one;
 }
@@ -140,7 +145,10 @@ function figureAt(raw: string, start: number, after: string): Figure | null {
 export function figuresOf(text: string, given = false): Figure[] {
   const out: Figure[] = [];
   // Not inside code; not a list marker, a numbered heading or a heading at all.
-  const prose = text.replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length)).replace(/^\s*#{1,6}\s.*$/gm, (m) => ' '.repeat(m.length)).replace(/^\s*\d+[.)]\s/gm, (m) => ' '.repeat(m.length));
+  // Nor a date written in figures: "2026-05-12" is not three quantities.
+  const prose = text.replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length)).replace(/^\s*#{1,6}\s.*$/gm, (m) => ' '.repeat(m.length)).replace(/^\s*\d+[.)]\s/gm, (m) => ' '.repeat(m.length))
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, (m) => ' '.repeat(m.length));
+  const tables = tablesOf(text);
   for (const m of prose.matchAll(PAIR)) {
     const [left, right] = m[0].split('/');
     if (left !== right) out.push({ key: `pair:${m[0]}`, raw: m[0], start: m.index, end: m.index + m[0].length, value: NaN, percent: false, unit: null });
@@ -153,14 +161,21 @@ export function figuresOf(text: string, given = false): Figure[] {
     const scaled = /[%$€£]|percent|bps|[kmbx]$|thousand|million|billion/i.test(raw);
     const unit = scaled || MEASURE.test(after);
     const digits = raw.replace(/\D/g, '').length;
-    if (!unit && digits < 2 && !(given && f.unit !== null)) continue;
+    if (!unit && digits < 2 && !given) continue;
     const before = prose.slice(Math.max(0, start - 14), start);
     // A label or a date is a bare number: "line 214", "12 May". A percentage, a sum of money or an amount never is.
     if (!unit && (LABEL_BEFORE.test(before) || ((DATE_BEFORE.test(before) || DATE_AFTER.test(after)) && (f.value <= 31 || /^(?:19|20)\d\d$/.test(raw))))) continue;
     // A year stands alone and is not a quantity.
     if (!unit && /^(?:19|20)\d\d$/.test(raw)) continue;
-    const line = prose.slice(prose.lastIndexOf('\n', start) + 1, !prose.includes('\n', start) ? prose.length : prose.indexOf('\n', start));
-    out.push(/^\s*\|.*\|\s*$/.test(line) ? { ...f, inTable: true } : f);
+    const lineStart = prose.lastIndexOf('\n', start) + 1;
+    const lineEnd = prose.indexOf('\n', start);
+    const line = prose.slice(lineStart, lineEnd === -1 ? prose.length : lineEnd);
+    if (!/^\s*\|.*\|\s*$/.test(line)) { out.push(f); continue; }
+    // In a table: which row, and what unit its column's heading gives it.
+    const column = (line.slice(0, start - lineStart).match(/\|/g) ?? []).length - 1;
+    const heading = tables.find((t) => start >= t.start && start <= t.end)?.header[column] ?? '';
+    const named = /\(([^)]+)\)/.exec(heading)?.[1].replace(/[^\p{L}µ]/gu, '') ?? '';
+    out.push({ ...f, inTable: true, row: lineStart, columnUnit: UNIT_NAMES[named] ?? null });
   }
   for (const m of prose.matchAll(WORD_FIGURE)) {
     const value = WORDS[m[1].toLowerCase()]; const rest = prose.slice(m.index + m[0].length); const percent = /^\s+percent/i.test(rest);
@@ -177,7 +192,23 @@ function alsoGiven(f: Figure): string[] {
 }
 
 /** Whether a figure with a unit of measure is the number in a table whose heading, not its cell, carries the unit. */
-const inGivenTable = (f: Figure, given: readonly Figure[]): boolean => f.key.includes('|') && given.some((g) => g.inTable === true && g.value === f.value && !g.percent && !g.key.includes('|'));
+const inGivenTable = (f: Figure, given: readonly Figure[]): boolean => f.key.includes('|') && given.some((g) => g.inTable === true && g.value === f.value && !g.percent && g.columnUnit === f.key.split('|')[1]);
+
+/**
+ * How far a figure may sit from the number it rounds: half its last place, and never more than a twentieth of it.
+ * Only for a figure of two significant figures or more: "about 12,000" rounds 12,400, and "1,000" rounds nothing.
+ */
+function roundingSlack(value: number): number {
+  if (!Number.isInteger(value) || value === 0) return 0;
+  const zeros = /0+$/.exec(String(Math.abs(value)))?.[0].length ?? 0;
+  const significant = String(Math.abs(value)).length - zeros;
+  return zeros >= 1 && significant >= 2 ? Math.min(10 ** zeros / 2, Math.abs(value) * 0.05) : 0;
+}
+/** Whether a round figure is one given figure, rounded: of the same thing, or of nothing named. */
+const roundsGiven = (f: Figure, given: readonly Figure[]): boolean => {
+  const slack = roundingSlack(f.value);
+  return slack > 0 && !f.percent && given.some((g) => !g.percent && Number.isFinite(g.value) && Math.abs(g.value - f.value) <= slack && (g.unit === f.unit || g.unit === null || f.unit === null));
+};
 
 /**
  * Whether a stated figure follows from what was given, by one step of arithmetic on two given figures.
@@ -190,19 +221,19 @@ const inGivenTable = (f: Figure, given: readonly Figure[]): boolean => f.key.inc
 function derived(f: Figure, given: readonly Figure[]): boolean {
   if (!Number.isFinite(f.value)) return false;
   const counts = given.filter((g) => !g.percent && Number.isFinite(g.value)).slice(0, 80);
-  // How the stated figure is rounded: "20,500" is to the hundred, so half a hundred either way is the same figure.
-  const zeros = Number.isInteger(f.value) && f.value !== 0 ? (/0+$/.exec(String(f.value))?.[0].length ?? 0) : 0;
-  const slack = zeros ? 10 ** zeros / 2 : 0;
+  const slack = roundingSlack(f.value);
   for (const a of counts) for (const b of counts) {
     if (a === b || a.value === b.value) continue;
     const named = [a.unit, b.unit].filter((u): u is string => u !== null);
-    const sameThing = named.length > 0 && new Set(named).size === 1;
+    // Named as the same thing, or two cells of one row of a table, which a row is.
+    const oneRow = a.row !== undefined && a.row === b.row;
+    const sameThing = (named.length > 0 && new Set(named).size === 1) || (oneRow && named.length === 0);
     if (f.percent) {
       if (sameThing && a.value < b.value && Math.abs(f.value - (a.value / b.value) * 100) <= 0.5) return true;
       continue;
     }
     // At least one of the two says what it counts, neither says something else, and the result counts that too.
-    if (!sameThing || (f.unit !== null && f.unit !== named[0]) || (f.unit === null && named.length < 2)) continue;
+    if (!sameThing || (f.unit !== null && named.length > 0 && f.unit !== named[0])) continue;
     if (f.key.includes('|') && (a.unit !== f.unit || b.unit !== f.unit)) continue;
     const same = (x: number): boolean => Math.abs(f.value - x) <= Math.max(slack, Math.abs(x) * 1e-9);
     if (same(a.value + b.value) || same(Math.abs(a.value - b.value))) return true;
@@ -224,10 +255,11 @@ export const CITED: Observer = {
   observe(text, p, context?: CheckContext): ObserverResult {
     const material = context?.material ?? [];
     const givenFigures = [context?.request ?? '', ...material.map((m) => m.text)].flatMap((t) => figuresOf(t, true));
-    const given = new Set(givenFigures.flatMap((f) => [f.key, ...alsoGiven(f)]));
+    // A measured figure also gives its bare number: "Potassium 3.4 mmol/L" was given to a draft that says "3.4".
+    const given = new Set(givenFigures.flatMap((f) => [f.key, ...(f.key.includes('|') ? [f.key.split('|')[0]] : []), ...alsoGiven(f)]));
     const stated = figuresOf(text);
     // The same quantity, or one that follows from two that were given. A percentage is never met by a bare count.
-    const missing = stated.filter((f) => !given.has(f.key) && !inGivenTable(f, givenFigures) && !derived(f, givenFigures));
+    const missing = stated.filter((f) => !given.has(f.key) && !inGivenTable(f, givenFigures) && !roundsGiven(f, givenFigures) && !derived(f, givenFigures));
     const allow = num(p, 'allow') ?? 0;
     const where = material.length ? `the request or the material (${material.map((m) => m.name).join(', ')})` : 'the request (no material was bound)';
     const detail = `${stated.length - missing.length} of ${stated.length} figure(s) are in ${where}`;

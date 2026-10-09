@@ -40,8 +40,21 @@ describe('a section is the same section however two writers mark and spell it', 
   it('a piece of prose with a bold lead-in and an aside has no sections to ask for', () => {
     expect(shapeAgainst('Anything.', '**Acme Corp** signed on Tuesday and has asked for terms.\n\nNote: call me before Friday.\n\nThe rest is prose.').sections.of).toBe(0);
   });
-  it('most of the sections is the shape; one heading alone is not a shape to hold anything to', () => {
-    expect([[3, 3], [2, 3], [1, 3], [0, 3], [2, 4], [1, 4], [0, 1], [1, 2], [0, 2]].map(([held, of]) => hasShape({ sections: { of, held, missing: [] } }))).toEqual([true, true, false, false, true, false, true, true, false]);
+  it('two thirds of the sections is the shape; one heading alone is not a shape to hold anything to', () => {
+    expect([[3, 3], [2, 3], [1, 3], [3, 4], [2, 4], [0, 1], [2, 2], [1, 2]].map(([held, of]) => hasShape({ sections: { of, held, missing: [] } }))).toEqual([true, true, false, true, false, true, true, false]);
+  });
+  it('a placeholder is not a section, and a heading is matched by its words', () => {
+    const two = '## Plan\n\nDraw on the facility and cut travel until the end of June.\n\n## Risk\n\nThe bank may not extend the facility on the same terms.\n';
+    expect(shapeAgainst('## Plan\n\nTBD\n\n## Risk\n\nTBD\n', two).sections.held).toBe(0);
+    expect(shapeAgainst('## Explanation\n\nWe explain at some length what was done here.\n\n## Brisket recipes\n\nSmoke it low and slow for twelve hours.\n', two).sections.held).toBe(0);
+    expect(shapeAgainst('## The plan\n\nDraw on the facility now.\n\n## Risk\n\nThe bank may refuse.\n', two).sections.held).toBe(2);
+  });
+  it('a contract in capitals and the same contract in title case have the same clauses', () => {
+    expect(shapeAgainst('1. Definitions\n\n"Service" means the hosted product described here.\n\n2. Term\n\nThe agreement runs for one year from signing.\n\n3. Fees\n\nFees are paid yearly in advance.\n',
+      '1. DEFINITIONS\n\n"Service" means the hosted product in Schedule A.\n\n2. TERM\n\nThis agreement runs for the initial period.\n\n3. FEES\n\nFees are due yearly in advance.\n').sections).toMatchObject({ of: 3, held: 3 });
+  });
+  it('an email is not a set of sections because some of its lines hold a colon', () => {
+    expect(shapeAgainst('Anything.', 'Hi Sam,\n\nSubject: the offsite\nPhone: 555 0100\nJo Li: COO\nWhen: Tuesday\n\nSee you there.\n').sections.of).toBe(0);
   });
 });
 
@@ -53,6 +66,6 @@ describe('the record counts the shape, and says it', () => {
     const r = record([one({ shape: { sections: { of: 3, held: 3, missing: [] } } }), one({ id: 'fm.md', conformant: false, shape: { sections: { of: 4, held: 1, missing: ['a', 'b', 'c'] } }, why: 'it lacks 3 section(s) your held-back piece has: a, b, c' })]);
     expect(countsOf(r).shape).toEqual({ held: 4, of: 7 });
     expect(renderReproduction(r)).toMatch(/ {2}4 of 7 {3}sections of your held-back pieces are in the outputs, each with something in it/);
-    expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant", and the output has most of the sections of the piece held back/);
+    expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant", and the output has two thirds or more of the sections of the piece held back/);
   });
 });

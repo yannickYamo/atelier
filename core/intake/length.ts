@@ -35,9 +35,9 @@ const POINTS_AT = /\b(?:this|that|the|these|those|my|your|our|his|her|its|their|
 /** Words that introduce a length whatever follows. */
 const APPROX = /(?:\b(?:about|around|roughly|approximately|approx\.?|circa|some)|~)\s*$/i;
 /** Words that report a count of text that exists ("my draft has 300 words"). */
-const REPORTS = /\b(?:has|have|had|having|contains?|wrote|written|pasted|was|were|are|got|with|already|currently)\s+(?:about\s+|around\s+|roughly\s+|just\s+|only\s+|over\s+)?$/i;
+const REPORTS = /\b(?:has|have|had|having|contains?|wrote|written|pasted|was|were|are|is|runs?|ran|got|with|already|currently)\s+(?:about\s+|around\s+|roughly\s+|just\s+|only\s+|over\s+)?$/i;
 /** What may follow the unit when the number is a length: the end of its phrase, or what the piece is to be about. */
-const ENDS_PHRASE = /^(?:\s*$|\s*[.,;:!?)\]"'’”]|\s+(?:long|in length|in total|total|each|per|or so|please|about|on|titled|called|explaining|describing|covering|that|which|and)\b)/i;
+const ENDS_PHRASE = /^(?:\s*$|\s*[.,;:!?)\]"'’”]|\s+(?:long|in length|in total|total|each|or so|please|about|on|titled|called|explaining|describing|covering|that|which|and)\b)/i;
 
 type Read = Omit<StatedLength, 'raw'>;
 interface Form { readonly re: RegExp; readonly read: (m: RegExpExecArray) => Read; readonly bare: boolean }
@@ -46,7 +46,7 @@ const FORMS: readonly Form[] = [
   // "at least 300 and at most 500 words"
   form(String.raw`\bat least\s+${NUMBER}\s+(?:and|but)\s+(?:at most|no more than)\s+${NUMBER}\s+${UNIT}\b`,
     (m) => ({ unit: unitOf(m[3]), kind: 'range', min: toNumber(m[1]), max: toNumber(m[2]), target: null })),
-  form(String.raw`\b(?:at least|no (?:fewer|less) than|not (?:fewer|less) than|a minimum of|minimum(?: of)?|not under)\s+${NUMBER}\s+${UNIT}\b`,
+  form(String.raw`\b(?:at least|no (?:fewer|less) than|not (?:fewer|less) than|a minimum of|minimum(?: of)?|not under|(?<!\b(?:no|not)\s)more than|(?<!\bnot\s)over|above)\s+${NUMBER}\s+${UNIT}\b`,
     (m) => ({ unit: unitOf(m[2]), kind: 'min', min: toNumber(m[1]), max: null, target: null })),
   form(String.raw`\b(?:at most|no more than|not more than|a maximum of|maximum(?: of)?|max|under|within|up to|fewer than|less than|not over)\s+${NUMBER}\s+${UNIT}\b`,
     (m) => ({ unit: unitOf(m[2]), kind: 'max', min: null, max: toNumber(m[1]), target: null })),
@@ -63,18 +63,25 @@ const FORMS: readonly Form[] = [
 ];
 
 /** What a count of words can stand before as the length of it: "a 20,000 word book". */
-const PIECE = String.raw`(?:book|chapter|post|essay|article|report|piece|brief|memo|story|draft|summary|section|intro(?:duction)?|conclusion|email|letter|note|speech|script|answer|reply|review|bio|description|overview|doc(?:ument)?)`;
+const PIECE = String.raw`(?:book|chapter|blog(?:\s+post)?|post|essay|article|report|piece|brief|memo|story|draft|summary|section|intro(?:duction)?|conclusion|email|letter|note|speech|script|answer|reply|review|bio|description|overview|doc(?:ument)?)`;
 // "a 20,000 word book": the unit in the singular, then the kind of piece. It is a length only when that piece is what
 // is asked for, which the words straight before it say ("write a", "draft me a", "I need a"). "I wrote a 500 word
 // draft", "proofread the attached 3 page report" and "a proposal for a 90,000 word book" each name a piece that is
 // not the one to write.
 const PIECE_FORM = form(String.raw`${NUMBER}\s+(word|page|paragraph|sentence)(?=\s+${PIECE}\b)`, (m) => ({ unit: unitOf(m[2]), kind: 'target', min: null, max: null, target: toNumber(m[1]) }));
-const ASKS_FOR = /\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make)\s+(?:me\s+|us\s+|up\s+)?an?\s+$/i;
+const ASKS_FOR = /(?<!\b(?:not|never|don't|dont|doesn't|won't|cannot|can't)\s+(?:\w+\s+)?)\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make)\s+(?:me\s+|us\s+|up\s+)?an?\s+$/i;
+/** Before "a 500-word draft": words that say the piece is there already, or is what another piece is about. */
+const THERE_ALREADY = /\b(?:wrote|written|pasted|attached|here(?:'s| is| are)|proofread|edit|review|tighten|fix|improve|for|of|about|on|from|in|into)\s+(?:an?\s+|the\s+|my\s+|this\s+|that\s+)?(?:attached\s+)?$/i;
+const HYPHEN_FORM = FORMS[6];
 const ALL_FORMS: readonly Form[] = [...FORMS.slice(0, 7), PIECE_FORM, ...FORMS.slice(7)];
 /** Words before a count that say the text is to be changed by that much, not written to it. */
-const EDITS = /\b(?:remove|delete|cut|drop|trim|add|insert|change|fix|rewrite|move|merge|split)\s+(?:the\s+|about\s+|up to\s+|at least\s+)?$/i;
-/** Words that introduce a count spelled out as a length: without one, "two pages", "Three Sentences" and "one page" are prose. */
-const INTRODUCES = /(?:\b(?:write|draft|in|of|to|at|is|be|it|about|around|roughly|approximately|some|under|over|within|exactly|least|most|between)|~|-|–)\s*(?:a\s+|an\s+)?$/i;
+const EDITS = /\b(?:remove|delete|cut|drop|trim|add|insert|change|fix|rewrite|move|merge|split|by)\s+(?:the\s+|about\s+|around\s+|roughly\s+|up to\s+|at least\s+)?$/i;
+/**
+ * What introduces a count spelled out as a length: a word of approximation, or the verb that asks for the piece.
+ * "In three words", "it is two pages" and "look at two pages" are how people write prose, and a length read from
+ * prose is the harmful error; a length said this way and missed costs nothing that was not already so.
+ */
+const INTRODUCES = /(?:\b(?:write|draft|give me|give us|make it|keep it to|keep it under|about|around|roughly|approximately|exactly|between)|~)\s*(?:a\s+|an\s+)?$/i;
 
 // WHAT IS INSIDE QUOTATION MARKS IS A TITLE OR A QUOTATION, never the length to write to: a post titled "10 words
 // that changed our roadmap" was read as a post of ten words. Blanked, at the same length, so every place stays put.
@@ -127,7 +134,7 @@ function inDigits(request: string): { text: string; from: number[]; spelled: Set
  * paragraphs" states two. Of two said in the same unit (a first thought, then the length), the later is the length;
  * of two readings of the same words, the more specific. `raw` is the request's own words.
  */
-export function statedLengths(request: string): StatedLength[] {
+function located(request: string): { start: number; stated: StatedLength }[] {
   const { text, from, spelled } = inDigits(unquoted(request));
   const best = new Map<LengthUnit, { at: number; start: number; rank: number; stated: StatedLength }>();
   ALL_FORMS.forEach((f, rank) => {
@@ -136,11 +143,14 @@ export function statedLengths(request: string): StatedLength[] {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
       if (POINTS_AT.test(before) || REPORTS.test(before) || EDITS.test(before)) continue;
       if (f === PIECE_FORM && !ASKS_FOR.test(before)) continue;
+      if (f === HYPHEN_FORM && THERE_ALREADY.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
       // something else. One spelled out needs the word before it: "two pages" alone is how people write prose.
       if (f.bare && !APPROX.test(before) && !ENDS_PHRASE.test(after)) continue;
       const numberAt = m.index + m[0].search(/\d/);
       if (f.bare && spelled.has(numberAt) && !INTRODUCES.test(text.slice(0, m.index)) && text.slice(0, m.index).trim() !== '') continue;
+      // A count before "per" is a rate: "80 words per minute".
+      if (/^\s+(?:per|a|an|every)\s+(?:minute|hour|day|week|month|year|second)\b/i.test(after)) continue;
       const read = f.read(m);
       const numbers = [read.min, read.max, read.target].filter((x): x is number => x !== null);
       if (!numbers.length || numbers.some((x) => !Number.isFinite(x) || x <= 0)) continue;
@@ -150,12 +160,13 @@ export function statedLengths(request: string): StatedLength[] {
       if (!was || end > was.at || (end === was.at && rank < was.rank)) best.set(read.unit, { at: end, start: m.index, rank, stated: { raw: request.slice(from[m.index], from[end]).trim(), ...read } });
     }
   });
-  return [...best.values()].sort((a, b) => a.start - b.start).map((b) => b.stated);
+  return [...best.values()].sort((a, b) => a.start - b.start).map((b) => ({ start: b.start, stated: b.stated }));
 }
+export const statedLengths = (request: string): StatedLength[] => located(request).map((l) => l.stated);
 
-/** The length a draft is held to, or null: of the lengths the request states, the last one said. */
+/** The length a draft is held to, or null: of the lengths the request states, the last one said, where it was said. */
 export function statedLength(request: string): StatedLength | null {
-  return statedLengths(request).reduce<{ at: number; stated: StatedLength } | null>((last, s) => { const at = request.lastIndexOf(s.raw); return !last || at >= last.at ? { at, stated: s } : last; }, null)?.stated ?? null;
+  return located(request).at(-1)?.stated ?? null;
 }
 
 /** How a count sits against a stated length: inside it, or short or long of it. A target is met within a tenth. */

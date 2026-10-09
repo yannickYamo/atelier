@@ -123,7 +123,7 @@ export function planRepair(text: string, report: VerifyReport,
   // `specifics` stays "carries an unsourced claim" (what the loop reports as cut); `pure` is whether every
   // part merged into the span is one. It was ORed into the one flag the meaning check read, so a style
   // span that happened to overlap an invented figure skipped every check: its hedges and names could go.
-  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; pure: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
+  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; pure: boolean; allClaims: boolean; anyWhole: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
   for (const r of raw) {
     const last = merged[merged.length - 1];
     if (last && r.start < last.end) {
@@ -133,9 +133,12 @@ export function planRepair(text: string, report: VerifyReport,
       if (r.drop && !last.drops.includes(r.drop)) last.drops.push(r.drop);
       if (r.swap && !last.swaps.includes(r.swap)) last.swaps.push(r.swap);
       if (r.claim && !last.claims.includes(r.claim)) last.claims.push(r.claim);
-      last.specifics ||= r.specifics; last.pure &&= r.whole; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
+      last.specifics ||= r.specifics; last.allClaims &&= r.specifics; last.anyWhole ||= r.whole;
+      // The whole may go when a part of the span is an invented story and every other part is a claim too: a figure
+      // inside an invented sentence goes with the sentence.
+      last.pure = last.allClaims && last.anyWhole; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
     } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [],
-      specifics: r.specifics, pure: r.whole, claims: r.claim ? [r.claim] : [], recase: r.recase, cuttable: r.cuttable });
+      specifics: r.specifics, pure: r.whole, allClaims: r.specifics, anyWhole: r.whole, claims: r.claim ? [r.claim] : [], recase: r.recase, cuttable: r.cuttable });
   }
   return merged.map((m, i) => ({ id: i + 1, start: m.start, end: m.end, text: text.slice(m.start, m.end),
     reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase, cuttable: m.cuttable,

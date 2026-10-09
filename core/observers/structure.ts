@@ -54,7 +54,8 @@ export function headingsOf(text: string): Heading[] {
 /** Words that open a sentence, never a label: "We agreed one thing: ..." is a sentence. */
 const NOT_A_LABEL = new Set(['we', 'i', 'you', 'he', 'she', 'they', 'it', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'there', 'here', 'if', 'when', 'and', 'but', 'so', 'or',
   // the head of a letter or a memo, and an aside, are not sections of the work
-  'date', 'to', 'from', 'cc', 'bcc', 'subject', 're', 'note', 'nb', 'ps', 'tip', 'warning', 'example', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+  'date', 'to', 'from', 'cc', 'bcc', 'subject', 're', 'note', 'nb', 'ps', 'tip', 'warning', 'example', 'phone', 'tel', 'email', 'contact', 'signed', 'regards', 'thanks',
+  'please', 'first', 'second', 'third', 'then', 'next', 'finally', 'also', 'for', 'in', 'on', 'at', 'as', 'one', 'two', 'three', 'dr', 'mr', 'mrs', 'ms', 'prof', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
 /** A label that marks a section, short and written as a name: every word capitalised, or one or two words. */
 const labelLike = (t: string): boolean => {
   const words = t.trim().split(/\s+/);
@@ -79,17 +80,25 @@ export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
     if (/^(```|~~~)/.test(t)) { fence = !fence; continue; }
     if (fence || !t || /^#{1,6}\s/.test(t) || /^\s*\|/.test(line)) continue;
     const at = start + line.indexOf(t);
-    // "**Assessment**", "**Assessment:** she is pale", "Situation: ...", "Recommendation:" and "2. TERM".
+    // "**Assessment**", "**Assessment:** she is pale", "Situation: ...", "Recommendation:", "2. TERM", "3. Fees and
+    // Payment.", "SITUATION", and any of the labelled kinds as an item of a list ("- **Blocking:** ...").
+    const body = t.replace(/^[-*+]\s+/, '');
     // Bold is a label when it is the whole line, or ends in a colon: "**Acme Corp** signed on Tuesday" is a sentence.
-    const bold = /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/.exec(t) ?? /^(?:\*\*|__)(.+?):(?:\*\*|__)\s*(.*)$/.exec(t) ?? /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:\s*(.*)$/.exec(t);
-    const colon = /^([^:*_|]{2,48}):(?:\s+(.*)|\s*)$/.exec(t);
-    // A numbered clause heading: a short number, its full stop, capitals. "2024 ANNUAL REPORT" is a title.
-    const clause = /^\d{1,3}(?:\.\d+)*[.)]\s+(\p{Lu}[\p{Lu}\d &/'-]{2,})$/u.exec(t);
-    const name = bold ? bold[1].replace(/:\s*$/, '').trim() : clause ? clause[1].trim() : colon ? colon[1].trim() : null;
+    const bold = /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/.exec(body) ?? /^(?:\*\*|__)(.+?):(?:\*\*|__)\s*(.*)$/.exec(body) ?? /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:\s*(.*)$/.exec(body);
+    const colon = /^([^:*_|]{2,48}):(?:\s+(.*)|\s*)$/.exec(body);
+    // A numbered clause heading: a short number, its full stop, and a name in capitals or in title case (every word
+    // of four letters or more capitalised, six words at most). "2024 ANNUAL REPORT" is a title, and "1. Open the
+    // file" is a step.
+    const numbered = /^\d{1,3}(?:\.\d+)*[.)]\s+(.{3,60}?)\.?$/.exec(t)?.[1] ?? null;
+    const titled = (n: string): boolean => { const ws = n.split(/\s+/); return ws.length <= 6 && /^\p{Lu}/u.test(n) && !/[.!?;,:]/.test(n) && ws.filter((w) => w.length >= 4).every((w) => /^\p{Lu}/u.test(w)) && ws.some((w) => w.length >= 4); };
+    const clause = numbered !== null && (/^\p{Lu}[\p{Lu}\d &/'-]{2,}$/u.test(numbered) || titled(numbered)) ? numbered : null;
+    // A line that is nothing but one to five words in capitals.
+    const capitals = /^\p{Lu}[\p{Lu} &/'-]{3,40}$/u.test(t) && t.split(/\s+/).length <= 5 ? t : null;
+    const name = bold ? bold[1].replace(/:\s*$/, '').trim() : clause ?? capitals ?? (colon ? colon[1].trim() : null);
     // A whole line in bold is a heading by another name, and may run to a few words; a name before a colon is held
     // to being written as a name.
     const wholeBold = bold !== null && bold[2] === undefined && name !== null && name.split(/\s+/).length <= 8 && !/[.!?]$/.test(name);
-    if (name === null || taken.has(at) || (!clause && !wholeBold && !labelLike(name))) continue;
+    if (name === null || taken.has(at) || (clause === null && capitals === null && !wholeBold && !labelLike(name)) || NOT_A_LABEL.has(name.split(/\s+/)[0].toLowerCase())) continue;
     // The label ends where its name does, so what follows it on the line is the start of its section.
     out.push({ level: 7, text: name, start: at, end: at + t.indexOf(name) + name.length });
   }
@@ -265,7 +274,11 @@ export const PRESENCE: Observer = {
     // Sections present, in order.
     const sections = list(p, 'sections');
     if (sections.length) {
-      const at = sections.map((s) => heads.findIndex((h) => h.text.toLowerCase().includes(s.toLowerCase())));
+      // Where the standard asks more of a section than its heading (the params below), it is named by its words:
+      // "Plan" is not met by "Planning context". Read the older way where it does not, as it always was.
+      const strict = Boolean(num(p, 'body') ?? num(p, 'opens') ?? num(p, 'closes') ?? num(p, 'labels'));
+      const wordsOfName = (x: string): string => ` ${x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+      const at = sections.map((s) => heads.findIndex((h) => (strict ? wordsOfName(h.text).includes(wordsOfName(s)) : h.text.toLowerCase().includes(s.toLowerCase()))));
       const missing = sections.filter((_, i) => at[i] === -1);
       const found = at.filter((i) => i !== -1);
       const ordered = found.every((x, i) => i === 0 || x > found[i - 1]);
@@ -279,13 +292,18 @@ export const PRESENCE: Observer = {
       // Read among sections of its own level and above: a label under a heading does not come "before" the heading's
       // peers. And a section that follows a page of something else does not open the text, whatever came first.
       const first = at[0]; const lastAt = at[at.length - 1];
+      // What a stretch of text says, less a title and the head of a letter or memo (short lines with a colon, a line in
+      // capitals): those are not the work opening or ending with something else.
+      const substance = (chunk: string): number => (chunk.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').replace(/^\s*#{1,6}\s.*$/gm, ' ').replace(/^[^:\n]{1,30}:.*$/gm, ' ').replace(/^[\p{Lu} ]{3,40}$/gmu, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
+      // A heading, or a labelled part that says something: a signature line with a colon is not a section.
+      const says = (k: number): boolean => heads[k].level < 7 || substance(bodyOf(k)) >= 8;
       if (num(p, 'opens') && first !== -1) {
-        const earlier = heads.slice(0, first).find((h) => h.level <= heads[first].level);
-        const lead = (text.slice(0, heads[first].start).replace(/^---\n[\s\S]*?\n---\n/, '').replace(/^\s*#{1,6}\s.*$/gm, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
+        const earlier = heads.map((h, k) => ({ h, k })).slice(0, first).find(({ h, k }) => h.level <= heads[first].level && says(k))?.h;
+        const lead = substance(text.slice(0, heads[first].start));
         if (earlier) problems.push(`the text opens with "${earlier.text}", not with the "${sections[0]}" section`);
-        else if (lead > 12) problems.push(`the text does not open with the "${sections[0]}" section: ${lead} words come before it`);
+        else if (lead > 25) problems.push(`the text does not open with the "${sections[0]}" section: ${lead} words come before it`);
       }
-      const after = lastAt === -1 ? undefined : heads.slice(lastAt + 1).findLast((h) => h.level <= heads[lastAt].level);
+      const after = lastAt === -1 ? undefined : heads.map((h, k) => ({ h, k })).slice(lastAt + 1).findLast(({ h, k }) => h.level <= heads[lastAt].level && says(k))?.h;
       if (num(p, 'closes') && after) problems.push(`the text ends with "${after.text}", not with the "${sections[sections.length - 1]}" section`);
       if ((empty.length || problems.length) && !missing.length && ordered && lastPara) spans.push({ start: lastPara.start, end: lastPara.end, text: lastPara.text, why: problems.join('; ') });
       if ((missing.length || !ordered) && lastPara) spans.push({ start: lastPara.start, end: lastPara.end, text: lastPara.text,

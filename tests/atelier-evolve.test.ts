@@ -111,6 +111,7 @@ describe('a search remembers what earlier searches under the same standard tried
     const before = [rec({ standardVersion: 'other', trials: [trial('1d|x1', false)], heldBack: { start: scored(1, 2), end: scored(1, 2) } }), rec({ skillVersion: 'v0', trials: [trial('1d|x9', false)] })];
     expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['g', 'h'])).toEqual({ tried: [], heldBackReads: 0 });
     // and a file beside them that is not a record of a search is passed over
+    expect(priorSearches([{ standardVersion: 'std', skillVersion: 'v1', trials: [], briefs: null }, { standardVersion: 'std', skillVersion: 'v1', trials: [null], briefs: {} }], 'std', 'v1', ['a'], ['g'])).toEqual({ tried: [], heldBackReads: 0 });
     expect(priorSearches([null, 3, {}, { standardVersion: 'std', skillVersion: 'v1' }, { standardVersion: 'std', skillVersion: 'v1', briefs: {}, trials: [{}] }], 'std', 'v1', ['a', 'b'], ['g', 'h'])).toEqual({ tried: [], heldBackReads: 0 });
   });
 });

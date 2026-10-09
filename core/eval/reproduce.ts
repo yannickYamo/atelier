@@ -15,7 +15,7 @@
 // have been run: a piece held back is unseen once, and a reserve run again after each change to the skill is being
 // worked toward.
 
-import { headingsOf, sectionHeadsOf } from '../observers/structure.js';
+import { headingsOf, sectionHeadsOf, type Heading } from '../observers/structure.js';
 
 export interface CaseOutcome {
   readonly id: string;
@@ -57,27 +57,38 @@ const nameOf = (h: string): string => h.toLowerCase().normalize('NFKC').replace(
  * in the output however it marks its sections, headings or labels.
  */
 export function shapeAgainst(output: string, reference: string): Shape {
-  const heads = headingsOf(reference);
-  const top = heads.length ? Math.min(...heads.map((h) => h.level)) : 0;
-  // The piece's own headings at its top level; with none, its labels, where it has three or more.
-  const labels = heads.length ? [] : sectionHeadsOf(reference, true);
-  const wanted = (heads.length ? heads.filter((h) => h.level === top) : labels.length >= 3 ? labels : []).map((h) => h.text).filter((t, i, all) => nameOf(t).length >= 3 && all.findIndex((o) => nameOf(o) === nameOf(t)) === i);
-  const found = sectionHeadsOf(output, true);
-  const holds = (name: string): boolean => found.some((h, i) => {
-    const mine = nameOf(h.text); const theirs = nameOf(name);
-    if (!(mine === theirs || mine.includes(theirs) || (mine.length >= 4 && theirs.includes(mine)))) return false;
-    const next = found.slice(i + 1).find((x) => x.level <= h.level);
-    return /[\p{L}\p{N}]/u.test(output.slice(h.end, next ? next.start : output.length).replace(/^\s*#{1,6}\s.*$/gm, ' '));
+  const words = (t: string): number => (t.replace(/^\s*#{1,6}\s.*$/gm, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
+  const bodies = (text: string, heads: readonly Heading[]): { name: string; said: number; body: string }[] => heads.map((h, i) => {
+    const next = heads.slice(i + 1).find((x) => x.level <= h.level);
+    const body = text.slice(h.end, next ? next.start : text.length);
+    return { name: h.text, said: words(body), body };
   });
-  const missing = wanted.filter((name) => !holds(name));
+  // A section that holds only a promise of itself holds nothing.
+  const PLACEHOLDER = /^[\W_]*(?:tbd|tbc|todo|tk|n\/?a|to be (?:done|written|added|confirmed|decided)|coming soon|placeholder|lorem ipsum)[\W_]*$/i;
+  const headings = headingsOf(reference);
+  const top = headings.length ? Math.min(...headings.map((h) => h.level)) : 0;
+  // The piece's own headings at its top level. With none, its labels, where three or more each say something: an
+  // email is not a set of sections because some of its lines hold a colon.
+  const labelled = headings.length ? [] : bodies(reference, sectionHeadsOf(reference, true)).filter((x) => x.said >= 5);
+  const mine = headings.length ? bodies(reference, headings).filter((_, i) => headings[i].level === top) : labelled.length >= 3 ? labelled : [];
+  const wanted = mine.filter((x, i, all) => nameOf(x.name).length >= 3 && all.findIndex((o) => nameOf(o.name) === nameOf(x.name)) === i);
+  const found = bodies(output, sectionHeadsOf(output, true));
+  // Named by its words, in order: "The plan" is "Plan", and "Explanation" is not. And it says something: "TBD" under
+  // a heading is not the section.
+  const holds = (want: { name: string }): boolean => found.some((f) => {
+    const a = ` ${nameOf(f.name)} `; const b = ` ${nameOf(want.name)} `;
+    return (a.includes(b) || (a.trim().includes(' ') && b.includes(a))) && f.said >= 1 && !PLACEHOLDER.test(f.body.trim());
+  });
+  const missing = wanted.filter((x) => !holds(x)).map((x) => x.name);
   return { sections: { of: wanted.length, held: wanted.length - missing.length, missing } };
 }
 
 /**
- * Whether an output has the shape of the piece held back: most of its sections, where it has two or more. One
- * heading is not a shape, and a heading that says what this one piece concluded need not be said the same way twice.
+ * Whether an output has the shape of the piece held back: two thirds of its sections or more, where it has two or
+ * more. One heading is not a shape, and a heading that says what this one piece concluded need not be said the same
+ * way twice.
  */
-export const hasShape = (shape: Shape): boolean => shape.sections.of < 2 || shape.sections.held * 2 >= shape.sections.of + (shape.sections.of % 2);
+export const hasShape = (shape: Shape): boolean => shape.sections.of < 2 || shape.sections.held >= Math.ceil((shape.sections.of * 2) / 3);
 
 export interface ReproductionRecord {
   readonly schema: 1;
@@ -154,7 +165,7 @@ export function renderReproduction(r: ReproductionRecord): string {
     return out.join('\n');
   }
   out.push(r.arm === 'bare' ? `ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
-  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : `the run's own verdict was "conformant"`}${c.shape?.of ? ', and the output has most of the sections of the piece held back' : ''}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
+  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : `the run's own verdict was "conformant"`}${c.shape?.of ? ', and the output has two thirds or more of the sections of the piece held back' : ''}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
     : `  ${c.factSafe} of ${c.ran}   with no unsupported specific, read by a qualified reader`);

@@ -82,6 +82,33 @@ describe('what an independent review found the first version of this got wrong',
   it('a small number spelled out is a length only where the request introduces it as one', () => {
     for (const r of ['Remove three sentences', 'Delete two paragraphs and tighten', 'Add one sentence about pricing', 'Write a review of the film Three Sentences',
       "Write a post titled 'Ten words that matter'", 'In a word, no. Two words: not yet.', 'Why are two pages better than one page?', 'Our style guide: every post opens with a one sentence summary', 'Remove 3 sentences']) none(r);
-    expect(read('In three sentences, say why')).toEqual([3, 'sentences', 'three sentences']);
+    expect(read('Write three sentences on why')).toEqual([3, 'sentences', 'three sentences']);
+  });
+});
+
+describe('what a second review found: a false length is the harmful error, so a doubtful one is not read', () => {
+  const none = (r: string): void => { expect(statedLength(r), r).toBeNull(); };
+  it('a small number spelled out in a sentence about something else', () => {
+    for (const r of ['He said it in three words: "we are done".', 'Write a scene where she ends it in three words.', 'Chapter one is two pages. Write chapter two.', 'It is two pages, and I hate it. Rewrite.',
+      'The intro consists of two paragraphs. Make it warmer.', 'Look at two pages, then decide.', 'Compare it to two paragraphs that I wrote before.', 'The summary of three paragraphs, which I pasted, needs a title.',
+      'There should be two sentences that mention price.', 'Attachments:\n- two pages on pricing\n- one page on risks\nWrite the cover note.']) none(r);
+  });
+  it('a piece that exists, or one that is refused, written with a hyphen or without', () => {
+    for (const r of ['I wrote a 500-word draft; tighten it.', 'Proofread the attached 3-page report.', 'Write a proposal for a 90,000-word book.', 'Here is a 12-page deck. Write the cover email.',
+      "I don't want a 500 word essay, keep it short."]) none(r);
+    expect(read('Write a 2,000-word chapter')).toEqual([2000, 'words', '2,000-word']);
+    expect(read('Write a 500 word blog post')).toEqual([500, 'words', '500 word']);
+  });
+  it('an amount to change by, a count of what exists, and a rate', () => {
+    for (const r of ['Shorten this by 100 words.', 'Trim it by about 50 words.', 'Expand the second section by 150 words.', 'This draft is 900 words; make it punchier.', 'My bio is 3 sentences. Make it funnier.',
+      'I type 80 words per minute; write my bio.', 'We publish 20 pages per week; write the status note.']) none(r);
+  });
+  it('"more than" and "over" set a floor', () => {
+    expect(statedLength('Write more than 500 words.')).toMatchObject({ kind: 'min', min: 500 });
+    expect(statedLength('Write over 500 words.')).toMatchObject({ kind: 'min', min: 500 });
+  });
+  it('the last length said is the one found where it was said, not where its words appear again', () => {
+    expect(read('Write about 500 words, in 3 paragraphs. Do not reuse the 500 words I pasted.')).toEqual([3, 'paragraphs', '3 paragraphs']);
+    expect(read('Write 2 pages, about 600 words, on the 12 pages attached.')).toEqual([600, 'words', '600 words']);
   });
 });

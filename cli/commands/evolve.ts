@@ -171,12 +171,15 @@ export async function evolve(): Promise<void> {
     // A candidate is kept beyond the band: with the skill already within the band of every brief, none could be.
     // Asked again each round: a change that was kept raises what the next one must beat.
     const gainPossible = (): boolean => best + band < dev.length;
-    const startedWithRoom = gainPossible(); let ranOut = false;
+    const startedWithRoom = gainPossible(); let ranOut = false; const notTriedAgain: string[] = [];
     if (!startedWithRoom && !state.stopped) say(`  no gain could be shown at this size: the skill holds ${best} of ${dev.length} and a change must beat that by more than ${band}. Nothing is run to look for a gain.`);
     for (let round = 1; round <= rounds && !state.stopped; round++) {
       const candidates = proposals(incumbent, last, statements, tried, { drafts: !release, gain: gainPossible() });
       // Nothing left to try: because every change was run before on these briefs, or because none could be shown.
-      if (!candidates.length) { ranOut = round === 1 && startedWithRoom && earlier.tried.length > 0; break; }
+      // What this round would have tried had no earlier search run it: that, and only that, is what was not tried again.
+      const fresh = proposals(incumbent, last, statements, new Set([carryKey(start, statements)]), { drafts: !release, gain: gainPossible() });
+      for (const c of fresh) if (earlier.tried.includes(c.key) && !notTriedAgain.includes(c.key)) notTriedAgain.push(c.key);
+      if (!candidates.length) { ranOut = round === 1 && fresh.length > 0; break; }
       let winner: { c: (typeof candidates)[number]; s: Scored } | null = null;
       for (const c of candidates) {
         tried.add(c.key);
@@ -204,14 +207,14 @@ export async function evolve(): Promise<void> {
     const held = heldStart && heldEnd && !state.stopped ? { start: heldStart, end: heldEnd } : null;
     const verdict: EvolveRecord['verdict'] = state.stopped ? 'STOPPED' : !changed ? 'UNCHANGED' : held && held.end.ok >= held.start.ok ? 'ADOPTED' : 'NOT_CARRIED';
     const why = state.stopped ? `${state.stopped}. Nothing was adopted; what was run is kept.`
-      : !changed ? (ranOut ? `every change this search could try was run by an earlier search over these same briefs and not kept (${earlier.tried.length}), so nothing was tried. Other briefs, or a changed skill, would be a new question.`
+      : !changed ? (ranOut ? `every change this search would have tried (${notTriedAgain.length}) was run by an earlier search over these same briefs and not kept, so nothing was tried. Other briefs, or a changed skill, would be a new question.`
         : startedWithRoom ? 'no change was plainly better than the skill as it stands, so it is left as it is.' : `the skill holds ${best} of ${dev.length} working briefs, where a change must beat that by more than ${band}: no gain could be shown at this size, so nothing was tried for one. More briefs would let a search say more.`)
         : verdict === 'ADOPTED' ? `the change did not break on the briefs set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}), so the skill now carries its method this way. atelier evolve --skill ${name} --rollback goes back.`
           : `better on the briefs it worked on, and worse on the ones set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}): the gain did not carry, and the skill is left as it was.`;
     // `end` is what the search arrived at. After a stop that is where it had got to, with no reading on the briefs set aside.
     record = { schema: 1, skill: name, skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(),
       briefs: { dev: dev.map((b) => b.id), heldBack: heldBack.map((b) => b.id) }, start, baseline: { first, second, band }, trials, end: incumbent, heldBack: held, verdict, why,
-      costUsd: Math.round(spent * 1e6) / 1e6, earlier: { heldBackReads: earlier.heldBackReads, notTriedAgain: earlier.tried } };
+      costUsd: Math.round(spent * 1e6) / 1e6, earlier: { heldBackReads: earlier.heldBackReads, notTriedAgain } };
   } finally {
     process.off('SIGINT', interrupted); process.off('SIGTERM', interrupted);
     tidy();
