@@ -7,6 +7,17 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: the copying check, by an amendment to the 1.x freeze
+
+One fix, admitted by the owner after the freeze ([decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), amended).
+
+- **The copying check is read in one pass.** A long copied stretch, the case the check exists for, was the one it
+  was slowest on: 600 copied words took seconds and 4,000 did not finish, and strict delivery runs it on every
+  output. Same numbers as before on every input the earlier reading could read.
+- **It reads every script.** An exact copy in Cyrillic, Greek, Arabic, Hebrew or Chinese read as no copy. An
+  accented word is one word.
+- Three pieces that are one clause ending three ways count as three pieces for the author's standard wording.
+
 ### Fixed: the last fixes before 1.x is frozen
 
 Six defects, named in [decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), and no
