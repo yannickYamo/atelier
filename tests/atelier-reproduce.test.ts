@@ -280,7 +280,7 @@ describe('the record is a count of cases, read beside the expert\'s own work', (
   const rec = (cases: CaseOutcome[], heldBack = { full: cases.length, taskOnly: 0, referenceOnly: 0 }, timesRun = 1): ReproductionRecord => ({ schema: 1, skill: 'x', skillVersion: 'a', standardVersion: 'b', at: '', heldBack, cases, notCheckable: 2, timesRun, costUsd: 0 });
   it('binary per case; rules and facts are never added into one number', () => {
     const r = rec([one({}), one({ id: 'b.md', conformant: false, required: { held: 4, applicable: 5 } }), one({ id: 'c.md', conformant: false, claims: { qualified: true, instrument: 'reader', unsupported: 2 } }), one({ id: 'd.md', reference: { met: 4, applicable: 5 } })]);
-    expect(countsOf(r)).toEqual({ ran: 4, reproduced: 2, notObserved: 0, refused: 0, factSafe: 3, required: { held: 19, applicable: 20 }, reference: { met: 19, applicable: 20, whole: 3 } });
+    expect(countsOf(r)).toEqual({ ran: 4, reproduced: 2, notObserved: 0, refused: 0, factSafe: 3, required: { held: 19, applicable: 20 }, reference: { met: 19, applicable: 20, whole: 3 }, shape: null });
     const text = renderReproduction(r);
     expect(text).toMatch(/· 4 cases\n {2}2 of 4 {3}reproduced: the run's own verdict was "conformant"\n {2}3 of 4 {3}with no unsupported specific, read by a qualified reader\n {2}19 of 20 {3}required rules met, over the 4 cases\n {2}19 of 20 {3}on your own held-back work, for the counted required rules that apply to every piece; 3 of 4 of your pieces meet every one/);
     expect(text).toMatch(/2 required rules cannot be checked by code, and are in none of these counts/);

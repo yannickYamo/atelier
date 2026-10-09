@@ -126,12 +126,6 @@ const PARKED: Readonly<Record<string, string>> = {
     'A CANDIDATE INSTRUMENT THAT FAILED ITS QUALIFICATION (studies/SENSOR_QUALIFICATION_RESULT.md): one '
     + 'feature reliable, kept and replicating against a floor of two. Kept for the next attempt and for the '
     + 'studies/harness runner, wired into no command until an instrument for the deep layers qualifies.',
-  'core/stats/sign-test.ts':
-    'The external-expert study\'s analysis instrument (exact sign test, two-sided and the one-sided '
-    + 'test Phase C preregisters, Clopper-Pearson, the discordant floor), named by a sealed '
-    + 'preregistration and pinned by its own tests. Consumed '
-    + 'by the studies/harness runner, deliberately reachable from no CLI verb: a user command that '
-    + 'computes study p-values is an invitation to peeking.',
   'core/fidelity/conditional-fidelity.ts':
     'MEASUREMENT INFRASTRUCTURE, PARKED ON PURPOSE UNTIL A STUDY USES IT. It replaces the adherence '
     + 'endpoint that failed three times: COMPLETE defined as absence of violations, over conditional '

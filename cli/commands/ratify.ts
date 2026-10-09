@@ -398,7 +398,7 @@ export function parseMeasure(spec: string): Measurement {
     DISTRIBUTION: ['edges', 'shares', 'tolerance'],
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
-    FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts'],
+    FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels'],
     TABLE: ['columns', 'minRows'], CITED: ['allow'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.

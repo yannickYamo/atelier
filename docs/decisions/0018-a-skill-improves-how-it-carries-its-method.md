@@ -10,9 +10,9 @@ do by hand was notice what the skill kept getting wrong and correct it, one `ate
 
 Work on regularized self-improvement of agent harnesses (see [the comparison](../COMPARISON.md)) shows both halves of
 this. An unattended search over how an agent is run does find gains. Left alone it also overfits the tasks it is
-scored on, and its gains do not carry. What made them carry was discipline, not cleverness: a measured noise band,
-one change at a time, a price on added cost, a check that a candidate is not carrying the tasks, and tasks held back
-to the end.
+scored on, and its gains do not carry. What made them carry there was regularizing both ends of the search: what
+may be proposed (a budget of edits, a history of what was tried, pruning) and what may be accepted (a measured noise
+floor, a price on added cost, a critic that refuses a candidate carrying the tasks).
 
 Atelier already separates the two things such a search must not confuse. The standard is what the owner approved,
 hashed, and changed by nobody else. The implementation is how that standard is carried on a run, and may change.
@@ -28,7 +28,9 @@ hashed, and changed by nobody else. The implementation is how that standard is c
    to the writer naming what earlier drafts missed. The note is built in code from the required steps of the standard
    as approved, in the standard's words, with how often each was missed: up to six, the newest misses first. No model writes it. It is served under a
    heading that says it is not a rule of the standard, and a run records the note it was served by its hash.
-4. **Five things hold the search back.**
+4. **Six things hold the search back.** The first, third and fourth are RRSI's, at a much smaller size. One change
+   at a time is stricter than its budget of edits. The briefs set aside are a validation gate of the kind skill
+   optimizers use; RRSI reports its held-out tasks and does not accept on them.
 
    | | |
    |---|---|
@@ -36,6 +38,8 @@ hashed, and changed by nobody else. The implementation is how that standard is c
    | One change | Each candidate changes one thing, at most two candidates a round, one kept a round. Within a search, no way of carrying the method is run twice, the one it started from included. |
    | Cost | A change may cost a third more for each tenth of the cases it gains. A draft fewer is the one change kept without a gain: it must lose no case and save a tenth. Where the model is not priced, cost is not read as measured. |
    | Leakage | A candidate that names a brief, or repeats six words in a row of one that are not the standard's own, is refused before anything is spent on it. |
+   | Memory | Under the same standard and version, what an earlier search ran on the same working briefs and did not keep is not run again, and the record says how many earlier searches read these same briefs set aside. |
+   | Steady briefs | A change that breaks a brief both runs of the unchanged skill held is not kept, whatever it fixes elsewhere. |
    | Held-back briefs | A fifth of the briefs, at least two, are set aside before the first run, by a hash of their names. In a search they are run once, at the end, on the skill as it started and as the search left it. |
 
 5. **A change is adopted only if it is no worse on the briefs set aside.** A gain on the working briefs that is a
@@ -61,8 +65,12 @@ hashed, and changed by nobody else. The implementation is how that standard is c
 - The adoption applies to runs made through `atelier invoke`, and so to `atelier reproduce`, which runs the skill
   as it now runs. A skill file already exported to a coding agent is not rewritten by it, and `atelier fix` compares
   its candidates without the note.
-- The same briefs are set aside by every search over the same folder, and one search does not remember what
-  another tried. Searching again and again over one folder reads the held-back briefs more than once.
+- The same briefs are set aside by every search over the same folder. Searching again and again over one folder
+  reads them more than once; each record says how many earlier searches did. At six working briefs the working rule is about a
+  5 to 7% test for each candidate, and finds a real gain of thirty points less than half the time. An unchanged
+  skill passes the two-brief gate about seven times in ten. Only more briefs change that.
+- Where the skill already holds all but the noise band of its working briefs, no gain could be shown, and the search
+  runs nothing to look for a gain.
 - An adoption is bound to the standard, not to the skill version: it stays in force after `atelier fix`.
 - Where a skill has a release, the number of drafts is the release's: the search leaves it alone and searches the
   note only, and `--fidelity` and a later release keep their own number.

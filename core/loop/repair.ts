@@ -82,7 +82,7 @@ export function planRepair(text: string, report: VerifyReport,
   const requiredOnly = opts.requiredOnly ?? true;
   const sentences = sentencesOf(text);
   const paragraphs = paragraphsOf(text);
-  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
+  const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; whole: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
     if (requiredOnly && c.materiality !== 'REQUIRED') continue;
@@ -91,7 +91,8 @@ export function planRepair(text: string, report: VerifyReport,
     // that went wrong: rewritten into the last paragraph it becomes prose that mentions the section, which reads as
     // done and is not. It is answered by writing the piece again with what is missing named (cli/commands/invoke.ts,
     // `withMethod`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
-    // which takes the figure out and claims nothing in its place.
+    // which takes the figure out and claims nothing in its place. Held to keep every figure, the rewrite that cut it
+    // was refused and the figure delivered; so that figure, and only it, is what the rewrite may lose.
     if (c.obligation === 'DELIVERABLE') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
@@ -112,14 +113,17 @@ export function planRepair(text: string, report: VerifyReport,
         drop: c.observer && REMOVES_SPAN.has(c.observer) && (move !== undefined || !(sent && sp.start <= sent.start && sp.end >= sent.end))
           ? sp.text.trim().toLowerCase() : null,
         swap: c.observer && SWAPS_SPAN.has(c.observer) ? sp.text.trim().toLowerCase() : null,
-        specifics: c.requirementId === 'UNSOURCED', claim: c.requirementId === 'UNSOURCED' ? sp.text : null, recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
+        specifics: c.requirementId === 'UNSOURCED' || c.observer === 'CITED',
+        // An invented story is the whole of its sentence, and the whole may go. A figure the material lacks is one part
+        // of a sentence that says other things too: the figure may go, and everything else is held as in any rewrite.
+        whole: c.requirementId === 'UNSOURCED', claim: c.requirementId === 'UNSOURCED' || c.observer === 'CITED' ? sp.text : null, recase: c.observer === 'HEADINGS' && sp.why.includes('Case'), cuttable: c.pattern === 'MACHINE_TELL' });
     }
   }
   raw.sort((a, b) => a.start - b.start || b.end - a.end);
   // `specifics` stays "carries an unsourced claim" (what the loop reports as cut); `pure` is whether every
   // part merged into the span is one. It was ORed into the one flag the meaning check read, so a style
   // span that happened to overlap an invented figure skipped every check: its hedges and names could go.
-  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; pure: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
+  const merged: { start: number; end: number; reasons: string[]; rids: string[]; drops: string[]; swaps: string[]; specifics: boolean; pure: boolean; allClaims: boolean; anyWhole: boolean; claims: string[]; recase: boolean; cuttable: boolean }[] = [];
   for (const r of raw) {
     const last = merged[merged.length - 1];
     if (last && r.start < last.end) {
@@ -129,9 +133,12 @@ export function planRepair(text: string, report: VerifyReport,
       if (r.drop && !last.drops.includes(r.drop)) last.drops.push(r.drop);
       if (r.swap && !last.swaps.includes(r.swap)) last.swaps.push(r.swap);
       if (r.claim && !last.claims.includes(r.claim)) last.claims.push(r.claim);
-      last.specifics ||= r.specifics; last.pure &&= r.specifics; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
+      last.specifics ||= r.specifics; last.allClaims &&= r.specifics; last.anyWhole ||= r.whole;
+      // The whole may go when a part of the span is an invented story and every other part is a claim too: a figure
+      // inside an invented sentence goes with the sentence.
+      last.pure = last.allClaims && last.anyWhole; last.recase ||= r.recase; last.cuttable &&= r.cuttable;
     } else merged.push({ start: r.start, end: r.end, reasons: [r.reason], rids: [r.rid], drops: r.drop ? [r.drop] : [], swaps: r.swap ? [r.swap] : [],
-      specifics: r.specifics, pure: r.specifics, claims: r.claim ? [r.claim] : [], recase: r.recase, cuttable: r.cuttable });
+      specifics: r.specifics, pure: r.whole, allClaims: r.specifics, anyWhole: r.whole, claims: r.claim ? [r.claim] : [], recase: r.recase, cuttable: r.cuttable });
   }
   return merged.map((m, i) => ({ id: i + 1, start: m.start, end: m.end, text: text.slice(m.start, m.end),
     reasons: m.reasons, requirementIds: m.rids, drops: m.drops, swaps: m.swaps, specifics: m.specifics, recase: m.recase, cuttable: m.cuttable,

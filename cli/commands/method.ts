@@ -13,7 +13,9 @@
 // Nothing here calls a model (core/method/standard.ts). `--yes` accepts exactly what the screen showed.
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { argv, die, flag, positional, loadSession, saveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
+import { DATA, argv, die, flag, positional, loadSession, saveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
+import * as store from '../../core/state/store.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -59,9 +61,22 @@ export async function method(): Promise<void> {
   console.log(`Method: ${basename(notePath)}  ·  example: ${basename(goldenPath)}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of describeMethod(proposals, example.caseClass)) console.log(line);
 
-  const name = flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  if (!argv.includes('--yes')) {
-    console.log(`\nNothing has been built. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
+  // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
+  const name = ((): string => { try { return skillNameFrom(flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')); } catch { return die('--name <name> required: the method file gives no name a skill can carry.'); } })();
+  // Said before anything is offered: a command printed as "to accept exactly this" must be one that will be accepted.
+  let s = loadSession();
+  // A SKILL OF THAT NAME BUILT SOMEWHERE ELSE IS SOMEBODY'S STANDARD. Built again here it would be replaced without a
+  // word: two people whose method file is called method.md would each overwrite the other's skill.
+  if (store.getActive({ root: DATA, skillName: name }) && s.skillName !== name) {
+    die(`a skill called "${name}" already exists, and this folder has no record of building it. Building here would replace its standard. Give this one a name of its own: --name <name>. (If a build of it here stopped part-way, finish that one: atelier build --name ${name}.)`);
+  }
+  // ONE CALL, UNLESS THERE IS A QUESTION THAT IS THE OWNER'S. Every step is theirs, in their words, and what their
+  // example shows beyond them is shown and not required: there is nothing to approve that they did not write. Where
+  // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
+  // `--review` only shows; `--yes` builds whatever the screen showed.
+  const toSettle = proposals.filter((p) => p.demoted);
+  if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length)) {
+    console.log(`\nNothing has been built${toSettle.length && !argv.includes('--review') ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement` : ''}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
       + '\nTo require something your example shows, accept and then: atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
     return;
   }
@@ -71,7 +86,6 @@ export async function method(): Promise<void> {
   // the machine's reading that they approved: ratified, and shown rather than required until they declare it.
   // ONE PROJECT, ONE STANDARD. A folder that already holds rules (a run of `atelier new`, an earlier `atelier method`)
   // would have these added to them, and the skill built would be held to both. Refused before anything is written.
-  let s = loadSession();
   if (s.decided.length || s.proposals.length || s.run.standardVersionHash) {
     die(`this folder already holds a standard${s.skillName ? ` (the skill "${s.skillName}")` : ''}: a method's steps would be added to its rules, and the skill would be held to both. Build a method's skill from a folder of its own.`);
   }
@@ -80,7 +94,8 @@ export async function method(): Promise<void> {
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
     kind: /\b(?:never|do not|don't|must not|no )\b/i.test(p.statement) ? 'BOUNDARY' : 'GENERATIVE',
     authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
-    evidence: p.onExample, evidenceItemId: null, wouldBeAbsentIf: null,
+    // No evidence is carried: how the example fared on a check is said on the screen, and is not the author's words.
+    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
     materiality: null, realizationTolerance: null, outputShape: null,
     obligation: p.obligation, ...(p.measurement ? { measurement: p.measurement } : {}),
   }));

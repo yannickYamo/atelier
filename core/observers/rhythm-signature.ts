@@ -25,7 +25,9 @@ import { proseSentencesOf, quantile } from './text.js';
 export const MIN_SENTENCES = 20;
 /** Fewer readable pieces of the writer's, or fewer drafts of the model's, and nothing is called a signature. */
 export const MIN_PIECES = 4;
-export const MIN_DRAFTS = 2;
+export const MIN_DRAFTS = 3;
+/** With fewer drafts than this, every one of the writer's pieces must stand beyond every draft, not all but one. */
+export const DRAFTS_FOR_ONE_EXCEPTION = 5;
 /** The writer's pieces agree when their spread is at most this share of their own typical value. */
 export const MAX_OWN_SPREAD = 0.25;
 /** The gap to the model must be at least this many times the writer's own spread, and this share of the model's value. */
@@ -48,9 +50,12 @@ export interface RhythmReading {
   readonly model: { readonly median: number; readonly long: number } | null;
 }
 
-const mid = (xs: readonly number[]): number => quantile(xs, 0.5);
+// The middle of a side, between its two middle values when it has an even number: taken as the lower of two drafts,
+// a writer level with one draft stood "apart from the model" because the other draft was shorter.
+const at = (xs: readonly number[], q: number): number => { const s = [...xs].sort((a, b) => a - b); if (!s.length) return 0; const i = (s.length - 1) * q; const lo = Math.floor(i); return s[lo] + (s[Math.min(s.length - 1, lo + 1)] - s[lo]) * (i - lo); };
+const mid = (xs: readonly number[]): number => at(xs, 0.5);
 /** Half the distance between the quarter points, as a share of the middle: how far a writer's pieces sit from each other. */
-const spreadOf = (xs: readonly number[]): number => { const m = mid(xs); return m ? (quantile(xs, 0.75) - quantile(xs, 0.25)) / 2 / m : 0; };
+const spreadOf = (xs: readonly number[]): number => { const m = mid(xs); return m ? (at(xs, 0.75) - at(xs, 0.25)) / 2 / m : 0; };
 const r1 = (x: number): number => Math.round(x * 10) / 10;
 
 /** One statistic, read on each side: consistent among the writer's pieces, and apart from every draft of the model's. */
@@ -61,7 +66,7 @@ function apart(writer: readonly number[], model: readonly number[]): 'LONG' | 'S
   if (gap < MIN_GAP_IN_SPREADS * own * w || gap < MIN_GAP_SHARE * m) return null;
   // All of the writer's pieces but one beyond every draft of the model's, on the same side.
   const beyond = w > m ? writer.filter((x) => x > Math.max(...model)).length : writer.filter((x) => x < Math.min(...model)).length;
-  return beyond >= writer.length - 1 ? (w > m ? 'LONG' : 'SHORT') : null;
+  return beyond >= writer.length - (model.length >= DRAFTS_FOR_ONE_EXCEPTION ? 1 : 0) ? (w > m ? 'LONG' : 'SHORT') : null;
 }
 
 /**

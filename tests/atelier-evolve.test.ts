@@ -10,7 +10,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { splitBriefs, noiseBand, proposals, rule, leak, scoreOf, renderEvolve, carryKey, allowance, readRun, MIN_BRIEFS, NOTE_HEAD, type Carry, type Scored, type EvolveRecord } from '../core/evolve/loop.js';
+import { splitBriefs, noiseBand, proposals, rule, leak, scoreOf, renderEvolve, carryKey, allowance, readRun, priorSearches, steadyBriefs, MIN_BRIEFS, NOTE_HEAD, type Carry, type Scored, type EvolveRecord } from '../core/evolve/loop.js';
 
 const scored = (ok: number, n: number, costUsd = 1, missing: Record<string, number> = {}): Scored => ({ ok, n, costUsd, missing });
 const plain: Carry = { drafts: 1, note: '' };
@@ -46,7 +46,7 @@ describe('a gain inside what two runs of the same skill differ by is not a gain'
     expect(dear.why).toMatch(/^it gains 2 case\(s\) and costs 150% more, where 83% is what that gain buys$/);
   });
   it('a saving is kept when no case is lost and the cost falls by a tenth or more', () => {
-    expect(rule(scored(8, 8, 0.6), 8, 1, 1, 'FEWER_DRAFTS')).toEqual({ keep: true, why: 'it holds 8 of 8 at 40% less cost' });
+    expect(rule(scored(8, 8, 0.6), 8, 1, 1, 'FEWER_DRAFTS')).toEqual({ keep: true, why: 'it lost none of 8 at 40% less cost' });
     expect(rule(scored(7, 8, 0.6), 8, 1, 1, 'FEWER_DRAFTS').keep).toBe(false);
     expect(rule(scored(8, 8, 0.95), 8, 1, 1, 'FEWER_DRAFTS').keep).toBe(false);
   });
@@ -75,6 +75,51 @@ describe('what a search spends is counted run by run, and no run is started that
     expect(readRun('a.md', JSON.stringify({ costUsd: 0.4, invocationId: 'inv-2', eval: null }), 'atelier: the evaluation could not be built.', false, tracked, 20))
       .toEqual({ result: null, paid: 0.4, invocationId: 'inv-2', stopped: 'the run of "a.md" ended with no verdict (atelier: the evaluation could not be built.)' });
     expect(readRun('a.md', '', '', true, tracked, 20).stopped).toBe('the run of "a.md" had not answered in 20 minutes and was ended; what it had spent is not known');
+  });
+});
+
+describe('a gain is not paid for with a brief that held', () => {
+  const held = (ok: number, n: number, passed: string[]): Scored => ({ ...scored(ok, n), passed });
+  it('the briefs that held on both runs of the skill as it stands are the steady ones', () => {
+    expect(steadyBriefs(held(2, 4, ['a', 'b']), held(3, 4, ['b', 'c', 'd']))).toEqual(['b']);
+    expect(steadyBriefs(held(2, 4, ['a', 'b']), null)).toEqual([]);
+  });
+  it('a candidate that fixes three briefs and breaks a steady one is not kept, and the reason names the brief', () => {
+    expect(rule(held(5, 6, ['a', 'c', 'd', 'e', 'f']), 2, 1, 1, 'NOTE', ['b'])).toEqual({ keep: false, why: 'it holds 5 of 6, and breaks b, which held on both runs of the skill as it stands' });
+    expect(rule(held(5, 6, ['a', 'b', 'c', 'd', 'e']), 2, 1, 1, 'NOTE', ['b']).keep).toBe(true);
+    expect(rule(held(6, 6, ['a', 'c', 'd', 'e', 'f', 'g']), 6, 1, 1, 'FEWER_DRAFTS', ['b']).keep).toBe(false);
+  });
+});
+
+describe('a search remembers what earlier searches under the same standard tried, and how often the briefs set aside were read', () => {
+  const rec = (o: Partial<EvolveRecord>): EvolveRecord => ({ schema: 1, skill: 's', skillVersion: 'v1', standardVersion: 'std', at: '', start: plain,
+    baseline: { first: scored(1, 6), second: scored(1, 6), band: 1 }, trials: [], end: plain, heldBack: null, verdict: 'UNCHANGED', why: '', costUsd: 0, ...o, briefs: o.briefs ?? { dev: ['a', 'b'], heldBack: ['g', 'h'] } });
+  const trial = (key: string, kept: boolean, why = 'inside the noise band'): EvolveRecord['trials'][number] => ({ round: 1, gene: 'NOTE', key, hypothesis: '', carry: plain, scored: scored(1, 6), kept, why });
+  it('what was run and not kept is not run again; what was kept and then did not carry is not either', () => {
+    const before = [rec({ trials: [trial('1d|x1', false), trial('2d|', false)] }),
+      rec({ trials: [trial('1d|x2', true)], heldBack: { start: scored(2, 2), end: scored(0, 2) }, verdict: 'NOT_CARRIED' })];
+    expect(priorSearches(before, 'std', 'v1', ['b', 'a'], ['h', 'g'])).toEqual({ tried: ['1d|x1', '1d|x2', '2d|'], heldBackReads: 1 });
+    // ON OTHER WORKING BRIEFS THE SAME CHANGE IS ANOTHER QUESTION: inside the noise on two, it may be plain on four
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b', 'c', 'd'], ['h', 'g'])).toEqual({ tried: [], heldBackReads: 1 });
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['x', 'y']).heldBackReads).toBe(0);
+  });
+  it('a candidate that was never read (the search stopped) or was refused may be tried', () => {
+    const before = [rec({ trials: [trial('1d|x1', false, 'not read: the cap ran out'), { ...trial('1d|x2', false, 'refused before any run: it names the brief'), scored: null }], verdict: 'STOPPED' })];
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['g', 'h']).tried).toEqual([]);
+  });
+  it('a search under another standard, or of another version of the skill, says nothing about this one', () => {
+    const before = [rec({ standardVersion: 'other', trials: [trial('1d|x1', false)], heldBack: { start: scored(1, 2), end: scored(1, 2) } }), rec({ skillVersion: 'v0', trials: [trial('1d|x9', false)] })];
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['g', 'h'])).toEqual({ tried: [], heldBackReads: 0 });
+    // and a file beside them that is not a record of a search is passed over
+    expect(priorSearches([{ standardVersion: 'std', skillVersion: 'v1', trials: [], briefs: null }, { standardVersion: 'std', skillVersion: 'v1', trials: [null], briefs: {} }], 'std', 'v1', ['a'], ['g'])).toEqual({ tried: [], heldBackReads: 0 });
+    expect(priorSearches([null, 3, {}, { standardVersion: 'std', skillVersion: 'v1' }, { standardVersion: 'std', skillVersion: 'v1', briefs: {}, trials: [{}] }], 'std', 'v1', ['a', 'b'], ['g', 'h'])).toEqual({ tried: [], heldBackReads: 0 });
+  });
+});
+
+describe('where no gain could be shown, nothing is run to look for one', () => {
+  it('with the skill at 5 of 6 and a band of one, a candidate would need 7 of 6', () => {
+    expect(proposals(plain, scored(5, 6, 1, { x1: 1 }), statements, new Set(), { gain: false })).toEqual([]);
+    expect(proposals({ drafts: 2, note: '' }, scored(6, 6), statements, new Set(), { gain: false }).map((c) => c.gene)).toEqual(['FEWER_DRAFTS']);
   });
 });
 
@@ -170,7 +215,7 @@ describe('the record says what was tried, what was kept and why, and whether it 
     expect(text).toMatch(/held back {7}as it started 0 of 2; as the search left it 2 of 2\./);
     expect(text).toMatch(/A judgement step is scored by nothing here\./);
     expect(renderEvolve({ ...r, baseline: { first: scored(1, 3), second: null, band: 1 }, trials: [], heldBack: null, verdict: 'STOPPED', why: 'w' })).toMatch(/as it started {3}1 draft\(s\): 1 of 3 conformant on the one run that was made\./);
-    expect(scoreOf([{ id: 'a', ok: true, missing: [], costUsd: 0.1 }, { id: 'b', ok: false, missing: ['x1'], costUsd: 0.2 }])).toEqual({ ok: 1, n: 2, costUsd: 0.3, missing: { x1: 1 } });
+    expect(scoreOf([{ id: 'a', ok: true, missing: [], costUsd: 0.1 }, { id: 'b', ok: false, missing: ['x1'], costUsd: 0.2 }])).toEqual({ ok: 1, n: 2, costUsd: 0.3, missing: { x1: 1 }, passed: ['a'] });
   });
 });
 

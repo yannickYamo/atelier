@@ -15,6 +15,8 @@
 // have been run: a piece held back is unseen once, and a reserve run again after each change to the skill is being
 // worked toward.
 
+import { headingsOf, sectionHeadsOf, type Heading } from '../observers/structure.js';
+
 export interface CaseOutcome {
   readonly id: string;
   /** `ran`: the case was run and has a verdict (a refusal under strict delivery is one). `not-run`: it could not be run, for the reason in `why` */
@@ -38,8 +40,55 @@ export interface CaseOutcome {
   /** the expert's own reference, on the counted required rules that apply to every piece */
   readonly reference: { readonly met: number; readonly applicable: number; readonly broken?: readonly string[] };
   readonly words: { readonly output: number | null; readonly reference: number };
+  /** the sections of the held-back piece, read on the output in code: how many it has, with something in each, and which it lacks */
+  readonly shape?: Shape;
   readonly costUsd: number;
 }
+
+export interface Shape { readonly sections: { readonly of: number; readonly held: number; readonly missing: readonly string[] } }
+
+/** A section's name as two writers would both write it: no case, no numbering, "&" as "and", no punctuation. */
+const nameOf = (h: string): string => h.toLowerCase().normalize('NFKC').replace(/^\s*\d+(?:\.\d+)*[.)]?\s+/, '').replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/**
+ * THE SHAPE OF THE WORK HELD BACK, READ ON THE OUTPUT. The held-back piece is the expert's answer to the same task
+ * from the same material. It is never served; read here, in code, beside the output, it says what a reproduction
+ * has: the piece's top sections, each with something in it. Named as two writers would both write them, and found
+ * in the output however it marks its sections, headings or labels.
+ */
+export function shapeAgainst(output: string, reference: string): Shape {
+  const words = (t: string): number => (t.replace(/^\s*#{1,6}\s.*$/gm, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
+  const bodies = (text: string, heads: readonly Heading[]): { name: string; said: number; body: string }[] => heads.map((h, i) => {
+    const next = heads.slice(i + 1).find((x) => x.level <= h.level);
+    const body = text.slice(h.end, next ? next.start : text.length);
+    return { name: h.text, said: words(body), body };
+  });
+  // A section that holds only a promise of itself holds nothing.
+  const PLACEHOLDER = /^[\W_]*(?:tbd|tbc|todo|tk|n\/?a|to be (?:done|written|added|confirmed|decided)|coming soon|placeholder|lorem ipsum)[\W_]*$/i;
+  const headings = headingsOf(reference);
+  const top = headings.length ? Math.min(...headings.map((h) => h.level)) : 0;
+  // The piece's own headings at its top level. With none, its labels, where three or more each say something: an
+  // email is not a set of sections because some of its lines hold a colon.
+  const labelled = headings.length ? [] : bodies(reference, sectionHeadsOf(reference, true)).filter((x) => x.said >= 5);
+  const mine = headings.length ? bodies(reference, headings).filter((_, i) => headings[i].level === top) : labelled.length >= 3 ? labelled : [];
+  const wanted = mine.filter((x, i, all) => nameOf(x.name).length >= 3 && all.findIndex((o) => nameOf(o.name) === nameOf(x.name)) === i);
+  const found = bodies(output, sectionHeadsOf(output, true));
+  // Named by its words, in order: "The plan" is "Plan", and "Explanation" is not. And it says something: "TBD" under
+  // a heading is not the section.
+  const holds = (want: { name: string }): boolean => found.some((f) => {
+    const a = ` ${nameOf(f.name)} `; const b = ` ${nameOf(want.name)} `;
+    return (a.includes(b) || (a.trim().includes(' ') && b.includes(a))) && f.said >= 1 && !PLACEHOLDER.test(f.body.trim());
+  });
+  const missing = wanted.filter((x) => !holds(x)).map((x) => x.name);
+  return { sections: { of: wanted.length, held: wanted.length - missing.length, missing } };
+}
+
+/**
+ * Whether an output has the shape of the piece held back: two thirds of its sections or more, where it has two or
+ * more. One heading is not a shape, and a heading that says what this one piece concluded need not be said the same
+ * way twice.
+ */
+export const hasShape = (shape: Shape): boolean => shape.sections.of < 2 || shape.sections.held >= Math.ceil((shape.sections.of * 2) / 3);
 
 export interface ReproductionRecord {
   readonly schema: 1;
@@ -77,6 +126,8 @@ export function countsOf(r: ReproductionRecord): {
   readonly factSafe: number | null;
   readonly required: { readonly held: number; readonly applicable: number };
   readonly reference: { readonly met: number; readonly applicable: number; readonly whole: number };
+  /** sections of the held-back pieces that the outputs have, over the cases whose shape was read; null when none was */
+  readonly shape: { readonly held: number; readonly of: number } | null;
 } {
   const done = ran(r);
   const qualified = done.length > 0 && done.every((c) => (c.refused === true ? true : c.claims?.qualified === true));
@@ -87,6 +138,7 @@ export function countsOf(r: ReproductionRecord): {
     refused: done.filter((c) => c.refused).length,
     factSafe: qualified ? done.filter((c) => !c.refused && c.claims?.unsupported === 0).length : null,
     required: { held: done.reduce((n, c) => n + (c.required?.held ?? 0), 0), applicable: done.reduce((n, c) => n + (c.required?.applicable ?? 0), 0) },
+    shape: done.some((c) => c.shape) ? { held: done.reduce((n, c) => n + (c.shape?.sections.held ?? 0), 0), of: done.reduce((n, c) => n + (c.shape?.sections.of ?? 0), 0) } : null,
     reference: { met: done.reduce((n, c) => n + c.reference.met, 0), applicable: done.reduce((n, c) => n + c.reference.applicable, 0), whole: done.filter((c) => c.reference.met === c.reference.applicable).length },
   };
 }
@@ -113,10 +165,11 @@ export function renderReproduction(r: ReproductionRecord): string {
     return out.join('\n');
   }
   out.push(r.arm === 'bare' ? `ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
-  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : 'the run\'s own verdict was "conformant"'}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
+  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : `the run's own verdict was "conformant"`}${c.shape?.of ? ', and the output has two thirds or more of the sections of the piece held back' : ''}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
     : `  ${c.factSafe} of ${c.ran}   with no unsupported specific, read by a qualified reader`);
+  if (c.shape?.of) out.push(`  ${c.shape.held} of ${c.shape.of}   sections of your held-back pieces are in the outputs, each with something in it`);
   if (c.notObserved) out.push(`  ${c.notObserved} of ${c.ran}   not observed: no required rule is checked by code on ${c.notObserved === 1 ? 'it' : 'them'}, so ${c.notObserved === 1 ? 'it is' : 'they are'} read as neither`);
   if (c.required.applicable) out.push(`  ${c.required.held} of ${c.required.applicable}   required rules met, over the ${s(c.ran, 'case')}`);
   if (c.reference.applicable) {

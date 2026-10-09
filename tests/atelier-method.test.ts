@@ -96,7 +96,7 @@ describe('every figure is one the writer was given', () => {
   });
   it('a figure that follows from two given figures by one step of arithmetic is the writer reading the material', () => {
     const m = { observer: 'CITED' as const, params: { allow: 0 } };
-    const given = { material: [{ name: 'm.md', text: 'It won 10 of 20 deals, and lost 30 others.' }] };
+    const given = { material: [{ name: 'm.md', text: 'It won 10 of 20 deals, and lost 30 deals elsewhere.' }] };
     expect(measure('It won 50% of them, 40 deals lost or won beyond the 10.', m, given).verdict).toBe('MET');
     expect(measure('It won 73% of them.', m, given).verdict).toBe('VIOLATED');
   });
@@ -108,8 +108,8 @@ describe('every figure is one the writer was given', () => {
     expect(invented.spans.map((s) => s.text)).toEqual(['4,200']);
     expect(measure(`${EXAMPLE}\nAcme has 4,200 customers.`, { observer: 'CITED', params: { allow: 1 } }, context).verdict).toBe('MET');
   });
-  it('with no material it cannot be read, and says so: it is never a rule that held', () => {
-    expect(measure(EXAMPLE, { observer: 'CITED', params: { allow: 0 } })).toMatchObject({ verdict: 'NOT_APPLICABLE' });
+  it('with no material it is read against the request alone: a figure nobody gave was not given', () => {
+    expect(measure(EXAMPLE, { observer: 'CITED', params: { allow: 0 } })).toMatchObject({ verdict: 'VIOLATED', detail: '0 of 3 figure(s) are in the request (no material was bound)' });
     expect(CITED.validate({ allow: -1 })).toMatch(/allow is a count/);
   });
 });
@@ -220,8 +220,8 @@ describe('a run says what of the method was held, by kind, and a missing section
     expect(bland.failed).toBe(true);
     expect(methodLine(methodReading(reqs, bland)!)).toBe('Method: contains 0 of 2 thing(s) it must (missing: x1, x2) · made from what was given 1 of 1 · 1 judgement step(s) not measured.');
   });
-  it('with no material bound, the check on it is said as not read', () => {
-    expect(methodLine(methodReading(reqs, verifyText('s', v, EXAMPLE))!)).toMatch(/1 check\(s\) on the material not read: none was bound/);
+  it('with no material bound, what the work was made from is read against the request, and is not held', () => {
+    expect(methodLine(methodReading(reqs, verifyText('s', v, EXAMPLE))!)).toMatch(/made from what was given 0 of 1/);
   });
   it('the sentence repair leaves a method requirement alone', () => {
     expect(planRepair(BLAND, verifyText('s', v, BLAND, context))).toEqual([]);
@@ -266,9 +266,9 @@ describe('through the binary: atelier method, then a run held to the method', ()
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('shows the owner their steps by kind, and builds nothing until they say yes; it calls no model', async () => {
+  it('--review shows the owner their steps by kind and builds nothing; it calls no model', async () => {
     const before = await count();
-    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', ...BACKEND());
+    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
     expect(r.out).toMatch(/^Method: method\.md {2}· {2}example: acme\.md with 1 file\(s\) of material$/m);
     expect(r.out).toMatch(/5 step\(s\) from your method\./);
@@ -278,6 +278,14 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/Nothing has been built\. To accept exactly this:/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
     expect(await count()).toBe(before);
+  });
+
+  it('with a step the example does not hold, nothing is built in one call: that question is the owner\'s', () => {
+    writeFileSync(join(proj, 'asks.md'), '- Open with a Verdict section.\n- End with a Appendix section.\n');
+    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', ...BACKEND());
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toMatch(/Nothing has been built: 1 step\(s\) above are yours to settle first\./);
+    expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });
 
   it('--yes builds the skill from exactly that, with the example as its one worked example, and still calls no model', async () => {
@@ -308,14 +316,14 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(j.eval.result.conformant).toBe(false);
     expect(j.eval.result.reasons.join(' ')).toMatch(/3 required rules broken/);
     expect(j.report.join('\n')).toMatch(/Method: contains 0 of 3 thing\(s\) it must \(missing: x\d+, x\d+, x\d+\)/);
-    expect(j.report.join('\n')).toMatch(/The draft leaves out 3 thing\(s\) the method requires \(x\d+, x\d+, x\d+\); one more draft did not do better, so the first is kept\./);
+    expect(j.report.join('\n')).toMatch(/The draft leaves out 3 thing\(s\) the method requires \(x\d+: "Open with a Verdict section[^"]*"; x\d+: "[^"]+"; x\d+: "[^"]+"\); one more draft did not do better, so the first is kept\./);
   }, 120_000);
 
   it('what a draft left out is written again with it named, and the piece that then holds it is the one delivered', async () => {
     await script(BLAND, [{ contains: 'An earlier draft left out what this work must contain', answer: { piece: NEW_PIECE } }]);
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
-    expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+, x\d+, x\d+\); it now leaves out 0\./);
+    expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+: "[^"]+"; x\d+: "[^"]+"; x\d+: "[^"]+"\); it now leaves out 0\./);
     expect(j.output).toContain('## Verdict');
     expect(j.eval.result.conformant).toBe(true);
   }, 120_000);

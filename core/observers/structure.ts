@@ -51,6 +51,60 @@ export function headingsOf(text: string): Heading[] {
   return titles.length === 1 ? out.filter((h) => h.level > 1) : out;
 }
 
+/** Words that open a sentence, never a label: "We agreed one thing: ..." is a sentence. */
+const NOT_A_LABEL = new Set(['we', 'i', 'you', 'he', 'she', 'they', 'it', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'there', 'here', 'if', 'when', 'and', 'but', 'so', 'or',
+  // the head of a letter or a memo, and an aside, are not sections of the work
+  'date', 'to', 'from', 'cc', 'bcc', 'subject', 're', 'note', 'nb', 'ps', 'tip', 'warning', 'example', 'phone', 'tel', 'email', 'contact', 'signed', 'regards', 'thanks',
+  'please', 'first', 'second', 'third', 'then', 'next', 'finally', 'also', 'for', 'in', 'on', 'at', 'as', 'one', 'two', 'three', 'dr', 'mr', 'mrs', 'ms', 'prof', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+/** A label that marks a section, short and written as a name: every word capitalised, or one or two words. */
+const labelLike = (t: string): boolean => {
+  const words = t.trim().split(/\s+/);
+  if (!t.trim() || words.length > 4 || /[.!?;,]/.test(t) || !/^\p{Lu}/u.test(words[0]) || NOT_A_LABEL.has(words[0].toLowerCase())) return false;
+  return words.length <= 2 || words.every((w) => /^[\p{Lu}\d(&/-]/u.test(w));
+};
+
+/**
+ * THE SECTIONS OF A TEXT AS IT MARKS THEM. Headings always; and, where a standard says the work marks its sections
+ * with labels (`labels`), a label too: a bold line, a short name before a colon ("Situation: ..."), a numbered
+ * clause heading in capitals ("2. TERM"). A handover note, a contract and a review are not written with `##`, and
+ * read for headings alone each had no sections at all. Labels sit below every heading (level 7).
+ */
+export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
+  const heads = headingsOf(text);
+  if (!labels) return heads;
+  const out: Heading[] = [...heads]; const taken = new Set(heads.map((h) => h.start));
+  let offset = 0; let fence = false;
+  for (const line of text.split('\n')) {
+    const start = offset; offset += line.length + 1;
+    const t = line.trim();
+    if (/^(```|~~~)/.test(t)) { fence = !fence; continue; }
+    if (fence || !t || /^#{1,6}\s/.test(t) || /^\s*\|/.test(line)) continue;
+    const at = start + line.indexOf(t);
+    // "**Assessment**", "**Assessment:** she is pale", "Situation: ...", "Recommendation:", "2. TERM", "3. Fees and
+    // Payment.", "SITUATION", and any of the labelled kinds as an item of a list ("- **Blocking:** ...").
+    const body = t.replace(/^[-*+]\s+/, '');
+    // Bold is a label when it is the whole line, or ends in a colon: "**Acme Corp** signed on Tuesday" is a sentence.
+    const bold = /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/.exec(body) ?? /^(?:\*\*|__)(.+?):(?:\*\*|__)\s*(.*)$/.exec(body) ?? /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:\s*(.*)$/.exec(body);
+    const colon = /^([^:*_|]{2,48}):(?:\s+(.*)|\s*)$/.exec(body);
+    // A numbered clause heading: a short number, its full stop, and a name in capitals or in title case (every word
+    // of four letters or more capitalised, six words at most). "2024 ANNUAL REPORT" is a title, and "1. Open the
+    // file" is a step.
+    const numbered = /^\d{1,3}(?:\.\d+)*[.)]\s+(.{3,60}?)\.?$/.exec(t)?.[1] ?? null;
+    const titled = (n: string): boolean => { const ws = n.split(/\s+/); return ws.length <= 6 && /^\p{Lu}/u.test(n) && !/[.!?;,:]/.test(n) && ws.filter((w) => w.length >= 4).every((w) => /^\p{Lu}/u.test(w)) && ws.some((w) => w.length >= 4); };
+    const clause = numbered !== null && (/^\p{Lu}[\p{Lu}\d &/'-]{2,}$/u.test(numbered) || titled(numbered)) ? numbered : null;
+    // A line that is nothing but one to five words in capitals.
+    const capitals = /^\p{Lu}[\p{Lu} &/'-]{3,40}$/u.test(t) && t.split(/\s+/).length <= 5 ? t : null;
+    const name = bold ? bold[1].replace(/:\s*$/, '').trim() : clause ?? capitals ?? (colon ? colon[1].trim() : null);
+    // A whole line in bold is a heading by another name, and may run to a few words; a name before a colon is held
+    // to being written as a name.
+    const wholeBold = bold !== null && bold[2] === undefined && name !== null && name.split(/\s+/).length <= 8 && !/[.!?]$/.test(name);
+    if (name === null || taken.has(at) || (clause === null && capitals === null && !wholeBold && !labelLike(name)) || NOT_A_LABEL.has(name.split(/\s+/)[0].toLowerCase())) continue;
+    // The label ends where its name does, so what follows it on the line is the start of its section.
+    out.push({ level: 7, text: name, start: at, end: at + t.indexOf(name) + name.length });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
 /** Short words a Title Case heading capitalises and a sentence-case heading does not. They decide the
  *  case; names, acronyms ("APIs") and product words ("Kubernetes") are capitalised either way and
  *  cannot. */
@@ -198,6 +252,9 @@ export const PRESENCE: Observer = {
     const needs = [
       sections.length ? `sections ${sections.map((s) => `"${s}"`).join(', ')}, in that order` : '',
       any.length ? `${where} mentions ${num(p, 'min') && (num(p, 'min') ?? 1) > 1 ? `at least ${num(p, 'min')} of ` : ''}${any.map((a) => `"${a}"`).join(' or ')}` : '',
+      sections.length && num(p, 'body') ? 'each with something in it' : '',
+      sections.length && num(p, 'opens') ? `the text opens with "${sections[0]}"` : '',
+      sections.length && num(p, 'closes') ? `the text ends with "${sections[sections.length - 1]}"` : '',
       num(p, 'figure') ? `${where} carries a figure` : '',
       starts.length ? `${where} starts with ${starts.map((a) => `"${a}"`).join(' or ')}` : '',
     ].filter(Boolean);
@@ -208,18 +265,47 @@ export const PRESENCE: Observer = {
   observe(text, p) {
     if (!text.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
     const problems: string[] = []; const spans: Span[] = [];
-    const heads = headingsOf(text);
+    const heads = sectionHeadsOf(text, Boolean(num(p, 'labels')));
     const paras = paragraphsOf(text);
     const lastPara = paras.at(-1);
+    // What a section holds: everything from its heading to the next one at its level or above.
+    // A heading inside it is not what it holds: a section of nothing but the headings of empty sections is empty.
+    const bodyOf = (i: number): string => { const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level); return text.slice(heads[i].end, next ? next.start : text.length).replace(/^\s*#{1,6}\s.*$/gm, ' '); };
     // Sections present, in order.
     const sections = list(p, 'sections');
     if (sections.length) {
-      const at = sections.map((s) => heads.findIndex((h) => h.text.toLowerCase().includes(s.toLowerCase())));
+      // Where the standard asks more of a section than its heading (the params below), it is named by its words:
+      // "Plan" is not met by "Planning context". Read the older way where it does not, as it always was.
+      const strict = Boolean(num(p, 'body') ?? num(p, 'opens') ?? num(p, 'closes') ?? num(p, 'labels'));
+      const wordsOfName = (x: string): string => ` ${x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+      const at = sections.map((s) => heads.findIndex((h) => (strict ? wordsOfName(h.text).includes(wordsOfName(s)) : h.text.toLowerCase().includes(s.toLowerCase()))));
       const missing = sections.filter((_, i) => at[i] === -1);
       const found = at.filter((i) => i !== -1);
       const ordered = found.every((x, i) => i === 0 || x > found[i - 1]);
       if (missing.length) problems.push(`no ${missing.map((m) => `"${m}"`).join(', ')} section`);
       if (!ordered) problems.push(`sections out of order (${sections.join(' before ')})`);
+      // A HEADING WITH NOTHING UNDER IT IS NOT THE SECTION (`body`): a draft that lacked a section was written again,
+      // came back with the bare heading added, and read as complete. A word is something: "Risks: none." is a section.
+      const empty = num(p, 'body') ? sections.filter((_, i) => at[i] !== -1 && !/[\p{L}\p{N}]/u.test(bodyOf(at[i]))) : [];
+      if (empty.length) problems.push(`the ${empty.map((m) => `"${m}"`).join(', ')} section${empty.length === 1 ? ' is' : 's are'} empty`);
+      // "OPEN WITH" AND "END WITH" SAY WHERE (`opens`, `closes`): the first section of the text, and the last.
+      // Read among sections of its own level and above: a label under a heading does not come "before" the heading's
+      // peers. And a section that follows a page of something else does not open the text, whatever came first.
+      const first = at[0]; const lastAt = at[at.length - 1];
+      // What a stretch of text says, less a title and the head of a letter or memo (short lines with a colon, a line in
+      // capitals): those are not the work opening or ending with something else.
+      const substance = (chunk: string): number => (chunk.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').replace(/^\s*#{1,6}\s.*$/gm, ' ').replace(/^[^:\n]{1,30}:.*$/gm, ' ').replace(/^[\p{Lu} ]{3,40}$/gmu, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
+      // A heading, or a labelled part that says something: a signature line with a colon is not a section.
+      const says = (k: number): boolean => heads[k].level < 7 || substance(bodyOf(k)) >= 8;
+      if (num(p, 'opens') && first !== -1) {
+        const earlier = heads.map((h, k) => ({ h, k })).slice(0, first).find(({ h, k }) => h.level <= heads[first].level && says(k))?.h;
+        const lead = substance(text.slice(0, heads[first].start));
+        if (earlier) problems.push(`the text opens with "${earlier.text}", not with the "${sections[0]}" section`);
+        else if (lead > 25) problems.push(`the text does not open with the "${sections[0]}" section: ${lead} words come before it`);
+      }
+      const after = lastAt === -1 ? undefined : heads.map((h, k) => ({ h, k })).slice(lastAt + 1).findLast(({ h, k }) => h.level <= heads[lastAt].level && says(k))?.h;
+      if (num(p, 'closes') && after) problems.push(`the text ends with "${after.text}", not with the "${sections[sections.length - 1]}" section`);
+      if ((empty.length || problems.length) && !missing.length && ordered && lastPara) spans.push({ start: lastPara.start, end: lastPara.end, text: lastPara.text, why: problems.join('; ') });
       if ((missing.length || !ordered) && lastPara) spans.push({ start: lastPara.start, end: lastPara.end, text: lastPara.text,
         why: missing.length ? `add the ${missing.map((m) => `"${m}"`).join(', ')} section(s)` : `put the sections in the order ${sections.join(', ')}` });
     }
@@ -255,6 +341,8 @@ export const PRESENCE: Observer = {
         spans.push({ start: scope.start, end: scope.end, text: scope.text, why: why.join('; ') });
       }
     }
+    // Every failure says where: with nothing better to point at, the start of the text.
+    if (problems.length && !spans.length) spans.push({ start: 0, end: Math.min(text.length, 120), text: text.slice(0, 120), why: problems.join('; ') });
     return problems.length
       ? { verdict: 'VIOLATED', spans, value: problems.length, detail: problems.join('; ') }
       : { verdict: 'MET', spans: [], value: 0, detail: 'everything it must contain is there' };

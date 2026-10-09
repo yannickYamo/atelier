@@ -50,7 +50,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords } from '../../core/eval/size.js';
-import { statedLength, againstStated } from '../../core/intake/length.js';
+import { statedLength, statedLengths, againstStated } from '../../core/intake/length.js';
 import { composeServed } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -452,7 +452,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ledger = factLedger(materialText);
   // Said to the writer in so many words, after the pieces it is shown: they run at the author's length, and without
   // this line they set the length whatever the request says.
-  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${stated.raw}. Write to that length. The length my own pieces run does not apply to this request.` : '';
+  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${statedLengths(asked).map((x) => x.raw).join(', ')}. Write to that length. The length my own pieces run does not apply to this request.` : '';
   // Served under its own heading, as what it is: what earlier runs showed, not a rule of the standard.
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
@@ -915,6 +915,8 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
   const must = new Map((c?.std.requirements ?? []).filter((r) => r.obligation === 'DELIVERABLE' && r.measurement && r.materiality === 'REQUIRED').map((r) => [r.requirementId, r.statement]));
   if (!c || !must.size) return refine;
   const missingIn = (d: Delivered): string[] => d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
+  // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
+  const named = (ids: readonly string[]): string => ids.map((id) => { const st = must.get(id) ?? id; return `${id}: "${st.length > 70 ? `${st.slice(0, 67)}...` : st}"`; }).join('; ');
   return async (draft: string) => {
     const d = await refine(draft);
     const missing = missingIn(d);
@@ -930,12 +932,12 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
       // draft that adds a section and breaks another rule would otherwise read as no worse.
       const others = (x: Delivered): number => brokenIn(x.report).filter((id) => !must.has(id)).length;
       const better = missing2.length < missing.length && others(d2) <= others(d);
-      c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${missing.join(', ')}); it now leaves out ${missing2.length}.`
-        : `The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); one more draft did not do better, so the first is kept.`);
+      c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${named(missing)}); it now leaves out ${missing2.length}${missing2.length ? ` (${named(missing2)})` : ''}.`
+        : `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); one more draft did not do better, so the first is kept.`);
       if (better && !d2.repair) return { ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } };
       return better ? d2 : d;
     } catch (err) {
-      c.notes.push(`The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
+      c.notes.push(`The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
       return d;
     }
   };
@@ -1347,7 +1349,7 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
     const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
     if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
     if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
-    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : 'held once what could not be traced to your material was cut'})` : ''}.`);
+    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : r.violatedBefore.includes('UNSOURCED') ? 'held once what could not be traced to your material was cut' : 'held once the draft was corrected'})` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);
