@@ -915,6 +915,8 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
   const must = new Map((c?.std.requirements ?? []).filter((r) => r.obligation === 'DELIVERABLE' && r.measurement && r.materiality === 'REQUIRED').map((r) => [r.requirementId, r.statement]));
   if (!c || !must.size) return refine;
   const missingIn = (d: Delivered): string[] => d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
+  // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
+  const named = (ids: readonly string[]): string => ids.map((id) => { const st = must.get(id) ?? id; return `${id}: "${st.length > 70 ? `${st.slice(0, 67)}...` : st}"`; }).join('; ');
   return async (draft: string) => {
     const d = await refine(draft);
     const missing = missingIn(d);
@@ -930,12 +932,12 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
       // draft that adds a section and breaks another rule would otherwise read as no worse.
       const others = (x: Delivered): number => brokenIn(x.report).filter((id) => !must.has(id)).length;
       const better = missing2.length < missing.length && others(d2) <= others(d);
-      c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${missing.join(', ')}); it now leaves out ${missing2.length}.`
-        : `The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); one more draft did not do better, so the first is kept.`);
+      c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${named(missing)}); it now leaves out ${missing2.length}${missing2.length ? ` (${named(missing2)})` : ''}.`
+        : `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); one more draft did not do better, so the first is kept.`);
       if (better && !d2.repair) return { ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } };
       return better ? d2 : d;
     } catch (err) {
-      c.notes.push(`The draft leaves out ${missing.length} thing(s) the method requires (${missing.join(', ')}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
+      c.notes.push(`The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
       return d;
     }
   };

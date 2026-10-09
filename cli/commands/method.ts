@@ -63,8 +63,13 @@ export async function method(): Promise<void> {
   // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
   const name = (flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!name) die('--name <name> required: the method file gives no name a skill can carry.');
-  if (!argv.includes('--yes')) {
-    console.log(`\nNothing has been built. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
+  // ONE CALL, UNLESS THERE IS A QUESTION THAT IS THE OWNER'S. Every step is theirs, in their words, and what their
+  // example shows beyond them is shown and not required: there is nothing to approve that they did not write. Where
+  // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
+  // `--review` only shows; `--yes` builds whatever the screen showed.
+  const toSettle = proposals.filter((p) => p.demoted);
+  if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length)) {
+    console.log(`\nNothing has been built${toSettle.length && !argv.includes('--review') ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement` : ''}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
       + '\nTo require something your example shows, accept and then: atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
     return;
   }

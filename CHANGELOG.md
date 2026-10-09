@@ -7,6 +7,53 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: a verdict that can be met by an empty shell or an invented number is not one
+
+Found by running both ways in from end to end as a new user would, and by an audit of the statistics.
+
+- **A section must hold something, and be where the method says.** A heading with nothing under it counted as the
+  section, so a draft sent back for a missing section returned with the bare heading and read as complete. "Open
+  with" and "end with" are now held to the first and the last section. A table needs a row that says something.
+- **A figure is sourced when it was given.** It counted as sourced when any two numbers in the material added up
+  to it, whatever they counted: a dose passed because a chart held an age and a breathing rate. A sum or a
+  difference is now of the same thing only, and an amount in a unit of measure matches that unit. With no material
+  bound the rule did not run at all; it now runs against the request alone. A pair written with a slash and a
+  single digit with its unit are figures. A date and a line number are not.
+- **An invented figure can be cut.** The rewrite that removed it was refused for losing a figure, and the figure
+  was delivered.
+- **A reproduction has the shape of the work held back.** `atelier reproduce` counted the run's own verdict, and a
+  skill with two rules of style gives that verdict to anything tidy. The held-back piece is never served; it is now
+  read in code beside the output, and a case is reproduced only when the output has the sections that piece has,
+  each with something in it.
+- **More of a method is checked.** A step is linked to a section check however its sentence opens ("Include a
+  Background section"), with the name in quotation marks, or as "a section called X". Work that marks its sections
+  with labels and not headings (a handover note, a contract clause) is read as it is written. A sentence that
+  describes the work is not a step for holding the word "never".
+- **`atelier method` builds in one call** when every step is one your example holds. Where your method and your
+  example disagree, it stops and asks that. `--review` only shows.
+- **A skill built in another folder is no longer replaced without a word.**
+- **The copying check is fast and reads every script.** A long copied stretch, the case the check exists for, was
+  the one it was slowest on: 600 copied words took seconds and 4,000 did not finish. An exact copy in Cyrillic read
+  as no copy. Same numbers as before on every input the earlier reading could read.
+- **A length is read the way people say it.** A number in a title is not a length ("10 words that changed our
+  roadmap" was read as a post of ten words). "A 20,000 word book", "roughly two thousand words" and "a two-page
+  brief" are read, and a request that states words and paragraphs keeps both.
+- **The exact interval and the paired test hold at any size.** From n = 90 an exact interval came back as {1, 1},
+  and a paired test on a thousand pairs as p = 0, with no error. No published figure was affected: every one was
+  recomputed, and all were at smaller sizes.
+- **The screen of candidates no longer loses all of them to a cycle,** a threshold is compared with the number and
+  not the number rounded for the screen, and the rhythm reading takes the middle of an even number of drafts.
+- **The search remembers.** `atelier evolve` reads the searches kept beside the skill and does not run again what
+  they ran and did not keep. A change that breaks a brief both runs of the unchanged skill held is not kept. Where
+  no gain could be shown at the size given, nothing is run to look for one.
+
+Known and not fixed here: the two ways in still cannot build one standard together; a figure the writer proposes
+("cap the delay at 30 seconds") is flagged like one it claims; sections in a format no reader here knows (tracked
+changes, comments anchored to a line of a diff) are not seen. One erratum, in a pre-registration that is left as
+sealed: `studies/EXTERNAL_EXPERT_B2_PREREGISTRATION.md` says a 60/40 split at 0.80 power needs about 150
+discordant pairs. That is the one-sided figure; for the two-sided exact test the study declares it is about 200 to
+210.
+
 ### Added, for 2.0: a skill improves how it carries its method, with nobody guiding it
 
 On top of `atelier method` ([decision 0018](docs/decisions/0018-a-skill-improves-how-it-carries-its-method.md)).

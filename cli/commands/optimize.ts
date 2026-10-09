@@ -4,7 +4,8 @@
 //                    [--no-reflect] [--promote] [--cap <usd>]
 //   atelier optimize --skill <name> --report
 //
-// One round of the search GEPA and SkillOpt run, hosted where it cannot move the target:
+// One round of a search in the family of GEPA and SkillOpt, and narrower than either (no rewritten text, no pool of
+// candidates kept between rounds, a screen on rule means and not on task instances), hosted where it cannot move the target:
 //
 //   1. PROPOSE   single-gene changes to what the compiler derives (core/optimizer/genome.ts): first by
 //                reflection, a model reading real failures and choosing among legal changes

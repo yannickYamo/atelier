@@ -178,6 +178,13 @@ describe('through the binary: a skill is its owner\'s, and another folder does n
     expect(run(first, 'verify', '--skill', 'method', 'example.md').code).toBe(0);
     expect(run(second, 'method', 'method.md', '--golden', 'example.md', '--name', 'Second Review', '--yes').out).toMatch(/second-review/);
   }, 180_000);
+  it('a method whose every step the example holds is built in one call, with nothing to confirm', () => {
+    const third = project('third', 'Open with a Background section.');
+    const r = run(third, 'method', 'method.md', '--golden', 'example.md', '--name', 'third');
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).not.toMatch(/Nothing has been built/);
+    expect(run(third, 'verify', '--skill', 'third', 'example.md').code).toBe(0);
+  }, 120_000);
   it('a bare heading added to a draft does not make it conformant, and a full one does', () => {
     const first = join(root, 'first');
     writeFileSync(join(first, 'shell.md'), '## Background\n\n## Assessment\n\nSafe to merge once the delay is capped.\n');

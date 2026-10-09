@@ -6,8 +6,10 @@
 // in the search: what may change is the implementation (how many drafts, what the writer is told its earlier drafts
 // left out), and what a change is scored on is the owner's own requirements, read by code.
 //
-// The discipline is the whole of it, and it is borrowed from work on regularized self-improvement of agent
-// harnesses, where an unattended search was shown to overfit the tasks it is scored on unless it is held back:
+// The discipline is the whole of it. The noise band, the cost rule, the leakage check and the memory of what was
+// tried are taken from work on regularized self-improvement of agent harnesses, where an unattended search was shown
+// to overfit the tasks it is scored on unless it is held back, and are far smaller here than there. One change at a
+// time is stricter than that work's budget of edits; the briefs set aside are a validation gate, and a weak one:
 //
 //   A NOISE BAND      the unchanged skill is run twice before anything is tried. Two runs of the same thing differ;
 //                     a gain inside that difference is not a gain.

@@ -16,7 +16,7 @@
 //   exemplar   whether the owner's exemplar piece ships (only when there is one)
 //   contrast   whether the write-this-not-that pairs ship (only when there are any)
 //
-// One mutation changes one gene. SkillOpt's edit budget, taken literally: a candidate that changes one
+// One mutation changes one gene. Stricter than SkillOpt's edit budget, which allows a few ranked edits a step: a candidate that changes one
 // thing can be credited or blamed for one thing.
 
 import type { Carrier, SkillArchitecture } from '../architecture/compile.js';

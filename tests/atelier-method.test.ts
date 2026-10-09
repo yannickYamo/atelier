@@ -266,9 +266,9 @@ describe('through the binary: atelier method, then a run held to the method', ()
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('shows the owner their steps by kind, and builds nothing until they say yes; it calls no model', async () => {
+  it('--review shows the owner their steps by kind and builds nothing; it calls no model', async () => {
     const before = await count();
-    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', ...BACKEND());
+    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
     expect(r.out).toMatch(/^Method: method\.md {2}· {2}example: acme\.md with 1 file\(s\) of material$/m);
     expect(r.out).toMatch(/5 step\(s\) from your method\./);
@@ -278,6 +278,14 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/Nothing has been built\. To accept exactly this:/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
     expect(await count()).toBe(before);
+  });
+
+  it('with a step the example does not hold, nothing is built in one call: that question is the owner\'s', () => {
+    writeFileSync(join(proj, 'asks.md'), '- Open with a Verdict section.\n- End with a Appendix section.\n');
+    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', ...BACKEND());
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toMatch(/Nothing has been built: 1 step\(s\) above are yours to settle first\./);
+    expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });
 
   it('--yes builds the skill from exactly that, with the example as its one worked example, and still calls no model', async () => {
@@ -308,14 +316,14 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(j.eval.result.conformant).toBe(false);
     expect(j.eval.result.reasons.join(' ')).toMatch(/3 required rules broken/);
     expect(j.report.join('\n')).toMatch(/Method: contains 0 of 3 thing\(s\) it must \(missing: x\d+, x\d+, x\d+\)/);
-    expect(j.report.join('\n')).toMatch(/The draft leaves out 3 thing\(s\) the method requires \(x\d+, x\d+, x\d+\); one more draft did not do better, so the first is kept\./);
+    expect(j.report.join('\n')).toMatch(/The draft leaves out 3 thing\(s\) the method requires \(x\d+: "Open with a Verdict section[^"]*"; x\d+: "[^"]+"; x\d+: "[^"]+"\); one more draft did not do better, so the first is kept\./);
   }, 120_000);
 
   it('what a draft left out is written again with it named, and the piece that then holds it is the one delivered', async () => {
     await script(BLAND, [{ contains: 'An earlier draft left out what this work must contain', answer: { piece: NEW_PIECE } }]);
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
-    expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+, x\d+, x\d+\); it now leaves out 0\./);
+    expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+: "[^"]+"; x\d+: "[^"]+"; x\d+: "[^"]+"\); it now leaves out 0\./);
     expect(j.output).toContain('## Verdict');
     expect(j.eval.result.conformant).toBe(true);
   }, 120_000);
