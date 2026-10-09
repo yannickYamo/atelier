@@ -72,7 +72,7 @@ export function stepsOf(note: string): MethodStep[] {
   const RULE = /\b(?:must|never|always|do not|don't|required?|shall|only)\b/i;
   // A sentence that DESCRIBES the work holds those words too ("read by a registrar who has never met the patient"):
   // inside a clause about someone or something else, the word instructs nobody.
-  const DESCRIBES = /\b(?:who|whom|whose|which|that)\s+(?:\w+\s+){0,3}(?:never|always|only|must|shall)\b/i;
+  const DESCRIBES = /\b(?:(?:who|whom|whose)\s+(?:\w+\s+){0,3}|(?:which|that)\s+(?:has|have|had|is|are|was|were)\s+(?:\w+\s+){0,2})(?:never|always|only|must|shall)\b/i;
   const instructs = (t: string): boolean => RULE.test(t) && !(DESCRIBES.test(t) && !RULE.test(t.replace(DESCRIBES, ' ')));
   const steps = items.length ? [...items, ...prose.filter((s) => instructs(s.text))] : prose;
   const seen = new Set<string>();
@@ -134,16 +134,20 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   // section's name in passing ("never give the Assessment before reading the diff", "keep the Background short")
   // names no requirement on the work's shape, and is a judgement. A name is capitalised or in quotation marks.
   const NAME = String.raw`(?:["“']([^"”']{3,40})["”']|((?:\p{Lu}[\w'-]*\s?){1,5}))`;
-  const VERB = String.raw`(?:[Oo]pen|[Ss]tart|[Bb]egin|[Ll]ead|[Ee]nd|[Cc]lose|[Ff]inish|[Cc]onclude|[Ii]nclude|[Aa]dd|[Ww]rite|[Hh]ave|[Hh]as|[Cc]ontain|[Gg]ive|[Pp]rovide|[Pp]ut|[Ww]ith|[Tt]hen)`;
-  const named = [
+  const VERB = String.raw`(?:[Oo]pen|[Ss]tart|[Bb]egin|[Ll]ead|[Ee]nd|[Cc]lose|[Ff]inish|[Cc]onclude|[Ii]nclude|[Aa]dd|[Ww]rite|[Hh]ave|[Hh]as|[Cc]ontain)`;
+  // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
+  // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
+  const conditional = /\b(?:do not|don't|never|not|no|unless|only when|only if|if|when|where|whenever|except|optional(?:ly)?)\b/i.test(step);
+  const named = conditional ? [] : [
     ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\s+(?:with\s+)?(?:an?\s+|the\s+|its\s+|one\s+)?${NAME}\s*(?:section|heading|part)\b`, 'gu')),
     ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\b[^.;]*?\b(?:section|heading|part)\s+(?:called|named|titled|headed)\s+${NAME}`, 'gu')),
-    ...step.matchAll(new RegExp(String.raw`\b(under)\s+(?:the\s+|a\s+)?heading\s+${NAME}`, 'giu')),
+    ...step.matchAll(new RegExp(String.raw`\b([Uu]nder)\s+(?:the\s+|a\s+)?heading\s+${NAME}`, 'gu')),
   ].map((m) => ({ verb: m[1].toLowerCase(), name: (m[2] ?? m[3]).trim(), at: m.index })).filter((x) => x.name.length >= 3).sort((a, b) => a.at - b.at);
   const sections = named.map((x) => x.name).filter((n, i, all) => all.findIndex((o) => norm(o) === norm(n)) === i);
   if (sections.length) {
-    const opens = /^(?:open|start|begin|lead)/.test(named[0].verb) || /\b(?:first|before anything else|at the (?:top|start))\b/i.test(step);
-    const closes = /^(?:end|close|finish|conclude)/.test(named[named.length - 1].verb) || /\b(?:last|at the end|after everything else)\b/i.test(step);
+    // Where is said by the verb, and by nothing else: "listing the first three risks" says nothing of where.
+    const opens = /^(?:open|start|begin|lead)/.test(named[0].verb);
+    const closes = /^(?:end|close|finish|conclude)/.test(named[named.length - 1].verb);
     return sectionsCheck(sections, outline, { opens, closes: closes && !(opens && sections.length === 1) });
   }
   if (/\btables?\b/i.test(step) && outline.tables.length) {

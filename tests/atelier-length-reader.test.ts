@@ -48,13 +48,40 @@ describe('a number spelled out is a number', () => {
 });
 
 describe('a request may state more than one length, one for each unit', () => {
-  it('both are kept, in the order they were said, and the count of words is the one a draft is measured against', () => {
+  it('both are kept, in the order they were said', () => {
     const all = statedLengths('Write a 500-word introduction in 3 paragraphs');
     expect(all.map((s) => [s.target, s.unit, s.raw])).toEqual([[500, 'words', '500-word'], [3, 'paragraphs', '3 paragraphs']]);
-    expect(read('Write a 500-word introduction in 3 paragraphs')).toEqual([500, 'words', '500-word']);
+    // the length a draft is held to is the last one said, as it always was
+    expect(read('Write a 500-word introduction in 3 paragraphs')).toEqual([3, 'paragraphs', '3 paragraphs']);
+    expect(read('A headline of 5 words. Body: 3 paragraphs.')).toEqual([3, 'paragraphs', '3 paragraphs']);
   });
   it('of two said in the same unit, the later one is the length', () => {
     expect(statedLengths('About 300 words. Actually, make it about 600 words.').map((s) => s.target)).toEqual([600]);
   });
   it('none stated is an empty list', () => { expect(statedLengths('Write something good about pricing')).toEqual([]); });
+});
+
+describe('what an independent review found the first version of this got wrong', () => {
+  const none = (r: string): void => { expect(statedLength(r), r).toBeNull(); };
+  it('a count before the kind of piece is a length only when that piece is what is asked for', () => {
+    for (const r of ['I wrote a 500 word draft. Tighten it.', 'Here is a 500 word draft, make it better', 'A 300 word essay by a student is attached; grade it', 'Proofread the attached 3 page report',
+      'Reply to a 2 sentence email', 'Write a book proposal for a 90,000 word book', 'Write the jacket copy for a 300 page report']) none(r);
+    expect(read('Draft me a 300 word summary of the call')).toEqual([300, 'words', '300 word']);
+    expect(read('I need a 1,200 word article on pricing')).toEqual([1200, 'words', '1,200 word']);
+  });
+  it('two numbers side by side are two numbers', () => {
+    expect(statedLengths('Write between two and three paragraphs').map((s) => [s.kind, s.min, s.max, s.unit])).toEqual([['range', 2, 3, 'paragraphs']]);
+    expect(read('Write five two-sentence blurbs')).toEqual([2, 'sentences', 'two-sentence']);
+    expect(read('Write three one-paragraph options')).toEqual([1, 'paragraphs', 'one-paragraph']);
+  });
+  it('digits and words together keep their size', () => {
+    expect(read('Write 2 thousand words')).toEqual([2000, 'words', '2 thousand words']);
+    expect(read('about 3 hundred words')).toEqual([300, 'words', '3 hundred words']);
+    expect(read('Write one thousand, two hundred words')).toEqual([1200, 'words', 'one thousand, two hundred words']);
+  });
+  it('a small number spelled out is a length only where the request introduces it as one', () => {
+    for (const r of ['Remove three sentences', 'Delete two paragraphs and tighten', 'Add one sentence about pricing', 'Write a review of the film Three Sentences',
+      "Write a post titled 'Ten words that matter'", 'In a word, no. Two words: not yet.', 'Why are two pages better than one page?', 'Our style guide: every post opens with a one sentence summary', 'Remove 3 sentences']) none(r);
+    expect(read('In three sentences, say why')).toEqual([3, 'sentences', 'three sentences']);
+  });
 });

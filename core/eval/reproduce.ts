@@ -15,8 +15,7 @@
 // have been run: a piece held back is unseen once, and a reserve run again after each change to the skill is being
 // worked toward.
 
-import { measure } from '../observers/registry.js';
-import { outlineOf } from '../method/standard.js';
+import { headingsOf, sectionHeadsOf } from '../observers/structure.js';
 
 export interface CaseOutcome {
   readonly id: string;
@@ -48,16 +47,37 @@ export interface CaseOutcome {
 
 export interface Shape { readonly sections: { readonly of: number; readonly held: number; readonly missing: readonly string[] } }
 
+/** A section's name as two writers would both write it: no case, no numbering, "&" as "and", no punctuation. */
+const nameOf = (h: string): string => h.toLowerCase().normalize('NFKC').replace(/^\s*\d+(?:\.\d+)*[.)]?\s+/, '').replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
 /**
  * THE SHAPE OF THE WORK HELD BACK, READ ON THE OUTPUT. The held-back piece is the expert's answer to the same task
  * from the same material. It is never served; read here, in code, beside the output, it says what a reproduction
- * has: its sections, each with something in it. Read as the piece marks them, headings or labels.
+ * has: the piece's top sections, each with something in it. Named as two writers would both write them, and found
+ * in the output however it marks its sections, headings or labels.
  */
 export function shapeAgainst(output: string, reference: string): Shape {
-  const outline = outlineOf(reference);
-  const missing = outline.sections.filter((name) => measure(output, { observer: 'PRESENCE', params: { sections: [name], body: 1, ...(outline.labels ? { labels: 1 } : {}) } }).verdict !== 'MET');
-  return { sections: { of: outline.sections.length, held: outline.sections.length - missing.length, missing } };
+  const heads = headingsOf(reference);
+  const top = heads.length ? Math.min(...heads.map((h) => h.level)) : 0;
+  // The piece's own headings at its top level; with none, its labels, where it has three or more.
+  const labels = heads.length ? [] : sectionHeadsOf(reference, true);
+  const wanted = (heads.length ? heads.filter((h) => h.level === top) : labels.length >= 3 ? labels : []).map((h) => h.text).filter((t, i, all) => nameOf(t).length >= 3 && all.findIndex((o) => nameOf(o) === nameOf(t)) === i);
+  const found = sectionHeadsOf(output, true);
+  const holds = (name: string): boolean => found.some((h, i) => {
+    const mine = nameOf(h.text); const theirs = nameOf(name);
+    if (!(mine === theirs || mine.includes(theirs) || (mine.length >= 4 && theirs.includes(mine)))) return false;
+    const next = found.slice(i + 1).find((x) => x.level <= h.level);
+    return /[\p{L}\p{N}]/u.test(output.slice(h.end, next ? next.start : output.length).replace(/^\s*#{1,6}\s.*$/gm, ' '));
+  });
+  const missing = wanted.filter((name) => !holds(name));
+  return { sections: { of: wanted.length, held: wanted.length - missing.length, missing } };
 }
+
+/**
+ * Whether an output has the shape of the piece held back: most of its sections, where it has two or more. One
+ * heading is not a shape, and a heading that says what this one piece concluded need not be said the same way twice.
+ */
+export const hasShape = (shape: Shape): boolean => shape.sections.of < 2 || shape.sections.held * 2 >= shape.sections.of + (shape.sections.of % 2);
 
 export interface ReproductionRecord {
   readonly schema: 1;
@@ -134,7 +154,7 @@ export function renderReproduction(r: ReproductionRecord): string {
     return out.join('\n');
   }
   out.push(r.arm === 'bare' ? `ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
-  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : `the run's own verdict was "conformant"${c.shape?.of ? ', and the output has the sections of the piece held back' : ''}`}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
+  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : `the run's own verdict was "conformant"`}${c.shape?.of ? ', and the output has most of the sections of the piece held back' : ''}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
     : `  ${c.factSafe} of ${c.ran}   with no unsupported specific, read by a qualified reader`);

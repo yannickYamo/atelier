@@ -52,7 +52,9 @@ export function headingsOf(text: string): Heading[] {
 }
 
 /** Words that open a sentence, never a label: "We agreed one thing: ..." is a sentence. */
-const NOT_A_LABEL = new Set(['we', 'i', 'you', 'he', 'she', 'they', 'it', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'there', 'here', 'if', 'when', 'and', 'but', 'so', 'or']);
+const NOT_A_LABEL = new Set(['we', 'i', 'you', 'he', 'she', 'they', 'it', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'there', 'here', 'if', 'when', 'and', 'but', 'so', 'or',
+  // the head of a letter or a memo, and an aside, are not sections of the work
+  'date', 'to', 'from', 'cc', 'bcc', 'subject', 're', 'note', 'nb', 'ps', 'tip', 'warning', 'example', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
 /** A label that marks a section, short and written as a name: every word capitalised, or one or two words. */
 const labelLike = (t: string): boolean => {
   const words = t.trim().split(/\s+/);
@@ -78,11 +80,16 @@ export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
     if (fence || !t || /^#{1,6}\s/.test(t) || /^\s*\|/.test(line)) continue;
     const at = start + line.indexOf(t);
     // "**Assessment**", "**Assessment:** she is pale", "Situation: ...", "Recommendation:" and "2. TERM".
-    const bold = /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:?\s*(.*)$/.exec(t);
+    // Bold is a label when it is the whole line, or ends in a colon: "**Acme Corp** signed on Tuesday" is a sentence.
+    const bold = /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/.exec(t) ?? /^(?:\*\*|__)(.+?):(?:\*\*|__)\s*(.*)$/.exec(t) ?? /^(?:\*\*|__)(.+?)(?:\*\*|__)\s*:\s*(.*)$/.exec(t);
     const colon = /^([^:*_|]{2,48}):(?:\s+(.*)|\s*)$/.exec(t);
-    const clause = /^\d+(?:\.\d+)*[.)]?\s+(\p{Lu}[\p{Lu}\d &/'-]{2,})$/u.exec(t);
+    // A numbered clause heading: a short number, its full stop, capitals. "2024 ANNUAL REPORT" is a title.
+    const clause = /^\d{1,3}(?:\.\d+)*[.)]\s+(\p{Lu}[\p{Lu}\d &/'-]{2,})$/u.exec(t);
     const name = bold ? bold[1].replace(/:\s*$/, '').trim() : clause ? clause[1].trim() : colon ? colon[1].trim() : null;
-    if (name === null || taken.has(at) || (!clause && !labelLike(name))) continue;
+    // A whole line in bold is a heading by another name, and may run to a few words; a name before a colon is held
+    // to being written as a name.
+    const wholeBold = bold !== null && bold[2] === undefined && name !== null && name.split(/\s+/).length <= 8 && !/[.!?]$/.test(name);
+    if (name === null || taken.has(at) || (!clause && !wholeBold && !labelLike(name))) continue;
     // The label ends where its name does, so what follows it on the line is the start of its section.
     out.push({ level: 7, text: name, start: at, end: at + t.indexOf(name) + name.length });
   }
@@ -253,7 +260,8 @@ export const PRESENCE: Observer = {
     const paras = paragraphsOf(text);
     const lastPara = paras.at(-1);
     // What a section holds: everything from its heading to the next one at its level or above.
-    const bodyOf = (i: number): string => { const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level); return text.slice(heads[i].end, next ? next.start : text.length); };
+    // A heading inside it is not what it holds: a section of nothing but the headings of empty sections is empty.
+    const bodyOf = (i: number): string => { const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level); return text.slice(heads[i].end, next ? next.start : text.length).replace(/^\s*#{1,6}\s.*$/gm, ' '); };
     // Sections present, in order.
     const sections = list(p, 'sections');
     if (sections.length) {
@@ -264,12 +272,19 @@ export const PRESENCE: Observer = {
       if (missing.length) problems.push(`no ${missing.map((m) => `"${m}"`).join(', ')} section`);
       if (!ordered) problems.push(`sections out of order (${sections.join(' before ')})`);
       // A HEADING WITH NOTHING UNDER IT IS NOT THE SECTION (`body`): a draft that lacked a section was written again,
-      // came back with the bare heading added, and read as complete. Three words, or a row of a table, is something.
-      const empty = num(p, 'body') ? sections.filter((_, i) => at[i] !== -1 && (bodyOf(at[i]).match(/[\p{L}\p{N}]+/gu) ?? []).length < 3) : [];
+      // came back with the bare heading added, and read as complete. A word is something: "Risks: none." is a section.
+      const empty = num(p, 'body') ? sections.filter((_, i) => at[i] !== -1 && !/[\p{L}\p{N}]/u.test(bodyOf(at[i]))) : [];
       if (empty.length) problems.push(`the ${empty.map((m) => `"${m}"`).join(', ')} section${empty.length === 1 ? ' is' : 's are'} empty`);
       // "OPEN WITH" AND "END WITH" SAY WHERE (`opens`, `closes`): the first section of the text, and the last.
+      // Read among sections of its own level and above: a label under a heading does not come "before" the heading's
+      // peers. And a section that follows a page of something else does not open the text, whatever came first.
       const first = at[0]; const lastAt = at[at.length - 1];
-      if (num(p, 'opens') && first > 0) problems.push(`the text opens with "${heads[0].text}", not with the "${sections[0]}" section`);
+      if (num(p, 'opens') && first !== -1) {
+        const earlier = heads.slice(0, first).find((h) => h.level <= heads[first].level);
+        const lead = (text.slice(0, heads[first].start).replace(/^---\n[\s\S]*?\n---\n/, '').replace(/^\s*#{1,6}\s.*$/gm, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
+        if (earlier) problems.push(`the text opens with "${earlier.text}", not with the "${sections[0]}" section`);
+        else if (lead > 12) problems.push(`the text does not open with the "${sections[0]}" section: ${lead} words come before it`);
+      }
       const after = lastAt === -1 ? undefined : heads.slice(lastAt + 1).findLast((h) => h.level <= heads[lastAt].level);
       if (num(p, 'closes') && after) problems.push(`the text ends with "${after.text}", not with the "${sections[sections.length - 1]}" section`);
       if ((empty.length || problems.length) && !missing.length && ordered && lastPara) spans.push({ start: lastPara.start, end: lastPara.end, text: lastPara.text, why: problems.join('; ') });
@@ -308,6 +323,8 @@ export const PRESENCE: Observer = {
         spans.push({ start: scope.start, end: scope.end, text: scope.text, why: why.join('; ') });
       }
     }
+    // Every failure says where: with nothing better to point at, the start of the text.
+    if (problems.length && !spans.length) spans.push({ start: 0, end: Math.min(text.length, 120), text: text.slice(0, 120), why: problems.join('; ') });
     return problems.length
       ? { verdict: 'VIOLATED', spans, value: problems.length, detail: problems.join('; ') }
       : { verdict: 'MET', spans: [], value: 0, detail: 'everything it must contain is there' };

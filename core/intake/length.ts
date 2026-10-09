@@ -64,41 +64,62 @@ const FORMS: readonly Form[] = [
 
 /** What a count of words can stand before as the length of it: "a 20,000 word book". */
 const PIECE = String.raw`(?:book|chapter|post|essay|article|report|piece|brief|memo|story|draft|summary|section|intro(?:duction)?|conclusion|email|letter|note|speech|script|answer|reply|review|bio|description|overview|doc(?:ument)?)`;
-// "a 20,000 word book": the unit in the singular, then the kind of piece. The kind of piece is what makes it a length.
+// "a 20,000 word book": the unit in the singular, then the kind of piece. It is a length only when that piece is what
+// is asked for, which the words straight before it say ("write a", "draft me a", "I need a"). "I wrote a 500 word
+// draft", "proofread the attached 3 page report" and "a proposal for a 90,000 word book" each name a piece that is
+// not the one to write.
 const PIECE_FORM = form(String.raw`${NUMBER}\s+(word|page|paragraph|sentence)(?=\s+${PIECE}\b)`, (m) => ({ unit: unitOf(m[2]), kind: 'target', min: null, max: null, target: toNumber(m[1]) }));
+const ASKS_FOR = /\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make)\s+(?:me\s+|us\s+|up\s+)?an?\s+$/i;
 const ALL_FORMS: readonly Form[] = [...FORMS.slice(0, 7), PIECE_FORM, ...FORMS.slice(7)];
+/** Words before a count that say the text is to be changed by that much, not written to it. */
+const EDITS = /\b(?:remove|delete|cut|drop|trim|add|insert|change|fix|rewrite|move|merge|split)\s+(?:the\s+|about\s+|up to\s+|at least\s+)?$/i;
+/** Words that introduce a count spelled out as a length: without one, "two pages", "Three Sentences" and "one page" are prose. */
+const INTRODUCES = /(?:\b(?:write|draft|in|of|to|at|is|be|it|about|around|roughly|approximately|some|under|over|within|exactly|least|most|between)|~|-|–)\s*(?:a\s+|an\s+)?$/i;
 
 // WHAT IS INSIDE QUOTATION MARKS IS A TITLE OR A QUOTATION, never the length to write to: a post titled "10 words
 // that changed our roadmap" was read as a post of ten words. Blanked, at the same length, so every place stays put.
-const unquoted = (s: string): string => s.replace(/"[^"\n]*"|“[^”\n]*”/g, (m) => ' '.repeat(m.length));
+// Single marks count where they open after a space and close before one, which an apostrophe inside a word never does.
+const unquoted = (s: string): string => s.replace(/"[^"\n]*"|“[^”\n]*”|(?<=^|[\s(])'[^'\n]{3,}'(?=$|[\s.,;:!?)])|(?<=^|[\s(])‘[^’\n]{3,}’/g, (m) => ' '.repeat(m.length));
 
-// A NUMBER SPELLED OUT IS A NUMBER: "two thousand", "fifteen hundred", "twenty-five hundred", "a thousand", "three".
-const SMALL: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
-  fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
-const NUMBER_WORD = `(?:${Object.keys(SMALL).join('|')}|hundred|thousand)`;
-const SPELLED = new RegExp(String.raw`\b(?:an?\s+(?=(?:hundred|thousand)\b))?${NUMBER_WORD}(?:(?:\s+and\s+|[\s-]+)${NUMBER_WORD})*\b`, 'gi');
+// A NUMBER SPELLED OUT IS A NUMBER: "two thousand", "fifteen hundred", "twenty-five hundred", "a thousand", "three",
+// "one thousand, two hundred", and "2 thousand". Read by its grammar, so that two numbers side by side stay two:
+// "between two and three paragraphs" is not five, and "five two-sentence blurbs" is not seven.
+const ONES: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+const TEENS: Readonly<Record<string, number>> = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+const TENS: Readonly<Record<string, number>> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const SMALL: Readonly<Record<string, number>> = { ...ONES, ...TEENS, ...TENS };
+const alt = (o: Readonly<Record<string, number>>): string => Object.keys(o).join('|');
+const SUB100 = String.raw`(?:(?:${alt(TENS)})(?:[\s-](?:${alt(ONES)}))?|${alt(TEENS)}|${alt(ONES)})`;
+const SUB1000 = String.raw`(?:${SUB100}\s+hundred(?:\s+(?:and\s+)?${SUB100})?|${SUB100})`;
+const SPELLED = new RegExp(String.raw`\b(?:(?:an?|${SUB1000}|\d+(?:\.\d+)?)\s+thousand(?:,?\s+(?:and\s+)?${SUB1000})?|(?:an?|\d+(?:\.\d+)?)\s+hundred(?:\s+(?:and\s+)?${SUB100})?|${SUB1000})\b`, 'gi');
 function valueOf(spelled: string): number {
   let total = 0; let current = 0;
-  for (const w of spelled.toLowerCase().match(/[a-z]+/g) ?? []) {
+  for (const w of spelled.toLowerCase().match(/[a-z]+|\d+(?:\.\d+)?/g) ?? []) {
     if (w === 'hundred') current = (current || 1) * 100;
-    else if (w === 'thousand') { total += (current || 1) * 1000; current = 0; } else current += SMALL[w] ?? 0;
+    else if (w === 'thousand') { total += (current || 1) * 1000; current = 0; } else if (/^\d/.test(w)) current += Number(w); else current += SMALL[w] ?? 0;
   }
-  return total + current;
+  return Math.round(total + current);
 }
-/** The request with its spelled numbers in digits, and for each place in it, the place in the request it came from. */
-function inDigits(request: string): { text: string; from: number[] } {
-  let text = ''; const from: number[] = []; let at = 0;
+/**
+ * The request with its spelled numbers in digits; for each place in it, the place in the request it came from; and
+ * where each number that was spelled out now starts.
+ */
+function inDigits(request: string): { text: string; from: number[]; spelled: Set<number> } {
+  let text = ''; const from: number[] = []; let at = 0; const spelled = new Set<number>();
   const copy = (to: number): void => { for (; at < to; at++) { text += request[at]; from.push(at); } };
   for (const m of request.matchAll(SPELLED)) {
     const value = valueOf(m[0]);
-    if (value <= 0) continue;
+    // A name is not a number: "the film Three Sentences". A number that opens its sentence is still one.
+    const opensSentence = /(?:^|[.!?:]\s+|\n\s*)$/.test(request.slice(0, m.index));
+    if (value <= 0 || (/^\p{Lu}/u.test(m[0]) && !opensSentence)) continue;
     copy(m.index);
+    spelled.add(text.length);
     for (const d of String(value)) { text += d; from.push(m.index); }
     at = m.index + m[0].length;
   }
   copy(request.length);
   from.push(request.length);
-  return { text, from };
+  return { text, from, spelled };
 }
 
 /**
@@ -107,16 +128,19 @@ function inDigits(request: string): { text: string; from: number[] } {
  * of two readings of the same words, the more specific. `raw` is the request's own words.
  */
 export function statedLengths(request: string): StatedLength[] {
-  const { text, from } = inDigits(unquoted(request));
+  const { text, from, spelled } = inDigits(unquoted(request));
   const best = new Map<LengthUnit, { at: number; start: number; rank: number; stated: StatedLength }>();
   ALL_FORMS.forEach((f, rank) => {
     f.re.lastIndex = 0;
     for (let m = f.re.exec(text); m; m = f.re.exec(text)) {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
-      if (POINTS_AT.test(before) || REPORTS.test(before)) continue;
+      if (POINTS_AT.test(before) || REPORTS.test(before) || EDITS.test(before)) continue;
+      if (f === PIECE_FORM && !ASKS_FOR.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
-      // something else.
+      // something else. One spelled out needs the word before it: "two pages" alone is how people write prose.
       if (f.bare && !APPROX.test(before) && !ENDS_PHRASE.test(after)) continue;
+      const numberAt = m.index + m[0].search(/\d/);
+      if (f.bare && spelled.has(numberAt) && !INTRODUCES.test(text.slice(0, m.index)) && text.slice(0, m.index).trim() !== '') continue;
       const read = f.read(m);
       const numbers = [read.min, read.max, read.target].filter((x): x is number => x !== null);
       if (!numbers.length || numbers.some((x) => !Number.isFinite(x) || x <= 0)) continue;
@@ -129,13 +153,9 @@ export function statedLengths(request: string): StatedLength[] {
   return [...best.values()].sort((a, b) => a.start - b.start).map((b) => b.stated);
 }
 
-/**
- * The length a draft is held to, or null: the count of words where the request states one, since that is what can
- * be counted on a draft, and otherwise the last length it states.
- */
+/** The length a draft is held to, or null: of the lengths the request states, the last one said. */
 export function statedLength(request: string): StatedLength | null {
-  const all = statedLengths(request);
-  return all.find((s) => s.unit === 'words') ?? all.at(-1) ?? null;
+  return statedLengths(request).reduce<{ at: number; stated: StatedLength } | null>((last, s) => { const at = request.lastIndexOf(s.raw); return !last || at >= last.at ? { at, stated: s } : last; }, null)?.stated ?? null;
 }
 
 /** How a count sits against a stated length: inside it, or short or long of it. A target is met within a tenth. */

@@ -152,8 +152,8 @@ export async function evolve(): Promise<void> {
 
   // WHAT EARLIER SEARCHES RAN, under this standard and this version of the skill: kept beside the skill, read here.
   const records = join(DATA, 'skills', name, 'evolve');
-  const before = existsSync(records) ? readdirSync(records).filter((f) => f.endsWith('.json')).sort().flatMap((f) => { try { return [readJson<EvolveRecord>(join(records, f), { what: 'an earlier search' })]; } catch { return []; } }) : [];
-  const earlier = priorSearches(before, sv.standardVersionHash, active);
+  const before = existsSync(records) ? readdirSync(records).filter((f) => f.endsWith('.json')).sort().flatMap((f) => { try { return [readJson<unknown>(join(records, f), { what: 'an earlier search' })]; } catch { return []; } }) : [];
+  const earlier = priorSearches(before, sv.standardVersionHash, active, dev.map((b) => b.id), heldBack.map((b) => b.id));
   const trials: Trial[] = []; let incumbent = start; let record: EvolveRecord;
   try {
     say(`${briefs.length} briefs: ${dev.length} to work on, ${heldBack.length} set aside before anything is run.`);
@@ -169,11 +169,14 @@ export async function evolve(): Promise<void> {
     const tried = new Set<string>([carryKey(start, statements), ...earlier.tried]);
     const steady = steadyBriefs(first, second);
     // A candidate is kept beyond the band: with the skill already within the band of every brief, none could be.
-    const gainPossible = best + band < dev.length;
-    if (!gainPossible && !state.stopped) say(`  no gain could be shown at this size: the skill holds ${best} of ${dev.length} and a change must beat that by more than ${band}. Nothing is run to look for one.`);
+    // Asked again each round: a change that was kept raises what the next one must beat.
+    const gainPossible = (): boolean => best + band < dev.length;
+    const startedWithRoom = gainPossible(); let ranOut = false;
+    if (!startedWithRoom && !state.stopped) say(`  no gain could be shown at this size: the skill holds ${best} of ${dev.length} and a change must beat that by more than ${band}. Nothing is run to look for a gain.`);
     for (let round = 1; round <= rounds && !state.stopped; round++) {
-      const candidates = proposals(incumbent, last, statements, tried, { drafts: !release, gain: gainPossible });
-      if (!candidates.length) break;
+      const candidates = proposals(incumbent, last, statements, tried, { drafts: !release, gain: gainPossible() });
+      // Nothing left to try: because every change was run before on these briefs, or because none could be shown.
+      if (!candidates.length) { ranOut = round === 1 && startedWithRoom && earlier.tried.length > 0; break; }
       let winner: { c: (typeof candidates)[number]; s: Scored } | null = null;
       for (const c of candidates) {
         tried.add(c.key);
@@ -201,7 +204,8 @@ export async function evolve(): Promise<void> {
     const held = heldStart && heldEnd && !state.stopped ? { start: heldStart, end: heldEnd } : null;
     const verdict: EvolveRecord['verdict'] = state.stopped ? 'STOPPED' : !changed ? 'UNCHANGED' : held && held.end.ok >= held.start.ok ? 'ADOPTED' : 'NOT_CARRIED';
     const why = state.stopped ? `${state.stopped}. Nothing was adopted; what was run is kept.`
-      : !changed ? (gainPossible ? 'no change was plainly better than the skill as it stands, so it is left as it is.' : `the skill holds ${best} of ${dev.length} working briefs, where a change must beat that by more than ${band}: no gain could be shown at this size, so nothing was tried for one. More briefs would let a search say more.`)
+      : !changed ? (ranOut ? `every change this search could try was run by an earlier search over these same briefs and not kept (${earlier.tried.length}), so nothing was tried. Other briefs, or a changed skill, would be a new question.`
+        : startedWithRoom ? 'no change was plainly better than the skill as it stands, so it is left as it is.' : `the skill holds ${best} of ${dev.length} working briefs, where a change must beat that by more than ${band}: no gain could be shown at this size, so nothing was tried for one. More briefs would let a search say more.`)
         : verdict === 'ADOPTED' ? `the change did not break on the briefs set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}), so the skill now carries its method this way. atelier evolve --skill ${name} --rollback goes back.`
           : `better on the briefs it worked on, and worse on the ones set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}): the gain did not carry, and the skill is left as it was.`;
     // `end` is what the search arrived at. After a stop that is where it had got to, with no reading on the briefs set aside.

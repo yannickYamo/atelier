@@ -250,15 +250,21 @@ export function leak(note: string, briefs: readonly Brief[], own: readonly strin
 }
 
 /**
- * WHAT EARLIER SEARCHES SAY TO THIS ONE. Under the same standard and the same version of the skill: every way of
- * carrying the method that was run and not kept, or kept and then worse on the briefs set aside, is not run again;
+ * WHAT EARLIER SEARCHES SAY TO THIS ONE. Under the same standard, the same version of the skill and the same working
+ * briefs: every way of carrying the method that was run and not kept, or kept and then worse on the briefs set aside, is not run again;
  * and how many times the briefs set aside have been read. A search that forgets the last one tries the same thing
  * against the same held-back briefs until chance lets it through.
  */
-export function priorSearches(records: readonly EvolveRecord[], standardVersion: string, skillVersion: string): { tried: string[]; heldBackReads: number } {
-  const same = records.filter((r) => r.standardVersion === standardVersion && r.skillVersion === skillVersion);
-  const tried = same.flatMap((r) => r.trials.filter((t) => t.scored !== null && !t.why.startsWith('not read') && (!t.kept || r.verdict === 'NOT_CARRIED')).map((t) => t.key));
-  return { tried: [...new Set(tried)].sort(), heldBackReads: same.filter((r) => r.heldBack !== null).length };
+export function priorSearches(records: readonly unknown[], standardVersion: string, skillVersion: string, working: readonly string[] = [], heldBack: readonly string[] = []): { tried: string[]; heldBackReads: number } {
+  const sameSet = (a: unknown, b: readonly string[]): boolean => { if (!Array.isArray(a)) return false; const mine = a.filter((x): x is string => typeof x === 'string'); return mine.length === b.length && [...mine].sort().join('\n') === [...b].sort().join('\n'); };
+  // Only what is plainly a record of a search is read: a file that is something else says nothing.
+  const whole = (r: unknown): r is EvolveRecord => typeof r === 'object' && r !== null && Array.isArray((r as EvolveRecord).trials) && typeof (r as EvolveRecord).briefs === 'object'
+    && (r as EvolveRecord).trials.every((t) => typeof t === 'object' && typeof t.key === 'string' && typeof t.why === 'string');
+  const same = records.filter(whole).filter((r) => r.standardVersion === standardVersion && r.skillVersion === skillVersion);
+  // WHAT WAS TRIED ON THESE WORKING BRIEFS. On other briefs, or more of them, the same change is another question:
+  // a note that was inside the noise on eight briefs may be plainly better on sixteen.
+  const tried = same.filter((r) => sameSet(r.briefs.dev, working)).flatMap((r) => r.trials.filter((t) => t.scored !== null && !t.why.startsWith('not read') && (!t.kept || r.verdict === 'NOT_CARRIED')).map((t) => t.key));
+  return { tried: [...new Set(tried)].sort(), heldBackReads: same.filter((r) => r.heldBack !== null && sameSet(r.briefs.heldBack, heldBack)).length };
 }
 
 export interface Trial { readonly round: number; readonly gene: Gene; readonly key: string; readonly hypothesis: string; readonly carry: Carry;

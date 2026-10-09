@@ -6,7 +6,7 @@
 // output must have, each with something in it. The output answers the same task from the same material, so the
 // piece's own headings are fair to ask of it.
 import { describe, it, expect } from 'vitest';
-import { shapeAgainst, countsOf, renderReproduction, type ReproductionRecord, type CaseOutcome } from '../core/eval/reproduce.js';
+import { shapeAgainst, hasShape, countsOf, renderReproduction, type ReproductionRecord, type CaseOutcome } from '../core/eval/reproduce.js';
 
 const reference = '## What the clause does\n\nIt assigns to Pellow every invention made in the course of the work.\n\n## Who carries the risk\n\nThe contractor, who warrants that nothing assigned is a third party\'s.\n\n## What Pellow should ask for\n\nA carve-out for tools the contractor built before the engagement.\n';
 
@@ -28,6 +28,23 @@ describe('the sections of the held-back piece, read on the output', () => {
   });
 });
 
+describe('a section is the same section however two writers mark and spell it', () => {
+  const ref = '## 1. Risks & mitigations\n\nThe loop can spin.\n\n## What’s next\n\nCap the delay.\n\n### A detail\n\nSmall.\n\n## Verdict\n\nSafe.\n';
+  it('numbering, "&", curly marks and case do not make it another section; a sub-heading is not asked for', () => {
+    const out = "## Risks and mitigations\n\nIt may spin.\n\n## what's next\n\nA cap.\n\n## Verdict\n\nSafe to merge.\n";
+    expect(shapeAgainst(out, ref)).toEqual({ sections: { of: 3, held: 3, missing: [] } });
+  });
+  it('an output that marks its sections with labels has them', () => {
+    expect(shapeAgainst('**Risks and mitigations**\n\nIt may spin.\n\nWhat\'s next: a cap.\n\nVerdict: safe to merge.\n', ref).sections.held).toBe(3);
+  });
+  it('a piece of prose with a bold lead-in and an aside has no sections to ask for', () => {
+    expect(shapeAgainst('Anything.', '**Acme Corp** signed on Tuesday and has asked for terms.\n\nNote: call me before Friday.\n\nThe rest is prose.').sections.of).toBe(0);
+  });
+  it('most of the sections is the shape; one heading alone is not a shape to hold anything to', () => {
+    expect([[3, 3], [2, 3], [1, 3], [0, 3], [2, 4], [1, 4], [0, 1], [1, 2], [0, 2]].map(([held, of]) => hasShape({ sections: { of, held, missing: [] } }))).toEqual([true, true, false, false, true, false, true, true, false]);
+  });
+});
+
 describe('the record counts the shape, and says it', () => {
   const one = (o: Partial<CaseOutcome>): CaseOutcome => ({ id: 'ip.md', state: 'ran', conformant: true, required: { held: 2, applicable: 2 }, claims: null, reference: { met: 2, applicable: 2 },
     words: { output: 67, reference: 240 }, costUsd: 0, ...o });
@@ -36,6 +53,6 @@ describe('the record counts the shape, and says it', () => {
     const r = record([one({ shape: { sections: { of: 3, held: 3, missing: [] } } }), one({ id: 'fm.md', conformant: false, shape: { sections: { of: 4, held: 1, missing: ['a', 'b', 'c'] } }, why: 'it lacks 3 section(s) your held-back piece has: a, b, c' })]);
     expect(countsOf(r).shape).toEqual({ held: 4, of: 7 });
     expect(renderReproduction(r)).toMatch(/ {2}4 of 7 {3}sections of your held-back pieces are in the outputs, each with something in it/);
-    expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant", and the output has the sections of the piece held back/);
+    expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant", and the output has most of the sections of the piece held back/);
   });
 });

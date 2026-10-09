@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
 import * as store from '../../core/state/store.js';
+import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
@@ -61,8 +62,7 @@ export async function method(): Promise<void> {
   for (const line of describeMethod(proposals, example.caseClass)) console.log(line);
 
   // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
-  const name = (flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  if (!name) die('--name <name> required: the method file gives no name a skill can carry.');
+  const name = ((): string => { try { return skillNameFrom(flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')); } catch { return die('--name <name> required: the method file gives no name a skill can carry.'); } })();
   // ONE CALL, UNLESS THERE IS A QUESTION THAT IS THE OWNER'S. Every step is theirs, in their words, and what their
   // example shows beyond them is shown and not required: there is nothing to approve that they did not write. Where
   // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
@@ -83,7 +83,7 @@ export async function method(): Promise<void> {
   // A SKILL OF THAT NAME BUILT SOMEWHERE ELSE IS SOMEBODY'S STANDARD. Built again here it would be replaced without a
   // word: two people whose method file is called method.md would each overwrite the other's skill.
   if (store.getActive({ root: DATA, skillName: name }) && s.skillName !== name) {
-    die(`a skill called "${name}" already exists, and it was not built in this folder. Building here would replace its standard. Give this one a name of its own: --name <name>.`);
+    die(`a skill called "${name}" already exists, and this folder has no record of building it. Building here would replace its standard. Give this one a name of its own: --name <name>. (If a build of it here stopped part-way, finish that one: atelier build --name ${name}.)`);
   }
   if (s.decided.length || s.proposals.length || s.run.standardVersionHash) {
     die(`this folder already holds a standard${s.skillName ? ` (the skill "${s.skillName}")` : ''}: a method's steps would be added to its rules, and the skill would be held to both. Build a method's skill from a folder of its own.`);

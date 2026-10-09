@@ -74,38 +74,63 @@ export const TABLE: Observer = {
 const WORDS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
   thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100 };
 const SCALE: Readonly<Record<string, number>> = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 };
-const FIGURE = /(?<![\w.,:/-])(?:[$€£]\s?)?\d(?:[\d,]*\d)?(?:\.\d+)?(?:\s?(?:%|percent\b|bps\b|(?:k|m|mn|b|bn)\b|thousand\b|million\b|billion\b|x\b|times\b))?(?![\d:/]|(?:st|nd|rd|th)\b)/gi;
+const FIGURE = /(?<![\w.,:/-])(?:[$€£]\s?)?\d(?:[\d,]*\d)?(?:\.\d+)?(?:\s?(?:%|percent\b|bps\b|(?:k|m|mn|b|bn)\b|thousand\b|million\b|billion\b|x\b))?(?![\d:/]|(?:st|nd|rd|th)\b)/gi;
 const WORD_FIGURE = new RegExp(String.raw`\b(${Object.keys(WORDS).join('|')})\b(?=\s+(?:percent|dollars?|euros?|seats?|customers?|users?|employees?|people|months?|years?|days?|weeks?|deals?|accounts?|points?|times)\b)`, 'gi');
-/** Two numbers with a slash between them are one reading: a blood pressure, a score out of a total. */
-const PAIR = /(?<![\w.,:/-])\d{1,4}\/\d{1,4}(?![\w/])/g;
-/** What comes before a number that makes it a label, not a quantity. */
-const LABEL_BEFORE = /(?:\b(?:page|pages|p\.|pp\.|section|chapter|step|figure|fig\.|table|version|v|iso|rfc|q[1-4]|fy|part|appendix|item|no\.|number|line|lines|clause|article|schedule|exhibit|bed|room|ward|row|column|issue|ticket|commit|stage|phase|grade|#)\s*|\[)$/i;
-const MONTH = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)`;
-/** A number beside the name of a month is a day of it: a date, not a quantity. */
-const DATE_BEFORE = new RegExp(String.raw`\b${MONTH}\.?\s+$`, 'i'); const DATE_AFTER = new RegExp(String.raw`^\s+(?:of\s+)?${MONTH}\b`, 'i');
 /**
- * Units of measure. A number that carries one is that much of that thing: "40 mg" is not met by a bare 40 somewhere
- * else in the material, nor by "four times daily". And a single digit that carries one is a figure ("4 g").
+ * Two numbers of two digits or more with a slash between them are one reading: a blood pressure, a score out of a
+ * total. Not "24/7", "1/3 of the users" or a date, and not an even split.
  */
-const MEASURE = /^\s?(mcg|µg|mg|kg|g|ml|dl|l|mmol|mol|iu|mmhg|bpm|cm|mm|km|kb|mb|gb|ms)\b/i;
+const PAIR = /(?<![\w.,:/-])\d{2,4}\/\d{2,4}(?![\w/])/g;
+/** What comes before a bare number that makes it a label, not a quantity. A percentage or a sum of money is never a label. */
+const LABEL_BEFORE = /(?:\b(?:page|pages|p\.|pp\.|section|chapter|step|figure|fig\.|table|version|v|iso|rfc|q[1-4]|fy|part|appendix|item|no\.|number|lines?|clause|article|schedule|exhibit|bed|room|ward|row|column|ticket|commit|#)\s*|\[)$/i;
+const MONTH = String.raw`(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)`;
+/** A day of the month beside the month's name, written as a name: a date, not a quantity. ("may" is not May.) */
+const DATE_BEFORE = new RegExp(String.raw`\b${MONTH}\.?\s+$`); const DATE_AFTER = new RegExp(String.raw`^\s+(?:of\s+)?${MONTH}\b`);
+/**
+ * Units of measure, each under one name however it is written. A number that carries one is that much of that
+ * thing: "40 mg" is not met by a bare 40 somewhere else in the material. A single digit that carries one is a figure.
+ */
+const UNIT_NAMES: Readonly<Record<string, string>> = { mcg: 'mcg', 'µg': 'mcg', microgram: 'mcg', micrograms: 'mcg', mg: 'mg', milligram: 'mg', milligrams: 'mg', g: 'g', gram: 'g', grams: 'g',
+  kg: 'kg', kilogram: 'kg', kilograms: 'kg', ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml', dl: 'dl', l: 'l', litre: 'l', litres: 'l', liter: 'l', liters: 'l',
+  mmol: 'mmol', mol: 'mol', iu: 'iu', mmhg: 'mmhg', bpm: 'bpm', cm: 'cm', mm: 'mm', km: 'km', kb: 'kb', mb: 'mb', gb: 'gb', ms: 'ms' };
+const MEASURE = new RegExp(String.raw`^[\s-]?(${Object.keys(UNIT_NAMES).sort((x, y) => y.length - x.length).join('|')})\b`, 'i');
+/** Money is one thing whether it is written with its sign or its name. */
+const MONEY: Readonly<Record<string, string>> = { $: 'dollar', '€': 'euro', '£': 'pound', dollar: 'dollar', euro: 'euro', pound: 'pound' };
 /** A small word after a number that is not what the number counts. */
-const NOT_A_UNIT = new Set(['of', 'and', 'or', 'to', 'in', 'on', 'at', 'the', 'a', 'an', 'for', 'from', 'by', 'with', 'is', 'are', 'was', 'were', 'per', 'out', 'more', 'less', 'than', 'that', 'which', 'who', 'as', 'but', 'so', 'if', 'it', 'this']);
+const NOT_A_UNIT = new Set(['of', 'and', 'or', 'to', 'in', 'on', 'at', 'the', 'a', 'an', 'for', 'from', 'by', 'with', 'is', 'are', 'was', 'were', 'per', 'out', 'more', 'less', 'than', 'that', 'which', 'who', 'as', 'but', 'so', 'if', 'it', 'this', 'may', 'will', 'would', 'can', 'could', 'should', 'did', 'do', 'have', 'has', 'had', 'not', 'now', 'then', 'each', 'every', 'all', 'in', 'old', 'total', 'times']);
 
 interface Figure { readonly key: string; readonly raw: string; readonly start: number; readonly end: number; readonly value: number; readonly percent: boolean;
-  /** what the number counts, as written after it ("seat", "mg", "$"), or null: two figures are added or subtracted only when this is the same */
-  readonly unit: string | null }
+  /** what the number counts ("seat", "mg", "dollar"), or null: two figures are added or subtracted only when this is the same */
+  readonly unit: string | null;
+  /** it stands in a row of a table, where the unit is in the column's heading and not beside the number */
+  readonly inTable?: boolean }
 
-function figureAt(raw: string, start: number, end: number, after: string): Figure | null {
+/**
+ * What a number counts, read from the words after it: the unit of measure if one follows, else the noun of the
+ * phrase ("12 enterprise customers" counts customers, "64 years old" counts years), else nothing.
+ */
+function thingAfter(after: string): string | null {
+  const phrase = /^[\s-]?(\p{L}+(?:[\s-]\p{L}+){0,2})/u.exec(after)?.[1].toLowerCase().split(/[\s-]/) ?? [];
+  const stop = phrase.findIndex((w) => NOT_A_UNIT.has(w));
+  const words = stop === -1 ? phrase : phrase.slice(0, stop);
+  if (!words.length) return null;
+  const noun = [...words].reverse().find((w) => w.length > 3 && w.endsWith('s')) ?? words[0];
+  const one = noun.length > 3 ? noun.replace(/s$/, '') : noun;
+  return MONEY[one] ?? one;
+}
+
+function figureAt(raw: string, start: number, after: string): Figure | null {
   const t = raw.toLowerCase().replace(/[$€£,\s]/g, '');
-  const m = /^(\d+(?:\.\d+)?)(%|percent|bps|k|mn|m|bn|b|thousand|million|billion|x|times)?$/.exec(t);
+  const m = /^(\d+(?:\.\d+)?)(%|percent|bps|k|mn|m|bn|b|thousand|million|billion|x)?$/.exec(t);
   if (!m) return null;
-  const value = Number(m[1]) * (SCALE[m[2] ?? ''] ?? 1); const percent = m[2] === '%' || m[2] === 'percent'; const multiple = m[2] === 'x' || m[2] === 'times';
-  const measure = MEASURE.exec(after)?.[1].toLowerCase() ?? null;
-  const word = /^\s?(\p{L}+)/u.exec(after)?.[1].toLowerCase() ?? null;
-  const unit = /[$€£]/.exec(raw)?.[0] ?? measure ?? (word && !NOT_A_UNIT.has(word) ? word.replace(/s$/, '') : null);
-  const tail = percent ? '%' : multiple ? 'x' : m[2] === 'bps' ? 'bps' : measure ? `|${measure}` : '';
-  const shown = measure ? `${raw}${/^\s/.test(after) ? ' ' : ''}${MEASURE.exec(after)?.[1] ?? ''}` : raw;
-  return { key: `${Math.round(value * 1e6) / 1e6}${tail}`, raw: shown, start, end: start + shown.length > end ? start + shown.length : end, value, percent, unit };
+  const value = Number(m[1]) * (SCALE[m[2] ?? ''] ?? 1); const percent = m[2] === '%' || m[2] === 'percent';
+  const measured = MEASURE.exec(after); const measure = measured ? UNIT_NAMES[measured[1].toLowerCase()] : null;
+  const sign = /[$€£]/.exec(raw)?.[0];
+  const unit = (sign ? MONEY[sign] : null) ?? measure ?? thingAfter(after);
+  const tail = percent ? '%' : m[2] === 'x' ? 'x' : m[2] === 'bps' ? 'bps' : measure ? `|${measure}` : '';
+  // With its unit of measure, the figure is the number and the unit as written: "74 g".
+  const shown = measured ? `${raw}${measured[0]}` : raw;
+  return { key: `${Math.round(value * 1e6) / 1e6}${tail}`, raw: shown, start, end: start + shown.length, value, percent, unit };
 }
 
 /**
@@ -116,25 +141,30 @@ export function figuresOf(text: string, given = false): Figure[] {
   const out: Figure[] = [];
   // Not inside code; not a list marker, a numbered heading or a heading at all.
   const prose = text.replace(/```[\s\S]*?```/g, (m) => ' '.repeat(m.length)).replace(/^\s*#{1,6}\s.*$/gm, (m) => ' '.repeat(m.length)).replace(/^\s*\d+[.)]\s/gm, (m) => ' '.repeat(m.length));
-  for (const m of prose.matchAll(PAIR)) out.push({ key: `pair:${m[0]}`, raw: m[0], start: m.index, end: m.index + m[0].length, value: NaN, percent: false, unit: null });
+  for (const m of prose.matchAll(PAIR)) {
+    const [left, right] = m[0].split('/');
+    if (left !== right) out.push({ key: `pair:${m[0]}`, raw: m[0], start: m.index, end: m.index + m[0].length, value: NaN, percent: false, unit: null });
+  }
   for (const m of prose.matchAll(FIGURE)) {
     const raw = m[0].trim(); const start = m.index + (m[0].length - m[0].trimStart().length); const end = m.index + m[0].length;
-    const after = prose.slice(end, end + 16);
-    const f = figureAt(raw, start, end, after);
+    const after = prose.slice(end, end + 40);
+    const f = figureAt(raw, start, after);
     if (!f) continue;
-    const unit = /[%$€£]|percent|bps|[kmbx]$|thousand|million|billion|times/i.test(raw) || MEASURE.test(after);
+    const scaled = /[%$€£]|percent|bps|[kmbx]$|thousand|million|billion/i.test(raw);
+    const unit = scaled || MEASURE.test(after);
     const digits = raw.replace(/\D/g, '').length;
     if (!unit && digits < 2 && !(given && f.unit !== null)) continue;
     const before = prose.slice(Math.max(0, start - 14), start);
-    if (LABEL_BEFORE.test(before) || DATE_BEFORE.test(before) || DATE_AFTER.test(after)) continue;
+    // A label or a date is a bare number: "line 214", "12 May". A percentage, a sum of money or an amount never is.
+    if (!unit && (LABEL_BEFORE.test(before) || ((DATE_BEFORE.test(before) || DATE_AFTER.test(after)) && (f.value <= 31 || /^(?:19|20)\d\d$/.test(raw))))) continue;
     // A year stands alone and is not a quantity.
     if (!unit && /^(?:19|20)\d\d$/.test(raw)) continue;
-    out.push(f);
+    const line = prose.slice(prose.lastIndexOf('\n', start) + 1, !prose.includes('\n', start) ? prose.length : prose.indexOf('\n', start));
+    out.push(/^\s*\|.*\|\s*$/.test(line) ? { ...f, inTable: true } : f);
   }
   for (const m of prose.matchAll(WORD_FIGURE)) {
     const value = WORDS[m[1].toLowerCase()]; const rest = prose.slice(m.index + m[0].length); const percent = /^\s+percent/i.test(rest);
-    const word = /^\s+(\p{L}+)/u.exec(rest)?.[1].toLowerCase() ?? null;
-    out.push({ key: `${value}${percent ? '%' : ''}`, raw: m[0], start: m.index, end: m.index + m[0].length, value, percent, unit: word ? word.replace(/s$/, '') : null });
+    out.push({ key: `${value}${percent ? '%' : ''}`, raw: m[0], start: m.index, end: m.index + m[0].length, value, percent, unit: thingAfter(rest) });
   }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -146,23 +176,35 @@ function alsoGiven(f: Figure): string[] {
   return [];
 }
 
+/** Whether a figure with a unit of measure is the number in a table whose heading, not its cell, carries the unit. */
+const inGivenTable = (f: Figure, given: readonly Figure[]): boolean => f.key.includes('|') && given.some((g) => g.inTable === true && g.value === f.value && !g.percent && !g.key.includes('|'));
+
 /**
- * Whether a stated figure follows from what was given, by one step of arithmetic on two given figures. A share of
- * one count in another, to the nearest point ("half the deals" from "10 of 20"). Or the sum or the difference of two
- * amounts OF THE SAME THING, exactly: 12 seats and 8 seats are 20 seats, and 12 seats and 8 dollars are nothing. Read without the unit, any two numbers in
- * the material made a third "sourced": a dose of 80 mg passed because a chart held an age of 64 and a rate of 16.
+ * Whether a stated figure follows from what was given, by one step of arithmetic on two given figures.
+ *   A SHARE of one count in a larger one of the same thing, to the nearest point: "half the doses" from "10 of 20".
+ *   THE SUM OR THE DIFFERENCE of two amounts of the same thing: 12 seats and 8 seats are 20 seats, and 12 seats and
+ *   8 dollars are nothing. Exact, or rounded as the figure itself is rounded ("about 20,500" from 20,549).
+ * "Of the same thing" is read from what each number counts. Two numbers that count nothing add up to nothing: read
+ * without that, a dose of 80 passed because a chart held an age of 64 and a breathing rate of 16.
  */
 function derived(f: Figure, given: readonly Figure[]): boolean {
-  const counts = given.filter((g) => !g.percent && Number.isFinite(g.value)).slice(0, 80);
   if (!Number.isFinite(f.value)) return false;
+  const counts = given.filter((g) => !g.percent && Number.isFinite(g.value)).slice(0, 80);
+  // How the stated figure is rounded: "20,500" is to the hundred, so half a hundred either way is the same figure.
+  const zeros = Number.isInteger(f.value) && f.value !== 0 ? (/0+$/.exec(String(f.value))?.[0].length ?? 0) : 0;
+  const slack = zeros ? 10 ** zeros / 2 : 0;
   for (const a of counts) for (const b of counts) {
     if (a === b || a.value === b.value) continue;
-    if (f.percent) { if (b.value !== 0 && Math.abs(f.value - (a.value / b.value) * 100) <= 0.5) return true; continue; }
-    // Of the same thing: no two of the three name different things, and an amount in a unit of measure (mg, ml) is
-    // only ever made from two amounts in that unit.
-    const things = [a.unit, b.unit, f.unit].filter((u): u is string => u !== null);
-    if (new Set(things).size > 1 || (f.key.includes('|') && (a.unit !== f.unit || b.unit !== f.unit))) continue;
-    const same = (x: number): boolean => Math.abs(f.value - x) <= Math.abs(x) * 1e-9;
+    const named = [a.unit, b.unit].filter((u): u is string => u !== null);
+    const sameThing = named.length > 0 && new Set(named).size === 1;
+    if (f.percent) {
+      if (sameThing && a.value < b.value && Math.abs(f.value - (a.value / b.value) * 100) <= 0.5) return true;
+      continue;
+    }
+    // At least one of the two says what it counts, neither says something else, and the result counts that too.
+    if (!sameThing || (f.unit !== null && f.unit !== named[0]) || (f.unit === null && named.length < 2)) continue;
+    if (f.key.includes('|') && (a.unit !== f.unit || b.unit !== f.unit)) continue;
+    const same = (x: number): boolean => Math.abs(f.value - x) <= Math.max(slack, Math.abs(x) * 1e-9);
     if (same(a.value + b.value) || same(Math.abs(a.value - b.value))) return true;
   }
   return false;
@@ -185,7 +227,7 @@ export const CITED: Observer = {
     const given = new Set(givenFigures.flatMap((f) => [f.key, ...alsoGiven(f)]));
     const stated = figuresOf(text);
     // The same quantity, or one that follows from two that were given. A percentage is never met by a bare count.
-    const missing = stated.filter((f) => !given.has(f.key) && !derived(f, givenFigures));
+    const missing = stated.filter((f) => !given.has(f.key) && !inGivenTable(f, givenFigures) && !derived(f, givenFigures));
     const allow = num(p, 'allow') ?? 0;
     const where = material.length ? `the request or the material (${material.map((m) => m.name).join(', ')})` : 'the request (no material was bound)';
     const detail = `${stated.length - missing.length} of ${stated.length} figure(s) are in ${where}`;

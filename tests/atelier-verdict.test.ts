@@ -6,7 +6,7 @@
 // held here by the smallest text that used to pass.
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { measure } from '../core/observers/registry.js';
@@ -84,7 +84,7 @@ describe('a figure is sourced when it was given, and not because some two number
     expect(cited('About 43% were given.', chart)).toEqual({ verdict: 'VIOLATED', missing: ['43%'] });
   });
   it('a multiple and the same thing as a percentage are one figure', () => {
-    expect(cited('The fee is 1.25 times the base.', 'The fee is 125% of the base.').verdict).toBe('MET');
+    expect(cited('The fee is 1.25x the base.', 'The fee is 125% of the base.').verdict).toBe('MET');
   });
   it('a pair written with a slash, and a single digit with its unit, are figures', () => {
     expect(cited('Blood pressure 82/45.', 'Blood pressure 110/70 on admission.')).toEqual({ verdict: 'VIOLATED', missing: ['82/45'] });
@@ -95,6 +95,81 @@ describe('a figure is sourced when it was given, and not because some two number
   it('a date and a line of a file are not figures', () => {
     expect(cited('The term ends on 31 December 2027.', 'The agreement was signed in Leeds.').verdict).toBe('MET');
     expect(cited('On line 214 the handle is never closed.', 'The diff adds a retry loop.').verdict).toBe('MET');
+  });
+});
+
+describe('what an independent review found the first version of this got wrong', () => {
+  it('the same amount written another way is the same amount', () => {
+    expect(cited('Give 40 mg tonight.', 'The dose is 40 milligrams.').verdict).toBe('MET');
+    expect(cited('The dose is 40 milligrams.', 'Give 40 mg tonight.').verdict).toBe('MET');
+    expect(cited('A 40-mg tablet.', 'Give 40 mg tonight.').verdict).toBe('MET');
+    expect(cited('Give 50 mcg.', 'Give 50 µg.').verdict).toBe('MET');
+    expect(cited('Give 40 mg tonight.', '| Drug | Dose (mg) |\n|---|---|\n| Enoxaparin | 40 |\n').verdict).toBe('MET');
+    expect(cited('Give 40 mg tonight.', 'She is 40 and well.').verdict).toBe('VIOLATED');
+  });
+  it('"times" counts occasions, and a slash is not always a reading', () => {
+    expect(cited('We tried 3 times before it worked.', 'We tried 3 times before it worked.').verdict).toBe('MET');
+    expect(cited('Take it 3 times a week.', 'Take it three times a week.').verdict).toBe('MET');
+    expect(cited('Growth of 300%.', 'Take it 3 times a week.').verdict).toBe('VIOLATED');
+    expect(cited('Support is 24/7 and the split is 50/50, for 1/3 of the users.', 'Nothing here.').verdict).toBe('MET');
+  });
+  it('amounts of the same thing add up, however they are described and rounded', () => {
+    expect(cited('That is 20 customers in total.', 'It has 12 enterprise customers and 8 startup customers.').verdict).toBe('MET');
+    expect(cited('A saving of $30.', 'It was 120 dollars, and is now $90.').verdict).toBe('MET');
+    expect(cited('About 20,500 in all.', 'There were 12,437 users in March and 8,112 users in April.').verdict).toBe('MET');
+    expect(cited('About 21,500 in all.', 'There were 12,437 users in March and 8,112 users in April.').verdict).toBe('VIOLATED');
+  });
+  it('an invented figure is not hidden by the word after it or before it', () => {
+    expect(cited('Up to 45% may churn and 300 may leave; $900 may be lost.', 'Nothing here.').missing).toEqual(['45%', '300', '$900']);
+    expect(cited('In May 2,000 users joined.', 'Nothing here.').missing).toEqual(['2,000']);
+    expect(cited('The bottom line 40% churned; issue 120 refunds; grade 95 scores.', 'Nothing here.').missing).toEqual(['40%', '120', '95']);
+  });
+  it('a share is of one thing in the same thing, and two numbers that count nothing add up to nothing', () => {
+    const plan = 'There are 8 seats and 2 admins and 5 teams and 3 plans.';
+    for (const pct of ['25%', '40%', '60%', '160%', '250%', '38%', '63%']) expect(cited(`That is ${pct}.`, plan).verdict, pct).toBe('VIOLATED');
+    expect(cited('Give 80 units of insulin.', 'Age: 64. Resp rate: 16.').verdict).toBe('VIOLATED');
+  });
+});
+
+describe('sections, as the review found them misread', () => {
+  it('a short section is still a section; only a bare heading is empty', () => {
+    expect(presence('## Risks\n\nNone.\n\n## Total\n\n$4,200\n\n## Owners\n\n- Priya\n- Tom\n', { sections: ['Risks', 'Total', 'Owners'], body: 1 }).verdict).toBe('MET');
+    expect(presence('Allergies: none known\n\nPlan: review tomorrow morning\n', { sections: ['Allergies', 'Plan'], body: 1, labels: 1 }).verdict).toBe('MET');
+    expect(presence('## Risks\n\n### Legal\n\n### Market\n', { sections: ['Risks'], body: 1 })).toEqual({ verdict: 'VIOLATED', detail: 'the "Risks" section is empty' });
+  });
+  it('a line of the header, a lead-in in bold and a title in capitals are not sections', () => {
+    const letter = 'Date: 12 May\nTo: the board\n\n## Situation\n\nWe are short of cash this quarter.\n\nNote: call me before Friday.\n';
+    expect(presence(letter, { sections: ['Situation'], opens: 1, closes: 1, labels: 1 }).verdict).toBe('MET');
+    expect(presence('**Acme Corp** signed on Tuesday and has asked for terms.\n\n2024 ANNUAL REPORT\n\nRevenue rose.\n', { sections: ['Acme Corp'], labels: 1 }).verdict).toBe('VIOLATED');
+    expect(presence('**Acme Corp** signed on Tuesday and has asked for terms.\n\n2024 ANNUAL REPORT\n\nRevenue rose.\n', { sections: ['Annual Report'], labels: 1 }).verdict).toBe('VIOLATED');
+  });
+  it('"open with" is not met by a section that follows a page of something else, and every failure says where', () => {
+    const late = `${'This preamble runs on for a while before any section is reached, which is not opening with it. '.repeat(2)}\n\n## Verdict\n\nBorealis wins.\n`;
+    expect(presence(late, { sections: ['Verdict'], opens: 1 }).verdict).toBe('VIOLATED');
+    const r = measure('## Owners\n', { observer: 'PRESENCE', params: { sections: ['Owners'], body: 1 } });
+    expect(r.verdict).toBe('VIOLATED');
+    expect(r.spans.length).toBeGreaterThan(0);
+  });
+});
+
+describe('steps, as the review found them misread', () => {
+  const example = { task: 'Review the retry change.', material: [{ name: 'diff.md', text: 'The diff adds a retry loop.' }],
+    reference: '## Verdict\n\nSafe to merge once the delay is capped.\n\n## Risks\n\nThe loop can spin for ever.\n\n## Sources\n\nThe diff, and the incident note.\n' };
+  const of = (note: string, re: RegExp): ReturnType<typeof methodProposals>[number] | undefined => methodProposals(note, example).find((p) => re.test(p.statement));
+  it('an instruction written as a sentence is kept', () => {
+    const note = '# Review\n\nMake sure that you never give the verdict before reading the diff. It is important that you always cite the file. State which risks must be fixed before merge.\n\n- Open with a Verdict section.\n';
+    expect(stepsOf(note).map((s) => s.text)).toEqual(['Open with a Verdict section.', 'Make sure that you never give the verdict before reading the diff.', 'It is important that you always cite the file.', 'State which risks must be fixed before merge.']);
+  });
+  it('a word like "first" or "last" inside a step says nothing of where the section is', () => {
+    expect(of('- Include a Risks section listing the first three risks.\n', /^Include a Risks/)).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Risks'], body: 1 } } });
+    expect(of('- Include a Risks section listing the first three risks.\n', /^Include a Risks/)?.measurement?.params).not.toHaveProperty('opens');
+    expect(of('- Include a Sources section with the last access date.\n', /^Include a Sources/)?.measurement?.params).not.toHaveProperty('closes');
+  });
+  it('a step that forbids a section, or asks for it only sometimes, is not a requirement that it be there', () => {
+    for (const step of ['Do not end with a Sources section unless asked.', 'Add a Risks section only when the change touches billing.', 'Give the Risks section a second read before sending.',
+      'With the Verdict section done, check the tone.', 'Put the answer under a heading that fits the reader best.']) {
+      expect(of(`- ${step}\n`, new RegExp(`^${step.slice(0, 12)}`)), step).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, demoted: null });
+    }
   });
 });
 
@@ -113,10 +188,15 @@ describe('a figure the material does not hold is cut, and the rewrite is let to 
     const context = { request: 'Hand over bed 9.', material: [{ name: 'chart.md', text: 'Admitted Tuesday. Stable overnight.' }] };
     const targets = planRepair(text, verifyText('s', v, text, context));
     expect(targets).toHaveLength(1);
-    expect(targets[0]).toMatchObject({ specifics: true });
-    expect(text.slice(targets[0].start, targets[0].end)).toBe('Her haemoglobin has dropped to 74 g/L and she has lost about 850 ml in total.');
-    // a rewrite that drops both figures is accepted: losing them is the repair
-    expect(spanIntegrity(text.slice(targets[0].start, targets[0].end), 'Her haemoglobin has dropped and she has lost blood.', new Set(), true).ok).toBe(true);
+    const original = text.slice(targets[0].start, targets[0].end);
+    expect(original).toBe('Her haemoglobin has dropped to 74 g/L and she has lost about 850 ml in total.');
+    // THE FIGURES ARE WHAT MAY GO, AND ONLY THEY: the rest of the sentence is held as any rewrite is.
+    const t = targets[0];
+    // as the repair loop calls it (core/loop/repair.ts)
+    const held = (replacement: string): boolean => spanIntegrity(original, replacement, new Set(t.drops), t.specifics && !t.mixed, new Set(t.swaps ?? []), t.recase ?? false, t.mixed ? t.claims ?? [] : []).ok;
+    expect(t).toMatchObject({ specifics: true, mixed: true, claims: ['74 g', '850 ml'] });
+    expect(held('Her haemoglobin has dropped and she has lost blood in total.')).toBe(true);
+    expect(held('Her haemoglobin has not dropped and she has lost no blood.')).toBe(false);
   });
 });
 
@@ -171,11 +251,16 @@ describe('through the binary: a skill is its owner\'s, and another folder does n
     const first = project('first', 'Open with a Background section.'); const second = project('second', 'End with an Assessment section.');
     const built = run(first, 'method', 'method.md', '--golden', 'example.md', '--yes');
     expect(built.code, built.err).toBe(0);
+    const stored = (): string => { const d = join(root, 'data', 'skills', 'method'); return `${readdirSync(join(d, 'standards')).sort().join(',')}|${readFileSync(join(d, 'active.json'), 'utf8')}`; };
+    const asBuilt = stored();
     const clash = run(second, 'method', 'method.md', '--golden', 'example.md', '--yes');
     expect(clash.code).not.toBe(0);
-    expect(clash.err).toMatch(/a skill called "method" already exists, and it was not built in this folder\. Building here would replace its standard\. Give this one a name of its own: --name <name>\./);
-    // the first skill is as it was built, and the second builds under its own name
-    expect(run(first, 'verify', '--skill', 'method', 'example.md').code).toBe(0);
+    expect(clash.err).toMatch(/a skill called "method" already exists, and this folder has no record of building it\. Building here would replace its standard\. Give this one a name of its own: --name <name>\./);
+    // the first skill is as it was built, standard and version, and the second builds under its own name
+    expect(stored()).toBe(asBuilt);
+    // a name longer than a skill's name can be is the name it is cut to, and is refused as that
+    const long = 'a-name-that-runs-well-past-the-forty-characters-a-skill-may-carry';
+    expect(run(first, 'method', 'method.md', '--golden', 'example.md', '--name', long, '--review').out).toMatch(/--name a-name-that-runs-well-past-the-forty-char(?:a)? --yes|--name [a-z-]{1,40} --yes/);
     expect(run(second, 'method', 'method.md', '--golden', 'example.md', '--name', 'Second Review', '--yes').out).toMatch(/second-review/);
   }, 180_000);
   it('a method whose every step the example holds is built in one call, with nothing to confirm', () => {

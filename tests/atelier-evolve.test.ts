@@ -92,21 +92,26 @@ describe('a gain is not paid for with a brief that held', () => {
 });
 
 describe('a search remembers what earlier searches under the same standard tried, and how often the briefs set aside were read', () => {
-  const rec = (o: Partial<EvolveRecord>): EvolveRecord => ({ schema: 1, skill: 's', skillVersion: 'v1', standardVersion: 'std', at: '', briefs: { dev: [], heldBack: ['g', 'h'] }, start: plain,
-    baseline: { first: scored(1, 6), second: scored(1, 6), band: 1 }, trials: [], end: plain, heldBack: null, verdict: 'UNCHANGED', why: '', costUsd: 0, ...o });
+  const rec = (o: Partial<EvolveRecord>): EvolveRecord => ({ schema: 1, skill: 's', skillVersion: 'v1', standardVersion: 'std', at: '', start: plain,
+    baseline: { first: scored(1, 6), second: scored(1, 6), band: 1 }, trials: [], end: plain, heldBack: null, verdict: 'UNCHANGED', why: '', costUsd: 0, ...o, briefs: o.briefs ?? { dev: ['a', 'b'], heldBack: ['g', 'h'] } });
   const trial = (key: string, kept: boolean, why = 'inside the noise band'): EvolveRecord['trials'][number] => ({ round: 1, gene: 'NOTE', key, hypothesis: '', carry: plain, scored: scored(1, 6), kept, why });
   it('what was run and not kept is not run again; what was kept and then did not carry is not either', () => {
     const before = [rec({ trials: [trial('1d|x1', false), trial('2d|', false)] }),
       rec({ trials: [trial('1d|x2', true)], heldBack: { start: scored(2, 2), end: scored(0, 2) }, verdict: 'NOT_CARRIED' })];
-    expect(priorSearches(before, 'std', 'v1')).toEqual({ tried: ['1d|x1', '1d|x2', '2d|'], heldBackReads: 1 });
+    expect(priorSearches(before, 'std', 'v1', ['b', 'a'], ['h', 'g'])).toEqual({ tried: ['1d|x1', '1d|x2', '2d|'], heldBackReads: 1 });
+    // ON OTHER WORKING BRIEFS THE SAME CHANGE IS ANOTHER QUESTION: inside the noise on two, it may be plain on four
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b', 'c', 'd'], ['h', 'g'])).toEqual({ tried: [], heldBackReads: 1 });
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['x', 'y']).heldBackReads).toBe(0);
   });
   it('a candidate that was never read (the search stopped) or was refused may be tried', () => {
     const before = [rec({ trials: [trial('1d|x1', false, 'not read: the cap ran out'), { ...trial('1d|x2', false, 'refused before any run: it names the brief'), scored: null }], verdict: 'STOPPED' })];
-    expect(priorSearches(before, 'std', 'v1').tried).toEqual([]);
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['g', 'h']).tried).toEqual([]);
   });
   it('a search under another standard, or of another version of the skill, says nothing about this one', () => {
     const before = [rec({ standardVersion: 'other', trials: [trial('1d|x1', false)], heldBack: { start: scored(1, 2), end: scored(1, 2) } }), rec({ skillVersion: 'v0', trials: [trial('1d|x9', false)] })];
-    expect(priorSearches(before, 'std', 'v1')).toEqual({ tried: [], heldBackReads: 0 });
+    expect(priorSearches(before, 'std', 'v1', ['a', 'b'], ['g', 'h'])).toEqual({ tried: [], heldBackReads: 0 });
+    // and a file beside them that is not a record of a search is passed over
+    expect(priorSearches([null, 3, {}, { standardVersion: 'std', skillVersion: 'v1' }, { standardVersion: 'std', skillVersion: 'v1', briefs: {}, trials: [{}] }], 'std', 'v1', ['a', 'b'], ['g', 'h'])).toEqual({ tried: [], heldBackReads: 0 });
   });
 });
 

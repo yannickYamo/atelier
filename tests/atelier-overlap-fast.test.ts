@@ -75,6 +75,18 @@ describe('time grows with the length of the text, not with the length of what wa
   });
 });
 
+describe('wording that repeats itself does not stall the reading', () => {
+  it('a table of four hundred rows that all say the same, read against itself', () => {
+    const table = Array.from({ length: 400 }, () => '| n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |').join('\n');
+    const read = overlapIndex([table]);
+    const t = Date.now(); const got = read(table); const ms = Date.now() - t;
+    expect(got.longestShared).toBe(6400);
+    // Each place in the text meets every place the same six words stand in the piece: this grows with both, and is
+    // held to seconds, not minutes.
+    expect(ms).toBeLessThan(30_000);
+  }, 60_000);
+});
+
 describe('a copy is a copy in any script', () => {
   const copies: Record<string, string> = {
     Cyrillic: 'Мы строим продукт который помогает командам писать лучше и быстрее каждый день без лишней суеты',
