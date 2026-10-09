@@ -22,7 +22,7 @@ import { readJson } from '../../core/state/read-json.js';
 import { readCase } from '../corpus.js';
 import { releaseFor } from '../fidelity.js';
 import { DATA, argv, die, flag, numericFlag, skillArg, runFile } from '../runtime.js';
-import { MIN_BRIEFS, NOTE_HEAD, allowance, carryKey, leak, noiseBand, readRun, proposals, renderEvolve, rule, scoreOf, splitBriefs,
+import { MIN_BRIEFS, NOTE_HEAD, allowance, carryKey, leak, noiseBand, priorSearches, readRun, steadyBriefs, proposals, renderEvolve, rule, scoreOf, splitBriefs,
   type Brief, type BriefResult, type Carry, type EvolveRecord, type Scored, type Trial } from '../../core/evolve/loop.js';
 
 const HANDED_ON = ['--provider', '--base-url', '--model', '--target-model', '--target-provider', '--target-base-url', '--price-in', '--price-out', '--claims', '--max-tokens'] as const;
@@ -150,6 +150,10 @@ export async function evolve(): Promise<void> {
     return s;
   };
 
+  // WHAT EARLIER SEARCHES RAN, under this standard and this version of the skill: kept beside the skill, read here.
+  const records = join(DATA, 'skills', name, 'evolve');
+  const before = existsSync(records) ? readdirSync(records).filter((f) => f.endsWith('.json')).sort().flatMap((f) => { try { return [readJson<EvolveRecord>(join(records, f), { what: 'an earlier search' })]; } catch { return []; } }) : [];
+  const earlier = priorSearches(before, sv.standardVersionHash, active);
   const trials: Trial[] = []; let incumbent = start; let record: EvolveRecord;
   try {
     say(`${briefs.length} briefs: ${dev.length} to work on, ${heldBack.length} set aside before anything is run.`);
@@ -160,10 +164,15 @@ export async function evolve(): Promise<void> {
     const second = state.stopped ? null : again;
     const band = second ? noiseBand(first, second) : 1;
     let best = Math.max(first.ok, second?.ok ?? 0); let bestCost = second ? (first.costUsd + second.costUsd) / 2 : first.costUsd; let last = second && second.ok > first.ok ? second : first;
-    // Every way of carrying the method that was run, the one it started from included: none is run twice.
-    const tried = new Set<string>([carryKey(start, statements)]);
+    // Every way of carrying the method that was run, the one it started from and what earlier searches under this
+    // standard ran included: none is run twice.
+    const tried = new Set<string>([carryKey(start, statements), ...earlier.tried]);
+    const steady = steadyBriefs(first, second);
+    // A candidate is kept beyond the band: with the skill already within the band of every brief, none could be.
+    const gainPossible = best + band < dev.length;
+    if (!gainPossible && !state.stopped) say(`  no gain could be shown at this size: the skill holds ${best} of ${dev.length} and a change must beat that by more than ${band}. Nothing is run to look for one.`);
     for (let round = 1; round <= rounds && !state.stopped; round++) {
-      const candidates = proposals(incumbent, last, statements, tried, { drafts: !release });
+      const candidates = proposals(incumbent, last, statements, tried, { drafts: !release, gain: gainPossible });
       if (!candidates.length) break;
       let winner: { c: (typeof candidates)[number]; s: Scored } | null = null;
       for (const c of candidates) {
@@ -173,7 +182,7 @@ export async function evolve(): Promise<void> {
         if (leaked) { say(`  round ${round}, a note was not tried: ${leaked}`); trials.push({ round, gene: c.gene, key: c.key, hypothesis: c.hypothesis, carry: c.carry, scored: null, kept: false, why: `refused before any run: ${leaked}` }); continue; }
         const s = await runAll(dev, c.carry, `round ${round}, ${c.gene === 'NOTE' ? 'naming what drafts miss' : `${c.carry.drafts} draft(s)`}`);
         if (state.stopped) { trials.push({ round, gene: c.gene, key: c.key, hypothesis: c.hypothesis, carry: c.carry, scored: s, kept: false, why: `not read: ${state.stopped}` }); break; }
-        const r = rule(s, best, bestCost, band, c.gene);
+        const r = rule(s, best, bestCost, band, c.gene, steady);
         trials.push({ round, gene: c.gene, key: c.key, hypothesis: c.hypothesis, carry: c.carry, scored: s, kept: false, why: r.why });
         if (r.keep && (!winner || s.ok > winner.s.ok)) winner = { c, s };
       }
@@ -192,13 +201,13 @@ export async function evolve(): Promise<void> {
     const held = heldStart && heldEnd && !state.stopped ? { start: heldStart, end: heldEnd } : null;
     const verdict: EvolveRecord['verdict'] = state.stopped ? 'STOPPED' : !changed ? 'UNCHANGED' : held && held.end.ok >= held.start.ok ? 'ADOPTED' : 'NOT_CARRIED';
     const why = state.stopped ? `${state.stopped}. Nothing was adopted; what was run is kept.`
-      : !changed ? 'no change was plainly better than the skill as it stands, so it is left as it is.'
-        : verdict === 'ADOPTED' ? `the change held on the briefs set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}), so the skill now carries its method this way. atelier evolve --skill ${name} --rollback goes back.`
+      : !changed ? (gainPossible ? 'no change was plainly better than the skill as it stands, so it is left as it is.' : `the skill holds ${best} of ${dev.length} working briefs, where a change must beat that by more than ${band}: no gain could be shown at this size, so nothing was tried for one. More briefs would let a search say more.`)
+        : verdict === 'ADOPTED' ? `the change did not break on the briefs set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}), so the skill now carries its method this way. atelier evolve --skill ${name} --rollback goes back.`
           : `better on the briefs it worked on, and worse on the ones set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}): the gain did not carry, and the skill is left as it was.`;
     // `end` is what the search arrived at. After a stop that is where it had got to, with no reading on the briefs set aside.
     record = { schema: 1, skill: name, skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(),
       briefs: { dev: dev.map((b) => b.id), heldBack: heldBack.map((b) => b.id) }, start, baseline: { first, second, band }, trials, end: incumbent, heldBack: held, verdict, why,
-      costUsd: Math.round(spent * 1e6) / 1e6 };
+      costUsd: Math.round(spent * 1e6) / 1e6, earlier: { heldBackReads: earlier.heldBackReads, notTriedAgain: earlier.tried } };
   } finally {
     process.off('SIGINT', interrupted); process.off('SIGTERM', interrupted);
     tidy();
