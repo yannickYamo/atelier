@@ -75,7 +75,7 @@ this one was reported as one. The owner reopened 1.x for it alone, because it ca
    searching every piece again, so the output the check exists for, a long copied stretch, was the one it was
    slowest on: 600 copied words took seconds, and 4,000 did not finish. Under strict delivery that check runs on
    every output. It also read only unaccented Latin letters, so an exact copy in another script read as no copy.
-   On every input the earlier reading could read the numbers are the same, held by generated cases against it.
+   On unaccented text the numbers are the same, held by generated cases against the earlier reading.
    Three pieces that are one clause ending three ways are now three pieces.
 
 Nothing else enters. The commit that carries this amendment is the one the closing claims are tested on.

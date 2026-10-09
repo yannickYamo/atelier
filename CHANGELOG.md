@@ -13,9 +13,10 @@ One fix, admitted by the owner after the freeze ([decision 0016](docs/decisions/
 
 - **The copying check is read in one pass.** A long copied stretch, the case the check exists for, was the one it
   was slowest on: 600 copied words took seconds and 4,000 did not finish, and strict delivery runs it on every
-  output. Same numbers as before on every input the earlier reading could read.
+  output. Same numbers as before on unaccented text. Wording that repeats the same six words hundreds of times
+  still takes seconds.
 - **It reads every script.** An exact copy in Cyrillic, Greek, Arabic, Hebrew or Chinese read as no copy. An
-  accented word is one word.
+  accented word is now one word, so a skill built from accented work gains its standard wording at its next build.
 - Three pieces that are one clause ending three ways count as three pieces for the author's standard wording.
 
 ### Fixed: the last fixes before 1.x is frozen
