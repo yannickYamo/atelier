@@ -35,6 +35,7 @@
 // may be calibrated — PRODUCT VALIDATION is not MEASUREMENT AUTHORITY.
 
 import { upperBound95 } from './holdout-integrity.js';
+import { mcnemarExactP as exactP } from '../stats/sign-test.js';
 
 /** What the expert may answer. No explanation is requested; the holistic judgement is the authority. */
 export type ReferenceJudgement = 'A_BETTER' | 'B_BETTER' | 'NO_MATERIAL_DIFFERENCE' | 'UNCERTAIN';
@@ -172,18 +173,8 @@ export function mcnemarExactP(b: number, c: number): number {
   if (!Number.isInteger(b) || !Number.isInteger(c) || b < 0 || c < 0) {
     throw new Error(`mcnemarExactP: discordant counts must be non-negative integers, got b=${b} c=${c}`);
   }
-  const n = b + c;
-  // No discordant pair is not "no difference"; it is no information. p = 1 is the honest reading and
-  // the caller is expected to report n alongside it rather than the p on its own.
-  if (n === 0) return 1;
-  const k = Math.min(b, c);
-  let tail = 0;
-  for (let j = 0; j <= k; j += 1) {
-    let coeff = 1;
-    for (let t = 0; t < j; t += 1) coeff = (coeff * (n - t)) / (t + 1);
-    tail += coeff * 0.5 ** n;
-  }
-  return Math.min(1, 2 * tail);
+  // One owner of the arithmetic (core/stats/sign-test.ts): a second copy here overflowed where that one did not.
+  return exactP(b, c);
 }
 
 export interface PairedArmResult {

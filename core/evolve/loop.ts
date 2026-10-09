@@ -195,7 +195,8 @@ export function rule(candidate: Scored, incumbentBest: number, incumbentCost: nu
   }
   if (gain <= band) return { keep: false, why: `${candidate.ok} of ${candidate.n} against ${incumbentBest}: a gain of ${gain} is inside the noise band of ${band} case(s)` };
   const allowed = 1 + COST_PER_TENTH * ((gain / candidate.n) * 10);
-  if (costRatio > allowed) return { keep: false, why: `it gains ${gain} case(s) and costs ${Math.round((costRatio - 1) * 100)}% more, where ${Math.round((allowed - 1) * 100)}% is what that gain buys` };
+  // Compared a hair inside, so that a cost of exactly what the gain buys is bought: 1 + 0.33 x 3.33 is not 2.1 to a computer.
+  if (costRatio > allowed + 1e-9) return { keep: false, why: `it gains ${gain} case(s) and costs ${Math.round((costRatio - 1) * 100)}% more, where ${Math.round((allowed - 1) * 100)}% is what that gain buys` };
   return { keep: true, why: `${candidate.ok} of ${candidate.n} against ${incumbentBest}: a gain of ${gain}, beyond the noise band of ${band}${costRatio > 1.005 ? `, for ${Math.round((costRatio - 1) * 100)}% more cost` : ''}` };
 }
 

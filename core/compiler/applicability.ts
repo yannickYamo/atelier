@@ -92,16 +92,18 @@ export function moveEvidence(rate: { readonly present: number; readonly applicab
     }
     return { ...base, presentBound: null, shareBound: null, carrier: 'exemplar', why: `shown as an example only: it applied in none of the ${pieces} piece(s) it was checked against` };
   }
-  const presentBound = r2(lowerBound(rate.present, rate.applicable));
-  const shareBound = pieces && pieces >= rate.applicable ? r2(lowerBound(rate.applicable, pieces, 0.025)) : null;
+  // Compared as computed, rounded only to be shown: 11 of 23 has a bound of 0.296, which rounded is 0.30 and passed 0.3.
+  const presentRaw = lowerBound(rate.present, rate.applicable);
+  const shareRaw = pieces && pieces >= rate.applicable ? lowerBound(rate.applicable, pieces, 0.025) : null;
+  const presentBound = r2(presentRaw); const shareBound = shareRaw === null ? null : r2(shareRaw);
   const counted = `${rate.present} of ${rate.applicable} piece(s) where it could apply${pieces ? `, of ${pieces} in all` : ''}`;
-  if (rate.applicable < MIN_APPLICABLE || presentBound < MIN_PRESENT_BOUND) {
+  if (rate.applicable < MIN_APPLICABLE || presentRaw < MIN_PRESENT_BOUND) {
     return { ...base, presentBound, shareBound, carrier: 'exemplar', why: `shown as an example only: ${counted} is too little to state as a habit` };
   }
   if (opts.holdsBack && !opts.ownerRuled) {
     return { ...base, presentBound, shareBound, carrier: 'exemplar', why: `shown as an example only: it holds back what was asked (${counted}), and when to do that is yours to rule on` };
   }
-  if (opts.general && shareBound !== null && shareBound >= GENERAL_SHARE) return { ...base, presentBound, shareBound, carrier: 'general', why: `stated as something I do: ${counted}` };
+  if (opts.general && shareRaw !== null && shareRaw >= GENERAL_SHARE) return { ...base, presentBound, shareBound, carrier: 'general', why: `stated as something I do: ${counted}` };
   return { ...base, presentBound, shareBound, carrier: 'conditional', why: `stated only with its condition: ${counted}` };
 }
 
