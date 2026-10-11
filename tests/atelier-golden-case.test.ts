@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { classOf, goldenCase, splitMaterialRefs, servedFor, leakedRun, LEAK_RUN, describeCases, inMaterialDir, materialDirOf, countClasses, preferredForReserve, namedAsMaterial, isFileRef, staysInside } from '../core/golden/case.js';
+import { classOf, goldenCase, splitMaterialRefs, servedFor, leakedRun, repeatsReference, CARRIED_RUN, LEAK_RUN, describeCases, inMaterialDir, materialDirOf, countClasses, preferredForReserve, namedAsMaterial, isFileRef, staysInside } from '../core/golden/case.js';
 import { extract } from '../core/intake/extract.js';
 import { autoReserveIds } from '../cli/commands/intake.js';
 import { openFiles } from '../cli/commands/reference.js';
@@ -211,5 +211,27 @@ describe('an arm that is shown the author\'s work is never shown a piece held ba
     expect(openFiles(sealed, ['b.md'])).toEqual([sealed[0], sealed[2]]);
     expect(openFiles(sealed, [])).toEqual(sealed);
     expect(openFiles(sealed, ['a.md', 'b.md', 'c.md'])).toEqual([]);
+  });
+});
+
+// Two real outputs were marked as copies of the piece held back. The shared run was the table header every served
+// example carries, then a competitor's name and price from the material: in no one source, so the old check, which
+// forgave only a run found whole in the material, counted all of it.
+describe('the repeat check counts only wording that the held-back piece alone holds', () => {
+  const material = [{ name: 'sources.md', text: 'Kitchenly pricing page: $1,200 per month.\nPrepstack pricing page: $0.40 per box shipped.\nOur pricing: $600 per month plus $0.10 per box.\nKitchenly includes a storefront.\nPrepstack only plans packing.\nSaltbox plans routes for local delivery vans.' }];
+  const reference = '## Verdict\nSell to meal-kit companies that deliver with their own vans in one region. Route planning is what they do by hand today, and neither rival does it.\n\n## Competitors\n| Company | Price | Strength | Weakness |\n|---|---|---|---|\n| Kitchenly | $1,200 a month | Storefront included | Costly |\n| Prepstack | $0.40 a box | Cheap when small | Packing only |\n\n## Pricing\nAt 3,000 boxes a month, Prepstack costs $1,200 and we cost $900. Kitchenly costs $1,200 at any size.\n';
+  const output = '## Verdict\nSell to regional meal-kit companies shipping under 20,000 boxes a month that run their own delivery vans.\n\n## Competitors\n| Company | Price | Strength | Weakness |\n|---|---|---|---|\n| Kitchenly | $1,200 a month | Storefront included | Flat cost at low volume |\n| Prepstack | $0.40 a box shipped | Scales with the season | Packing only |\n\n## Pricing\nWe charge $600 a month plus $0.10 a box.\n';
+  const served = ['## Verdict\nSell to small offices.\n\n## Competitors\n| Company | Price | Strength | Weakness |\n|---|---|---|---|\n| Sentrix | $45 a month | Storefront included | Contract |\n'];
+  it('the header of every served example, then a name and a price: not carried', () => {
+    expect(leakedRun(output, reference, material.map((m) => m.text))).toBeGreaterThanOrEqual(CARRIED_RUN);
+    expect(repeatsReference(output, { material, reference }, served)).toBeLessThan(CARRIED_RUN);
+  });
+  it('twelve words in a row that only the held-back piece holds: still carried', () => {
+    const copied = `${output}\nRoute planning is what they do by hand today, and neither rival does it.\n`;
+    expect(repeatsReference(copied, { material, reference }, served)).toBeGreaterThanOrEqual(CARRIED_RUN);
+    expect(repeatsReference(reference, { material, reference }, served)).toBeGreaterThanOrEqual(CARRIED_RUN);
+  });
+  it('with nothing served, a run found whole in the material is still the material\'s', () => {
+    expect(repeatsReference(material[0].text, { material, reference: `Quoted: ${material[0].text}` })).toBe(0);
   });
 });

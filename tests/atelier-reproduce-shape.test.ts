@@ -21,7 +21,9 @@ describe('the sections of the held-back piece, read on the output', () => {
   });
   it('a bare heading is not the section', () => {
     const shell = '## What the clause does\n\n## Who carries the risk\n\nMarchetti does, by warranty.\n\n## What Pellow should ask for\n\nA carve-out for earlier tools.\n';
-    expect(shapeAgainst(shell, reference).sections).toEqual({ of: 3, held: 2, missing: ['What the clause does'] });
+    expect(shapeAgainst(shell, reference).sections).toEqual({ of: 3, held: 2, missing: ['What the clause does'], empty: ['What the clause does'] });
+    // and a piece with a section left empty is not the work reproduced, whatever share the others make
+    expect(hasShape(shapeAgainst(shell, reference))).toBe(false);
   });
   it('a held-back piece with no sections asks for none', () => {
     expect(shapeAgainst('Anything.', 'A piece written as three plain paragraphs, with no heading in it at all.')).toEqual({ sections: { of: 0, held: 0, missing: [] } });
@@ -67,5 +69,48 @@ describe('the record counts the shape, and says it', () => {
     expect(countsOf(r).shape).toEqual({ held: 4, of: 7 });
     expect(renderReproduction(r)).toMatch(/ {2}4 of 7 {3}sections of your held-back pieces are in the outputs, each with something in it/);
     expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant", and the output has two thirds or more of the sections of the piece held back/);
+  });
+});
+
+// The tester's sealed cases (D5, D5b) and one real output. One word under each heading, filler text, and two names
+// run into one heading were each counted as the work reproduced; so was a real analysis whose Risks section the
+// claim cut had emptied.
+describe('a section counts when it says something, and one heading is one section', () => {
+  const held = '## Situation\nThe client runs 40 sites across three regions and has had two outages this year.\n\n## Options\nThree options were considered: patch, replace, or outsource.\n\n'
+    + '## Recommendation\nTake option two, replacing the core switches by March.\n\n## Risks\nSupply delays could push the cutover into the busy season.\n';
+  const reproduced = (out: string): boolean => hasShape(shapeAgainst(out, held));
+  it('all four sections, briefly: reproduced', () => {
+    expect(reproduced('## Situation\nAcme has 12 plants and one recent outage.\n\n## Options\nTwo paths were weighed.\n\n## Recommendation\nPath one, by June.\n\n## Risks\nCost overruns.\n')).toBe(true);
+  });
+  it('two of them reworded, each still naming its section: reproduced', () => {
+    expect(reproduced('## Current situation\nAcme has 12 plants.\n\n## Options\nTwo paths.\n\n## Our recommendation\nPath one.\n\n## Risks\nCost.\n')).toBe(true);
+  });
+  it('headings only, or none: not', () => {
+    expect(reproduced('## Situation\n\n## Options\n\n## Recommendation\n\n## Risks\n\n')).toBe(false);
+    expect(reproduced('Acme should take path one because costs are lower and the risks are manageable.')).toBe(false);
+  });
+  it('one word under each heading: not', () => {
+    expect(shapeAgainst('## Situation\nAcme.\n\n## Options\nTwo.\n\n## Recommendation\nOne.\n\n## Risks\nCost.\n', held).sections.held).toBe(0);
+  });
+  it('filler under each heading, alone or after the section\'s label: not', () => {
+    expect(shapeAgainst('## Situation\nLorem ipsum dolor.\n\n## Options\nLorem ipsum dolor.\n\n## Recommendation\nLorem ipsum dolor.\n\n## Risks\nLorem ipsum dolor.\n', held).sections.held).toBe(0);
+    expect(shapeAgainst('## Situation\nLorem.\n\n## Options\nOptions: TBD\n\n## Recommendation\nRecommendation: TBD.\n\n## Risks\nLorem ipsum dolor sit amet, consectetur adipiscing elit.\n', held).sections.held).toBe(0);
+  });
+  it('two names run into one heading are one section, not two', () => {
+    const run = shapeAgainst('## Situation analysis of options\nText here about it.\n\n## Recommendation and risks\nMore text here.\n', held);
+    expect(run.sections).toMatchObject({ held: 2, missing: ['Options', 'Risks'] });
+    expect(hasShape(run)).toBe(false);
+  });
+  it('a section named twice is read where it says the most', () => {
+    expect(reproduced('Contents: Situation, Options, Recommendation, Risks\n\n## Risks\n\n## Situation\nAcme has 12 plants and one outage.\n\n## Options\nTwo paths were weighed.\n\n## Recommendation\nPath one, by June.\n\n## Risks\nCost overruns are likely.\n')).toBe(true);
+  });
+  it('a real output with its Risks section emptied is not the analysis reproduced', () => {
+    const beaconHeld = '## Verdict\nSell to small offices that will not sign a contract.\n\n## Competitors\n| Company | Price |\n|---|---|\n| Sentrix | $45 a month |\n\n## Pricing\nOver three years Sentrix costs $1,620 and we cost $1,080.\n\n'
+      + '## Where we lose\nSentrix installs its own hardware and we do not.\n\n## Risks\nSentrix could drop its contract. Hallguard could add monitoring.\n';
+    const delivered = '## Verdict\nSell to small offices that already have door sensors in place and will not sign a three-year contract.\n\n## Competitors\n| Company | Price | Strength | Weakness |\n|---|---|---|---|\n| Sentrix | $45 a month, 36 months | Installs its own hardware | 36-month contract |\n\n'
+      + '## Pricing\nWe charge $30 a month with no contract.\n\n## Where we lose\nHallguard is cheaper, and an owner who trusts their own phone sees no reason to pay for monitoring.\n\n## Risks\n\n\n\n';
+    const shape = shapeAgainst(delivered, beaconHeld);
+    expect(shape.sections).toEqual({ of: 5, held: 4, missing: ['Risks'], empty: ['Risks'] });
+    expect(hasShape(shape)).toBe(false);
   });
 });

@@ -45,7 +45,17 @@ export interface CaseOutcome {
   readonly costUsd: number;
 }
 
-export interface Shape { readonly sections: { readonly of: number; readonly held: number; readonly missing: readonly string[] } }
+export interface Shape { readonly sections: { readonly of: number; readonly held: number; readonly missing: readonly string[];
+  /** sections the output has a heading for and nothing under it: a title is not the section, whatever share the rest make */
+  readonly empty?: readonly string[] } }
+
+/**
+ * WHAT A SECTION MUST HOLD TO COUNT. Five words, or a fifth of what the expert's own section holds when that is
+ * fewer: one word under each heading, or "Lorem ipsum dolor", was counted as the work reproduced. A fifth, so a
+ * short answer to a short section still counts; five, so a long section is never asked to be long.
+ */
+export const SECTION_WORDS = 5;
+export const SECTION_SHARE = 1 / 5;
 
 /** A section's name as two writers would both write it: no case, no numbering, "&" as "and", no punctuation. */
 const nameOf = (h: string): string => h.toLowerCase().normalize('NFKC').replace(/^\s*\d+(?:\.\d+)*[.)]?\s+/, '').replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -64,7 +74,8 @@ export function shapeAgainst(output: string, reference: string): Shape {
     return { name: h.text, said: words(body), body };
   });
   // A section that holds only a promise of itself holds nothing.
-  const PLACEHOLDER = /^[\W_]*(?:tbd|tbc|todo|tk|n\/?a|to be (?:done|written|added|confirmed|decided)|coming soon|placeholder|lorem ipsum)[\W_]*$/i;
+  // Alone, or after the section's own label ("Recommendation: TBD"); filler text however long it runs.
+  const PLACEHOLDER = /^[\W_]*(?:[\p{L}][\p{L} ]{0,40}:\s*)?(?:tbd|tbc|todo|tk|n\/?a|to be (?:done|written|added|confirmed|decided)|coming soon|placeholder|lorem(?:[ ,.]+[\p{L}]+){0,60})[\W_]*$/iu;
   const headings = headingsOf(reference);
   const top = headings.length ? Math.min(...headings.map((h) => h.level)) : 0;
   // The piece's own headings at its top level. With none, its labels, where three or more each say something: an
@@ -75,12 +86,22 @@ export function shapeAgainst(output: string, reference: string): Shape {
   const found = bodies(output, sectionHeadsOf(output, true));
   // Named by its words, in order: "The plan" is "Plan", and "Explanation" is not. And it says something: "TBD" under
   // a heading is not the section.
-  const holds = (want: { name: string }): boolean => found.some((f) => {
+  const named = (f: { name: string }, want: { name: string }): boolean => {
     const a = ` ${nameOf(f.name)} `; const b = ` ${nameOf(want.name)} `;
-    return (a.includes(b) || (a.trim().includes(' ') && b.includes(a))) && f.said >= 1 && !PLACEHOLDER.test(f.body.trim());
-  });
+    return a.includes(b) || (a.trim().includes(' ') && b.includes(a));
+  };
+  // ONE HEADING IS ONE SECTION. "Recommendation and risks" over one paragraph was counted as both. Each section of
+  // the reference takes the fullest heading of the output that names it and that no earlier section took.
+  const taken = new Set<number>(); const empty: string[] = [];
+  const holds = (want: { name: string; said: number }): boolean => {
+    const at = found.map((f, i) => ({ f, i })).filter(({ f, i }) => !taken.has(i) && named(f, want)).sort((x, y) => y.f.said - x.f.said)[0];
+    if (!at) return false;
+    taken.add(at.i);
+    if (!at.f.said) empty.push(want.name);
+    return at.f.said >= Math.max(1, Math.min(SECTION_WORDS, want.said * SECTION_SHARE)) && !PLACEHOLDER.test(at.f.body.trim());
+  };
   const missing = wanted.filter((x) => !holds(x)).map((x) => x.name);
-  return { sections: { of: wanted.length, held: wanted.length - missing.length, missing } };
+  return { sections: { of: wanted.length, held: wanted.length - missing.length, missing, ...(empty.length ? { empty } : {}) } };
 }
 
 /**
@@ -88,7 +109,8 @@ export function shapeAgainst(output: string, reference: string): Shape {
  * more. One heading is not a shape, and a heading that says what this one piece concluded need not be said the same
  * way twice.
  */
-export const hasShape = (shape: Shape): boolean => shape.sections.of < 2 || shape.sections.held >= Math.ceil((shape.sections.of * 2) / 3);
+export const hasShape = (shape: Shape): boolean => shape.sections.of < 2
+  || (!shape.sections.empty?.length && shape.sections.held >= Math.ceil((shape.sections.of * 2) / 3));
 
 export interface ReproductionRecord {
   readonly schema: 1;

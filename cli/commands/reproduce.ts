@@ -55,6 +55,8 @@ export async function reproduce(): Promise<void> {
   const L: store.StoreLayout = { root: DATA, skillName: name };
   const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
   const sv = store.getSkillVersion(L, active) ?? die(`skill version ${active} is missing.`);
+  // What the skill serves a writer (its standard, its examples): wording an output may share with a held-back piece honestly.
+  const servedTexts = Object.values(store.getPackage(L, sv.materializedHash)?.files ?? {});
   const std = store.getStandard(L, sv.standardVersionHash) ?? die(`standard ${sv.standardVersionHash} is missing.`);
   // THE PIECES HELD BACK ARE KEPT WITH THE RUN THAT BUILT THE SKILL, and only that run's are this skill's: a folder
   // with no run, or one whose run built another skill or has taken in a corpus since, has nothing to say about it.
@@ -166,7 +168,7 @@ export async function reproduce(): Promise<void> {
         if (!v?.checked) { outcomes.push(notRun(c.id, c.reference, 'its output could not be checked')); say(`not run         ${c.id}`); continue; }
         const req = v.checked.filter((x) => x.materiality === 'REQUIRED' && x.result.verdict !== 'NOT_APPLICABLE' && x.requirementId !== 'UNSOURCED');
         const unsourced = v.checked.some((x) => x.requirementId === 'UNSOURCED' && x.result.verdict === 'VIOLATED');
-        const shared = repeatsReference(text, c);
+        const shared = repeatsReference(text, c, servedTexts);
         const bareShape = shapeAgainst(text, c.reference);
         const ok = v.failed !== true && shared < CARRIED_RUN && hasShape(bareShape);
         outcomes.push({ ...blank(c.id, c.reference), state: 'ran', conformant: ok, shape: bareShape,
@@ -203,7 +205,7 @@ export async function reproduce(): Promise<void> {
         continue;
       }
       // AND THE LAST CHECK: the output must not carry the held-back piece's own wording. Nothing served should have.
-      const shared = repeatsReference(j.output, c);
+      const shared = repeatsReference(j.output, c, servedTexts);
       const carried = shared >= CARRIED_RUN;
       const claims = { qualified: ev.gates.claims.state === 'checked' && ev.gates.claims.measured !== null, instrument: ev.gates.claims.instrument, unsupported: ev.gates.claims.delivered + ev.gates.claims.unconfirmed };
       // WITH NO REQUIRED RULE CHECKED BY CODE, NOTHING WAS OBSERVED. A verdict of "conformant" then says only that no

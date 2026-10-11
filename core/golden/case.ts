@@ -182,7 +182,28 @@ export function whyNotRunnable(c: Pick<GoldenCase, 'task' | 'material' | 'refere
  * material does not hold. Nothing served should have carried them, so a long one means something did, by a path
  * the audit before the run does not read. The case is then not a reproduction, whatever else it met.
  */
-export const repeatsReference = (output: string, c: Pick<GoldenCase, 'material' | 'reference'>): number => leakedRun(output, c.reference, c.material.map((m) => m.text));
+export function repeatsReference(output: string, c: Pick<GoldenCase, 'material' | 'reference'>, served: readonly string[] = []): number {
+  const s = wordsOf(output);
+  const inReference = runsFrom(s, wordsOf(c.reference));
+  // WHAT THE WRITER WAS GIVEN IS NOT CARRIED. A run of the reference's words made of a table header every served
+  // example has and then a name and a price from the material is in no one source, and two real outputs were
+  // marked as copies for it. Each word inside a stretch shared with the material, or with what the skill serves
+  // (its examples, its standard), is left out; what remains of the run is what only the held-back piece holds.
+  const given = new Array<boolean>(s.length).fill(false);
+  for (const text of [...c.material.map((m) => m.text), ...served]) {
+    const runs = runsFrom(s, wordsOf(text));
+    for (let i = 0; i < s.length; i++) if (runs[i] >= GIVEN_RUN) for (let k = i; k < i + runs[i]; k++) given[k] = true;
+  }
+  let longest = 0;
+  for (let i = 0; i < s.length; i++) {
+    let own = 0;
+    for (let k = i; k < i + inReference[i]; k++) if (!given[k]) own++;
+    if (own > longest) longest = own;
+  }
+  return longest;
+}
+/** Words in a row shared with a text the writer was given, for them to count as taken from it: one shared word is the language, three are the source. */
+export const GIVEN_RUN = 3;
 /** An output may share this many words in a row with the reference by chance of subject; more is carried wording. */
 export const CARRIED_RUN = 12;
 
