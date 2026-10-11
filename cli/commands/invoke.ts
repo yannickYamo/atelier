@@ -518,6 +518,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const listed = unmeasuredWork && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
   const shipped = listed.length ? `${rec.output.trimEnd()}\n\n---\nNot found in your material (check before you use this):\n${listed.map((c) => `- "${c}"`).join('\n')}` : rec.output;
   if (!machine && !strict) console.log(`\n${shipped}\n`);
+  if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;

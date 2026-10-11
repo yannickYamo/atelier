@@ -13,6 +13,9 @@ import { countWords, describeParts, skillSizeOf } from '../../core/eval/size.js'
 import { withoutReferenceIndex } from '../served.js';
 import { argv, flag, skillArg } from '../runtime.js';
 
+/** The heading an adopted note is served under, on a run and in an export alike. */
+export const CARRY_HEADING = '\n\n## From earlier runs of this skill (not a rule of the standard)\n\n';
+
 /** Past this many words an export says so. */
 export const EXPORT_WORDS = 2500;
 
@@ -24,7 +27,13 @@ export const EXPORT_WORDS = 2500;
 export function exportSkill(): void {
   const name = skillArg('--skill <name> required: atelier export --skill <name> [--out <file>] [--no-index]');
   const noIndex = argv.includes('--no-index');
-  const { L, servedText, sv, delivery } = resolveServedSkill(name, { index: !noIndex });
+  const { L, servedText: built, sv, delivery } = resolveServedSkill(name, { index: !noIndex });
+  // WHAT THE SKILL LEARNED GOES WHERE THE SKILL GOES. A note adopted by `atelier evolve` reached runs made through
+  // `atelier invoke` and no host that was handed the export. Under the standard it was adopted for, it closes the
+  // export in the words a run is served; with none adopted the export is byte for byte what it was.
+  const carry = store.getCarry(L);
+  const note = carry?.standardVersion === sv.standardVersionHash ? carry.note.trim() : '';
+  const servedText = note ? `${built}${CARRY_HEADING}${note}` : built;
   const out = flag('--out');
   if (!out) { process.stdout.write(`${servedText}\n`); return; }
   writeAtomic(out, `${servedText}\n`);

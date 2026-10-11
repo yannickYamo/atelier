@@ -154,6 +154,8 @@ export const activeTells = (t: StoredTells): string[] => [...new Set([...t.learn
  * beside the skill, changed only by a search that showed it better, and each earlier one is kept so that it can be
  * gone back to.
  */
+/** Said wherever an adopted note is no longer used: an amended standard retires it, and that was silent. */
+export const CARRY_RETIRED = 'The note adopted by atelier evolve was for an earlier standard and is not used. Run atelier evolve again.';
 export interface StoredCarry {
   readonly drafts: number; readonly note: string; readonly adoptedAt: string;
   /** the search record that showed it better */

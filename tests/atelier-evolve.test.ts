@@ -317,6 +317,11 @@ describe('through the binary: a skill that leaves required things out learns to 
     const body = (await served()).slice(before).join('\n');
     expect(body).toContain('From earlier runs of this skill (not a rule of the standard)');
     expect(body).toContain('Earlier drafts of this work missed these');
+    // and a host handed the export gets the same note, once, under the same heading; the status says it is carried
+    const exported = atelier('export', '--skill', 'vendors').out;
+    expect(exported.split('## From earlier runs of this skill (not a rule of the standard)')).toHaveLength(2);
+    expect(exported).toContain('Earlier drafts of this work missed these');
+    expect(atelier('status', '--skill', 'vendors').out).toMatch(/evolve {9}carries \d draft\(s\) and a note on what drafts leave out, adopted \d{4}-\d\d-\d\d/);
   }, 120_000);
 
   it('a second search finds nothing left to try that the checks can score, and leaves the skill as it is', async () => {
@@ -399,6 +404,11 @@ describe('through the binary: a skill that leaves required things out learns to 
     const sent = (await served()).slice(before);
     expect(sent.length, run.err).toBeGreaterThan(0);
     expect(sent.join('\n')).not.toContain('From earlier runs of this skill');
+    // and that is said, once on the run and on the status, never left for the owner to find out; the export leaves it out
+    const RETIRED = 'The note adopted by atelier evolve was for an earlier standard and is not used. Run atelier evolve again.';
+    expect((JSON.parse(run.out.slice(run.out.indexOf('{'))) as { report: string[] }).report.filter((l) => l === RETIRED)).toHaveLength(1);
+    expect(atelierB('status', '--skill', 'vendors-b').out).toContain(`evolve         ${RETIRED}`);
+    expect(atelierB('export', '--skill', 'vendors-b').out).not.toContain('From earlier runs of this skill');
     // a later adoption keeps the one it replaced whole, with the standard it was adopted under
     store.setCarry(L, { drafts: 2, note: '', adoptedAt: '2026-02-01T00:00:00.000Z', from: 'a later search', standardVersion: 'the-next-standard' });
     expect(store.getCarry(L)?.before).toEqual({ ...old, before: null });

@@ -122,6 +122,8 @@ export function skillDashboard(name: string): void {
   console.log(`  floor          ${st.state}`);
   console.log(`  uses           ${store.listLearningInvocations(L).length} recorded`);
   console.log(`  waiting        ${pending.length} candidate(s)`);
+  const carry = store.getCarry(L);
+  if (carry) console.log(`  evolve         ${carry.standardVersion === v.standardVersionHash ? `carries ${carry.drafts} draft(s)${carry.note.trim() ? ' and a note on what drafts leave out' : ''}, adopted ${carry.adoptedAt.slice(0, 10)}` : store.CARRY_RETIRED}`);
   console.log(`  last tended    ${lastTend ? String(lastTend.at) : 'never (atelier tend --skill ' + name + ')'}`);
 }
 
