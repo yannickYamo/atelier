@@ -12,6 +12,7 @@
 
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, ObserverResult, Span, CheckContext } from './registry.js';
+import { workedFromMaterial } from '../loop/derived.js';
 
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -259,7 +260,16 @@ export const CITED: Observer = {
     const given = new Set(givenFigures.flatMap((f) => [f.key, ...(f.key.includes('|') ? [f.key.split('|')[0]] : []), ...alsoGiven(f)]));
     const stated = figuresOf(text);
     // The same quantity, or one that follows from two that were given. A percentage is never met by a bare count.
-    const missing = stated.filter((f) => !given.has(f.key) && !inGivenTable(f, givenFigures) && !roundsGiven(f, givenFigures) && !derived(f, givenFigures));
+    // Or worked from what was given, in the sentence it stands in: a scenario priced from the price list
+    // (../loop/derived.ts). The claim check reads the same arithmetic, so the two never disagree about a total.
+    const source = [context?.request ?? '', ...material.map((m) => m.text)].join('\n');
+    const sentenceAt = (f: Figure): string => {
+      const from = Math.max(text.lastIndexOf('\n', f.start - 1), ...['. ', '! ', '? '].map((e) => { const i = text.lastIndexOf(e, f.start - 1); return i === -1 ? -1 : i + 1; }));
+      const ends = ['\n', '. ', '! ', '? '].map((e) => text.indexOf(e, f.end)).filter((i) => i !== -1);
+      return text.slice(from + 1, ends.length ? Math.min(...ends) + 1 : text.length);
+    };
+    const missing = stated.filter((f) => !given.has(f.key) && !inGivenTable(f, givenFigures) && !roundsGiven(f, givenFigures) && !derived(f, givenFigures)
+      && !workedFromMaterial(sentenceAt(f), f.value, source));
     const allow = num(p, 'allow') ?? 0;
     const where = material.length ? `the request or the material (${material.map((m) => m.name).join(', ')})` : 'the request (no material was bound)';
     const detail = `${stated.length - missing.length} of ${stated.length} figure(s) are in ${where}`;
