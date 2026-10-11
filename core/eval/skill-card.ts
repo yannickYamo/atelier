@@ -28,7 +28,9 @@ export interface SkillCard {
   };
   readonly claims: { readonly instrument: string; readonly qualified: boolean;
     readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null;
-    readonly answers: boolean };
+    readonly answers: boolean;
+    /** the kind of work, when the claim check was never measured on it: listed, never cut, and no borrowed rates */
+    readonly unmeasured?: string | null };
   readonly fidelity: {
     readonly profile: string; readonly features: number; readonly steering: number;
     readonly layers: readonly { readonly layer: string; readonly steering: number; readonly monitored: number }[];
@@ -64,7 +66,7 @@ export function renderSkillCard(c: SkillCard, width = 110, opts: { next?: boolea
   const r = c.rules;
   out.push(`    ${pad('your rules', 18)}${r.total} approved by you: ${r.required} required · ${r.counted} counted on every output · ${r.read} read by the taste reader${r.conditional ? ` · ${r.conditional} apply only under a condition` : ''}${r.needsMaterial ? ` · ${r.needsMaterial} wait for your material` : ''}`);
   const m = c.claims.measured;
-  out.push(`    ${pad('invented claims', 18)}${c.claims.instrument}${m ? `: caught ${m.caught}/${m.planted} planted, left ${m.leftAlone}/${m.clean} clean alone, on ${m.on}` : c.claims.qualified ? '' : ': not qualified, so the pattern check decides what is cut'}${c.claims.answers ? ' · answers: work and results by pattern, other specifics listed' : ''}`);
+  out.push(`    ${pad('invented claims', 18)}${c.claims.instrument}${c.claims.unmeasured ? `: not measured on ${c.claims.unmeasured}; what it finds is listed, never cut` : m ? `: caught ${m.caught}/${m.planted} planted, left ${m.leftAlone}/${m.clean} clean alone, on ${m.on}` : c.claims.qualified ? '' : ': not qualified, so the pattern check decides what is cut'}${c.claims.answers ? ' · answers: work and results by pattern, other specifics listed' : ''}`);
   if (c.copying) out.push(`    ${pad('copying', 18)}a run of 12 or more words shared with your pieces fails`);
   if (c.fidelity) {
     const f = c.fidelity;

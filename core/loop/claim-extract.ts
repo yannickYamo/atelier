@@ -32,6 +32,8 @@ import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { wordsOf } from '../observers/text.js';
 import { unsourcedClaims, claimUnitsOf, type Claim } from './claims.js';
+import { normalizeClass } from '../observers/doc-class.js';
+import { formatOf } from '../observers/formats.js';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { readJson } from '../state/read-json.js';
@@ -164,6 +166,12 @@ export interface QualifiedReader {
    * drafts left alone of those read, and the population (the rates hold there, not everywhere).
    */
   readonly measured?: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string; readonly record: string };
+  /**
+   * The kinds of work (document classes, ../observers/doc-class.ts) the measurement covers. A rate measured
+   * on essays says nothing about a competitive analysis: there the same reader cut 32 legitimate sentences
+   * of 41 and emptied three sections. On any other declared kind it lists what it finds and cuts nothing.
+   */
+  readonly classes?: readonly string[];
 }
 /**
  * ONLY A MEASURED INSTRUMENT MAY CUT. A reader in this list met the qualification battery's bar
@@ -199,16 +207,38 @@ export async function patiently<T>(f: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * The kinds of work both measurements read: prose published under the author's name. The names a person may
+ * give such work, normalised; a known format (../observers/formats.ts) keeps the policy its profile states.
+ */
+const PROSE_CLASSES: readonly string[] = ['essay', 'product-essay', 'article', 'blog-post', 'newsletter', 'technical-piece', 'marketing-piece',
+  'linkedin-post', 'x-post', 'book-chapter', 'one-pager', 'white-paper'];
 export const QUALIFIED_READERS: readonly QualifiedReader[] = [
   { model: 'claude-haiku-4-5', version: '0279163b',
-    measured: { caught: 35, planted: 35, leftAlone: 35, clean: 38, on: 'technical and marketing pieces', record: 'studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md' } },
+    measured: { caught: 35, planted: 35, leftAlone: 35, clean: 38, on: 'technical and marketing pieces', record: 'studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md' },
+    classes: PROSE_CLASSES },
   // Re-measured at its production settings (temperature 0, two reads) in 0.7.0: bench/runs/0.7.0/claims.
   { model: 'claude-haiku-4-5', version: 'a173339d',
-    measured: { caught: 46, planted: 46, leftAlone: 39, clean: 48, on: 'product essays', record: 'bench/runs/0.7.0/claims' } },
+    measured: { caught: 46, planted: 46, leftAlone: 39, clean: 48, on: 'product essays', record: 'bench/runs/0.7.0/claims' },
+    classes: PROSE_CLASSES },
 ];
 /** Is this model, at this reader version, one a qualification result stands behind? */
 export const isQualified = (model: string, version = READER_VERSION, list: readonly QualifiedReader[] = QUALIFIED_READERS): boolean =>
   list.some((q) => q.model === model && q.version === version);
+/**
+ * THE KIND OF WORK NOTHING WAS MEASURED ON, or null when the claim check may cut as it always has.
+ *
+ * Null for a skill that declares no kind (every skill built before kinds were recorded: its behaviour does
+ * not change), for a known format (its profile says cut or list), and for a kind a qualification covers.
+ * Any other declared kind returns its name: there every finding, the reader's and the patterns', is listed
+ * for the person to check and nothing is deleted, because nobody has measured how often a deletion is wrong.
+ */
+export function unmeasuredKind(cls: string | null | undefined, list: readonly QualifiedReader[] = QUALIFIED_READERS): string | null {
+  if (!cls?.trim()) return null;
+  const kind = normalizeClass(cls);
+  if (formatOf(kind)) return null;
+  return list.some((q) => q.classes?.includes(kind)) ? null : kind;
+}
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
 

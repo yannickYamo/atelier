@@ -8,7 +8,7 @@
 import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
-import { modelSensor, patternSensor, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { modelSensor, patternSensor, unmeasuredKind, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
 import { flag, providerFor, clientAndBinding, DATA } from './runtime.js';
@@ -124,7 +124,9 @@ export function checksFor(L: store.StoreLayout, opts: {
   const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
     : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false));
-  return { material, guardClaims, placeholders, format, ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
+  // The kind of work the skill declares, when the claim check was never measured on it: listed, never cut.
+  const unmeasured = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
+  return { material, guardClaims, placeholders, format, ...(unmeasured ? { unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }

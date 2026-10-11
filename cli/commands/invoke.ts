@@ -56,6 +56,7 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
+import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
@@ -260,6 +261,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const strict = (argv.includes('--strict') || runSettings?.delivery === 'strict') && std !== null && contractFile === null;
   if (argv.includes('--strict') && argv.includes('--no-repair')) die('--strict delivers only a checked output, and --no-repair turns the checks off: drop one of them.');
   const redraws = strict && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--redraws', 2))) : 0;
+  // STRICT NEEDS A MEASURED CLAIM CHECK. On a kind of work nobody measured it on, its findings are listed and
+  // nothing fails on them, so "delivered only when conformant" would promise a check that did not decide. Said
+  // before anything is spent. --allow-unsourced turns the claim check off, and with it this stop.
+  const unmeasuredWork = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
+  if (strict && unmeasuredWork && !argv.includes('--allow-unsourced')) {
+    die(`Strict delivery needs the claim check measured on ${unmeasuredWork}. It is not, so nothing was written. Run without --strict to get a draft with unsourced sentences listed.`);
+  }
   const shapeRounds = Math.max(shapeAsked ? Math.floor(numericFlag('--shape-rounds', 3)) : 0, redraws);
   if (shapeAsked && shapeRounds < 1) die('--shape-rounds must be at least 1: each round is one more draft.');
   if (shapeAsked && argv.includes('--no-repair')) die('--until-typical and --until-author check each round before keeping it, and --no-repair turns the checks off: drop one of them.');
@@ -504,7 +512,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
   reportDrift(report, L, sv, rec);
   // Under strict delivery nothing is printed until the verdict is known.
-  if (!machine && !strict) console.log(`\n${rec.output}\n`);
+  // WHAT A HOST READS IS THE TEXT, NOT THE REPORT. On a kind of work the claim check lists and never cuts, the
+  // sentences it could not find in the material close the delivered text, after everything the checks read;
+  // the record keeps the text without them. --no-unsourced-note leaves the list to the report alone.
+  const listed = unmeasuredWork && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
+  const shipped = listed.length ? `${rec.output.trimEnd()}\n\n---\nNot found in your material (check before you use this):\n${listed.map((c) => `- "${c}"`).join('\n')}` : rec.output;
+  if (!machine && !strict) console.log(`\n${shipped}\n`);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
@@ -531,7 +544,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
-      answers: checks.format?.claims === 'list', profile: fid?.profile ?? null,
+      answers: checks.format?.claims === 'list', unmeasured: checks.unmeasured ?? null, profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
@@ -558,7 +571,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     console.error(`atelier: not delivered (strict delivery): ${why}. The text is kept with the record: atelier report ${rec.invocationId}. To deliver it anyway, marked: --allow-nonconformant.`);
   }
   if (showPanel && evaluation) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
-  if (machine === 'answer' && !refused) process.stdout.write(`${rec.output}\n`);
+  if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
       output: refused ? null : rec.output, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
@@ -723,7 +736,7 @@ function refineDraft(c: DraftContext & { readonly client: InferenceClient; reado
     // read it, so the text is held to the claim floor again and every figure below is counted on it.
     const final = await enforceClaims(c.name, c.std, t.output, c.checks);
     // A cut that breaks the tasted text: deliver the draft the counted checks already cleared instead.
-    if (final.cut.length && brokenByCut(t.output, final.text)) {
+    if (final.kept.length || (final.cut.length && brokenByCut(t.output, final.text))) {
       taste.notes.push('the taste rewrite added claims that could not be cut without breaking it; delivered as the counted checks left it');
       return { output: r.output, repair: r.repair, report: r.report };
     }
@@ -932,15 +945,23 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
       // draft that adds a section and breaks another rule would otherwise read as no worse.
       const others = (x: Delivered): number => brokenIn(x.report).filter((id) => !must.has(id)).length;
       const better = missing2.length < missing.length && others(d2) <= others(d);
-      c.notes.push(better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${named(missing)}); it now leaves out ${missing2.length}${missing2.length ? ` (${named(missing2)})` : ''}.`
-        : `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); one more draft did not do better, so the first is kept.`);
-      if (better && !d2.repair) return { ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } };
-      return better ? d2 : d;
+      const say = (x: Delivered, note: string): Delivered => { c.notes.push(note); return noted(x, note, missing); };
+      const outcome = better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${named(missing)}); it now leaves out ${missing2.length}${missing2.length ? ` (${named(missing2)})` : ''}.`
+        : `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); one more draft did not do better, so the first is kept.`;
+      if (better && !d2.repair) return say({ ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } }, outcome);
+      return say(better ? d2 : d, outcome);
     } catch (err) {
-      c.notes.push(`The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
-      return d;
+      const failed = `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`;
+      c.notes.push(failed);
+      return noted(d, failed, missing);
     }
   };
+}
+
+/** The delivered text with one more note in its repair record, so the record says what the printed line said. */
+function noted(d: Delivered, note: string, violatedBefore: readonly string[]): Delivered {
+  const base = d.repair ?? { passes: 0, violatedBefore, violatedAfter: brokenIn(d.report), originalOutputHash: sha(d.output), why: note };
+  return { ...d, repair: { ...base, notes: [...(base.notes ?? []), note] } };
 }
 
 function withCoverage(refine: (draft: string) => Promise<Delivered>,

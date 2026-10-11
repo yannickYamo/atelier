@@ -15,6 +15,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
 import * as store from '../../core/state/store.js';
+import { normalizeClass } from '../../core/observers/doc-class.js';
+import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
@@ -49,6 +51,19 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   return out;
 }
 
+/**
+ * The kind of work a method is for: `--class`, or the note's title when it has one (its first line, when that is
+ * not a step, up to a dash or a colon), or the skill's name. A name for the record and the screen; any kind the
+ * claim check was not measured on is treated alike.
+ */
+export function kindOfWork(note: string, name: string, declared: string | undefined = flag('--class')): string {
+  if (declared?.trim()) return normalizeClass(declared);
+  const first = note.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  const title = /^(?:[-*+]|\d+[.)])\s/.test(first) ? '' : first.replace(/^#+\s*/, '').split(/\s[—–-]\s|[:,]/)[0].replace(/[^\p{L}\p{N}\s-]/gu, '').trim();
+  const words = title.split(/\s+/).filter(Boolean);
+  return normalizeClass(words.length >= 1 && words.length <= 4 && !/[.!?]$/.test(first) ? title : name);
+}
+
 export async function method(): Promise<void> {
   const notePath = positional([]) ?? die('usage: atelier method <method note> --golden <finished example> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). The example is one piece of work where it was done.');
   const goldenPath = flag('--golden') ?? die('--golden <file> required: one finished example of the method carried out.');
@@ -63,6 +78,12 @@ export async function method(): Promise<void> {
 
   // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
   const name = ((): string => { try { return skillNameFrom(flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')); } catch { return die('--name <name> required: the method file gives no name a skill can carry.'); } })();
+  // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
+  // (essays, posts), a sentence not found in the material is cut; on any other it is listed for the owner to check.
+  const kind = kindOfWork(note, name);
+  console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
+    + (unmeasuredKind(kind) ? 'Sentences not found in your material are listed for you to check, never cut: the claim check is measured on essays and posts, not on this.'
+      : 'Sentences not found in your material are cut, as the claim check is measured to do on this kind of writing.'));
   // Said before anything is offered: a command printed as "to accept exactly this" must be one that will be accepted.
   let s = loadSession();
   // A SKILL OF THAT NAME BUILT SOMEWHERE ELSE IS SOMEBODY'S STANDARD. Built again here it would be replaced without a
@@ -120,6 +141,7 @@ export async function method(): Promise<void> {
   if (!argv.includes('--exemplar')) argv.push('--exemplar', exampleFile);
   if (!argv.includes('--voice')) argv.push('--voice', 'none');
   if (!argv.includes('--persona')) argv.push('--persona', 'none');
+  if (!argv.includes('--class')) store.setDocClass({ root: DATA, skillName: name }, kind);
   ratifyClose();
   await build(name);
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,

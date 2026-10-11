@@ -10,7 +10,7 @@ import * as vstore from '../core/state/voice-store.js';
 import { featureTrait, split } from '../core/voice/transfer.js';
 import { putSkillCard, getSkillCard } from '../core/state/eval-store.js';
 import { isGeneralScope } from '../core/state/canonical-state.js';
-import { QUALIFIED_READERS } from '../core/loop/claim-extract.js';
+import { QUALIFIED_READERS, unmeasuredKind } from '../core/loop/claim-extract.js';
 import { featureOf, LAYER_LABEL } from '../core/observers/features.js';
 import { FORMATS } from '../core/observers/formats.js';
 import { tasteRules } from '../core/taste/reader.js';
@@ -38,6 +38,7 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
   const measured = sensor.qualified && sensor.gate === 'reader' && sensor.version
     ? QUALIFIED_READERS.find((r) => r.version === sensor.version && r.measured && sensor.instrument.includes(r.model))?.measured ?? null : null;
   const cls = store.getDocClass(L);
+  const unmeasured = unmeasuredKind(cls);
   const answers = cls ? (FORMATS as Record<string, { claims?: string } | undefined>)[cls]?.claims === 'list' : false;
   const active = fstore.getActiveRelease(L)?.release ?? null;
   const profile = active?.profileHash ? fstore.getProfile(L, active.profileHash) : fstore.getProfile(L);
@@ -71,8 +72,8 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
       conditional: live.filter((q) => !isGeneralScope(q.appliesWhen)).length,
       needsMaterial: live.filter((q) => q.prerequisites?.length).length,
     },
-    claims: { instrument: sensor.instrument, qualified: sensor.qualified, answers,
-      measured: measured ? { caught: measured.caught, planted: measured.planted, leftAlone: measured.leftAlone, clean: measured.clean, on: measured.on } : null },
+    claims: { instrument: sensor.instrument, qualified: sensor.qualified, answers, ...(unmeasured ? { unmeasured } : {}),
+      measured: measured && !unmeasured ? { caught: measured.caught, planted: measured.planted, leftAlone: measured.leftAlone, clean: measured.clean, on: measured.on } : null },
     fidelity: profile ? {
       profile: profile.hash, features: pooled.length, steering: pooled.filter((b) => b.role !== 'MONITOR').length,
       layers: [...layers].map(([layer, x]) => ({ layer, ...x })),

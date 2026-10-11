@@ -618,6 +618,8 @@ export interface RepairRecord {
   readonly storiesCut?: readonly string[];
   /** specifics a `list` format left in for the person to check (core/observers/formats.ts, `claims`) */
   readonly claimsToCheck?: readonly string[];
+  /** what the steps after the first repair said they did or could not do (a draft written again for a missing section, and how it fared): printed on the run, and kept so the record can say why */
+  readonly notes?: readonly string[];
   /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
   readonly revertedRules?: readonly string[];
   /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */
