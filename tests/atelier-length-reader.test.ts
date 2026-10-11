@@ -112,3 +112,33 @@ describe('what a second review found: a false length is the harmful error, so a 
     expect(read('Write 2 pages, about 600 words, on the 12 pages attached.')).toEqual([600, 'words', '600 words']);
   });
 });
+
+// The tester's 40 sealed requests. A false length is the harmful error: the bar is none of 20. Three were read
+// as lengths, each a count in a sentence that reports beside a sentence that asks.
+describe('a count in a sentence that reports, beside a sentence that asks, is not a length', () => {
+  const NOT_LENGTHS = ['We indexed 1,200 pages. Write the changelog entry.', 'Our docs site has 300 pages. Write a post about search.', 'In 2024 we shipped 12 releases. Write the year-in-review post.',
+    'Summarise the attached 50-page contract.', 'Rewrite the 2 paragraphs below so they flow.', 'Write a post titled "10 words that changed our roadmap".', 'Draft section 4 of the 12-section policy.',
+    'Explain why we cut our docs from 900 pages to 200.', 'The report is 40 pages long; summarise its risks.', 'Compare the 5 sentences customers repeat most.',
+    'Our README grew to 3,000 words. Write a note asking contributors to trim it.', 'We sent 25 pages of feedback. Write the thank-you email.', 'Turn these 3 paragraphs of notes into a memo.',
+    'The 7 sentences in our mission statement need a rewrite.', 'Write the release notes for version 2.4 with 6 fixes.', 'Our 100-page handbook is out of date. Write the announcement.',
+    'Translate the 2-page letter into Spanish.', 'We have 14 paragraphs of policy text; write an FAQ.', 'Customers read 2 pages on average. Write a short landing page.', 'After 500 words of debate, write the decision.'];
+  const LENGTHS = ['Write about 2,000 words on our hiring process.', 'Draft a 600-word blog post on the launch.', 'Keep the summary under 150 words.', 'Write between 800 and 1,000 words on pricing.',
+    'Give me two paragraphs on the outage.', 'A one-page brief on the market, please.', 'Write a 1,500 word essay on calm software.', 'Three sentences on why we chose Postgres.',
+    'Write roughly two thousand words on the roadmap.', 'At most 300 words, please, on the policy.', 'Write a 20,000 word book on agents.', 'Exactly 50 words for the app store blurb.',
+    'Write a four-paragraph intro.', 'No more than 2 pages on the merger.', 'In 400 words, explain the change.', 'A 10-page report on the pilot.', 'Write 1k words on onboarding.'];
+  // Known and not read: a length with no count in it, or in a unit this does not count.
+  const NOT_READ = ['Keep it to a page.', 'Write 3 bullet points on the risks.', 'Write a short paragraph on the team.'];
+  it('none of the 20 requests that hold a number that is not a length is read as one', () => {
+    expect(NOT_LENGTHS.filter((r) => statedLengths(r).length)).toEqual([]);
+  });
+  it('the 17 stated lengths it read are still read; the 3 it missed are still missed, and said', () => {
+    expect(LENGTHS.filter((r) => !statedLengths(r).length)).toEqual([]);
+    expect(NOT_READ.filter((r) => statedLengths(r).length)).toEqual([]);
+  });
+  it('a length in a sentence of its own is still the length', () => {
+    expect(statedLengths('I need a post on search. About 600 words.')).toMatchObject([{ unit: 'words', target: 600 }]);
+    expect(statedLengths('Write a post on search. It should be 600 words.')).toMatchObject([{ unit: 'words', target: 600 }]);
+    expect(statedLengths('Write the changelog entry. Keep it under 200 words.')).toMatchObject([{ unit: 'words', kind: 'max', max: 200 }]);
+    expect(statedLengths('We indexed 1,200 pages. Write the changelog entry in 150 words.')).toMatchObject([{ unit: 'words', target: 150 }]);
+  });
+});

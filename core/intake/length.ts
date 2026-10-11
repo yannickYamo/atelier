@@ -134,6 +134,23 @@ function inDigits(request: string): { text: string; from: number[]; spelled: Set
  * paragraphs" states two. Of two said in the same unit (a first thought, then the length), the later is the length;
  * of two readings of the same words, the more specific. `raw` is the request's own words.
  */
+/**
+ * A COUNT IN A SENTENCE THAT REPORTS, BESIDE A SENTENCE THAT ASKS, IS NOT A LENGTH. "We indexed 1,200 pages. Write the
+ * changelog entry." asked for an entry and was held to 1,200 pages. The sentence a count stands in reports when a
+ * subject and a verb come before it and none of them asks, sets a limit or introduces a length ("About 600 words."
+ * and "It should be 600 words." are still read); and only where another sentence of the request does the asking.
+ */
+const ASKS = /\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make|keep|summari[sz]e|explain|describe)\b/i;
+const SETS_A_LENGTH = /\b(?:should|must|shall|needs? to|aim|target|limit|length|long|max(?:imum)?|min(?:imum)?|under|over|within|most|least|than|up to|about|around|roughly|approximately|exactly|between|in)\b|~/i;
+function reportsBesideAnAsk(text: string, at: number): boolean {
+  const bounds = [0, ...[...text.matchAll(/[.!?]\s+(?=[\p{Lu}"'(])/gu)].map((m) => m.index + m[0].length), text.length];
+  const i = bounds.findIndex((b, k) => k < bounds.length - 1 && at >= b && at < bounds[k + 1]);
+  if (i === -1 || bounds.length <= 2) return false;
+  const before = text.slice(bounds[i], at);
+  if (before.trim().split(/\s+/).filter(Boolean).length < 2 || ASKS.test(before) || SETS_A_LENGTH.test(before)) return false;
+  return bounds.slice(0, -1).some((b, k) => k !== i && ASKS.test(text.slice(b, bounds[k + 1])));
+}
+
 function located(request: string): { start: number; stated: StatedLength }[] {
   const { text, from, spelled } = inDigits(unquoted(request));
   const best = new Map<LengthUnit, { at: number; start: number; rank: number; stated: StatedLength }>();
@@ -142,6 +159,7 @@ function located(request: string): { start: number; stated: StatedLength }[] {
     for (let m = f.re.exec(text); m; m = f.re.exec(text)) {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
       if (POINTS_AT.test(before) || REPORTS.test(before) || EDITS.test(before)) continue;
+      if (reportsBesideAnAsk(text, m.index)) continue;
       if (f === PIECE_FORM && !ASKS_FOR.test(before)) continue;
       if (f === HYPHEN_FORM && THERE_ALREADY.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
