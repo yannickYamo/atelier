@@ -54,12 +54,17 @@ export function headingsOf(text: string): Heading[] {
 /** Words that open a sentence, never a label: "We agreed one thing: ..." is a sentence. */
 const NOT_A_LABEL = new Set(['we', 'i', 'you', 'he', 'she', 'they', 'it', 'the', 'a', 'an', 'this', 'that', 'these', 'those', 'there', 'here', 'if', 'when', 'and', 'but', 'so', 'or',
   // the head of a letter or a memo, and an aside, are not sections of the work
-  'date', 'to', 'from', 'cc', 'bcc', 'subject', 're', 'note', 'nb', 'ps', 'tip', 'warning', 'example', 'phone', 'tel', 'email', 'contact', 'signed', 'regards', 'thanks',
+  'date', 'to', 'from', 'cc', 'bcc', 'subject', 're', 'note', 'nb', 'ps', 'tip', 'warning', 'example', 'phone', 'tel', 'email', 'contact', 'signed', 'regards', 'thanks', 'dear', 'hi', 'hello', 'best', 'kind', 'sincerely', 'yours', 'cheers',
   'please', 'first', 'second', 'third', 'then', 'next', 'finally', 'also', 'for', 'in', 'on', 'at', 'as', 'one', 'two', 'three', 'dr', 'mr', 'mrs', 'ms', 'prof', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+/** Whether a name opens on a word that opens a sentence or an aside. "Next: nothing to do" is an aside; "Next steps" and "Next 48 hours" are names. */
+const opensLikeASentence = (name: string): boolean => {
+  const words = name.trim().split(/\s+/); const first = words[0].toLowerCase();
+  return NOT_A_LABEL.has(first) && !(first === 'next' && words.length > 1);
+};
 /** A label that marks a section, short and written as a name: every word capitalised, or one or two words. */
 const labelLike = (t: string): boolean => {
   const words = t.trim().split(/\s+/);
-  if (!t.trim() || words.length > 4 || /[.!?;,]/.test(t) || !/^\p{Lu}/u.test(words[0]) || NOT_A_LABEL.has(words[0].toLowerCase())) return false;
+  if (!t.trim() || words.length > 4 || /[.!?;,]/.test(t) || !/^\p{Lu}/u.test(words[0]) || opensLikeASentence(t)) return false;
   return words.length <= 2 || words.every((w) => /^[\p{Lu}\d(&/-]/u.test(w));
 };
 
@@ -91,17 +96,53 @@ export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
     // file" is a step.
     const numbered = /^\d{1,3}(?:\.\d+)*[.)]\s+(.{3,60}?)\.?$/.exec(t)?.[1] ?? null;
     const titled = (n: string): boolean => { const ws = n.split(/\s+/); return ws.length <= 6 && /^\p{Lu}/u.test(n) && !/[.!?;,:]/.test(n) && ws.filter((w) => w.length >= 4).every((w) => /^\p{Lu}/u.test(w)) && ws.some((w) => w.length >= 4); };
-    const clause = numbered !== null && (/^\p{Lu}[\p{Lu}\d &/'-]{2,}$/u.test(numbered) || titled(numbered)) ? numbered : null;
+    // A clause that goes on after its heading on the same line: '1. DEFINITIONS. "Effective Date" means ...'. The
+    // name is in capitals and ends at its full stop, so "1. Open the file. Then save it." is still a step.
+    const inline = /^\d{1,3}(?:\.\d+)*[.)]\s+(\p{Lu}[\p{Lu}\d &/'-]{2,40})\.\s+\S/u.exec(t)?.[1] ?? null;
+    const clause = numbered !== null && (/^\p{Lu}[\p{Lu}\d &/'-]{2,}$/u.test(numbered) || titled(numbered)) ? numbered : inline;
     // A line that is nothing but one to five words in capitals.
     const capitals = /^\p{Lu}[\p{Lu} &/'-]{3,40}$/u.test(t) && t.split(/\s+/).length <= 5 ? t : null;
     const name = bold ? bold[1].replace(/:\s*$/, '').trim() : clause ?? capitals ?? (colon ? colon[1].trim() : null);
     // A whole line in bold is a heading by another name, and may run to a few words; a name before a colon is held
     // to being written as a name.
     const wholeBold = bold !== null && bold[2] === undefined && name !== null && name.split(/\s+/).length <= 8 && !/[.!?]$/.test(name);
-    if (name === null || taken.has(at) || (clause === null && capitals === null && !wholeBold && !labelLike(name)) || NOT_A_LABEL.has(name.split(/\s+/)[0].toLowerCase())) continue;
+    if (name === null || taken.has(at) || (clause === null && capitals === null && !wholeBold && !labelLike(name)) || opensLikeASentence(name)) continue;
     // The label ends where its name does, so what follows it on the line is the start of its section.
     out.push({ level: 7, text: name, start: at, end: at + t.indexOf(name) + name.length });
   }
+  // A NAME ALONE ON ITS LINE, WITH ITS SECTION UNDER IT: "Verdict", a blank line, a paragraph. Work written with no
+  // markup at all had no sections, and a method's "Include a Pricing section" could not be checked on its own
+  // example. One to four words opening on a capital, no punctuation, after a blank line, with text under it before
+  // the next such line. Read only where the text marks three sections or more this way or another: one short line
+  // is a line.
+  const lines = text.split('\n'); const starts: number[] = []; let o = 0;
+  for (const l of lines) { starts.push(o); o += l.length + 1; }
+  const isBare = (i: number): boolean => {
+    const t = lines[i].trim();
+    return /^\p{Lu}[\p{L}\p{N} &/'’-]{2,47}$/u.test(t) && t.split(/\s+/).length <= 4 && !opensLikeASentence(t) && (i === 0 || !lines[i - 1].trim());
+  };
+  const bare: Heading[] = []; const under = new Map<number, number>(); fence = false;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^(```|~~~)/.test(t)) { fence = !fence; continue; }
+    const at = starts[i] + lines[i].indexOf(t);
+    if (fence || !isBare(i) || taken.has(at) || out.some((h) => h.start === at)) continue;
+    let j = i + 1; while (j < lines.length && !lines[j].trim()) j++;
+    // Something under it, and not the next name: a title over the first section is not a section.
+    if (j >= lines.length || isBare(j)) continue;
+    const next = starts[j] + lines[j].indexOf(lines[j].trim());
+    if (out.some((h) => h.start === next)) under.set(at, next);
+    bare.push({ level: 7, text: t, start: at, end: at + t.length });
+  }
+  // Three such names and the text is written this way: then a line under one that opens "Notion: $10 per seat ..."
+  // is the section's first sentence, not a section of its own. Fewer, and they are read only beside labels that
+  // already make three, and never over one: "Handover" above "STATUS: amber" is a title.
+  if (bare.length >= 3) {
+    const firstLines = new Set(under.values());
+    return [...out.filter((h) => !(h.level === 7 && firstLines.has(h.start))), ...bare].sort((a, b) => a.start - b.start);
+  }
+  const beside = bare.filter((h) => !under.has(h.start));
+  if (beside.length && beside.length + out.filter((h) => h.level === 7).length >= 3) out.push(...beside);
   return out.sort((a, b) => a.start - b.start);
 }
 

@@ -53,7 +53,13 @@ export function stepsOf(note: string): MethodStep[] {
     if (!text) return;
     for (const s of text.split(/(?<=[.!?])\s+(?=[A-Z"'(])/)) if (s.trim().split(/\s+/).length >= 3) prose.push({ text: s.trim(), under });
   };
-  for (const line of lines) {
+  // THE NOTE'S TITLE IS NOT A STEP: its first line, when that is a name and not a sentence (no full stop, a blank
+  // line under it). "Competitive analysis — how we do it" was shown to the owner as a step nobody can follow.
+  const firstAt = lines.findIndex((l) => l.trim());
+  const titled = firstAt !== -1 && !/^\s*(?:[-*+]|\d+[.)]|#{1,6})\s/.test(lines[firstAt]) && !/[.!?:;]\s*$/.test(lines[firstAt])
+    && lines[firstAt].trim().split(/\s+/).length <= 10 && !(lines[firstAt + 1] ?? '').trim();
+  for (const [at, line] of lines.entries()) {
+    if (titled && at === firstAt) { under = line.trim(); continue; }
     const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
     if (heading) { closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim(); continue; }
@@ -137,7 +143,26 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   const VERB = String.raw`(?:[Oo]pen|[Ss]tart|[Bb]egin|[Ll]ead|[Ee]nd|[Cc]lose|[Ff]inish|[Cc]onclude|[Ii]nclude|[Aa]dd|[Ww]rite|[Hh]ave|[Hh]as|[Cc]ontain)`;
   // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
   // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
-  const conditional = /\b(?:do not|don't|never|not|no|unless|only when|only if|if|when|where|whenever|except|optional(?:ly)?)\b/i.test(step);
+  const conditional = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|if|when|where|whenever|except|optional(?:ly)?)\b/i.test(step);
+  // WHAT THE EXAMPLE HAS, BY ITS OWN NAME, COMES FIRST. A wording is one way to say it; "Size the market with a
+  // Market size section", "under a Blocking heading" and "an Open issues section" over "OPEN ISSUES:" are others, and
+  // each round of testing found one more. A section of the example named in the step, in any case, introduced by
+  // "a", "an" or "one" and followed by the word that says it is one (section, heading, part, line), is that section.
+  // A name alone is not enough ("what would change the recommendation" asks for no section), nor is one spoken of
+  // as already there ("keep the Background section short").
+  if (!conditional) {
+    const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
+    const found = outline.sections.map((sec) => ({ sec, name: norm(sec),
+      at: Math.min(...['a', 'an', 'one'].flatMap((art) => ['section', 'heading', 'part', 'line'].map((kind) => low.indexOf(` ${art} ${norm(sec)} ${kind} `))).filter((i) => i !== -1), Infinity) }))
+      .filter((x) => Number.isFinite(x.at) && x.name.length >= 3).sort((a, b) => a.at - b.at);
+    if (found.length) {
+      // Where is said by the verb that introduces the name, and by nothing else.
+      const before = (x: { at: number }): string => low.slice(0, x.at + 1);
+      const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
+      const closes = /\b(?:ends?|closes?|finish(?:es)?|concludes?)(?: with)? $/.test(before(found[found.length - 1]));
+      return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1) });
+    }
+  }
   const named = conditional ? [] : [
     ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\s+(?:with\s+)?(?:an?\s+|the\s+|its\s+|one\s+)?${NAME}\s*(?:section|heading|part)\b`, 'gu')),
     ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\b[^.;]*?\b(?:section|heading|part)\s+(?:called|named|titled|headed)\s+${NAME}`, 'gu')),
