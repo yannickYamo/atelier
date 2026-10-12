@@ -292,6 +292,18 @@ finished work alone.
   was in front of the model that was then asked to reproduce it. That arm is now given the pieces discovery read
   and no others. A comparison made with it before this is not a blind one for that arm.
 
+### Fixed: the copying check, by an amendment to the 1.x freeze
+
+One fix, admitted by the owner after the freeze ([decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), amended).
+
+- **The copying check is read in one pass.** A long copied stretch, the case the check exists for, was the one it
+  was slowest on: 600 copied words took seconds and 4,000 did not finish, and strict delivery runs it on every
+  output. Same numbers as before on unaccented text. Wording that repeats the same six words hundreds of times
+  still takes seconds.
+- **It reads every script.** An exact copy in Cyrillic, Greek, Arabic, Hebrew or Chinese read as no copy. An
+  accented word is now one word, so a skill built from accented work gains its standard wording at its next build.
+- Three pieces that are one clause ending three ways count as three pieces for the author's standard wording.
+
 ### Fixed: the last fixes before 1.x is frozen
 
 Six defects, named in [decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), and no
