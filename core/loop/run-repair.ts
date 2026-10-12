@@ -158,8 +158,9 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
   // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
   const unmeasured = !listOnly && opts.listsBecause ? opts.listsBecause : null;
+  // Each finding's own words say what a cut does; here nothing is cut, and the words say so.
   const everyFinding = unmeasured ? [...claims, ...(reading?.gate ? reading.claims.filter((c) => !claims.some((x) => x.start === c.start)) : [])]
-    .sort((x, y) => x.start - y.start) : [];
+    .sort((x, y) => x.start - y.start).map((c) => ({ ...c, why: c.why.replace(/: the sentence is cut; /, ': listed for you to check; ') })) : [];
   const toCut = unmeasured ? [] : listOnly ? workClaims : claims;
   const toList = unmeasured ? everyFinding
     : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];

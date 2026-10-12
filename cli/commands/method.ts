@@ -22,6 +22,7 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
+import type { GoldenCase } from '../../core/golden/case.js';
 import { proposalsAcross, stepsOf, type MethodProposal } from '../../core/method/standard.js';
 import { readCase, corpusFiles } from '../corpus.js';
 import { observerFor } from '../../core/observers/registry.js';
@@ -82,24 +83,84 @@ export function kindOfWork(note: string, name: string, declared: string | undefi
   return Object.hasOwn(CLASS_ALIASES, read) ? `${read}-work` : read;
 }
 
-export async function method(): Promise<void> {
-  const notePath = positional([]) ?? die('usage: atelier method <method note> --golden <finished example> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). The example is one piece of work where it was done.');
-  const goldenPath = flag('--golden') ?? die('--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
-  for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (!existsSync(p)) die(`${what}: there is nothing at ${p}.`);
-  const note = readFileSync(notePath, 'utf8');
-  if (!stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
-  // ONE EXAMPLE, OR A FOLDER OF THEM. With a folder, the first piece by name is the worked example a check is read
-  // from, and every other piece is what the check is then held against (core/method/standard.ts, `acrossExamples`):
-  // the pieces are also served with the skill, and how long they run is recorded, as for a skill built from a folder.
+/**
+ * ONE EXAMPLE, OR A FOLDER OF THEM, AS CASES. From a folder: the pieces a build would serve from it and no others
+ * (not a file about the work, not a piece's material, not the method note itself if it is kept there, not a hidden
+ * file). Every piece is what a check is held against (core/method/standard.ts, `acrossExamples`), and with three
+ * or more they are served with the skill and their lengths recorded, as for a skill built from a folder.
+ */
+function readExamples(goldenPath: string, notePath: string): { folder: string | null; cases: GoldenCase[] } {
   const folder = statSync(resolve(goldenPath)).isDirectory() ? resolve(goldenPath) : null;
-  // The pieces a build would serve from that folder, and no others: not a file about the work, not a piece's
-  // material, not the method note itself if it is kept there, not a hidden file.
   const files = folder ? corpusFiles(folder).filter((f) => resolve(f) !== resolve(notePath) && !basename(f).startsWith('.')).sort() : [resolve(goldenPath)];
   if (!files.length) die(`${goldenPath} holds no example that can be read.`);
   const said: string[] = [];
   const cases = files.map((f) => readCase(f, (line) => { said.push(folder ? `${basename(f)}: ${line}` : line); })).filter((c) => c.reference.trim());
   for (const line of [...new Set(said)].slice(0, 6)) console.log(line);
   if (!cases.length) die(`${goldenPath} is empty.`);
+  return { folder, cases };
+}
+
+/**
+ * NOTHING IS BUILT UNTIL THE OWNER HAS SEEN WHAT IS THEIRS TO SETTLE. Says why and how to accept, and answers true,
+ * when the call only reviews, when a step and the finished work disagree, or when a check was read from a section
+ * name; false when the skill may be built now.
+ */
+function waitsForOwner(proposals: readonly MethodProposal[], notePath: string, goldenPath: string, name: string): boolean {
+  // ONE CALL, UNLESS THERE IS A QUESTION THAT IS THE OWNER'S. Every step is theirs, in their words, and what their
+  // example shows beyond them is shown and not required: there is nothing to approve that they did not write. Where
+  // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
+  // `--review` only shows; `--yes` builds whatever the screen showed.
+  const toSettle = proposals.filter((p) => p.demoted);
+  // A CHECK READ FROM THE EXAMPLE'S OWN SECTION NAMES IS A READING OF WHAT THE OWNER MEANT, and a reading is theirs to
+  // see before a run is held to it: "State the constraints in a Regulation section" asks for one, and "compare it
+  // with a Risks section from last quarter" does not, and the words that tell them apart are not a closed list.
+  const read = proposals.filter((p) => p.byName);
+  if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length || read.length)) {
+    const why = argv.includes('--review') ? '' : toSettle.length ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement`
+      : `: ${read.length} check(s) above were read from your example's section names (${read.map((p) => `"${p.statement.length > 48 ? `${p.statement.slice(0, 45)}...` : p.statement}"`).join('; ')}). Look that each asks for what you meant`;
+    console.log(`\nNothing has been built${why}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
+      + '\nTo require something your example shows, accept and then: atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
+    return true;
+  }
+  return false;
+}
+
+/**
+ * THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN. A stated step is the owner's
+ * sentence: authored by them, and required where code can hold an output to it. One read off the example is the
+ * machine's reading that they approved: a preference until they say otherwise.
+ */
+function decideSteps(proposals: readonly MethodProposal[], nextId: () => string): { decided: Requirement[]; ledger: RatificationLedger } {
+  const bases: Requirement[] = proposals.map((p) => ({
+    requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
+    // A prohibition opens with one. "Then a Suggestions section: improvements that do not block the merge" asks for
+    // a section, and was listed under what not to do.
+    kind: /^\s*(?:never|do not|don't|must not|avoid|no)\b/i.test(p.statement) ? 'BOUNDARY' : 'GENERATIVE',
+    authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
+    // No evidence is carried: how the example fared on a check is said on the screen, and is not the author's words.
+    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
+    materiality: null, realizationTolerance: null, outputShape: null,
+    obligation: p.obligation, ...(p.measurement ? { measurement: p.measurement } : {}),
+  }));
+  let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
+  const decided = bases.map((base, i) => {
+    // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
+    // example is a preference until the owner says otherwise.
+    const p = proposals[i];
+    const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(p.measurement ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: 'PREFERRED' });
+    ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
+    return outcome.requirement;
+  });
+  return { decided, ledger };
+}
+
+export async function method(): Promise<void> {
+  const notePath = positional([]) ?? die('usage: atelier method <method note> --golden <finished example, or a folder of them> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). An example is one piece of work where it was done.');
+  const goldenPath = flag('--golden') ?? die('--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
+  for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (!existsSync(p)) die(`${what}: there is nothing at ${p}.`);
+  const note = readFileSync(notePath, 'utf8');
+  if (!stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
+  const { folder, cases } = readExamples(goldenPath, notePath);
   const { lead, proposals } = proposalsAcross(note, cases);
   const example = cases[lead];
   console.log(`Method: ${basename(notePath)}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}; checks read from ${example.id}, then held against the rest`}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
@@ -120,22 +181,7 @@ export async function method(): Promise<void> {
   if (store.getActive({ root: DATA, skillName: name }) && s.skillName !== name) {
     die(`a skill called "${name}" already exists, and this folder has no record of building it. Building here would replace its standard. Give this one a name of its own: --name <name>. (If a build of it here stopped part-way, finish that one: atelier build --name ${name}.)`);
   }
-  // ONE CALL, UNLESS THERE IS A QUESTION THAT IS THE OWNER'S. Every step is theirs, in their words, and what their
-  // example shows beyond them is shown and not required: there is nothing to approve that they did not write. Where
-  // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
-  // `--review` only shows; `--yes` builds whatever the screen showed.
-  const toSettle = proposals.filter((p) => p.demoted);
-  // A CHECK READ FROM THE EXAMPLE'S OWN SECTION NAMES IS A READING OF WHAT THE OWNER MEANT, and a reading is theirs to
-  // see before a run is held to it: "State the constraints in a Regulation section" asks for one, and "compare it
-  // with a Risks section from last quarter" does not, and the words that tell them apart are not a closed list.
-  const read = proposals.filter((p) => p.byName);
-  if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length || read.length)) {
-    const why = argv.includes('--review') ? '' : toSettle.length ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement`
-      : `: ${read.length} check(s) above were read from your example's section names (${read.map((p) => `"${p.statement.length > 48 ? `${p.statement.slice(0, 45)}...` : p.statement}"`).join('; ')}). Look that each asks for what you meant`;
-    console.log(`\nNothing has been built${why}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
-      + '\nTo require something your example shows, accept and then: atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
-    return;
-  }
+  if (waitsForOwner(proposals, notePath, goldenPath, name)) return;
 
   // ── ACCEPTED: THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   // A stated step is the owner's sentence, so it is authored by them and required. A step read off the example is
@@ -145,25 +191,7 @@ export async function method(): Promise<void> {
   if (s.decided.length || s.proposals.length || s.run.standardVersionHash) {
     die(`this folder already holds a standard${s.skillName ? ` (the skill "${s.skillName}")` : ''}: a method's steps would be added to its rules, and the skill would be held to both. Build a method's skill from a folder of its own.`);
   }
-  const nextId = authoredIdAllocator(s);
-  const bases: Requirement[] = proposals.map((p) => ({
-    requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
-    kind: /\b(?:never|do not|don't|must not|no )\b/i.test(p.statement) ? 'BOUNDARY' : 'GENERATIVE',
-    authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
-    // No evidence is carried: how the example fared on a check is said on the screen, and is not the author's words.
-    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null,
-    materiality: null, realizationTolerance: null, outputShape: null,
-    obligation: p.obligation, ...(p.measurement ? { measurement: p.measurement } : {}),
-  }));
-  let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
-  const decided = bases.map((base, i) => {
-    // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
-    // example is a preference until the owner says otherwise.
-    const p = proposals[i];
-    const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(p.measurement ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: 'PREFERRED' });
-    ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
-    return outcome.requirement;
-  });
+  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s));
   s = { ...s, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 

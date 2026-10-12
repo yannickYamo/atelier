@@ -31,6 +31,7 @@ Instead of a model that re-guesses your rules on every run, you get rules you ap
 ```bash
 atelier new ./examples-to-match "answers like these"         # read the examples, propose the rules
 atelier new ./examples-to-match --accept                      # approve them, install the skill
+atelier method how-we-do-it.md --golden ./examples-to-match   # or: your written method plus your examples, no model
 atelier invoke --skill examples-to-match "the next answer"    # an output, checked and repaired
 atelier tend --skill examples-to-match --auto                 # find what keeps failing, keep a fix only if it measures better
 ```

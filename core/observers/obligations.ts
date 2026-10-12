@@ -297,7 +297,9 @@ export const LINES: Observer = {
     // The request is somewhere a change can be given too (a diff pasted into the task). With nothing bound and
     // nothing pasted, a citation points at something nobody gave, and fails as one.
     const material = [...(context?.request ? [{ name: 'request', text: context.request }] : []), ...(context?.material ?? [])];
-    const cited = citedLines(text, material); const off = cited.filter((c) => c.why !== null); const min = num(p, 'min') ?? 0;
+    const nothingBound = !(context?.material ?? []).length;
+    const cited = citedLines(text, material).map((c) => (nothingBound && c.why === 'no such file in the material' ? { ...c, why: 'no material is bound to look it up in' } : c));
+    const off = cited.filter((c) => c.why !== null); const min = num(p, 'min') ?? 0;
     const detail = `${cited.length - off.length} of ${cited.length} citation(s) point at a line of the material with something on it`
       + (off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : '') + (cited.length < min ? `; ${min} needed` : '');
     if (!off.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };

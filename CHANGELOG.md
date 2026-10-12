@@ -7,6 +7,28 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: what a pass over the new commands found
+
+Every command the changes below touch was run end to end against a scripted model, and the code they added was
+read for shape. What was wrong:
+
+- `atelier score --material` and the MCP tool's `material` never reached the rules read against material, so a
+  correct line citation failed there and passed under `atelier verify`. All three now read the same material.
+- A step with "do not" anywhere in it ("a Suggestions section: improvements that do not block the merge") was
+  listed in the skill under what not to do. A prohibition is a step that opens with one.
+- A finding that was only listed was still explained as "the sentence is cut", and with `--placeholders` a slot
+  was reported as a cut.
+- A line citation checked with nothing bound said "no such file in the material"; it says nothing is bound.
+- In a folder build, a step the piece read from broke was reported without the piece's name.
+- `atelier reproduce` told the owner of a method-built skill to add tasks and material that were already there.
+- The usage guide and the README did not mention `atelier method`; they do now, with its two limits: one step
+  gets one check, and a method build holds no piece back to test on.
+
+The step reader had grown to one function of ninety-seven lines. It is ten small readers in
+`core/method/step-readers.ts`, each answering one question about a step, with the same tests.
+
+Left as it is: a method-built skill cannot be rebuilt in the same folder after `--yes` (build it in a fresh one).
+
 ### Added, for 2.0: a rule stated as a count, or as quoted words, is held as stated
 
 Three tweets and five lines of rules now build a skill with three of the five rules held by code, with no model

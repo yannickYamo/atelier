@@ -56,3 +56,26 @@ describe('drafts are chosen by it after every rule, and before the finer feature
     expect(draftOrder({ ...base, outside: 1 }, { ...base, outside: 2 })).toBeLessThan(0);
   });
 });
+
+describe('what the run says, and which stated lengths a request sets aside', () => {
+  it('the length line names the span, and the band only when the output is outside it', async () => {
+    const { ownLengthLine } = await import('../cli/commands/invoke.js');
+    expect(ownLengthLine(words(210), [187, 232], [202, 217])).toBe('Length: 210 words. The request names none; your pieces run 202 to 217, shortest to longest.');
+    expect(ownLengthLine(words(248), [187, 232], [202, 217])).toBe('Length: 248 words. The request names none; your pieces run 202 to 217, shortest to longest, and this is long of what they span (187 to 232).');
+  });
+  it('a request that states a length sets aside the method\'s length in the same unit, and no other', async () => {
+    const { lengthRulesTheRequestSets } = await import('../cli/commands/invoke.js');
+    const { statedLength } = await import('../core/intake/length.js');
+    const rule = (id: string, unit: string) => ({ requirementId: id, statement: `${id}.`, measurement: { observer: 'LENGTH', params: { unit: [unit], max: 100 } } });
+    const std = { requirements: [rule('words', 'words'), rule('chars', 'characters'), rule('longest', 'sentence'), { requirementId: 'other', statement: 'x', measurement: { observer: 'LEXICON', params: { terms: ['x'] } } }] } as never;
+    expect(lengthRulesTheRequestSets(std, statedLength('Write about 600 words on tides.')).map((q) => q.requirementId)).toEqual(['words']);
+    expect(lengthRulesTheRequestSets(std, statedLength('Explain tides in detail.'))).toEqual([]);
+    expect(lengthRulesTheRequestSets(null, statedLength('Write about 600 words on tides.'))).toEqual([]);
+  });
+  it('the citations line counts what was looked up and names what was not a line', async () => {
+    const { lineCitationsLine } = await import('../cli/commands/invoke.js');
+    const material = [{ name: 'notes.md', text: 'One.\n\nThree.' }];
+    expect(lineCitationsLine('See notes.md:1 and notes.md:2.', material)).toBe('Line citations: 1 of 2 point at a line of the material with something on it; not: notes.md:2 (a blank line or a lone bracket).');
+    expect(lineCitationsLine('Nothing cited.', material)).toContain('none found in the output');
+  });
+});

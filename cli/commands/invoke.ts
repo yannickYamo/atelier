@@ -17,7 +17,7 @@ import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
-import type { RepairRecord } from '../../core/state/canonical-state.js';
+import type { RepairRecord, Requirement } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
@@ -50,7 +50,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords } from '../../core/eval/size.js';
-import { statedLength, statedLengths, againstStated, ownLengthBand, againstBand } from '../../core/intake/length.js';
+import { statedLength, statedLengths, againstStated, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
@@ -159,6 +159,30 @@ export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: bo
   !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections;
 /** How many words a count is outside a band; 0 inside it. */
 export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
+
+/**
+ * A LENGTH THE METHOD STATES IS ITS DEFAULT: a request that states its own, in the same unit, sets it for the run,
+ * and these are the method's rules it then sets aside. "A detailed answer" names no number and moves no cap; a
+ * request for 600 words says nothing about a limit in characters.
+ */
+export function lengthRulesTheRequestSets(std: Standard | null, stated: StatedLength | null): Requirement[] {
+  if (!std || !stated) return [];
+  return std.requirements.filter((q) => q.measurement?.observer === 'LENGTH'
+    && ((q.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === stated.unit);
+}
+
+/** What a run says of the places its output cites, for a skill that cites lines (core/loop/locators.ts). */
+export function lineCitationsLine(output: string, material: readonly { name: string; text: string }[]): string {
+  const cited = citedLines(output, material); const off = cited.filter((c) => c.why);
+  if (!cited.length) return 'Line citations: none found in the output in the form path:line, though this skill cites lines.';
+  return `Line citations: ${cited.length - off.length} of ${cited.length} point at a line of the material with something on it${off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : ''}.`;
+}
+
+/** What a run says of its length, where the request named none and the author's own pieces set it. */
+export function ownLengthLine(output: string, band: readonly [number, number], span: readonly [number, number]): string {
+  const written = proseWords(output); const how = againstBand(written, band);
+  return `Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}, shortest to longest${how === 'met' ? '' : `, and this is ${how} of what they span (${band[0]} to ${band[1]})`}.`;
+}
 
 /** One draft's counts, as `invoke --drafts N` ranks them. */
 export interface DraftScore {
@@ -428,15 +452,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // like "detailed" were, so the usual length stayed in the prompt and the chapter came back short.
   const stated = statedLength(asked);
   const lengthAsked = intent?.length ?? requestedLength(asked);
-  // A LENGTH THE METHOD STATES IS ITS DEFAULT: a request that states its own, in the same unit, sets it for this run,
-  // and the method's is withheld and said. "A detailed answer" names no number and moves no cap; a request for 600
-  // words says nothing about a limit in characters.
-  if (stated && std) for (const q of std.requirements) {
-    const m = q.measurement; const unit = ((m?.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase();
-    if (m?.observer !== 'LENGTH' || unit !== stated.unit) continue;
-    waived.set(q.requirementId, `the request states its own length (${stated.raw})`);
+  for (const q of lengthRulesTheRequestSets(std, stated)) {
+    waived.set(q.requirementId, `the request states its own length (${stated?.raw})`);
     withheld.push(q.statement);
-    report.say(`The request states its own length (${stated.raw}): "${q.statement}" is withheld for this run.`);
+    report.say(`The request states its own length (${stated?.raw}): "${q.statement}" is withheld for this run.`);
   }
   const lengthLine = lengthAsked || stated ? servedText.split('\n').find((l) => /^My (?:pieces of this kind|answers usually) run about /.test(l.trim())) : undefined;
   if (lengthLine) withheld.push(lengthLine.trim());
@@ -561,18 +580,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
-  if (lineCiting && material.length) {
-    const cited = citedLines(rec.output, material); const off = cited.filter((c) => c.why);
-    report.say(!cited.length ? 'Line citations: none found in the output in the form path:line, though this skill cites lines.'
-      : `Line citations: ${cited.length - off.length} of ${cited.length} point at a line of the material with something on it${off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : ''}.`);
-  }
+  if (lineCiting && material.length) report.say(lineCitationsLine(rec.output, material));
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
-  if (ownBand) {
-    const written = proseWords(rec.output); const how = againstBand(written, ownBand); const span = store.getVoice(L)?.lengthSpan ?? ownBand;
-    report.say(`Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}${how === 'met' ? '' : `, and this is ${how} of what they span (${ownBand[0]} to ${ownBand[1]})`}.`);
-  }
+  if (ownBand) report.say(ownLengthLine(rec.output, ownBand, store.getVoice(L)?.lengthSpan ?? ownBand));
   if (stated?.unit === 'words' && contractFile === null) {
     const written = countWords(rec.output); const how = againstStated(written, stated);
     report.say(`Length asked: ${stated.raw}. Written: ${written.toLocaleString('en-US')} words${how === 'met' ? '' : ` (${how} of what was asked)`}.`);
@@ -1383,7 +1395,8 @@ export function withoutWaiting(veto: ReadonlySet<string>, rules: readonly { rule
  * a prerequisite is matched by name, so a generic "bind your notes" would not have cleared it.
  */
 export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string): string | null {
-  const cut = !guardClaims ? null : materialBound ? 'any story, source or figure not found in what you bound is cut, or listed where the check is not measured'
+  const cut = !guardClaims ? null : argv.includes('--placeholders') ? 'a story, source or figure the draft invents is replaced by a slot for yours'
+    : materialBound ? 'any story, source or figure not found in what you bound is cut, or listed where the check is not measured'
     : 'a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut';
   if (v.kind === 'DEGRADED') {
     const ids = [...new Set(v.missing.map((m) => m.requirementId))];
@@ -1450,7 +1463,7 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
     for (const c of r.claimsToCheck) report.detail(`    check: "${c.slice(0, 160)}"`);
   }
   if (r?.storiesCut?.length) {
-    report.say(`Cut ${r.storiesCut.length} invented stor(ies), quotation(s) or figure(s); your own would fit where they were (listed in the details).`);
+    report.say(`${checks.placeholders ? 'Left a slot for' : 'Cut'} ${r.storiesCut.length} invented stor(ies), quotation(s) or figure(s); your own would fit where they were (listed in the details).`);
     for (const c of r.storiesCut) report.detail(`    cut: "${c.slice(0, 160)}"`);
   }
 }

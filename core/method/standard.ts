@@ -28,6 +28,7 @@ import { measure, type CheckContext } from '../observers/registry.js';
 import { headingsOf, sectionHeadsOf } from '../observers/structure.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
+import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
 
@@ -93,7 +94,6 @@ export function stepsOf(note: string): MethodStep[] {
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
 const sectionName = (heading: string): string => heading.replace(/\s*[(:—–].*$/, '').replace(/[*_`]/g, '').trim();
-const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** What one finished example shows of its own shape: its sections in order, and its tables. */
 export function outlineOf(reference: string): { sections: string[]; tables: ReturnType<typeof tablesOf>; labels: boolean } {
@@ -112,90 +112,6 @@ export function outlineOf(reference: string): { sections: string[]; tables: Retu
 function sectionsCheck(sections: readonly string[], outline: ReturnType<typeof outlineOf>, where: { opens?: boolean; closes?: boolean; options?: readonly string[] } = {}): Measurement {
   return { observer: 'PRESENCE', params: { sections: [...sections], body: 1, ...(where.opens ? { opens: 1 } : {}), ...(where.closes ? { closes: 1 } : {}), ...(outline.labels ? { labels: 1 } : {}),
     ...(where.options?.length && sections.length === 1 ? { options: [...where.options] } : {}) } };
-}
-
-/**
- * WHAT THE OWNER STATED AS A COUNT OR AS EXACT WORDS, held as they said it: a length of the whole work in words,
- * characters or sentences; the longest a sentence may run; the words the first or last paragraph starts with; a
- * word never to use. Read narrowly, because a rule the owner did not write is worse than a step left to judgement:
- *
- *   only where the step gives the number or quotes the words ("keep it short" gives neither);
- *   never from a step that says when, or says it softly ("unless", "ideally", "aim for", "usually", "about");
- *   a length only when it is of the whole work: a count of a part ("each bullet", "the title", "per section",
- *   "3 examples of 20 words") is that part's, and nothing here measures parts;
- *   never from a negation other than the plain forms ("no more than", "no fewer than", "no sentence"): "never go
- *   over 100 words" read by its comparator alone is the opposite of what was written;
- *   a banned word only where the quoted words end the sentence ('never use "very" in headings' bans it somewhere).
- *
- * Each is then held against every example before it is a rule (`acrossExamples`): a count the owner's own pieces
- * break is put to them, not built.
- */
-function statedCount(step: string): Measurement | null {
-  const SOFT = /\b(?:unless|if|when|whenever|except|sometimes|rarely|optional(?:ly)?|usually|about|around|roughly|approximately|ideally|aim|try|typically|possible|in most cases|generally|prefer(?:ably)?|normally|often|mostly|give or take|rule of thumb|excluding|not counting|depending)\b|~/i;
-  if (SOFT.test(step)) return null;
-  const n = (x: string): number => Number(x.replace(/,/g, ''));
-  // Double quotes hold an apostrophe ("in today's world"); single quotes count only standing clear of a letter.
-  const QUOTED = String.raw`(?:["“]([^"”]{2,40})["”]|(?<![\p{L}])'([^']{2,40})'(?![\p{L}]))`;
-  const quotedIn = (t: string): string[] => [...t.matchAll(new RegExp(QUOTED, 'gu'))].map((m) => (m[1] ?? m[2]).trim());
-  const negated = (t: string): boolean => /\b(?:not|never|cannot|no)\b|n't\b/i.test(t.replace(/\bno (?:more|fewer|longer|sentence)\b/gi, ' '));
-
-  // The longest a sentence may run.
-  const longest = /\bno sentence\b[^.]*?\b(?:longer than|over|more than|above|exceed(?:s|ing)?)\s+(\d[\d,]*)\s+words\b/i.exec(step);
-  if (longest) return negated(step) ? null : { observer: 'LENGTH', params: { unit: ['sentence'], max: n(longest[1]) } };
-
-  // A length of the whole work.
-  const UNIT = String.raw`(words?|characters?|sentences?)`;
-  const unitOf = (u: string): string => (u.toLowerCase().startsWith('word') ? 'words' : u.toLowerCase().startsWith('char') ? 'characters' : 'sentences');
-  const counts = [...step.matchAll(new RegExp(String.raw`\d[\d,]*\s+${UNIT}\b`, 'gi'))];
-  const ofAPart = /\b(?:per|each|every|title|headline|subject line|summary|intro(?:duction)?|hook|bullets?|items?|paragraphs?|sections?|quot(?:e|es|ed|ation)|examples?|captions?|headings?|replies|posts)\b/i.test(step)
-    || counts.some((m) => /^\s+(?:of|in the|for|from|like|by)\b/i.test(step.slice(m.index + m[0].length)));
-  if (counts.length && !ofAPart && !negated(step)) {
-    const between = new RegExp(String.raw`\b(?:between|from)\s+(\d[\d,]*)\s+(?:and|to)\s+(\d[\d,]*)\s+${UNIT}\b`, 'i').exec(step) ?? new RegExp(String.raw`(?<![\d-])(\d[\d,]*)\s*(?:-|–|to)\s*(\d[\d,]*)\s+${UNIT}\b`, 'i').exec(step);
-    if (between) return counts.length === 1 && n(between[1]) <= n(between[2]) ? { observer: 'LENGTH', params: { unit: [unitOf(between[3])], min: n(between[1]), max: n(between[2]) } } : null;
-    // "At least" before "at most", and each taken out once read, so that "no fewer than" is never read as "fewer than".
-    const LEAST = new RegExp(String.raw`\b(at least|no fewer than|a minimum of|minimum of|over|(?<!\bno )more than)\s+(\d[\d,]*)\s+${UNIT}\b`, 'i');
-    const MOST = new RegExp(String.raw`\b(at most|no more than|no longer than|up to|a maximum of|maximum of|under|fewer than|less than|below)\s+(\d[\d,]*)\s+${UNIT}\b`, 'i');
-    const least = LEAST.exec(step); const rest = least ? step.replace(least[0], ' ') : step; const most = MOST.exec(rest);
-    if ((least ? 1 : 0) + (most ? 1 : 0) !== counts.length) return null;
-    if (least && most && unitOf(least[3]) !== unitOf(most[3])) return null;
-    const min = least ? n(least[2]) + (/over|more than/i.test(least[1]) ? 1 : 0) : null;
-    const max = most ? n(most[2]) - (/under|fewer|less|below/i.test(most[1]) ? 1 : 0) : null;
-    const unit = unitOf((least ?? most)?.[3] ?? 'words');
-    if (min !== null && max !== null && min > max) return null;
-    if (min !== null || max !== null) return { observer: 'LENGTH', params: { unit: [unit], ...(min !== null ? { min } : {}), ...(max !== null ? { max } : {}) } };
-    return null;
-  }
-  if (counts.length) return null;
-
-  // The words the first or the last paragraph starts with.
-  const edges = [...step.matchAll(/\b(last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b/gi)];
-  const edge = edges.length === 1 ? new RegExp(String.raw`\b(?:last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b[^.]*?\b(?:starts?|begins?|opens?)\s+with\s+((?:${QUOTED}\s*(?:,|or)?\s*)+)`, 'iu').exec(step) : null;
-  if (edge && !negated(step)) {
-    const starts = quotedIn(edge[1]);
-    if (starts.length) return { observer: 'PRESENCE', params: { in: [/^(?:first|opening)$/i.test(edges[0][1]) ? 'first' : 'last'], starts } };
-  }
-
-  // A word never to use: the quoted words end the sentence, so nothing after them narrows where or how often.
-  const banned = new RegExp(String.raw`\b(?:never|do not|don't|avoid)\s+(?:use|say|write|using|saying|writing)\s+(?:the\s+)?(?:words?|phrases?)?\s*((?:${QUOTED}\s*(?:,|or|and)?\s*)+)[.!]?\s*$`, 'iu').exec(step.trim());
-  if (banned) {
-    const terms = quotedIn(banned[1]).map((t) => t.toLowerCase());
-    if (terms.length) return { observer: 'LEXICON', params: { terms } };
-  }
-  return null;
-}
-
-/**
- * The closed set a step gives a section: "a Verdict section that holds one of: Approve, Request changes, Comment".
- * Two to six short options, read only in the clause that names the section, after a verb that says the section is
- * one of them; a bracketed aside and a trailing "only" are not part of an option. "Name one of the authors" in a
- * later sentence gives the section nothing.
- */
-function optionsOf(step: string): string[] {
-  const said = /\b(?:section|heading)\b[^.;]*?\b(?:holds?|is|says?|reads?|gives?|states?|contains?|with)\s+(?:exactly\s+|only\s+)?one of(?: these| the following)?\s*:?\s+([^.;]+)/i.exec(step)?.[1];
-  if (!said) return [];
-  const options = said.replace(/\([^)]*\)/g, ' ').split(/\s*,\s*(?:or\s+|and\s+)?|\s+or\s+/)
-    .map((o) => o.replace(/[*_`"“”']/g, '').replace(/\s+only$/i, '').trim()).filter(Boolean);
-  return options.length >= 2 && options.length <= 6 && options.every((o) => o.split(/\s+/).length <= 4) ? options : [];
 }
 
 export interface MethodProposal {
@@ -228,67 +144,17 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
   // WHAT THE STEP NAMES OUTRIGHT COMES FIRST, whether or not the example has it: "a Risks section", "a table with the
   // columns A, B and C". Read only from the example, a step that names a column the example lacks was given the
   // example's own table and marked as held.
-  const columns = /\btable\b[^.]*?\bcolumns?\s+(?:of\s+|named\s+|called\s+|:\s*)?(.+?)\s*(?:[.;]|$)/i.exec(step)?.[1]
-    ?.split(/\s*,\s*(?:and\s+)?|\s+and\s+/).map((c) => norm(c)).filter((c) => c.length >= 2 && c.split(' ').length <= 5) ?? [];
+  const columns = tableColumns(step);
   if (columns.length >= 2) return { observer: 'TABLE', params: { columns, minRows: 1 } };
-  // A section the step says the work has, by a verb that says so: "open with a Verdict section", "Include a Sources
-  // section", 'must have a "Security" section', "add a section called Background". A step that only mentions a
-  // section's name in passing ("never give the Assessment before reading the diff", "keep the Background short")
-  // names no requirement on the work's shape, and is a judgement. A name is capitalised or in quotation marks.
-  const NAME = String.raw`(?:["“']([^"”']{3,40})["”']|((?:\p{Lu}[\w'-]*\s?){1,5}))`;
-  const VERB = String.raw`(?:[Oo]pen|[Ss]tart|[Bb]egin|[Ll]ead|[Ee]nd|[Cc]lose|[Ff]inish|[Cc]onclude|[Ii]nclude|[Aa]dd|[Ww]rite|[Hh]ave|[Hh]as|[Cc]ontain)`;
-  // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
-  // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
-  // The condition counts where it is about the section: in the clause that names one, or in a later clause that
-  // points back at it ("skip it for internal notes"). "Then a Suggestions section: improvements that do not block
-  // the merge. Write None when there are none." asks for the section; its "not" and "when" describe what goes in.
-  const COND = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|only for|only|if|when|where|whenever|except|optional(?:ly)?|rarely|sometimes|avoid|without|instead of|rather than|skip|replace)\b/i;
-  // A later clause that only says when is a condition too, though it names nothing: "Only for billing changes.",
-  // "Billing changes only.", "Optional for small changes.", "omit when nothing was cited".
-  const WHEN = /^(?:only|unless|if|when|whenever|except|optional(?:ly)?|rarely|sometimes|skip|omit|leave (?:it )?out|drop)\b|\bonly[.!]?$|\b(?:optional(?:ly)?|omit|skip|leave (?:it )?out|drop)\b/i;
-  // (A later sentence, not what follows a colon: "holds one of: Approve, Request changes, or Comment only." is a list.)
-  const conditional = step.split(/(?<=[.:;!?])\s+/).some((c) => COND.test(c) && /\b(?:sections?|headings?|tables?|parts?|it|its|them)\b/i.test(c))
-    || step.split(/(?<=[.;!?])\s+/).some((c, i) => i > 0 && WHEN.test(c.trim()));
-  // WHAT THE EXAMPLE HAS, BY ITS OWN NAME. A wording is one way to say it; "Size the market with a Market size
-  // section", "under a Blocking heading" and "an Open issues section" over "OPEN ISSUES:" are others, and each round
-  // of testing found one more. A section of the example named in the step, in any case, is that section when the
-  // step puts it in the work: after "with", "in", "under", "include", "add", "have", "contain", "write", "then" or
-  // "and", as "a", "an" or "one" of them, and called a section or a heading. "A Summary line" is one only where the
-  // work opens or ends with it. Everything else names it in passing or tells the writer to leave it out ("avoid a
-  // Summary section", "add a status line to the footer"), and asks for nothing.
-  const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
-  const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'provide', 'provides', 'need', 'needs', 'there must be', 'there is'];
-  const EDGE = /\b(?:opens?|starts?|begins?|leads?|ends?|closes?|finish(?:es)?|concludes?) with $/;
-  const sequenced = norm(/^\s*(?:and\s+)?(?:then|next|after that|after it|finally|lastly|last|first|second|third|fourth|fifth),?\s+(?:a|an|one)\s+(.+?)\s+(?:section|heading)\s*(?:[:.;]|$|,?\s*(?:that|which|with|listing|holding|naming|giving)\b)/i.exec(step)?.[1] ?? '');
-  const placed = (sec: string): number => {
-    const hits: number[] = [];
-    for (const art of ['a', 'an', 'one']) for (const kind of ['section', 'heading', 'line']) {
-      const phrase = ` ${art} ${norm(sec)} ${kind} `;
-      for (let at = low.indexOf(phrase); at !== -1; at = low.indexOf(phrase, at + 1)) {
-        const before = low.slice(0, at + 1);
-        if (kind === 'line' ? EDGE.test(before) : PUTS.some((w) => before.endsWith(` ${w} `))) hits.push(at);
-        // "and" and "then" carry on a list of sections; alone they join two clauses ("readers skim, and a Summary section helps").
-        else if (kind !== 'line' && /\b(?:section|heading|line) (?:and then|and|then) $/.test(before)) hits.push(at);
-        // A step that is the next thing in the order: "Then a Must fix section: ...", "Next, a Suggestions section."
-        // Only as the step's first words, and only where the section is all the clause says, or is followed by what
-        // it holds: "Then a Summary section helps the reader" and "First a Background section is tempting" ask for nothing.
-        else if (kind !== 'line' && sequenced === norm(sec) && /^ (?:and )?(?:then|next|after that|after it|finally|lastly|last|first|second|third|fourth|fifth) $/.test(before)) hits.push(at);
-      }
-    }
-    return hits.length ? Math.min(...hits) : -1;
-  };
-  const found = conditional ? [] : outline.sections.map((sec) => ({ sec, name: norm(sec), at: placed(sec) })).filter((x) => x.at !== -1 && x.name.length >= 3).sort((a, b) => a.at - b.at);
-  const named = conditional ? [] : [
-    ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\s+(?:with\s+)?(?:an?\s+|the\s+|its\s+|one\s+)?${NAME}\s*(?:section|heading|part)\b`, 'gu')),
-    ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\b[^.;]*?\b(?:section|heading|part)\s+(?:called|named|titled|headed)\s+${NAME}`, 'gu')),
-    ...step.matchAll(new RegExp(String.raw`\b([Uu]nder)\s+(?:the\s+|a\s+)?heading\s+${NAME}`, 'gu')),
-  ].map((m) => ({ verb: m[1].toLowerCase(), name: (m[2] ?? m[3]).trim(), at: m.index })).filter((x) => x.name.length >= 3).sort((a, b) => a.at - b.at);
+  const conditional = isConditional(step);
+  const low = lowered(step);
+  const found = conditional ? [] : sectionsPlaced(step, outline.sections);
+  const named = conditional ? [] : sectionsNamed(step);
   // The example's own names decide only when they cover everything the step names outright: "open with a Glossary
   // section and include a Summary section", over an example with no Glossary, is the owner's to settle below.
   // A section the step names with a capital and the example does not have ("and a Glossary section") is not dropped:
   // the check asks for it too, the example fails it, and the owner is asked.
-  const outright = [...step.matchAll(/\b(?:an?|one)\s+((?:\p{Lu}[\w'-]*\s?){1,4}?)\s*(?:section|heading)\b/gu)].map((m) => m[1].trim())
-    .filter((n) => !outline.sections.some((sec) => norm(sec) === norm(n)));
+  const outright = sectionsOutright(step, outline.sections);
   if (found.length && outright.length && !conditional) return sectionsCheck([...found.map((x) => x.sec), ...outright], outline);
   if (found.length && named.every((x) => found.some((f) => f.name === norm(x.name)))) {
     // Tied by the example's own name where the step's wording alone would not have said it: a reading, said as one.
@@ -436,7 +302,9 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
 export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[]): { lead: number; proposals: MethodProposal[] } {
   let best = { lead: 0, proposals: [] as MethodProposal[], held: -1 };
   cases.forEach((c, i) => {
-    const proposals = acrossExamples(methodProposals(note, c), cases.filter((_, k) => k !== i));
+    // A step the piece read from breaks is said by that piece's name, as one another piece breaks is.
+    const read = methodProposals(note, c).map((p) => (cases.length > 1 && p.demoted ? { ...p, demoted: p.demoted.replace(/\byour example\b/, c.id) } : p));
+    const proposals = acrossExamples(read, cases.filter((_, k) => k !== i));
     // A step that became a check and that some piece then broke is read too: it is put to the owner, by name.
     const held = proposals.filter((p) => p.origin === 'STATED' && (p.measurement ?? p.demoted)).length;
     if (held > best.held) best = { lead: i, proposals, held };

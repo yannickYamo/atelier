@@ -63,8 +63,9 @@ any other kind of work, what doesn't trace is listed and nothing is deleted.
   left 41 of 48 clean drafts alone ([result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)). Most of
   its false flags were the author's own true stories, so bind yours with `atelier material`.
 - Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
-- Expect it to cut a true detail now and then. `atelier material --skill <name> <notes>` binds your notes,
-  so a cut story comes back.
+- It deletes only in an essay or a post with your material bound (`atelier material --skill <name> <notes>`, or
+  `--with`). Anywhere else it lists what it could not find and deletes nothing. Where it does delete, expect it
+  to cut a true detail now and then: add the detail to your material and it stays.
 
 ## What it builds: the whole harness
 
@@ -116,6 +117,35 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 
 Everything else runs without you, from `atelier invoke` to `atelier tend --auto` on a schedule. (The loop
 is built and tested offline; it has not yet looked after a live skill for weeks. See below.)
+
+## From your method and your finished work
+
+When you can say how the work is done, say it, and hand over the pieces where it was done:
+
+```bash
+atelier method review.md --golden ./reviews          # a note of steps, and a file or a folder of finished examples
+atelier method review.md --golden ./reviews --yes    # build exactly what the screen showed
+```
+
+Every step of the note is your rule, in your words. It calls no model. The screen sorts the steps into three
+kinds and says, for each check, what it looks for and how your examples fare on it:
+
+- **Checked on every output.** A section the work must have ("Open with a Summary section", "Then a Must fix
+  section"), one of a closed set ("a Verdict section that holds one of: Approve, Request changes, Comment"), a
+  table's columns, a length you stated ("between 150 and 230 words", "under 280 characters", "no sentence longer
+  than 25 words"), the words a paragraph starts with, a word never to use.
+- **Checked against the material.** Figures that must be ones you gave, and places cited as `path:line`: each
+  citation is looked up, and the material is shown to the writer with its line numbers so that none is counted.
+- **Judgement.** Everything else: shown to the writer, reported as not measured, never called checked.
+
+A check is kept only when every example holds it. One that a piece of yours breaks is named with the piece and is
+yours to settle: change the note or the example, or build with the step kept as a judgement. With three or more
+examples, the pieces are served with the skill and their lengths recorded, so a draft is chosen by how near it runs
+to them when a request names no length. Three short pieces and a few lines of rules are enough to build from.
+
+Two limits. One step gets one check: "Then a Must fix section: cite each item as path:line" is read for its
+section, so put the citation rule in a step of its own. And the build reads every example, so none is left to test
+the skill on blind: `atelier reproduce` needs a skill built with `atelier new`.
 
 ## Using it
 

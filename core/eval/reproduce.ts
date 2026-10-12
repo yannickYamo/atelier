@@ -180,7 +180,8 @@ export function renderReproduction(r: ReproductionRecord): string {
     out.push(held
       ? `  ${s(held, 'piece')} held back, and none carries both its task and the material it was made from. A candidate can only be given what you were given when both are there.`
       : '  No piece was held back when this skill was built.');
-    out.push('  Add the task (`request:` in the front matter) and the material (a folder `<example>.material` beside it) to some examples, and build again.');
+    out.push(held ? '  Add the task (`request:` in the front matter) and the material (a folder `<example>.material` beside it) to some examples, and build again.'
+      : '  A skill built by `atelier method` reads every example, so none is left to test it on: reproduction needs pieces the build never saw. Build from a folder with `atelier new` to have some held back.');
     return out.join('\n');
   }
   const c = countsOf(r);

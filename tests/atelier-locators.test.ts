@@ -119,7 +119,7 @@ describe('"cite each item as path:line" is a step code holds', () => {
   it('a change pasted into the request is looked up too; a citation of something nobody gave fails', async () => {
     const { measure } = await import('../core/observers/registry.js');
     expect(measure('search.js:43', { observer: 'LINES', params: { min: 0 } }, { request: `Review this.\n${DIFF}`, material: [] }).verdict).toBe('MET');
-    expect(measure('search.js:43', { observer: 'LINES', params: { min: 0 } }, { request: 'Review this.', material: [] })).toMatchObject({ verdict: 'VIOLATED', detail: expect.stringContaining('no such file in the material') as string });
+    expect(measure('search.js:43', { observer: 'LINES', params: { min: 0 } }, { request: 'Review this.', material: [] })).toMatchObject({ verdict: 'VIOLATED', detail: expect.stringContaining('no material is bound to look it up in') as string });
   });
   it('a review with nothing to cite holds "cite each item"', async () => {
     const { measure } = await import('../core/observers/registry.js');

@@ -90,3 +90,40 @@ describe('three tweets and five lines of rules', () => {
     expect(skill).toContain('Under 120 characters');
   }, 120_000);
 });
+
+describe('what a pass over the new commands found', () => {
+  const DIFF = '--- a/src/run.ts\n+++ b/src/run.ts\n@@ -10,0 +10,2 @@\n+const a = load();\n+run(a);\n';
+  const REVIEW = '## Summary\nIt adds a runner and keeps the tests.\n\n## Must fix\n- src/run.ts:11 runs before the check.\n\n## Verdict\nRequest changes\n';
+  const setup = () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-gap-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-gap-proj-'));
+    mkdirSync(join(proj, 'e1.material'));
+    writeFileSync(join(proj, 'e1.material', 'diff.txt'), DIFF);
+    writeFileSync(join(proj, 'e1.md'), `---\nrequest: Review this change.\n---\n${REVIEW}`);
+    writeFileSync(join(proj, 'diff.txt'), DIFF); writeFileSync(join(proj, 'ok.md'), REVIEW);
+    writeFileSync(join(proj, 'method.md'), 'How we review\n\n- Open with a Summary section.\n- Then a Must fix section: defects that do not wait for a later change.\n- Cite each Must fix item as path:line.\n- End with a Verdict section.\n');
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+    const run = (...a: string[]): { code: number; out: string } => {
+      try { return { code: 0, out: execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
+      catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: x.stdout + x.stderr }; }
+    };
+    expect(run('method', 'method.md', '--golden', 'e1.md', '--name', 'reviews', '--yes').code).toBe(0);
+    return { proj, run };
+  };
+  it('a step that asks for a section is not listed under what not to do, though it says "do not"', () => {
+    const { proj } = setup();
+    const skill = readFileSync(join(proj, '.claude', 'skills', 'reviews', 'SKILL.md'), 'utf8');
+    const prohibitions = skill.split(/^## /m).find((part) => /^What not to do/i.test(part)) ?? '';
+    expect(prohibitions).not.toContain('Must fix section');
+    expect(skill).toContain('Then a Must fix section');
+  }, 120_000);
+  it('verify, score and the same material agree on a line citation; with nothing bound it says so', () => {
+    const { run } = setup();
+    expect(run('verify', '--skill', 'reviews', 'ok.md', '--with', 'diff=diff.txt', '--claims', 'pattern').code).toBe(0);
+    const scored = run('score', '--skill', 'reviews', '--task', 'Review this change.', '--material', 'diff.txt', 'ok.md', '--json');
+    expect(scored.out).not.toContain('no such file in the material');
+    const unbound = run('verify', '--skill', 'reviews', 'ok.md', '--claims', 'pattern');
+    expect(unbound.code).toBe(1);
+    expect(unbound.out).toContain('no material is bound to look it up in');
+  }, 120_000);
+});
