@@ -8,11 +8,19 @@
 //   shared6          how many of the text's six-word sequences appear in the corpus
 //   longestShared    the longest run of consecutive words the text shares with any one piece
 //
-// Words are lowercased letters, digits and apostrophes; punctuation and markdown do not break a run.
+// Words are letters, digits and apostrophes in any script, lowercased, with one spelling for a letter that can be
+// written two ways; punctuation and markdown do not break a run. A script written without spaces is cut into its
+// words by the platform's own segmenter.
 
 import { sentencesOf } from './text.js';
 
-const wordsOf = (t: string): string[] => t.toLowerCase().match(/[a-z0-9'’]+/g) ?? [];
+/** A stretch of a script that puts no space between its words. */
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+const wordsOf = (t: string): string[] => {
+  const runs = t.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}'’][\p{L}\p{N}\p{M}'’]*/gu) ?? [];
+  return runs.some((r) => UNSPACED.test(r)) ? runs.flatMap((r) => (UNSPACED.test(r) ? [...segmenter.segment(r)].filter((x) => x.isWordLike).map((x) => x.segment) : [r])) : runs;
+};
 const N = 6;
 
 /**
@@ -35,26 +43,49 @@ export const STANDARD_WORDING_PIECES = 3;
  * nothing is left out and the reading is what it always was.
  */
 export function overlapIndex(corpus: readonly string[], standardWording: readonly string[] = []): (text: string) => CorpusOverlap {
-  const words = corpus.map(wordsOf);
-  const grams = new Set(words.flatMap(gramsOf));
-  const joined = words.map((w) => ` ${w.join(' ')} `);
+  // EVERY SIX-WORD RUN OF EVERY PIECE, WITH WHERE IT STARTS: built once. A text is then read in one pass, and a run
+  // it shares with a piece is followed along that piece a word at a time, never searched for again. The check exists
+  // for the output that copies a long stretch, and read the earlier way that was the output it was slowest on.
+  const starts = new Map<string, { piece: number; at: number }[]>();
+  corpus.map(wordsOf).forEach((w, piece) => {
+    for (let at = 0; at + N <= w.length; at++) {
+      const gram = w.slice(at, at + N).join(' ');
+      const list = starts.get(gram);
+      if (list) list.push({ piece, at }); else starts.set(gram, [{ piece, at }]);
+    }
+  });
   const standard = new Set(standardWording);
   return (text) => {
     const w = wordsOf(text);
+    const grams = w.slice(0, Math.max(0, w.length - N + 1)).map((_, i) => w.slice(i, i + N).join(' '));
+    // run[i]: how many words from word i on the text shares with one piece, taking the piece that goes furthest.
+    // Read from the end: along one piece, the run from i is one word longer than the run from i + 1.
+    const run = new Array<number>(grams.length).fill(0);
+    let after = new Map<string, number>();
+    for (let i = grams.length - 1; i >= 0; i--) {
+      const here = new Map<string, number>();
+      for (const h of starts.get(grams[i]) ?? []) {
+        const along = `${h.piece}:${h.at - i}`;
+        const length = (after.get(along) ?? N - 1) + 1;
+        here.set(along, length);
+        if (length > run[i]) run[i] = length;
+      }
+      after = here;
+    }
     let shared6 = 0; let longestShared = 0; let left = 0;
-    for (let i = 0; i + N <= w.length; i++) {
-      const gram = w.slice(i, i + N).join(' ');
-      if (!grams.has(gram)) continue;
-      if (standard.has(gram)) left += 1; else shared6 += 1;
-      let j = i + N;
-      while (j < w.length && joined.some((c) => c.includes(` ${w.slice(i, j + 1).join(' ')} `))) j++;
+    for (let i = 0; i < grams.length; i++) {
+      if (!run[i]) continue;
+      if (standard.has(grams[i])) left += 1; else shared6 += 1;
+      if (!standard.size) { longestShared = Math.max(longestShared, run[i]); continue; }
+      // A run that lies inside the one read just before it holds nothing that one did not.
+      if (i > 0 && run[i - 1] > run[i]) continue;
       // WHAT COUNTS OF THE RUN is the longest stretch of its words that some six-word run outside the standard wording
       // covers. A clause the author uses everywhere counts for nothing; the words lifted from one piece beside it
       // count in full, and a standard phrase inside a lifted sentence does not cut the sentence in two.
-      if (!standard.size) { longestShared = Math.max(longestShared, j - i); continue; }
+      const j = i + run[i];
       let stretch = 0; let reach = -1;
       for (let k = i; k < j; k++) {
-        if (k + N <= j && !standard.has(w.slice(k, k + N).join(' '))) reach = k + N - 1;
+        if (k + N <= j && !standard.has(grams[k])) reach = k + N - 1;
         stretch = k <= reach ? stretch + 1 : 0;
         longestShared = Math.max(longestShared, stretch);
       }
@@ -68,11 +99,12 @@ const gramsOf = (w: readonly string[]): string[] => w.slice(0, Math.max(0, w.len
 /**
  * The author's standard wording: every six-word run found in STANDARD_WORDING_PIECES or more separate pieces. Read
  * at build over the whole corpus the skill was built from, since the few pieces a skill serves are too few to show
- * what recurs. Pieces are told apart by their text, so one piece given twice is one piece. Sorted, so that the same
+ * what recurs. Pieces are told apart by their text as written, so one piece given twice is one piece, and three
+ * pieces that are one clause ending three ways are three. Sorted, so that the same
  * corpus gives the same list.
  */
 export function standardWordingOf(pieces: readonly string[]): string[] {
-  const separate = [...new Set(pieces.map((p) => wordsOf(p).join(' ')))].map((p) => p.split(' '));
+  const separate = [...new Set(pieces.map((p) => p.normalize('NFKC').trim()))].map(wordsOf);
   if (separate.length < STANDARD_WORDING_PIECES) return [];
   const seenIn = new Map<string, number>();
   for (const w of separate) for (const g of new Set(gramsOf(w))) seenIn.set(g, (seenIn.get(g) ?? 0) + 1);
