@@ -185,7 +185,15 @@ describe('what a review of the first version found', () => {
 });
 
 describe('what a second review found: a paragraph over a rule, and a sentence in bold, are not headings', () => {
-  it('neither is counted, so neither can keep an invented sentence in', () => {
+  it('a heading that asks a question or holds a colon is a heading, and a cut cannot empty it', async () => {
+    for (const h of ['**Why now?**', "**What's next?**", '**FAQ: billing**', '**Risks, costs and owners**']) expect(emptyHeadings(`${h}\n\n## Next\nShip.\n`), h).toBe(1);
+    expect(emptyHeadings('FAQ: billing\n---\n\nRisks (v2.0)\n---\nFew.\n')).toBe(1);
+    const e = await enforceClaims('s', STD, '**Why now?**\n\nAn invented one stands here.\n\n## Next\nShip.\n', { claimSensor: reader(['An invented one stands here.']) });
+    expect(e).toMatchObject({ cut: [], kept: ['An invented one stands here.'] });
+  });
+  it('a paragraph over a rule and a sentence in bold are not counted, and a cut beside one goes ahead', async () => {
+    const e = await enforceClaims('s', STD, '**Bottom line: we should switch.**\n\nThe rival raised a lot. An invented one stands here.\n\n## Next\nShip.\n', { claimSensor: reader(['An invented one stands here.']) });
+    expect(e).toMatchObject({ cut: ['An invented one stands here.'], kept: [] });
     expect(emptyHeadings('## Risks\n\nNone known today.\n---\n## Next\nShip.')).toBe(0);
     expect(emptyHeadings('Here is the note.\n---\n## Summary\nGood.')).toBe(0);
     expect(emptyHeadings('## Summary\n\nAll good.\n\n**Thank you for your business.**')).toBe(0);

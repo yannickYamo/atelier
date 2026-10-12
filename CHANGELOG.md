@@ -59,17 +59,24 @@ Measured in this round and not changed by it:
 - **The author's own held-back analyses** still carry sentences the claim reader flags: plain statements of what
   the author knows and the material does not say. They are listed now, not cut. They would not pass a strict
   check, and no rule here makes them.
-- **Work written with no markup is read by its layout, and layout is ambiguous.** A name alone on a line with
-  text under it is a section where there are three. At the very top of a text, a title cannot be told from a first
-  section followed by a one-line answer; a title followed by an introduction is read as a section, so "opens with"
-  then fails on it. Markdown headings and labels have neither problem.
+- **Layout is read only on the owner's example.** Work written with no markup marks a section by a name alone on
+  a line. Guessing those from layout was tried three ways, and each lost a real section on some ordinary output. An
+  output is not guessed at: a check knows the names it asks for and looks for those, so a title, a one-line answer
+  and a signature are lines. The example is read by layout once, at the build, and shown; there a title cannot
+  always be told from a first section with a one-line answer, and the owner sees which was taken.
+- **A check read from the example's section names waits for the owner's yes.** "State the constraints in a
+  Regulation section" asks for one and "compare it with a Risks section from last quarter" does not, and the words
+  that tell them apart are not a closed list: the second is still read as asking. So such a check is shown with the
+  section it looks for, and nothing is built until the owner accepts the screen. A step whose own wording says it
+  ("Include a Risks section") builds in one call as before.
 - A worked figure is checked for arithmetic, not for what it counts: an invented amount that happens to equal one
-  offer's total, or the gap between two, at a number the sentence states is listed as computed. On a price list of
-  six lines that is about 40 amounts in 2,400. A break-even is accepted as a count of anything.
-- A step is tied to a section by a short list of words that put one in the work, and "with", "in" and "have" also
-  say other things: "compare it with a Risks section from last quarter" is still read as asking for one. Two
-  reviews of this round's changes were made and their findings fixed; the second round's fixes were not reviewed
-  again.
+  offer's total, or the gap between two, at a number the sentence states is listed as computed. A break-even is
+  accepted as a count of anything. Price lines it cannot give one role to are not worked from (a fee, a rate and a
+  percentage on one line; a line that also holds a count), so some honest totals are still listed as unsourced.
+- Existing skills are not changed by any of this: 120 stored texts (the pieces of one corpus and the outputs of
+  seven study rounds on it) get the same verdict on every rule from the commit this round started on and from this
+  one, with the claim check off and with it on. Three independent reviews were made of the round's changes and
+  their findings fixed, each with its inputs as tests; the last fixes were not reviewed again.
 - A step's check cannot yet be set by hand at the build; `atelier amend` is the way. An interrupted search cannot
   be resumed. A task that paraphrases the held-back piece's conclusion, or material that holds it in pieces, is
   not caught before a reproduction run.

@@ -288,6 +288,15 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });
 
+  it('a check read from the example\'s own section names is shown and waits for the owner\'s yes', () => {
+    writeFileSync(join(proj, 'reads.md'), '- Put who wins under a Verdict heading.\n');
+    const r = atelier('method', 'reads.md', '--golden', 'acme.md', '--name', 'reads', ...BACKEND());
+    expect(r.code, r.err).toBe(0);
+    expect(r.out).toMatch(/Checked on every output: what the work must contain \(1\)\n {2}- Put who wins under a Verdict heading\./);
+    expect(r.out).toMatch(/Nothing has been built: 1 check\(s\) above were read from your example's section names \("Put who wins under a Verdict heading\."\)\. Look that each asks for what you meant\. To accept exactly this:/);
+    expect(existsSync(join(data, 'skills', 'reads'))).toBe(false);
+  });
+
   it('--yes builds the skill from exactly that, with the example as its one worked example, and still calls no model', async () => {
     const before = await count();
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes', ...BACKEND());

@@ -40,7 +40,17 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
     items.forEach((p) => { out.push(`  - ${p.statement}`); const n = note(p); if (n) out.push(`      ${n}`); });
   };
   out.push(`${stated.length} step(s) from your method.`);
-  block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `your example: ${p.onExample ?? 'held'}`);
+  // What will be looked for, in the check's own terms, beside how the example fares on it: the owner approves the
+  // check, and "everything it must contain is there" does not say which section a step was tied to.
+  const looksFor = (p: MethodProposal): string => {
+    const m = p.measurement;
+    if (m?.observer === 'PRESENCE' && Array.isArray(m.params.sections)) {
+      const names = (m.params.sections as readonly string[]).map((n) => `"${n}"`).join(', ');
+      return `checks for: ${names.includes(',') ? `the sections ${names}` : `a section ${names}`}, with something in it${m.params.opens ? ', opening the work' : ''}${m.params.closes ? ', ending the work' : ''}${p.byName ? ' (read from your example\'s section names)' : ''}; `;
+    }
+    return m?.observer === 'TABLE' && Array.isArray(m.params.columns) ? `checks for: a table with the columns ${(m.params.columns as readonly string[]).join(', ')}; ` : '';
+  };
+  block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}`);
   block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `your example: ${p.onExample ?? 'held'}`);
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
   block('Yours to settle: your method says it, and your example does not hold it', stated.filter((p) => p.demoted), (p) => `${p.demoted}. Kept as a judgement until the method or the example changes.`);
@@ -101,8 +111,14 @@ export async function method(): Promise<void> {
   // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
   // `--review` only shows; `--yes` builds whatever the screen showed.
   const toSettle = proposals.filter((p) => p.demoted);
-  if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length)) {
-    console.log(`\nNothing has been built${toSettle.length && !argv.includes('--review') ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement` : ''}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
+  // A CHECK READ FROM THE EXAMPLE'S OWN SECTION NAMES IS A READING OF WHAT THE OWNER MEANT, and a reading is theirs to
+  // see before a run is held to it: "State the constraints in a Regulation section" asks for one, and "compare it
+  // with a Risks section from last quarter" does not, and the words that tell them apart are not a closed list.
+  const read = proposals.filter((p) => p.byName);
+  if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length || read.length)) {
+    const why = argv.includes('--review') ? '' : toSettle.length ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement`
+      : `: ${read.length} check(s) above were read from your example's section names (${read.map((p) => `"${p.statement.length > 48 ? `${p.statement.slice(0, 45)}...` : p.statement}"`).join('; ')}). Look that each asks for what you meant`;
+    console.log(`\nNothing has been built${why}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
       + '\nTo require something your example shows, accept and then: atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
     return;
   }

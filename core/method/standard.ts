@@ -122,6 +122,11 @@ export interface MethodProposal {
   readonly onExample: string | null;
   /** a stated step whose check the example did not pass: kept as the owner's, as a judgement, with why */
   readonly demoted: string | null;
+  /**
+   * The check was tied to the step by a section name of the example, not by the step's wording alone ("State the
+   * constraints in a Regulation section"). A reading of what the owner meant: shown, and built only on their yes.
+   */
+  readonly byName?: true;
 }
 
 const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
@@ -132,7 +137,7 @@ const ABOUT_FIGURES = /\b(?:figure|number|statistic|stat|data|claim|metric|price
  * those sections; one that speaks of a table is about the example's table whose columns it names (or its only
  * table); one that speaks of sources for figures is about the material.
  */
-function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Measurement | null {
+function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: { byName?: boolean } = {}): Measurement | null {
   const said = ` ${norm(step)} `;
   // WHAT THE STEP NAMES OUTRIGHT COMES FIRST, whether or not the example has it: "a Risks section", "a table with the
   // columns A, B and C". Read only from the example, a step that names a column the example lacks was given the
@@ -148,7 +153,7 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   const VERB = String.raw`(?:[Oo]pen|[Ss]tart|[Bb]egin|[Ll]ead|[Ee]nd|[Cc]lose|[Ff]inish|[Cc]onclude|[Ii]nclude|[Aa]dd|[Ww]rite|[Hh]ave|[Hh]as|[Cc]ontain)`;
   // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
   // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
-  const conditional = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|if|when|where|whenever|except|optional(?:ly)?)\b/i.test(step);
+  const conditional = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|only for|only|if|when|where|whenever|except|optional(?:ly)?|rarely|sometimes|avoid|without|instead of|rather than|skip|replace)\b/i.test(step);
   // WHAT THE EXAMPLE HAS, BY ITS OWN NAME. A wording is one way to say it; "Size the market with a Market size
   // section", "under a Blocking heading" and "an Open issues section" over "OPEN ISSUES:" are others, and each round
   // of testing found one more. A section of the example named in the step, in any case, is that section when the
@@ -157,7 +162,7 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   // work opens or ends with it. Everything else names it in passing or tells the writer to leave it out ("avoid a
   // Summary section", "add a status line to the footer"), and asks for nothing.
   const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
-  const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'provide', 'provides', 'need', 'needs', 'be'];
+  const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'provide', 'provides', 'need', 'needs', 'there must be', 'there is'];
   const EDGE = /\b(?:opens?|starts?|begins?|leads?|ends?|closes?|finish(?:es)?|concludes?) with $/;
   const placed = (sec: string): number => {
     const hits: number[] = [];
@@ -167,7 +172,7 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
         const before = low.slice(0, at + 1);
         if (kind === 'line' ? EDGE.test(before) : PUTS.some((w) => before.endsWith(` ${w} `))) hits.push(at);
         // "and" and "then" carry on a list of sections; alone they join two clauses ("readers skim, and a Summary section helps").
-        else if (kind !== 'line' && /(?: and| then) $/.test(before) && /\b(?:section|heading) (?:and|then) $/.test(before.replace(/\s+/g, ' '))) hits.push(at);
+        else if (kind !== 'line' && /\b(?:section|heading|line) (?:and then|and|then) $/.test(before)) hits.push(at);
       }
     }
     return hits.length ? Math.min(...hits) : -1;
@@ -186,6 +191,8 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
     .filter((n) => !outline.sections.some((sec) => norm(sec) === norm(n)));
   if (found.length && outright.length && !conditional) return sectionsCheck([...found.map((x) => x.sec), ...outright], outline);
   if (found.length && named.every((x) => found.some((f) => f.name === norm(x.name)))) {
+    // Tied by the example's own name where the step's wording alone would not have said it: a reading, said as one.
+    how.byName = found.some((f) => !named.some((x) => norm(x.name) === f.name));
     // Where is said by the verb that introduces the name, and by nothing else.
     const before = (x: { at: number }): string => low.slice(0, x.at + 1);
     const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
@@ -218,7 +225,8 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   const read = (m: Measurement): { verdict: string; detail: string } => { const r = measure(example.reference, m, context); return { verdict: r.verdict, detail: r.detail }; };
   const out: MethodProposal[] = []; const claimed = new Set<string>(); const claimedSections = new Set<string>();
   for (const step of stepsOf(note)) {
-    const m = checkNamedBy(step.text, outline);
+    const how: { byName?: boolean } = {};
+    const m = checkNamedBy(step.text, outline, how);
     if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, demoted: null }); continue; }
     const r = read(m);
     if (r.verdict !== 'MET') {
@@ -228,7 +236,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     }
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of (m.params.sections as readonly string[])) claimedSections.add(norm(sec));
-    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null });
+    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null, ...(how.byName ? { byName: true as const } : {}) });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the
   // work contains, as plainly as a sentence would. Each is held against the example like any stated step: sections

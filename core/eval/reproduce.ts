@@ -83,7 +83,7 @@ export function shapeAgainst(output: string, reference: string): Shape {
   const labelled = headings.length ? [] : bodies(reference, sectionHeadsOf(reference, true)).filter((x) => x.said >= 5);
   const mine = headings.length ? bodies(reference, headings).filter((_, i) => headings[i].level === top) : labelled.length >= 3 ? labelled : [];
   const wanted = mine.filter((x, i, all) => nameOf(x.name).length >= 3 && all.findIndex((o) => nameOf(o.name) === nameOf(x.name)) === i);
-  const found = bodies(output, sectionHeadsOf(output, true));
+  const found = bodies(output, sectionHeadsOf(output, true, wanted.map((w) => w.name)));
   // Named by its words, in order: "The plan" is "Plan", and "Explanation" is not. And it says something: "TBD" under
   // a heading is not the section.
   const named = (f: { name: string }, want: { name: string }): boolean => {

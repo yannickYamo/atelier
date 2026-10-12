@@ -76,7 +76,7 @@ const labelLike = (t: string): boolean => {
  * clause heading in capitals ("2. TERM"). A handover note, a contract and a review are not written with `##`, and
  * read for headings alone each had no sections at all. Labels sit below every heading (level 7).
  */
-export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
+export function sectionHeadsOf(text: string, labels: boolean, names?: readonly string[]): Heading[] {
   const heads = headingsOf(text);
   if (!labels) return heads;
   const out: Heading[] = [...heads]; const taken = new Set(heads.map((h) => h.start));
@@ -131,9 +131,31 @@ export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
     return /^\p{Lu}[\p{L}\p{N} &/'’-]{2,47}$/u.test(t) && t.split(/\s+/).length <= 4 && !opensLikeASentence(t) && !SIGNS_OFF.has(t.split(/\s+/)[0].toLowerCase())
       && (i === 0 || !lines[i - 1].trim()) && (i === lines.length - 1 || !lines[i + 1].trim());
   };
-  // Names in a row with nothing between them are one thing, not several: at the top of a text a title and what
-  // stands under it ("Handover", a name, a team), with the last of them the first section; anywhere else a section
-  // and its one-line answer ("Verdict", then "Approve"). A run with nothing after it is a signature.
+  const plain = (t: string): string => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+  const says = (h: Heading): boolean => { const nl = text.indexOf('\n', h.end); return /[\p{L}\p{N}]/u.test(text.slice(h.end, nl === -1 ? text.length : nl).replace(/^[\s:*_.]+/, '')); };
+  // WHERE THE SECTIONS ASKED FOR ARE KNOWN, THEY ARE LOOKED FOR, NOT GUESSED. A check on an output names its sections:
+  // a line alone between blank lines that holds one of those names is that section, and no other short line is one
+  // ("None" under "Risks" is its answer; a title, a signature and a list are lines). Guessing them from layout was
+  // tried three ways, and each way lost a real section on some ordinary output. A line under a found name that opens
+  // with a label the check did not ask for ("Notion: $10 a seat") is what the section says.
+  if (names) {
+    const wanted = names.map(plain).filter((n) => n.trim().length >= 3);
+    const asked = (t: string): boolean => wanted.some((n) => plain(t).includes(n));
+    const found: Heading[] = []; fence = false;
+    for (let i = 0; i < lines.length; i++) {
+      const t = lines[i].trim();
+      if (/^(```|~~~)/.test(t)) { fence = !fence; continue; }
+      const at = starts[i] + lines[i].indexOf(t);
+      if (!fence && isBare(i) && asked(t) && !taken.has(at) && !out.some((h) => h.start === at)) found.push({ level: 7, text: t, start: at, end: at + t.length });
+    }
+    if (!found.length) return out.sort((a, b) => a.start - b.start);
+    const first = Math.min(...found.map((h) => h.start));
+    return [...out.filter((h) => !(h.level === 7 && h.start > first && says(h) && !asked(h.text))), ...found].sort((a, b) => a.start - b.start);
+  }
+  // WITH NO NAMES GIVEN (an owner's finished example, read once at the build and shown to them), the layout is read.
+  // Names in a row with nothing between them are a name and its one-line answer, or a title and the first name: the
+  // last of a run has the text under it, so it is a name, and so is every second one before it. A run with nothing
+  // after it is a signature.
   const bare: Heading[] = []; const under = new Map<number, number>(); fence = false;
   const candidates: number[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -145,24 +167,22 @@ export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
   const blankBetween = (a: number, b: number): boolean => lines.slice(a + 1, b).every((l) => !l.trim());
   for (let k = 0; k < candidates.length; k++) {
     let end = k; while (end + 1 < candidates.length && blankBetween(candidates[end], candidates[end + 1])) end++;
-    const top = lines.slice(0, candidates[k]).every((l) => !l.trim());
-    const i = candidates[top ? end : k];
     let j = candidates[end] + 1; while (j < lines.length && !lines[j].trim()) j++;
-    k = end;
+    const run = candidates.slice(k, end + 1); k = end;
     if (j >= lines.length) continue;
-    const t = lines[i].trim(); const at = starts[i] + lines[i].indexOf(t);
     const next = starts[j] + lines[j].indexOf(lines[j].trim());
-    if (out.some((h) => h.start === next)) under.set(at, next);
-    bare.push({ level: 7, text: t, start: at, end: at + t.length });
+    for (let r = run.length - 1; r >= 0; r -= 2) {
+      const i = run[r]; const t = lines[i].trim(); const at = starts[i] + lines[i].indexOf(t);
+      if (r === run.length - 1 && out.some((h) => h.start === next)) under.set(at, next);
+      bare.push({ level: 7, text: t, start: at, end: at + t.length });
+    }
   }
-  // Three such names and the text is written this way: then a line under one that opens "Notion: $10 per seat ..."
-  // is what the section says, not a section of its own. A label alone on its line ("**Budget**", "ROLLOUT:") is still
-  // one. Fewer than three, and they are read only beside labels that already make three, and never over one:
-  // "Handover" above "STATUS: amber" is a title.
+  // Three such names and the example is written this way: then a line under one that opens "Notion: $10 per seat ..."
+  // is what the section says. A label alone on its line ("**Budget**", "ROLLOUT:") is still a section. Fewer than
+  // three, and they are read only beside labels that already make three, and never over one.
   if (bare.length >= 3) {
     const first = Math.min(...bare.map((h) => h.start));
-    const saysMore = (h: Heading): boolean => /[\p{L}\p{N}]/u.test(text.slice(h.end, !text.includes('\n', h.end) ? text.length : text.indexOf('\n', h.end)).replace(/^[\s:*_.]+/, ''));
-    return [...out.filter((h) => !(h.level === 7 && h.start > first && saysMore(h))), ...bare].sort((a, b) => a.start - b.start);
+    return [...out.filter((h) => !(h.level === 7 && h.start > first && says(h))), ...bare].sort((a, b) => a.start - b.start);
   }
   const beside = bare.filter((h) => !under.has(h.start));
   if (beside.length && beside.length + out.filter((h) => h.level === 7).length >= 3) out.push(...beside);
@@ -329,7 +349,7 @@ export const PRESENCE: Observer = {
   observe(text, p) {
     if (!text.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
     const problems: string[] = []; const spans: Span[] = [];
-    const heads = sectionHeadsOf(text, Boolean(num(p, 'labels')));
+    const heads = sectionHeadsOf(text, Boolean(num(p, 'labels')), num(p, 'labels') ? list(p, 'sections') : undefined);
     const paras = paragraphsOf(text);
     const lastPara = paras.at(-1);
     // What a section holds: everything from its heading to the next one at its level or above.

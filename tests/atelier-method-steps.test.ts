@@ -176,8 +176,6 @@ describe('what a review of the first version found', () => {
   });
   const names = (t: string): string[] => sectionHeadsOf(t, true).map((h) => h.text);
   it('a short answer under a name is its answer; a signature and a list are not sections', () => {
-    // (at the very top of a text two names in a row are read as a title and the first section: there the two cannot be told apart)
-    expect(names('Review of the cache change, for the platform team.\n\nVerdict\n\nApprove\n\nIt is ready.\n\nEvidence\n\nTests pass.\n\nRisks\n\nFew.\n\nNext steps\n\nShip.\n')).toEqual(['Verdict', 'Evidence', 'Risks', 'Next steps']);
     expect(names('Background\n\nWe met in May.\n\nOur position\n\nWe agree.\n\nRisks\n\nFew.\n\nAnna Lindqvist\nHead of Platform Engineering\nAcme Systems Ltd, Leeds office\n')).toEqual(['Background', 'Our position', 'Risks']);
     expect(names('Shopping\n\nMilk\nEggs\n\nErrands\n\nPost office\nBank\n\nCalls\n\nMum\nDentist\n')).toEqual(['Shopping', 'Errands', 'Calls']);
   });
@@ -200,14 +198,15 @@ describe('what a second review found', () => {
     expect(names('Verdict\n\nGo.\n\nEvidence\n\nTests pass.\n\nRisks\n\nFew.\n\n**Budget**\n\nTen.\n\n**Owners**\n\nSam.\n')).toEqual(['Verdict', 'Evidence', 'Risks', 'Budget', 'Owners']);
     expect(names('Verdict\n\nGo.\n\nEvidence\n\nTests pass.\n\nRisks\n\nFew.\n\nTesting:\nUnit.\n\nRollout:\nFriday.\n')).toEqual(['Verdict', 'Evidence', 'Risks', 'Testing', 'Rollout']);
   });
-  it('a title, a name and a team above labelled sections, and a signature below them, are not sections', () => {
-    expect(names('Handover\n\nDana Whitfield\n\nPlatform team\n\nSTATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
+  it('a signature below labelled sections is not a section', () => {
     expect(names('STATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n\nAnna Lindqvist\n\nHead of Platform\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
   });
   const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Background\nWe met.\n\n## Risks\nFew.\n\n## Next steps\nShip.\n' };
   const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : p.demoted ? 'to settle' : null; };
   it('"and" joins two sections of a list, not two clauses', () => {
     expect(check('Include a Summary section, then a Risks section.')).toBe('Summary+Risks');
+    expect(check('Include a Summary section and a Risks section.')).toBe('Summary+Risks');
+    expect(check('Start with a Summary section, and then a Risks section.')).toBe('Summary+Risks');
     expect(check('Readers skim, and a Summary section helps them.')).toBeNull();
     expect(check('Keep prose tight and a Summary heading short.')).toBeNull();
   });
@@ -219,6 +218,43 @@ describe('what a second review found', () => {
   });
   // Known, and not read: "with", "in" and "have" also say other things. These three are still tied to the section.
   it('what is still read wrongly is written down', () => {
-    for (const step of ['Compare it with a Risks section from last quarter.', 'Do the maths in a Background section of the spreadsheet.', 'Earlier drafts would have a Risks section; skip it now.']) expect(check(step), step).not.toBeNull();
+    for (const step of ['Compare it with a Risks section from last quarter.', 'Do the maths in a Background section of the spreadsheet.']) expect(check(step), step).not.toBeNull();
+  });
+});
+
+// A third review, of the second round's fixes, found that every way of guessing sections from layout lost a real
+// one on some ordinary output. So an output is no longer guessed at: the check knows the names it asks for and looks
+// for those. Layout is read only on the owner's example, once, where they see the result before anything is built.
+describe('on an output, the sections asked for are looked for by name', () => {
+  const found = (t: string, asked: string[]): string[] => sectionHeadsOf(t, true, asked).map((h) => h.text);
+  const presence = async (t: string, params: Record<string, number | string[]>): Promise<string> => (await import('../core/observers/registry.js')).measure(t, { observer: 'PRESENCE', params }).detail;
+  const ASKED = ['Summary', 'Risks', 'Next steps'];
+  it('a one-line answer under a name is its answer, and the next name is still found', () => {
+    expect(found('Summary\n\nIt works.\n\nRisks\n\nNone\n\nNext steps\n\nShip it.\n', ASKED)).toEqual(ASKED);
+  });
+  it('a title, an introduction and a signature are lines: "opens with" is not broken by them', async () => {
+    const t = 'Platform Review\n\nPrepared by the team for the board.\n\nSummary\n\nIt works.\n\nRisks\n\nNone\n\nNext steps\n\nShip it.\n\nAnna Lindqvist\n\nHead of Platform\n';
+    expect(found(t, ASKED)).toEqual(ASKED);
+    expect(await presence(t, { sections: ['Summary'], opens: 1, labels: 1, body: 1 })).toBe('everything it must contain is there');
+  });
+  it('a label alone on its line with a one-line answer has that answer', async () => {
+    expect(await presence('STATUS:\n\nAmber\n\nBLOCKERS:\n\nNone yet\n\nCONTACTS:\n\nSam Lee\n', { sections: ['STATUS', 'BLOCKERS', 'CONTACTS'], labels: 1, body: 1 })).toBe('everything it must contain is there');
+  });
+  it('lines under a found name that open with a label nobody asked for are what the section says', async () => {
+    expect(await presence('Verdict\n\nGo.\n\nCompetitors\n\nNotion: ten a seat.\nCoda: twelve.\n\nRisks\n\nFew.\n', { sections: ['Competitors'], labels: 1, body: 1 })).toBe('everything it must contain is there');
+  });
+  it('a name with nothing under it is still an empty section', async () => {
+    expect(await presence('Verdict\n\nGo.\n\nRisks\n\n\n', { sections: ['Risks'], labels: 1, body: 1 })).toBe('the "Risks" section is empty');
+  });
+  it('a step that asks for a section only sometimes, or says to leave one out beside one it wants, is not a check', () => {
+    const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Risks\nFew.\n' };
+    for (const step of ['It needs a Risks section only for big changes.', 'You rarely need a Risks section.', 'Reviews sometimes need a Risks section.', 'The tone should be a Summary section for executives.']) {
+      expect(methodProposals(`- ${step}\n`, example)[0].measurement, step).toBeNull();
+    }
+  });
+  it('a check tied by the example\'s name, where the step\'s own wording would not have said it, is marked as a reading', () => {
+    const example = { task: 'x', material: [], reference: 'STATUS: amber, and why.\n\nOPEN ISSUES:\nThe lag.\n\nNEXT STEPS:\nWatch it.\n' };
+    expect(methodProposals('- Report the state in a Status section.\n', example)[0]).toMatchObject({ byName: true });
+    expect(methodProposals('- Include an Open issues section.\n', example)[0]).toMatchObject({ byName: true });
   });
 });

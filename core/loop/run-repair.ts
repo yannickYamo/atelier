@@ -402,8 +402,9 @@ export function emptyHeadings(text: string): number {
     if (fence) return 0;
     const atx = /^ {0,3}(#{1,6})[ \t]+\S/.exec(l);
     if (atx) return atx[1].length;
-    // Written as a name: a few words, and not a sentence. "None known today." over a rule is a paragraph and a rule.
-    const name = (t: string): boolean => t.trim().split(/\s+/).length <= 8 && !/[.!?,;:]/.test(t.trim());
+    // Written as a name: a few words that do not end as a sentence does. "None known today." over a rule is a
+    // paragraph and a rule; "Why now?" and "FAQ: billing" are headings.
+    const name = (t: string): boolean => t.trim().split(/\s+/).length <= 8 && !/[.!,;:]$/.test(t.trim());
     if (l.trim() && name(l) && !/^\s*(?:[-*+>|]|\d+[.)])/.test(l) && (i === 0 || !lines[i - 1].trim()) && underline(i + 1)) return underline(i + 1);
     const bold = /^\s*(?:\*\*|__)([^*_\n]{2,60}?):?(?:\*\*|__):?\s*$/.exec(l);
     return bold && name(bold[1]) ? 7 : 0;
