@@ -16,6 +16,7 @@
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, Span } from './registry.js';
 import { paragraphsOf, wordsOf, findTerms, proseRegions } from './text.js';
+import { visible } from './visible.js';
 
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
 const list = (p: Measurement['params'], k: string): readonly string[] => {
@@ -26,7 +27,8 @@ const list = (p: Measurement['params'], k: string): readonly string[] => {
 export interface Heading { readonly level: number; readonly text: string; readonly start: number; readonly end: number }
 
 /** Section headings (level 2 and below; a lone level-1 is the title), outside code and front matter. */
-export function headingsOf(text: string): Heading[] {
+export function headingsOf(raw: string): Heading[] {
+  const text = visible(raw);
   const out: Heading[] = [];
   let offset = 0; let fence = false; let front = false;
   let prev: { text: string; start: number } | null = null;
@@ -76,7 +78,8 @@ const labelLike = (t: string): boolean => {
  * clause heading in capitals ("2. TERM"). A handover note, a contract and a review are not written with `##`, and
  * read for headings alone each had no sections at all. Labels sit below every heading (level 7).
  */
-export function sectionHeadsOf(text: string, labels: boolean, names?: readonly string[]): Heading[] {
+export function sectionHeadsOf(raw: string, labels: boolean, names?: readonly string[]): Heading[] {
+  const text = visible(raw);
   const heads = headingsOf(text);
   if (!labels) return heads;
   const out: Heading[] = [...heads]; const taken = new Set(heads.map((h) => h.start));

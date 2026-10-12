@@ -13,6 +13,7 @@
 // selection read off the author's pieces, both sides: a floor with no ceiling is how a model overshoots.
 
 import { wordsOf, proseRegions, proseSentencesOf, paragraphsOf, quantile } from './text.js';
+import { visible } from './visible.js';
 import { bagOf, paceSteps, callbackShare } from './pace.js';
 import type { Observer } from './registry.js';
 
@@ -62,8 +63,8 @@ const count = (s: string, re: RegExp): number => (s.match(re) ?? []).length;
  * in a shell snippet is not a list item). Both are blanked, line for line; the fences themselves are
  * counted, ``` and ~~~ alike, the same way ./text.ts reads them. An unclosed fence runs to the end.
  */
-export function pageOf(text: string): { readonly body: string; readonly fences: number } {
-  const lines = text.split('\n');
+export function pageOf(raw: string): { readonly body: string; readonly fences: number } {
+  const lines = visible(raw).split('\n');
   let fence: string | null = null; let front = false; let fences = 0;
   const body = lines.map((line, i) => {
     const t = line.trim();

@@ -13,6 +13,7 @@
 // words by the platform's own segmenter.
 
 import { sentencesOf } from './text.js';
+import { visible } from './visible.js';
 
 /** A stretch of a script that puts no space between its words. */
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
@@ -56,7 +57,8 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
   });
   const standard = new Set(standardWording);
   return (text) => {
-    const w = wordsOf(text);
+    // The words a reader sees: the tags two pages share are not a passage copied from one to the other.
+    const w = wordsOf(visible(text));
     const grams = w.slice(0, Math.max(0, w.length - N + 1)).map((_, i) => w.slice(i, i + N).join(' '));
     // run[i]: how many words from word i on the text shares with one piece, taking the piece that goes furthest.
     // Read from the end: along one piece, the run from i is one word longer than the run from i + 1.

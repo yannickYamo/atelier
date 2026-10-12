@@ -7,6 +7,7 @@
 // word. The caller keeps one only if the draft breaks nothing it did not already break.
 
 import type { StandardVersion } from '../state/canonical-state.js';
+import { isMarkup } from '../observers/visible.js';
 import type { VerifyReport } from '../observers/verify.js';
 import { paragraphSentences } from '../observers/text.js';
 
@@ -41,6 +42,8 @@ export function replaceEmDashes(text: string): string {
  * block quote each part stays quoted. Lists, headings, tables and code are not paragraphs and are left alone.
  */
 export function splitLongParagraphs(text: string, max: number): string {
+  // A blank line does not end a paragraph in a page of markup: the page would read as fixed and show as it was.
+  if (isMarkup(text)) return text;
   if (!(max >= 1)) return text;
   let out = text;
   // Each pass re-reads the text, since a split moves every later offset; a pass that changes nothing ends it.

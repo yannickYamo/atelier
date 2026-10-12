@@ -7,6 +7,38 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: a page of markup is measured as what its reader sees
+
+A closing study built a skill from twelve explainers written as single HTML pages. Discovery measured the markup:
+the semicolons of the CSS became "use semicolons within my range: 15.7 to 54.2 per 1,000 words", the `!` of
+`<!doctype html>` a rule about exclamation marks, and four `<h2>` headings a page became "write without section
+headings", because only `#` was read as a heading. The skill failed all ten of its test tasks.
+
+- **A document that is markup is reduced to its visible text before anything measures it,** underneath every
+  reader of text: words, sentences, paragraphs, headings, sections, and the counted features of style. Scripts,
+  styles, comments, the head and the doctype are not read; `<h1>` to `<h6>` are headings; the end of a block is the
+  end of a paragraph; an entity is the character it stands for.
+- **The reduction keeps the page's length and the place of every visible character,** so a check still points
+  into the page as written, and a repair rewrites the page. The page is never converted: an author who writes
+  HTML is served HTML and writes HTML.
+- **Decided from the content:** a declared HTML page, with or without front matter, or a document that opens with
+  a tag and is built of block tags. An essay with a stray `<br>`, or one that writes about tags, is read as before.
+
+- **One pass over the page, linear in its length.** A first version ran a chain of patterns; a review found it
+  took half a minute on a long page of unclosed tags, read a heading whose words sat on the next line as no
+  heading, counted a link's address among a paragraph's words, and classed a README that opens with a centred
+  block as markup. Each is a test now. Tables, code blocks and anything never closed are not prose. Every heading
+  below the title is a section. The claim check and the copying check read the same visible text, and a long
+  paragraph in a page is not "split" by a blank line a browser would not show.
+
+Known and left: an entity in the middle of a word ("It&#8217;s") keeps its room and the word reads as two; a
+length stated in characters counts the markup; a rewrite of a sentence that ends inside a link can leave the
+link's closing tag behind.
+
+The test that holds it: a page and the same text in markdown give the same reading on every one of the counted
+features, the same headings, and the same count of words, sentences and paragraphs. Not run on a model: whether a
+skill built from HTML pages now passes that study's tasks is for the study to say.
+
 ### Fixed, for 2.0: what a pass over the new commands found
 
 Every command the changes below touch was run end to end against a scripted model, and the code they added was

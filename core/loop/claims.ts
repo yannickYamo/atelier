@@ -25,6 +25,7 @@
 
 import { sentencesOf, wordsOf, type Sentence } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
+import { visible } from '../observers/visible.js';
 
 /**
  * WHAT THE CLAIM CHECK READS: every sentence of prose, AND every heading and table row. `sentencesOf`
@@ -39,7 +40,9 @@ import type { Span } from '../observers/registry.js';
  * last), because a flagged unit is what the loop deletes (run-repair.ts, enforceClaims). A table's rule row
  * (`|---|:--:|`) carries no words and is not a unit.
  */
-export function claimUnitsOf(text: string): Sentence[] {
+export function claimUnitsOf(raw: string): Sentence[] {
+  // A page of markup is read as what its reader sees (../observers/visible.ts): a line of CSS is not a claim.
+  const text = visible(raw);
   const extra: Sentence[] = [];
   const lines = text.split('\n');
   let offset = 0; let fence: string | null = null; let front = false;
