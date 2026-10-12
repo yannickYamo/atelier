@@ -11,7 +11,7 @@
 // What the example shows that no step said is proposed, and is shown, never required, until they say so.
 //
 // Nothing here calls a model (core/method/standard.ts). `--yes` accepts exactly what the screen showed.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
 import * as store from '../../core/state/store.js';
@@ -22,8 +22,8 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { draftHash, appendDecision, type RatificationLedger } from '../../core/ratification/decision-record.js';
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
-import { methodProposals, stepsOf, type MethodProposal } from '../../core/method/standard.js';
-import { readCase } from '../corpus.js';
+import { proposalsAcross, stepsOf, type MethodProposal } from '../../core/method/standard.js';
+import { readCase, corpusFiles } from '../corpus.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 
@@ -53,7 +53,7 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}`);
   block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? 'checks for: every path:line cited is a line of the material with something on it (for a diff, a line the change adds); ' : ''}your example: ${p.onExample ?? 'held'}`);
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
-  block('Yours to settle: your method says it, and your example does not hold it', stated.filter((p) => p.demoted), (p) => `${p.demoted}. Kept as a judgement until the method or the example changes.`);
+  block('Yours to settle: your method says it, and your finished work does not hold it', stated.filter((p) => p.demoted), (p) => `${p.demoted}. Kept as a judgement until the method or the example changes.`);
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);
   if (cls !== 'FULL_REPRO_CASE') out.push('', cls === 'TASK_AND_REFERENCE'
     ? 'Your example carries its task and no material, so nothing about what the work is made from can be checked.'
@@ -81,14 +81,25 @@ export function kindOfWork(note: string, name: string, declared: string | undefi
 
 export async function method(): Promise<void> {
   const notePath = positional([]) ?? die('usage: atelier method <method note> --golden <finished example> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). The example is one piece of work where it was done.');
-  const goldenPath = flag('--golden') ?? die('--golden <file> required: one finished example of the method carried out.');
+  const goldenPath = flag('--golden') ?? die('--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
   for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (!existsSync(p)) die(`${what}: there is nothing at ${p}.`);
   const note = readFileSync(notePath, 'utf8');
   if (!stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
-  const example = readCase(resolve(goldenPath), (line) => { console.log(line); });
-  if (!example.reference.trim()) die(`${goldenPath} is empty.`);
-  const proposals = methodProposals(note, example);
-  console.log(`Method: ${basename(notePath)}  ·  example: ${basename(goldenPath)}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
+  // ONE EXAMPLE, OR A FOLDER OF THEM. With a folder, the first piece by name is the worked example a check is read
+  // from, and every other piece is what the check is then held against (core/method/standard.ts, `acrossExamples`):
+  // the pieces are also served with the skill, and how long they run is recorded, as for a skill built from a folder.
+  const folder = statSync(resolve(goldenPath)).isDirectory() ? resolve(goldenPath) : null;
+  // The pieces a build would serve from that folder, and no others: not a file about the work, not a piece's
+  // material, not the method note itself if it is kept there, not a hidden file.
+  const files = folder ? corpusFiles(folder).filter((f) => resolve(f) !== resolve(notePath) && !basename(f).startsWith('.')).sort() : [resolve(goldenPath)];
+  if (!files.length) die(`${goldenPath} holds no example that can be read.`);
+  const said: string[] = [];
+  const cases = files.map((f) => readCase(f, (line) => { said.push(folder ? `${basename(f)}: ${line}` : line); })).filter((c) => c.reference.trim());
+  for (const line of [...new Set(said)].slice(0, 6)) console.log(line);
+  if (!cases.length) die(`${goldenPath} is empty.`);
+  const { lead, proposals } = proposalsAcross(note, cases);
+  const example = cases[lead];
+  console.log(`Method: ${basename(notePath)}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}; checks read from ${example.id}, then held against the rest`}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of describeMethod(proposals, example.caseClass)) console.log(line);
 
   // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
@@ -150,7 +161,7 @@ export async function method(): Promise<void> {
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });
-  s = { ...s, decided: [...s.decided, ...decided], ledger };
+  s = { ...s, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer
@@ -158,9 +169,13 @@ export async function method(): Promise<void> {
   const exampleFile = runFile(`method-example-${sha(example.reference)}.md`);
   writeAtomic(exampleFile, example.reference);
   process.env.ATELIER_ORCHESTRATED = '1';
+  // Every step is the owner's and every check is code: the build asks no model for a reading of the examples.
+  process.env.ATELIER_BUILD_NO_MODEL = '1';
   if (!argv.includes('--work-type')) argv.push('--work-type', flag('--for') ?? name.replace(/-/g, ' '));
   if (!argv.includes('--exemplar')) argv.push('--exemplar', exampleFile);
-  if (!argv.includes('--voice')) argv.push('--voice', 'none');
+  // Three pieces or more are served with the skill, as its own way of writing, and their lengths recorded; with
+  // fewer there is no telling a usual piece from an odd one, and the one worked example stands alone.
+  if (!argv.includes('--voice') && !(folder && cases.length >= 3)) argv.push('--voice', 'none');
   if (!argv.includes('--persona')) argv.push('--persona', 'none');
   if (!argv.includes('--class')) store.setDocClass({ root: DATA, skillName: name }, kind);
   ratifyClose();

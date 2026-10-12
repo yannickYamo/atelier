@@ -37,6 +37,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 |---|---|
 | a skill from their writing | `atelier new <folder-of-their-work> "<what it is for>"`, show them the rules it proposes, then `atelier new <folder> --accept` once **they** approve (or `--set p3=reject` for their changes) |
 | a skill from rules they state | `atelier skill "<their rules, in their words>"` |
+| a skill from their method and finished examples | `atelier method <method note> --golden <example file or folder>`: each step they wrote is a rule, checked where code can hold it; calls no model. Show them the screen, then `--yes` once **they** agree |
 | new work in that voice | `atelier invoke --skill <name> "<the task>"` (written, checked, repaired, recorded) |
 | to check or fix a text | `atelier verify --skill <name> <file>` (exit 1 = a required rule broken); add `--repair` to fix only what broke |
 | their real stories and figures used | `atelier material --skill <name> <notes.md>`: with it bound, on a skill built with `--class essay` (or a post), anything invented is cut; otherwise specifics are only listed |

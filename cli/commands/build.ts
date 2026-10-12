@@ -10,6 +10,11 @@ import { derivePersona, reconcilePersona, standardForbids } from '../../core/com
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
 import { standardWordingOf } from '../../core/observers/overlap.js';
+import { targetOf } from '../../core/observers/obligations.js';
+
+/** Set by a command that builds from what the owner wrote and promised no model call (cli/commands/method.ts). */
+const NO_MODEL = (): boolean => process.env.ATELIER_BUILD_NO_MODEL === '1';
+const QUIET = 'no model was asked';
 import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../../core/compiler/scope.js';
 
 /** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
@@ -184,13 +189,15 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       const scopeBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
       let scope: ScopeProfile;
       try {
+        // A build that promised to call no model (`atelier method`) states the counts alone, and says nothing.
+        if (NO_MODEL()) throw new Error(QUIET);
         scope = await onCorpusReader((c) => deriveScope(c, scopeBudget, pairs, proposerModel()));
         console.log(`Scope: what ${scope.examples} example(s) add beyond what was asked, ${scope.paired} of them read with the request they answer`
           + (scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : '')
           + `${scope.unread ? ` (${scope.unread} example(s) not read${scope.beyond.length ? '' : ': too many to state a habit from the rest'})` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
       } catch (e) {
         scope = groundScope(pairs, null, null);
-        console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
+        if ((e as Error).message !== QUIET) console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
       }
       voice = { ...voice, scope };
       if (voiceFlag === undefined) voice = spreadExamples(voice, pairs);
@@ -214,8 +221,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     // is taken to have had all of its moves read.
     const covered = new Set(voice.holdsBackOf ?? (voice.holdsBack ? moves.map((r) => r.requirementId) : []));
     const reuse = voice.holdsBack !== undefined && personaFlag !== 'auto' && moves.every((r) => covered.has(r.requirementId));
-    const read = reuse ? voice.holdsBack ?? [] : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
-    if (!reuse && read === null) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
+    const read = reuse ? voice.holdsBack ?? [] : NO_MODEL() ? null : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
+    if (!reuse && read === null && !NO_MODEL()) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
     const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || (!reuse && HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
     // A reading that could not be made is not recorded as one: the pattern's answer is used for this build only.
     voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack, holdsBackOf: reuse || read !== null ? moves.map((r) => r.requirementId) : [] };
@@ -396,7 +403,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
       }
       // The exemplar is what the model imitates, so it should meet the standard it illustrates.
       const report = verifyText(name, v, text);
-      const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED');
+      // (Less the rules read against its material, which is not part of the exemplar.)
+      const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED' && targetOf(c.observer ?? '') !== 'BOUND_MATERIAL');
       if (broken.length) {
         console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
           + 'The model will imitate it as it is.');
@@ -586,7 +594,9 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
  * the check it had. A rule that applies only under a condition is not counted: no piece is held to it without the condition.
  */
 function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof loadSession>): void {
-  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && isGeneralScope(r.appliesWhen));
+  // A rule read against what a piece was made from (a figure given, a line cited) cannot be read on the piece alone:
+  // each piece's own material is not here, and without it every citation reads as invented.
+  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && isGeneralScope(r.appliesWhen) && targetOf(r.measurement.observer) !== 'BOUND_MATERIAL');
   if (!rules.length) return;
   const recorded = rules.map((r) => s.proposalMeta?.[r.requirementId]?.corpus ?? null);
   let pieces: number; let breaking: { id: string; pieces: readonly number[] }[];

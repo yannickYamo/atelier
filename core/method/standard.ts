@@ -324,3 +324,50 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   }
   return out;
 }
+
+/**
+ * THE SAME METHOD, HELD AGAINST EVERY EXAMPLE. A check read off one example and the note is a reading; the owner's
+ * other finished pieces are the test of it. A stated step keeps its check only when every example it can be read on
+ * holds it: one that does not is the owner's to settle, exactly as when the single example fails, with the count
+ * and the pieces named. What one example shows and the others do not was that piece's own, and is dropped. An owner
+ * who hands over twelve pieces and is told a required rule fails three of them has been given the wrong rule, so no
+ * such rule is built.
+ *
+ * A check read against what a piece was made from is read only on the examples that carry their material: a piece
+ * handed over without its sources says nothing about whether its figures were given. The count says which it is.
+ */
+export function acrossExamples(proposals: readonly MethodProposal[], others: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[]): MethodProposal[] {
+  if (!others.length) return [...proposals];
+  return proposals.flatMap((p): MethodProposal[] => {
+    const m = p.measurement;
+    if (!m || p.demoted) return [p];
+    const bound = targetOf(m.observer) === 'BOUND_MATERIAL';
+    const results = others.filter((c) => !bound || c.material.length).map((c) => ({ id: c.id, r: measure(c.reference, m, { ...(c.task ? { request: c.task } : {}), material: c.material } satisfies CheckContext) }))
+      .filter((x) => x.r.verdict !== 'NOT_APPLICABLE');
+    const fails = results.filter((x) => x.r.verdict === 'VIOLATED'); const n = results.length + 1; const all = others.length + 1;
+    const on = n === all ? `your ${all} examples` : `the ${n} of your ${all} examples it can be read on${bound ? ' (those that carry their material)' : ''}`;
+    if (!fails.length) return [{ ...p, onExample: n === all ? `held in all ${all} of your examples` : `held in all ${n} of your ${all} examples it can be read on${bound ? ' (those that carry their material)' : ''}` }];
+    if (p.origin === 'SHOWN_BY_EXAMPLE') return [];
+    const named = fails.slice(0, 3).map((x) => `${x.id} (${x.r.detail})`).join('; ');
+    return [{ statement: p.statement, origin: p.origin, obligation: 'JUDGEMENT', measurement: null, onExample: `held in ${n - fails.length} of ${on}`,
+      demoted: `${fails.length} of your examples do not hold it as a check would read it: ${named}${fails.length > 3 ? `; and ${fails.length - 3} more` : ''}` }];
+  });
+}
+
+/**
+ * WHICH EXAMPLE THE CHECKS ARE READ FROM. A check is read off one example, and read off the odd one out (the piece
+ * that happens to lack a section the other eleven have) the step was left a judgement and nobody was asked. So each
+ * example is tried as the one read from, and the one under which the most stated steps are read as checks (held by
+ * all, or broken by some and so put to the owner) is taken; the first by name where several do equally. The owner's steps do not change, only which
+ * piece they are read against.
+ */
+export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[]): { lead: number; proposals: MethodProposal[] } {
+  let best = { lead: 0, proposals: [] as MethodProposal[], held: -1 };
+  cases.forEach((c, i) => {
+    const proposals = acrossExamples(methodProposals(note, c), cases.filter((_, k) => k !== i));
+    // A step that became a check and that some piece then broke is read too: it is put to the owner, by name.
+    const held = proposals.filter((p) => p.origin === 'STATED' && (p.measurement ?? p.demoted)).length;
+    if (held > best.held) best = { lead: i, proposals, held };
+  });
+  return { lead: best.lead, proposals: best.proposals };
+}

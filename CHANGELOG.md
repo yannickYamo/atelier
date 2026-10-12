@@ -7,6 +7,35 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: one method and a folder of examples, built in one call
+
+`atelier method <note> --golden <folder>`. A person who has a page of rules and a dozen finished pieces had two
+commands that each took half: `atelier new` read the pieces and never heard the rules, and `atelier method` took
+the rules and one piece. In the standing comparison the plain prompt that got both (a rule page and the examples)
+failed 1 of 20 explanations, fewer than anything Atelier built from the examples alone.
+
+- **Every step is the owner's rule, in their words,** as before. A check read off the first example is now held
+  against every example: one that an example breaks is theirs to settle, with the count and the piece named, and
+  nothing is built until they have seen it. What only the first example shows is dropped.
+- **Three or more examples are served with the skill** as the author's own pieces, and the span of their lengths is
+  recorded, so drafts are chosen by it when a request names no length.
+- **It calls no model.** One file still builds exactly as it did.
+- A rule read against what a piece was made from (a figure given, a line cited) is no longer counted against the
+  author's pieces at build, where each piece's own material is not at hand: read that way, all twelve golden
+  reviews broke the citation rule their own diffs satisfy.
+
+- **Which example the checks are read from is chosen, not assumed.** Read off the first piece by name, a piece
+  that happened to lack a section left that step a judgement and nobody was asked. Each example is tried, and the
+  one under which the most steps become checks is used; a piece that then breaks one is named to the owner.
+- **A check against the material is held only on the examples that carry theirs,** and the count says so.
+- The folder is read as the build reads it: no file about the work, no piece's material, no hidden file, not the
+  note itself.
+
+On the standing comparison, one run per task, the skill built this way failed 1 of 10 explanations (the rule page
+and the examples as a plain prompt: 1 of 20; the skill discovered from the examples alone: 2 of 10) at $0.10 and 22
+seconds an output against $0.23 and 38, and 1 of 10 code reviews (the review within one line of the defect in the
+tenth). Ten outputs each: development evidence, and too few to rank the Atelier arms against each other.
+
 ### Added, for 2.0: three more kinds of method step are held by code
 
 A six-step review method (Summary, Must fix, Suggestions, Verdict, "cite each item as path:line", "name the missing

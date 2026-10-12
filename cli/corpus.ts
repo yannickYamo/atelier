@@ -19,6 +19,18 @@ export function readCorpus(path: string, what = '--corpus'): string[] {
   return readCorpusPairs(path, what).map((p) => p.text);
 }
 
+/**
+ * The files at `path` that are pieces, as every reading of a corpus takes them: readable, not about the work, not
+ * inside a `.material` folder and not named by another piece as its material. One list, so a command that reads
+ * the pieces as cases (cli/commands/method.ts) holds its checks against exactly the pieces the build then serves.
+ */
+export function corpusFiles(path: string): string[] {
+  const rels = statSync(path).isDirectory() ? walk(path).filter((r) => !inMaterialDir(r)) : null;
+  const files = (rels ? rels.map((r) => join(path, r)) : [path]).filter((f) => (READABLE as readonly string[]).includes(extname(f).toLowerCase()) && !META_NAME.test(basename(f)));
+  const named = new Set(files.flatMap((f) => { const r = extract(f); return r.ok ? (r.materialRefs ?? []).map((ref) => resolve(dirname(f), ref).toLowerCase()).filter((x) => x !== resolve(f).toLowerCase()) : []; }));
+  return files.filter((f) => !named.has(resolve(f).toLowerCase()) && extract(f).ok);
+}
+
 /** The same pieces, each with the request it answers when its file carries one (core/intake/extract.ts, `splitRequest`). */
 export function readCorpusPairs(path: string, what = '--corpus'): { text: string; request: string | null }[] {
   if (!existsSync(path)) die(`${what}: there is nothing at ${path}.`);

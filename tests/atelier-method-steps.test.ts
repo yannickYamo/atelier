@@ -300,3 +300,59 @@ describe('a step that gives its place in the order, a closed set, or the form of
       expect(first(step).measurement, step).toBeNull();
   });
 });
+
+// One method, a folder of examples: a check read off the first is held against all of them.
+describe('a method held against every example', () => {
+  const piece = (verdict: string, extra = ''): string => `## Summary\nIt adds a runner. It is small.\n\n## Must fix\nNone.\n\n${extra}## Verdict\n${verdict}\n`;
+  const cases = (refs: readonly string[]) => refs.map((reference, i) => ({ id: `e${i + 1}.md`, task: 'Review this change.', material: [], reference }));
+  const NOTE = '- Open with a Summary section.\n- Then a Must fix section.\n- End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
+  it('a step every example holds keeps its check, and says how many it was held in', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const all = cases([piece('Approve'), piece('Request changes'), piece('Comment')]);
+    const ps = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1));
+    expect(ps.filter((p) => p.measurement).map((p) => p.onExample)).toEqual(['held in all 3 of your examples', 'held in all 3 of your examples', 'held in all 3 of your examples']);
+  });
+  it('a step one example breaks is the owner\'s to settle, with the count and the piece named', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const all = cases([piece('Approve'), piece('Looks fine to me'), piece('Comment')]);
+    const verdict = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1)).find((p) => p.statement.startsWith('End with'));
+    expect(verdict).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, onExample: 'held in 2 of your 3 examples' });
+    expect(verdict?.demoted).toContain('1 of your examples do not hold it as a check would read it: e2.md');
+  });
+  it('what only the first example shows is that piece\'s own, and is dropped', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const all = cases([piece('Approve', '## Risks\nNone seen.\n\n## Rollback\nRevert the commit.\n\n'), piece('Approve'), piece('Comment')]);
+    const lead = methodProposals(NOTE, all[0]);
+    expect(lead.some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(true);
+    expect(acrossExamples(lead, all.slice(1)).some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(false);
+  });
+  it('with one example nothing changes', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const lead = methodProposals(NOTE, cases([piece('Approve')])[0]);
+    expect(acrossExamples(lead, [])).toEqual(lead);
+  });
+});
+
+describe('which example the checks are read from, and which examples a check can be read on', () => {
+  const piece = (sections: readonly string[]): string => sections.map((x) => `## ${x}\nSomething is said here about it.\n`).join('\n');
+  const NOTE = '- Open with a Summary section.\n- Then a Must fix section.\n- End with a Verdict section.\n';
+  it('the odd one out, first by name, is not what the checks are read from', async () => {
+    const { proposalsAcross } = await import('../core/method/standard.js');
+    const cases = [['Summary', 'Verdict'], ['Summary', 'Must fix', 'Verdict'], ['Summary', 'Must fix', 'Verdict'], ['Summary', 'Must fix', 'Verdict']]
+      .map((x, i) => ({ id: `e${i + 1}.md`, task: 'Review this.', material: [], reference: piece(x) }));
+    const { lead, proposals } = proposalsAcross(NOTE, cases);
+    expect(lead).toBe(1);
+    // the step is now a check the first piece fails, so it is the owner's to settle, by name: never a silent judgement
+    expect(proposals.find((p) => p.statement.startsWith('Then a Must fix'))).toMatchObject({ obligation: 'JUDGEMENT', demoted: expect.stringContaining('e1.md') as string });
+    expect(proposals.filter((p) => p.measurement).length).toBe(2);
+  });
+  it('a check against the material is read only on the examples that carry theirs', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const diff = '--- a/a.js\n+++ b/a.js\n@@ -1,0 +1,2 @@\n+const a = 1;\n+run(a);\n';
+    const review = '## Must fix\n- a.js:2 runs too early.\n';
+    const withIt = { id: 'e1.md', task: 'Review this.', material: [{ name: 'diff', text: diff }], reference: review };
+    const without = { id: 'e2.md', task: 'Review this.', material: [], reference: review };
+    const lines = acrossExamples(methodProposals('- Cite each item as path:line.\n', withIt), [without, { ...withIt, id: 'e3.md' }])[0];
+    expect(lines).toMatchObject({ obligation: 'EXECUTION', onExample: 'held in all 2 of your 3 examples it can be read on (those that carry their material)' });
+  });
+});

@@ -155,14 +155,14 @@ describe('a method and one example become requirements of three kinds', () => {
     const lines = describeMethod(disagree, 'FULL_REPRO_CASE').join('\n');
     expect(lines).toMatch(/Checked on every output: what the work must contain \(2\)/);
     expect(lines).toMatch(/Checked against the material: what the work must be made from \(1\)/);
-    expect(lines).toMatch(/Yours to settle: your method says it, and your example does not hold it \(2\)/);
+    expect(lines).toMatch(/Yours to settle: your method says it, and your finished work does not hold it \(2\)/);
   });
   it('a template table in the note that the example does not hold is a question, never a rule', () => {
     const withTemplate = `${NOTE}\n## Template\n\n| Vendor | Contract length | Exit fee |\n|---|---|---|\n| [name] | [months] | [amount] |\n`;
     const p = methodProposals(withTemplate, { task: TASK, material: context.material, reference: EXAMPLE }).find((x) => x.statement.includes('contract length'));
     expect(p).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null });
     expect(p?.demoted).toMatch(/^your example does not hold it as a check would read it \(the table lacks the column\(s\) "contract length", "exit fee"\)$/);
-    expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/Yours to settle: your method says it, and your example does not hold it \(1\)/);
+    expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/Yours to settle: your method says it, and your finished work does not hold it \(1\)/);
   });
   it('a step that only mentions a section in passing is a judgement, never a check on the work\'s shape', () => {
     const ps2 = methodProposals('1. Move to the Next section only after the Verdict is settled.\n2. Never give a Verdict before the comparison is read.\n', { task: TASK, material: context.material, reference: EXAMPLE });
