@@ -10,7 +10,7 @@
 | where "good" is defined | re-guessed from examples every run | a standard you approved, versioned and diffable |
 | which habits matter | can't tell a decision from an accident | each rule weighed, with when it applies, checked on work it never read |
 | machine tells | its own habits come back | caught as moves, held to your own rate |
-| your stories, sources and figures | invented when missing | read for, traced to what you supplied; the rest cut and listed |
+| your stories, sources and figures | invented when missing | read for, traced to what you supplied; the rest cut and listed (listed only, when no material is bound) |
 | your sentences | lifted when pasted | shown for voice; copying flagged |
 | after the draft | nothing checks it | every counted rule checked, the rest read (reporting only, until you label it); only what broke is rewritten |
 | next month | no memory of what went wrong | `fix` and `tend` propose changes, installed only through a gate (not yet shown on a live skill) |

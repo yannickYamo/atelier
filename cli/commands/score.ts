@@ -132,7 +132,7 @@ export async function score(): Promise<void> {
   const materialFile = flag('--material');
   if (materialFile && !existsSync(materialFile)) fail(`there is no material file at ${materialFile}.`);
   const material = [task, materialFile ? readFileSync(materialFile, 'utf8') : '', ...store.getMaterial(L).map((m) => m.text)].filter(Boolean).join('\n\n');
-  const checks = checksFor(L, { material, task, guardClaims: true, offline: true });
+  const checks = checksFor(L, { material, task, guardClaims: true, offline: true, bound: Boolean(materialFile) || store.getMaterial(L).length > 0 });
   const report = await checkDraftAsync(name, v, text, checks);
   const activeRelease = fstore.getActiveRelease(L);
   const profile = (activeRelease?.release.profileHash ? fstore.getProfile(L, activeRelease.release.profileHash) : null) ?? fstore.getProfile(L);

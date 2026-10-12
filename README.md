@@ -38,7 +38,7 @@ atelier tend --skill examples-to-match --auto                 # find what keeps 
 ## Why Atelier?
 
 - **Rules you own.** The standard is hashed and versioned, and only you can change it. Swap the model next month and the rules don't move with it.
-- **Nothing invented.** A made-up story, quote or figure is cut from published writing, never reworded. On product essays no test had used, the claim check caught all 46 planted inventions and left 39 of 48 clean drafts alone.
+- **Nothing invented.** In an essay or a post (`--class`) with your material bound, a made-up story, quote or figure is cut, never reworded; anywhere else it is listed for you to check. On product essays no test had used, the claim check caught all 46 planted inventions and left 39 of 48 clean drafts alone.
 - **A verdict on every output.** Conformant or not, with a plain pass or fail per check, plus what wasn't measured. There's no overall score, because adding the checks up would hide the one that failed.
 - **It improves without drifting.** Atelier searches for better ways to carry your rules and keeps a change only when it measures better. It can never edit a rule, and every release rolls back in one command.
 - **It works where you already work.** A skill for Claude Code or Codex, `npx skills add`, a Cursor or VS Code entry, an MCP server, a CLI guard that exits 1 on a broken rule, or a single-file export for any agent. It covers writing and answers alike: code reviews, financial reports, blog posts, contracts, support replies.
@@ -50,7 +50,7 @@ The same model on the same task, with and without Atelier:
 | Required rules held in full, outside blog test (the author's essays pasted in) | 2 of 9 posts | 7 of 9 posts |
 | Em dashes, invisible characters, copied six-word runs (same test) | not counted | none in any post |
 | Six-word runs copied from the author's pieces, per piece (the pieces given to it) | 97 | 3.6 |
-| An invented story, quote or figure, in published writing | ships as written | cut, never reworded |
+| An invented story, quote or figure, in published writing | ships as written | cut, never reworded, in an essay or post with your material bound; listed anywhere else |
 | Coding answers, the outside benchmark's own judge (no skill) | 3.99 | 4.39 |
 | What you know about an output before you read it | nothing | a pass or fail per check |
 

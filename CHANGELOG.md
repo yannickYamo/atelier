@@ -7,6 +7,42 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: the claim check deletes only with material bound, and never what the standard rests on
+
+A small study on real model runs: twelve plain-language explanations that all keep six habits (one of them a
+single analogy), a skill built from them with every default accepted, ten new requests, no material bound and no
+kind of work named. Outputs failing the examples' own checklist:
+
+| arm | failing |
+|---|---|
+| a six-line rule list and the examples | 1 of 20 |
+| the exported skill, as a plain prompt | 3 of 20 |
+| the examples pasted | 12 of 20 |
+| `atelier invoke` | 5 of 10 |
+
+Four of the five `invoke` failures were deletions: the model wrote the analogy in all ten drafts, and the claim
+check cut it from three as not found in the material, and cut a required closing line from a fourth. Nothing
+reported the loss. With no material there is nothing to check a sentence against, so every specific the writer
+chose read as invented. One standard, written by a model, one run per request: development evidence.
+
+- **A deletion needs material bound and a kind of work the check was measured on.** With no material bound
+  (`atelier material`, `--with`), on a skill that names no kind of work, or on a kind nobody measured, every finding
+  is listed and nothing is cut or failed. The reason is said on the check's line, in the run's verdict and on the
+  skill's card. This reverses the earlier default, under which a skill that named no kind cut as it always had.
+  `--placeholders` still leaves its slots without material: the person asked for them, and a slot hides nothing.
+- **No cut breaks a rule the draft was meeting.** Each deletion is tried against the standard's counted rules
+  first; one that would turn a met rule into a broken one is not made, and the sentence stays, flagged.
+- **The list closes the delivered text only when material is bound.** With none, it is every specific in the
+  text and stays in the report.
+- **Strict delivery** still stops before spending on a named kind the check was not measured on. With no kind
+  named or no material bound it delivers on the rest of the standard, and the verdict says the specifics were
+  listed.
+- **`atelier verify` and the MCP tool** follow the same rule: with nothing bound, an unsourced figure is listed
+  and the check passes; bind material and it fails as before.
+
+Not changed by this: a rule that only a reading can check (the closing line above was one) is not protected by
+the second guard, which reads counted rules only. The reader that flags an analogy as a claim is unchanged.
+
 ### Fixed, for 2.0: the claim check deletes only where its deletions were measured
 
 A test round on real model runs (27 competitive analyses written by one model and read by one claim reader,

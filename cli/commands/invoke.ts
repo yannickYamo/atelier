@@ -56,7 +56,7 @@ import { findOwnershipBreaches, describeBreaches } from '../../core/state/output
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
-import { unmeasuredKind } from '../../core/loop/claim-extract.js';
+import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
@@ -261,12 +261,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const strict = (argv.includes('--strict') || runSettings?.delivery === 'strict') && std !== null && contractFile === null;
   if (argv.includes('--strict') && argv.includes('--no-repair')) die('--strict delivers only a checked output, and --no-repair turns the checks off: drop one of them.');
   const redraws = strict && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--redraws', 2))) : 0;
-  // STRICT NEEDS A MEASURED CLAIM CHECK. On a kind of work nobody measured it on, its findings are listed and
-  // nothing fails on them, so "delivered only when conformant" would promise a check that did not decide. Said
-  // before anything is spent. --allow-unsourced turns the claim check off, and with it this stop.
-  const unmeasuredWork = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
-  if (strict && unmeasuredWork && !argv.includes('--allow-unsourced')) {
-    die(`Strict delivery needs the claim check measured on ${unmeasuredWork}. It is not, so nothing was written. Run without --strict to get a draft with unsourced sentences listed.`);
+  // STRICT NEEDS A CLAIM CHECK THAT DECIDES. On a kind of work the skill names and nobody measured the check on,
+  // its findings are listed and nothing fails on them, so "delivered only when conformant" would promise a check
+  // that did not decide. Said before anything is spent. A skill that names no kind, or a run with no material
+  // bound, has no claim check to wait for: strict holds the rest of the standard, and the verdict says the
+  // specifics were listed and why. --allow-unsourced turns the claim check off, and with it this stop.
+  const materialBound = store.getMaterial(L).length > 0 || boundMaterial().length > 0;
+  const unmeasuredWork = listsBecause({ cls: flag('--class') ?? store.getDocClass(L), bound: materialBound, slots: argv.includes('--placeholders') });
+  const unmeasuredNamed = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
+  if (strict && unmeasuredNamed && !argv.includes('--allow-unsourced')) {
+    die(`Strict delivery needs a claim check that decides, and here the claim check is not measured on ${unmeasuredNamed}. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.`);
   }
   const shapeRounds = Math.max(shapeAsked ? Math.floor(numericFlag('--shape-rounds', 3)) : 0, redraws);
   if (shapeAsked && shapeRounds < 1) die('--shape-rounds must be at least 1: each round is one more draft.');
@@ -512,11 +516,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
 
   reportDrift(report, L, sv, rec);
   // Under strict delivery nothing is printed until the verdict is known.
-  // WHAT A HOST READS IS THE TEXT, NOT THE REPORT. On a kind of work the claim check lists and never cuts, the
-  // sentences it could not find in the material close the delivered text, after everything the checks read;
-  // the record keeps the text without them. --no-unsourced-note leaves the list to the report alone.
-  const listed = unmeasuredWork && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
-  const shipped = listed.length ? `${rec.output.trimEnd()}\n\n---\nNot found in your material (check before you use this):\n${listed.map((c) => `- "${c}"`).join('\n')}` : rec.output;
+  // WHAT A HOST READS IS THE TEXT, NOT THE REPORT. Where material is bound and the claim check lists and never
+  // cuts, the sentences it could not find in the material close the delivered text, after everything the checks
+  // read; the record keeps the text without them. With nothing bound the list is every specific the writer chose,
+  // which tells a reader nothing: it stays in the report. --no-unsourced-note leaves it there in every case.
+  const listed = unmeasuredWork && materialBound && !argv.includes('--no-unsourced-note') ? rec.repair?.claimsToCheck ?? [] : [];
+  const shipped = listed.length ? `${rec.output.trimEnd()}\n\n---\nNot found in what you supplied (check before you use this):\n${listed.map((c) => `- "${c}"`).join('\n')}` : rec.output;
   if (!machine && !strict) console.log(`\n${shipped}\n`);
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
@@ -545,7 +550,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const finalReport = !std || contractFile !== null ? null : kept?.output === rec.output ? kept.report
       : await checkDraftAsync(name, std, rec.output, checks).catch(() => null);
     evaluation = buildRunEval({ L, rec, std, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'),
-      answers: checks.format?.claims === 'list', unmeasured: checks.unmeasured ?? null, profile: fid?.profile ?? null,
+      answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null, profile: fid?.profile ?? null,
       format: { words: formatAsked ?? null, shape, withheld: presentationWithheld }, taste: tasteMonitor, costUsd: spent,
       // Where the cost went (core/inference/client.ts, `SpendPurpose`) and what the writer was sent, in words.
       spend: spentBy,
@@ -1329,7 +1334,8 @@ export function withoutWaiting(veto: ReadonlySet<string>, rules: readonly { rule
  * a prerequisite is matched by name, so a generic "bind your notes" would not have cleared it.
  */
 export function materialLine(v: SatisfiabilityVerdict, materialBound: boolean, guardClaims: boolean, name: string): string | null {
-  const cut = guardClaims ? 'any story, source or figure the draft invents is cut' : null;
+  const cut = !guardClaims ? null : materialBound ? 'any story, source or figure not found in what you bound is cut, or listed where the check is not measured'
+    : 'a story, source or figure in the draft cannot be checked against anything of yours, and is listed for you, not cut';
   if (v.kind === 'DEGRADED') {
     const ids = [...new Set(v.missing.map((m) => m.requirementId))];
     const binds = [...new Set(v.missing.map((m) => `--with ${m.prerequisite.name}=<file>`))];

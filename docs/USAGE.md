@@ -48,7 +48,9 @@ Your stories, figures and sources are yours to supply. A small model reads every
 figures, dates, quotations, attributions, links, and stories told as lived. It says where each one came
 from, and code checks the claim against what you actually gave it: the passage it quotes must be in your
 material, the numbers must be there, and the specific must really be where the reader said it was. Anything
-that doesn't trace is cut and listed, so you can add the real one.
+that doesn't trace is cut and listed, so you can add the real one. That needs your material bound
+(`atelier material`, or `--with`) and a skill whose kind of work is an essay or a post: with no material, or on
+any other kind of work, what doesn't trace is listed and nothing is deleted.
 
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
@@ -142,7 +144,8 @@ LinkedIn posts, with `--class linkedin-post`, and it also holds each post to wha
 For answers rather than published writing (a coding assistant, support replies, review comments), use
 `--class assistant-reply`; `atelier skill` picks it when its rules are about replies. Its answers name
 versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
-you to check, not cut. Everywhere else an invented story, claim of evidence or quotation is cut.
+you to check, not cut. In essays and posts with your material bound, an invented story, claim of evidence or quotation is cut; anywhere
+else it is listed.
 
 A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
 "PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`

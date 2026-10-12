@@ -10,7 +10,7 @@ import * as vstore from '../core/state/voice-store.js';
 import { featureTrait, split } from '../core/voice/transfer.js';
 import { putSkillCard, getSkillCard } from '../core/state/eval-store.js';
 import { isGeneralScope } from '../core/state/canonical-state.js';
-import { QUALIFIED_READERS, unmeasuredKind } from '../core/loop/claim-extract.js';
+import { QUALIFIED_READERS, listsBecause } from '../core/loop/claim-extract.js';
 import { featureOf, LAYER_LABEL } from '../core/observers/features.js';
 import { FORMATS } from '../core/observers/formats.js';
 import { tasteRules } from '../core/taste/reader.js';
@@ -38,7 +38,8 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
   const measured = sensor.qualified && sensor.gate === 'reader' && sensor.version
     ? QUALIFIED_READERS.find((r) => r.version === sensor.version && r.measured && sensor.instrument.includes(r.model))?.measured ?? null : null;
   const cls = store.getDocClass(L);
-  const unmeasured = unmeasuredKind(cls);
+  // The card speaks for the skill as stored: a run that binds material with --with says its own (cli/checks.ts).
+  const unmeasured = listsBecause({ cls, bound: store.getMaterial(L).length > 0 })?.replace('no material was bound to check against', 'no material is stored with the skill (bind it with atelier material, or --with on a run)') ?? null;
   const answers = cls ? (FORMATS as Record<string, { claims?: string } | undefined>)[cls]?.claims === 'list' : false;
   const active = fstore.getActiveRelease(L)?.release ?? null;
   const profile = active?.profileHash ? fstore.getProfile(L, active.profileHash) : fstore.getProfile(L);

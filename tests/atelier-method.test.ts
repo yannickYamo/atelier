@@ -349,7 +349,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
   it('the kind of work was said on the build screen and recorded with the skill, without a question', () => {
     const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', ...BACKEND());
     expect(r.out).toMatch(/Kind of work: asks \(read from your method; --class <kind> to change it\)\. Sentences not found in your material are listed for you to check, never cut/);
-    expect(atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--class', 'essay', ...BACKEND()).out).toMatch(/Kind of work: essay\. Sentences not found in your material are cut/);
+    expect(atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--class', 'essay', ...BACKEND()).out).toMatch(/Kind of work: essay\. With your material bound \(atelier material\), sentences not found in it are cut/);
     expect(readFileSync(join(data, 'skills', 'analysis', 'class.txt'), 'utf8')).toBe('competitive-analysis');
   });
 
@@ -358,17 +358,17 @@ describe('through the binary: atelier method, then a run held to the method', ()
     await script(NEW_PIECE.replace('## Risks\n\n', `## Risks\n\n${story} `));
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', ...BACKEND());
     expect(r.out).toContain(story);
-    expect(r.out).toMatch(/\n---\nNot found in your material \(check before you use this\):\n- "Last week I interviewed 40 of our customers/);
+    expect(r.out).toMatch(/\n---\nNot found in what you supplied \(check before you use this\):\n- "Last week I interviewed 40 of our customers/);
     const quiet = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--no-unsourced-note', ...BACKEND());
     expect(quiet.out).toContain(story);
-    expect(quiet.out).not.toContain('Not found in your material');
+    expect(quiet.out).not.toContain('Not found in what you supplied');
   }, 120_000);
 
   it('strict delivery on a kind of work the claim check is not measured on stops before anything is spent, and says why', async () => {
     const before = await count();
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--strict', ...BACKEND());
     expect(r.code).not.toBe(0);
-    expect(r.err).toContain('Strict delivery needs the claim check measured on competitive-analysis. It is not, so nothing was written. Run without --strict to get a draft with unsourced sentences listed.');
+    expect(r.err).toContain('Strict delivery needs a claim check that decides, and here the claim check is not measured on competitive-analysis. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.');
     expect(await count()).toBe(before);
   });
 

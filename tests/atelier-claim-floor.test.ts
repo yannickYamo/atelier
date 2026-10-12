@@ -7,7 +7,7 @@
 // The drafts below are the three real ones, with the sentences the reader flagged on each.
 import { describe, it, expect } from 'vitest';
 import { checkDraft, enforceClaims, emptyHeadings, brokenByCut, listedClaims, CLAIMS_TO_CHECK } from '../core/loop/run-repair.js';
-import { unmeasuredKind, type ClaimSensor, type ClaimReading } from '../core/loop/claim-extract.js';
+import { unmeasuredKind, listsBecause, type ClaimSensor, type ClaimReading } from '../core/loop/claim-extract.js';
 import { kindOfWork } from '../cli/commands/method.js';
 import type { StandardVersion } from '../core/state/canonical-state.js';
 
@@ -86,6 +86,63 @@ describe('which kinds of work the claim check may cut on', () => {
   });
 });
 
+// A deletion needs both: material bound, and a kind of work a qualification covers. The mini study this pins:
+// twelve explanations, no material and no kind, and the check deleted the author's own kind of analogy.
+describe('the check may delete only with material bound, on a kind it was measured on', () => {
+  it('with no material bound it lists, whatever the kind', () => {
+    for (const cls of [null, '', 'essay', 'blog-post', 'contract', 'competitive-analysis']) expect(listsBecause({ cls, bound: false }), String(cls)).toBe('no material was bound to check against');
+  });
+  it('with material bound, a skill that names no kind lists, and so does a kind nobody measured', () => {
+    expect(listsBecause({ cls: null, bound: true })).toBe('the skill names no kind of work the claim check was measured on');
+    expect(listsBecause({ cls: 'Competitive analysis', bound: true })).toBe('the claim check is not measured on competitive-analysis');
+  });
+  it('--placeholders is the person asking for slots: no material needed, the kind still decides; "none" names no kind', () => {
+    expect(listsBecause({ cls: null, bound: false, slots: true })).toBeNull();
+    expect(listsBecause({ cls: 'essay', bound: false, slots: true })).toBeNull();
+    expect(listsBecause({ cls: 'handover', bound: false, slots: true })).toBe('the claim check is not measured on handover');
+    expect(listsBecause({ cls: 'none', bound: true })).toBe('the skill names no kind of work the claim check was measured on');
+  });
+  it('with material bound on measured prose or a known format, it may cut', () => {
+    for (const cls of ['essay', 'blog posts', 'white-paper', 'contract', 'assistant-reply']) expect(listsBecause({ cls, bound: true }), cls).toBeNull();
+  });
+  it('an analogy the author always makes is kept and listed when nothing was bound', async () => {
+    const piece = 'A battery holds chemicals that want to react.\n\nImagine water held behind a dam on a hillside.\n\nIn short, a battery stores energy as a chemical imbalance.\n';
+    const opts = { claimSensor: reader(['Imagine water held behind a dam on a hillside.', 'In short, a battery stores energy as a chemical imbalance.'], 'SOURCE'), listsBecause: listsBecause({ cls: null, bound: false }) };
+    const e = await enforceClaims('s', STD, piece, opts);
+    expect(e).toMatchObject({ text: piece, cut: [] });
+    expect(listedClaims(e.report)).toHaveLength(2);
+    expect(e.report.failed).toBe(false);
+  });
+});
+
+describe('no cut breaks a rule the draft was meeting', () => {
+  const withRule = { standardVersionHash: 's', requirements: [{ requirementId: 'c1', statement: 'Close in at least twelve words.', authority: 'USER_ADOPTED', materiality: 'REQUIRED', appliesWhen: 'GENERAL', phase: 'STYLE',
+    measurement: { observer: 'CLOSING', params: { minWords: 12 } } }] } as unknown as StandardVersion;
+  const piece = 'A battery holds chemicals that want to react with each other, and it keeps them apart until a wire joins its two ends. Then the particles one end gives away travel round through the lamp to the end that wants them, and that travel is the current you use.\n\nThe middle says how the current flows.\n\nIn short, 40 teams measured a battery storing energy as a chemical imbalance.\n';
+  const closing = 'In short, 40 teams measured a battery storing energy as a chemical imbalance.';
+  it('the closing the standard requires is kept, still flagged, where the check may cut', async () => {
+    expect(checkDraft('s', withRule, piece, { guardClaims: false }).checked.find((c) => c.requirementId === 'c1')?.result.verdict).toBe('MET');
+    const e = await enforceClaims('s', withRule, piece, { claimSensor: reader([closing], 'SOURCE') });
+    expect(e.cut).toEqual([]);
+    expect(e.text).toBe(piece);
+    expect(e.kept).toEqual([closing]);
+    expect(e.report.failed).toBe(true);
+  });
+  it('a preference does not outweigh an invented claim, and a slot the person asked for is still left', async () => {
+    const preferred = { ...withRule, requirements: withRule.requirements.map((q) => ({ ...q, materiality: 'PREFERRED' })) } as unknown as StandardVersion;
+    expect((await enforceClaims('s', preferred, piece, { claimSensor: reader([closing], 'SOURCE') })).cut).toEqual([closing]);
+    const slotted = await enforceClaims('s', withRule, piece, { claimSensor: reader([closing], 'SOURCE'), placeholders: true });
+    expect(slotted.kept).toEqual([]);
+    expect(slotted.text).not.toContain('40 teams');
+  });
+  it('a flagged sentence no rule rests on is cut as before', async () => {
+    const middle = 'The middle says how the current flows.';
+    const e = await enforceClaims('s', withRule, piece, { claimSensor: reader([middle], 'SOURCE') });
+    expect(e.cut).toEqual([middle]);
+    expect(e.text).toContain(closing);
+  });
+});
+
 describe('on a kind of work nobody measured it on, the check lists and never cuts', () => {
   const QUARRY = '## Risks\nBuildbook could add a stone template. A firm that owns Estimata already has its prices typed in.\n';
   const flagged = ['Buildbook could add a stone template.'];
@@ -97,10 +154,10 @@ describe('on a kind of work nobody measured it on, the check lists and never cut
     expect(e.text).not.toContain('stone template');
   });
   it('not measured: nothing fails, nothing is cut, and the sentence is listed with the reason', async () => {
-    const opts = { claimSensor: reader(flagged, 'SOURCE'), unmeasured: 'competitive-analysis' };
+    const opts = { claimSensor: reader(flagged, 'SOURCE'), listsBecause: 'the claim check is not measured on competitive-analysis' };
     const r = checkDraft('s', STD, QUARRY, opts);
     expect(r.failed).toBe(false);
-    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result).toMatchObject({ verdict: 'MET', detail: expect.stringContaining('not measured on competitive-analysis: 1 sentence(s) listed to check, none cut') as string });
+    expect(r.checked.find((c) => c.requirementId === 'UNSOURCED')?.result).toMatchObject({ verdict: 'MET', detail: expect.stringContaining('the claim check is not measured on competitive-analysis: 1 sentence(s) listed to check, none cut') as string });
     expect(r.checked.find((c) => c.requirementId === CLAIMS_TO_CHECK)).toMatchObject({ materiality: 'PREFERRED', statement: expect.stringContaining('never cut, because the claim check is not measured on competitive-analysis') as string });
     expect(listedClaims(r)).toEqual(flagged);
     const e = await enforceClaims('s', STD, QUARRY, opts);
@@ -109,14 +166,14 @@ describe('on a kind of work nobody measured it on, the check lists and never cut
   it('what the patterns find is listed too: no instrument deletes there', async () => {
     const story = 'Last week I interviewed 40 of our customers and 31 of them said they would switch.\n\nThe rest is plain.\n';
     expect(checkDraft('s', STD, story, { material: '' }).failed).toBe(true);
-    const r = checkDraft('s', STD, story, { material: '', unmeasured: 'handover' });
+    const r = checkDraft('s', STD, story, { material: '', listsBecause: 'the claim check is not measured on handover' });
     expect(r.failed).toBe(false);
     expect(listedClaims(r).length).toBeGreaterThan(0);
-    expect((await enforceClaims('s', STD, story, { material: '', unmeasured: 'handover' })).text).toBe(story);
+    expect((await enforceClaims('s', STD, story, { material: '', listsBecause: 'the claim check is not measured on handover' })).text).toBe(story);
   });
   it('the three real drafts keep every sentence and every section', async () => {
     for (const [draft, flags] of [[BEACON, BEACON_FLAGGED], [SALTBOX, SALTBOX_FLAGGED], [PAGEWISE, PAGEWISE_FLAGGED]] as const) {
-      const e = await enforceClaims('s', STD, draft, { claimSensor: reader(flags), unmeasured: 'competitive-analysis' });
+      const e = await enforceClaims('s', STD, draft, { claimSensor: reader(flags), listsBecause: 'the claim check is not measured on competitive-analysis' });
       expect(e.text).toBe(draft);
       expect(listedClaims(e.report)).toHaveLength(flags.length);
     }

@@ -228,8 +228,7 @@ export const isQualified = (model: string, version = READER_VERSION, list: reado
 /**
  * THE KIND OF WORK NOTHING WAS MEASURED ON, or null when the claim check may cut as it always has.
  *
- * Null for a skill that declares no kind (every skill built before kinds were recorded: its behaviour does
- * not change), for a known format (its profile says cut or list), and for a kind a qualification covers.
+ * Null for a skill that declares no kind (`listsBecause`, below, is what decides whether such a skill may cut), for a known format (its profile says cut or list), and for a kind a qualification covers.
  * Any other declared kind returns its name: there every finding, the reader's and the patterns', is listed
  * for the person to check and nothing is deleted, because nobody has measured how often a deletion is wrong.
  */
@@ -240,6 +239,26 @@ export function unmeasuredKind(cls: string | null | undefined, list: readonly Qu
   const one = kind.replace(/s$/, '');
   if (formatOf(kind) ?? formatOf(one)) return null;
   return list.some((q) => [kind, one].some((k) => q.classes?.includes(k))) ? null : kind;
+}
+/**
+ * WHY THE CLAIM CHECK LISTS HERE AND DOES NOT CUT, or null where it may cut.
+ *
+ * A deletion is the one thing the check does that a person cannot undo by reading, so it is made only where two
+ * things hold together. Material is bound (`atelier material`, `--with`): with none, every specific the writer
+ * chose reads as unsourced, and on ten explanations built from twelve examples the check deleted the author's own
+ * kind of analogy from three and a required closing line from a fourth. And the kind of work is one a
+ * qualification covers: a skill that names none says nothing about where its sentences come from. Anywhere else
+ * every finding is listed for the person, and the reason is the one returned here, said wherever the list is.
+ * Decided from what the skill and the run carry, never from a list of cases to spare. `--placeholders` is the
+ * person asking for a visible slot where a story was not theirs: nothing is lost from sight, so it needs no
+ * material, only a kind of work the check was not shown to misread.
+ */
+export function listsBecause(ctx: { readonly cls?: string | null; readonly bound: boolean; readonly slots?: boolean }, list: readonly QualifiedReader[] = QUALIFIED_READERS): string | null {
+  if (ctx.slots) { const k = unmeasuredKind(ctx.cls, list); return k ? `the claim check is not measured on ${k}` : null; }
+  if (!ctx.bound) return 'no material was bound to check against';
+  if (!ctx.cls?.trim() || ctx.cls.trim().toLowerCase() === 'none') return 'the skill names no kind of work the claim check was measured on';
+  const kind = unmeasuredKind(ctx.cls, list);
+  return kind ? `the claim check is not measured on ${kind}` : null;
 }
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));

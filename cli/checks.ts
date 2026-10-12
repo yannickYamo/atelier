@@ -8,10 +8,10 @@
 import type { CheckContext } from '../core/observers/registry.js';
 import * as store from '../core/state/store.js';
 import type { CheckOptions } from '../core/loop/run-repair.js';
-import { modelSensor, patternSensor, unmeasuredKind, type ClaimSensor } from '../core/loop/claim-extract.js';
+import { modelSensor, patternSensor, listsBecause, type ClaimSensor } from '../core/loop/claim-extract.js';
 import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
-import { flag, providerFor, clientAndBinding, DATA } from './runtime.js';
+import { flag, providerFor, clientAndBinding, boundMaterial, DATA } from './runtime.js';
 import { join } from 'node:path';
 import { formatOf } from '../core/observers/formats.js';
 
@@ -112,6 +112,13 @@ export function checksFor(L: store.StoreLayout, opts: {
    * context judge. `atelier score` needs this, so the same text scores the same on every machine.
    */
   readonly offline?: boolean;
+  /**
+   * Is material bound for this output (stored with `atelier material`, or given with the call)? The request is an
+   * instruction, not material. Left out, it is read from the store and the `--with` files.
+   */
+  readonly bound?: boolean;
+  /** the kind of work named for this one check (the MCP tool's `class`), over the flag and the skill's own */
+  readonly cls?: string | null;
 }): CheckOptions {
   const guardClaims = opts.guardClaims ?? true;
   const placeholders = opts.placeholders ?? false;
@@ -124,9 +131,10 @@ export function checksFor(L: store.StoreLayout, opts: {
   const judge = opts.offline ? undefined : opts.judge ?? (guardClaims ? contextJudgeFor() : undefined);
   const sensor = (): ClaimSensor => (opts.offline ? patternSensor(material, placeholders, 'pattern check (offline)')
     : claimSensorFor(material, opts.task ?? '', placeholders, format?.strictSpecifics ?? false));
-  // The kind of work the skill declares, when the claim check was never measured on it: listed, never cut.
-  const unmeasured = unmeasuredKind(flag('--class') ?? store.getDocClass(L));
-  return { material, guardClaims, placeholders, format, ...(unmeasured ? { unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
+  // Where a deletion is not earned (no material bound, or a kind of work nobody measured), findings are listed.
+  const bound = opts.bound ?? (store.getMaterial(L).length > 0 || boundMaterial().length > 0);
+  const unmeasured = listsBecause({ cls: opts.cls ?? flag('--class') ?? store.getDocClass(L), bound, slots: placeholders });
+  return { material, guardClaims, placeholders, format, ...(unmeasured ? { listsBecause: unmeasured } : {}), ...(opts.context ? { context: opts.context } : {}), ...(judge ? { judge } : {}),
     learnedTells: store.activeTells(store.getTells(L)),
     ...(guardClaims ? { claimSensor: sensor() } : {}) };
 }

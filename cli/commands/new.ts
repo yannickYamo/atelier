@@ -81,7 +81,7 @@ export async function newSkill(): Promise<void> {
   // the reader to check, never cut (core/observers/formats.ts).
   else if (mode === 'RESPOND' && !store.getDocClass({ root: DATA, skillName: skillNameFrom(name) })) {
     store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, 'assistant-reply');
-    console.log('Checked as answers (assistant-reply): specifics not in your material are listed for you to check, not cut. (--class none to cut them.)');
+    console.log('Checked as answers (assistant-reply): specifics not in your material are listed for you to check, not cut.');
   }
 
   process.env.ATELIER_ORCHESTRATED = '1';

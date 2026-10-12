@@ -39,7 +39,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 | a skill from rules they state | `atelier skill "<their rules, in their words>"` |
 | new work in that voice | `atelier invoke --skill <name> "<the task>"` (written, checked, repaired, recorded) |
 | to check or fix a text | `atelier verify --skill <name> <file>` (exit 1 = a required rule broken); add `--repair` to fix only what broke |
-| their real stories and figures used | `atelier material --skill <name> <notes.md>`: anything invented is otherwise cut |
+| their real stories and figures used | `atelier material --skill <name> <notes.md>`: with it bound, on a skill built with `--class essay` (or a post), anything invented is cut; otherwise specifics are only listed |
 | to correct the skill | `atelier fix "<what was wrong, in their words>"` |
 | to see where a skill stands | `atelier status --skill <name>` |
 | an agent to check its own output | `atelier setup` adds the MCP server (`atelier mcp`: `atelier_verify`, `atelier_rules`, `atelier_list_skills`, `atelier_skill_report`) to the agents in the project; `--dry-run` shows what it would write |

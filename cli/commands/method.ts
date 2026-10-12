@@ -94,11 +94,11 @@ export async function method(): Promise<void> {
   // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
   const name = ((): string => { try { return skillNameFrom(flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')); } catch { return die('--name <name> required: the method file gives no name a skill can carry.'); } })();
   // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
-  // (essays, posts), a sentence not found in the material is cut; on any other it is listed for the owner to check.
+  // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
   const kind = kindOfWork(note, name);
   console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
     + (unmeasuredKind(kind) ? 'Sentences not found in your material are listed for you to check, never cut: the claim check is measured on essays and posts, not on this.'
-      : 'Sentences not found in your material are cut, as the claim check is measured to do on this kind of writing.'));
+      : 'With your material bound (atelier material), sentences not found in it are cut, as the claim check is measured to do on this kind of writing; with none bound they are listed.'));
   // Said before anything is offered: a command printed as "to accept exactly this" must be one that will be accepted.
   let s = loadSession();
   // A SKILL OF THAT NAME BUILT SOMEWHERE ELSE IS SOMEBODY'S STANDARD. Built again here it would be replaced without a
