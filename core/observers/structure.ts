@@ -131,30 +131,38 @@ export function sectionHeadsOf(text: string, labels: boolean): Heading[] {
     return /^\p{Lu}[\p{L}\p{N} &/'’-]{2,47}$/u.test(t) && t.split(/\s+/).length <= 4 && !opensLikeASentence(t) && !SIGNS_OFF.has(t.split(/\s+/)[0].toLowerCase())
       && (i === 0 || !lines[i - 1].trim()) && (i === lines.length - 1 || !lines[i + 1].trim());
   };
-  const bare: Heading[] = []; const under = new Map<number, number>(); fence = false; let lastBare = -1;
+  // Names in a row with nothing between them are one thing, not several: at the top of a text a title and what
+  // stands under it ("Handover", a name, a team), with the last of them the first section; anywhere else a section
+  // and its one-line answer ("Verdict", then "Approve"). A run with nothing after it is a signature.
+  const bare: Heading[] = []; const under = new Map<number, number>(); fence = false;
+  const candidates: number[] = [];
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i].trim();
     if (/^(```|~~~)/.test(t)) { fence = !fence; continue; }
     const at = starts[i] + lines[i].indexOf(t);
-    if (fence || !isBare(i) || taken.has(at) || out.some((h) => h.start === at)) continue;
-    let j = i + 1; while (j < lines.length && !lines[j].trim()) j++;
+    if (!fence && isBare(i) && !taken.has(at) && !out.some((h) => h.start === at)) candidates.push(i);
+  }
+  const blankBetween = (a: number, b: number): boolean => lines.slice(a + 1, b).every((l) => !l.trim());
+  for (let k = 0; k < candidates.length; k++) {
+    let end = k; while (end + 1 < candidates.length && blankBetween(candidates[end], candidates[end + 1])) end++;
+    const top = lines.slice(0, candidates[k]).every((l) => !l.trim());
+    const i = candidates[top ? end : k];
+    let j = candidates[end] + 1; while (j < lines.length && !lines[j].trim()) j++;
+    k = end;
     if (j >= lines.length) continue;
-    // Two names in a row: the first is the section and the second its short answer ("Verdict", then "Approve"),
-    // unless the first opens the text, where it is the title over the first section.
-    const before = lines.slice(0, i).every((l) => !l.trim());
-    if (isBare(j) && before) continue;
-    if (lastBare !== -1 && lines.slice(lastBare + 1, i).every((l) => !l.trim())) continue;
-    lastBare = i;
+    const t = lines[i].trim(); const at = starts[i] + lines[i].indexOf(t);
     const next = starts[j] + lines[j].indexOf(lines[j].trim());
     if (out.some((h) => h.start === next)) under.set(at, next);
     bare.push({ level: 7, text: t, start: at, end: at + t.length });
   }
   // Three such names and the text is written this way: then a line under one that opens "Notion: $10 per seat ..."
-  // is what the section says, not a section of its own. Fewer, and they are read only beside labels that already
-  // make three, and never over one: "Handover" above "STATUS: amber" is a title.
+  // is what the section says, not a section of its own. A label alone on its line ("**Budget**", "ROLLOUT:") is still
+  // one. Fewer than three, and they are read only beside labels that already make three, and never over one:
+  // "Handover" above "STATUS: amber" is a title.
   if (bare.length >= 3) {
     const first = Math.min(...bare.map((h) => h.start));
-    return [...out.filter((h) => !(h.level === 7 && h.start > first)), ...bare].sort((a, b) => a.start - b.start);
+    const saysMore = (h: Heading): boolean => /[\p{L}\p{N}]/u.test(text.slice(h.end, !text.includes('\n', h.end) ? text.length : text.indexOf('\n', h.end)).replace(/^[\s:*_.]+/, ''));
+    return [...out.filter((h) => !(h.level === 7 && h.start > first && saysMore(h))), ...bare].sort((a, b) => a.start - b.start);
   }
   const beside = bare.filter((h) => !under.has(h.start));
   if (beside.length && beside.length + out.filter((h) => h.level === 7).length >= 3) out.push(...beside);

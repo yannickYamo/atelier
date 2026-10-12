@@ -71,18 +71,28 @@ interface Offer { readonly line: number; readonly fixed: number; readonly rate: 
   /** every amount in it is written as money, or as a percentage: a price, not a count of customers */
   readonly priced: boolean }
 
+/**
+ * EACH AMOUNT OF A LINE IN ONE ROLE. Read in every role, "$49 per month plus $8 per user" gave a team of 12 a price
+ * of $596 (49 x 12 + 8) and of $108, and one line's fee was set against another's rate. A percentage is a rate, and
+ * beside one every amount of money is fixed. Of two amounts with no percentage the larger is fixed and the smaller
+ * the rate. One amount alone may be either: "$1,200 per month" and "$0.40 per box" are written the same way.
+ */
 function offersOf(material: string): Offer[] {
   const out: Offer[] = [];
   material.split('\n').forEach((text, line) => {
     const figures = read(text);
-    if (!figures.length || figures.length > 4) return;
-    for (const r of figures) {
-      const rate = r.percent ? r.value / 100 : r.value;
-      const priced = r.money || r.percent;
-      out.push({ line, fixed: 0, rate, percent: r.percent, priced });
-      for (const f of figures) if (f !== r && !f.percent) out.push({ line, fixed: f.value, rate, percent: r.percent, priced: priced && f.money });
+    const percents = figures.filter((f) => f.percent); const amounts = figures.filter((f) => !f.percent);
+    const priced = amounts.every((f) => f.money);
+    if (!figures.length || percents.length > 1 || amounts.length > 2) return;
+    if (percents.length === 1 && amounts.length <= 1) {
+      out.push({ line, fixed: amounts[0]?.value ?? 0, rate: percents[0].value / 100, percent: true, priced });
+    } else if (!percents.length && amounts.length === 2) {
+      const [big, small] = [...amounts].sort((a, b) => b.value - a.value);
+      out.push({ line, fixed: big.value, rate: small.value, percent: false, priced });
+    } else if (!percents.length && amounts.length === 1) {
+      out.push({ line, fixed: 0, rate: amounts[0].value, percent: false, priced });
+      out.push({ line, fixed: amounts[0].value, rate: 0, percent: false, priced });
     }
-    for (const f of figures) if (!f.percent) out.push({ line, fixed: f.value, rate: 0, percent: false, priced: f.money });
   });
   return out;
 }

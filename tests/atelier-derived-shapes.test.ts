@@ -165,3 +165,19 @@ describe('what a review of the first version found', () => {
     expect(derivedFromKnown('The team has 3 million users.', 'We have 3 seats.')).toBe(false);
   });
 });
+
+// A second review: each amount of a line was read in every role.
+describe('each amount of a line has one role', () => {
+  const tiers = 'Starter: $19 per month.\nPro: $49 per month plus $8 per user.\nBusiness: $199 per month.\nRival A: $12 per user per month.\nRival B: $99 per month.\nCard fee: 1.2% of volume.';
+  it('the fee is the larger amount and the rate the smaller, never the other way round or one without the other', () => {
+    expect(derivedFromKnown('A team of 12 pays us $145 a month on Pro.', tiers)).toBe(true);
+    expect(derivedFromKnown('A team of 12 pays us $596 a month on Pro.', tiers)).toBe(false);
+    expect(derivedFromKnown('A team of 12 pays us $108 a month on Pro.', tiers)).toBe(false);
+    expect(derivedFromKnown('At 10,000 boxes a month we cost $1,000.', M.saltbox)).toBe(false);
+    expect(derivedFromKnown('At 10,000 boxes a month we cost $3,400.', M.saltbox)).toBe(false);
+  });
+  it('beside a card rate the monthly fee is always paid', () => {
+    expect(derivedFromKnown('A cafe on $25,000 a month pays us $625.', M.kettle)).toBe(false);
+    expect(derivedFromKnown('A cafe on $7,531 a month would pay $30.', M.kettle)).toBe(false);
+  });
+});

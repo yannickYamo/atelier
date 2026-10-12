@@ -183,3 +183,12 @@ describe('what a review of the first version found', () => {
     expect(e).toMatchObject({ cut: [], kept: ['An invented one stands here.'] });
   });
 });
+
+describe('what a second review found: a paragraph over a rule, and a sentence in bold, are not headings', () => {
+  it('neither is counted, so neither can keep an invented sentence in', () => {
+    expect(emptyHeadings('## Risks\n\nNone known today.\n---\n## Next\nShip.')).toBe(0);
+    expect(emptyHeadings('Here is the note.\n---\n## Summary\nGood.')).toBe(0);
+    expect(emptyHeadings('## Summary\n\nAll good.\n\n**Thank you for your business.**')).toBe(0);
+    expect(emptyHeadings('## A\nx\n\n**Recommendation: approve the change.**\n\n## B\ny')).toBe(0);
+  });
+});

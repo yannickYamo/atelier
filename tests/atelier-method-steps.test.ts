@@ -192,3 +192,33 @@ describe('what a review of the first version found', () => {
     expect(names('1. NASA. The agency launched it.\n\n2. ESA. The agency tracked it.\n')).toEqual([]);
   });
 });
+
+// A second review of the fixes.
+describe('what a second review found', () => {
+  const names = (t: string): string[] => sectionHeadsOf(t, true).map((h) => h.text);
+  it('a label alone on its line among sections named on a line is still a section', () => {
+    expect(names('Verdict\n\nGo.\n\nEvidence\n\nTests pass.\n\nRisks\n\nFew.\n\n**Budget**\n\nTen.\n\n**Owners**\n\nSam.\n')).toEqual(['Verdict', 'Evidence', 'Risks', 'Budget', 'Owners']);
+    expect(names('Verdict\n\nGo.\n\nEvidence\n\nTests pass.\n\nRisks\n\nFew.\n\nTesting:\nUnit.\n\nRollout:\nFriday.\n')).toEqual(['Verdict', 'Evidence', 'Risks', 'Testing', 'Rollout']);
+  });
+  it('a title, a name and a team above labelled sections, and a signature below them, are not sections', () => {
+    expect(names('Handover\n\nDana Whitfield\n\nPlatform team\n\nSTATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
+    expect(names('STATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n\nAnna Lindqvist\n\nHead of Platform\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
+  });
+  const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Background\nWe met.\n\n## Risks\nFew.\n\n## Next steps\nShip.\n' };
+  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : p.demoted ? 'to settle' : null; };
+  it('"and" joins two sections of a list, not two clauses', () => {
+    expect(check('Include a Summary section, then a Risks section.')).toBe('Summary+Risks');
+    expect(check('Readers skim, and a Summary section helps them.')).toBeNull();
+    expect(check('Keep prose tight and a Summary heading short.')).toBeNull();
+  });
+  it('a section the step names and the example lacks is asked about, not dropped', () => {
+    expect(check('Include a Summary section and a Glossary section.')).toBe('to settle');
+  });
+  it('"provide", "needs" and "there must be" put a section in the work', () => {
+    for (const step of ['Provide a Risks section listing three risks.', 'There must be a Risks section.', 'Each review needs a Risks section.']) expect(check(step), step).toBe('Risks');
+  });
+  // Known, and not read: "with", "in" and "have" also say other things. These three are still tied to the section.
+  it('what is still read wrongly is written down', () => {
+    for (const step of ['Compare it with a Risks section from last quarter.', 'Do the maths in a Background section of the spreadsheet.', 'Earlier drafts would have a Risks section; skip it now.']) expect(check(step), step).not.toBeNull();
+  });
+});

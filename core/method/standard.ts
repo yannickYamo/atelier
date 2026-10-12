@@ -157,7 +157,7 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   // work opens or ends with it. Everything else names it in passing or tells the writer to leave it out ("avoid a
   // Summary section", "add a status line to the footer"), and asks for nothing.
   const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
-  const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'then', 'and'];
+  const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'provide', 'provides', 'need', 'needs', 'be'];
   const EDGE = /\b(?:opens?|starts?|begins?|leads?|ends?|closes?|finish(?:es)?|concludes?) with $/;
   const placed = (sec: string): number => {
     const hits: number[] = [];
@@ -166,6 +166,8 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
       for (let at = low.indexOf(phrase); at !== -1; at = low.indexOf(phrase, at + 1)) {
         const before = low.slice(0, at + 1);
         if (kind === 'line' ? EDGE.test(before) : PUTS.some((w) => before.endsWith(` ${w} `))) hits.push(at);
+        // "and" and "then" carry on a list of sections; alone they join two clauses ("readers skim, and a Summary section helps").
+        else if (kind !== 'line' && /(?: and| then) $/.test(before) && /\b(?:section|heading) (?:and|then) $/.test(before.replace(/\s+/g, ' '))) hits.push(at);
       }
     }
     return hits.length ? Math.min(...hits) : -1;
@@ -178,6 +180,11 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   ].map((m) => ({ verb: m[1].toLowerCase(), name: (m[2] ?? m[3]).trim(), at: m.index })).filter((x) => x.name.length >= 3).sort((a, b) => a.at - b.at);
   // The example's own names decide only when they cover everything the step names outright: "open with a Glossary
   // section and include a Summary section", over an example with no Glossary, is the owner's to settle below.
+  // A section the step names with a capital and the example does not have ("and a Glossary section") is not dropped:
+  // the check asks for it too, the example fails it, and the owner is asked.
+  const outright = [...step.matchAll(/\b(?:an?|one)\s+((?:\p{Lu}[\w'-]*\s?){1,4}?)\s*(?:section|heading)\b/gu)].map((m) => m[1].trim())
+    .filter((n) => !outline.sections.some((sec) => norm(sec) === norm(n)));
+  if (found.length && outright.length && !conditional) return sectionsCheck([...found.map((x) => x.sec), ...outright], outline);
   if (found.length && named.every((x) => found.some((f) => f.name === norm(x.name)))) {
     // Where is said by the verb that introduces the name, and by nothing else.
     const before = (x: { at: number }): string => low.slice(0, x.at + 1);

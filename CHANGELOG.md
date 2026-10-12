@@ -64,7 +64,12 @@ Measured in this round and not changed by it:
   section followed by a one-line answer; a title followed by an introduction is read as a section, so "opens with"
   then fails on it. Markdown headings and labels have neither problem.
 - A worked figure is checked for arithmetic, not for what it counts: an invented amount that happens to equal one
-  offer's total at a number the sentence states is listed as computed.
+  offer's total, or the gap between two, at a number the sentence states is listed as computed. On a price list of
+  six lines that is about 40 amounts in 2,400. A break-even is accepted as a count of anything.
+- A step is tied to a section by a short list of words that put one in the work, and "with", "in" and "have" also
+  say other things: "compare it with a Risks section from last quarter" is still read as asking for one. Two
+  reviews of this round's changes were made and their findings fixed; the second round's fixes were not reviewed
+  again.
 - A step's check cannot yet be set by hand at the build; `atelier amend` is the way. An interrupted search cannot
   be resumed. A task that paraphrases the held-back piece's conclusion, or material that holds it in pieces, is
   not caught before a reproduction run.
