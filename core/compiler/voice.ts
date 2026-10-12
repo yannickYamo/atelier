@@ -41,6 +41,8 @@ export interface Voice {
   readonly standardWording?: readonly string[];
   /** the moves that reading covered, by requirement id: a build reads again only when a move is not among them */
   readonly holdsBackOf?: readonly string[];
+  /** the shortest and the longest of the author's pieces, in prose words (`lengthSpan`): what an output is held to when the request names no length. Kept with the stored voice, never in a package */
+  readonly lengthSpan?: readonly [number, number];
   /** pieces chosen to span the author's modes, served as reference files: whole (`selectVoicePieces`), or as excerpts */
   readonly pieces?: readonly string[];
   /** how `pieces` are shown. Absent: whole, which is every skill built before excerpts existed */
@@ -59,6 +61,12 @@ export function usualLength(pieces: readonly string[]): readonly [number, number
   const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
   const round = (n: number): number => (n < 200 ? Math.max(10, Math.round(n / 10) * 10) : Math.round(n / 100) * 100);
   return lengths.length >= 3 ? [round(quantile(lengths, 0.25)), round(quantile(lengths, 0.75))] as const : null;
+}
+
+/** The shortest and the longest of the author's pieces in prose words; null under three pieces, where one odd piece is a third of the evidence. */
+export function lengthSpan(pieces: readonly string[]): readonly [number, number] | null {
+  const lengths = pieces.map((t) => proseWords(t)).filter((n) => n > 0);
+  return lengths.length >= 3 ? [Math.min(...lengths), Math.max(...lengths)] as const : null;
 }
 
 export const VOICE_PASSAGES = 3;

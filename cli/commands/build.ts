@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -480,8 +480,11 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // written into a package. Where the pieces cannot be read, what an earlier build found is kept.
   const everyPiece = sessionCorpus(null, { includeReserved: true });
   const standardWording = everyPiece.length ? standardWordingOf(everyPiece) : voice?.standardWording ?? [];
-  const { standardWording: _was, ...voiceWithout } = voice ?? {}; void _was;
-  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}) } : voice;
+  // And how long their pieces run, shortest to longest, over the same pieces: what an output is held to when the
+  // request names no length (core/intake/length.ts, `ownLengthBand`). Stored the same way.
+  const span = everyPiece.length ? lengthSpan(everyPiece) : voice?.lengthSpan ?? null;
+  const { standardWording: _was, lengthSpan: _span, ...voiceWithout } = voice ?? {}; void _was; void _span;
+  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span } : {}) } : voice;
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));

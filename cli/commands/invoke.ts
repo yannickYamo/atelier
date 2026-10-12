@@ -50,7 +50,9 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords } from '../../core/eval/size.js';
-import { statedLength, statedLengths, againstStated } from '../../core/intake/length.js';
+import { statedLength, statedLengths, againstStated, ownLengthBand, againstBand } from '../../core/intake/length.js';
+import { proseWords } from '../../core/observers/style.js';
+import { isReplyWork } from '../../core/observers/formats.js';
 import { composeServed } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -146,6 +148,17 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
  * That check IS `deliveryEvidence`. It is also the whole of the DELIVERY_FAILURE route: a tampered
  * or stale artefact is caught here, deterministically, before any model is asked anything.
  */
+/**
+ * WHERE THE AUTHOR'S OWN LENGTH APPLIES. The request states no length and asks for no detail or brevity; it asks
+ * for no shape of its own (code, a list, one line); the skill writes pieces, not answers, whose length belongs to
+ * the request; the request is in the register the pieces are in; and the run is not a contract check or a long
+ * piece planned section by section. Anywhere else the span of the pieces says nothing about this output.
+ */
+export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: boolean; contract: boolean; answers: boolean; outOfRegister: boolean; sections: boolean }): boolean =>
+  !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections;
+/** How many words a count is outside a band; 0 inside it. */
+export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
+
 /** One draft's counts, as `invoke --drafts N` ranks them. */
 export interface DraftScore {
   readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number;
@@ -153,6 +166,8 @@ export interface DraftScore {
   readonly outside?: number; readonly outsideBy?: number;
   /** the style detector's P(model-written), when the skill has one: a tie-breaker, never more */
   readonly detector?: number | null;
+  /** words outside the span of the author's own pieces, when the request names no length (`ownLengthApplies`); absent where that does not apply */
+  readonly lengthOff?: number;
   /** how many of the facts the person supplied the draft uses (../../core/loop/fact-ledger.ts): only supplied facts count */
   readonly facts?: number;
 }
@@ -169,6 +184,9 @@ export const draftOrder = (a: DraftScore, b: DraftScore): number =>
   a.req - b.req || a.taste - b.taste || a.tells - b.tells || a.all - b.all
   // THE AUTHOR'S RANGE, AFTER THE RULES. How many steering features fall outside the range the author's own
   // pieces span, then by how much: never a pull toward their average (core/fidelity/types.ts).
+  // THE LENGTH THEIR PIECES RUN, when the request names none: how many words a draft is outside it. After every
+  // rule, before the finer features: a draft at the author's length that breaks a rule does not win on length.
+  || (a.lengthOff ?? 0) - (b.lengthOff ?? 0)
   || (a.outside ?? 0) - (b.outside ?? 0) || (a.outsideBy ?? 0) - (b.outsideBy ?? 0)
   // THE PERSON'S FACTS USED. Real writing carries more specifics than an imitation written from the same
   // facts; the way to that density is using what was supplied, so only ledger facts count. Specific-looking
@@ -486,6 +504,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // sentence's verdict held for the run by claimMemory) is the one the panel shows: a fresh read of the same text
   // is another sample of a noisy reader, and two samples of one run disagreed (7, 2 and 5 flags in a live test).
   const completions: string[] = [];
+  // THE AUTHOR'S OWN LENGTH, WHERE IT APPLIES (`ownLengthApplies`): one more thing the drafts are chosen by.
+  const ownBand = ownLengthApplies({ stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
+    answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections') })
+    ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
@@ -497,7 +519,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
       planState ? { budget, trace, state: planState } : null)) : null,
-    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
+    std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
@@ -529,6 +551,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
+  if (ownBand) {
+    const written = proseWords(rec.output); const how = againstBand(written, ownBand); const span = store.getVoice(L)!.lengthSpan!;
+    report.say(`Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}${how === 'met' ? '' : `, and this is ${how} of what they span (${ownBand[0]} to ${ownBand[1]})`}.`);
+  }
   if (stated?.unit === 'words' && contractFile === null) {
     const written = countWords(rec.output); const how = againstStated(written, stated);
     report.say(`Length asked: ${stated.raw}. Written: ${written.toLocaleString('en-US')} words${how === 'met' ? '' : ` (${how} of what was asked)`}.`);
@@ -765,7 +791,7 @@ const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
  * distance from the author's signals, and style. A count picks it, never a judge's taste: the reader
  * breaks ties between drafts that break the same REQUIRED rules, and never outranks one.
  */
-function selectDraft(c: DraftContext & { readonly n: number; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
+function selectDraft(c: DraftContext & { readonly n: number; readonly ownBand?: readonly [number, number] | null; readonly signals: ReturnType<typeof store.getSignals>; readonly profile: FidelityProfile | null; readonly trace: FidelityTrace; readonly ledger: readonly Fact[]; readonly variant?: (i: number) => DraftVariant; readonly retrievedFor?: readonly number[][]; readonly sampling?: boolean }) {
   return { n: c.n, ...(c.variant ? { variant: c.variant } : {}), choose: async (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => {
     if (c.variant && written) c.trace.variants = written.map((w) => ({ index: w.index, temperature: w.temperatureSent, retrieved: c.retrievedFor?.[w.index] ?? [] }));
     const tasteMissed = c.taste?.acts ? await c.taste.misses(drafts) : drafts.map(() => 0);
@@ -774,7 +800,7 @@ function selectDraft(c: DraftContext & { readonly n: number; readonly signals: R
     const readings = profile ? drafts.map((d) => readFidelity(d, profile)) : [];
     c.trace.drafts.push(...readings);
     const scored = drafts.map((d, i) => ({ i, ...draftScore(reports[i], c.std, d, c.signals, readings[i] ?? null),
-      ...(c.ledger.length ? { facts: factCoverage(d, c.ledger).used.length } : {}), taste: tasteMissed[i] }));
+      ...(c.ledger.length ? { facts: factCoverage(d, c.ledger).used.length } : {}), ...(c.ownBand ? { lengthOff: wordsOutside(proseWords(d), c.ownBand) } : {}), taste: tasteMissed[i] }));
     scored.sort(draftOrder);
     let best = scored[0];
     // SAMPLED, NOT THE ARGMAX, among the drafts the rules cannot separate (core/fidelity/sampling.ts): drawn by how

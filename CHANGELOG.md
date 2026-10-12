@@ -7,6 +7,26 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: drafts are chosen by the length your pieces run, when the request names none
+
+After the change below, the same ten requests failed on length: the skill told the model "about 200 words", nothing
+checked it, and three outputs ran 238 to 248 words where the twelve examples run 199 to 217.
+
+- **The span of your pieces is recorded at build** (shortest to longest, in prose words), with the stored voice and
+  never in the package, so a rebuild writes the same package bytes.
+- **It applies in one context:** the request states no length, asks for no detail or brevity and no shape of its
+  own; the skill writes pieces, not answers; the request is in the register of your pieces; the run is not a
+  contract check or a piece planned by section. A request that names a length still sets it.
+- **The band is the span widened by its own width on each side** (199 to 217 gives 181 to 235). No number is chosen:
+  an author whose pieces run 300 to 3,000 words gets a band that holds nothing.
+- **Where it applies, the drafts a run already writes are chosen by it,** after every rule and before the finer
+  features of style. No extra draft is written, and the run prints the length it delivered beside your span.
+
+A first version wrote the piece again when it ran outside the band. A review found it re-ran the whole repair chain,
+never showed the model the draft it was told to keep, and would fire on nearly every run of a small, even corpus;
+on the ten requests it fired once (282 words to 242, still outside). It was removed. A redraft for length belongs
+in one step that names everything a draft failed, which is not built.
+
 ### Changed, for 2.0: the claim check deletes only with material bound, and never what the standard rests on
 
 A small study on real model runs: twelve plain-language explanations that all keep six habits (one of them a
