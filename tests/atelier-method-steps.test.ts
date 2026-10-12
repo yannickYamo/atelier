@@ -356,3 +356,73 @@ describe('which example the checks are read from, and which examples a check can
     expect(lines).toMatchObject({ obligation: 'EXECUTION', onExample: 'held in all 2 of your 3 examples it can be read on (those that carry their material)' });
   });
 });
+
+// What the owner states as a count, or as exact words, is held as they said it.
+describe('a rule stated as a count or as quoted words', () => {
+  const sentence = 'You plug it in and the current pushes the charge across to the far side.';
+  const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
+  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? [p.measurement.observer, p.measurement.params] : p.demoted ? 'to settle' : null; };
+  it('a length, in the unit it was stated in', () => {
+    expect(check('Between 100 and 230 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 230 }]);
+    expect(check('Keep it under 2,000 characters.')).toEqual(['LENGTH', { unit: ['characters'], max: 1999 }]);
+    expect(check('Write at least 5 sentences.')).toEqual(['LENGTH', { unit: ['sentences'], min: 5 }]);
+    expect(check('No sentence is longer than 25 words.')).toEqual(['LENGTH', { unit: ['sentence'], max: 25 }]);
+  });
+  it('the words a paragraph starts with, and a word never to use', () => {
+    expect(check('The last paragraph is one short paragraph that starts with "In short,".')).toEqual(['PRESENCE', { in: ['last'], starts: ['In short,'] }]);
+    expect(check('Never use the word "leverage" or "synergy".')).toEqual(['LEXICON', { terms: ['leverage', 'synergy'] }]);
+  });
+  it('a count the example itself breaks is the owner\'s to settle, not a rule', () => {
+    expect(check('Between 300 and 400 words.')).toBe('to settle');
+    expect(check('No sentence is longer than 8 words.')).toBe('to settle');
+  });
+  it('no number and no quoted words, or a rule about when: a judgement', () => {
+    for (const step of ['Keep it short.', 'End on a takeaway the reader can use.', 'About 200 words unless the request asks for more.', 'Use at most 3 sentences when the topic is simple.', 'Speak to the reader as "you".'])
+      expect(check(step), step).toBeNull();
+  });
+  it('the checks read as a person would count', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    expect(measure('One two three. Four five.', { observer: 'LENGTH', params: { unit: ['sentences'], min: 2, max: 3 } })).toMatchObject({ verdict: 'MET', detail: '2 sentences (2 to 3)' });
+    expect(measure('A tweet of thirty-one characters', { observer: 'LENGTH', params: { unit: ['characters'], max: 30 } })).toMatchObject({ verdict: 'VIOLATED', detail: '32 characters (at most 30): long' });
+    const long = measure(`Short one. The ${Array.from({ length: 29 }, (_, i) => `w${i}`).join(' ')}.`, { observer: 'LENGTH', params: { unit: ['sentence'], max: 25 } });
+    expect(long).toMatchObject({ verdict: 'VIOLATED', detail: '1 sentence(s) over 25 words (the longest: 30)' });
+    expect(long.spans).toHaveLength(1);
+  });
+});
+
+// An independent review of the first version: every one of these was read as a rule the owner did not write.
+describe('a count or quoted words are read narrowly', () => {
+  const sentence = 'You plug it in and the current pushes the charge across to the far side.';
+  const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
+  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? [p.measurement.observer, p.measurement.params] : p.demoted ? 'to settle' : null; };
+  it('a negation is never read by its comparator alone', () => {
+    for (const step of ['Never go over 100 words.', 'Do not write more than 100 words.', 'Never under 100 words.', 'Don\'t write less than 50 words.',
+      'The last line never starts with "In conclusion".', 'The first sentence does not begin with "I".', 'The last paragraph cannot begin with "In short,".']) expect(check(step), step).toBeNull();
+  });
+  it('the plain forms are read, both ends where both are given', () => {
+    expect(check('No more than 300 words.')).toEqual(['LENGTH', { unit: ['words'], max: 300 }]);
+    expect(check('No fewer than 3 sentences and no more than 20 sentences.')).toEqual(['LENGTH', { unit: ['sentences'], min: 3, max: 20 }]);
+    expect(check('At least 100 words and at most 200 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 200 }]);
+    expect(check('100–230 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 230 }]);
+  });
+  it('the length of a part is not the length of the work', () => {
+    for (const step of ['Each bullet is at most 12 words.', 'The summary section is under 50 words.', 'Give at most 3 examples of up to 20 words each.', 'The title has no more than 8 words.',
+      'Open with a hook of under 15 words.', 'Include between 2 and 4 sentences of context before the ask.', 'Paragraphs of 3-5 sentences.', '200-300 words per section.',
+      'No more than 2 sentences per paragraph.', 'Under 100 words for replies, under 300 words for posts.', 'Cap the intro at 100 words and the whole piece at 800 words.']) expect(check(step), step).toBeNull();
+  });
+  it('a soft or a conditional wording is a judgement', () => {
+    for (const step of ['Ideally under 200 words.', 'Aim for at most 200 words.', 'Try to stay under 200 words.', 'Typically between 150 and 230 words.', 'Generally no more than 200 words.',
+      'Prefer at most 200 words.', 'At most 200 words, excluding code.', '~150 words, at most 200 words.']) expect(check(step), step).toBeNull();
+  });
+  it('quoted words keep their apostrophe, every alternative is kept, and a ban ends its sentence', () => {
+    expect(check('Never use the phrase "in today\'s world".')).toEqual(['LEXICON', { terms: ['in today\'s world'] }]);
+    expect(check('The last paragraph starts with "In short," or "So,".')).toEqual(['PRESENCE', { in: ['last'], starts: ['In short,', 'So,'] }]);
+    for (const step of ['Never use "very" in headings.', 'Don\'t use "very" twice.', 'Avoid using "we" in the first sentence.', 'Never say "sorry" without a reason.',
+      'The first sentence of the last paragraph starts with "So".']) expect(check(step), step).toBeNull();
+  });
+  it('a length counts characters less front matter, and the longest sentence needs a limit', async () => {
+    const { measure, observerFor } = await import('../core/observers/registry.js');
+    expect(measure('---\ntitle: x\n---\nHello', { observer: 'LENGTH', params: { unit: ['characters'], max: 5 } })).toMatchObject({ verdict: 'MET', detail: '5 characters (at most 5)' });
+    expect(observerFor('LENGTH').validate({ unit: ['sentence'], min: 3 })).toBe('the longest sentence needs max');
+  });
+});

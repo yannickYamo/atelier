@@ -24,6 +24,7 @@ import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { proposalsAcross, stepsOf, type MethodProposal } from '../../core/method/standard.js';
 import { readCase, corpusFiles } from '../corpus.js';
+import { observerFor } from '../../core/observers/registry.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 
@@ -48,7 +49,9 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
       const names = (m.params.sections as readonly string[]).map((n) => `"${n}"`).join(', ');
       return `checks for: ${names.includes(',') ? `the sections ${names}` : `a section ${names}`}, with something in it${m.params.opens ? ', opening the work' : ''}${m.params.closes ? ', ending the work' : ''}${Array.isArray(m.params.options) ? `, starting with one of ${(m.params.options as readonly string[]).map((o) => `"${o}"`).join(', ')} on a line of its own` : ''}${p.byName ? ' (read from your example\'s section names)' : ''}; `;
     }
-    return m?.observer === 'TABLE' && Array.isArray(m.params.columns) ? `checks for: a table with the columns ${(m.params.columns as readonly string[]).join(', ')}; ` : '';
+    if (m?.observer === 'TABLE' && Array.isArray(m.params.columns)) return `checks for: a table with the columns ${(m.params.columns as readonly string[]).join(', ')}; `;
+    // Any other check the step became, in the check's own words: a length, a banned word, how a paragraph starts.
+    return m ? `checks for: ${observerFor(m.observer).describe(m.params)}; ` : '';
   };
   block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}`);
   block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? 'checks for: every path:line cited is a line of the material with something on it (for a diff, a line the change adds); ' : ''}your example: ${p.onExample ?? 'held'}`);

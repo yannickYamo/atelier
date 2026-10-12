@@ -7,6 +7,34 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: a rule stated as a count, or as quoted words, is held as stated
+
+Three tweets and five lines of rules now build a skill with three of the five rules held by code, with no model
+and no minimum corpus: until now a corpus that small switched off nearly every counted check (style features need
+150 words a piece, counted rules 1,000 words in all).
+
+- **A length in the unit it was stated in** (the `LENGTH` check): "between 150 and 230 words", "under 280
+  characters", "at least 5 sentences", "no sentence longer than 25 words".
+- **The words a paragraph starts with:** 'the last paragraph starts with "In short,"'.
+- **A word never to use:** 'never use the word "excited" or "thrilled"'.
+- **Read narrowly.** Only where the step gives the number or quotes the words. Never from a step that says when or
+  says it softly ("unless", "ideally", "aim for", "usually"), from the length of a part ("each bullet", "the
+  title", "per section"), or from a negation other than the plain forms ("no more than", "no fewer than"): "never
+  go over 100 words", read by its comparator alone, is the opposite of what was written. A ban holds only where the
+  quoted words end the sentence. A first version read all of these as rules; a review found them, and each is a
+  test now.
+- **Each is held against every example before it is a rule.** A count the owner's own pieces break is put to them
+  with the piece named, and is not built.
+- **A request that states its own length in the same unit sets it for that run:** the method's is withheld and
+  said. A request for "detail" moves no stated limit.
+
+On the explanations' rule page this holds three of its six rules in code (length, the closing words, the longest
+sentence); "exactly one analogy", "plain paragraphs only" and "speak to the reader as you" stay judgements.
+Built that way from the rule page and the twelve examples, the skill failed 0 of 20 explanations on the standing
+comparison (two runs a task) at $0.08 and 20 seconds an output; the same rule page and examples as a plain prompt
+failed 1 of 20, and the skill discovered from the examples alone 2 of 10 at $0.23. Development evidence: one
+synthetic standard, the builder's checklist, and 0 of 20 cannot be told from 1 of 20.
+
 ### Added, for 2.0: one method and a folder of examples, built in one call
 
 `atelier method <note> --golden <folder>`. A person who has a page of rules and a dozen finished pieces had two

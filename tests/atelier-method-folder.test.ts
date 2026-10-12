@@ -70,3 +70,23 @@ describe('atelier method <note> --golden <folder>', () => {
     expect(r.out).not.toMatch(/Voice: \d/);
   }, 120_000);
 });
+
+describe('three tweets and five lines of rules', () => {
+  it('build with no key, three rules held by code, every tweet passing them', () => {
+    const data = mkdtempSync(join(tmpdir(), 'atelier-tw-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-tw-proj-'));
+    mkdirSync(join(proj, 'tweets'));
+    ['Shipped the fix at 2am. Nobody noticed. That is the job.', 'Your roadmap is a list of guesses. Date the guesses, not the features.', 'Hiring tip: ask what they deleted last quarter. Builders remember.']
+      .forEach((t, i) => { writeFileSync(join(proj, 'tweets', `${i + 1}.md`), `${t}\n`); });
+    writeFileSync(join(proj, 'rules.md'), 'How I write a tweet\n\n- Under 120 characters.\n- Between 2 and 3 sentences.\n- Never use the word "excited" or "thrilled".\n- No hashtags and no emoji.\n- End on the point, not on a question.\n');
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
+    delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+    const out = execFileSync('node', [CLI, 'method', 'rules.md', '--golden', 'tweets', '--name', 'short-posts', '--yes'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    expect(out).toContain('checks for: at most 119 characters; your example: held in all 3 of your examples');
+    expect(out).toContain('checks for: 2 to 3 sentences; your example: held in all 3 of your examples');
+    expect(out).toContain('checks for: none of: excited, thrilled; your example: held in all 3 of your examples');
+    expect(out).toMatch(/Held to your method on every run: 3 thing\(s\) the work must contain, 0 it must be made from; 2 judgement step\(s\)/);
+    expect(out).toContain('Your own pieces: 3 of 3 meet every required rule that is counted.');
+    const skill = readFileSync(join(proj, '.claude', 'skills', 'short-posts', 'SKILL.md'), 'utf8');
+    expect(skill).toContain('Under 120 characters');
+  }, 120_000);
+});

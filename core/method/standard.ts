@@ -115,6 +115,76 @@ function sectionsCheck(sections: readonly string[], outline: ReturnType<typeof o
 }
 
 /**
+ * WHAT THE OWNER STATED AS A COUNT OR AS EXACT WORDS, held as they said it: a length of the whole work in words,
+ * characters or sentences; the longest a sentence may run; the words the first or last paragraph starts with; a
+ * word never to use. Read narrowly, because a rule the owner did not write is worse than a step left to judgement:
+ *
+ *   only where the step gives the number or quotes the words ("keep it short" gives neither);
+ *   never from a step that says when, or says it softly ("unless", "ideally", "aim for", "usually", "about");
+ *   a length only when it is of the whole work: a count of a part ("each bullet", "the title", "per section",
+ *   "3 examples of 20 words") is that part's, and nothing here measures parts;
+ *   never from a negation other than the plain forms ("no more than", "no fewer than", "no sentence"): "never go
+ *   over 100 words" read by its comparator alone is the opposite of what was written;
+ *   a banned word only where the quoted words end the sentence ('never use "very" in headings' bans it somewhere).
+ *
+ * Each is then held against every example before it is a rule (`acrossExamples`): a count the owner's own pieces
+ * break is put to them, not built.
+ */
+function statedCount(step: string): Measurement | null {
+  const SOFT = /\b(?:unless|if|when|whenever|except|sometimes|rarely|optional(?:ly)?|usually|about|around|roughly|approximately|ideally|aim|try|typically|possible|in most cases|generally|prefer(?:ably)?|normally|often|mostly|give or take|rule of thumb|excluding|not counting|depending)\b|~/i;
+  if (SOFT.test(step)) return null;
+  const n = (x: string): number => Number(x.replace(/,/g, ''));
+  // Double quotes hold an apostrophe ("in today's world"); single quotes count only standing clear of a letter.
+  const QUOTED = String.raw`(?:["“]([^"”]{2,40})["”]|(?<![\p{L}])'([^']{2,40})'(?![\p{L}]))`;
+  const quotedIn = (t: string): string[] => [...t.matchAll(new RegExp(QUOTED, 'gu'))].map((m) => (m[1] ?? m[2]).trim());
+  const negated = (t: string): boolean => /\b(?:not|never|cannot|no)\b|n't\b/i.test(t.replace(/\bno (?:more|fewer|longer|sentence)\b/gi, ' '));
+
+  // The longest a sentence may run.
+  const longest = /\bno sentence\b[^.]*?\b(?:longer than|over|more than|above|exceed(?:s|ing)?)\s+(\d[\d,]*)\s+words\b/i.exec(step);
+  if (longest) return negated(step) ? null : { observer: 'LENGTH', params: { unit: ['sentence'], max: n(longest[1]) } };
+
+  // A length of the whole work.
+  const UNIT = String.raw`(words?|characters?|sentences?)`;
+  const unitOf = (u: string): string => (u.toLowerCase().startsWith('word') ? 'words' : u.toLowerCase().startsWith('char') ? 'characters' : 'sentences');
+  const counts = [...step.matchAll(new RegExp(String.raw`\d[\d,]*\s+${UNIT}\b`, 'gi'))];
+  const ofAPart = /\b(?:per|each|every|title|headline|subject line|summary|intro(?:duction)?|hook|bullets?|items?|paragraphs?|sections?|quot(?:e|es|ed|ation)|examples?|captions?|headings?|replies|posts)\b/i.test(step)
+    || counts.some((m) => /^\s+(?:of|in the|for|from|like|by)\b/i.test(step.slice(m.index + m[0].length)));
+  if (counts.length && !ofAPart && !negated(step)) {
+    const between = new RegExp(String.raw`\b(?:between|from)\s+(\d[\d,]*)\s+(?:and|to)\s+(\d[\d,]*)\s+${UNIT}\b`, 'i').exec(step) ?? new RegExp(String.raw`(?<![\d-])(\d[\d,]*)\s*(?:-|–|to)\s*(\d[\d,]*)\s+${UNIT}\b`, 'i').exec(step);
+    if (between) return counts.length === 1 && n(between[1]) <= n(between[2]) ? { observer: 'LENGTH', params: { unit: [unitOf(between[3])], min: n(between[1]), max: n(between[2]) } } : null;
+    // "At least" before "at most", and each taken out once read, so that "no fewer than" is never read as "fewer than".
+    const LEAST = new RegExp(String.raw`\b(at least|no fewer than|a minimum of|minimum of|over|(?<!\bno )more than)\s+(\d[\d,]*)\s+${UNIT}\b`, 'i');
+    const MOST = new RegExp(String.raw`\b(at most|no more than|no longer than|up to|a maximum of|maximum of|under|fewer than|less than|below)\s+(\d[\d,]*)\s+${UNIT}\b`, 'i');
+    const least = LEAST.exec(step); const rest = least ? step.replace(least[0], ' ') : step; const most = MOST.exec(rest);
+    if ((least ? 1 : 0) + (most ? 1 : 0) !== counts.length) return null;
+    if (least && most && unitOf(least[3]) !== unitOf(most[3])) return null;
+    const min = least ? n(least[2]) + (/over|more than/i.test(least[1]) ? 1 : 0) : null;
+    const max = most ? n(most[2]) - (/under|fewer|less|below/i.test(most[1]) ? 1 : 0) : null;
+    const unit = unitOf((least ?? most)?.[3] ?? 'words');
+    if (min !== null && max !== null && min > max) return null;
+    if (min !== null || max !== null) return { observer: 'LENGTH', params: { unit: [unit], ...(min !== null ? { min } : {}), ...(max !== null ? { max } : {}) } };
+    return null;
+  }
+  if (counts.length) return null;
+
+  // The words the first or the last paragraph starts with.
+  const edges = [...step.matchAll(/\b(last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b/gi)];
+  const edge = edges.length === 1 ? new RegExp(String.raw`\b(?:last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b[^.]*?\b(?:starts?|begins?|opens?)\s+with\s+((?:${QUOTED}\s*(?:,|or)?\s*)+)`, 'iu').exec(step) : null;
+  if (edge && !negated(step)) {
+    const starts = quotedIn(edge[1]);
+    if (starts.length) return { observer: 'PRESENCE', params: { in: [/^(?:first|opening)$/i.test(edges[0][1]) ? 'first' : 'last'], starts } };
+  }
+
+  // A word never to use: the quoted words end the sentence, so nothing after them narrows where or how often.
+  const banned = new RegExp(String.raw`\b(?:never|do not|don't|avoid)\s+(?:use|say|write|using|saying|writing)\s+(?:the\s+)?(?:words?|phrases?)?\s*((?:${QUOTED}\s*(?:,|or|and)?\s*)+)[.!]?\s*$`, 'iu').exec(step.trim());
+  if (banned) {
+    const terms = quotedIn(banned[1]).map((t) => t.toLowerCase());
+    if (terms.length) return { observer: 'LEXICON', params: { terms } };
+  }
+  return null;
+}
+
+/**
  * The closed set a step gives a section: "a Verdict section that holds one of: Approve, Request changes, Comment".
  * Two to six short options, read only in the clause that names the section, after a verb that says the section is
  * one of them; a bracketed aside and a trailing "only" are not part of an option. "Name one of the authors" in a
@@ -241,6 +311,8 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
     const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
     if (columnsSaid(best) > 0 || outline.tables.length === 1) return { observer: 'TABLE', params: { columns: best.header.filter(Boolean), minRows: 1 } };
   }
+  const counted = statedCount(step);
+  if (counted) return counted;
   // A step that names the form of a citation ("cite each item as path:line") is held by looking each one up.
   // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
   // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
@@ -269,7 +341,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
       continue;
     }
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
-    if (m.observer === 'PRESENCE') for (const sec of (m.params.sections as readonly string[])) claimedSections.add(norm(sec));
+    if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
     out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null, ...(how.byName ? { byName: true as const } : {}) });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the

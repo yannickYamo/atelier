@@ -428,6 +428,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // like "detailed" were, so the usual length stayed in the prompt and the chapter came back short.
   const stated = statedLength(asked);
   const lengthAsked = intent?.length ?? requestedLength(asked);
+  // A LENGTH THE METHOD STATES IS ITS DEFAULT: a request that states its own, in the same unit, sets it for this run,
+  // and the method's is withheld and said. "A detailed answer" names no number and moves no cap; a request for 600
+  // words says nothing about a limit in characters.
+  if (stated && std) for (const q of std.requirements) {
+    const m = q.measurement; const unit = ((m?.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase();
+    if (m?.observer !== 'LENGTH' || unit !== stated.unit) continue;
+    waived.set(q.requirementId, `the request states its own length (${stated.raw})`);
+    withheld.push(q.statement);
+    report.say(`The request states its own length (${stated.raw}): "${q.statement}" is withheld for this run.`);
+  }
   const lengthLine = lengthAsked || stated ? servedText.split('\n').find((l) => /^My (?:pieces of this kind|answers usually) run about /.test(l.trim())) : undefined;
   if (lengthLine) withheld.push(lengthLine.trim());
   // AND ITS FORMAT, WHEN IT STATES ONE. "Return only the code block" met a learned "end every piece with a

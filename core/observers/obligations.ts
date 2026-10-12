@@ -14,6 +14,8 @@ import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, ObserverResult, Span, CheckContext } from './registry.js';
 import { workedFromMaterial } from '../loop/derived.js';
 import { citedLines } from '../loop/locators.js';
+import { proseWords } from './style.js';
+import { sentencesOf } from './text.js';
 
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -301,6 +303,44 @@ export const LINES: Observer = {
     if (!off.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };
     return { verdict: 'VIOLATED', value: off.length + Math.max(0, min - cited.length), detail,
       spans: off.map((c) => ({ start: c.start, end: c.end, text: text.slice(c.start, c.end), why: `${c.path}:${c.line} is ${c.why}` })) };
+  },
+};
+
+/**
+ * A LENGTH THE OWNER STATED, IN THE UNIT THEY STATED IT: "between 150 and 230 words", "under 280 characters", "two or
+ * three sentences", "no sentence longer than 25 words". Counted the way a person counts: words of prose, characters
+ * of the text as delivered (less front matter), sentences (a list item counts as one); `sentence` is the longest
+ * sentence, in words. Words are words of prose: a heading, a table and a code block are not counted. A stated length is the
+ * method's; a request that names its own length sets it for that run (cli/commands/invoke.ts).
+ */
+export const LENGTH: Observer = {
+  id: 'LENGTH',
+  describe: (p) => {
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    const range = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+    return unit === 'sentence' ? `no sentence over ${hi} words` : `${range} ${unit}`;
+  },
+  validate: (p) => {
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    if (!['words', 'characters', 'sentences', 'sentence'].includes(unit)) return 'unit is words, characters, sentences or sentence';
+    if (lo === null && hi === null) return 'needs min or max';
+    if (unit === 'sentence' && hi === null) return 'the longest sentence needs max';
+    return lo !== null && hi !== null && lo > hi ? 'min cannot exceed max' : null;
+  },
+  observe(text, p): ObserverResult {
+    if (!text.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    if (unit === 'sentence') {
+      const long = sentencesOf(text).filter((s) => hi !== null && s.words > hi);
+      return long.length ? { verdict: 'VIOLATED', value: long.length, detail: `${long.length} sentence(s) over ${hi} words (the longest: ${Math.max(...long.map((s) => s.words))})`,
+        spans: long.map((s) => ({ start: s.start, end: s.end, text: s.text, why: `${s.words} words, where no sentence runs over ${hi}` })) }
+        : { verdict: 'MET', spans: [], value: 0, detail: `no sentence over ${hi} words` };
+    }
+    // Characters of the text as a reader has it: front matter is not part of a post.
+    const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length : proseWords(text);
+    const off = lo !== null && n < lo ? 'short' : hi !== null && n > hi ? 'long' : null;
+    const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${n} ${unit} (${asked})${off ? `: ${off}` : ''}` };
   },
 };
 
