@@ -27,6 +27,7 @@ import type { GoldenCase } from '../golden/case.js';
 import { measure, type CheckContext } from '../observers/registry.js';
 import { headingsOf, sectionHeadsOf } from '../observers/structure.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
+import { citesLines } from '../loop/locators.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
 
@@ -108,8 +109,23 @@ export function outlineOf(reference: string): { sections: string[]; tables: Retu
  * The check that named sections are in the work. Each must hold something: a bare heading is not the section. Where
  * the step says where ("open with", "end with"), the place is part of the check.
  */
-function sectionsCheck(sections: readonly string[], outline: ReturnType<typeof outlineOf>, where: { opens?: boolean; closes?: boolean } = {}): Measurement {
-  return { observer: 'PRESENCE', params: { sections: [...sections], body: 1, ...(where.opens ? { opens: 1 } : {}), ...(where.closes ? { closes: 1 } : {}), ...(outline.labels ? { labels: 1 } : {}) } };
+function sectionsCheck(sections: readonly string[], outline: ReturnType<typeof outlineOf>, where: { opens?: boolean; closes?: boolean; options?: readonly string[] } = {}): Measurement {
+  return { observer: 'PRESENCE', params: { sections: [...sections], body: 1, ...(where.opens ? { opens: 1 } : {}), ...(where.closes ? { closes: 1 } : {}), ...(outline.labels ? { labels: 1 } : {}),
+    ...(where.options?.length && sections.length === 1 ? { options: [...where.options] } : {}) } };
+}
+
+/**
+ * The closed set a step gives a section: "a Verdict section that holds one of: Approve, Request changes, Comment".
+ * Two to six short options, read only in the clause that names the section, after a verb that says the section is
+ * one of them; a bracketed aside and a trailing "only" are not part of an option. "Name one of the authors" in a
+ * later sentence gives the section nothing.
+ */
+function optionsOf(step: string): string[] {
+  const said = /\b(?:section|heading)\b[^.;]*?\b(?:holds?|is|says?|reads?|gives?|states?|contains?|with)\s+(?:exactly\s+|only\s+)?one of(?: these| the following)?\s*:?\s+([^.;]+)/i.exec(step)?.[1];
+  if (!said) return [];
+  const options = said.replace(/\([^)]*\)/g, ' ').split(/\s*,\s*(?:or\s+|and\s+)?|\s+or\s+/)
+    .map((o) => o.replace(/[*_`"“”']/g, '').replace(/\s+only$/i, '').trim()).filter(Boolean);
+  return options.length >= 2 && options.length <= 6 && options.every((o) => o.split(/\s+/).length <= 4) ? options : [];
 }
 
 export interface MethodProposal {
@@ -153,7 +169,16 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
   const VERB = String.raw`(?:[Oo]pen|[Ss]tart|[Bb]egin|[Ll]ead|[Ee]nd|[Cc]lose|[Ff]inish|[Cc]onclude|[Ii]nclude|[Aa]dd|[Ww]rite|[Hh]ave|[Hh]as|[Cc]ontain)`;
   // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
   // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
-  const conditional = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|only for|only|if|when|where|whenever|except|optional(?:ly)?|rarely|sometimes|avoid|without|instead of|rather than|skip|replace)\b/i.test(step);
+  // The condition counts where it is about the section: in the clause that names one, or in a later clause that
+  // points back at it ("skip it for internal notes"). "Then a Suggestions section: improvements that do not block
+  // the merge. Write None when there are none." asks for the section; its "not" and "when" describe what goes in.
+  const COND = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|only for|only|if|when|where|whenever|except|optional(?:ly)?|rarely|sometimes|avoid|without|instead of|rather than|skip|replace)\b/i;
+  // A later clause that only says when is a condition too, though it names nothing: "Only for billing changes.",
+  // "Billing changes only.", "Optional for small changes.", "omit when nothing was cited".
+  const WHEN = /^(?:only|unless|if|when|whenever|except|optional(?:ly)?|rarely|sometimes|skip|omit|leave (?:it )?out|drop)\b|\bonly[.!]?$|\b(?:optional(?:ly)?|omit|skip|leave (?:it )?out|drop)\b/i;
+  // (A later sentence, not what follows a colon: "holds one of: Approve, Request changes, or Comment only." is a list.)
+  const conditional = step.split(/(?<=[.:;!?])\s+/).some((c) => COND.test(c) && /\b(?:sections?|headings?|tables?|parts?|it|its|them)\b/i.test(c))
+    || step.split(/(?<=[.;!?])\s+/).some((c, i) => i > 0 && WHEN.test(c.trim()));
   // WHAT THE EXAMPLE HAS, BY ITS OWN NAME. A wording is one way to say it; "Size the market with a Market size
   // section", "under a Blocking heading" and "an Open issues section" over "OPEN ISSUES:" are others, and each round
   // of testing found one more. A section of the example named in the step, in any case, is that section when the
@@ -164,6 +189,7 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
   const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
   const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'provide', 'provides', 'need', 'needs', 'there must be', 'there is'];
   const EDGE = /\b(?:opens?|starts?|begins?|leads?|ends?|closes?|finish(?:es)?|concludes?) with $/;
+  const sequenced = norm(/^\s*(?:and\s+)?(?:then|next|after that|after it|finally|lastly|last|first|second|third|fourth|fifth),?\s+(?:a|an|one)\s+(.+?)\s+(?:section|heading)\s*(?:[:.;]|$|,?\s*(?:that|which|with|listing|holding|naming|giving)\b)/i.exec(step)?.[1] ?? '');
   const placed = (sec: string): number => {
     const hits: number[] = [];
     for (const art of ['a', 'an', 'one']) for (const kind of ['section', 'heading', 'line']) {
@@ -173,6 +199,10 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
         if (kind === 'line' ? EDGE.test(before) : PUTS.some((w) => before.endsWith(` ${w} `))) hits.push(at);
         // "and" and "then" carry on a list of sections; alone they join two clauses ("readers skim, and a Summary section helps").
         else if (kind !== 'line' && /\b(?:section|heading|line) (?:and then|and|then) $/.test(before)) hits.push(at);
+        // A step that is the next thing in the order: "Then a Must fix section: ...", "Next, a Suggestions section."
+        // Only as the step's first words, and only where the section is all the clause says, or is followed by what
+        // it holds: "Then a Summary section helps the reader" and "First a Background section is tempting" ask for nothing.
+        else if (kind !== 'line' && sequenced === norm(sec) && /^ (?:and )?(?:then|next|after that|after it|finally|lastly|last|first|second|third|fourth|fifth) $/.test(before)) hits.push(at);
       }
     }
     return hits.length ? Math.min(...hits) : -1;
@@ -197,20 +227,24 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
     const before = (x: { at: number }): string => low.slice(0, x.at + 1);
     const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
     const closes = /\b(?:ends?|closes?|finish(?:es)?|concludes?)(?: with)? $/.test(before(found[found.length - 1]));
-    return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1) });
+    return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1), options: optionsOf(step) });
   }
   const sections = named.map((x) => x.name).filter((n, i, all) => all.findIndex((o) => norm(o) === norm(n)) === i);
   if (sections.length) {
     // Where is said by the verb, and by nothing else: "listing the first three risks" says nothing of where.
     const opens = /^(?:open|start|begin|lead)/.test(named[0].verb);
     const closes = /^(?:end|close|finish|conclude)/.test(named[named.length - 1].verb);
-    return sectionsCheck(sections, outline, { opens, closes: closes && !(opens && sections.length === 1) });
+    return sectionsCheck(sections, outline, { opens, closes: closes && !(opens && sections.length === 1), options: optionsOf(step) });
   }
   if (/\btables?\b/i.test(step) && outline.tables.length) {
     const columnsSaid = (t: (typeof outline.tables)[number]): number => t.header.filter((h) => h.length >= 3 && said.includes(` ${norm(h)} `)).length;
     const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
     if (columnsSaid(best) > 0 || outline.tables.length === 1) return { observer: 'TABLE', params: { columns: best.header.filter(Boolean), minRows: 1 } };
   }
+  // A step that names the form of a citation ("cite each item as path:line") is held by looking each one up.
+  // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
+  // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
+  if (citesLines(step) && !/\b(?:do not|don't|never|not|no(?!-)|unless|if|when|where|whenever|except|optional(?:ly)?|avoid|without|instead of|rather than)\b/i.test(step)) return { observer: 'LINES', params: { min: 0 } };
   if (SOURCING.test(step) && ABOUT_FIGURES.test(step)) return { observer: 'CITED', params: { allow: 0 } };
   return null;
 }

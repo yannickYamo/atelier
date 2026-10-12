@@ -19,7 +19,7 @@ import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
-import { TABLE, CITED } from './obligations.js';
+import { TABLE, CITED, LINES } from './obligations.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
@@ -252,7 +252,7 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   PRESENCE,
   FEATURE,
   // ── What a method requires of the work: a table, and figures the writer was given (./obligations.ts) ──
-  TABLE, CITED,
+  TABLE, CITED, LINES,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];

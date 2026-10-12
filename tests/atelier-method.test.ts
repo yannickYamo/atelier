@@ -329,7 +329,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
   }, 120_000);
 
   it('what a draft left out is written again with it named, and the piece that then holds it is the one delivered', async () => {
-    await script(BLAND, [{ contains: 'An earlier draft left out what this work must contain', answer: { piece: NEW_PIECE } }]);
+    await script(BLAND, [{ contains: 'An earlier draft did not hold what this work requires', answer: { piece: NEW_PIECE } }]);
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
     expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+: "[^"]+"; x\d+: "[^"]+"; x\d+: "[^"]+"\); it now leaves out 0\./);

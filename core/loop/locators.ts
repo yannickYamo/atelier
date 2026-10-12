@@ -75,7 +75,7 @@ export function numbered(name: string, text: string): string {
   return rowsOf(name, text).map((r) => (r.at ? `${String(r.at.line).padStart(5)}  ${r.raw}` : r.inHunk ? `       ${r.raw}` : r.raw)).join('\n');
 }
 
-export interface LineCitation { readonly path: string; readonly line: number; readonly why: string | null }
+export interface LineCitation { readonly path: string; readonly line: number; readonly why: string | null; /** where it stands in the work */ readonly start: number; readonly end: number }
 
 const EMPTY = /^[\s{}()[\];,]*$/;
 const sameFile = (cited: string, path: string): boolean => path === cited || path.endsWith(`/${cited}`) || cited.endsWith(`/${path}`);
@@ -101,7 +101,7 @@ export function citedLines(output: string, material: readonly { readonly name: s
     const exact = all.filter((l) => l.path === path); const file = exact.length ? exact : all.filter((l) => sameFile(path, l.path));
     const at = file.filter((l) => l.line === line);
     const whyOf = (l: NumberedLine): string | null => (!l.added ? 'a line the change does not add' : EMPTY.test(l.text) ? 'a blank line or a lone bracket' : null);
-    out.push({ path, line, why: !file.length ? 'no such file in the material' : !at.length ? 'no such line in the material' : at.some((l) => whyOf(l) === null) ? null : whyOf(at[0]) });
+    out.push({ path, line, start: m.index, end: m.index + m[0].length, why: !file.length ? 'no such file in the material' : !at.length ? 'no such line in the material' : at.some((l) => whyOf(l) === null) ? null : whyOf(at[0]) });
   }
   return out;
 }

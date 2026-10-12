@@ -13,6 +13,7 @@
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, ObserverResult, Span, CheckContext } from './registry.js';
 import { workedFromMaterial } from '../loop/derived.js';
+import { citedLines } from '../loop/locators.js';
 
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -279,6 +280,30 @@ export const CITED: Observer = {
   },
 };
 
+/**
+ * EVERY PLACE THE WORK CITES IS A LINE OF WHAT IT WAS GIVEN (../loop/locators.ts). "Cite each item as path:line,
+ * and only lines the diff adds" is a step code can hold: each citation is looked up, and one that names no file of
+ * the material, no line of it, a line the change did not add, a blank line or a lone bracket fails, by name. `min`
+ * citations must be there at all. Whether the cited line is the right one is the writer's judgement, never read
+ * here. Looked up in the bound material and in the request.
+ */
+export const LINES: Observer = {
+  id: 'LINES',
+  describe: (p) => `every path:line cited is a line of the material with something on it${num(p, 'min') ? ` (at least ${num(p, 'min')} cited)` : ''}`,
+  validate: (p) => (num(p, 'min') === null || (num(p, 'min') ?? 0) >= 0 ? null : 'min is a count, zero or more'),
+  observe(text, p, context?: CheckContext): ObserverResult {
+    // The request is somewhere a change can be given too (a diff pasted into the task). With nothing bound and
+    // nothing pasted, a citation points at something nobody gave, and fails as one.
+    const material = [...(context?.request ? [{ name: 'request', text: context.request }] : []), ...(context?.material ?? [])];
+    const cited = citedLines(text, material); const off = cited.filter((c) => c.why !== null); const min = num(p, 'min') ?? 0;
+    const detail = `${cited.length - off.length} of ${cited.length} citation(s) point at a line of the material with something on it`
+      + (off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : '') + (cited.length < min ? `; ${min} needed` : '');
+    if (!off.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };
+    return { verdict: 'VIOLATED', value: off.length + Math.max(0, min - cited.length), detail,
+      spans: off.map((c) => ({ start: c.start, end: c.end, text: text.slice(c.start, c.end), why: `${c.path}:${c.line} is ${c.why}` })) };
+  },
+};
+
 /** What each check reads: the output alone, or the output against what it was made from. */
 export type ObligationTarget = 'OUTPUT' | 'BOUND_MATERIAL';
-export const targetOf = (observer: string): ObligationTarget => (observer === 'CITED' ? 'BOUND_MATERIAL' : 'OUTPUT');
+export const targetOf = (observer: string): ObligationTarget => (observer === 'CITED' || observer === 'LINES' ? 'BOUND_MATERIAL' : 'OUTPUT');

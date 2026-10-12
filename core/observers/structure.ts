@@ -339,6 +339,7 @@ export const PRESENCE: Observer = {
       sections.length && num(p, 'body') ? 'each with something in it' : '',
       sections.length && num(p, 'opens') ? `the text opens with "${sections[0]}"` : '',
       sections.length && num(p, 'closes') ? `the text ends with "${sections[sections.length - 1]}"` : '',
+      sections.length && list(p, 'options').length ? `"${sections[sections.length - 1]}" starts with one of ${list(p, 'options').map((o) => `"${o}"`).join(', ')}, on a line of its own` : '',
       num(p, 'figure') ? `${where} carries a figure` : '',
       starts.length ? `${where} starts with ${starts.map((a) => `"${a}"`).join(' or ')}` : '',
     ].filter(Boolean);
@@ -372,6 +373,15 @@ export const PRESENCE: Observer = {
       // came back with the bare heading added, and read as complete. A word is something: "Risks: none." is a section.
       const empty = num(p, 'body') ? sections.filter((_, i) => at[i] !== -1 && !/[\p{L}\p{N}]/u.test(bodyOf(at[i]))) : [];
       if (empty.length) problems.push(`the ${empty.map((m) => `"${m}"`).join(', ')} section${empty.length === 1 ? ' is' : 's are'} empty`);
+      // ONE OF A CLOSED SET (`options`): "a Verdict section that holds one of: Approve, Request changes, Comment". The
+      // section's first line is one of them and nothing else, whatever case or emphasis it is written in; a reason
+      // may follow on the lines after. "Request changes, mostly" on that line is not one of the three.
+      const options = list(p, 'options'); const lastNamed = at[at.length - 1];
+      if (options.length && lastNamed !== undefined && lastNamed !== -1) {
+        const plain = (x: string): string => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+        const firstLine = bodyOf(lastNamed).split('\n').map((l) => plain(l.replace(/^\s*(?:[-*+>]|\d+[.)])\s+/, ''))).find((l) => l.length) ?? '';
+        if (!options.some((o) => plain(o) === firstLine)) problems.push(`the "${sections[sections.length - 1]}" section does not start with one of ${options.map((o) => `"${o}"`).join(', ')} on a line of its own`);
+      }
       // "OPEN WITH" AND "END WITH" SAY WHERE (`opens`, `closes`): the first section of the text, and the last.
       // Read among sections of its own level and above: a label under a heading does not come "before" the heading's
       // peers. And a section that follows a page of something else does not open the text, whatever came first.

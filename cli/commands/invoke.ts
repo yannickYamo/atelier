@@ -968,7 +968,9 @@ export const STRICT_EXIT = 3;
  */
 function withMethod(refine: (draft: string) => Promise<Delivered>,
   c: { client: InferenceClient; budget: Budget; std: Standard; servedText: string; task: string; notes: string[] } | null) {
-  const must = new Map((c?.std.requirements ?? []).filter((r) => r.obligation === 'DELIVERABLE' && r.measurement && r.materiality === 'REQUIRED').map((r) => [r.requirementId, r.statement]));
+  // And a citation that is not a line of the material (LINES): not a sentence to rewrite either, since the right
+  // number is on the page the writer was given, not in the sentence.
+  const must = new Map((c?.std.requirements ?? []).filter((r) => r.measurement && r.materiality === 'REQUIRED' && (r.obligation === 'DELIVERABLE' || r.measurement.observer === 'LINES')).map((r) => [r.requirementId, r.statement]));
   if (!c || !must.size) return refine;
   const missingIn = (d: Delivered): string[] => d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
@@ -979,7 +981,7 @@ function withMethod(refine: (draft: string) => Promise<Delivered>,
     if (!missing.length) return d;
     try {
       const said = missing.map((id) => `- ${must.get(id) ?? id} (${d.report.checked.find((x) => x.requirementId === id)?.result.detail ?? 'missing'})`).join('\n');
-      const note = `An earlier draft left out what this work must contain:\n${said}\nWrite the whole piece again with each of them in it, in the order the method gives. `
+      const note = `An earlier draft did not hold what this work requires:\n${said}\nWrite the whole piece again so that each of them holds, in the order the method gives. `
         + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.';
       const piece = (await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, note, {})).piece;
       const d2 = await refine(piece);

@@ -52,7 +52,7 @@ describe('a diff is numbered by its hunks, anything else from 1', () => {
 describe('every citation is looked up', () => {
   const material = [{ name: 'diff', text: DIFF }, { name: 'terms.md', text: 'One.\n\nThree.' }];
   it('a line the change adds, with something on it, is a citation; by full path or by the file\'s name', () => {
-    expect(citedLines('- src/users/search.js:43 builds SQL by hand.\n- search.js:42 too.', material)).toEqual([
+    expect(citedLines('- src/users/search.js:43 builds SQL by hand.\n- search.js:42 too.', material)).toMatchObject([
       { path: 'src/users/search.js', line: 43, why: null }, { path: 'search.js', line: 42, why: null }]);
   });
   it('a lone bracket, a line the change did not add, a line or a file that is not there: each is said', () => {
@@ -67,7 +67,7 @@ describe('every citation is looked up', () => {
 // An independent review of the first version.
 describe('what a review of the first version found', () => {
   it('a citation that ends its sentence is a citation', () => {
-    expect(citedLines('The defect is at src/users/search.js:43.', [{ name: 'diff', text: DIFF }])).toEqual([{ path: 'src/users/search.js', line: 43, why: null }]);
+    expect(citedLines('The defect is at src/users/search.js:43.', [{ name: 'diff', text: DIFF }])).toEqual([{ path: 'src/users/search.js', line: 43, why: null, start: 17, end: 39 }]);
   });
   it('a hunk lasts as long as its header says: a second file, a closing fence and prose after it are not code', () => {
     const plain = ['--- a/x.py', '+++ b/x.py', '@@ -1,0 +1,2 @@', '+a = 1', '+b = 2', '--- a/y.py', '+++ b/y.py', '@@ -4,0 +5,1 @@', '+c = 3'].join('\n');
@@ -99,5 +99,49 @@ describe('what a review of the first version found', () => {
     for (const t of ['Line numbers in the margin help a student.', 'Never include line numbers when you cite a file.', 'File: line one is the title.',
       'See http://a.example.com:8080, http://b.example.com:8080 and http://c.example.com:9090.', 'Mail goes to ops@mail.com:25, dev@mail.com:25 and qa@mail.com:25.']) expect(citesLines(t), t).toBe(false);
     expect(citesLines('Cite the line number of each finding.')).toBe(true);
+  });
+});
+
+// The step that asks for it becomes a check, and the redraft that follows a missing section follows a bad citation.
+describe('"cite each item as path:line" is a step code holds', () => {
+  const material = [{ name: 'diff', text: DIFF }];
+  const lines = async (text: string, bound = material) => (await import('../core/observers/registry.js')).measure(text, { observer: 'LINES', params: { min: 1 } }, { request: 'Review this change.', material: bound });
+  it('every citation a line the change adds: met', async () => {
+    expect(await lines('## Must fix\n- src/users/search.js:43 builds SQL by hand.')).toMatchObject({ verdict: 'MET', detail: '1 of 1 citation(s) point at a line of the material with something on it' });
+  });
+  it('a lone bracket, or no citation at all: broken, and said by name', async () => {
+    const r = await lines('## Must fix\n- src/users/search.js:44 builds SQL by hand.');
+    expect(r.verdict).toBe('VIOLATED');
+    expect(r.detail).toContain('not: src/users/search.js:44 (a blank line or a lone bracket)');
+    expect(r.spans.map((s) => s.text)).toEqual(['src/users/search.js:44']);
+    expect(await lines('## Must fix\n- The query is built by hand.')).toMatchObject({ verdict: 'VIOLATED', detail: expect.stringContaining('1 needed') as string });
+  });
+  it('a change pasted into the request is looked up too; a citation of something nobody gave fails', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    expect(measure('search.js:43', { observer: 'LINES', params: { min: 0 } }, { request: `Review this.\n${DIFF}`, material: [] }).verdict).toBe('MET');
+    expect(measure('search.js:43', { observer: 'LINES', params: { min: 0 } }, { request: 'Review this.', material: [] })).toMatchObject({ verdict: 'VIOLATED', detail: expect.stringContaining('no such file in the material') as string });
+  });
+  it('a review with nothing to cite holds "cite each item"', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    expect(measure('## Must fix\nNone.', { observer: 'LINES', params: { min: 0 } }, { request: 'Review this.', material }).verdict).toBe('MET');
+  });
+  it('a numbered or bulleted verdict is still one of them', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    for (const body of ['1. Approve', '- Request changes', '> Comment']) expect(measure(`## Verdict\n${body}\n`, { observer: 'PRESENCE', params: { sections: ['Verdict'], body: 1, options: ['Approve', 'Request changes', 'Comment'] } }).verdict, body).toBe('MET');
+  });
+});
+
+describe('a section that holds one of a closed set', () => {
+  const verdict = async (body: string) => (await import('../core/observers/registry.js')).measure(`## Summary\nIt adds search.\n\n## Verdict\n${body}\n`,
+    { observer: 'PRESENCE', params: { sections: ['Verdict'], body: 1, closes: 1, options: ['Approve', 'Request changes', 'Comment'] } });
+  it('one of them on the section\'s first line, in any case or emphasis, with a reason after it if there is one', async () => {
+    for (const body of ['Request changes', '**Request changes.**', 'approve', 'Comment\n\nThe retry needs a second look.']) expect((await verdict(body)).verdict, body).toBe('MET');
+  });
+  it('more on that line, or another word, is not one of them', async () => {
+    for (const body of ['Request changes, mostly for the query.', 'Changes requested', 'Looks good to me']) {
+      const r = await verdict(body);
+      expect(r.verdict, body).toBe('VIOLATED');
+      expect(r.detail).toContain('does not start with one of "Approve", "Request changes", "Comment" on a line of its own');
+    }
   });
 });

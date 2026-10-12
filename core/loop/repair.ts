@@ -93,7 +93,9 @@ export function planRepair(text: string, report: VerifyReport,
     // `withMethod`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
     // which takes the figure out and claims nothing in its place. Held to keep every figure, the rewrite that cut it
     // was refused and the figure delivered; so that figure, and only it, is what the rewrite may lose.
-    if (c.obligation === 'DELIVERABLE') continue;
+    // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
+    // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another.
+    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
       // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not

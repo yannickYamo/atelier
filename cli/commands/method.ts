@@ -46,12 +46,12 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
     const m = p.measurement;
     if (m?.observer === 'PRESENCE' && Array.isArray(m.params.sections)) {
       const names = (m.params.sections as readonly string[]).map((n) => `"${n}"`).join(', ');
-      return `checks for: ${names.includes(',') ? `the sections ${names}` : `a section ${names}`}, with something in it${m.params.opens ? ', opening the work' : ''}${m.params.closes ? ', ending the work' : ''}${p.byName ? ' (read from your example\'s section names)' : ''}; `;
+      return `checks for: ${names.includes(',') ? `the sections ${names}` : `a section ${names}`}, with something in it${m.params.opens ? ', opening the work' : ''}${m.params.closes ? ', ending the work' : ''}${Array.isArray(m.params.options) ? `, starting with one of ${(m.params.options as readonly string[]).map((o) => `"${o}"`).join(', ')} on a line of its own` : ''}${p.byName ? ' (read from your example\'s section names)' : ''}; `;
     }
     return m?.observer === 'TABLE' && Array.isArray(m.params.columns) ? `checks for: a table with the columns ${(m.params.columns as readonly string[]).join(', ')}; ` : '';
   };
   block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}`);
-  block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `your example: ${p.onExample ?? 'held'}`);
+  block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? 'checks for: every path:line cited is a line of the material with something on it (for a diff, a line the change adds); ' : ''}your example: ${p.onExample ?? 'held'}`);
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
   block('Yours to settle: your method says it, and your example does not hold it', stated.filter((p) => p.demoted), (p) => `${p.demoted}. Kept as a judgement until the method or the example changes.`);
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);

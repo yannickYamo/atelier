@@ -7,6 +7,28 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: three more kinds of method step are held by code
+
+A six-step review method (Summary, Must fix, Suggestions, Verdict, "cite each item as path:line", "name the missing
+test") had two steps checked: the sections it opens and ends with. Now five are.
+
+- **"Then a Must fix section: ..."** A step whose first words give its place in the order (then, next, after that,
+  finally) asks for the section, as "open with" and "end with" do.
+- **A condition counts where it is about the section.** "Then a Suggestions section: improvements that do not
+  block the merge. Write None when there are none." asks for the section; before, its "not" and "when" made the
+  whole step a judgement. "Add a Risks section only when billing is touched" and "skip it for internal notes" are
+  still judgements about when.
+- **"...that holds one of: Approve, Request changes, Comment."** The section's first line is one of them and
+  nothing else, in any case or emphasis; a reason may follow on later lines.
+- **"Cite each item as path:line."** Each citation is looked up in the bound material (the `LINES` check) and one
+  that is no line of it, a line the change did not add, a blank line or a lone bracket fails, by name. A draft that
+  fails it is written again with the failure named, as a draft missing a section is. A change pasted into the
+  request is looked up too, and a review with nothing to fix cites nothing and holds the step. A step that forbids
+  the form, or asks for it only sometimes, stays a judgement.
+
+"Name the missing test" stays a judgement, shown to the writer and reported as not measured. Not measured on a
+model in this round: the two rules above were built after the code-review comparison below was run.
+
 ### Added, for 2.0: a skill that cites lines is shown the line numbers
 
 A second domain for the standing comparison: code review to a six-step method (Summary, Must fix, Suggestions,

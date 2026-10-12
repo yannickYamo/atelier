@@ -258,3 +258,45 @@ describe('on an output, the sections asked for are looked for by name', () => {
     expect(methodProposals('- Include an Open issues section.\n', example)[0]).toMatchObject({ byName: true });
   });
 });
+
+// A fourth round: the code-review method of the standing comparison had two of its six steps checked.
+describe('a step that gives its place in the order, a closed set, or the form of a citation', () => {
+  const example = { task: 'Review this change.', material: [{ name: 'diff', text: '--- a/src/a.js\n+++ b/src/a.js\n@@ -1,0 +1,2 @@\n+const a = 1;\n+run(a);\n' }],
+    reference: '## Summary\nIt adds a runner. It is small.\n\n## Must fix\n- src/a.js:2 runs before the check.\n\n## Suggestions\nNone.\n\n## Glossary\nRunner: the thing that runs.\n\n## Verdict\nRequest changes\n' };
+  const first = (step: string) => methodProposals(`- ${step}\n`, example)[0];
+  const sections = (step: string): string | null => { const m = first(step).measurement; return m?.observer === 'PRESENCE' ? (m.params.sections as string[]).join('+') : null; };
+  it('"Then a Must fix section: ..." asks for the section, and what follows the colon says what goes in it', () => {
+    expect(sections('Then a Must fix section: each item is a defect that blocks the merge, most serious first.')).toBe('Must fix');
+    expect(sections('Then a Suggestions section: improvements that do not block the merge. Write "None." when there are none.')).toBe('Suggestions');
+    expect(sections('Next, a Suggestions section.')).toBe('Suggestions');
+    expect(sections('Write a Summary section. Never more than three sentences.')).toBe('Summary');
+  });
+  it('a sentence that only begins like one asks for nothing', () => {
+    for (const step of ['Then a Summary section helps the reader.', 'Then a Summary section would be redundant.', 'First a Glossary section is tempting; resist it.',
+      'Last a Glossary section was the old way; we link inline now.', 'Second, a Glossary section slows readers down.']) expect(sections(step), step).toBeNull();
+  });
+  it('a condition in a later clause still makes the step a judgement about when', () => {
+    for (const step of ['Add a Glossary section. Only for billing changes.', 'Add a Glossary section. Billing changes only.', 'Include a Glossary section. Optional for small changes.',
+      'Include a Glossary section. For new readers only.', 'End with a Verdict section; omit when nothing was reviewed.', 'Then a Glossary section, unless the change is a doc fix.',
+      'Include a Glossary section if the reader is new: define each term.', 'Include a Glossary section. Skip it for internal notes.']) expect(sections(step), step).toBeNull();
+  });
+  it('"holds one of: A, B, C" is read in the clause that names the section, and nowhere else', () => {
+    const options = (step: string): unknown => first(step).measurement?.params.options ?? null;
+    expect(options('End with a Verdict section that holds one of: Approve, Request changes, Comment.')).toEqual(['Approve', 'Request changes', 'Comment']);
+    expect(options('End with a Verdict section that holds one of: **Approve**, Request changes, or Comment only.')).toEqual(['Approve', 'Request changes', 'Comment']);
+    expect(options('End with a Verdict section that is one of Approve, Request changes or Comment (with a reason).')).toEqual(['Approve', 'Request changes', 'Comment']);
+    expect(options('End with a Verdict section. In the Summary, name one of the authors, the reviewer or the owner.')).toBeNull();
+    expect(options('End with a Verdict section written by one of the leads or their deputy.')).toBeNull();
+    expect(first('End with a Verdict section that holds one of: Approve, Request changes, Comment.')).toMatchObject({ obligation: 'DELIVERABLE', demoted: null });
+  });
+  it('an example whose verdict is none of them is the owner\'s to settle', () => {
+    expect(first('End with a Verdict section that holds one of: Approve, Reject, Comment.')).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, demoted: expect.stringContaining('does not start with one of') as string });
+  });
+  it('"cite each item as path:line" is held by looking each citation up, and asks for none where there is none', () => {
+    expect(first('Cite each Must fix item as path:line, the line number in the new file, and cite only lines the diff adds.')).toMatchObject({ obligation: 'EXECUTION', measurement: { observer: 'LINES', params: { min: 0 } } });
+  });
+  it('a step that forbids the form, or asks for it only sometimes, is a judgement', () => {
+    for (const step of ['Do not cite as path:line; link to the file instead.', 'If a finding is about code, cite it as file:line.', 'Cite each item as path:line where there is one.'])
+      expect(first(step).measurement, step).toBeNull();
+  });
+});
