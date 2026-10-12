@@ -1,0 +1,68 @@
+diff --git a/src/search/paging.py b/src/search/paging.py
+--- a/src/search/paging.py
++++ b/src/search/paging.py
+@@ -64,0 +64,64 @@
++"""Pagination helpers for the search API.
++
++Translates incoming query parameters into offset/limit pairs and
++wraps result sets with navigation metadata.
++"""
++
++DEFAULT_PAGE_SIZE = 25
++FIRST_PAGE = 1
++
++
++def _as_int(raw, fallback):
++    """Coerce a raw query value to an int, falling back on junk input."""
++    if raw is None:
++        return fallback
++    try:
++        return int(str(raw).strip())
++    except (TypeError, ValueError):
++        return fallback
++
++
++def resolve_page(params):
++    """Return the 1-based page number requested by the client."""
++    page = _as_int(params.get("page"), FIRST_PAGE)
++    if page < FIRST_PAGE:
++        page = FIRST_PAGE
++    return page
++
++
++def resolve_page_size(params):
++    """Return the number of rows the client wants per page."""
++    size = _as_int(params.get("per_page"), DEFAULT_PAGE_SIZE)
++    if size < 1:
++        size = DEFAULT_PAGE_SIZE
++    return size
++
++
++def build_window(params):
++    """Compute the (offset, limit) window for a database query."""
++    page = resolve_page(params)
++    size = resolve_page_size(params)
++    return (page - 1) * size, size
++
++
++def total_pages(total_rows, page_size):
++    """Number of pages needed to cover total_rows at page_size each."""
++    if total_rows <= 0:
++        return 0
++    return (total_rows + page_size - 1) // page_size
++
++
++def paginate(rows, total_rows, params):
++    """Attach navigation metadata to an already-sliced result set."""
++    page = resolve_page(params)
++    size = resolve_page_size(params)
++    pages = total_pages(total_rows, size)
++    return {
++        "items": list(rows),
++        "page": page,
++        "per_page": size,
++        "total": total_rows,
++        "pages": pages,
++        "has_next": page < pages,
++        "has_prev": page > FIRST_PAGE,
++    }

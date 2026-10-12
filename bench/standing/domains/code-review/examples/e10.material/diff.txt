@@ -1,0 +1,74 @@
+diff --git a/src/export/zip.py b/src/export/zip.py
+--- a/src/export/zip.py
++++ b/src/export/zip.py
+@@ -108,0 +108,70 @@
++"""Utilities for bundling report artifacts into ZIP archives.
++
++The exporter writes a staging archive to disk first so that large
++reports do not have to be held in memory, then streams the finished
++file back to the caller.
++"""
++
++import os
++import shutil
++import zipfile
++from pathlib import Path
++
++DEFAULT_COMPRESSION = zipfile.ZIP_DEFLATED
++CHUNK_SIZE = 64 * 1024
++
++
++def _staging_path(job_id):
++    """Return the location used while the archive is being assembled."""
++    base = Path(os.environ.get("EXPORT_SPOOL_DIR", "/tmp"))
++    base.mkdir(parents=True, exist_ok=True)
++    return base / "export-{}.zip".format(job_id)
++
++
++def _arcname(root, path):
++    """Compute the in-archive name for *path* relative to *root*."""
++    return str(Path(path).relative_to(root)).replace(os.sep, "/")
++
++
++def collect_files(root, skip_hidden=True):
++    """Yield every regular file beneath *root* in a stable order."""
++    root = Path(root)
++    for current, dirs, files in os.walk(root):
++        if skip_hidden:
++            dirs[:] = sorted(d for d in dirs if not d.startswith("."))
++        else:
++            dirs.sort()
++        for name in sorted(files):
++            if skip_hidden and name.startswith("."):
++                continue
++            yield Path(current) / name
++
++
++def build_archive(root, job_id, compression=DEFAULT_COMPRESSION):
++    """Assemble an archive of *root* and return the path to it."""
++    target = _staging_path(job_id)
++    with zipfile.ZipFile(target, "w", compression) as archive:
++        for path in collect_files(root):
++            archive.write(path, _arcname(root, path))
++    return target
++
++
++def stream_archive(path, destination):
++    """Copy the finished archive into *destination* in fixed-size chunks."""
++    with open(path, "rb") as handle:
++        while True:
++            chunk = handle.read(CHUNK_SIZE)
++            if not chunk:
++                break
++            destination.write(chunk)
++
++
++def export(root, job_id, destination, cleanup=True):
++    """Build an archive for *root* and write it to *destination*."""
++    archive_path = build_archive(root, job_id)
++    try:
++        stream_archive(archive_path, destination)
++    finally:
++        if cleanup:
++            shutil.rmtree(archive_path, ignore_errors=True)
++    return archive_path

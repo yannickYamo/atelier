@@ -20,14 +20,21 @@ const rows = Object.entries(arms).map(([arm, rs]) => {
   const byRule = {};
   for (const c of checked) for (const f of c.fails) { const k = f.split(' ')[0]; byRule[k] = (byRule[k] ?? 0) + 1; }
   return { arm, outputs: rs.length, empty: rs.length - got.length, failing: checked.filter((c) => c.fails.length).length + (rs.length - got.length), byRule,
+    // what a domain's checker reports beside its failures (code review: the defect cited within two lines)
+    near: checked.some((c) => 'near' in c) ? checked.filter((c) => c.near).length : null,
     cuts: got.reduce((a, r) => a + (r.cut ?? []).length, 0), usdPerOutput: got.some((r) => r.costUsd) ? got.reduce((a, r) => a + (r.costUsd ?? 0), 0) / got.length : null,
     secondsPerOutput: got.reduce((a, r) => a + r.seconds, 0) / (got.length || 1) };
 });
 const rate = (a) => { const r = rows.find((x) => x.arm === a); return r ? r.failing / r.outputs : null; };
-const gates = { 'the runtime cut nothing': (rows.find((x) => x.arm === 'invoke')?.cuts ?? 0) === 0,
-  'the runtime fails no more often than its own export': rate('invoke') === null || rate('export') === null ? null : rate('invoke') <= rate('export') };
+// An arm labelled invoke-<x> is the runtime of the skill whose export is export-<x>.
+const gates = {};
+for (const r of rows.filter((x) => x.arm.startsWith('invoke'))) {
+  const twin = r.arm.replace(/^invoke/, 'export');
+  gates[`${r.arm} cut nothing`] = r.cuts === 0;
+  gates[`${r.arm} fails no more often than ${twin}`] = rate(twin) === null ? null : rate(r.arm) <= rate(twin);
+}
 if (process.argv.includes('--json')) console.log(JSON.stringify({ rows, gates }, null, 1));
 else {
-  for (const r of rows) console.log(`${r.arm.padEnd(8)} ${String(r.failing).padStart(3)} of ${String(r.outputs).padEnd(3)} failing  ${Object.entries(r.byRule).map(([k, n]) => `${k}:${n}`).join(' ').padEnd(28)} cuts ${r.cuts}  ${r.usdPerOutput === null ? '' : `$${r.usdPerOutput.toFixed(3)}/output  `}${r.secondsPerOutput.toFixed(0)} s/output`);
+  for (const r of rows) console.log(`${r.arm.padEnd(15)} ${String(r.failing).padStart(3)} of ${String(r.outputs).padEnd(3)} failing  ${Object.entries(r.byRule).map(([k, n]) => `${k}:${n}`).join(' ').padEnd(28)} cuts ${r.cuts}  ${r.near === null ? '' : `near ${r.near}  `}${r.usdPerOutput === null ? '' : `$${r.usdPerOutput.toFixed(3)}/output  `}${r.secondsPerOutput.toFixed(0)} s/output`);
   for (const [name, ok] of Object.entries(gates)) console.log(`${ok === null ? 'not run' : ok ? 'PASS   ' : 'FAIL   '} ${name}`);
 }

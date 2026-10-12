@@ -1,0 +1,78 @@
+diff --git a/src/mail/digest.py b/src/mail/digest.py
+--- a/src/mail/digest.py
++++ b/src/mail/digest.py
+@@ -20,0 +20,74 @@
++"""Digest assembly helpers for the daily mail job.
++
++Builds a plain-text summary of recent activity for a single recipient.
++"""
++
++import datetime
++import textwrap
++
++MAX_SUBJECT_LEN = 72
++SECTION_SEP = "\n" + ("-" * 40) + "\n"
++
++
++def _truncate(text, limit=MAX_SUBJECT_LEN):
++    """Shorten *text* to *limit* characters, adding an ellipsis."""
++    text = " ".join(text.split())
++    if len(text) <= limit:
++        return text
++    return text[: limit - 1].rstrip() + "\u2026"
++
++
++def _format_timestamp(ts):
++    """Render a UTC timestamp the way the mail template expects it."""
++    if isinstance(ts, (int, float)):
++        ts = datetime.datetime.utcfromtimestamp(ts)
++    return ts.strftime("%b %d, %H:%M UTC")
++
++
++def group_by_thread(messages):
++    """Bucket messages by their thread id, preserving arrival order."""
++    threads = {}
++    for message in messages:
++        key = message.get("thread_id") or message["id"]
++        threads.setdefault(key, []).append(message)
++    return threads
++
++
++def render_thread(thread_id, messages):
++    """Render one thread as a short block of text."""
++    head = messages[0]
++    lines = [
++        "Thread %s (%d message(s))" % (thread_id, len(messages)),
++        "  Subject: " + _truncate(head.get("subject", "(no subject)")),
++    ]
++
++    # One bullet per message, oldest first.
++    for i in range(len(messages) - 1):
++        msg = messages[i]
++        stamp = _format_timestamp(msg["received_at"])
++        sender = msg.get("from", "unknown sender")
++        lines.append("    * %s - %s" % (stamp, sender))
++
++    return "\n".join(lines)
++
++
++def build_digest(recipient, messages):
++    """Return the full digest body for *recipient*."""
++    if not messages:
++        return "Hello %s,\n\nNothing new today.\n" % recipient["name"]
++
++    header = textwrap.dedent(
++        """\
++        Hello %s,
++
++        Here is what happened in your inbox since the last digest.
++        """
++        % recipient["name"]
++    )
++
++    blocks = []
++    for thread_id, thread_messages in group_by_thread(messages).items():
++        blocks.append(render_thread(thread_id, thread_messages))
++
++    footer = "You are receiving this because digests are enabled."
++    return header + SECTION_SEP.join(blocks) + SECTION_SEP + footer + "\n"

@@ -7,6 +7,35 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: a skill that cites lines is shown the line numbers
+
+A second domain for the standing comparison: code review to a six-step method (Summary, Must fix, Suggestions,
+Verdict; cite each must-fix item as path:line; one of three verdict words), twelve golden reviews, ten changes
+with one planted defect each. Reviews failing the checklist, whose strictest rule is that the first must-fix item
+cites the defect's exact line:
+
+| arm | failing |
+|---|---|
+| the examples pasted | 20 of 20 |
+| the method and the examples | 20 of 20 |
+| the exported skill as a plain prompt (from twelve examples; from the method and one) | 20 of 20; 20 of 20 |
+| `atelier invoke`, before this change (both skills) | 10 of 10; 10 of 10 |
+| `atelier invoke`, after (from twelve examples; from the method and one) | 1 of 10; 0 of 10 |
+
+Every arm found the defect and miscounted its line: a model does not count lines in a diff. No instruction changes
+that, the method's own included.
+
+- **Material is served with its line numbers when the skill cites lines.** Read from the skill as served: a rule
+  that names the form ("path:line", "the line number"), or examples that cite three or more places. A diff is
+  numbered by its hunks, each added or context line with its number in the new file; any other material from 1.
+  A skill that does not cite lines is served exactly as before. What the checks read is the material as given.
+- **Every citation is looked up** and the run says how many point at a line of the material with something on it
+  (for a diff, a line the change adds), naming those that do not and why. Reported, not enforced.
+
+The comparison is not like for like on this point, and that is the finding: the prompt arms were given the diff as
+a person has it. A person who numbered the lines by hand would close most of the gap. Synthetic changes, one
+checker, one run per change for the runtime arms: development evidence.
+
 ### Added, for 2.0: drafts are chosen by the length your pieces run, when the request names none
 
 After the change below, the same ten requests failed on length: the skill told the model "about 200 words", nothing

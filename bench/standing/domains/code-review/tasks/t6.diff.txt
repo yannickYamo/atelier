@@ -1,0 +1,83 @@
+diff --git a/src/billing/invoice.js b/src/billing/invoice.js
+--- a/src/billing/invoice.js
++++ b/src/billing/invoice.js
+@@ -54,0 +54,79 @@
++'use strict';
++
++const TAX_RATES = {
++  US: 0.07,
++  CA: 0.13,
++  UK: 0.2,
++  DE: 0.19
++};
++
++/**
++ * Rounds a monetary amount to two decimal places.
++ */
++function roundMoney(amount) {
++  return Math.round(amount * 100) / 100;
++}
++
++/**
++ * Computes the net total for a single line item.
++ */
++function lineItemTotal(item) {
++  const gross = item.unitPrice * item.quantity;
++  const discount = gross * (item.discountPct || 0);
++  return roundMoney(gross - discount);
++}
++
++/**
++ * Sums all line items on the invoice.
++ */
++function subtotal(invoice) {
++  let sum = 0;
++  for (const item of invoice.items) {
++    sum += lineItemTotal(item);
++  }
++  return sum;
++}
++
++/**
++ * Applies the regional tax rate to the subtotal.
++ */
++function taxFor(invoice) {
++  const rate = TAX_RATES[invoice.region];
++  if (rate === undefined) {
++    throw new Error('Unknown region: ' + invoice.region);
++  }
++  return roundMoney(subtotal(invoice) * rate);
++}
++
++/**
++ * Full amount owed, taxes included.
++ */
++function invoiceTotal(invoice) {
++  return roundMoney(subtotal(invoice) + taxFor(invoice));
++}
++
++/**
++ * Returns true when the recorded payments cover the invoice exactly.
++ */
++function isSettled(invoice) {
++  const paid = (invoice.payments || []).reduce((acc, p) => acc + p.amount, 0);
++  return paid === invoiceTotal(invoice);
++}
++
++/**
++ * Builds a short summary line for reporting.
++ */
++function describe(invoice) {
++  const status = isSettled(invoice) ? 'PAID' : 'OPEN';
++  return `${invoice.id} [${invoice.region}] ${invoiceTotal(invoice).toFixed(2)} ${status}`;
++}
++
++module.exports = {
++  roundMoney,
++  lineItemTotal,
++  subtotal,
++  taxFor,
++  invoiceTotal,
++  isSettled,
++  describe
++};

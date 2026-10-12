@@ -1,0 +1,78 @@
+diff --git a/src/rate/limiter.js b/src/rate/limiter.js
+--- a/src/rate/limiter.js
++++ b/src/rate/limiter.js
+@@ -53,0 +53,74 @@
++'use strict';
++
++const DEFAULT_WINDOW_MS = 60 * 1000;
++const DEFAULT_MAX = 100;
++
++/**
++ * Token bucket style limiter backed by an in-memory map.
++ * Counters are guarded by a simple promise-chain mutex so that
++ * concurrent requests for the same key cannot interleave.
++ */
++class RateLimiter {
++  constructor(options = {}) {
++    this.windowMs = options.windowMs || DEFAULT_WINDOW_MS;
++    this.max = options.max || DEFAULT_MAX;
++    this.buckets = new Map();
++    this.lock = Promise.resolve();
++  }
++
++  // Serializes `fn` behind the internal mutex.
++  withLock(fn) {
++    const run = this.lock.then(fn, fn);
++    this.lock = run.catch(() => {});
++    return run;
++  }
++
++  bucketFor(key, now) {
++    let bucket = this.buckets.get(key);
++    if (!bucket || now - bucket.start >= this.windowMs) {
++      bucket = { start: now, count: 0 };
++      this.buckets.set(key, bucket);
++    }
++    return bucket;
++  }
++
++  /**
++   * Consume one slot for `key`. Resolves with the remaining quota.
++   * The read-modify-write of bucket.count happens while holding the lock.
++   */
++  consume(key) {
++    const now = Date.now();
++    return this.withLock(() => {
++      const bucket = this.bucketFor(key, now);
++      if (bucket.count >= this.max) {
++        const err = new Error('rate limit exceeded for ' + key);
++        err.retryAfter = bucket.start + this.windowMs - now;
++        throw err;
++      }
++      bucket.count += 1;
++      return this.max - bucket.count;
++    });
++  }
++
++  // Refunds a previously consumed slot, e.g. after a failed upstream call.
++  release(key) {
++    const bucket = this.buckets.get(key);
++    if (!bucket) return;
++    bucket.count = Math.max(0, bucket.count - 1);
++  }
++
++  // Drops buckets whose window has fully elapsed.
++  sweep(now = Date.now()) {
++    for (const [key, bucket] of this.buckets) {
++      if (now - bucket.start >= this.windowMs) {
++        this.buckets.delete(key);
++      }
++    }
++  }
++
++  reset(key) {
++    return this.withLock(() => this.buckets.delete(key));
++  }
++}
++
++module.exports = { RateLimiter, DEFAULT_WINDOW_MS, DEFAULT_MAX };

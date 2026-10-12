@@ -1,0 +1,86 @@
+diff --git a/src/perm/roles.js b/src/perm/roles.js
+--- a/src/perm/roles.js
++++ b/src/perm/roles.js
+@@ -97,0 +97,82 @@
++// Role and permission helpers for the admin console.
++//
++// Roles are stored on the user record as a flat array of strings.
++// Permissions are derived from roles via the ROLE_GRANTS table below.
++
++const ROLE_GRANTS = {
++  viewer: ['read'],
++  editor: ['read', 'write'],
++  auditor: ['read', 'export'],
++  admin: ['read', 'write', 'export', 'manage_users'],
++};
++
++const SUPERUSER_ROLE = 'admin';
++
++/**
++ * Normalize whatever shape the auth layer handed us into a role array.
++ */
++function rolesOf(user) {
++  if (!user || !Array.isArray(user.roles)) {
++    return [];
++  }
++  return user.roles.filter((r) => typeof r === 'string').map((r) => r.trim().toLowerCase());
++}
++
++/**
++ * Collect every permission granted by the user's roles.
++ */
++function permissionsOf(user) {
++  const granted = new Set();
++
++  for (const role of rolesOf(user)) {
++    const grants = ROLE_GRANTS[role] || [];
++    grants.forEach((p) => granted.add(p));
++  }
++
++  return Array.from(granted).sort();
++}
++
++function hasRole(user, role) {
++  return rolesOf(user).includes(role);
++}
++
++function hasPermission(user, permission) {
++  return permissionsOf(user).includes(permission);
++}
++
++/**
++ * Admin access requires the admin role on an account that is still active.
++ */
++function isAdmin(user) {
++  if (!user) {
++    return false;
++  }
++
++  return hasRole(user, SUPERUSER_ROLE) || user.active === true;
++}
++
++/**
++ * Guard used by route handlers; throws instead of returning a boolean so the
++ * error middleware can render a consistent 403 page.
++ */
++function assertCan(user, permission) {
++  if (isAdmin(user)) {
++    return;
++  }
++
++  if (!hasPermission(user, permission)) {
++    const err = new Error(`missing permission: ${permission}`);
++    err.status = 403;
++    throw err;
++  }
++}
++
++module.exports = {
++  ROLE_GRANTS,
++  rolesOf,
++  permissionsOf,
++  hasRole,
++  hasPermission,
++  isAdmin,
++  assertCan,
++};

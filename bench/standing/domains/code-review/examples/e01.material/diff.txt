@@ -1,0 +1,77 @@
+diff --git a/src/orders/refund.js b/src/orders/refund.js
+--- a/src/orders/refund.js
++++ b/src/orders/refund.js
+@@ -9,0 +9,73 @@
++// src/orders/refund.js
++// Handles refund processing for completed orders.
++
++const { findOrder, saveOrder } = require('../db/orders');
++const { createCredit } = require('../payments/gateway');
++const logger = require('../util/logger');
++
++const REFUNDABLE_STATES = ['paid', 'shipped', 'delivered'];
++
++/**
++ * Normalizes a currency amount to cents.
++ */
++function toCents(value) {
++  if (typeof value !== 'number' || Number.isNaN(value)) {
++    throw new TypeError('amount must be a number');
++  }
++  return Math.round(value * 100);
++}
++
++/**
++ * Returns the total already refunded against this order, in cents.
++ */
++function refundedCents(order) {
++  const history = order.refunds || [];
++  return history.reduce((sum, r) => sum + r.amountCents, 0);
++}
++
++function assertRefundable(order) {
++  if (!order) {
++    throw new Error('order not found');
++  }
++  if (!REFUNDABLE_STATES.includes(order.status)) {
++    throw new Error(`order ${order.id} is not refundable (${order.status})`);
++  }
++}
++
++/**
++ * Issues a refund for the given order.
++ *
++ * @param {string} orderId
++ * @param {number} amount - amount in the order's currency
++ * @param {string} reason
++ */
++async function refundOrder(orderId, amount, reason) {
++  const order = await findOrder(orderId);
++  assertRefundable(order);
++
++  const amountCents = toCents(amount);
++  if (amountCents <= 0) {
++    throw new Error('refund amount must be positive');
++  }
++
++  const credit = await createCredit({
++    paymentId: order.paymentId,
++    amountCents,
++    currency: order.currency,
++    reason: reason || 'customer_request'
++  });
++
++  order.refunds = (order.refunds || []).concat({
++    id: credit.id,
++    amountCents,
++    reason,
++    createdAt: new Date().toISOString()
++  });
++  order.status = refundedCents(order) === order.totalCents ? 'refunded' : order.status;
++
++  await saveOrder(order);
++  logger.info('refund issued', { orderId, amountCents, creditId: credit.id });
++  return credit;
++}
++
++module.exports = { refundOrder, refundedCents, toCents };

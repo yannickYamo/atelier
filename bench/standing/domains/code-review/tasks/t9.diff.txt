@@ -1,0 +1,65 @@
+diff --git a/src/report/dates.py b/src/report/dates.py
+--- a/src/report/dates.py
++++ b/src/report/dates.py
+@@ -75,0 +75,61 @@
++"""Date helpers used by the reporting pipeline.
++
++All persisted timestamps are stored in UTC. Helpers here convert them into
++the shapes the report templates expect.
++"""
++
++import datetime as dt
++from typing import Iterable, List, Optional
++
++ISO_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
++DISPLAY_FORMAT = "%b %d, %Y"
++
++
++def parse_timestamp(raw: str) -> dt.datetime:
++    """Parse an ISO-8601 timestamp coming from the API payload."""
++    value = raw.strip().replace("Z", "+00:00")
++    parsed = dt.datetime.fromisoformat(value)
++    if parsed.tzinfo is None:
++        parsed = parsed.replace(tzinfo=dt.timezone.utc)
++    return parsed.astimezone(dt.timezone.utc)
++
++
++def format_for_display(moment: dt.datetime) -> str:
++    """Render a timestamp using the short display format."""
++    return moment.strftime(DISPLAY_FORMAT)
++
++
++def start_of_day(moment: dt.datetime) -> dt.datetime:
++    """Truncate a timestamp down to midnight, preserving the offset."""
++    return moment.replace(hour=0, minute=0, second=0, microsecond=0)
++
++
++def days_between(first: dt.datetime, second: dt.datetime) -> int:
++    """Whole days separating two timestamps, always non-negative."""
++    delta = start_of_day(second) - start_of_day(first)
++    return abs(delta.days)
++
++
++def is_expired(expires_at: dt.datetime) -> bool:
++    """True when the given expiry timestamp is already in the past."""
++    now = dt.datetime.now()
++    return expires_at <= now
++
++
++def next_reporting_window(anchor: dt.datetime, period_days: int = 7) -> dt.datetime:
++    """Return the start of the reporting window following ``anchor``."""
++    if period_days <= 0:
++        raise ValueError("period_days must be positive")
++    return start_of_day(anchor) + dt.timedelta(days=period_days)
++
++
++def filter_recent(moments: Iterable[dt.datetime], max_age_days: int) -> List[dt.datetime]:
++    """Keep only the timestamps newer than ``max_age_days``."""
++    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=max_age_days)
++    return [m for m in moments if m >= cutoff]
++
++
++def earliest(moments: Iterable[dt.datetime]) -> Optional[dt.datetime]:
++    """Smallest timestamp in the sequence, or None when it is empty."""
++    ordered = sorted(moments)
++    return ordered[0] if ordered else None

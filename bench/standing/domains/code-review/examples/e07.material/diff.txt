@@ -1,0 +1,75 @@
+diff --git a/src/profile/cache.js b/src/profile/cache.js
+--- a/src/profile/cache.js
++++ b/src/profile/cache.js
+@@ -75,0 +75,71 @@
++'use strict';
++
++const redis = require('../lib/redis');
++const db = require('../lib/db');
++
++const TTL_SECONDS = 300;
++const NAMESPACE = 'profile';
++
++/**
++ * Build the namespaced key used to store a serialized profile.
++ */
++function buildProfileKey(userId, locale) {
++  return `${NAMESPACE}:v2:${locale}`;
++}
++
++/**
++ * Build the key used for the lightweight avatar record.
++ */
++function buildAvatarKey(userId) {
++  return `${NAMESPACE}:avatar:${userId}`;
++}
++
++function parse(raw) {
++  if (!raw) {
++    return null;
++  }
++
++  try {
++    return JSON.parse(raw);
++  } catch (err) {
++    // Corrupted entry; treat it as a miss and let the caller refill.
++    return null;
++  }
++}
++
++async function getProfile(userId, locale = 'en-US') {
++  const key = buildProfileKey(userId, locale);
++  const cached = parse(await redis.get(key));
++
++  if (cached) {
++    return cached;
++  }
++
++  const profile = await db.profiles.findByUserId(userId);
++  if (!profile) {
++    return null;
++  }
++
++  await redis.setex(key, TTL_SECONDS, JSON.stringify(profile));
++  return profile;
++}
++
++async function getAvatar(userId) {
++  const key = buildAvatarKey(userId);
++  const cached = parse(await redis.get(key));
++
++  if (cached) {
++    return cached;
++  }
++
++  const avatar = await db.avatars.findByUserId(userId);
++  await redis.setex(key, TTL_SECONDS, JSON.stringify(avatar));
++  return avatar;
++}
++
++async function invalidate(userId, locale = 'en-US') {
++  await redis.del(buildProfileKey(userId, locale));
++  await redis.del(buildAvatarKey(userId));
++}
++
++module.exports = { getProfile, getAvatar, invalidate };

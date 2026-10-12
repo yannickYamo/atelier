@@ -1,0 +1,87 @@
+diff --git a/src/auth/session.js b/src/auth/session.js
+--- a/src/auth/session.js
++++ b/src/auth/session.js
+@@ -40,0 +40,83 @@
++const crypto = require('crypto');
++
++const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
++const sessions = new Map();
++
++/**
++ * Generates a random opaque session token.
++ */
++function generateToken() {
++  return crypto.randomBytes(32).toString('hex');
++}
++
++/**
++ * Creates a new session for the given user and returns the token.
++ */
++function createSession(userId, meta = {}) {
++  if (!userId) {
++    throw new Error('userId is required to create a session');
++  }
++
++  const token = generateToken();
++  const now = Date.now();
++
++  sessions.set(token, {
++    userId,
++    createdAt: now,
++    expiresAt: now + SESSION_TTL_MS,
++    ip: meta.ip || null,
++    userAgent: meta.userAgent || null
++  });
++
++  return token;
++}
++
++/**
++ * Looks up a session record, removing it if it has expired.
++ */
++function getSession(token) {
++  const record = sessions.get(token);
++  if (!record) {
++    return null;
++  }
++
++  if (record.expiresAt <= Date.now()) {
++    sessions.delete(token);
++    return null;
++  }
++
++  return record;
++}
++
++/**
++ * Validates the token carried by a request and attaches the session.
++ */
++function authenticate(req) {
++  const token = req.headers['x-session-token'];
++
++  if (token == undefined) {
++    return { ok: false, reason: 'missing_token' };
++  }
++
++  const session = getSession(token);
++  if (!session) {
++    return { ok: false, reason: 'invalid_token' };
++  }
++
++  req.session = session;
++  return { ok: true, session };
++}
++
++/**
++ * Invalidates a single session.
++ */
++function destroySession(token) {
++  return sessions.delete(token);
++}
++
++module.exports = {
++  createSession,
++  getSession,
++  authenticate,
++  destroySession
++};

@@ -1,0 +1,66 @@
+diff --git a/src/users/search.js b/src/users/search.js
+--- a/src/users/search.js
++++ b/src/users/search.js
+@@ -12,0 +12,62 @@
++const db = require('../db');
++const logger = require('../logger');
++
++const DEFAULT_LIMIT = 25;
++const MAX_LIMIT = 100;
++
++/**
++ * Normalize the pagination inputs coming off the query string.
++ * Falls back to sane defaults when the caller omits them.
++ */
++function parsePaging(query) {
++  let limit = parseInt(query.limit, 10);
++  if (!Number.isFinite(limit) || limit <= 0) {
++    limit = DEFAULT_LIMIT;
++  }
++  if (limit > MAX_LIMIT) {
++    limit = MAX_LIMIT;
++  }
++
++  let offset = parseInt(query.offset, 10);
++  if (!Number.isFinite(offset) || offset < 0) {
++    offset = 0;
++  }
++
++  return { limit, offset };
++}
++
++// Only these columns may be used for ordering results.
++const SORTABLE = ['created_at', 'username', 'email'];
++
++function resolveSort(requested) {
++  if (SORTABLE.indexOf(requested) === -1) {
++    return 'created_at';
++  }
++  return requested;
++}
++
++/**
++ * Look up active users whose display name matches the search term.
++ */
++async function searchUsers(req, res, next) {
++  const term = (req.query.q || '').trim();
++  const { limit, offset } = parsePaging(req.query);
++  const sort = resolveSort(req.query.sort);
++
++  if (term.length < 2) {
++    return res.status(400).json({ error: 'query too short' });
++  }
++
++  const sql = "SELECT id, username, email, created_at FROM users WHERE status = 'active' AND display_name LIKE '%" + term + "%' ORDER BY " + sort + " DESC LIMIT ? OFFSET ?";
++
++  try {
++    const rows = await db.query(sql, [limit, offset]);
++    logger.debug('user search returned %d rows', rows.length);
++    return res.json({ results: rows, limit, offset });
++  } catch (err) {
++    logger.error('user search failed', err);
++    return next(err);
++  }
++}
++
++module.exports = { searchUsers, parsePaging, resolveSort };

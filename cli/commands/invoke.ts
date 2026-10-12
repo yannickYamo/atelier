@@ -53,6 +53,7 @@ import { countWords } from '../../core/eval/size.js';
 import { statedLength, statedLengths, againstStated, ownLengthBand, againstBand } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
+import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
 import { composeServed } from '../served.js';
 import { findOwnershipBreaches, describeBreaches } from '../../core/state/output-ownership.js';
 import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/repair-memory.js';
@@ -218,7 +219,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A standard measures one kind of document; asking it for another is refused before anything is spent.
   const cls = checkClass(store.getDocClass(L), flag('--class'));
   if (!cls.ok) die(cls.why);
-  const { material, materialText, task } = taskWithMaterial(L, asked);
+  // A SKILL THAT CITES LINES IS SHOWN THE LINE NUMBERS (core/loop/locators.ts), read from the skill as served.
+  const lineCiting = citesLines(servedText);
+  const { material, materialText, task } = taskWithMaterial(L, asked, lineCiting);
 
   // ── CAN THIS STANDARD BE EXECUTED TRUTHFULLY ON THIS INVOCATION ───────────────────────────
   //
@@ -548,11 +551,16 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
+  if (lineCiting && material.length) {
+    const cited = citedLines(rec.output, material); const off = cited.filter((c) => c.why);
+    report.say(!cited.length ? 'Line citations: none found in the output in the form path:line, though this skill cites lines.'
+      : `Line citations: ${cited.length - off.length} of ${cited.length} point at a line of the material with something on it${off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : ''}.`);
+  }
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
   if (ownBand) {
-    const written = proseWords(rec.output); const how = againstBand(written, ownBand); const span = store.getVoice(L)!.lengthSpan!;
+    const written = proseWords(rec.output); const how = againstBand(written, ownBand); const span = store.getVoice(L)?.lengthSpan ?? ownBand;
     report.say(`Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}${how === 'met' ? '' : `, and this is ${how} of what they span (${ownBand[0]} to ${ownBand[1]})`}.`);
   }
   if (stated?.unit === 'words' && contractFile === null) {
@@ -622,12 +630,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
  * figure in the output may come from. The request itself is material too: a story typed into the task
  * is theirs to tell.
  */
-function taskWithMaterial(L: store.StoreLayout, asked: string): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
+function taskWithMaterial(L: store.StoreLayout, asked: string, lineCiting = false): { material: readonly { name: string; text: string }[]; materialText: string; task: string } {
   const material = [...store.getMaterial(L), ...boundMaterial()];
   const materialText = [asked, ...material.map((m) => m.text)].join('\n\n');
-  const task = material.length
-    ? `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`
-    : asked;
+  // What the checks read is the material as given; what the writer sees, for a skill that cites lines, carries
+  // each line's number, so a citation is read off the page and never counted.
+  const task = !material.length ? asked
+    : lineCiting ? `${asked}\n\n${material.map((m) => `<material name="${m.name}" lines="numbered">\n${numbered(m.name, m.text)}\n</material>`).join('\n\n')}\n\n`
+      + '(Each line of the material is shown with its line number in front of it. When you cite a line, use that number; do not count.)'
+      : `${asked}\n\n${material.map((m) => `<material name="${m.name}">\n${m.text}\n</material>`).join('\n\n')}`;
   return { material, materialText, task };
 }
 

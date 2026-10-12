@@ -1,0 +1,73 @@
+diff --git a/src/stats/average.py b/src/stats/average.py
+--- a/src/stats/average.py
++++ b/src/stats/average.py
+@@ -130,0 +130,69 @@
++"""Utilities for computing simple statistics over numeric samples.
++
++These helpers are used by the reporting layer to summarise measurement
++batches collected from the instrument queue.
++"""
++
++from typing import Iterable, List, Sequence
++
++
++def _coerce(values: Iterable[float]) -> List[float]:
++    """Return the input as a concrete list of floats."""
++    return [float(v) for v in values]
++
++
++def total(values: Iterable[float]) -> float:
++    """Sum the sample, returning 0.0 for an empty sample."""
++    acc = 0.0
++    for value in _coerce(values):
++        acc += value
++    return acc
++
++
++def mean(values: Sequence[float]) -> float:
++    """Arithmetic mean of the sample."""
++    samples = _coerce(values)
++    if not samples:
++        return 0.0
++    return total(samples) / len(samples)
++
++
++def trimmed_mean(values: Sequence[float], trim: int = 1) -> float:
++    """Mean after discarding `trim` items from each end of the sorted sample."""
++    samples = sorted(_coerce(values))
++    if trim > 0:
++        samples = samples[trim:len(samples) - trim]
++    return sum(samples) / len(samples)
++
++
++def weighted_mean(values: Sequence[float], weights: Sequence[float]) -> float:
++    """Mean of `values` scaled by `weights`."""
++    samples = _coerce(values)
++    factors = _coerce(weights)
++    if len(samples) != len(factors):
++        raise ValueError("values and weights must be the same length")
++    mass = total(factors)
++    if mass == 0.0:
++        return 0.0
++    pairs = zip(samples, factors)
++    return sum(v * w for v, w in pairs) / mass
++
++
++def variance(values: Sequence[float]) -> float:
++    """Population variance of the sample."""
++    samples = _coerce(values)
++    if len(samples) < 2:
++        return 0.0
++    centre = mean(samples)
++    squares = [(v - centre) ** 2 for v in samples]
++    return sum(squares) / len(squares)
++
++
++def summarise(values: Sequence[float]) -> dict:
++    """Bundle the common statistics into a single mapping."""
++    return {
++        "count": len(values),
++        "total": total(values),
++        "mean": mean(values),
++        "variance": variance(values),
++    }

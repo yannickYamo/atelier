@@ -1,0 +1,68 @@
+diff --git a/src/cache/store.py b/src/cache/store.py
+--- a/src/cache/store.py
++++ b/src/cache/store.py
+@@ -47,0 +47,64 @@
++"""Simple in-memory cache store with TTL support.
++
++Used by the API layer to avoid repeated upstream lookups.
++"""
++
++import time
++
++
++DEFAULT_TTL = 300
++
++
++class CacheStore:
++    """A dictionary-backed cache with per-entry expiry timestamps."""
++
++    def __init__(self, ttl=DEFAULT_TTL):
++        self.ttl = ttl
++        self._data = {}
++
++    def set(self, key, value, ttl=None):
++        expires = time.time() + (ttl if ttl is not None else self.ttl)
++        self._data[key] = (value, expires)
++        return value
++
++    def get(self, key, default=None):
++        entry = self._data.get(key)
++        if entry is None:
++            return default
++
++        value, expires = entry
++        if expires < time.time():
++            # Lazily evict the stale entry on read.
++            del self._data[key]
++            return default
++
++        return value
++
++    def delete(self, key):
++        return self._data.pop(key, None)
++
++    def purge_expired(self):
++        """Drop every entry whose expiry timestamp has passed."""
++        now = time.time()
++        stale = [k for k, (_, exp) in self._data.items() if exp < now]
++        for key in stale:
++            del self._data[key]
++        return len(stale)
++
++    def keys(self):
++        return list(self._data.keys())
++
++
++def collect_keys(store, prefix, found=[]):
++    """Append keys from the store matching prefix and return the list."""
++    for key in store.keys():
++        if key.startswith(prefix):
++            found.append(key)
++    return found
++
++
++def warm(store, pairs, ttl=None):
++    """Preload a batch of key/value pairs into the store."""
++    for key, value in pairs:
++        store.set(key, value, ttl)
++    return store
