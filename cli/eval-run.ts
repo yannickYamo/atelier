@@ -30,6 +30,8 @@ export interface RunEvalInput {
   readonly claimsOff: boolean;
   /** answers list specifics by design; the patterns decide work and result claims */
   readonly answers: boolean;
+  /** the kind of work, when the claim check was never measured on it (core/loop/claim-extract.ts, `unmeasuredKind`) */
+  readonly unmeasured?: string | null;
   readonly profile: FidelityProfile | null;
   readonly format: { readonly words: string | null; readonly shape: 'SHAPE' | 'BARE' | null; readonly withheld: number };
   readonly taste: EvalSummary['monitors']['taste'];
@@ -75,7 +77,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // The measured rates belong to one model at one prompt version, and only when it is the one deciding (not in an
   // answer, where patterns decide what is cut): no borrowed rates for an unqualified reader or the pattern check.
   const version = x.sensor?.version ?? null;
-  const deciding = x.sensor?.qualified && x.sensor.gate === 'reader' && !x.sensor.degraded && !x.answers;
+  const deciding = x.sensor?.qualified && x.sensor.gate === 'reader' && !x.sensor.degraded && !x.answers && !x.unmeasured;
   const q = deciding && version ? QUALIFIED_READERS.find((r) => r.version === version && r.measured && (x.sensor?.instrument.includes(r.model) ?? false)) : undefined;
   // COPYING: the longest run of words shared with a piece of the author's the skill serves.
   const voice = store.getVoice(x.L);
@@ -142,7 +144,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     result: { conformant: reasons.length === 0, reasons },
     gates: {
       required: { held: req.length - broken.length, applicable: req.length, broken, ...(x.contract ? { contract: true } : {}) },
-      claims: { state, ...counts, agreement, instrument: x.sensor?.instrument ?? null, answers: x.answers,
+      claims: { state, ...counts, agreement, instrument: x.sensor?.instrument ?? null, answers: x.answers, ...(x.unmeasured ? { unmeasured: x.unmeasured } : {}),
         measured: q?.measured ? { caught: q.measured.caught, planted: q.measured.planted, leftAlone: q.measured.leftAlone, clean: q.measured.clean, on: q.measured.on } : null },
       copying: longest === null ? null : { longest, limit: COPY_LIMIT },
       format: { kind: x.format.shape === 'SHAPE' ? 'shape' : x.format.shape === 'BARE' ? 'bare' : 'none', words: x.format.words, withheld: x.format.withheld,

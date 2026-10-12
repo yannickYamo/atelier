@@ -4,7 +4,8 @@
 //                    [--no-reflect] [--promote] [--cap <usd>]
 //   atelier optimize --skill <name> --report
 //
-// One round of the search GEPA and SkillOpt run, hosted where it cannot move the target:
+// One round of a search in the family of GEPA and SkillOpt, and narrower than either (no rewritten text, no pool of
+// candidates kept between rounds, a screen on rule means and not on task instances), hosted where it cannot move the target:
 //
 //   1. PROPOSE   single-gene changes to what the compiler derives (core/optimizer/genome.ts): first by
 //                reflection, a model reading real failures and choosing among legal changes
@@ -235,7 +236,7 @@ export async function optimize(opts: { readonly promote?: boolean } = {}): Promi
 async function reflect(L: store.StoreLayout, v: StandardVersion, legal: readonly Mutation[], attempts: readonly Attempt[], budget: Budget) {
   const rules = new Map(v.requirements.map((r) => [r.requirementId, r]));
   const failures: Failure[] = [];
-  for (const inv of store.listInvocations(L).filter((i) => i.standardVersionHash === v.standardVersionHash).slice(-8)) {
+  for (const inv of store.listLearningInvocations(L).filter((i) => i.standardVersionHash === v.standardVersionHash).slice(-8)) {
     const report = checkDraft(L.skillName, v, inv.repair?.draft ?? inv.output, { guardClaims: false });
     for (const c of report.checked) {
       if (c.result.verdict !== 'VIOLATED') continue;

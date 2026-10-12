@@ -14,6 +14,7 @@
 // them can be undone, and every output names the release that shaped it. The estimate reads the records
 // `invoke` already wrote; only --distill calls a model.
 
+import { namedAsMaterial } from '../../core/golden/case.js';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
@@ -67,7 +68,7 @@ export async function fidelity(): Promise<void> {
   }
   // ONLY WHAT THIS STANDARD AND THIS PROFILE PRODUCED. Outputs under an earlier standard, or read against an
   // earlier profile, are about another target.
-  const records = store.listInvocations(L).flatMap((r) => (r.fidelity?.reading && r.standardVersionHash === from.standardVersionHash && r.fidelity.profileHash === profile.hash
+  const records = store.listLearningInvocations(L).flatMap((r) => (r.fidelity?.reading && r.standardVersionHash === from.standardVersionHash && r.fidelity.profileHash === profile.hash
     ? [{ ...r, reading: r.fidelity.reading }] : []));
   if (argv.includes('--distill')) { await distill(L, from, records); return; }
   if (argv.includes('--typicality')) { reportCloseness(L, profile.hash, records); return; }
@@ -304,7 +305,9 @@ function ownPieces(dir: string): { id: string; text: string }[] {
     }
   }
   const all = readdirSync(dir).filter((f) => /\.(md|markdown|txt)$/i.test(f)).sort();
-  const kept = all.filter((f) => !reserved.has(f));
+  // What an example was made from is not one of the author's pieces (core/golden/case.ts).
+  const material = namedAsMaterial(all.map((f) => ({ name: f, raw: readFileSync(join(dir, f), 'utf8') })));
+  const kept = all.filter((f) => !reserved.has(f) && !material.has(f));
   if (kept.length < all.length) console.log(`Left out ${all.length - kept.length} reserved piece(s): they stay the blind comparison.`);
   return kept.map((f) => ({ id: idOf.get(f) ?? f, text: readFileSync(join(dir, f), 'utf8') }));
 }

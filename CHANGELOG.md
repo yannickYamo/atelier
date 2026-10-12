@@ -7,6 +7,291 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: the claim check deletes only where its deletions were measured
+
+A test round on real model runs (27 competitive analyses written by one model and read by one claim reader,
+synthetic briefs, labels by one reader who was not blind) found the invented-claim check doing harm outside the
+writing it was measured on. It cut 41 sentences; 32 were legitimate by that reading (correct arithmetic from the
+price list, the work's own verdict, a risk with no figure in it), and 9 were real inventions or wrong figures. Three
+runs were delivered with a section cut to nothing, two of them counted conformant. Replayed on the same runs, "list
+and never cut" deletes nothing and leaves the 9 in the text, listed.
+
+- **On a kind of work the check was not measured on, it lists and never cuts.** Its rates were measured on essays
+  and posts. A skill that declares another kind of work (`--class`, or a skill built by `atelier method`, which
+  reads the kind from the note's title and records it) has every finding, the reader's and the patterns', listed
+  for the owner to check. The list closes the delivered text, after everything the checks read
+  (`--no-unsourced-note` keeps it to the report). A skill that declares no kind, a known format, and prose keep
+  the behaviour they had. The card and the run panel show the reader's measured rates only where it was measured.
+- **Strict delivery stops there before anything is spent,** and says why: a check that only lists cannot decide
+  what is delivered. This means strict delivery is not available for analysis, contracts written as a method,
+  reviews or handover notes until a claim reader is qualified on that kind of work. Nothing here does that.
+- **No cut empties a section.** Where the check does cut, the last sentence under a heading stays, still flagged,
+  and the run fails on it by name. A draft written again for a missing section leaves its note in the run record.
+- **A figure worked from the material is the writer reading it.** One offer's total at a scenario the sentence
+  states (49 + 2.5% of 25,000), the gap between two offers at it, a year of either, a break-even between two
+  prices; an offer's amounts from one line of the material, prices only, worked only into amounts of money. On the round's sentences: 9 of 9 honest calculations
+  recognised (none was before), 0 of 13 invented or wrong figures. A free two-step search was tried first by the
+  tester and passed 7 of 12 invented figures; it is not used. A four-digit amount is no longer dropped as a year.
+- **A method step is checked when it names a section its example has,** however each is written. Of 16 steps in
+  three methods that name something the work must contain, 2 got a check; 12 do now, and 12 of 12 on three more
+  written with labels, clauses and bold, with no step tied to a section it does not ask for. The example reader
+  reads a name alone on its line, and a clause that goes on after its name. A note's title is not a step.
+- **Reproduction counts only sections that say something:** three words, or a fifth of the expert's own section
+  when that is fewer. One word under each heading, filler text and two names run into one heading no longer count,
+  and a section left empty is never a reproduction. **The repeat check leaves out what the writer was given:** two
+  real outputs were marked as copies for sharing the table header every served example carries and then a name and
+  a price from the material.
+- **A count in a sentence that reports, before the sentence that asks, is not a length.** Of 20 sealed requests
+  holding a number that is not a length, 3 were read as one; none is now. It still misses a length with no count
+  in it ("Keep it to a page", "a short paragraph") and one in bullet points.
+- **An adopted note reaches the export,** under the heading a run serves it under, and an amended standard now
+  says that it retired one, on the run and on the status.
+
+Measured in this round and not changed by it:
+- **A judgement is still flagged like a fact.** "Sentrix could offer a 12-month term" is listed as unsourced. A rule
+  that reads modal sentences as judgement was specified and not built: on the 11 such sentences of the round it
+  clears 4 to 6, it would drop from the list a sentence the same reading labelled an invention, and on prose it
+  would let an invented story through in a sentence that says "could". Where nothing is cut, a longer list costs
+  less than a shorter one that hides something.
+- **The method's figure rule on a fact sheet** fails 11 of 20 invented figures and 1 of 20 honest sentences, as
+  before. The 9 it passes are a true figure moved to another subject, a wrong year or quarter, a single digit and
+  one correct sum the set labels invented; they need the subject read. The set is kept as a test, with the 9 named.
+- **The author's own held-back analyses** still carry sentences the claim reader flags: plain statements of what
+  the author knows and the material does not say. They are listed now, not cut. They would not pass a strict
+  check, and no rule here makes them.
+- **Layout is read only on the owner's example.** Work written with no markup marks a section by a name alone on
+  a line. Guessing those from layout was tried three ways, and each lost a real section on some ordinary output. An
+  output is not guessed at: a check knows the names it asks for and looks for those, so a title, a one-line answer
+  and a signature are lines. The example is read by layout once, at the build, and shown; there a title cannot
+  always be told from a first section with a one-line answer, and the owner sees which was taken.
+- **A check read from the example's section names waits for the owner's yes.** "State the constraints in a
+  Regulation section" asks for one and "compare it with a Risks section from last quarter" does not, and the words
+  that tell them apart are not a closed list: the second is still read as asking. So such a check is shown with the
+  section it looks for, and nothing is built until the owner accepts the screen. A step whose own wording says it
+  ("Include a Risks section") builds in one call as before.
+- A worked figure is checked for arithmetic, not for what it counts: an invented amount that happens to equal one
+  offer's total, or the gap between two, at a number the sentence states is listed as computed. A break-even is
+  accepted as a count of anything. Price lines it cannot give one role to are not worked from (a fee, a rate and a
+  percentage on one line; a line that also holds a count), so some honest totals are still listed as unsourced.
+- Existing skills are not changed by any of this: 120 stored texts (the pieces of one corpus and the outputs of
+  seven study rounds on it) get the same verdict on every rule from the commit this round started on and from this
+  one, with the claim check off and with it on. Three independent reviews were made of the round's changes and
+  their findings fixed, each with its inputs as tests; the last fixes were not reviewed again.
+- A step's check cannot yet be set by hand at the build; `atelier amend` is the way. An interrupted search cannot
+  be resumed. A task that paraphrases the held-back piece's conclusion, or material that holds it in pieces, is
+  not caught before a reproduction run.
+
+### Fixed, for 2.0: a verdict that can be met by an empty shell or an invented number is not one
+
+Found by running both ways in from end to end as a new user would, and by an audit of the statistics.
+
+- **A section must hold something, and be where the method says.** A heading with nothing under it counted as the
+  section, so a draft sent back for a missing section returned with the bare heading and read as complete. "Open
+  with" and "end with" are now held to the first and the last section. A table needs a row that says something.
+- **A figure is sourced when it was given.** It counted as sourced when any two numbers in the material added up
+  to it, whatever they counted: a dose passed because a chart held an age and a breathing rate. A sum or a
+  difference is now of two amounts of the same thing, where at least one says what it counts, exact or rounded as
+  a figure of two significant figures or more is; a share is of one count in a larger one of the same thing, and
+  two cells of one row of a table are the same thing. An amount in a unit of measure
+  matches that unit, however it is written ("40 mg", "40 milligrams"), or the number in a table whose heading
+  carries the unit. With no material bound the rule did not run at all; it now runs against the request alone. A
+  blood pressure written with a slash and a single digit with its unit are figures. A bare day beside a month's
+  name, and a bare number after "line" or "clause", are not; a percentage or a sum of money always is.
+- **An invented figure can be cut, and only it.** The rewrite that removed it was refused for losing a figure, and
+  the figure was delivered. The rest of its sentence is held as in any rewrite.
+- **A reproduction has the shape of the work held back.** `atelier reproduce` counted the run's own verdict, and a
+  skill with two rules of style gives that verdict to anything tidy. The held-back piece is never served; it is now
+  read in code beside the output, and a case is reproduced only when the output also has two thirds or more of that
+  piece's top sections (where it has two or more), each saying something, however either marks them. A section is
+  matched by the words of its name: one renamed altogether is not found.
+- **More of a method is checked.** A step is linked to a section check however its sentence opens ("Include a
+  Background section"), with the name in quotation marks, or as "a section called X". Work that marks its sections
+  with labels and not headings (a handover note, a contract clause) is read as it is written. A sentence that
+  describes the work is not a step for holding the word "never".
+- **`atelier method` builds in one call** when every step is one your example holds. Where your method and your
+  example disagree, it stops and asks that. `--review` only shows.
+- **`atelier method` no longer replaces a skill of the same name built in another folder.**
+- **The copying check is read in one pass, in every script.** A long copied stretch, the case the check exists
+  for, was the one it was slowest on: 600 copied words took seconds and 4,000 did not finish. An exact copy in
+  Cyrillic read as no copy. Same numbers as before on unaccented text. An accented word is now one word, so a skill
+  built from accented work gains its standard wording at its next build. Wording that repeats the same six words
+  hundreds of times still takes seconds.
+- **A length is read the way people say it.** A number in a title is not a length ("10 words that changed our
+  roadmap" was read as a post of ten words). "Write a 20,000 word book", "roughly two thousand words" and "a
+  two-page brief" are read. A request that states words and paragraphs tells the writer both; the one a draft is
+  held to is the last said. A count is not a length where it describes text that exists, an edit to make or a
+  rate. A small number spelled out is read only after a word that asks for it ("write three paragraphs", "about
+  two pages"): read from prose, a false length does harm, and one missed costs nothing that was not already so.
+- **The exact interval and the paired test hold at any size.** From n = 90 an exact interval came back as {1, 1},
+  and a paired test on a thousand pairs as p = 0, with no error. No published figure was affected: every one was
+  recomputed, and all were at smaller sizes.
+- **The screen of candidates no longer loses all of them to a cycle,** a threshold is compared with the number and
+  not the number rounded for the screen, and the rhythm reading takes the middle of an even number of drafts.
+- **The search remembers.** `atelier evolve` reads the searches kept beside the skill and does not run again what
+  they ran on the same working briefs and did not keep. A change that breaks a brief both runs of the unchanged
+  skill held is not kept. Where no gain could be shown at the size given, nothing is run to look for a gain.
+
+Known and not fixed here:
+- The two ways in still cannot build one standard together.
+- **The figure check reads numbers, not what they are about.** Two reviews of it found errors in both directions,
+  and fixed most. What remains: the sum of two unrelated amounts in the same unit passes (two doses in mg); a figure
+  moved from one subject to another passes; currency and time units are not compared ("€500" meets "$500", "47
+  minutes" meets "47 hours"); no unit is converted (1 g and 1,000 mg); a decimal comma is misread; a figure the
+  writer proposes ("cap the delay at 30 seconds") is flagged like one it claims.
+- **The length reader still reads some counts that are not lengths** ("Find 10 words that rhyme"), as 1.x did,
+  and misses some plain ones.
+- Sections in a format no reader here knows (tracked changes, comments anchored to a line of a diff) are not seen.
+  A speaker's name before a colon can be read as a label.
+
+One erratum, in a pre-registration that is left as
+sealed: `studies/EXTERNAL_EXPERT_B2_PREREGISTRATION.md` says a 60/40 split at 0.80 power needs about 150
+discordant pairs. That is the one-sided figure; for the two-sided exact test the study declares it is about 200 to
+210.
+
+### Added, for 2.0: a skill improves how it carries its method, with nobody guiding it
+
+On top of `atelier method` ([decision 0018](docs/decisions/0018-a-skill-improves-how-it-carries-its-method.md)).
+Built and tested offline against a scripted model. It has not been run against a real one.
+
+- **`atelier evolve --skill <name> --briefs <folder>`** runs the skill on briefs you give (a task and its material
+  each, no reference answer), reads what its drafts keep leaving out, tries one change at a time and keeps a change
+  only when it is plainly better. `--dry-run` says what it would run and calls nothing. No run is started that
+  what is left of `--cap` cannot cover.
+- **Your standard is never changed by it.** What changes is how many drafts are written, and a note to the writer
+  naming what earlier drafts missed, in the words of your standard's required steps. No model writes the note.
+- **It is held back from fooling itself.** The unchanged skill is run twice, and a gain inside what those two runs
+  differ by is not a gain. A change that costs more must buy it with cases. A candidate that carries a brief is
+  refused before it is run. A fifth of the briefs are set aside before the first run and read once at the end, and a
+  change is adopted only if it is no worse there.
+- **Every search is kept, adopted or not,** with what was tried and why each change was or was not kept.
+  `atelier evolve --skill <name> --rollback` goes back one adoption at a time.
+- **A run that breaks stops the search.** It is never counted as a case that failed, nothing is adopted, and the
+  command exits 2. A signal stops it the same way and puts back what the search moved.
+- Where a skill has a release, the number of drafts stays the release's and only the note is searched.
+- **What it cannot improve, it says.** It is scored on what the checks read. A judgement step is scored by nothing.
+- An adoption is bound to the standard it was made under, and is not used after you change the standard.
+
+### Added, for 2.0: a skill from one method and one finished example
+
+A second way in, beside `atelier new` ([decision 0017](docs/decisions/0017-a-skill-from-one-method-and-one-example.md)).
+Nothing changes for a skill built from a body of work.
+
+- **`atelier method <note> --golden <example>`** reads what you say is done (steps, a template, both) and one piece
+  of work where it was done, and builds a skill held to the method. It calls no model, and `--yes` accepts exactly
+  what the screen showed.
+- **Each step is yours, in your words, and is one of three things.** Something the work must contain (these
+  sections, this table), read by code on every output. Something it must be made from (every figure is in the
+  material), read against what was bound. Or a judgement, shown to the writer and reported as not measured.
+- **A step gets a check only when your own example passes it.** A step your example does not hold is kept as yours
+  and asked about: your template and your finished work disagree, and only you know which is right.
+- **What your example shows and your method did not say is proposed, and shown, never required.**
+- **No taste is read from one piece.** How you sound is read from a body of work, with `atelier new`.
+- **Every run says what was held:** "Method: contains 3 of 3 thing(s) it must · made from what was given 1 of 1 · 1
+  judgement step(s) not measured."
+- **What a draft left out is written again with it named.** A missing section or table is never patched into a
+  sentence. An output that follows the easy rules and says nothing is not conformant: it lacks what the work must
+  contain.
+- Two new checks, usable by any standard: `TABLE` (a table with these columns) and `CITED` (every figure is in the
+  request or the material). A check may now read the request and the named material, not only the output.
+
+### Fixed, for 2.0: a test run is never something a skill learns from
+
+- **A run marked as a test is a measurement, and nothing that learns reads it.** A held-back case run by `atelier
+  reproduce`, or a benchmark answer, was recorded with every other run, and `tend`, `mine`, the learned list of
+  machine-writing phrases, the search over implementations, the optimizer and `eval` all read it. A skill changed
+  on what a held-back case showed has seen that case, and its next run of it tested nothing. The runs a skill may
+  learn from are now read in one place, which leaves test runs out; `eval` leaves them out of its counts.
+- **A reproduction is bound to the run that held its cases back.** The skill under test must hold the standard that
+  run closed, or one that supersedes it; otherwise nothing is run. The record carries the run, its sealed corpus, a
+  hash of the cases as they stood, and how many times they have been run on each version.
+- **`--cap` is the total for the command.** Each case's run is given what is left of it, split between the run and
+  its claim reader, and a case is not started on less than sixty cents. It was checked only between cases, so the
+  last run could pass it. A run that stops partway is counted at what it had spent.
+- **A reading of a test run by the taste reader is not kept,** `atelier fix` refuses a run marked as a test, and
+  observations made on one are not evidence a skill is changed on.
+- **A held-back piece that has been read is never run as reproduction,** and whether one has been read is part of
+  what the reserve is identified by.
+- **Every reproduction is kept and none is written over.** Each run is its own file; the first look at a set of
+  cases is the only one that is a test, and a later run says it is a repeat and where the first is kept. Exposure is
+  counted for one set of cases and never carried to another.
+- **Each case can be walked back to its run:** the invocation, the output by hash, the rules it broke by id, the
+  longest run it shares with a piece the skill carries. Where a rule the output broke is one the expert's own
+  held-back piece breaks too, the record says the standard asked more than the work does.
+- **A case on which no required rule is checked by code is "not observed",** never "reproduced".
+- **A reproduction never accepts a new runtime for the skill.** A measurement does not change how a skill is run.
+- **`--bare` is called what it is: a one-shot floor.** One plain call a case, checked afterwards. The skill's run
+  drafts more than once, chooses, repairs and has its claims read, so the gap between the two is the runtime and
+  the skill together and is never offered as what the skill adds. Each case now records its own cost.
+
+### Changed, for 2.0: sentence length is a rule only where it is the writer's own rhythm
+
+- **A count is not a style.** How long sentences run follows the piece: its format, its reader, what it is for. A
+  rule on sentence length, on the share of short sentences, on the mix of lengths or on how much they vary is now
+  suggested as required only when the writer's rhythm is detected as theirs: the same in piece after piece, and
+  apart from what the model writes on the same topics (a monologue that runs a hundred words before it stops, or
+  prose cut to the bone). Otherwise the rule is counted, shown and used to choose between drafts, and the review
+  says why: "how long your sentences run changes from piece to piece, so it follows the piece". You can still make
+  it required.
+- The rhythm is read on prose sentences only. A heading, a line that is only a bold label, a list item and a table
+  row are not sentences of the writer's prose.
+- Found on a real corpus: every output written to a standard, and the author's own held-back piece, failed on a
+  required mix of sentence lengths that the format, not the author, had set.
+- Applies to a new discovery. A standard approved before is unchanged; `atelier amend --rule <id> --materiality
+  PREFERRED` makes the same ruling on it. The counted checks themselves still read a bold label line as a
+  sentence: changing what an approved rule counts needs its own decision.
+
+### Added, for 2.0: `atelier reproduce`, whether a skill reproduces work it never saw
+
+- **`atelier reproduce --skill <name>`** runs each piece that was held back with its task and its material: the
+  skill is given the task and the material and never the piece, writes through the same checked path as any run,
+  and the output is read by that run's own verdict.
+- **A case is checked before it is run and its output after.** A case whose task repeats the finished work's own
+  wording, or whose material holds the finished work, is not run and is said. An output that carries wording of the
+  held-back piece that its material does not hold is not a reproduction, whatever else it met.
+- **What it reports is a count of cases.** A case is reproduced when the run's verdict was "conformant"; a refusal
+  under strict delivery is a case that was run and not reproduced. Under the count: unsupported specifics (read
+  only when a qualified reader read every case, and "not read" otherwise), required rules met, and your own
+  held-back work on the counted rules that apply to every piece. There is no total and no label, and the number of
+  cases is beside every count. Required rules no code can check are counted apart and are in none of it.
+- **It counts how many times the held-back cases have been run on a skill**, and says so from the second time: a
+  piece held back is unseen once.
+- **`--bare` is a one-shot floor:** the same cases, one plain call each, given the task and the material alone and
+  read with `atelier verify` against the same standard. Its record is kept apart.
+- `--dry-run` shows what each case would be given and calls nothing. `--cap <usd>` holds the total (5 by default).
+  The record is kept with the skill and shown by `atelier report --skill <name>`. A reproduction does not become
+  "the last run" that `atelier fix` and `atelier report` point at.
+- Run it from the project the skill was built in: the held-back pieces are kept with that run.
+- Known limit: `atelier_skill_report` (MCP) does not carry the record yet.
+
+### Added, for 2.0: an example may carry its task and what it was made from
+
+The first step toward a skill built from a method and examples of good output. Nothing changes for a folder of
+finished work alone.
+
+- **An example can say what was asked and what it was made from.** The task as before (`request:` in the front
+  matter, or the `## Request` / `## Answer` layouts). The material in a folder named after the example
+  (`acme.md` and `acme.material/`), or named in the front matter (`material: filing.md, notes/call.txt`, paths from
+  the example's own folder). Material is read as that example's sources and never as your finished work.
+- **Each example has a class, and intake says what you gave:** "8 examples: 2 with the task and the material it was
+  made from, 1 with the task, 5 finished work only." Every example teaches the standard. Only one that carries both
+  its task and its material can test whether a skill reproduces your work, because only then can a candidate be
+  given what you were given and nothing of what you wrote.
+- **A piece held back is one that can be tested.** The automatic reserve puts half of the examples that carry both
+  their task and their material first in line, and leaves the rest to be learned from; among examples of one kind
+  it chooses as it always did.
+- **A held-back example that carries its request is tested on that request.** `atelier reference` gives each arm,
+  and shows the blind reader, what was actually asked, where it gave "produce <file>". A skill built before is
+  unchanged.
+- Material stays inside the folder you point at: a name that leaves it is said and not read. A `materials:` key of
+  your own, whose values are not file names, is left alone.
+
+### Fixed
+
+- **`atelier reference` pasted the held-back pieces into the arm it compared them with.** The arm that is given
+  your work in its prompt read every piece intake had sealed, those held back included, so each held-back reference
+  was in front of the model that was then asked to reproduce it. That arm is now given the pieces discovery read
+  and no others. A comparison made with it before this is not a blind one for that arm.
+
 ### Fixed: the copying check, by an amendment to the 1.x freeze
 
 One fix, admitted by the owner after the freeze ([decision 0016](docs/decisions/0016-the-last-fixes-before-one-point-x-is-frozen.md), amended).
@@ -394,6 +679,19 @@ Defects found by an outside review of the build, each with what it broke.
   and says so.
 
 ### Studies
+
+- **A skill from one method and one finished example, on a real model, once** (exploratory, by the builder; $1.60;
+  no sealed result). One house method for a kind of analysis, written as a template of 16 steps, and one finished
+  example of it; two new subjects, each with a page of material written for another purpose. Of the 16 steps, 2
+  could be checked on the output (the example held them), 11 were judgement, and 3 template tables the finished
+  example does not hold were left as questions. Against the same method and example pasted into one plain call:
+  both met the 2 required things on both subjects, so **on what is enforced the two did not differ.** Beside
+  that: the skill's outputs were longer (2,765 and 3,209 words against 2,027 and 1,674), carried more of the
+  example's own section headings (5 and 4 of 17 against 2 and 0) and of the tables the example shows (1 and 2 of 5
+  against none), and the qualified claim reader cut 7 and 13 invented specifics from them; the pasted outputs were
+  read by the pattern check only, which found none. What it does not show: that either is better work. Nobody
+  read them, two subjects is two, and a method whose steps are mostly judgement gives the checks little to hold.
+  It found one defect, fixed: the build's closing line counted what the example shows as if it were required.
 
 - **The user path on a real model, once** (acceptance by the builder with the owner's key; $4.79 recorded, and two
   discovery attempts that failed before any cost was recorded; no sealed result). A skill that answers, from twelve examples: discovery $0.55, one answer

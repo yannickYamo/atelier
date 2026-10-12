@@ -4,6 +4,7 @@
 // the provider factory, host selection — lives in ../runtime.js and is imported, so a
 // command file reads as one job rather than as a slice of everything.
 
+import { rhythmSignature, isSentenceLengthRule } from '../../core/observers/rhythm-signature.js';
 import { existsSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { join, basename } from 'node:path';
@@ -422,6 +423,22 @@ export async function discover(): Promise<void> {
       framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: c.conformance, corpus: corpusOf(c.requirement) } satisfies ProposalMeta])) };
     // An addition to what is already saved, not a second save of the run.
     saveSession({ ...loadSession(), proposals, proposalMeta });
+  }
+
+  // IS THE LENGTH OF THEIR SENTENCES A SIGNATURE, OR WHAT EACH PIECE NEEDED? (core/observers/rhythm-signature.ts.)
+  // A rule on sentence length or its variation may be suggested as required only when the writer's rhythm is the same
+  // in piece after piece and apart from what the model writes on the same topics. Otherwise the rule is counted and
+  // shown, and the review says why. Read on the pieces discovery read and held out, never the reserve.
+  {
+    const paced = proposals.filter((p) => isSentenceLengthRule(p.measurement));
+    if (paced.length) {
+      const rhythm = rhythmSignature(ownPieces, drafts);
+      if (!rhythm.signature) {
+        proposalMeta = { ...proposalMeta, ...Object.fromEntries(paced.flatMap((p) => { const m = proposalMeta[p.requirementId]; return m?.inSample ? [[p.requirementId, { ...m, inSample: { ...m.inSample, contextual: rhythm.why } }]] : []; })) };
+        saveSession({ ...loadSession(), proposals, proposalMeta });
+        if (!orchestrated()) console.log(`Sentence length: ${rhythm.why}. ${paced.length} rule(s) on it are shown, not required.`);
+      } else if (!orchestrated()) console.log(`Sentence length: ${rhythm.why}. It is read as part of how you write.`);
+    }
   }
 
   if (methodDocs.size && existsSync(pkgPath) && !argv.includes('--skip-methods')) {

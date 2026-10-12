@@ -6,11 +6,13 @@
 // wearing a hang's clothes. Out of process, the server answers while the test process blocks.
 //
 //   POST /chat/completions  → the scripted payload, as a forced tool call
-//                             (`when`: [{ contains, answer }] answers a request whose body contains
+//                             (`when`: [{ contains, containsAll, answer }], first match wins, answers a request whose body contains
 //                              the text first, so a candidate and its champion can answer differently)
 //   POST /__set             → replace the scripted payload (JSON body); `failNext: k` answers the
 //                             next k completions with HTTP 500, so a failed call can be scripted
 //   GET  /__count           → how many /chat/completions requests have been served
+//   GET  /__log             → the body of every /chat/completions request served, in order: what a test reads to
+//                             show that something was, or was never, sent to the model
 //
 // Prints "PORT <n>" on stdout once listening.
 
@@ -23,6 +25,7 @@ let payload = { rules: [], workType: 'writing' };
 let byTool = null;
 let when = [];
 let count = 0;
+const bodies = [];
 let failNext = 0;
 // `emptyNext: { <tool>: k }` answers the next k calls of that tool with an empty object: a model that returned no
 // usable answer, where `failNext` is a server that returned an error.
@@ -46,7 +49,8 @@ const server = createServer((req, res) => {
       res.end('{"ok":true}'); return;
     }
     if (req.url === '/__count') { res.end(JSON.stringify({ count })); return; }
-    count += 1;
+    if (req.url === '/__log') { res.end(JSON.stringify({ bodies })); return; }
+    count += 1; bodies.push(body);
     if (failNext > 0) { failNext -= 1; res.statusCode = 500; res.end('{"error":"scripted failure"}'); return; }
     let answer = payload;
     if (byTool) {
@@ -54,7 +58,7 @@ const server = createServer((req, res) => {
       if (tool && byTool[tool] !== undefined) answer = byTool[tool];
     }
     { const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name; if (tool && emptyNext[tool] > 0) { emptyNext[tool] -= 1; answer = {}; } }
-    const hit = when.find((w) => body.includes(w.contains));
+    const hit = when.find((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)));
     if (hit) answer = hit.answer;
     // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`
     // answers with one label per "[n]" the request carries, cycling through the moves given.

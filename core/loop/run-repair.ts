@@ -4,6 +4,7 @@
 // if it breaks nothing that held and fixes at least one thing that did not (`acceptRepair`). Every
 // call is metered through the caller's budget. The standard is read, never written.
 
+import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
@@ -52,6 +53,8 @@ function cutClaim(text: string, start: number, end: number): string {
 export interface Refined { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
 export interface CheckOptions {
+  /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
+  readonly context?: CheckContext;
   /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
   readonly material?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
@@ -85,6 +88,12 @@ export interface CheckOptions {
   readonly waived?: ReadonlyMap<string, string>;
   /** a small model for the questions that need context (./context-judge.ts); absent, the word patterns decide */
   readonly judge?: ContextJudge;
+  /**
+   * The kind of work, when the claim check was never measured on it (./claim-extract.ts, `unmeasuredKind`).
+   * Everything the reader and the patterns find is then LISTED for the person to check and nothing is cut:
+   * no instrument may delete where nobody has measured how often its deletions are wrong.
+   */
+  readonly unmeasured?: string | null;
 }
 
 
@@ -98,7 +107,7 @@ export interface CheckOptions {
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const base = waive(verifyText(skill, v, text), opts.waived);
+  const base = waive(verifyText(skill, v, text, opts.context), opts.waived);
   const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
@@ -146,22 +155,30 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   const listOnly = opts.format?.claims === 'list';
   const workClaims = listOnly ? answerWorkClaims(text, opts.material ?? '', claims) : [];
   const judgeFlags = listOnly ? judgedOnly(text, opts.judge?.workClaims(answerSentences(text)) ?? null, workClaims) : [];
-  const toCut = listOnly ? workClaims : claims;
-  const toList = listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];
+  // ON A KIND OF WORK NOBODY MEASURED, NOTHING IS CUT. The reader's findings and the patterns' are one list
+  // for the person to check: on 27 real competitive analyses the cut deleted 32 legitimate sentences of 41.
+  const unmeasured = !listOnly && opts.unmeasured ? opts.unmeasured : null;
+  const everyFinding = unmeasured ? [...claims, ...(reading?.gate ? reading.claims.filter((c) => !claims.some((x) => x.start === c.start)) : [])]
+    .sort((x, y) => x.start - y.start) : [];
+  const toCut = unmeasured ? [] : listOnly ? workClaims : claims;
+  const toList = unmeasured ? everyFinding
+    : listOnly ? [...claims.filter((c) => !workClaims.some((w) => w.start === c.start)), ...judgeFlags.filter((j) => !claims.some((c) => c.start === j.start))] : [];
   const statement = 'Never invent a story, a quotation, an attribution or a specific the person did not supply.';
   // Which instrument found what may be cut: the patterns decide an answer's work claims; otherwise the
   // gating reading's instrument, qualified or not (./cut-authority.ts refuses the ones that may not cut).
   // The sensor says which instrument gates: 'pattern' for the pattern check, or a reader that degraded to it.
-  const authority: CutAuthority = listOnly || !gating || reading?.gate || !opts.claimSensor || opts.claimSensor.gate === 'pattern' ? 'pattern'
+  const authority: CutAuthority = unmeasured ? 'unqualified-reader' : listOnly || !gating || reading?.gate || !opts.claimSensor || opts.claimSensor.gate === 'pattern' ? 'pattern'
     : opts.claimSensor?.qualified ? 'qualified-reader' : process.env.ATELIER_CLAIMS_GATE === 'reader' ? 'owner-override' : 'unqualified-reader';
   const line = { requirementId: 'UNSOURCED', statement: listOnly ? 'Never claim work done, a result seen, or a detail of the person\'s own system that the request did not give.' : statement,
     materiality: 'REQUIRED', phase: 'ACCURACY' as const, authority,
     result: { verdict: toCut.length ? 'VIOLATED' as const : 'MET' as const, spans: [...toCut], value: toCut.length,
-      detail: `${toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
-  const checkLine = toList.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: 'Specifics not in the material supplied: listed for you to check, never cut in this format.',
+      detail: `${unmeasured ? `not measured on ${unmeasured}: ${toList.length ? `${toList.length} sentence(s) listed to check, none cut` : 'nothing found, and nothing would be cut'}`
+        : toCut.length ? `${toCut.length} claim(s) not in the material supplied` : 'no unsourced stories, quotations or specifics'} [${by}]` } };
+  const checkLine = toList.length ? [{ requirementId: CLAIMS_TO_CHECK, statement: unmeasured ? `Not found in your material: listed for you to check, never cut, because the claim check is not measured on ${unmeasured}.`
+    : 'Specifics not in the material supplied: listed for you to check, never cut in this format.',
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: 'VIOLATED' as const, spans: [...toList], value: toList.length, detail: `${toList.length} specific(s) to check [${by}]` } }] : [];
-  const readerOnly = reading?.gate ? reading : null;
+  const readerOnly = reading?.gate && !unmeasured ? reading : null;
   const readerLine = readerOnly ? [{ requirementId: READER_REPORT, statement,
     materiality: 'PREFERRED', phase: 'ACCURACY' as const,
     result: { verdict: readerOnly.claims.length ? 'VIOLATED' as const : 'MET' as const, spans: [...readerOnly.claims], value: readerOnly.claims.length,
@@ -177,7 +194,7 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
   // FAILS CLOSED. A qualified reader that could not run leaves the pattern check, which catches a fraction
   // of what the reader does. In writing that is not a check of invented claims at the level the standard was
   // promised, and it is not reported as one: the run fails until it is read again. Answers list by design.
-  const unread = !listOnly && opts.claimSensor?.degraded && opts.claimSensor.qualified ? [{ requirementId: UNREAD, materiality: 'REQUIRED', phase: 'ACCURACY' as const,
+  const unread = !listOnly && !unmeasured && opts.claimSensor?.degraded && opts.claimSensor.qualified ? [{ requirementId: UNREAD, materiality: 'REQUIRED', phase: 'ACCURACY' as const,
     statement: 'The qualified claim reader read this text.',
     result: { verdict: 'VIOLATED' as const, spans: [], value: null, detail: 'the claim reader could not run, so this text was checked by the pattern check only: run it again, or check its specifics yourself' } }] : [];
   return { ...report, checked: [...report.checked, line, ...checkLine, ...readerLine, ...pubLine, ...fmtLines, ...unread],
@@ -277,10 +294,10 @@ export function claimMemory(): ClaimMemory {
  * again after each cut, at most three times, with `memory` holding each sentence to its first verdict.
  */
 export async function enforceClaims(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {},
-  known?: VerifyReport, memory: ClaimMemory = claimMemory()): Promise<{ text: string; report: VerifyReport; cut: string[]; listed: string[] }> {
+  known?: VerifyReport, memory: ClaimMemory = claimMemory()): Promise<{ text: string; report: VerifyReport; cut: string[]; listed: string[]; kept: string[] }> {
   let report = memory.apply(text, known ?? await checkDraftAsync(skill, v, text, opts));
-  const cut: string[] = [];
-  if (opts.guardClaims === false) return { text, report, cut, listed: [] };
+  const cut: string[] = []; const kept = new Set<string>();
+  if (opts.guardClaims === false) return { text, report, cut, listed: [], kept: [] };
   for (let round = 0; round < 3; round++) {
     let spans = [...flaggedClaims(report)].sort((a, b) => b.start - a.start);
     if (!spans.length) break;
@@ -308,13 +325,17 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
     }
     let next = text;
     for (const sp of spans) {
-      next = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);
+      const without = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);
+      // NO CUT EMPTIES A SECTION. The last sentence under a heading stays, still flagged: the check fails on it
+      // and names it, which a person can act on. A heading over nothing passed as a section that was there.
+      if (emptyHeadings(without) > emptyHeadings(next)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
+      next = without;
       cut.push(sp.text.trim().slice(0, 160));
     }
     if (next === text) break;
     text = next; report = memory.apply(text, await checkDraftAsync(skill, v, text, opts));
   }
-  return { text, report, cut: cut.reverse(), listed: memory.listed() };
+  return { text, report, cut: cut.reverse(), listed: memory.listed(), kept: [...kept] };
 }
 
 /** The id of the line that holds claims the check could neither clear nor cut. */
@@ -346,6 +367,7 @@ export function withInconclusive(report: VerifyReport, text: string, sentences: 
  */
 export function brokenByCut(before: string, after: string, opts: { readonly structureOnly?: boolean } = {}): string | null {
   const count = (t: string, re: RegExp): number => (t.match(re) ?? []).length;
+  if (emptyHeadings(after) > emptyHeadings(before)) return 'a section with nothing under its heading';
   // A marker alone on its line inside a list (next to another item). A bare "102." answering "17 times 6"
   // is an answer, not an empty item.
   const EMPTY_ITEM = /(?:^[ \t]*(?:\d+[.)]|[-*+])[ \t]+\S[^\n]*\n)[ \t]*(?:\d+[.)]|[-*+])[ \t]*$|^[ \t]*(?:\d+[.)]|[-*+])[ \t]*\n[ \t]*(?:\d+[.)]|[-*+])[ \t]/gm;
@@ -362,6 +384,44 @@ export function brokenByCut(before: string, after: string, opts: { readonly stru
   // A share only means something in a draft long enough for a gutting to show.
   if (words(before) >= 80 && words(after) < words(before) / 2) return `${words(after)} of ${words(before)} words`;
   return null;
+}
+
+/**
+ * HEADINGS WITH NOTHING UNDER THEM. A markdown heading whose section, up to the next heading of its level or
+ * above, holds no word outside headings. Three real analyses were delivered with a section cut to nothing,
+ * two of them counted as conformant: a required section that is only its title is not the section.
+ */
+export function emptyHeadings(text: string): number {
+  const lines = text.split(/\r?\n/);
+  // A heading however markdown writes one: "## Risks" (indented up to three spaces), "Risks" over a rule of = or -,
+  // and a line that is nothing but bold, which writers use as one. Bold sits below every real heading.
+  const underline = (i: number): number => { const m = /^ {0,3}(=+|-{3,})\s*$/.exec(lines[i] ?? ''); return m ? (m[1].startsWith('=') ? 1 : 2) : 0; };
+  let fence = false;
+  const levels = lines.map((l, i) => {
+    if (/^ {0,3}(```|~~~)/.test(l)) { fence = !fence; return 0; }
+    if (fence) return 0;
+    const atx = /^ {0,3}(#{1,6})[ \t]+\S/.exec(l);
+    if (atx) return atx[1].length;
+    // Written as a name: a few words that do not end as a sentence does. "None known today." over a rule is a
+    // paragraph and a rule; "Why now?" and "FAQ: billing" are headings.
+    const name = (t: string): boolean => t.trim().split(/\s+/).length <= 8 && !/[.!,;:]$/.test(t.trim());
+    if (l.trim() && name(l) && !/^\s*(?:[-*+>|]|\d+[.)])/.test(l) && (i === 0 || !lines[i - 1].trim()) && underline(i + 1)) return underline(i + 1);
+    const bold = /^\s*(?:\*\*|__)([^*_\n]{2,60}?):?(?:\*\*|__):?\s*$/.exec(l);
+    return bold && name(bold[1]) ? 7 : 0;
+  });
+  let empty = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const at = levels[i];
+    if (!at) continue;
+    let body = false;
+    for (let j = i + 1; j < lines.length && !body; j++) {
+      if (levels[j] && levels[j] <= at) break;
+      // the rule under a heading is part of the heading
+      if (!levels[j] && !(j === i + 1 && underline(j)) && /[\p{L}\p{N}]/u.test(lines[j])) body = true;
+    }
+    if (!body) empty++;
+  }
+  return empty;
 }
 
 /** A sentence that opens by pointing back at what came before it. */
@@ -481,6 +541,13 @@ export async function refineToStandard(
   const cutSafely = async (t: string, known: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> => {
     const e = await enforceClaims(skill, v, t, opts, known, memory);
     listedHere.push(...e.listed);
+    // Said once, and the cut at the end of the run still happens: a sentence kept for its section does not let a
+    // claim a later rewrite adds stay.
+    if (e.kept.length) {
+      const note = 'a flagged claim that is the last sentence of its section was not cut: check it before you use this';
+      if (!notes.includes(note)) notes.push(note);
+      listedHere.push(...e.kept);
+    }
     // Found by the pattern (may be cut with its parent) or by the judge (may only be redrafted).
     const patternDangling = e.cut.length ? danglingAfterCut(t, e.text, e.cut) : [];
     const judgedDangling = e.cut.length && opts.judge ? await danglingJudged(t, e.text, e.cut, opts.judge) : [];

@@ -19,6 +19,8 @@ import { getEval, putRating } from '../../core/state/eval-store.js';
 import { renderPanel } from '../../core/eval/summary.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import { skillCardFor } from '../skill-card.js';
+import { reproductionFile } from './reproduce.js';
+import { renderReproduction, type ReproductionRecord } from '../../core/eval/reproduce.js';
 import { featureOf } from '../../core/observers/features.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
@@ -46,7 +48,12 @@ export function report(): void {
   if (!id) {
     const name = flag('--skill') ?? die('usage: atelier report <invocation> | atelier report --skill <name> [--json]');
     const card = skillCardFor({ root: DATA, skillName: name }) ?? die(`no built skill called "${name}".`);
-    console.log(argv.includes('--json') ? JSON.stringify(card, null, 1) : renderSkillCard(card, process.stdout.columns || 110));
+    // The last reproduction on held-back cases, when one was run (`atelier reproduce`): kept beside the skill, and
+    // said to be of an earlier version when the skill has been built again since.
+    const repro = existsSync(reproductionFile({ root: DATA, skillName: name })) ? readJson<ReproductionRecord>(reproductionFile({ root: DATA, skillName: name }), { what: 'the reproduction record' }) : null;
+    if (argv.includes('--json')) { console.log(JSON.stringify(repro ? { ...card, reproduction: repro } : card, null, 1)); return; }
+    console.log(renderSkillCard(card, process.stdout.columns || 110));
+    if (repro) console.log(`\n${renderReproduction(repro)}${repro.skillVersion === card.skillVersion ? '' : `\n  (read on version ${repro.skillVersion.slice(0, 8)}; the skill has been built again since: atelier reproduce --skill ${name})`}`);
     return;
   }
   const { L, rec } = locate(id);

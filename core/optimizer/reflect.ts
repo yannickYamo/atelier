@@ -8,7 +8,7 @@
 //   1. It chooses among LEGAL moves only: single-gene changes from ./genome.ts, minus those repair
 //      memory has already rejected on evidence as strong. Anything else it returns is discarded and
 //      counted, so an invalid proposal is visible rather than silently repaired.
-//   2. It sees a BOUNDED history (SkillOpt's budget on how much of the past a proposer reads): the most
+//   2. It sees a BOUNDED history (the evidence for a cap is cited in ../architecture/repair-memory.ts): the most
 //      recent failures and prior attempts, a fixed number of each. The measured result that more
 //      history makes proposals worse past a point (arXiv 2608.27454) is why the budget is small.
 //   3. It proposes; it never decides. Every proposal is built, fired, and judged by the floor and the

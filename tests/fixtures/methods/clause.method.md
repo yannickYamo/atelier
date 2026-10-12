@@ -1,0 +1,4 @@
+- Start with a Definitions section.
+- Include a Term section stating the start date and length.
+- Include a Termination section with the notice period.
+- End with a Governing law section.

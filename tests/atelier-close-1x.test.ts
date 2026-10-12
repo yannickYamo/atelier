@@ -21,7 +21,8 @@ describe('a length the request states in numbers is read off the request', () =>
     expect(statedLength('at least 600 words')).toMatchObject({ kind: 'min', min: 600 });
     expect(statedLength('no more than 3 paragraphs')).toMatchObject({ kind: 'max', max: 3, unit: 'paragraphs' });
     expect(statedLength('exactly 5 sentences')).toMatchObject({ kind: 'exact', target: 5, unit: 'sentences' });
-    expect(statedLength('two pages')).toBeNull();
+    // From 2.0 a number spelled out is read as a number (tests/atelier-length-reader.test.ts).
+    expect(statedLength('two pages')).toMatchObject({ raw: 'two pages', unit: 'pages', target: 2 });
     expect(statedLength('500 words max')).toMatchObject({ kind: 'max', max: 500 });
     expect(statedLength('1,500 words minimum')).toMatchObject({ kind: 'min', min: 1500 });
     expect(statedLength('at least 300 and at most 500 words')).toMatchObject({ kind: 'range', min: 300, max: 500 });

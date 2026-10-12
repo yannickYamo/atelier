@@ -29,7 +29,7 @@ unless the row says so, and none of it should be read as a validation of this sy
 | `core/inference/provider-conformance.ts:48` | four vendors passed all five probes at 200, one returned a different shape | a single conformance sweep against a live router on one day; vendor behaviour changes and this will go stale |
 | `core/compiler/placement.ts:14-15` | the selector read the declared-anchor files and `SKILL.md` contributed 0% | one compile, traced by bytes served; this is the delivery defect the module was built to prevent |
 | `core/comparison/resolution.ts:48` | a duplicated t-table returned t(3)=3.182 where t(2)=4.303 is correct, giving an interval 26% too narrow | arithmetic, checkable from the tree: `core/stats/t.ts` and `tests/atelier-stats.test.ts` |
-| `core/golden/golden-unit.ts:112-115` | ten PRs, zero failures, one-sided 95% bound of 26% within a repo and 95% across projects | arithmetic on a stated n, checkable from the tree |
+| `core/golden/golden-unit.ts:119-122` | ten PRs, zero failures, one-sided 95% bound of 26% within a repo and 95% across projects | arithmetic on a stated n, checkable from the tree |
 
 The last two rows are different in kind from the rest. They are arithmetic on stated inputs, and a
 reader can reproduce them without any record from us. The others cannot be reproduced from this

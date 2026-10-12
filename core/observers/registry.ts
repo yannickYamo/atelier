@@ -19,6 +19,7 @@ import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
+import { TABLE, CITED } from './obligations.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
@@ -36,13 +37,26 @@ export interface ObserverResult {
   readonly detail: string;
 }
 
+/**
+ * WHAT A CHECK MAY READ BESIDE THE OUTPUT: the request the output answers, and the material it was written from,
+ * each file by name. Most rules are about the text alone and never look. A rule about what the work was made from
+ * ("every figure is in a source you gave", "each company the brief names has its row") cannot be read off the
+ * output, and without this each such rule became a line built by hand outside the registry.
+ *
+ * Absent, a check that needs it says NOT_APPLICABLE: a rule that could not be read is never a rule that held.
+ */
+export interface CheckContext {
+  readonly request?: string;
+  readonly material?: readonly { readonly name: string; readonly text: string }[];
+}
+
 export interface Observer {
   readonly id: ObserverId;
   /** the measurement in words, for the review screen and the skill file */
   describe(params: Measurement['params']): string;
   /** refuse a malformed measurement before it is stored, not when it is first run */
   validate(params: Measurement['params']): string | null;
-  observe(text: string, params: Measurement['params']): ObserverResult;
+  observe(text: string, params: Measurement['params'], context?: CheckContext): ObserverResult;
 }
 
 export { proseRegions, wordsOf, sentencesOf, paragraphsOf, quantile, findTerms, splitTerm, DEFAULT_HEDGES, proseBlocks } from './text.js';
@@ -237,13 +251,15 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   // ── What must be there: sections, mentions, figures, how the close starts (./structure.ts) ────
   PRESENCE,
   FEATURE,
+  // ── What a method requires of the work: a table, and figures the writer was given (./obligations.ts) ──
+  TABLE, CITED,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];
 export const OBSERVER_IDS = Object.keys(OBSERVERS) as ObserverId[];
 
-export function measure(text: string, m: Measurement): ObserverResult {
-  return OBSERVERS[m.observer].observe(text, m.params);
+export function measure(text: string, m: Measurement, context?: CheckContext): ObserverResult {
+  return OBSERVERS[m.observer].observe(text, m.params, context);
 }
 
 export function validateMeasurement(m: Measurement): string | null {

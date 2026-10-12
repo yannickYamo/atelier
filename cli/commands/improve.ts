@@ -72,8 +72,10 @@ export async function improve(): Promise<void> {
     // nesting, recurrence, claimability, repair history — and says what each requirement is
     // blocked on, which is the question a person actually has.
     const events = store.readEvents(L);
-    const observations = store.listObservations(L);
-    const invocations = store.listInvocations(L);
+    // An observation made on a run marked as a test is a measurement of the skill, never evidence it is changed on.
+    const tests = store.testRunIds(L);
+    const observations = store.listObservations(L).filter((o) => !o.invocationId || !tests.has(o.invocationId));
+    const invocations = store.listLearningInvocations(L);
     const repairs = foldRepairs(events);
     const prohibitions = foldProhibitions(events);
 

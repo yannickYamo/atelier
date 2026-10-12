@@ -29,7 +29,7 @@ import { sessionCorpus } from '../corpus.js';
 export async function learnTells(L: store.StoreLayout, name: string, probe = 0, budget?: Budget, includeReserved = false): Promise<{ before: number; after: number; drafts: number; topics: number } | null> {
   const corpus = sessionCorpus(name, { includeReserved });
   if (!corpus.length) return null;
-  const drafts: TellDraft[] = store.listInvocations(L).map((i) => ({ task: i.input, text: i.repair?.draft ?? i.output }));
+  const drafts: TellDraft[] = store.listLearningInvocations(L).map((i) => ({ task: i.input, text: i.repair?.draft ?? i.output }));
   if (probe > 0) {
     const active = store.getActive(L) ?? die(`no built skill called "${name}".`);
     const served = resolveServedVersion(L, active, '');

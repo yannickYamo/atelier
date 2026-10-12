@@ -62,7 +62,10 @@ export interface RecordedTaste {
 export async function recordTaste(L: store.StoreLayout, v: StandardVersion, text: string, task: string | null,
   invocationId: string | null, budget: Budget,
   /** readings already taken of exactly this text (by a taste repair), recorded instead of reading again */
-  taken: readonly TasteReading[] | null = null): Promise<RecordedTaste> {
+  taken: readonly TasteReading[] | null = null,
+  /** false for a run marked as a test: the text is read and nothing is kept. A reading kept from a held-back case
+   *  would be offered for labelling, and labels change what later runs are held to */
+  keep = true): Promise<RecordedTaste> {
   const model = readerModel();
   const rules = tasteRules(v);
   const permissions = tastePermissions(rules, store.readEvents(L), model);
@@ -71,6 +74,7 @@ export async function recordTaste(L: store.StoreLayout, v: StandardVersion, text
   const at = new Date().toISOString();
   const readingId = sha(`${v.standardVersionHash}|${sha(text)}|${at}`);
   const held = heldBack(readingId, holdbackShare());
+  if (!keep) return { readings, permissions, held };
   const hashOf = new Map(rules.map(({ rule, key }) => [key, statementHash(rule)]));
   store.appendEvent(L, { kind: 'TASTE_READING', readingId, invocationId, standardVersionHash: v.standardVersionHash, readerModel: model, at, blind: held,
     readings: readings.map((r) => ({ ...r, statementHash: hashOf.get(r.key) ?? '', ...(r.quote ? { passage: passageAround(text, r.quote) } : {}) })) });

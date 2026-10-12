@@ -60,6 +60,8 @@ export interface EvalSummary {
       readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null;
       /** for answers: work and result claims are decided by patterns, other specifics are listed */
       readonly answers: boolean;
+      /** the kind of work, when the claim check was never measured on it: its findings are listed, never cut */
+      readonly unmeasured?: string | null;
     };
     readonly copying: { readonly longest: number; readonly limit: number } | null;
     /** `held`: the format's hard limits (the FORMAT line) held; null when the skill measures no format */
@@ -158,7 +160,8 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   if (req.contract) out.push(`  ${tag(null)}  ${pad('required rules', 17)}a structured output: held by its output contract, not by prose rules`);
   else out.push(`  ${tag(req.broken.length === 0)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id}${b.label ? ` "${b.label}"` : ''} (${b.detail})`).join(', ')}` : ''}`);
   const cl = g.claims;
-  const reader = cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone, on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
+  const reader = cl.unmeasured ? ` · not measured on ${cl.unmeasured}: what the check finds is listed, never cut`
+    : cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone, on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
   if (cl.state === 'off') out.push(`  ${tag(null)}  ${pad('invented claims', 17)}not checked: turned off for this run (--allow-unsourced)`);
   else if (cl.state === 'not-checked') out.push(`  ${tag(false)}  ${pad('invented claims', 17)}not checked: the claim reader could not run, so this is not a pass`);
   else out.push(`  ${tag(cl.delivered === 0 && cl.unconfirmed === 0)}  ${pad('invented claims', 17)}${cl.delivered} delivered · ${cl.cut} cut${cl.unconfirmed ? ` · ${cl.unconfirmed} unconfirmed` : ''}${cl.disputed ? ` · ${cl.disputed} disputed (one of two reads flagged it: check before you publish)` : ''}${cl.listed ? ` · ${cl.listed} listed to check` : ''}${cl.agreement ? ` · ${agreementOf(cl.agreement)}` : ''}${cl.answers ? ' · answers: work and results by pattern' : ''}${reader}`);

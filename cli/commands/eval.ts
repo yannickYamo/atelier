@@ -27,11 +27,14 @@ const rate = (x: number, n: number): string => (n ? `${pct(x / n)} (${x}/${n}, 9
 export function evaluate(): void {
   const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
-  const evals = listEvals(L);
+  // A run marked as a test (a benchmark answer, a held-back case) is a measurement of the skill, not use of it: it is
+  // in none of the counts below, and the number left out is said.
+  const testRuns = store.testRunIds(L);
+  const evals = listEvals(L).filter((e) => !testRuns.has(e.invocationId));
   const evaluated = new Set(evals.map((e) => e.invocationId));
   // Ratings of runs with no evaluation (before 1.0) are left out of every count here, and those runs are named.
   const ratings = latestRatings(L).filter((r) => evaluated.has(r.invocationId));
-  const unevaluated = store.listInvocations(L).filter((r) => !evaluated.has(r.invocationId)).length;
+  const unevaluated = store.listLearningInvocations(L).filter((r) => !evaluated.has(r.invocationId)).length;
   const byRun = new Map(ratings.map((r) => [r.invocationId, r]));
   // THE COHORT: a release where there is one; else the skill version (a skill built without a corpus has no
   // release). Never pooled across either.
@@ -72,6 +75,7 @@ export function evaluate(): void {
       notShippedBecause: noRating, toRead: queue.map((e) => e.invocationId), coverage }, null, 1));
     return;
   }
+  if (testRuns.size && !argv.includes('--json')) console.log(`(${testRuns.size} run(s) marked as tests are left out: a benchmark answer or a held-back case is a measurement, not use.)`);
   if (!evals.length) { console.log(`No evaluated runs of "${name}" yet: every run from Atelier 1.0 records one (atelier invoke --skill ${name} "<task>").`); return; }
   console.log(`${evals.length} evaluated run(s) of "${name}", ${ratings.length} rated by you.${unevaluated ? ` ${unevaluated} earlier run(s) ran before evaluations were kept and are not counted.` : ''}`);
   for (const c of summary) {

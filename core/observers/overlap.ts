@@ -61,11 +61,13 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
     // run[i]: how many words from word i on the text shares with one piece, taking the piece that goes furthest.
     // Read from the end: along one piece, the run from i is one word longer than the run from i + 1.
     const run = new Array<number>(grams.length).fill(0);
-    let after = new Map<string, number>();
+    // A place along a piece, as one number: which piece, and how far the piece runs ahead of the text there.
+    const pieces = Math.max(1, corpus.length);
+    let after = new Map<number, number>();
     for (let i = grams.length - 1; i >= 0; i--) {
-      const here = new Map<string, number>();
+      const here = new Map<number, number>();
       for (const h of starts.get(grams[i]) ?? []) {
-        const along = `${h.piece}:${h.at - i}`;
+        const along = (h.at - i + w.length) * pieces + h.piece;
         const length = (after.get(along) ?? N - 1) + 1;
         here.set(along, length);
         if (length > run[i]) run[i] = length;

@@ -55,7 +55,8 @@ export async function verify(): Promise<void> {
   // draft whose stories are theirs adds them to the material, or passes --allow-unsourced.
   // The request is supplied, as it is to invoke: a detail the person typed is theirs to have repeated.
   const material = [flag('--task') ?? '', ...[...store.getMaterial(L), ...boundMaterial()].map((m) => m.text)].filter(Boolean).join('\n\n');
-  const checks = checksFor(L, { material, task: flag('--task') ?? '', guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  const named = [...store.getMaterial(L), ...boundMaterial()].map((m) => ({ name: m.name, text: m.text }));
+  const checks = checksFor(L, { material, task: flag('--task') ?? '', context: { ...(flag('--task') ? { request: flag('--task') } : {}), material: named }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);

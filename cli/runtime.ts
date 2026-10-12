@@ -67,6 +67,10 @@ export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === 
 // said so. A census test proves every option the codebase reads is declared, which is what stops the
 // table going stale one flag at a time.
 export const VALUED_OPTIONS: readonly string[] = [
+  // `atelier method`: the one finished example, and what the skill is for
+  'golden', 'for',
+  // `atelier evolve`: the briefs to work on, how many rounds, and (to a run) what earlier drafts left out
+  'briefs', 'rounds', 'carry-note',
   'with',
   'api-key-env', 'applies-when', 'arm-set', 'backend', 'base-url', 'brief',
   'candidate', 'cap', 'complaint', 'context', 'decision',
@@ -94,7 +98,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];
 
 export const argv = process.argv.slice(2);
@@ -631,6 +635,8 @@ export interface ProposalMeta {
   readonly needs: string | null;
   /** for a measured rule: of the pieces it was checked on, how many could be measured, how many meet it, and whether those pieces were independent of the target */
   readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean;
+    /** a rule on sentence length where the writer's rhythm is not a signature of theirs (core/observers/rhythm-signature.ts): why, in words */
+    readonly contextual?: string;
     /** the limit was moved to where the author's own pieces are; the counts are the held-out pieces against the limit before it moved */
     readonly fitted?: boolean } | null;
   /**

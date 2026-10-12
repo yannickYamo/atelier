@@ -103,7 +103,9 @@ export type RuleKind = 'GENERATIVE' | 'BOUNDARY';
  */
 export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'HEDGE_RATE'
   | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
-  | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE';
+  | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
+  // what a method requires of the work itself (core/observers/obligations.ts)
+  | 'TABLE' | 'CITED';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
@@ -231,6 +233,14 @@ export interface Requirement {
    * sometimes makes, with this rate, rather than as something every piece must do.
    */
   readonly observedRate?: { readonly present: number; readonly applicable: number };
+  /**
+   * FOR A REQUIREMENT THAT COMES FROM A METHOD (core/method/standard.ts): what kind of thing it asks, which decides
+   * how it can be checked and what a failure is answered with. DELIVERABLE is something the output must hold, read
+   * by code on the output. EXECUTION is something the work must have been made from or done with, counted only
+   * where an artifact shows it (a figure found in the bound material). JUDGEMENT is the rest: stated, shown to the
+   * writer, and reported as not measured. Absent on a rule that describes how an author writes.
+   */
+  readonly obligation?: 'DELIVERABLE' | 'EXECUTION' | 'JUDGEMENT';
 }
 
 /**
@@ -509,7 +519,9 @@ export interface InvocationSettings {
   readonly temperature?: number;
   readonly flags: { readonly drafts: number; readonly noTaste: boolean; readonly allowUnsourced: boolean; readonly placeholders: boolean;
     /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
-    readonly testRun?: boolean };
+    readonly testRun?: boolean;
+    /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
+    readonly carryNoteHash?: string };
 }
 
 export interface InvocationRecord {
@@ -606,6 +618,8 @@ export interface RepairRecord {
   readonly storiesCut?: readonly string[];
   /** specifics a `list` format left in for the person to check (core/observers/formats.ts, `claims`) */
   readonly claimsToCheck?: readonly string[];
+  /** what the steps after the first repair said they did or could not do (a draft written again for a missing section, and how it fared): printed on the run, and kept so the record can say why */
+  readonly notes?: readonly string[];
   /** the rules whose rewrites `integrityReverted` refused, so a refusal is charged to the rule it was for */
   readonly revertedRules?: readonly string[];
   /** host repairs only: what the host's rewrite lost that the draft claimed (it holds the pen, so this is reported, not reverted) */

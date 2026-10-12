@@ -59,6 +59,9 @@ const sideFor = (pairKind: string, unitId: string, salt: string): 'A' | 'B' =>
  * whether compiling that material beats simply showing it. Reading a different set would compare two
  * things at once.
  */
+/** The sealed files that are not held back: what an arm that is shown the author's work may be shown. */
+export const openFiles = <T extends { readonly id: string }>(files: readonly T[], reservedIds: readonly string[]): T[] => files.filter((f) => !reservedIds.includes(f.id));
+
 function corpusTextForBaseline(): string {
   const manifest = runFile('corpus-paths.json');
   if (!existsSync(manifest)) {
@@ -66,7 +69,10 @@ function corpusTextForBaseline(): string {
       + 'paste-the-work baseline cannot be built from the same material.');
   }
   const files = readJson<{ id: string; path: string }[]>(manifest, { kind: 'array', what: 'the corpus manifest' });
-  return files.map((f) => `--- ${f.id} ---\n${readFileSync(f.path, 'utf8')}`).join('\n\n');
+  // THE RESERVE IS LEFT OUT, AS THE LINE ABOVE HAS ALWAYS SAID. The manifest lists every piece intake sealed, the
+  // pieces held back among them, and read whole it pasted each held-back reference into the prompt of the arm it
+  // was then compared with.
+  return openFiles(files, (loadSession().reservation?.reserved ?? []).map((u) => u.unitId)).map((f) => `--- ${f.id} ---\n${readFileSync(f.path, 'utf8')}`).join('\n\n');
 }
 
 /**

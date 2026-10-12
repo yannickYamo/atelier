@@ -145,7 +145,11 @@ export function spanIntegrity(fullOriginal: string, replacement: string, allowed
    */
   claimParts: readonly string[] = []): Integrity {
   if (specificsExpected) return { ok: true, lost: [] };
-  const original = claimParts.reduce((o, c) => (c && o.includes(c) ? o.replace(c, ' ') : o), fullOriginal);
+  // A claim that is a figure is taken out where it stands as a figure, not where its digits first appear: "40" is not
+  // the end of "2040" nor of "$1,240". A longer claim is taken out first, so a figure inside it goes with it.
+  const esc = (c: string): string => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const without = (o: string, c: string): string => (/^\d/.test(c) ? o.replace(new RegExp(`(?<![\\d.,$€£])${esc(c)}(?![\\d])`), ' ') : o.replace(c, ' '));
+  const original = [...claimParts].sort((x, y) => y.length - x.length).reduce((o, c) => (c && o.includes(c) ? without(o, c) : o), fullOriginal);
   const lost: string[] = [];
   // A term the rule asked to remove licenses whatever it contains: removing "not X, it's Y" removes a
   // negation, and removing a flagged "perhaps" removes a qualifier. That is the repair, not a loss.

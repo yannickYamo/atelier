@@ -429,7 +429,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   const rechoose = contrastFlag?.trim().toLowerCase() === 'auto';
   // What is kept is the choice; what ships is the part of it that still teaches this standard. Storing the shipped
   // part would lose, for good, a pair that an amendment set aside and a later one brings back.
-  const chosenPairs = contrastOff ? [] : rechoose ? selectContrastPairs(store.listInvocations(L), v, heldBack) : keptPairs;
+  const chosenPairs = contrastOff ? [] : rechoose ? selectContrastPairs(store.listLearningInvocations(L), v, heldBack) : keptPairs;
   const contrast = { off: contrastOff, pairs: contrastOff ? [] : contrastFor(chosenPairs, v) };
   const shipped = contrast.pairs;
   if (shipped.length) console.log(`Contrast examples: ${shipped.length} "write this, not that" pair(s) from past repairs (examples/contrast.md). Turn off with --contrast none.`);

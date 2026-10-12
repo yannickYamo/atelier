@@ -68,6 +68,8 @@ export interface ProposalEvidence {
   readonly needs: string | null;
   /** a measured rule's conformance on the pieces it was counted from */
   readonly inSample?: { readonly applicable: number; readonly present: number; readonly independent?: boolean; readonly weak?: boolean;
+    /** a rule on sentence length where the writer's rhythm is not a signature of theirs (core/observers/rhythm-signature.ts): why, in words */
+    readonly contextual?: string;
     /** the proposed limit was moved to where the author's pieces are; the counts are against the limit before it was moved */
     readonly fitted?: boolean } | null;
   /** a measured rule against the author's own pieces (read and held out): how many pieces, and which break it */
@@ -117,6 +119,12 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     if (p.measurement.observer === 'STYLE_DISTANCE') {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 2,
         why: `${present} of ${applicable} ${where} are closer to you than to the model; used to choose between drafts` };
+    }
+    // SENTENCE LENGTH FOLLOWS THE PIECE unless it was detected as the writer's own rhythm: shown and counted, never
+    // required on a count. The owner can still make it required; the default is that a number is not a style.
+    if (e.inSample.contextual) {
+      return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,
+        why: `${e.inSample.contextual}; it is shown and used to choose between drafts, and never enforced unless you make it required` };
     }
     if (e.inSample.weak) {
       return { decision: 'APPROVE', materiality: 'PREFERRED', needs, strength: 1,

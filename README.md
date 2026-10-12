@@ -131,7 +131,7 @@ An outside test also found a real failure: an early runtime cut correct sentence
 | A strong model with examples | re-guessed every run | every run | no | not checked | nothing to undo |
 | Voice tools (Spiral, Writer, Jasper) | inferred by the vendor | the vendor, or its judge | by the vendor's own checks | not the focus | the vendor's call |
 | Style checkers (Vale, Markup AI) | rules written by hand | whoever edits them | yes, the rules they hold | not checked | yes, in the rule files |
-| Prompt optimizers (GEPA, SkillOpt, SSO, EvoSkill) | a metric someone else wrote | whoever owns the metric | by that metric | only if the metric does | a new prompt each round |
+| Prompt optimizers (GEPA, SkillOpt, EvoSkill; SSO with a judge in place of a metric) | a metric someone else wrote, or a judge's preference | whoever owns the metric or the judge | by that metric or judge | only if it does | each candidate is kept, by that tool |
 | **Atelier** | **your examples, approved rule by rule** | **only you** | **yes, with a pass or fail you can read** | **cut, by a measured checker** | **every release is versioned and rolls back** |
 
 Atelier keeps the part each one is good at. It finds the rules from your examples, the way a voice tool does. It checks them on every output, the way a style checker does. It can search for a better way to carry them, the way an optimizer does. The rules stay the ones you approved.

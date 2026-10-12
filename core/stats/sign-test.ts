@@ -13,18 +13,27 @@
 /**
  * Below this many discordant pairs, no p-value is quoted: the result is UNDERPOWERED, declared in
  * the design rather than discovered in the discussion section. At 25 discordant pairs the critical
- * count is 18 (two-sided exact p = 0.043) and power at a 75/25 true split is barely 0.63 — the
+ * count is 18 (two-sided exact p = 0.043) and power at a 75/25 true split is 0.73 — the
  * floor under which a null is uninterpretable rather than informative.
  */
 export const MIN_DISCORDANT = 25;
 
-const binomTail = (n: number, p: number, from: number): number => {
-  // P(X >= from) computed by iterating the pmf — stable for the study-sized n this serves.
-  let pmf = Math.pow(1 - p, n);          // P(X = 0)
-  let acc = from <= 0 ? pmf : 0;
+/**
+ * P(X >= from) for X ~ Binomial(n, p), summed over the mass function in logarithms. Started from (1 - p)^n as a plain
+ * number it is zero to a computer once n is large, and every term after it is zero times something: from n = 90 an
+ * exact interval came back as {1, 1}, and a paired test on a thousand pairs as p = 0, with no error.
+ */
+export const binomTail = (n: number, p: number, from: number): number => {
+  if (from <= 0) return 1;
+  if (from > n) return 0;
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const step = Math.log(p) - Math.log1p(-p);
+  let logPmf = n * Math.log1p(-p);       // log P(X = 0)
+  let acc = 0;
   for (let k = 1; k <= n; k++) {
-    pmf *= ((n - k + 1) / k) * (p / (1 - p));
-    if (k >= from) acc += pmf;
+    logPmf += Math.log((n - k + 1) / k) + step;
+    if (k >= from) acc += Math.exp(logPmf);
   }
   return Math.min(1, acc);
 };
