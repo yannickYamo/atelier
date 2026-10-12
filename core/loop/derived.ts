@@ -55,7 +55,7 @@ interface Read { readonly raw: string; readonly value: number; readonly percent:
  */
 function read(text: string): Read[] {
   const out: Read[] = [];
-  for (const m of text.matchAll(/([$€£]\s?)?(?<![\d.])(\d[\d,]*(?:\.\d+)?)(\s?%|\s?percent\b)?/g)) {
+  for (const m of text.matchAll(/([$€£]\s?)?(?<!\d)(?<!\d[.,])(\d[\d,]*(?:\.\d+)?)(\s?%|\s?percent\b)?/g)) {
     const raw = m[2].replace(/[.,]$/, ''); const value = Number(raw.replace(/,/g, ''));
     if (!Number.isFinite(value)) continue;
     if (!m[1] && !m[3] && /^(?:19|20)\d\d$/.test(raw)) continue;
@@ -64,7 +64,7 @@ function read(text: string): Read[] {
   return out;
 }
 
-const SPELLED: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, twenty: 20, fifty: 50, hundred: 100 };
+const SPELLED: Readonly<Record<string, number>> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, twenty: 20, fifty: 50, hundred: 100 };
 
 /** One priced offer as one line of the material states it: a fixed amount and a rate per unit, either of which may be absent. */
 interface Offer { readonly line: number; readonly fixed: number; readonly rate: number; readonly percent: boolean;
@@ -104,62 +104,80 @@ function offersOf(material: string): Offer[] {
  * least one other figure of the sentence must follow from it. True when every figure of the sentence is in the
  * material, one operation from it, or worked this way.
  */
-function shapes(sentence: string, material: string, known: readonly number[]): { alone: (f: Read) => boolean; from: (f: Read, n: number) => boolean; scenarios: number[]; figures: Read[] } {
+function shapes(sentence: string, material: string): { alone: (f: Read) => boolean; from: (f: Read, n: Scenario) => boolean; scenarios: Scenario[]; figures: Read[] } {
   const figures = read(sentence);
   const close = (v: number, f: Read): boolean => Number.isFinite(v) && Math.abs(atPrecisionOf(Math.abs(v), f.raw) - f.value) < 1e-9;
-  const offers = offersOf(material);
-  const periods = /\b(?:(?:a|per|each|every)\s+year|annual(?:ly)?|yearly)\b/i.test(sentence) ? [1, 12] : [1];
+  // PRICES ONLY. Every amount of an offer is written as money or as a percentage. Read from any figure, a head count
+  // was a "rate": 640 employees x 12 sourced "7,680 people a year", and two invented numbers vouched for each other.
+  const offers = offersOf(material).filter((o) => o.priced);
+  const yearly = /\b(?:(?:a|per|each|every)\s+year|annual(?:ly)?|yearly)\b/i.test(sentence);
+  const periods = yearly ? [1, 12] : [1];
   const across = offers.flatMap((a) => offers.filter((b) => b.line !== a.line).map((b) => [a, b] as const));
-  // Between two PRICES. On a fact sheet, a head count against a customer count "breaks even" at any number.
-  const breakEvens = across.filter(([a, b]) => a.priced && b.priced && a.percent === b.percent && a.rate !== b.rate && (a.rate !== 0 || b.rate !== 0))
+  const breakEvens = across.filter(([a, b]) => a.percent === b.percent && a.rate !== b.rate && (a.rate !== 0 || b.rate !== 0))
     .map(([a, b]) => ({ at: (a.fixed - b.fixed) / (b.rate - a.rate), money: a.percent })).filter((v) => v.at > 0);
   const spelled = [...sentence.toLowerCase().matchAll(/\b[a-z]+\b/g)].map((m) => SPELLED[m[0]]).filter((v): v is number => v !== undefined);
-  return { figures, scenarios: [...new Set([...figures.map((f) => f.value), ...spelled])],
-    // a year of a given figure, or a break-even: no scenario needed
-    alone: (f) => (periods.length > 1 && known.some((m) => close(m * 12, f))) || (!f.percent && breakEvens.some((v) => (v.money || !f.money) && close(v.at, f))),
-    // a total or a gap at the scenario's n
-    from: (f, n) => {
-      const totals = offers.filter((o) => o.rate !== 0).map((o) => ({ line: o.line, at: o.fixed + o.rate * n }));
+  const scenarios: Scenario[] = [...figures.filter((f) => !f.percent).map((f) => ({ n: f.value, money: f.money })), ...spelled.map((n) => ({ n, money: false }))]
+    .filter((x, i, all) => all.findIndex((y) => y.n === x.n) === i);
+  return { figures, scenarios,
+    // A year of a price, or a break-even: no scenario needed. A break-even is a count of units, or an amount where
+    // the rates are percentages of one; never a percentage.
+    alone: (f) => !f.percent && ((yearly && f.money && offers.some((o) => o.rate === 0 && close(o.fixed * 12, f))) || breakEvens.some((v) => (v.money || !f.money) && close(v.at, f))),
+    // A total or a gap at the scenario's n: an amount of money, written as one. A percentage rate is of an amount.
+    from: (f, sc) => {
+      if (!f.money || f.percent) return false;
+      const totals = offers.filter((o) => o.rate !== 0 && (!o.percent || sc.money)).map((o) => ({ line: o.line, at: o.fixed + o.rate * sc.n }));
       const flat = offers.filter((o) => o.rate === 0).map((o) => ({ line: o.line, at: o.fixed }));
       const values = [...totals.map((t) => t.at), ...totals.flatMap((a) => [...totals, ...flat].filter((b) => b.line !== a.line).flatMap((b) => [a.at - b.at, b.at - a.at]))];
       return periods.some((p) => values.some((v) => close(v * p, f)));
     } };
 }
+interface Scenario { readonly n: number; readonly money: boolean }
 
-function worked(sentence: string, material: string, known: readonly number[]): boolean {
-  const sh = shapes(sentence, material, known);
-  const open = sh.figures.filter((f) => !derivable(f.raw, known) && !sh.alone(f));
-  if (!open.length) return sh.figures.length > 0;
-  return sh.scenarios.some((n) => {
-    const rest = open.filter((f) => f.value !== n);
-    return rest.length > 0 && rest.length >= open.length - 1 && rest.every((f) => sh.from(f, n));
+/** Whether each of `open` (figures of the sentence that nothing else explains, by value) is worked from the material. */
+function worked(sentence: string, material: string, open: readonly number[]): boolean {
+  const sh = shapes(sentence, material);
+  // A figure this reading does not see as written (spelled out, or with a scale word) is explained only as the
+  // scenario itself: "a shop of three". Two of them, or one that is no scenario, and nothing here explains it.
+  const unseen = [...new Set(open.filter((v) => !sh.figures.some((f) => f.value === v)))];
+  if (unseen.length > 1 || (unseen.length === 1 && !sh.scenarios.some((sc) => sc.n === unseen[0]))) return false;
+  const rest = sh.figures.filter((f) => open.includes(f.value) && !sh.alone(f));
+  if (!rest.length) return unseen.length === 0;
+  return sh.scenarios.filter((sc) => !unseen.length || sc.n === unseen[0]).some((sc) => {
+    const left = rest.filter((f) => f.value !== sc.n);
+    return left.length > 0 && left.length >= rest.length - 1 && left.every((f) => sh.from(f, sc));
   });
 }
+
+/** A year, and only a year: four digits from 1900 to 2099 with no currency sign, no thousands comma, no percent. */
+const YEAR = /(?<![$€£\d,.])(?<![$€£]\s)\b(?:19|20)\d\d\b(?![,.]\d|\s?%|\s?percent\b)/g;
 
 /**
  * Whether every figure in `sentence` is the person's or computed from theirs. A sentence with no figure is
  * not a derived figure (false): what it claims is for the rest of the check to judge.
  */
 export function derivedFromKnown(sentence: string, material: string): boolean {
-  const figures = read(sentence);
+  const text = sentence.replace(YEAR, ' ');
+  const figures = numbersIn(text);
   if (!figures.length) return false;
   const known = [...new Set(numbersIn(material).map(Number).filter(Number.isFinite))];
-  if (figures.every((f) => derivable(f.raw, known))) return true;
-  return known.length <= MAX_WORKED && worked(sentence, material, known);
+  const open = figures.filter((f) => !derivable(f, known)).map(Number);
+  if (!open.length) return true;
+  return known.length <= MAX_WORKED && worked(text, material, open);
 }
 
 /**
  * ONE FIGURE, WORKED FROM THE MATERIAL, for a check that reads units and one step of arithmetic more strictly than
  * the claim check does (the method's "every figure from the sources", ../observers/obligations.ts) and asks only
- * about a figure it could not find. True when `value` is a year of a given figure or a break-even; a total or a gap
- * at a scenario the sentence states; or that scenario itself, when another figure of the sentence follows from it.
+ * about a figure it could not find. True when `value` is a year of a price or a break-even; a total or a gap at a
+ * scenario the sentence states; or that scenario itself, when an amount in the sentence follows from it.
  */
 export function workedFromMaterial(sentence: string, value: number, material: string): boolean {
   const known = [...new Set(numbersIn(material).map(Number).filter(Number.isFinite))];
   if (known.length > MAX_WORKED) return false;
-  const sh = shapes(sentence, material, known);
+  const sh = shapes(sentence, material);
   const f = sh.figures.find((x) => x.value === value);
   if (!f) return false;
-  if (sh.alone(f) || sh.scenarios.some((n) => n !== value && sh.from(f, n))) return true;
-  return sh.figures.some((g) => g.value !== value && !known.includes(g.value) && sh.from(g, value));
+  if (sh.alone(f) || sh.scenarios.some((sc) => sc.n !== value && sh.from(f, sc))) return true;
+  const me = sh.scenarios.find((sc) => sc.n === value);
+  return me !== undefined && sh.figures.some((g) => g.value !== value && !known.includes(g.value) && sh.from(g, me));
 }

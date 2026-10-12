@@ -202,8 +202,8 @@ export function repeatsReference(output: string, c: Pick<GoldenCase, 'material' 
   }
   return longest;
 }
-/** Words in a row shared with a text the writer was given, for them to count as taken from it: one shared word is the language, three are the source. */
-export const GIVEN_RUN = 3;
+/** Words in a row shared with a text the writer was given, for them to count as taken from it: a few shared words are the language (at three, one copied run of 14 words in three slipped under the bar on an author's own prose), five are the source. */
+export const GIVEN_RUN = 5;
 /** An output may share this many words in a row with the reference by chance of subject; more is carried wording. */
 export const CARRIED_RUN = 12;
 

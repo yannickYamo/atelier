@@ -138,7 +138,7 @@ function inDigits(request: string): { text: string; from: number[]; spelled: Set
  * A COUNT IN A SENTENCE THAT REPORTS, BESIDE A SENTENCE THAT ASKS, IS NOT A LENGTH. "We indexed 1,200 pages. Write the
  * changelog entry." asked for an entry and was held to 1,200 pages. The sentence a count stands in reports when a
  * subject and a verb come before it and none of them asks, sets a limit or introduces a length ("About 600 words."
- * and "It should be 600 words." are still read); and only where another sentence of the request does the asking.
+ * and "It should be 600 words." are still read); and only where a LATER sentence of the request does the asking.
  */
 const ASKS = /\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make|keep|summari[sz]e|explain|describe)\b/i;
 const SETS_A_LENGTH = /\b(?:should|must|shall|needs? to|aim|target|limit|length|long|max(?:imum)?|min(?:imum)?|under|over|within|most|least|than|up to|about|around|roughly|approximately|exactly|between|in)\b|~/i;
@@ -148,7 +148,9 @@ function reportsBesideAnAsk(text: string, at: number): boolean {
   if (i === -1 || bounds.length <= 2) return false;
   const before = text.slice(bounds[i], at);
   if (before.trim().split(/\s+/).filter(Boolean).length < 2 || ASKS.test(before) || SETS_A_LENGTH.test(before)) return false;
-  return bounds.slice(0, -1).some((b, k) => k !== i && ASKS.test(text.slice(b, bounds[k + 1])));
+  // BEFORE the asking: what comes first sets the scene. A sentence after the ask is far more often about the piece
+  // ("Write a post about the launch. I'd like 600 words.", "The final piece will be 600 words.") and is read.
+  return bounds.slice(0, -1).some((b, k) => k > i && ASKS.test(text.slice(b, bounds[k + 1])));
 }
 
 function located(request: string): { start: number; stated: StatedLength }[] {

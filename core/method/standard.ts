@@ -56,10 +56,15 @@ export function stepsOf(note: string): MethodStep[] {
   // THE NOTE'S TITLE IS NOT A STEP: its first line, when that is a name and not a sentence (no full stop, a blank
   // line under it). "Competitive analysis — how we do it" was shown to the owner as a step nobody can follow.
   const firstAt = lines.findIndex((l) => l.trim());
-  const titled = firstAt !== -1 && !/^\s*(?:[-*+]|\d+[.)]|#{1,6})\s/.test(lines[firstAt]) && !/[.!?:;]\s*$/.test(lines[firstAt])
-    && lines[firstAt].trim().split(/\s+/).length <= 10 && !(lines[firstAt + 1] ?? '').trim();
+  // Not a rule ("Always open with the verdict") and not an instruction ("Open with a Summary section"): those are steps
+  // however they are punctuated. And only above something: a note of one line is its one step.
+  const first = firstAt === -1 ? '' : lines[firstAt].trim();
+  const titled = firstAt !== -1 && !/^(?:[-*+]|\d+[.)]|#{1,6})\s/.test(first) && !/[.!?:;]$/.test(first) && first.split(/\s+/).length <= 10
+    && !(lines[firstAt + 1] ?? '').trim() && lines.slice(firstAt + 1).some((l) => l.trim())
+    && !/\b(?:must|never|always|do not|don't|required?|shall|only)\b/i.test(first)
+    && !/^(?:open|start|begin|lead|end|close|finish|conclude|include|add|write|keep|give|put|use|state|list|name|say|check|make|call|flag|ask|point|prefer|separate|weigh|size|then)\b/i.test(first);
   for (const [at, line] of lines.entries()) {
-    if (titled && at === firstAt) { under = line.trim(); continue; }
+    if (titled && at === firstAt) continue;
     const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
     if (heading) { closeItem(); closePara(); under = heading[1].replace(/[*_`]/g, '').trim(); continue; }
@@ -144,30 +149,42 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>): Meas
   // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
   // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
   const conditional = /\b(?:do not|don't|never|not|no(?!-)|unless|only when|only if|if|when|where|whenever|except|optional(?:ly)?)\b/i.test(step);
-  // WHAT THE EXAMPLE HAS, BY ITS OWN NAME, COMES FIRST. A wording is one way to say it; "Size the market with a
-  // Market size section", "under a Blocking heading" and "an Open issues section" over "OPEN ISSUES:" are others, and
-  // each round of testing found one more. A section of the example named in the step, in any case, introduced by
-  // "a", "an" or "one" and followed by the word that says it is one (section, heading, part, line), is that section.
-  // A name alone is not enough ("what would change the recommendation" asks for no section), nor is one spoken of
-  // as already there ("keep the Background section short").
-  if (!conditional) {
-    const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
-    const found = outline.sections.map((sec) => ({ sec, name: norm(sec),
-      at: Math.min(...['a', 'an', 'one'].flatMap((art) => ['section', 'heading', 'part', 'line'].map((kind) => low.indexOf(` ${art} ${norm(sec)} ${kind} `))).filter((i) => i !== -1), Infinity) }))
-      .filter((x) => Number.isFinite(x.at) && x.name.length >= 3).sort((a, b) => a.at - b.at);
-    if (found.length) {
-      // Where is said by the verb that introduces the name, and by nothing else.
-      const before = (x: { at: number }): string => low.slice(0, x.at + 1);
-      const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
-      const closes = /\b(?:ends?|closes?|finish(?:es)?|concludes?)(?: with)? $/.test(before(found[found.length - 1]));
-      return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1) });
+  // WHAT THE EXAMPLE HAS, BY ITS OWN NAME. A wording is one way to say it; "Size the market with a Market size
+  // section", "under a Blocking heading" and "an Open issues section" over "OPEN ISSUES:" are others, and each round
+  // of testing found one more. A section of the example named in the step, in any case, is that section when the
+  // step puts it in the work: after "with", "in", "under", "include", "add", "have", "contain", "write", "then" or
+  // "and", as "a", "an" or "one" of them, and called a section or a heading. "A Summary line" is one only where the
+  // work opens or ends with it. Everything else names it in passing or tells the writer to leave it out ("avoid a
+  // Summary section", "add a status line to the footer"), and asks for nothing.
+  const low = ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
+  const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'then', 'and'];
+  const EDGE = /\b(?:opens?|starts?|begins?|leads?|ends?|closes?|finish(?:es)?|concludes?) with $/;
+  const placed = (sec: string): number => {
+    const hits: number[] = [];
+    for (const art of ['a', 'an', 'one']) for (const kind of ['section', 'heading', 'line']) {
+      const phrase = ` ${art} ${norm(sec)} ${kind} `;
+      for (let at = low.indexOf(phrase); at !== -1; at = low.indexOf(phrase, at + 1)) {
+        const before = low.slice(0, at + 1);
+        if (kind === 'line' ? EDGE.test(before) : PUTS.some((w) => before.endsWith(` ${w} `))) hits.push(at);
+      }
     }
-  }
+    return hits.length ? Math.min(...hits) : -1;
+  };
+  const found = conditional ? [] : outline.sections.map((sec) => ({ sec, name: norm(sec), at: placed(sec) })).filter((x) => x.at !== -1 && x.name.length >= 3).sort((a, b) => a.at - b.at);
   const named = conditional ? [] : [
     ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\s+(?:with\s+)?(?:an?\s+|the\s+|its\s+|one\s+)?${NAME}\s*(?:section|heading|part)\b`, 'gu')),
     ...step.matchAll(new RegExp(String.raw`\b(${VERB})\w*\b[^.;]*?\b(?:section|heading|part)\s+(?:called|named|titled|headed)\s+${NAME}`, 'gu')),
     ...step.matchAll(new RegExp(String.raw`\b([Uu]nder)\s+(?:the\s+|a\s+)?heading\s+${NAME}`, 'gu')),
   ].map((m) => ({ verb: m[1].toLowerCase(), name: (m[2] ?? m[3]).trim(), at: m.index })).filter((x) => x.name.length >= 3).sort((a, b) => a.at - b.at);
+  // The example's own names decide only when they cover everything the step names outright: "open with a Glossary
+  // section and include a Summary section", over an example with no Glossary, is the owner's to settle below.
+  if (found.length && named.every((x) => found.some((f) => f.name === norm(x.name)))) {
+    // Where is said by the verb that introduces the name, and by nothing else.
+    const before = (x: { at: number }): string => low.slice(0, x.at + 1);
+    const opens = /\b(?:opens?|starts?|begins?|leads?)(?: with)? $/.test(before(found[0]));
+    const closes = /\b(?:ends?|closes?|finish(?:es)?|concludes?)(?: with)? $/.test(before(found[found.length - 1]));
+    return sectionsCheck(found.map((x) => x.sec), outline, { opens, closes: closes && !(opens && found.length === 1) });
+  }
   const sections = named.map((x) => x.name).filter((n, i, all) => all.findIndex((o) => norm(o) === norm(n)) === i);
   if (sections.length) {
     // Where is said by the verb, and by nothing else: "listing the first three risks" says nothing of where.

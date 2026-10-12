@@ -139,3 +139,29 @@ describe('the method\'s figure rule on a fact sheet: no looser than it was', () 
     expect(honest.filter(fails)).toEqual(['We recommend a 30-day trial for enterprise buyers.']);
   });
 });
+
+// An independent review of the first version: any figure of the material was a "rate", so a head count times twelve
+// sourced a number of people, two invented numbers vouched for each other, and a count satisfied a percentage.
+describe('what a review of the first version found', () => {
+  const sheet = 'Pricing: Starter $29 per user per month.\nHeadcount: 640 employees.\nData centres: 4 regions.';
+  it('only prices are worked from, and only into amounts of money', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    const fails = (t: string): boolean => measure(t, { observer: 'CITED', params: { allow: 0 } }, { request: '', material: [{ name: 'sheet.md', text: sheet }] }).verdict === 'VIOLATED';
+    for (const t of ['Net revenue retention is 48% a year.', 'It plans to hire 7,680 people a year.', 'It has 55 offices and 35,200 contractors.', 'It has 9 offices and 261 partners.',
+      'Each of its 9 regions has 5,760 servers.', 'No one doubts its 611 patents.', 'Its ten largest customers pay $6,400 each.']) expect(fails(t), t).toBe(true);
+  });
+  it('the claim check reads the same', () => {
+    expect(derivedFromKnown('With 40 offices the firm employs 480 people.', 'Founded with 12 staff in one room.')).toBe(false);
+    expect(derivedFromKnown('Estimata employs 30 people and has 14,970 users.', M.quarry)).toBe(false);
+    expect(derivedFromKnown('With 100 users, churn is 7,900%.', M.quarry)).toBe(false);
+    expect(derivedFromKnown('Tillcraft holds 26% of a market of 1,000 shops.', M.kettle)).toBe(false);
+    expect(derivedFromKnown('Growth runs at 36% a year.', 'We have 3 seats and 40 staff.')).toBe(false);
+    expect(derivedFromKnown('The 40 staff serve nine hundred customers.', 'We have 3 seats and 40 staff.')).toBe(false);
+  });
+  it('a figure with a scale word is read as it always was', () => {
+    const m = 'Revenue was $1.5 million last year. We have 3 million users.';
+    expect(derivedFromKnown('Revenue was $1.5 million last year.', m)).toBe(true);
+    expect(derivedFromKnown('We have 3 million users.', m)).toBe(true);
+    expect(derivedFromKnown('The team has 3 million users.', 'We have 3 seats.')).toBe(false);
+  });
+});

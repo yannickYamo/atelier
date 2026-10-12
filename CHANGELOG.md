@@ -7,6 +7,68 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed, for 2.0: the claim check deletes only where its deletions were measured
+
+A test round on real model runs (27 competitive analyses written by one model and read by one claim reader,
+synthetic briefs, labels by one reader who was not blind) found the invented-claim check doing harm outside the
+writing it was measured on. It cut 41 sentences; 32 were legitimate by that reading (correct arithmetic from the
+price list, the work's own verdict, a risk with no figure in it), and 9 were real inventions or wrong figures. Three
+runs were delivered with a section cut to nothing, two of them counted conformant. Replayed on the same runs, "list
+and never cut" deletes nothing and leaves the 9 in the text, listed.
+
+- **On a kind of work the check was not measured on, it lists and never cuts.** Its rates were measured on essays
+  and posts. A skill that declares another kind of work (`--class`, or a skill built by `atelier method`, which
+  reads the kind from the note's title and records it) has every finding, the reader's and the patterns', listed
+  for the owner to check. The list closes the delivered text, after everything the checks read
+  (`--no-unsourced-note` keeps it to the report). A skill that declares no kind, a known format, and prose keep
+  the behaviour they had. The card and the run panel show the reader's measured rates only where it was measured.
+- **Strict delivery stops there before anything is spent,** and says why: a check that only lists cannot decide
+  what is delivered. This means strict delivery is not available for analysis, contracts written as a method,
+  reviews or handover notes until a claim reader is qualified on that kind of work. Nothing here does that.
+- **No cut empties a section.** Where the check does cut, the last sentence under a heading stays, still flagged,
+  and the run fails on it by name. A draft written again for a missing section leaves its note in the run record.
+- **A figure worked from the material is the writer reading it.** One offer's total at a scenario the sentence
+  states (49 + 2.5% of 25,000), the gap between two offers at it, a year of either, a break-even between two
+  prices; an offer's amounts from one line of the material, prices only, worked only into amounts of money. On the round's sentences: 9 of 9 honest calculations
+  recognised (none was before), 0 of 13 invented or wrong figures. A free two-step search was tried first by the
+  tester and passed 7 of 12 invented figures; it is not used. A four-digit amount is no longer dropped as a year.
+- **A method step is checked when it names a section its example has,** however each is written. Of 16 steps in
+  three methods that name something the work must contain, 2 got a check; 12 do now, and 12 of 12 on three more
+  written with labels, clauses and bold, with no step tied to a section it does not ask for. The example reader
+  reads a name alone on its line, and a clause that goes on after its name. A note's title is not a step.
+- **Reproduction counts only sections that say something:** three words, or a fifth of the expert's own section
+  when that is fewer. One word under each heading, filler text and two names run into one heading no longer count,
+  and a section left empty is never a reproduction. **The repeat check leaves out what the writer was given:** two
+  real outputs were marked as copies for sharing the table header every served example carries and then a name and
+  a price from the material.
+- **A count in a sentence that reports, before the sentence that asks, is not a length.** Of 20 sealed requests
+  holding a number that is not a length, 3 were read as one; none is now. It still misses a length with no count
+  in it ("Keep it to a page", "a short paragraph") and one in bullet points.
+- **An adopted note reaches the export,** under the heading a run serves it under, and an amended standard now
+  says that it retired one, on the run and on the status.
+
+Measured in this round and not changed by it:
+- **A judgement is still flagged like a fact.** "Sentrix could offer a 12-month term" is listed as unsourced. A rule
+  that reads modal sentences as judgement was specified and not built: on the 11 such sentences of the round it
+  clears 4 to 6, it would drop from the list a sentence the same reading labelled an invention, and on prose it
+  would let an invented story through in a sentence that says "could". Where nothing is cut, a longer list costs
+  less than a shorter one that hides something.
+- **The method's figure rule on a fact sheet** fails 11 of 20 invented figures and 1 of 20 honest sentences, as
+  before. The 9 it passes are a true figure moved to another subject, a wrong year or quarter, a single digit and
+  one correct sum the set labels invented; they need the subject read. The set is kept as a test, with the 9 named.
+- **The author's own held-back analyses** still carry sentences the claim reader flags: plain statements of what
+  the author knows and the material does not say. They are listed now, not cut. They would not pass a strict
+  check, and no rule here makes them.
+- **Work written with no markup is read by its layout, and layout is ambiguous.** A name alone on a line with
+  text under it is a section where there are three. At the very top of a text, a title cannot be told from a first
+  section followed by a one-line answer; a title followed by an introduction is read as a section, so "opens with"
+  then fails on it. Markdown headings and labels have neither problem.
+- A worked figure is checked for arithmetic, not for what it counts: an invented amount that happens to equal one
+  offer's total at a number the sentence states is listed as computed.
+- A step's check cannot yet be set by hand at the build; `atelier amend` is the way. An interrupted search cannot
+  be resumed. A task that paraphrases the held-back piece's conclusion, or material that holds it in pieces, is
+  not caught before a reproduction run.
+
 ### Fixed, for 2.0: a verdict that can be met by an empty shell or an invented number is not one
 
 Found by running both ways in from end to end as a new user would, and by an audit of the statistics.
@@ -64,8 +126,8 @@ Known and not fixed here:
   moved from one subject to another passes; currency and time units are not compared ("€500" meets "$500", "47
   minutes" meets "47 hours"); no unit is converted (1 g and 1,000 mg); a decimal comma is misread; a figure the
   writer proposes ("cap the delay at 30 seconds") is flagged like one it claims.
-- **The length reader still reads some counts that are not lengths** ("We indexed 1,200 pages. Write the changelog
-  entry.", "Find 10 words that rhyme"), as 1.x did, and misses some plain ones ("Give me two paragraphs.").
+- **The length reader still reads some counts that are not lengths** ("Find 10 words that rhyme"), as 1.x did,
+  and misses some plain ones.
 - Sections in a format no reader here knows (tracked changes, comments anchored to a line of a diff) are not seen.
   A speaker's name before a colon can be read as a label.
 

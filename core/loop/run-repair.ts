@@ -392,17 +392,28 @@ export function brokenByCut(before: string, after: string, opts: { readonly stru
  * two of them counted as conformant: a required section that is only its title is not the section.
  */
 export function emptyHeadings(text: string): number {
-  const lines = text.split('\n');
-  const level = (l: string): number => /^(#{1,6})[ \t]+\S/.exec(l)?.[1].length ?? 0;
+  const lines = text.split(/\r?\n/);
+  // A heading however markdown writes one: "## Risks" (indented up to three spaces), "Risks" over a rule of = or -,
+  // and a line that is nothing but bold, which writers use as one. Bold sits below every real heading.
+  const underline = (i: number): number => { const m = /^ {0,3}(=+|-{3,})\s*$/.exec(lines[i] ?? ''); return m ? (m[1].startsWith('=') ? 1 : 2) : 0; };
+  let fence = false;
+  const levels = lines.map((l, i) => {
+    if (/^ {0,3}(```|~~~)/.test(l)) { fence = !fence; return 0; }
+    if (fence) return 0;
+    const atx = /^ {0,3}(#{1,6})[ \t]+\S/.exec(l);
+    if (atx) return atx[1].length;
+    if (l.trim() && !/^\s*(?:[-*+>|]|\d+[.)])/.test(l) && (i === 0 || !lines[i - 1].trim()) && underline(i + 1)) return underline(i + 1);
+    return /^\s*(?:\*\*|__)[^*_\n]{2,60}(?:\*\*|__):?\s*$/.test(l) ? 7 : 0;
+  });
   let empty = 0;
   for (let i = 0; i < lines.length; i++) {
-    const at = level(lines[i]);
+    const at = levels[i];
     if (!at) continue;
     let body = false;
     for (let j = i + 1; j < lines.length && !body; j++) {
-      const l = level(lines[j]);
-      if (l && l <= at) break;
-      if (!l && /[\p{L}\p{N}]/u.test(lines[j])) body = true;
+      if (levels[j] && levels[j] <= at) break;
+      // the rule under a heading is part of the heading
+      if (!levels[j] && !(j === i + 1 && underline(j)) && /[\p{L}\p{N}]/u.test(lines[j])) body = true;
     }
     if (!body) empty++;
   }
@@ -526,9 +537,12 @@ export async function refineToStandard(
   const cutSafely = async (t: string, known: VerifyReport): Promise<{ text: string; report: VerifyReport; cut: string[] }> => {
     const e = await enforceClaims(skill, v, t, opts, known, memory);
     listedHere.push(...e.listed);
+    // Said once, and the cut at the end of the run still happens: a sentence kept for its section does not let a
+    // claim a later rewrite adds stay.
     if (e.kept.length) {
-      notes.push(`${e.kept.length} flagged claim(s) were not cut, because each is the last sentence of its section: check them before you use this`);
-      listedHere.push(...e.kept); keptUncut = true;
+      const note = 'a flagged claim that is the last sentence of its section was not cut: check it before you use this';
+      if (!notes.includes(note)) notes.push(note);
+      listedHere.push(...e.kept);
     }
     // Found by the pattern (may be cut with its parent) or by the judge (may only be redrafted).
     const patternDangling = e.cut.length ? danglingAfterCut(t, e.text, e.cut) : [];

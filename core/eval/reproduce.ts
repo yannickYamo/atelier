@@ -50,11 +50,11 @@ export interface Shape { readonly sections: { readonly of: number; readonly held
   readonly empty?: readonly string[] } }
 
 /**
- * WHAT A SECTION MUST HOLD TO COUNT. Five words, or a fifth of what the expert's own section holds when that is
- * fewer: one word under each heading, or "Lorem ipsum dolor", was counted as the work reproduced. A fifth, so a
- * short answer to a short section still counts; five, so a long section is never asked to be long.
+ * WHAT A SECTION MUST HOLD TO COUNT. Three words, or a fifth of what the expert's own section holds when that is
+ * fewer: one word under each heading was counted as the work reproduced. A fifth, so a short answer to a short
+ * section still counts; three, so "Approved, ship Friday." and a small table are still a section.
  */
-export const SECTION_WORDS = 5;
+export const SECTION_WORDS = 3;
 export const SECTION_SHARE = 1 / 5;
 
 /** A section's name as two writers would both write it: no case, no numbering, "&" as "and", no punctuation. */
@@ -68,14 +68,14 @@ const nameOf = (h: string): string => h.toLowerCase().normalize('NFKC').replace(
  */
 export function shapeAgainst(output: string, reference: string): Shape {
   const words = (t: string): number => (t.replace(/^\s*#{1,6}\s.*$/gm, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length;
-  const bodies = (text: string, heads: readonly Heading[]): { name: string; said: number; body: string }[] => heads.map((h, i) => {
+  const bodies = (text: string, heads: readonly Heading[]): { name: string; said: number; body: string; from: number; at: number }[] => heads.map((h, i) => {
     const next = heads.slice(i + 1).find((x) => x.level <= h.level);
     const body = text.slice(h.end, next ? next.start : text.length);
-    return { name: h.text, said: words(body), body };
+    return { name: h.text, said: words(body), body, from: h.end, at: h.start };
   });
   // A section that holds only a promise of itself holds nothing.
   // Alone, or after the section's own label ("Recommendation: TBD"); filler text however long it runs.
-  const PLACEHOLDER = /^[\W_]*(?:[\p{L}][\p{L} ]{0,40}:\s*)?(?:tbd|tbc|todo|tk|n\/?a|to be (?:done|written|added|confirmed|decided)|coming soon|placeholder|lorem(?:[ ,.]+[\p{L}]+){0,60})[\W_]*$/iu;
+  const PLACEHOLDER = /^[\W_]*(?:(?:[\p{L}][\p{L} ]{0,40}:\s*)?(?:tbd|tbc|todo)|tk|n\/?a|to be (?:done|written|added|confirmed|decided)|coming soon|placeholder|lorem(?:\s+ipsum(?:[ ,.]+[\p{L}]+){0,60})?)[\W_]*$/iu;
   const headings = headingsOf(reference);
   const top = headings.length ? Math.min(...headings.map((h) => h.level)) : 0;
   // The piece's own headings at its top level. With none, its labels, where three or more each say something: an
@@ -94,10 +94,14 @@ export function shapeAgainst(output: string, reference: string): Shape {
   // the reference takes the fullest heading of the output that names it and that no earlier section took.
   const taken = new Set<number>(); const empty: string[] = [];
   const holds = (want: { name: string; said: number }): boolean => {
-    const at = found.map((f, i) => ({ f, i })).filter(({ f, i }) => !taken.has(i) && named(f, want)).sort((x, y) => y.f.said - x.f.said)[0];
+    // The heading that is this name exactly before one that only holds it; then the fullest.
+    const exact = (f: { name: string }): number => (nameOf(f.name) === nameOf(want.name) ? 1 : 0);
+    const at = found.map((f, i) => ({ f, i })).filter(({ f, i }) => !taken.has(i) && named(f, want)).sort((x, y) => exact(y.f) - exact(x.f) || y.f.said - x.f.said)[0];
     if (!at) return false;
     taken.add(at.i);
-    if (!at.f.said) empty.push(want.name);
+    // Empty is nothing at all before the next section of the piece: a label over its sub-labels is not empty.
+    const nextSection = found.find((f, i) => i > at.i && wanted.some((w) => named(f, w)));
+    if (!words(output.slice(at.f.from, nextSection ? nextSection.at : output.length))) empty.push(want.name);
     return at.f.said >= Math.max(1, Math.min(SECTION_WORDS, want.said * SECTION_SHARE)) && !PLACEHOLDER.test(at.f.body.trim());
   };
   const missing = wanted.filter((x) => !holds(x)).map((x) => x.name);

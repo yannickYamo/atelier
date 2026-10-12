@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
 import * as store from '../../core/state/store.js';
-import { normalizeClass } from '../../core/observers/doc-class.js';
+import { normalizeClass, CLASS_ALIASES } from '../../core/observers/doc-class.js';
 import { unmeasuredKind } from '../../core/loop/claim-extract.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
@@ -58,10 +58,15 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
  */
 export function kindOfWork(note: string, name: string, declared: string | undefined = flag('--class')): string {
   if (declared?.trim()) return normalizeClass(declared);
-  const first = note.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
-  const title = /^(?:[-*+]|\d+[.)])\s/.test(first) ? '' : first.replace(/^#+\s*/, '').split(/\s[—–-]\s|[:,]/)[0].replace(/[^\p{L}\p{N}\s-]/gu, '').trim();
+  // Read, not declared, so never by a short name: a note titled "X" or a skill called "blog" is not thereby a post
+  // on X with its 280 characters. Only `--class` takes the short names (../../core/observers/doc-class.ts).
+  const slug = (t: string): string => t.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+  const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+  const first = body.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  const title = /^(?:[-*+]|\d+[.)])\s/.test(first) ? '' : first.replace(/^#+\s*/, '').split(/\s[—–-]\s|[:,]/)[0].trim();
   const words = title.split(/\s+/).filter(Boolean);
-  return normalizeClass(words.length >= 1 && words.length <= 4 && !/[.!?]$/.test(first) ? title : name);
+  const read = words.length >= 1 && words.length <= 4 && !/[.!?]$/.test(first) && /\p{L}{3}/u.test(title) ? slug(title) : slug(name);
+  return Object.hasOwn(CLASS_ALIASES, read) ? `${read}-work` : read;
 }
 
 export async function method(): Promise<void> {

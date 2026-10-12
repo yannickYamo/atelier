@@ -161,3 +161,25 @@ describe('where it does cut, no cut leaves a heading over nothing', () => {
     expect(e).toMatchObject({ cut: ['An invented one follows it.'], kept: [] });
   });
 });
+
+// An independent review of the first version.
+describe('what a review of the first version found', () => {
+  it('prose is prose however its kind is spelled', () => {
+    for (const cls of ['essays', 'post', 'blogpost', 'blog posts', 'op-ed', 'marketing', 'articles']) expect(unmeasuredKind(cls), cls).toBeNull();
+  });
+  it('a kind read from a title or a name is never a short name for a format', () => {
+    expect(kindOfWork('# X\n\n- Open with a hook.', 'x', undefined)).toBe('x-work');
+    expect(kindOfWork('- Open with a hook.', 'blog', undefined)).toBe('blog-work');
+    expect(kindOfWork('---\ntitle: n\n---\nCompetitive analysis\n\n- Open with a Verdict section.', 'ca', undefined)).toBe('competitive-analysis');
+    expect(kindOfWork('Q3 2026: plan\n\n- Open with a Verdict section.', 'plan', undefined)).toBe('plan');
+    expect(kindOfWork('- Open with a hook.', 'x', 'x')).toBe('x-post');
+  });
+  it('a heading written with a rule under it, indented, or as a bold line is a heading whose section must not be emptied', async () => {
+    expect(emptyHeadings('Risks\n-----\n\nVerdict\n=======\nGo.\n')).toBe(1);
+    expect(emptyHeadings('  ## Risks\n\n## Verdict\nGo.\n')).toBe(1);
+    expect(emptyHeadings('**Risks**\n\n**Verdict**\nGo.\n')).toBe(1);
+    expect(emptyHeadings('A paragraph.\n\n---\n\nAnother one.\n')).toBe(0);
+    const e = await enforceClaims('s', STD, 'Risks\n-----\nAn invented one stands here.\n\nVerdict\n-------\nGo.\n', { claimSensor: reader(['An invented one stands here.']) });
+    expect(e).toMatchObject({ cut: [], kept: ['An invented one stands here.'] });
+  });
+});

@@ -211,8 +211,8 @@ export async function patiently<T>(f: () => Promise<T>): Promise<T> {
  * The kinds of work both measurements read: prose published under the author's name. The names a person may
  * give such work, normalised; a known format (../observers/formats.ts) keeps the policy its profile states.
  */
-const PROSE_CLASSES: readonly string[] = ['essay', 'product-essay', 'article', 'blog-post', 'newsletter', 'technical-piece', 'marketing-piece',
-  'linkedin-post', 'x-post', 'book-chapter', 'one-pager', 'white-paper'];
+const PROSE_CLASSES: readonly string[] = ['essay', 'product-essay', 'article', 'blog-post', 'blogpost', 'post', 'newsletter', 'op-ed', 'column', 'technical-piece', 'marketing-piece',
+  'marketing', 'linkedin-post', 'x-post', 'book-chapter', 'one-pager', 'white-paper'];
 export const QUALIFIED_READERS: readonly QualifiedReader[] = [
   { model: 'claude-haiku-4-5', version: '0279163b',
     measured: { caught: 35, planted: 35, leftAlone: 35, clean: 38, on: 'technical and marketing pieces', record: 'studies/CLAIM_READER_V2_QUALIFICATION_RESULT.md' },
@@ -236,8 +236,10 @@ export const isQualified = (model: string, version = READER_VERSION, list: reado
 export function unmeasuredKind(cls: string | null | undefined, list: readonly QualifiedReader[] = QUALIFIED_READERS): string | null {
   if (!cls?.trim()) return null;
   const kind = normalizeClass(cls);
-  if (formatOf(kind)) return null;
-  return list.some((q) => q.classes?.includes(kind)) ? null : kind;
+  // however it is spelled: "essays", "blog posts"
+  const one = kind.replace(/s$/, '');
+  if (formatOf(kind) ?? formatOf(one)) return null;
+  return list.some((q) => [kind, one].some((k) => q.classes?.includes(k))) ? null : kind;
 }
 const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was', 'have', 'had', 'into', 'about', 'their', 'there', 'then', 'than', 'when', 'what', 'which', 'would', 'could', 'because']);
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));

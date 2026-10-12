@@ -27,12 +27,13 @@ export const EXPORT_WORDS = 2500;
 export function exportSkill(): void {
   const name = skillArg('--skill <name> required: atelier export --skill <name> [--out <file>] [--no-index]');
   const noIndex = argv.includes('--no-index');
-  const { L, servedText: built, sv, delivery } = resolveServedSkill(name, { index: !noIndex });
+  const { L, servedText: built, sv, delivery, contractFile } = resolveServedSkill(name, { index: !noIndex });
   // WHAT THE SKILL LEARNED GOES WHERE THE SKILL GOES. A note adopted by `atelier evolve` reached runs made through
   // `atelier invoke` and no host that was handed the export. Under the standard it was adopted for, it closes the
   // export in the words a run is served; with none adopted the export is byte for byte what it was.
   const carry = store.getCarry(L);
-  const note = carry?.standardVersion === sv.standardVersionHash ? carry.note.trim() : '';
+  // A skill that answers in a fixed format is served no note on a run, and none here.
+  const note = carry?.standardVersion === sv.standardVersionHash && contractFile === null ? carry.note.trim() : '';
   const servedText = note ? `${built}${CARRY_HEADING}${note}` : built;
   const out = flag('--out');
   if (!out) { process.stdout.write(`${servedText}\n`); return; }

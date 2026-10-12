@@ -142,3 +142,13 @@ describe('a count in a sentence that reports, beside a sentence that asks, is no
     expect(statedLengths('We indexed 1,200 pages. Write the changelog entry in 150 words.')).toMatchObject([{ unit: 'words', target: 150 }]);
   });
 });
+
+// A review of the first version of that rule: it also dropped lengths stated after the ask.
+describe('a length stated after the ask is the length, however it is put', () => {
+  it('twelve ways of saying it in a second sentence', () => {
+    for (const second of ["I'd like 600 words.", 'Please do 600 words.', 'Stick to 600 words.', 'It has to be 600 words.', 'Cap it at 600 words.', 'Shoot for 600 words.', 'My editor asked for 600 words.',
+      'Then trim it to 600 words.', 'I was thinking 600 words.', 'The brief says 600 words.', 'The final piece will be 600 words.']) {
+      expect(statedLengths(`Write a post about the launch. ${second}`).map((x) => x.unit), second).toEqual(['words']);
+    }
+  });
+});

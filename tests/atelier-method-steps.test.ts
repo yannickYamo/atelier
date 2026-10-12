@@ -125,7 +125,7 @@ describe('a step names a section of the example only by saying it is one', () =>
   it('in any case, after any verb, with the word that says what it is', () => {
     expect(check('Size the problem with an Open issues section.')).toBe('OPEN ISSUES');
     expect(check('Put what is still broken under an open issues heading.')).toBe('OPEN ISSUES');
-    expect(check('Give a status line, then an Open Issues part.')).toBe('STATUS+OPEN ISSUES');
+    expect(check('Report the state in a Status section, then add an Open issues section.')).toBe('STATUS+OPEN ISSUES');
   });
   it('named in passing, forbidden, or asked for only sometimes: a judgement', () => {
     expect(check('Weigh switching costs before recommending anything.')).toBeNull();
@@ -144,5 +144,51 @@ describe('the title of a note is not a step', () => {
   });
   it('a first line that is a sentence is a step, as it was', () => {
     expect(stepsOf('Open with a Recommendation section.\n\nEnd with a Next steps section.\n')).toHaveLength(2);
+  });
+});
+
+// An independent review of the first version of this: it tied steps to sections they forbid or only mention, took a
+// rule for a title, and read a signature, a short answer and a list as sections.
+describe('what a review of the first version found', () => {
+  const example = { task: 'Write it.', material: [], reference: '## Summary\nIt works.\n\n## Status\nGreen today.\n\n## Pricing\nTen a seat.\n\n## Open\nNothing is.\n\n## Risks\nA price cut.\n' };
+  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
+  it('a step that leaves a section out, weighs it or replaces it asks for none', () => {
+    for (const step of ['Avoid a Summary section.', 'Rather than a Summary section, lead with the decision.', 'Write the verdict without a Summary section above it.', 'Replace a Summary section with one sentence.',
+      'Consider a Risks section for larger changes.', 'Sometimes a Risks section is worth adding.', 'Skip a Risks section for small changes.']) expect(check(step), step).toBeNull();
+  });
+  it('"a status line" in the footer, "one summary line per ticket" and "an open line" are not sections', () => {
+    for (const step of ['Add a status line to the footer of every page.', 'Keep it to one summary line per ticket.', 'Give each competitor a pricing line in the comparison table.',
+      'Leave an open line between paragraphs.', 'Record a summary part of the meeting in the tracker.']) expect(check(step), step).toBeNull();
+    expect(check('Start with a Summary line.')).toBe('Summary');
+  });
+  it('a step that names two sections, one the example lacks, is not checked on the other alone', () => {
+    for (const step of ['Open with a Glossary section and include a Summary section.', 'Include a Summary section, then end with a Sources section.']) {
+      const p = methodProposals(`- ${step}\n`, example)[0];
+      expect(p.measurement, step).toBeNull();
+      expect(p.demoted, step).toMatch(/your example does not hold it/);
+    }
+  });
+  it('a first line that is a rule or an instruction is a step, whatever its punctuation; a note called Inputs still has steps', () => {
+    expect(stepsOf('Always open with the verdict')).toHaveLength(1);
+    expect(stepsOf('Never write more than one page\n\n- Open with the verdict.\n- End with the risks.\n').map((x) => x.text)).toContain('Never write more than one page');
+    expect(stepsOf('Open with a Summary section\n\nThen give the evidence in order\n')).toHaveLength(2);
+    expect(stepsOf('Inputs\n\n- Open with the verdict.\n- End with the risks.\n')).toHaveLength(2);
+  });
+  const names = (t: string): string[] => sectionHeadsOf(t, true).map((h) => h.text);
+  it('a short answer under a name is its answer; a signature and a list are not sections', () => {
+    // (at the very top of a text two names in a row are read as a title and the first section: there the two cannot be told apart)
+    expect(names('Review of the cache change, for the platform team.\n\nVerdict\n\nApprove\n\nIt is ready.\n\nEvidence\n\nTests pass.\n\nRisks\n\nFew.\n\nNext steps\n\nShip.\n')).toEqual(['Verdict', 'Evidence', 'Risks', 'Next steps']);
+    expect(names('Background\n\nWe met in May.\n\nOur position\n\nWe agree.\n\nRisks\n\nFew.\n\nAnna Lindqvist\nHead of Platform Engineering\nAcme Systems Ltd, Leeds office\n')).toEqual(['Background', 'Our position', 'Risks']);
+    expect(names('Shopping\n\nMilk\nEggs\n\nErrands\n\nPost office\nBank\n\nCalls\n\nMum\nDentist\n')).toEqual(['Shopping', 'Errands', 'Calls']);
+  });
+  it('every line under a name that opens with a label is what the section says', () => {
+    expect(names('Verdict\n\nGo.\n\nPricing\n\nNotion: ten a seat.\nCoda: twelve a seat.\n\nRisks\n\nFew.\n')).toEqual(['Verdict', 'Pricing', 'Risks']);
+  });
+  it('labels that were read before are read still', () => {
+    expect(names('**Best Practices**\n\nKeep it short.\n')).toEqual(['Best Practices']);
+    expect(names('BEST PRACTICES\n\nKeep it short.\n\nKind: a note.\n')).toEqual(['BEST PRACTICES', 'Kind']);
+  });
+  it('a numbered list about two agencies is not two clauses', () => {
+    expect(names('1. NASA. The agency launched it.\n\n2. ESA. The agency tracked it.\n')).toEqual([]);
   });
 });

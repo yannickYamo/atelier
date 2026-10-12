@@ -114,3 +114,24 @@ describe('a section counts when it says something, and one heading is one sectio
     expect(hasShape(shape)).toBe(false);
   });
 });
+
+// An independent review of the first version.
+describe('what a review of the first version found', () => {
+  it('a heading that is a section\'s name exactly is that section, before a longer one that holds the name', () => {
+    const ref = '## Summary\nWe recommend the second option for the reasons below.\n\n## Executive summary of costs\nThe second option costs less over three years than the first one does in total.\n';
+    expect(shapeAgainst(ref, ref).sections).toMatchObject({ of: 2, held: 2 });
+  });
+  it('three words are a section, and so is a small table', () => {
+    const ref = '## Decision\nWe approve the change and it ships on Friday after the freeze lifts, with the rollback plan attached and the on-call engineer told beforehand.\n\n## Owners\n| Who | What |\n|---|---|\n| Sam | Deploy |\n| Priya | Rollback |\n';
+    expect(hasShape(shapeAgainst('## Decision\nApproved, ship Friday.\n\n## Owners\n| Who | What |\n|---|---|\n| Sam | Deploy |\n', ref))).toBe(true);
+  });
+  it('a label over its sub-labels is not an empty section', () => {
+    const ref = '## Risks\nTechnical risk is low and commercial risk is moderate this quarter.\n\n## Verdict\nGo ahead with the launch as planned.\n\n## Plan\nShip on Friday after the freeze.\n';
+    const out = '**Risks**\n\n**Technical:** low this quarter.\n\n**Verdict**\n\nGo ahead as planned.\n\n**Plan**\n\nShip Friday after freeze.\n';
+    expect(shapeAgainst(out, ref).sections.empty).toBeUndefined();
+  });
+  it('a client called Lorem Health and a dependency marked N/A are not filler', () => {
+    const ref = '## Client\nLorem Health is our client and has been since the spring of last year.\n\n## Dependencies\nInternal: the billing service. External: none this time.\n';
+    expect(shapeAgainst('## Client\nLorem Health is our client this year.\n\n## Dependencies\nExternal: N/A for now.\n', ref).sections).toMatchObject({ held: 2 });
+  });
+});
