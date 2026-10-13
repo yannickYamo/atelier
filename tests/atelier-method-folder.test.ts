@@ -28,11 +28,11 @@ const seed = (verdicts: readonly string[]) => {
 describe('atelier method <note> --golden <folder>', () => {
   it('builds with no key: every step held against every example, the pieces served, their span recorded', () => {
     const { data, proj, run } = seed(['Approve', 'Request changes', 'Comment', 'Approve']);
-    const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--yes');
+    const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--yes', '--report');
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('4 examples from examples; checks read from e1.md, then held against the rest');
     expect(r.out).toContain('starting with one of "Approve", "Request changes", "Comment" on a line of its own; your example: held in all 4 of your examples');
-    expect(r.out).toMatch(/Held to your method on every run: 3 thing\(s\) the work must contain, 0 it must be made from; 1 judgement step\(s\)/);
+    expect(r.out).toMatch(/Your skill "review" is ready\.\n {2}Checked on every run: 3 of your rules\. Yours to judge: 1\./);
     expect(r.out).toMatch(/Voice: \d whole piece\(s\) of the author's own served with the skill/);
     expect(r.out).toContain('Your own pieces: 4 of 4 meet every required rule that is counted.');
     const voice = JSON.parse(readFileSync(join(data, 'skills', 'review', 'voice.json'), 'utf8')) as { lengthSpan?: [number, number] };
@@ -80,11 +80,11 @@ describe('three tweets and five lines of rules', () => {
     writeFileSync(join(proj, 'rules.md'), 'How I write a tweet\n\n- Under 120 characters.\n- Between 2 and 3 sentences.\n- Never use the word "excited" or "thrilled".\n- No hashtags and no emoji.\n- End on the point, not on a question.\n');
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
-    const out = execFileSync('node', [CLI, 'method', 'rules.md', '--golden', 'tweets', '--name', 'short-posts', '--yes'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = execFileSync('node', [CLI, 'method', 'rules.md', '--golden', 'tweets', '--name', 'short-posts', '--yes', '--report'], { encoding: 'utf8', cwd: proj, env, stdio: ['ignore', 'pipe', 'pipe'] });
     expect(out).toContain('checks for: at most 119 characters; your example: held in all 3 of your examples');
     expect(out).toContain('checks for: 2 to 3 sentences; your example: held in all 3 of your examples');
     expect(out).toContain('checks for: none of: excited, thrilled; your example: held in all 3 of your examples');
-    expect(out).toMatch(/Held to your method on every run: 3 thing\(s\) the work must contain, 0 it must be made from; 2 judgement step\(s\)/);
+    expect(out).toMatch(/Your skill "short-posts" is ready\.\n {2}Checked on every run: 3 of your rules\. Yours to judge: 2\./);
     expect(out).toContain('Your own pieces: 3 of 3 meet every required rule that is counted.');
     const skill = readFileSync(join(proj, '.claude', 'skills', 'short-posts', 'SKILL.md'), 'utf8');
     expect(skill).toContain('Under 120 characters');
@@ -125,5 +125,31 @@ describe('what a pass over the new commands found', () => {
     const unbound = run('verify', '--skill', 'reviews', 'ok.md', '--claims', 'pattern');
     expect(unbound.code).toBe(1);
     expect(unbound.out).toContain('no material is bound to look it up in');
+  }, 120_000);
+});
+
+// What a person sees: one command to build, a screen of their own steps, and nothing of the engine.
+describe('the front door: atelier new <your-work> --method <note>', () => {
+  it('is the same build, said in three groups, in under twenty lines', () => {
+    const { proj, run } = seed(['Approve', 'Request changes', 'Comment', 'Approve']);
+    const r = run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes');
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/^Method: method\.md {2}· {2}4 examples from examples\n\n4 step\(s\) in your method\.\n\nChecked on every run \(3\):/);
+    expect(r.out).toMatch(/Yours to judge: said to the writer, never called checked \(1\):\n {2}- Weigh the risk of the change before the style of it\./);
+    expect(r.out).toContain('Your skill "review" is ready.');
+    expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|TASTE READER|SIZE {2}|Kind of work|checks for:/);
+    expect(r.out.trim().split('\n').length).toBeLessThan(20);
+    expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(true);
+  }, 120_000);
+  it('the help is three commands, and everything else is one word away', () => {
+    const { run } = seed(['Approve']);
+    const help = run('--help').out;
+    expect(help.trim().split('\n').length).toBeLessThanOrEqual(8);
+    for (const c of ['atelier new <your-work> --method', 'atelier run "<task>"', 'atelier fix "<what was wrong>"', 'atelier lab']) expect(help).toContain(c);
+    expect(help).not.toMatch(/taste|fidelity|tend|floor|ratify/);
+    const lab = run('lab').out;
+    for (const c of ['verify', 'reproduce', 'evolve', 'fidelity', 'method']) expect(lab).toContain(c);
+    expect(run('lab', 'status').code).toBe(0);
+    expect(run('nonsense').out).toContain('The three you need: new, run, fix');
   }, 120_000);
 });

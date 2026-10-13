@@ -68,7 +68,7 @@ export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === 
 // table going stale one flag at a time.
 export const VALUED_OPTIONS: readonly string[] = [
   // `atelier method`: the one finished example, and what the skill is for
-  'golden', 'for',
+  'golden', 'for', 'method',
   // `atelier evolve`: the briefs to work on, how many rounds, and (to a run) what earlier drafts left out
   'briefs', 'rounds', 'carry-note',
   'with',

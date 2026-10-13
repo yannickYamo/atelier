@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t3",
+ "run": 0,
+ "seconds": 50.2,
+ "output": "## Summary\n\nThis change adds cart totalling helpers built on `Decimal`, with a shared two-place rounding helper, per-line and subtotal arithmetic, percentage discounts, threshold-based flat shipping, and sales tax. `cart_total` composes these into the final payable amount for a cart.\n\n## Must fix\n\n- **src/cart/total.py:93** — The discount is applied twice. Line 92 already returns the base less the reduction, and line 93 subtracts `discount_amount(gross, discount_percent)` from that result again, so every discounted cart undercharges by the discount value — and a 60% discount yields a negative total. Delete line 93.\n- **src/cart/total.py:65** — `percent` arrives as a string in the same way `tax_rate` does (`tax_rate=\"0.0\"` on line 89 sets that precedent), and `\"5\" <= 0` raises `TypeError` on Python 3. Convert before comparing, and reject `percent > 100` while you are there.\n- **src/cart/total.py:51** — `Decimal(item.get(\"quantity\", 1))` passes a raw value straight to `Decimal`, so a float quantity such as `1.5` reintroduces exactly the binary rounding the module docstring says it avoids. Wrap it in `str()` as line 50 does.\n\n## Suggestions\n\n- Shipping on line 94 is charged on the post-discount, pre-tax amount; confirm that is the intended rule, since it means a discount can push an order back under the free-shipping threshold.\n- `shipping_cost` hard-codes `4.95` and `Decimal(\"50.00\")` in the signature; module-level constants alongside `TWO_PLACES` would make the policy visible and testable.\n- No tests accompany this module. Add cases for `cart_total` with a non-zero `discount_percent` — one assertion on a 10% discount would have caught the double subtraction — plus `subtotal` on an empty cart and `shipping_cost` exactly at the threshold.\n\n## Verdict\n\nRequest changes",
+ "costUsd": 0.1217,
+ "cut": []
+}

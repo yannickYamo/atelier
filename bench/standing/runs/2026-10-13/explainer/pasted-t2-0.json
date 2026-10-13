@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t2",
+ "run": 0,
+ "seconds": 8,
+ "output": "Sound is not a mysterious thing. It is air being squeezed and stretched, over and over, in waves. When those waves reach your eardrum, they push it back and forth, and your brain reads that movement as noise.\n\nNoise-cancelling headphones exploit a quirk of how waves behave. If one wave pushes the air outward at exactly the moment another pulls it inward, the two cancel each other. Neither push nor pull reaches your ear. Silence.\n\nPicture two people on opposite sides of a swing door. One shoves forward just as the other shoves back with equal force. The door does not move at all.\n\nTo pull this off, the headphones need tiny microphones on the outside of each earcup. These listen to the drone around you: the engine, the fan, the rumble of a train. A small processor inside analyses that sound and instantly generates its mirror image, an upside-down copy of the wave. The speakers play that copy alongside your music. The two collide inside the earcup and flatten each other out.\n\nThis works best on steady, low rumbles, because they are predictable enough to mirror in time. Sudden sounds like a baby crying or a door slamming slip through, since the processor cannot anticipate them.\n\nIn short, the headphones listen to the world and play its exact opposite, so the two sounds erase each other before they reach you."
+}

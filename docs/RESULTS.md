@@ -7,6 +7,22 @@ Each row links to its record in [studies/](../studies/README.md). Confirmations 
 pre-registered and sealed before any output existed. The early voice rounds and development runs were
 exploratory, and say so.
 
+## The standing comparison (development evidence, 2.0)
+
+The same work asked for several ways, on four kinds of work, scored by checklists that import nothing from Atelier
+(bench/standing). Synthetic cases, the builder's own checklists, ten tasks a domain: it says where to look, and is
+no claim about anyone's real work. Outputs failing the domain's checklist:
+
+| arm | explainer | code review | contract | analysis |
+|---|---|---|---|---|
+| the examples pasted | 12 of 20 | 20 of 20 | 8 of 8 (12 refused by the model) | 16 of 20 |
+| the method and the examples, as a prompt | 1 of 20 | 20 of 20 | 20 of 20 | 5 of 20 |
+| the Atelier skill, built from the same method and examples | 0 of 20 | 2 of 10 | 10 of 10 | 1 of 10 |
+
+Contract is a miss for every arm on one rule, a 220 to 420 word cap; every other rule of the agreement held in every
+arm. Code review is not like for like: the runtime shows the writer the diff with its line numbers. Runs and how to
+make them again: bench/standing/README.md. The outputs behind this table are in bench/standing/runs/2026-10-13/.
+
 ## What held
 
 | Result | Number | Population | Record |

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 0,
+ "seconds": 60,
+ "output": "## Verdict\n\nAcme Desk costs least for a team of 35, at $280 per month. Its 10-seat minimum sits below the team size, so all 35 seats bill at the list rate of $8. Fennel HQ's 25-seat floor is also below the team, so it bills cleanly at $420. Kelp's 50-seat minimum forces payment for 15 seats the team will not use.\n\n## Vendor pricing\n\n| Vendor | Price per seat | Minimum seats |\n|---|---|---|\n| Acme Desk | $8 | 10 |\n| Fennel HQ | $12 | 25 |\n| Kelp | $17 | 50 |\n\n## Cost at this size\n\nSeats paid for is the team size (35) or the vendor minimum, whichever is larger.\n\n- **Acme Desk:** minimum 10 is below 35, so 35 seats paid. 35 × $8 = **$280 per month**.\n- **Fennel HQ:** minimum 25 is below 35, so 35 seats paid. 35 × $12 = **$420 per month**.\n- **Kelp:** minimum 50 exceeds 35, so 50 seats paid. 50 × $17 = **$850 per month**. Effective rate $24.29 per person ($850 ÷ 35).\n\nAcme Desk is $140 per month cheaper than Fennel HQ and $570 cheaper than Kelp — $1,680 and $6,840 over twelve months.\n\n## Risks\n\nOnly Kelp is distorted by its minimum here, and that distortion disappears at 50 people. Even then Kelp costs $850 against Acme Desk's $400, so the ranking does not change at any size above 35. Shrinking matters more: below 25 people Fennel HQ starts billing its floor, and below 10 Acme Desk bills $80 regardless.\n\nThis is a price comparison and nothing else. The price list carries no detail on features, support tiers, usage caps, or security, so the cheapest seat may not be a comparable product.\n\nAll figures assume list price billed monthly, as stated. Annual commitments, volume discounts, onboarding and migration costs are not in the source and could reorder these totals. Worth confirming whether minimums bind at signup or only at renewal.",
+ "costUsd": 0.1537,
+ "cut": []
+}

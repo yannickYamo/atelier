@@ -1,7 +1,7 @@
 {
   "name": "@yannickyamo/atelier",
   "version": "1.1.0",
-  "description": "Reproduce a writing taste at scale: learn a standard from the writing you choose, approve it once, and hold every AI draft to it.",
+  "description": "Atelier turns an expert's method and examples of great work into an executable standard, checks new work against that standard, and improves how the method is carried without changing what the expert meant by good.",
   "type": "module",
   "bin": {
     "atelier": "./dist/cli/atelier.mjs"

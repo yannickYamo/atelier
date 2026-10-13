@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t3",
+ "run": 0,
+ "seconds": 51.6,
+ "output": "## Verdict\n\nHeronry costs least for a team of 45, at $405 per month. All three minimums (40, 1, 10) sit at or below the team size, so every vendor bills for exactly 45 seats and the ranking follows the per-seat rate directly.\n\n## Vendor pricing\n\n| Vendor | Price per seat | Minimum seats |\n|---|---|---|\n| Juno Board | $15 | 40 |\n| Cygnus Flow | $21 | 1 |\n| Heronry | $9 | 10 |\n\n## Cost at this size\n\nSeats paid for is the larger of 45 and the vendor minimum. No minimum binds here.\n\n- **Juno Board:** minimum 40 is below 45, so 45 seats paid. 45 × $15 = **$675 per month**.\n- **Cygnus Flow:** minimum 1 is below 45, so 45 seats paid. 45 × $21 = **$945 per month**.\n- **Heronry:** minimum 10 is below 45, so 45 seats paid. 45 × $9 = **$405 per month**.\n\nHeronry is $270 per month cheaper than Juno Board and $540 cheaper than Cygnus Flow — $3,240 and $6,480 over twelve months.\n\n## Risks\n\nJuno Board's 40-seat floor is the one number to watch. At 45 people the team has only five seats of slack; drop to 35 and the bill stays at $600 while Heronry falls to $315, widening the gap. Heronry's own floor of 10 seats costs $90 and binds only on a very small team, so its lead holds across the plausible range.\n\nThis is a price comparison and nothing more. The list gives per-seat rates and minimums alone, with no detail on features, support tiers, usage caps, security or integrations, so the cheapest seat may not be the comparable product. The $9 rate is the lowest on the list by a wide margin, which is itself worth probing.\n\nAll figures assume list price billed monthly, as stated. Annual commitments, volume discounts, onboarding fees and migration costs are not in the source and could reorder these totals.",
+ "costUsd": 0.1387,
+ "cut": []
+}

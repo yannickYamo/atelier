@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t0",
+ "run": 1,
+ "seconds": 7.3,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds chemicals that are eager to react with each other.\n\nInside, there are two different materials separated by a paste or liquid called the electrolyte. One material wants to give away electrons. The other wants to accept them. The electrolyte lets charged particles move between the two, but it blocks the electrons themselves.\n\nSo the electrons have to find another route. That route is your circuit. When you connect a torch or a phone, you hand them a path through the wire. They stream along it, powering whatever sits in the way, and arrive at the other material. That flow is the current you use.\n\nThink of water held behind a dam. The water is not doing anything useful while it sits there, but it carries stored potential. Open a channel, and it rushes through, turning a wheel on its way down.\n\nWhen the eager chemicals are used up, the battery goes flat. In a rechargeable one, plugging it in pushes the reaction backwards. Electricity from the wall forces the materials back into their original, unstable state, ready to go again.\n\nIn short, a battery stores energy in chemicals, and releases it as electrons travelling through your device."
+}

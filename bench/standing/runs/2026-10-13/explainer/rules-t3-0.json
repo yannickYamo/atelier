@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t3",
+ "run": 0,
+ "seconds": 7.1,
+ "output": "Most computer programs follow instructions a person wrote by hand. A programmer decides every rule in advance. Machine learning flips that around. Instead of writing the rules, you supply examples, and the computer works out the rules itself.\n\nSay you want a program that spots spam email. Writing rules would be hopeless, because spammers keep changing their wording. So you feed the system thousands of emails already labelled spam or not spam. It searches for patterns that separate the two groups. Certain phrases, sending addresses and formatting quirks turn out to matter. The result is a model: a mathematical summary of those patterns.\n\nThink of a child learning to recognise dogs. Nobody recites a definition involving fur length and ear shape. The child simply sees many dogs, hears them named, and gradually gets the idea.\n\nOnce trained, the model can judge things it has never seen before. That is the whole point. It handles new emails, new photographs, new voices.\n\nThis also explains the technology's weaknesses. A model only knows what its examples contained. Feed it narrow or biased data, and it learns narrow or biased habits. It cannot explain its reasoning in plain language either.\n\nIn short, machine learning means teaching a computer through examples rather than instructions."
+}

@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t3",
+ "run": 1,
+ "seconds": 10,
+ "output": "Traditional software works by instruction. A programmer writes rules, the computer follows them, and the same input always produces the same output. That approach works well for calculating tax or sorting a list. It falls apart when you try to write rules for recognising a cat in a photograph.\n\nMachine learning takes a different route. Instead of writing the rules, you supply examples and let the computer work out the rules itself. Show it ten thousand photographs labelled \"cat\" and ten thousand labelled \"not cat\". The system looks for patterns that separate the two groups, adjusting itself slightly with each mistake until its guesses improve.\n\nThink of teaching a child the difference between dogs and horses. You never recite a definition involving leg length and ear shape. You point at animals, say the word, and correct them when they get it wrong. Understanding emerges from repetition rather than instruction.\n\nThe same method now handles spam filtering, speech recognition, medical scans and film recommendations. In each case the machine has been shown vast numbers of past examples and has extracted patterns from them.\n\nThis explains the technology's main weakness. A system trained on poor or lopsided examples will learn poor or lopsided patterns, and it cannot tell you it has done so.\n\nIn short, machine learning means a computer learns from examples instead of being told the rules."
+}

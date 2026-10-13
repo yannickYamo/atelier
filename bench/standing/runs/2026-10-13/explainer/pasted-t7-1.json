@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t7",
+ "run": 1,
+ "seconds": 6.9,
+ "output": "Right now, somewhere above you, around thirty satellites are circling the Earth at roughly 12,500 miles up. Each one does something remarkably simple. It broadcasts a radio message saying, in effect, \"I am satellite number seven, and the time is exactly this.\"\n\nThe phone in your pocket listens. It does not transmit anything back; it simply receives. When a message arrives, your phone compares the time stamped inside it with the current time. The gap is tiny, around a tenth of a second, but it reveals how far that signal travelled. Radio waves move at a fixed speed, so distance is just speed multiplied by time.\n\nOne satellite tells you only that you are somewhere on a huge sphere around it. Two satellites narrow that to a circle where the spheres overlap. Three bring you down to a couple of points, one of which is absurd, out in space. A fourth settles it and also corrects your phone's clock, which is nowhere near accurate enough on its own.\n\nPicture standing in a dark field hearing three church bells, and knowing how far away each one is. There is only one spot where all three distances fit.\n\nIn short, GPS works by timing how long signals take to arrive, then finding the single point where those distances agree."
+}

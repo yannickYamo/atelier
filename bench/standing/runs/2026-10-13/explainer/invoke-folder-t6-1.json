@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t6",
+ "run": 1,
+ "seconds": 17.5,
+ "output": "Normally, when you send money online, a bank keeps the record. One company holds the official list of who owns what, and everyone trusts it. A blockchain removes that single keeper.\n\nInstead, the record is copied across thousands of computers at once. Every one of them holds the same list of transactions. When you send something, your transaction is broadcast to all of them. They check it against the history they already hold, and agree whether it is valid.\n\nThose agreed transactions get bundled into a block. Each new block carries a mathematical fingerprint of the block before it. Change an old entry, and every fingerprint after it stops matching. The tampering shows up immediately on thousands of machines.\n\nThink of a shared notebook in a room full of people. Everyone writes the same line at the same time, in pen. One person scribbling over their copy convinces nobody.\n\nThis is why blockchains are called trustless. You do not have to trust any particular participant, only the fact that most of them cannot be bribed at once. The cost is speed and energy, since agreement takes work.\n\nIn short, a blockchain is a shared record that nobody owns and nobody can quietly rewrite.",
+ "costUsd": 0.067,
+ "cut": []
+}

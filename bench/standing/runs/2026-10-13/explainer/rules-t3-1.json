@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t3",
+ "run": 1,
+ "seconds": 6.3,
+ "output": "Most computer programs follow instructions a person wrote by hand. Someone decided, step by step, exactly what the machine should do. Machine learning works differently. Instead of writing the rules, you show the computer examples and let it work the rules out itself.\n\nSay you want software that spots spam email. Writing rules by hand would be hopeless, because spammers keep changing tactics. So you feed the system thousands of emails already labelled spam or not spam. It hunts for patterns that separate the two groups. Then it applies those patterns to messages it has never seen.\n\nThink of a child learning to recognise dogs. Nobody recites a definition involving fur, legs and snouts. The child simply sees many dogs, hears the word, and gradually gets it right.\n\nThe learning happens through adjustment. The system makes a guess, checks how wrong it was, and nudges its internal settings. Repeat that millions of times and accuracy climbs steadily.\n\nThis explains both the strengths and the weaknesses. Good examples produce good results. Biased or thin examples produce biased, unreliable results. The system has no understanding of meaning, only of patterns in what it was shown.\n\nIn short, machine learning means a computer discovers its own rules from examples, rather than being told them."
+}

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 0,
+ "seconds": 18.1,
+ "output": "You hear that \"the market rose today\". Nobody means every company. They mean a stock index, which is a single number standing in for a whole group of shares.\n\nAn index picks a list of companies and tracks their share prices together. The FTSE 100 follows the hundred largest firms listed in London. The S&P 500 follows five hundred big American ones. Each day, the prices are combined into one figure, and that figure goes up or down.\n\nThink of a class test average. One pupil's mark tells you little, but the average tells you how the class did overall. An index does the same job for a slice of the economy.\n\nMost indexes weight companies by size. A huge firm moves the number far more than a small one does. So a bad day for a few giants can drag the whole index down, even if most members rose.\n\nThe number itself has no meaning on its own. What matters is the change: how it compares with yesterday, or last year. You can also buy funds that simply copy an index, which is why these lists matter to ordinary savers.\n\nIn short, a stock index is one number summarising how a chosen group of shares is doing.",
+ "costUsd": 0.1529,
+ "cut": []
+}

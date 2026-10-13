@@ -6,7 +6,7 @@
 
 ## What is Atelier?
 
-Atelier is an agentic system that builds AI skills from examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved. I built it because I kept hitting the same wall: perfect context, still variance. In production, a standard model suffers from "needle in a haystack" drop-offs, hallucinatory drift, and little formatting discipline. You point it at pieces written the way you want - yours, your team's, or a style you admire - and it reads them, proposes the rules behind them, and shows the evidence for each one. You approve those rules once. From then on, Atelier compiles them into a skill and does the work of holding them.
+Atelier is an agentic system that builds AI skills from your method and examples of the work you want, runs every output through a check, and keeps improving the skill without ever changing the standard you approved. I built it because I kept hitting the same wall: perfect context, still variance. In production, a standard model suffers from "needle in a haystack" drop-offs, hallucinatory drift, and little formatting discipline. You point it at pieces written the way you want - yours, your team's, or a style you admire - and it reads them, proposes the rules behind them, and shows the evidence for each one. You approve those rules once. From then on, Atelier compiles them into a skill and does the work of holding them.
 
 Teams ask for it in plainer words:
 
@@ -15,25 +15,30 @@ Teams ask for it in plainer words:
 - "Write the way our best product people write and reason."
 - "Change the model underneath without changing how we work."
 
-You don't need to learn how Atelier works to get there. Give it 15 to 30 examples, read what it thinks your standard is, accept its suggestions or change the few that matter to you, and connect your agent. Everything else stays underneath.
+You don't need to learn how Atelier works to get there. Write down how you do the work, hand it a few finished examples, read one short screen that says what will be checked and what stays your judgement, and connect your agent. Everything else stays underneath.
 
 I built it for three things: output that stays stable over time, less entropy from one run to the next, and writing in the voice I chose, at scale, without anyone supervising each draft.
 
-Think of it as four steps you walk through:
+Think of it as three things you do, and one it does for you:
 
-1. **Point it at examples.** It reads them and proposes the rules behind them, each with evidence: how often your examples do it, how often a plain model does, and whether it held on pieces the agent never read.
-2. **Approve the rules once.** The standard is hashed and versioned the moment you accept it. No model update, optimizer or judge can move it.
-3. **Every output is written, checked and repaired.** You get a plain pass or fail per check before you read a word, and only what broke gets rewritten.
+1. **Give it your method and your finished work.** Each step you wrote is your rule, in your words. Where code can hold a step it is checked on every run; the rest is yours to judge, and is said to be. With no written method, it reads the rules off your examples and you approve them.
+2. **Build it once.** The standard is hashed and versioned the moment you accept it. No model update, optimizer or judge can move it.
+3. **Run it, and react.** Every output is written, checked and repaired, and comes back with one line: blocked, checked, or certified. When something is wrong, you say so in your own words.
 4. **It improves itself, and keeps a change only when it measures better.** Atelier mines its own records for what keeps going wrong, searches for a better way to carry your rules, and installs a winner only when the gate allows it.
 
 Instead of a model that re-guesses your rules on every run, you get rules you approved, kept in a file outside the model, and a verdict on every output.
 
 ```bash
-atelier new ./examples-to-match "answers like these"         # read the examples, propose the rules
-atelier new ./examples-to-match --accept                      # approve them, install the skill
-atelier method how-we-do-it.md --golden ./examples-to-match   # or: your written method plus your examples, no model
-atelier invoke --skill examples-to-match "the next answer"    # an output, checked and repaired
-atelier tend --skill examples-to-match --auto                 # find what keeps failing, keep a fix only if it measures better
+atelier new ./my-work --method how-we-do-it.md    # build: your method and your finished examples
+atelier run "the next piece of work"               # run: the work, and one line that says where it stands
+atelier fix "what was wrong"                       # react: in your own words
+```
+
+No written method yet? `atelier new ./my-work "what it is for"` reads the rules off your examples for you to
+approve. Everything else the tool can do is under `atelier lab`.
+
+```bash
+atelier lab                                       # the rest: verify, material, reproduce, evolve, and the experiments
 ```
 
 ## Why Atelier?

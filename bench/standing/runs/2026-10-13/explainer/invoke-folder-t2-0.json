@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 0,
+ "seconds": 16.4,
+ "output": "Sound is nothing more than air being pushed back and forth. A speaker makes those pushes on purpose. The hum of a plane engine makes them too, in long, steady waves that reach your ear.\n\nNoise-cancelling headphones fight that hum with sound of their own. A tiny microphone on the outside listens to the noise around you. A small processor works out the exact shape of that wave. Then the headphone plays a matching wave, flipped upside down.\n\nWhere one wave pushes, the other pulls. The two meet and largely flatten each other out. Your ear receives much less, so the drone fades into something soft and distant.\n\nThink of footprints in wet sand. Press down to make a dent, then push the sand back up by the same amount. The surface looks untouched again.\n\nThis trick works best on low, constant sounds like engines, trains and air conditioning. Those waves are slow and predictable, so the processor can keep up. Sudden noises are harder. A voice or a slamming door changes too quickly to be matched in time.\n\nThat is why conversations still cut through while the rumble disappears.\n\nIn short, your headphones listen to the noise and answer it with its mirror image.",
+ "costUsd": 0.0656,
+ "cut": []
+}

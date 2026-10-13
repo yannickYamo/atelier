@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t2",
+ "run": 0,
+ "seconds": 7.7,
+ "output": "Sound travels as waves of air pressure, pushing and pulling against your eardrum. A rumbling engine produces a steady, repetitive wave. Noise-cancelling headphones exploit that regularity.\n\nTiny microphones sit on the outside of each earcup. They listen to the noise arriving around you, moment by moment. A small processor inside analyses that wave almost instantly. It then creates a new sound wave shaped as the exact opposite. Where the incoming wave pushes, the new one pulls.\n\nYour speakers play that opposite wave into your ear alongside the original noise. The two collide and largely flatten each other out. Engineers call this destructive interference. You hear far less rumble, even though nothing has physically blocked it.\n\nThink of two people pushing a swing from opposite sides with equal force. The swing barely moves, because each push undoes the other.\n\nThis trick works best on low, constant sounds like aircraft engines or air conditioning. Sudden noises are harder, because the processor has almost no time to react. Speech is tricky too, since voices change pitch constantly. That is why conversations often cut through while the drone disappears.\n\nThe earcups themselves still help, muffling higher frequencies by simple physical blocking. Both methods work together.\n\nIn short, these headphones generate an opposite sound that cancels unwanted noise before it reaches you."
+}

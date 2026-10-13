@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 0,
+ "seconds": 42.1,
+ "output": "## Summary\n\nThis change adds an in-memory job queue `Worker` built on `EventEmitter`. It polls a store for reserved jobs, dispatches each to a handler keyed by `job.type`, and retries failures up to `MAX_ATTEMPTS` before marking the job failed. A `delay` helper paces the poll loop when the queue is empty.\n\n## Must fix\n\n- **src/queue/worker.js:140** — A failure in `store.release` is caught and discarded entirely: the job is never requeued, never marked failed, and no event is emitted. It vanishes with no record. Emit an error, or fail the job, rather than swallowing the exception.\n- **src/queue/worker.js:102** — A rejection from `store.reserve` is unhandled, so one transient store error rejects `loop()`, ends the worker silently, and leaves `this.running` true — `start()` will then refuse to restart it. Wrap the loop body in a try/catch and back off on error.\n- **src/queue/worker.js:96** — `stop()` clears `this.timer`, which is never assigned; the pending timer created at line 105 is unreachable, so the process stays alive for up to a full poll interval after stopping.\n- **src/queue/worker.js:91** — `loop()` is called without `await` or a `.catch`, so any escaping rejection becomes an unhandled promise rejection.\n\n## Suggestions\n\n- No tests accompany this module. Add unit tests for `process`: an unregistered type, a throwing handler that is released for retry, and a job reaching `MAX_ATTEMPTS` and emitting `failed`.\n- `retry` emits nothing on success, so consumers cannot see that a job was requeued.\n- `err.message` at line 134 assumes a real `Error`.\n\n## Verdict\n\nRequest changes",
+ "costUsd": 0.1519,
+ "cut": []
+}

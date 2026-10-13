@@ -15,17 +15,25 @@ deletes nothing from a text when no material is bound, and the runtime fails no 
 skill used as a plain prompt.
 
 ```bash
-node bench/standing/run.mjs --domain explainer --arm pasted --out <dir> --runs 2
-node bench/standing/run.mjs --domain explainer --arm rules  --out <dir> --runs 2
-node bench/standing/run.mjs --domain explainer --arm export --out <dir> --runs 2 --skill <name> --proj <dir> --data <dir>
-node bench/standing/run.mjs --domain explainer --arm invoke --out <dir> --skill <name> --proj <dir> --data <dir>
-node bench/standing/score.mjs --domain explainer --out <dir>
+node bench/standing/score.mjs --domain contract --out bench/standing/runs/2026-10-13/contract    # the recorded run, scored again: no model, no cost
 ```
 
-Every `run.mjs` call spends money (about $2.50 for the `invoke` arm over ten tasks, cents for the others) and
-needs `ANTHROPIC_API_KEY`. `score.mjs` calls nothing. Build the skill first with
-`atelier new bench/standing/domains/<domain>/examples "<purpose>" --accept`: every default accepted, since the
-comparison is of what a person gets without steering.
+`runs/<date>/<domain>/` holds every output of a recorded run as one small file (the arm, the task, the output, what
+it cost and how long it took), so each table in the changelog and in docs/RESULTS.md can be made again from a clone.
+To make a run of your own:
+
+```bash
+bench/standing/build.sh contract /tmp/standing                                    # the Atelier skill: the domain's method and examples, no model
+node bench/standing/run.mjs --domain contract --arm pasted --out <dir> --runs 2
+node bench/standing/run.mjs --domain contract --arm rules  --out <dir> --runs 2
+node bench/standing/run.mjs --domain contract --arm export --label export-folder --skill contract-folder --proj /tmp/standing/contract/proj --data /tmp/standing/contract/store --out <dir> --runs 2
+node bench/standing/run.mjs --domain contract --arm invoke --label invoke-folder --skill contract-folder --proj /tmp/standing/contract/proj --data /tmp/standing/contract/store --out <dir>
+node bench/standing/score.mjs --domain contract --out <dir>
+```
+
+Every `run.mjs` call spends money (about $2 for the `invoke` arm over ten tasks, cents for the others) and needs
+`ANTHROPIC_API_KEY`. `score.mjs` calls nothing. It reports, per arm: outputs failing, by rule; cost an output and
+cost a passing output; and the two gates. A model's refusal is said apart and is not scored as a failure.
 
 ## A domain
 

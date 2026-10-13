@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t6",
+ "run": 0,
+ "seconds": 7.9,
+ "output": "Imagine a shared notebook that records who owns what. Normally one organisation keeps that notebook — a bank, say — and you trust them to write in it honestly. A blockchain removes the single owner. Instead, thousands of computers around the world each hold an identical copy.\n\nNew transactions are gathered into a batch called a block. Before a block is added, the network must agree it is valid. Once accepted, that block is chained to the one before it, and the chain grows. Hence the name.\n\nThe chaining is the clever part. Each block carries a short code calculated from the contents of the previous block. Change anything in an old block, even a single digit, and that code no longer matches. The mismatch cascades through every block that follows. Tampering is not impossible, but it announces itself loudly.\n\nPicture a ledger written in pen, photocopied to thousands of people, where every page references the one before. Altering your copy convinces nobody. The other copies still disagree with you.\n\nThis is why people call blockchains trustless. You are not trusting a company's honesty; you are trusting that most participants will not conspire at once.\n\nBitcoin was the first major use, but the technology is separate from any particular currency.\n\nIn short, a blockchain is a shared record that many people keep, built so that past entries cannot quietly be rewritten."
+}

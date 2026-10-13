@@ -68,6 +68,26 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
 }
 
 /**
+ * THE SCREEN A PERSON BUILDS FROM: their steps, in their words, in three groups. What is checked on every run; what
+ * is theirs to judge; what their examples show. How each check is made, and how every example fared, is the long
+ * form above (`--report`). Two things stay on this screen because they are the owner's to act on: a step read as a
+ * check by a section name of theirs (said beside it, so they can see it is what they meant), and a step their own
+ * finished work does not hold.
+ */
+export function shortScreen(ps: readonly MethodProposal[]): string[] {
+  const stated = ps.filter((p) => p.origin === 'STATED');
+  const checked = stated.filter((p) => p.measurement && !p.demoted); const judged = stated.filter((p) => !p.measurement && !p.demoted);
+  const settle = stated.filter((p) => p.demoted); const shown = ps.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement);
+  const what = (p: MethodProposal): string => (p.measurement ? observerFor(p.measurement.observer).describe(p.measurement.params) : '');
+  const out: string[] = [`${stated.length} step(s) in your method.`];
+  if (checked.length) out.push('', `Checked on every run (${checked.length}):`, ...checked.map((p) => `  - ${p.statement}${p.byName ? `\n      read as: ${what(p)}` : ''}`));
+  if (judged.length) out.push('', `Yours to judge: said to the writer, never called checked (${judged.length}):`, ...judged.map((p) => `  - ${p.statement}`));
+  if (settle.length) out.push('', `Yours to settle: your method says it, and your finished work does not hold it (${settle.length}):`, ...settle.map((p) => `  - ${p.statement}\n      ${p.demoted}`));
+  if (shown.length) out.push('', `Seen in your examples, shown to the writer (${shown.length}): ${shown.map(what).join(' · ')}`);
+  return out;
+}
+
+/**
  * The kind of work a method is for: `--class`, or the note's title when it has one (its first line, when that is
  * not a step, up to a dash or a colon), or the skill's name. A name for the record and the screen; any kind the
  * claim check was not measured on is treated alike.
@@ -107,7 +127,7 @@ function readExamples(goldenPath: string, notePath: string): { folder: string | 
  * when the call only reviews, when a step and the finished work disagree, or when a check was read from a section
  * name; false when the skill may be built now.
  */
-function waitsForOwner(proposals: readonly MethodProposal[], notePath: string, goldenPath: string, name: string): boolean {
+function waitsForOwner(proposals: readonly MethodProposal[], name: string): boolean {
   // ONE CALL, UNLESS THERE IS A QUESTION THAT IS THE OWNER'S. Every step is theirs, in their words, and what their
   // example shows beyond them is shown and not required: there is nothing to approve that they did not write. Where
   // the method and the example disagree, that is theirs to settle, and nothing is built until they have seen it.
@@ -118,10 +138,12 @@ function waitsForOwner(proposals: readonly MethodProposal[], notePath: string, g
   // with a Risks section from last quarter" does not, and the words that tell them apart are not a closed list.
   const read = proposals.filter((p) => p.byName);
   if (!argv.includes('--yes') && (argv.includes('--review') || toSettle.length || read.length)) {
-    const why = argv.includes('--review') ? '' : toSettle.length ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as judgement`
-      : `: ${read.length} check(s) above were read from your example's section names (${read.map((p) => `"${p.statement.length > 48 ? `${p.statement.slice(0, 45)}...` : p.statement}"`).join('; ')}). Look that each asks for what you meant`;
-    console.log(`\nNothing has been built${why}. To accept exactly this:\n\n  atelier method ${JSON.stringify(notePath)} --golden ${JSON.stringify(goldenPath)} --name ${name} --yes\n`
-      + '\nTo require something your example shows, accept and then: atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
+    const why = argv.includes('--review') ? '' : toSettle.length ? `: ${toSettle.length} step(s) above are yours to settle first. Change the method or the example, or build with them kept as yours to judge`
+      : `: ${read.length} step(s) above were read as a check by a section name in your examples. Look that each "read as" is what you meant`;
+    // The command as it was typed, under the name the skill will carry (a name too long is the name it is cut to).
+    const typed = process.argv.slice(2); const at = typed.indexOf('--name');
+    const again = typed.filter((a, i) => a !== '--review' && a !== '--yes' && (at === -1 || (i !== at && i !== at + 1))).map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
+    console.log(`\nNothing has been built${why}. To build exactly this:\n\n  atelier ${again} --name ${name} --yes\n`);
     return true;
   }
   return false;
@@ -160,8 +182,10 @@ function decideSteps(proposals: readonly MethodProposal[], nextId: () => string)
 }
 
 export async function method(): Promise<void> {
-  const notePath = positional([]) ?? die('usage: atelier method <method note> --golden <finished example, or a folder of them> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). An example is one piece of work where it was done.');
-  const goldenPath = flag('--golden') ?? die('--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
+  // `atelier new <your-work> --method <note>` and `atelier method <note> --golden <your-work>` are one command.
+  const asNew = flag('--method');
+  const notePath = asNew ?? positional([]) ?? die('usage: atelier method <method note> --golden <finished example, or a folder of them> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). An example is one piece of work where it was done.');
+  const goldenPath = flag('--golden') ?? (asNew ? positional([asNew]) : undefined) ?? die('--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
   for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (!existsSync(p)) die(`${what}: there is nothing at ${p}.`);
   const note = readFileSync(notePath, 'utf8');
   if (!stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
@@ -171,15 +195,18 @@ export async function method(): Promise<void> {
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
   const proposals = [...read.proposals, ...countedOffers(read.proposals, cases)];
   const example = cases[lead];
-  console.log(`Method: ${basename(notePath)}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}; checks read from ${example.id}, then held against the rest`}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
-  for (const line of describeMethod(proposals, example.caseClass)) console.log(line);
+  console.log(`Method: ${basename(notePath)}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${argv.includes('--report') && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${argv.includes('--report') && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
+  for (const line of argv.includes('--report') ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
 
   // The name as the skill will carry it, whether it was given or read off the file: what is printed is what is built.
   const name = ((): string => { try { return skillNameFrom(flag('--name') ?? basename(notePath).replace(/\.[^.]+$/, '')); } catch { return die('--name <name> required: the method file gives no name a skill can carry.'); } })();
   // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
   // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
   const kind = kindOfWork(note, name);
-  console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
+  // What the kind of work decides (whether an untraced sentence is cut or listed) is the engine's business: said
+  // to whoever asks for the whole account, and kept off the screen a person builds from.
+  const whole = argv.includes('--report');
+  if (whole) console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
     + (unmeasuredKind(kind) ? 'Sentences not found in your material are listed for you to check, never cut: the claim check is measured on essays and posts, not on this.'
       : 'With your material bound (atelier material), sentences not found in it are cut, as the claim check is measured to do on this kind of writing; with none bound they are listed.'));
   // Said before anything is offered: a command printed as "to accept exactly this" must be one that will be accepted.
@@ -189,7 +216,7 @@ export async function method(): Promise<void> {
   if (store.getActive({ root: DATA, skillName: name }) && s.skillName !== name) {
     die(`a skill called "${name}" already exists, and this folder has no record of building it. Building here would replace its standard. Give this one a name of its own: --name <name>. (If a build of it here stopped part-way, finish that one: atelier build --name ${name}.)`);
   }
-  if (waitsForOwner(proposals, notePath, goldenPath, name)) return;
+  if (waitsForOwner(proposals, name)) return;
 
   // ── ACCEPTED: THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   // A stated step is the owner's sentence, so it is authored by them and required. A step read off the example is
@@ -217,12 +244,18 @@ export async function method(): Promise<void> {
   if (!argv.includes('--voice') && !(folder && cases.length >= 3)) argv.push('--voice', 'none');
   if (!argv.includes('--persona')) argv.push('--persona', 'none');
   if (!argv.includes('--class')) store.setDocClass({ root: DATA, skillName: name }, kind);
-  ratifyClose();
-  await build(name);
+  // THE BUILD SAYS A GREAT DEAL (the standard's hash, the size of the export, what no instrument measures): all of it
+  // true, none of it what a person needs to start. It is kept for --report, and shown whole if the build fails.
+  const said: string[] = []; const log = console.log;
+  if (!whole) console.log = (...a: unknown[]) => { said.push(a.map(String).join(' ')); };
+  try { ratifyClose(); await build(name); } catch (e) { console.log = log; for (const l of said) console.log(l); throw e; } finally { console.log = log; }
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   const n = (k: Requirement['obligation']): number => decided.filter((r) => r.obligation === k && r.measurement && r.materiality === 'REQUIRED').length;
   const shown = decided.filter((r) => r.measurement && r.materiality !== 'REQUIRED').length;
-  console.log(`\nHeld to your method on every run: ${n('DELIVERABLE')} thing(s) the work must contain, ${n('EXECUTION')} it must be made from; ${decided.filter((r) => !r.measurement).length} judgement step(s) shown and reported as not measured.${shown ? ` ${shown} more thing(s) your example shows are checked and reported, and required only if you say so.` : ''}`);
-  console.log(`Use it:  atelier invoke --skill ${name} "<the task>" --with <name>=<material file>`);
+  const judged = decided.filter((r) => !r.measurement).length;
+  console.log(`\nYour skill "${name}" is ready.`);
+  console.log(`  Checked on every run: ${n('DELIVERABLE') + n('EXECUTION')} of your rules${n('EXECUTION') ? ` (${n('EXECUTION')} against the material you give it)` : ''}.`
+    + `${judged ? ` Yours to judge: ${judged}.` : ''}${shown ? ` From your examples, shown to the writer: ${shown}.` : ''}`);
+  console.log(`  Use it: atelier run "<the task>"${n('EXECUTION') ? ' --with <name>=<material file>' : ''}   (or /${name} in Claude Code) · the whole account of this build: add --report`);
 }

@@ -40,6 +40,8 @@ import { voice } from './commands/voice.js';
 import { setup } from './commands/setup.js';
 import { create, improve } from './commands/improve.js';
 import { invoke } from './commands/invoke.js';
+import { run } from './commands/run.js';
+import { spawnSync } from 'node:child_process';
 import { amend, sharpen, answerProbe } from './commands/amend.js';
 import { reject, compare, promote, judgements } from './commands/promote.js';
 import { check, profiles, carriers } from './commands/check.js';
@@ -104,6 +106,8 @@ export const COMMANDS: readonly string[] = [
   'inspect',
   'intake',
   'invoke',
+  'run',
+  'lab',
   'mine',
   'taste',
   'tend',
@@ -135,6 +139,45 @@ export const COMMANDS: readonly string[] = [
   'status',
 ];
 
+/**
+ * WHAT A PERSON SEES FIRST: build, run, react. Three commands carry the product; everything else is still here,
+ * under `atelier lab`, for whoever wants it. A newcomer read forty commands to find these three.
+ */
+export const FRONT_DOOR: readonly string[] = [
+  'atelier: your method and your best work, turned into a skill that holds new work to them.',
+  '',
+  '  atelier new <your-work> --method <how-you-do-it.md>    build a skill from your method and your finished examples',
+  '  atelier run "<task>"                                   do new work with it, checked (or /<skill> in Claude Code)',
+  '  atelier fix "<what was wrong>"                         say what was wrong, in your own words',
+  '',
+  '  No written method yet? atelier new <your-work> "<what it is for>" reads the rules off your examples for you to approve.',
+  '  atelier <command> --help explains a command. Everything else, for the curious: atelier lab',
+];
+
+/** The commands a newcomer does not need, by what they are for. Nothing is hidden: it is one command away. */
+const LAB: readonly (readonly [string, readonly string[]])[] = [
+  ['check and correct', ['verify', 'score', 'material', 'amend', 'add', 'status', 'report', 'rate', 'export', 'setup', 'mcp']],
+  ['build, the long way', ['method', 'skill', 'review', 'pending', 'ratify', 'ratify-one', 'ratify-close', 'build', 'confirm', 'plan', 'contract', 'abort', 'check']],
+  ['measure a skill', ['reproduce', 'evolve', 'eval', 'qualify', 'floor', 'reference', 'history', 'inspect']],
+  ['experimental: studied, and not shown to help yet', ['fidelity', 'taste', 'tells', 'tend', 'voice', 'optimize', 'mine', 'sharpen', 'improve', 'compare', 'profiles', 'carriers']],
+];
+
+function lab(): void {
+  const rest = argv.slice(1);
+  // `atelier lab <command> ...` is that command: one name for the long way round, and no second way to run anything.
+  if (rest.length && COMMANDS.includes(rest[0])) {
+    const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...rest], { stdio: 'inherit' });
+    process.exitCode = r.status ?? 1;
+    return;
+  }
+  console.log('atelier lab: everything beyond build, run and fix. Each is its own command: atelier <command> --help\n');
+  const listed = new Set<string>();
+  for (const [what, names] of LAB) { const here = names.filter((n) => COMMANDS.includes(n)); here.forEach((n) => listed.add(n)); console.log(`  ${what}:\n    ${here.join(' · ')}`); }
+  const others = COMMANDS.filter((c) => !EVAL_ONLY.includes(c)).filter((c) => !listed.has(c) && !['new', 'run', 'fix', 'invoke', 'lab'].includes(c));
+  if (others.length) console.log(`  the rest:\n    ${others.join(' · ')}`);
+  console.log('\n  `atelier invoke` is `atelier run` with its full report.');
+}
+
 const main = async (): Promise<void> => {
   // Answered BEFORE dispatch, so no command can run when asked about. `abort --help` used to abort.
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') { console.log(version()); return; }
@@ -143,7 +186,11 @@ const main = async (): Promise<void> => {
     return;
   }
   switch (cmd) {
-    case 'new': return newSkill();
+    // ONE WAY TO BUILD. With a method note, the owner's steps are the rules and the folder is their finished work
+    // (./commands/method.ts); without one, the rules are read off the folder and offered for approval.
+    case 'new': return flag('--method') ? method() : newSkill();
+    case 'run': return run();
+    case 'lab': { lab(); return; }
     case 'review': { await review(); return; }
     case 'verify': return verify();
     case 'score': return score();
@@ -256,24 +303,12 @@ const main = async (): Promise<void> => {
       // The list is derived from the dispatch table rather than typed out beside it. The hand-written
       // version had drifted to omit nine registered commands, including `promote` and `confirm`,
       // which other commands tell the user to run.
-      const known = COMMANDS.filter((c) => !EVAL_ONLY.includes(c)).join(' · ');
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
-        die(`unknown command "${cmd}".\n  commands: ${known}`);
+        die(`unknown command "${cmd}". The three you need: new, run, fix. Every other: atelier lab`);
       }
       // THE SIX VERBS A SKILL IS LIVED WITH, IN THE ORDER IT IS LIVED, THEN EVERY COMMAND ON ONE LINE:
       // AGENTS.md promises --help lists every command, and a newcomer should not have to read forty.
-      console.log('atelier: a writing standard learned from the pieces you choose, kept in every draft.\n');
-      console.log('  atelier new <folder> "<what it is for>"      create a skill from writing you want to match');
-      console.log('  atelier invoke --skill <name> "<task>"       write with it (or /<name> in Claude Code)');
-      console.log('  atelier verify --skill <name> <file>         check any text (exit 1 = a REQUIRED rule broken)');
-      console.log('  atelier material --skill <name> <notes.md>   your real stories and figures, so none are invented');
-      console.log('  atelier fix "<what was wrong>"               correct it in your own words');
-      console.log('  atelier status --skill <name>                where it stands');
-      console.log('');
-      console.log('  first time here: atelier setup   (gives your coding agents the Atelier MCP server)');
-      console.log('  look after it: taste --skill <name> --calibrate · floor --skill <name> · tend --skill <name> --auto');
-      console.log('  atelier <command> --help explains any command.');
-      console.log(`  every command: ${known}`);
+      for (const line of FRONT_DOOR) console.log(line);
       return;
     }
   }

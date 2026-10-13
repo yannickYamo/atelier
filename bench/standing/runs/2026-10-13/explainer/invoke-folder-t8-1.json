@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 1,
+ "seconds": 21.2,
+ "output": "You buy insurance so somebody else pays when things go wrong. In practice, you still pay the first slice yourself. That slice is the deductible.\n\nSay your car policy carries a £500 deductible. A repair bill arrives for £3,000. You hand over £500, and the insurer covers the remaining £2,500. If the damage only came to £400, you pay all of it and the insurer pays nothing.\n\nThink of a season ticket that still charges you for the first ride each month. The pass is real, but it starts working after your own contribution.\n\nWhy does this exist? Partly to keep small claims out of the system, since processing them costs more than they are worth. Partly to keep you careful, because you have money at stake too.\n\nThe deductible also shapes your premium, the amount you pay each month. Choose a high deductible and your premium falls, because you have agreed to absorb more risk. Choose a low one and the premium rises.\n\nSo the sensible question is what you could comfortably pay tomorrow. A £2,000 deductible saves you money until the day you actually need it.\n\nIn short, a deductible is the portion of a claim you cover before your insurer steps in.",
+ "costUsd": 0.0712,
+ "cut": []
+}

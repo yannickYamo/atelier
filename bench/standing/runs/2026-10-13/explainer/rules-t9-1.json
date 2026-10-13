@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t9",
+ "run": 1,
+ "seconds": 6.4,
+ "output": "Sunlight looks white, but it is actually a mixture of every colour. Red, orange, yellow, green and blue all travel together in one beam. Each colour moves as a wave, and those waves differ in size. Red waves are long and lazy. Blue and violet waves are short and tight.\n\nOur atmosphere is packed with tiny molecules of nitrogen and oxygen. When sunlight pushes through, it bumps into these molecules constantly. The long red waves mostly sail straight past them. The short blue waves do not. They get knocked sideways and flung off in every direction across the sky.\n\nThink of throwing balls at a forest of thin poles. Big beach balls roll between them untouched, while small marbles ricochet everywhere. The blue light behaves like those marbles.\n\nSo when you look up at any patch of sky away from the sun, you see scattered blue light arriving from all over. You might wonder about violet, which scatters even more. There is simply less of it in sunlight, and your eyes are poorly tuned to see it.\n\nSunsets flip the effect. The light travels a longer path through air, so blue scatters away entirely, leaving red and orange behind.\n\nIn short, the sky is blue because air scatters short blue waves in every direction."
+}

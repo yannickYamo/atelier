@@ -37,8 +37,8 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 |---|---|
 | a skill from their writing | `atelier new <folder-of-their-work> "<what it is for>"`, show them the rules it proposes, then `atelier new <folder> --accept` once **they** approve (or `--set p3=reject` for their changes) |
 | a skill from rules they state | `atelier skill "<their rules, in their words>"` |
-| a skill from their method and finished examples | `atelier method <method note> --golden <example file or folder>`: each step they wrote is a rule, checked where code can hold it; calls no model. Show them the screen, then `--yes` once **they** agree |
-| new work in that voice | `atelier invoke --skill <name> "<the task>"` (written, checked, repaired, recorded) |
+| a skill from their method and finished examples (start here) | `atelier new <example file or folder> --method <method note>`: each step they wrote is a rule, checked where code can hold it; calls no model. Show them the screen, then `--yes` once **they** agree |
+| new work to that standard | `atelier run "<the task>"` (written, checked, repaired, recorded). It ends with one line: BLOCKED (a required rule that can be checked was not met; exit 1), CHECKED (everything checkable met; what is left is theirs to judge) or CERTIFIED. `atelier invoke --skill <name> "<the task>" --json` is the same run with its whole record |
 | to check or fix a text | `atelier verify --skill <name> <file>` (exit 1 = a required rule broken); add `--repair` to fix only what broke |
 | their real stories and figures used | `atelier material --skill <name> <notes.md>`: with it bound, on a skill built with `--class essay` (or a post), anything invented is cut; otherwise specifics are only listed |
 | to correct the skill | `atelier fix "<what was wrong, in their words>"` |
@@ -48,7 +48,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 | where outputs sit against the author's range, and the releases that steer them | `atelier fidelity --skill <name>` (`--read <file>` for one text, `--rollback` to undo a release) |
 | whether the skill's detector and steering features hold on texts they never saw | `atelier qualify --skill <name>` (topic labels in each piece's front matter, or `--topics <file>`) |
 
-`atelier --help` lists everything; `atelier <command> --help` explains one command.
+`atelier --help` shows the three commands a person needs (new, run, fix); `atelier lab` lists every other; `atelier <command> --help` explains one.
 
 ## Rules for agents
 

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t9",
+ "run": 0,
+ "seconds": 46.1,
+ "output": "## Summary\n\nThis change adds a date helper module for the reporting pipeline: ISO parsing that normalises everything to UTC, display formatting, midnight truncation, day arithmetic, an expiry check, a window calculator, a recency filter, and an `earliest` helper. The module docstring states that all persisted timestamps are UTC.\n\n## Must fix\n\n- **src/report/dates.py:115** — `dt.datetime.now()` returns a naive local time, and comparing it against the tz-aware `expires_at` on line 116 raises `TypeError: can't compare offset-naive and offset-aware datetimes`. Every call with a value from `parse_timestamp` fails. Use `dt.datetime.now(dt.timezone.utc)`, as `filter_recent` already does on line 128.\n- **src/report/dates.py:104** — `start_of_day` truncates in whatever offset the timestamp carries, so for a non-UTC input \"midnight\" is midnight elsewhere. The docstring says the offset is preserved, but the module contract says UTC; convert with `astimezone(dt.timezone.utc)` first or the day boundaries in `days_between` and `next_reporting_window` drift by up to a day.\n- **src/report/dates.py:134** — `sorted` raises `TypeError` on a mix of naive and aware timestamps, and nothing in the signature prevents that mix. Normalise each element, or document that callers must pass aware values only.\n\n## Suggestions\n\n- `parse_timestamp` replaces every `Z` in the string, not just a trailing one; anchor the replacement to the end.\n- `ISO_FORMAT` on line 84 is defined and never used — either drop it or use it in `format_for_display`'s sibling.\n- No tests accompany this module. Add cases for `is_expired` with an aware expiry (which would have caught line 115), `days_between` across a DST boundary, and `earliest` on an empty iterable.\n\n## Verdict\n\nRequest changes",
+ "costUsd": 0.1289,
+ "cut": []
+}

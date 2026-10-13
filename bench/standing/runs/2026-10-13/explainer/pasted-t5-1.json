@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t5",
+ "run": 1,
+ "seconds": 7.1,
+ "output": "A heat pump does not burn anything. It does not glow red or make a flame. It finds warmth that is already outside and carries it indoors.\n\nThat sounds impossible on a freezing morning, but cold air is not empty of heat. Even at zero degrees, the air holds plenty of energy. It only feels cold compared with you.\n\nThe trick is a fluid called refrigerant, sealed inside a loop of pipe. This fluid boils at a startlingly low temperature, far below freezing. Outside your house sits a unit with a fan and coils. Air passes over those coils, and because the refrigerant inside is colder still, heat flows into it. The fluid boils into gas, carrying that warmth away.\n\nNext comes a compressor, which squeezes the gas tightly. Squeezing any gas makes it hotter, the same way a bicycle pump warms in your hand. Now genuinely hot, the gas flows to coils indoors and releases its heat into your rooms or your radiators. Cooling as it goes, it turns back to liquid and returns outside to collect more.\n\nThink of a sponge soaking up a thin film of water across a wide floor, then being wrung out into a single cup.\n\nIn short, a heat pump moves heat rather than making it, which is why it delivers more warmth than the electricity it consumes."
+}

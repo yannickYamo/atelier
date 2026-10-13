@@ -118,13 +118,33 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 Everything else runs without you, from `atelier invoke` to `atelier tend --auto` on a schedule. (The loop
 is built and tested offline; it has not yet looked after a live skill for weeks. See below.)
 
+## The three commands
+
+```bash
+atelier new ./reviews --method review.md     # build: your finished work, and a note of how you do it
+atelier run "review this change" --with diff=change.diff     # run: the work, and one line that says where it stands
+atelier fix "it missed the migration cost"   # react: what was wrong, in your own words
+```
+
+A run ends with one of three words:
+
+- **BLOCKED**: a rule you require, and that code can check, was not met. The work is shown and is not deliverable; the
+  line names the rule and what was found. Exit 1.
+- **CHECKED**: everything that can be checked was met. What is left is yours to judge (a step of your method no
+  machine reads) and is counted on the line.
+- **CERTIFIED**: every rule you require was checked and met, and nothing was left to anyone's judgement.
+
+`--report` on either command adds the whole account: every check, what a draft cost, what was written again. Every
+other command is under `atelier lab`. `atelier invoke` is `atelier run` with that account always on, and is what
+scripts and other tools call.
+
 ## From your method and your finished work
 
 When you can say how the work is done, say it, and hand over the pieces where it was done:
 
 ```bash
-atelier method review.md --golden ./reviews          # a note of steps, and a file or a folder of finished examples
-atelier method review.md --golden ./reviews --yes    # build exactly what the screen showed
+atelier new ./reviews --method review.md          # your finished examples (a file or a folder), and a note of steps
+atelier new ./reviews --method review.md --yes    # build exactly what the screen showed
 ```
 
 Every step of the note is your rule, in your words. It calls no model. The screen sorts the steps into three

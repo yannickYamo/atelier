@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 1,
+ "seconds": 20.1,
+ "output": "A cold and a chest infection can feel much the same to you. Sore throat, blocked nose, aching head. But the culprits behind them are not remotely alike.\n\nBacteria are living cells. They eat, they grow, and they divide to make more of themselves. Antibiotics attack the machinery that lets them do that. Some drugs break down the bacterial cell wall. Others jam the process bacteria use to build proteins.\n\nA cold is caused by a virus, and a virus is barely alive. It is a scrap of genetic instructions wrapped in protein. It has no cell wall to break and no machinery of its own to jam. Instead it hijacks your own cells and makes them do the copying.\n\nThink of a key cut for one lock. Present it at a different door and nothing turns, however hard you push. The antibiotic simply finds nothing it recognises.\n\nTaking them anyway is not harmless. They kill useful bacteria in your gut, and they give surviving bacteria practice at resisting treatment. That resistance spreads, and it makes real infections harder to cure later.\n\nIn short, antibiotics target bacteria, and your cold is a virus. Rest, fluids and time are what actually work.",
+ "costUsd": 0.0707,
+ "cut": []
+}

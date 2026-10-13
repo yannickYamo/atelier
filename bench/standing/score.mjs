@@ -25,6 +25,8 @@ const rows = Object.entries(arms).map(([arm, rs]) => {
     // what a domain's checker reports beside its failures (code review: the defect cited within two lines)
     near: checked.some((c) => 'near' in c) ? checked.filter((c) => c.near).length : null,
     cuts: got.reduce((a, r) => a + (r.cut ?? []).length, 0), usdPerOutput: got.some((r) => r.costUsd) ? got.reduce((a, r) => a + (r.costUsd ?? 0), 0) / got.length : null,
+    // What a piece of work that passes costs: an arm that writes failures cheaply is not cheap.
+    usdPerConforming: got.some((r) => r.costUsd) && checked.some((c) => !c.fails.length) ? got.reduce((a, r) => a + (r.costUsd ?? 0), 0) / checked.filter((c) => !c.fails.length).length : null,
     secondsPerOutput: got.reduce((a, r) => a + r.seconds, 0) / (got.length || 1) };
 });
 const rate = (a) => { const r = rows.find((x) => x.arm === a); return r && r.outputs ? r.failing / r.outputs : null; };
@@ -37,6 +39,6 @@ for (const r of rows.filter((x) => x.arm.startsWith('invoke'))) {
 }
 if (process.argv.includes('--json')) console.log(JSON.stringify({ rows, gates }, null, 1));
 else {
-  for (const r of rows) console.log(`${r.arm.padEnd(15)} ${String(r.failing).padStart(3)} of ${String(r.outputs).padEnd(3)} failing  ${Object.entries(r.byRule).map(([k, n]) => `${k}:${n}`).join(' ').padEnd(28)} cuts ${r.cuts}  ${r.near === null ? '' : `near ${r.near}  `}${r.usdPerOutput === null ? '' : `$${r.usdPerOutput.toFixed(3)}/output  `}${r.secondsPerOutput.toFixed(0)} s/output${r.empty ? `  (${r.empty} returned nothing: not scored)` : ''}`);
+  for (const r of rows) console.log(`${r.arm.padEnd(15)} ${String(r.failing).padStart(3)} of ${String(r.outputs).padEnd(3)} failing  ${Object.entries(r.byRule).map(([k, n]) => `${k}:${n}`).join(' ').padEnd(28)} cuts ${r.cuts}  ${r.near === null ? '' : `near ${r.near}  `}${r.usdPerOutput === null ? '' : `$${r.usdPerOutput.toFixed(3)}/output  `}${r.usdPerConforming === null ? '' : `$${r.usdPerConforming.toFixed(3)}/passing  `}${r.secondsPerOutput.toFixed(0)} s/output${r.empty ? `  (${r.empty} returned nothing: not scored)` : ''}`);
   for (const [name, ok] of Object.entries(gates)) console.log(`${ok === null ? 'not run' : ok ? 'PASS   ' : 'FAIL   '} ${name}`);
 }

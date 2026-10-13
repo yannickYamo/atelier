@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 0,
+ "seconds": 21.7,
+ "output": "When you have a cold, you feel miserable enough to want something strong. Antibiotics sit in the cupboard, so reaching for them seems sensible. Sadly they will do nothing at all.\n\nThe reason is that colds are caused by viruses, not bacteria. These are two very different kinds of invader. Bacteria are living cells. They feed, they grow, and they build their own outer walls. Antibiotics attack exactly those features, jamming the machinery a bacterium needs to survive.\n\nA virus has almost none of that machinery. It is barely more than genetic instructions in a protein shell. It hijacks your own cells and makes them produce copies instead. There is no bacterial wall to break, so the drug finds nothing to work on.\n\nThink of a key cut for one particular lock. You can push it into a different door all you like, but the shape simply does not match.\n\nTaking antibiotics anyway is not harmless. They kill useful bacteria in your gut, and they help resistant strains spread. That makes future infections harder to treat for everyone.\n\nYour immune system clears a cold in its own time. Rest, fluids and patience are genuinely the treatment.\n\nIn short, antibiotics target bacteria, and a cold is not bacterial.",
+ "costUsd": 0.0717,
+ "cut": []
+}

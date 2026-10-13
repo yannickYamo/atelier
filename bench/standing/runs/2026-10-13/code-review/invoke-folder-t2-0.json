@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 0,
+ "seconds": 87.5,
+ "output": "## Summary\n\nThis change adds an `AuditLog` class that appends normalized JSON lines to per-day files under a configurable directory, skipping records below a minimum level. It also exports `normalize`, `resolveLogPath` and the `LEVELS` table, plus a `rotate` helper that deletes files older than a given age by mtime.\n\n## Must fix\n\n- **src/audit/log.js:90** — The `appendFile` promise is neither awaited nor returned, so `write` resolves before the record reaches disk and a rejected append becomes an unhandled rejection. Audit records are silently lost. Add `await`.\n- **src/audit/log.js:116** — `rotate` stats and unlinks every entry in the directory, not just files matching `audit-YYYY-MM-DD.log`. An unrelated sibling file is deleted, and a subdirectory throws. Filter on the known filename pattern first.\n- **src/audit/log.js:89** — `new Date(entry.ts)` is built from a caller-supplied `ts` with no validation, so a malformed value yields `Invalid Date` and `toISOString()` throws inside `resolveLogPath`. Validate `record.ts` in `normalize` and fall back to the current time.\n\n## Suggestions\n\n- **src/audit/log.js:73** — An unrecognised `minLevel` makes `indexOf` return `-1`, so everything is recorded. Validate it against `LEVELS` in the constructor.\n- **src/audit/log.js:50** — `action` is the one field with no default and no check, yet it is what the log exists for. Reject records without it.\n- **src/audit/log.js:80** — Two concurrent first writes both race into `init`; `mkdir` is idempotent, so this is harmless today, but caching the `init()` promise is clearer.\n- No tests accompany this module. Add cases for `write` returning `null` below `minLevel`, `resolveLogPath` at a UTC day boundary, and `rotate` leaving a non-matching file untouched.\n\n## Verdict\n\nRequest changes",
+ "costUsd": 0.328,
+ "cut": []
+}

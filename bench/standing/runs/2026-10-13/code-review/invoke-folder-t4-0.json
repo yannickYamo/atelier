@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 0,
+ "seconds": 38.5,
+ "output": "## Summary\n\nThis change adds an in-memory session store backed by a module-level `Map`, with helpers to mint a 32-byte hex token, look a session up (evicting it when expired), authenticate a request from the `x-session-token` header, and destroy a session. Sessions carry an eight-hour TTL plus optional IP and user-agent metadata.\n\n## Must fix\n\n- **src/auth/session.js:43** — Sessions live in a process-local `Map`, so they are lost on restart and not shared across workers; behind more than one process a user is authenticated on some requests and rejected on others. Back this with Redis or the database, or state the single-process constraint at the top of the module.\n- **src/auth/session.js:97** — `token == undefined` is loose equality, so it catches `null` but passes an empty string or a duplicated header arriving as an array straight into `getSession`. Require a non-empty string.\n- **src/auth/session.js:84** — Expired records are only evicted when that exact token is looked up again, so tokens never presented again stay resident forever and the map grows without bound. Add a periodic sweep, or cap the store.\n\n## Suggestions\n\n- No tests accompany this module. Add cases for `getSession` at the expiry boundary (`expiresAt === Date.now()`), `authenticate` returning `missing_token` and `invalid_token`, and `destroySession` returning `false` for an unknown token.\n- `authenticate` both mutates `req.session` and returns the session; pick one contract.\n- Line 57 throws a bare `Error`; a typed error would let callers distinguish it from a store failure.\n\n## Verdict\n\nRequest changes",
+ "costUsd": 0.1405,
+ "cut": []
+}

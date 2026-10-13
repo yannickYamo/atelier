@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t0",
+ "run": 1,
+ "seconds": 7.3,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds chemicals that are desperate to react with each other, and it keeps them apart until you give permission.\n\nInside, there are two different materials, one at each end. One of them readily gives up electrons; the other readily accepts them. Between them sits a paste or liquid called the electrolyte, which lets charged particles drift across but blocks the electrons themselves.\n\nSo the electrons are stuck. They want to travel from one end to the other, but the only route open to them runs out through the metal terminal, around the outside, and back in the far side. That outside route is your circuit. Connect a torch bulb, and the electrons pour through the filament on their way across, lighting it as they go.\n\nPicture water held behind a dam. The water is not doing anything useful while it waits, but open a channel and it will drive a wheel on its way down. The battery stores energy as a chemical imbalance, in just the same patient way.\n\nEventually the reaction runs to completion. The eager material is spent, the electrons stop flowing, and the battery is flat. Rechargeable types can be pushed backwards by forcing current in the opposite direction, rebuilding the imbalance.\n\nIn short, a battery stores energy as chemistry waiting to happen, and your circuit is the only road home."
+}

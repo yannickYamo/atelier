@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t0",
+ "run": 0,
+ "seconds": 7.7,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds chemicals that are desperate to react with each other, and it keeps them apart until you give them a path.\n\nInside sit two different materials, one at each end. Picture them as two substances with mismatched appetites: one eagerly gives away tiny particles called electrons, the other eagerly accepts them. Between them lies a paste or liquid called the electrolyte, which blocks electrons but lets charged atoms drift through.\n\nSo the electrons are stuck. They want to travel from the giving end to the accepting end, but the electrolyte refuses to carry them. The moment you connect a wire from one terminal to the other, they finally have a route. They rush along it, and that rush through your torch bulb or phone chip is the current doing work for you.\n\nThe stored energy was never electrical. It was chemical, locked in the arrangement of atoms, the way a stretched spring stores energy in its shape. The reaction simply releases what was already there.\n\nA disposable battery dies when the giving material is used up. A rechargeable one is different. Pushing current backwards forces the reaction to run in reverse, returning the atoms roughly to where they started.\n\nIn short, a battery stores energy as a chemical imbalance, and discharging simply lets that imbalance resolve."
+}

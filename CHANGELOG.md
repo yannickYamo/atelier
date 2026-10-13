@@ -7,6 +7,42 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: three commands, and one line under the work
+
+The tool answered to fifty-nine commands and a run read thirty-eight flags, many of them for studies whose own
+results said they did not help. A person needs three things from it.
+
+- **`atelier new <your-work> --method <note>`** builds the skill: your finished work, and how you do it. It is
+  `atelier method` under the name people look for; without a method note, `atelier new` reads the rules off the
+  examples as before. The screen is your own steps in three groups (checked on every run, yours to judge, seen in
+  your examples) and three lines to say the skill is ready. How each check is made, and the build's own account, is
+  `--report`.
+- **`atelier run "<task>"`** does new work and prints it with one line under it: **BLOCKED** (a required rule that
+  can be checked was not met: shown, not deliverable, exit 1), **CHECKED** (everything checkable was met; what is
+  left is yours to judge, and is counted) or **CERTIFIED** (every required rule was checked and met). A rule you
+  require is required whether or not a check exists for it, so CHECKED is never rounded up. In a folder that built
+  one skill, the skill need not be named. `atelier invoke` is the same run with its whole report, unchanged.
+- **`atelier fix "<what was wrong>"`** is unchanged.
+- **`atelier --help`** is those three. Every other command is listed by `atelier lab`, by what it is for, with the
+  ones whose studies did not show a gain named as experimental. Nothing was removed: each still answers to its name.
+
+The package's description, the README's opening, the roadmap and the agent guide say this product. Decisions 0017
+(a skill from a method and finished work) and 0018 (a skill improves how it carries its method) are accepted, the
+second with what evolution may change and what it may never change.
+
+The standing comparison can be made again from a clone: `bench/standing/runs/2026-10-13/` holds every output behind
+its tables, `score.mjs` reads them with no model, `build.sh` builds the Atelier skill for a domain, and each arm
+now also reports what a passing output costs.
+
+**If you are upgrading.** On this line of work, compared with 1.x:
+- `atelier verify` and the MCP tool pass an unsourced figure as a listed finding when no material is bound, where
+  they failed it before. A check in CI that relied on that exit code needs material bound (`atelier material`,
+  `--with`).
+- Nothing is deleted from a draft unless material is bound and the skill is an essay or a post (`--class`).
+- A skill rebuilt from nine pieces or more may write one or two more drafts when a draft misses its length;
+  `--no-redraft` turns that off.
+- A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
+
 ### Studies: the standing comparison on its four domains
 
 One run a task for the runtime, two for the prompt arms; the Atelier skill is the one built by
@@ -18,7 +54,7 @@ domain's checklist:
 | the examples pasted | 12 of 20 | 20 of 20 | 8 of 8 (12 refused by the model) | 16 of 20 |
 | the method and the examples | 1 of 20 | 20 of 20 | 20 of 20 | 5 of 20 |
 | the Atelier skill as a plain prompt | not run | not run | 20 of 20 | 2 of 20 |
-| the Atelier skill, `atelier invoke` | 0 of 20 | 1 of 10 | 10 of 10 | 1 of 10 |
+| the Atelier skill, `atelier invoke` | 0 of 20 | 2 of 10 (1 of 10 on the run before) | 10 of 10 | 1 of 10 |
 
 - **Contract is a miss for every arm, on one rule:** the method's "between 220 and 420 words". The twelve examples
   run 405 to 419; the prompt arms wrote 437 to 500 and the runtime 425 to 436. Every other rule of the agreement

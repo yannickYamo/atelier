@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t4",
+ "run": 0,
+ "seconds": 8.2,
+ "output": "You feel awful, the doctor says no antibiotics, and it sounds like being refused help. The reason is not stinginess. It is that the drug has nothing to attack.\n\nColds are caused by viruses. Bacteria are a completely different kind of thing. A bacterium is a living cell. It has a wall around it, machinery inside for making proteins, and it feeds and divides on its own. A virus is barely alive at all. It is a scrap of genetic instructions in a protein shell, with no cell wall and no machinery of its own. It cannot even reproduce by itself. It hijacks your cells and makes them build copies for it.\n\nAntibiotics work by sabotaging the parts that only bacteria have. Some punch holes in the cell wall. Some jam the protein-building equipment. Your own cells are built differently, which is why the drug harms the invader and leaves you alone.\n\nNow point that weapon at a virus. There is no wall to break and no machinery to jam. It is like bringing a tyre iron to a problem with your plumbing. The tool is fine; it simply does not fit.\n\nTaking them anyway is not harmless. The drug still kills useful bacteria in your gut, and the survivors learn to resist it. That resistance spreads, and the medicine becomes weaker for everyone, including you next time you genuinely need it.\n\nIn short, antibiotics target bacterial parts that a cold virus does not have."
+}

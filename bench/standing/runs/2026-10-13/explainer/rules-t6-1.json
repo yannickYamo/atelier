@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t6",
+ "run": 1,
+ "seconds": 8.2,
+ "output": "Most records you rely on sit with a single trusted keeper. Your bank holds the list of who has what money. If that record changes, you simply have to believe the keeper got it right.\n\nA blockchain removes the single keeper. Instead, thousands of computers each hold an identical copy of the same record. Every new transaction is broadcast to all of them. They check it against the history they already hold, and only agree to add it if the maths lines up.\n\nTransactions are bundled into groups called blocks. Each block carries a fingerprint of the block before it, so they link into a chain. Change anything in an old block and its fingerprint changes, which breaks every link after it. The alteration becomes obvious to everyone immediately.\n\nThink of a village where every resident keeps the same ledger in their kitchen. To fake a debt, you would need to sneak into nearly every house and rewrite the same page identically. The effort makes cheating impractical.\n\nThis is why blockchains underpin cryptocurrencies, where no bank vouches for balances. The trade-off is speed and energy. Thousands of machines agreeing on everything is slower than one database quietly updating itself.\n\nIn short, a blockchain is a shared record that nobody owns and nobody can quietly rewrite."
+}

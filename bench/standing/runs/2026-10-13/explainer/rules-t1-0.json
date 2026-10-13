@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t1",
+ "run": 0,
+ "seconds": 9,
+ "output": "You hear that \"the market rose today.\" But the market is thousands of separate companies, each moving its own way. Somebody has to boil all that down to one number. That number is a stock index.\n\nAn index is a selected group of company shares, tracked together as a single measure. The FTSE 100 follows the hundred largest companies listed in London. The S&P 500 follows five hundred large American firms. Each index has rules deciding which companies get in and when they drop out.\n\nThe companies are not usually counted equally. Bigger firms carry more weight, so their movements shift the number more. If a giant retailer falls three percent, the index feels it. A small member sliding the same amount barely registers.\n\nThink of a school reporting its average exam mark. No single pupil's score tells you much. The average tells you how the year group did overall, even though individual results vary wildly.\n\nThis matters for two reasons. An index gives you a quick read on how a market is behaving. It also gives investors something to copy, through funds that simply buy everything in the list.\n\nIn short, a stock index bundles many companies into one number so you can see the overall direction."
+}

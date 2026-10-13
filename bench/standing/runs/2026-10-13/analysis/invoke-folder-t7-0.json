@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t7",
+ "run": 0,
+ "seconds": 51.8,
+ "output": "## Verdict\n\nJuno Board costs least for a team of 15, at $300 per month. Its 25-seat minimum forces payment for 10 unused seats, but the $12 rate is low enough to stay ahead of Heronry, which bills all 15 seats at $24. Cygnus Flow's 50-seat floor makes it the most expensive by a wide margin.\n\n## Vendor pricing\n\n| Vendor | Price per seat | Minimum seats |\n|---|---|---|\n| Juno Board | $12 | 25 |\n| Cygnus Flow | $17 | 50 |\n| Heronry | $24 | 5 |\n\n## Cost at this size\n\nSeats paid for is the team size (15) or the vendor minimum, whichever is larger.\n\n- **Juno Board:** minimum 25 exceeds 15, so 25 seats paid. 25 × $12 = **$300 per month**. Effective rate $20.00 per person.\n- **Cygnus Flow:** minimum 50 exceeds 15, so 50 seats paid. 50 × $17 = **$850 per month**. Effective rate $56.67 per person.\n- **Heronry:** minimum 5 is below 15, so 15 seats paid. 15 × $24 = **$360 per month**. Effective rate $24.00 per person.\n\nJuno Board is $60 per month cheaper than Heronry and $550 cheaper than Cygnus Flow — $720 and $6,600 over twelve months.\n\n## Risks\n\nThe margin over Heronry is thin and depends entirely on headcount. Heronry bills only for real users, so a team of 12 would pay $288 against Juno Board's fixed $300 floor, reversing the ranking. Anything below 13 people favours Heronry; anything above it favours Juno Board, and the gap widens fast as the team grows.\n\nCygnus Flow is not competitive at this size and does not reach its list rate until 50 seats. Even then it sits above Juno Board per seat, so it loses on price at every size here.\n\nThis is a price comparison only. The list carries no detail on features, support, limits or contract terms, so a cheaper seat may buy less product. All figures assume monthly billing as stated; annual commitments and discounts are not on the list and could change the ranking.",
+ "costUsd": 0.1432,
+ "cut": []
+}

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t0",
+ "run": 0,
+ "seconds": 16.9,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds chemicals that are waiting to react, and that waiting is the stored energy.\n\nInside every battery sit two different materials, kept apart. One of them is eager to give away tiny particles called electrons. The other is eager to accept them. Between the two sits a paste or liquid called the electrolyte, which lets charged particles pass but blocks the electrons themselves.\n\nSo the electrons have only one route: out through the terminals, round your circuit, and back in the other side. On the way they power your torch, your phone, your remote. The reaction keeps going as long as that route stays open.\n\nThink of water held behind a dam. Nothing happens while the gate is shut, but open it and the flow will turn a wheel. A battery is chemical water behind a chemical dam.\n\nEventually the eager material is used up and the flow stops. In a rechargeable battery, pushing electricity back in drives the reaction backwards and resets it. Disposable batteries cannot be reset, so you replace them.\n\nIn short, a battery stores energy as chemistry, then releases it as a flow of electrons through your device.",
+ "costUsd": 0.1632,
+ "cut": []
+}
