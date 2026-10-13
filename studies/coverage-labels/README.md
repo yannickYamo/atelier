@@ -54,8 +54,13 @@ table, not where it refers to one. After the fix the reader compiles 15 of the 1
 | reader said FULL | 2 | 0 | 0 |
 | reader said PARTIAL | 0 | 10 | 3 |
 
-The three left are the citation class. They are shown as read in part, with what is not read named, and are left
-as they are: no further wording patches without evidence from real use. (The label for the section-length step
+The three left are the citation class: a check tied to a step by its subject and not by what it asks. Related is
+not a part of: a figure missing from the material is not "name the source the first time I cite a figure" broken.
+Two of the three (the lookup of figures, tied to a step about claims or about naming sources) are now marked as
+near the rule: run, shown, and blocking nothing. The lookup stays enforced where figures are what the step is
+about and the source is where they must come from ("every figure must be sourced from the material", "keep
+numbers as they appeared at source"). The third, a step that asks for `path:line` citations held by looking each
+citation up, is left enforced: a citation of a line that is not there is not a citation. (The label for the section-length step
 was given for the check as it was first compiled.)
 
 **5. The larger finding is what the reader does not compile.** Of the 139 steps first left with no check, the

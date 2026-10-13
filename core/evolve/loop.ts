@@ -282,6 +282,8 @@ export interface EvolveRecord {
   readonly schema: 1;
   readonly skill: string; readonly skillVersion: string; readonly standardVersion: string; readonly at: string;
   readonly briefs: { readonly dev: readonly string[]; readonly heldBack: readonly string[] };
+  /** how many of the owner's rules the score reads, of how many they have; absent from a search recorded before this was kept */
+  readonly scored?: { readonly on: number; readonly of: number };
   readonly start: Carry;
   /** the unchanged skill, twice, on the working briefs, and the band read from the two. `second` is null when the search stopped before the second run was whole; `first` may then be a part of the briefs */
   readonly baseline: { readonly first: Scored; readonly second: Scored | null; readonly band: number };
@@ -318,6 +320,8 @@ export function renderEvolve(r: EvolveRecord): string {
   if (r.heldBack) out.push(`  held back       as it started ${r.heldBack.start.ok} of ${r.heldBack.start.n}; as the search left it ${r.heldBack.end.ok} of ${r.heldBack.end.n}.${r.earlier?.heldBackReads ? ` These briefs were read by ${r.earlier.heldBackReads} earlier search(es): each reading makes them less of a test.` : ''}`);
   out.push(`  ${r.verdict === 'ADOPTED' ? 'ADOPTED' : r.verdict === 'NOT_CARRIED' ? 'NOT ADOPTED' : r.verdict === 'STOPPED' ? 'STOPPED' : 'UNCHANGED'}: ${r.why}`);
   if (r.verdict === 'ADOPTED') out.push(`  What ${r.briefs.heldBack.length} briefs set aside can show is that a change breaks what worked. They cannot show that a gain carries.`);
-  out.push('  Scored on what the checks read: what the work must contain and be made from, and nothing unsupported delivered. A judgement step is scored by nothing here.');
+  out.push(`  ${r.scored ? `Scored on ${r.scored.on} of your ${r.scored.of} rules: the ones a check reads.` : 'Scored on what the checks read: what the work must contain and be made from, and nothing unsupported delivered.'} A judgement step is scored by nothing here.`);
+  // A SCORE THAT READS A SMALL PART OF THE STANDARD CAN RISE WHILE THE WORK GETS NO BETTER. Said where it matters.
+  if (r.scored && r.scored.on * 2 < r.scored.of && r.verdict === 'ADOPTED') out.push(`  Most of your rules are scored by nothing here. This adoption says the ${r.scored.on} that are did not get worse; it is no evidence that the work is better by your standard.`);
   return out.join('\n');
 }

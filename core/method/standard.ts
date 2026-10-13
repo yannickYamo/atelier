@@ -145,6 +145,8 @@ export interface MethodProposal {
    * constraints in a Regulation section"). A reading of what the owner meant: said beside the step on the build screen.
    */
   readonly byName?: true;
+  /** The check was tied to the step by its subject (sources, figures), not by what it asks: near the rule, and not the rule. */
+  readonly related?: true;
   /**
    * Counted off the examples and said by no step: how the pieces are written (a sentence length, a paragraph cap, a
    * word never used). A rule of style, not a part of the work: shown, used to choose between drafts, and repaired
@@ -154,6 +156,8 @@ export interface MethodProposal {
 }
 
 const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
+/** A word for a figure itself: what the lookup in the material reads. A claim is not one. */
+const FIGURES = /\b(?:figure|number|statistic|stat|data|metric|price|pricing|revenue|percent\w*|quantit\w+)s?\b/i;
 const ABOUT_FIGURES = /\b(?:figure|number|statistic|stat|data|claim|metric|price|pricing|revenue|percent\w*|quantit\w+)s?\b/i;
 
 /**
@@ -161,7 +165,7 @@ const ABOUT_FIGURES = /\b(?:figure|number|statistic|stat|data|claim|metric|price
  * those sections; one that speaks of a table is about the example's table whose columns it names (or its only
  * table); one that speaks of sources for figures is about the material.
  */
-function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: { byName?: boolean } = {}): Measurement | null {
+function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: { byName?: boolean; related?: boolean } = {}): Measurement | null {
   const said = ` ${norm(step)} `;
   // WHAT THE STEP NAMES OUTRIGHT COMES FIRST, whether or not the example has it: "a Risks section", "a table with the
   // columns A, B and C". Read only from the example, a step that names a column the example lacks was given the
@@ -212,7 +216,17 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
   // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
   // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
   if (citesLines(step) && !/\b(?:do not|don't|never|not|no(?!-)|unless|if|when|where|whenever|except|optional(?:ly)?|avoid|without|instead of|rather than)\b/i.test(step)) return { observer: 'LINES', params: { min: 0 } };
-  if (SOURCING.test(step) && ABOUT_FIGURES.test(step)) return { observer: 'CITED', params: { allow: 0 } };
+  // A STEP THAT SPEAKS OF SOURCES AND OF FIGURES is given the lookup of figures in the material. That is the step's
+  // subject, not what it asks: "name the source the first time I cite a figure" is not broken by a figure the
+  // material lacks. The check is kept, shown, and marked as near the rule: it blocks nothing.
+  // It IS what the step asks where the figures are what the step is about and the source is where they must come
+  // from: "every figure must be sourced from the material", "keep numbers as they appeared at source". Said of
+  // figures first, then of the source. Anything else (a claim, or the source named before the figure) is near it.
+  if (SOURCING.test(step) && ABOUT_FIGURES.test(step)) {
+    const figures = step.search(FIGURES); const source = step.search(SOURCING);
+    how.related = !(figures !== -1 && figures < source);
+    return { observer: 'CITED', params: { allow: 0 } };
+  }
   return null;
 }
 
@@ -230,13 +244,13 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   const unreadable = (m: Measurement): boolean => targetOf(m.observer) === 'BOUND_MATERIAL' && !example.material.length;
   const against = (r: { verdict: string; detail: string }, m: Measurement): string | null => (r.verdict === 'VIOLATED' && !unreadable(m) ? `your example does not do this (${r.detail})` : null);
   for (const step of stepsOf(note)) {
-    const how: { byName?: boolean } = {};
+    const how: { byName?: boolean; related?: boolean } = {};
     const m = checkNamedBy(step.text, outline, how);
     if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }); continue; }
     const r = read(m);
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
-    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(how.byName ? { byName: true as const } : {}) });
+    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(how.byName ? { byName: true as const } : {}), ...(how.related ? { related: true as const } : {}) });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the
   // work contains, as plainly as a sentence would. Each is held against the example like any stated step: sections

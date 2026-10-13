@@ -74,6 +74,13 @@ only partly observed, or the owner's word was moved by a measurement.
   settings, a file given with it is gone, or the skill has changed since, the fix says so before it writes.
 - **A length said of a section is that section's, with or without the word "section"**, and a step that only
   refers to a table ("three to five rows in that table") is no longer given the table's column check.
+- **A check near a rule is not a check of it.** A step that speaks of sources and of figures was given the lookup
+  of figures in the material, whatever it asked. Where the figures are not what the step is about ("every claim
+  cites a numbered Evidence item", "name the source the first time I cite a figure"), the check is still run and
+  shown, and blocks nothing: its failing is not your rule broken. "Every figure must be sourced from the material"
+  is enforced as before.
+- **`atelier lab evolve` says how much of your standard its score reads** ("scored on 3 of your 17 rules"), and
+  where that is under half, an adoption says it is no evidence the work is better by your standard.
 - **A build that stopped half-way is finished by running it again.** Stopped between storing the standard and
   installing the skill, the same command was refused with "a skill called … already exists, and this folder did
   not build it".

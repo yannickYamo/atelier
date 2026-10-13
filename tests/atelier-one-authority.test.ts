@@ -201,3 +201,20 @@ describe('a rule that was not checked because it does not apply everywhere is no
     expect(e.result.reasons).toEqual(['Every specific in the work is found in what you supplied: 2 not found in it, and still in the text']);
   });
 });
+
+describe('a search says how much of the owner\'s standard its score reads, and an adoption claims no more', () => {
+  it('scored on 3 of 17 rules: said as a count, and an adoption says what it does not show', async () => {
+    const { renderEvolve } = await import('../core/evolve/loop.js');
+    const s = (ok: number, n: number) => ({ ok, n, costUsd: 1, missing: {} });
+    const r = { schema: 1 as const, skill: 'teardown', skillVersion: 'a', standardVersion: 'b', at: '', briefs: { dev: ['a', 'b', 'c'], heldBack: ['d'] }, start: { drafts: 1, note: '' },
+      baseline: { first: s(1, 3), second: s(1, 3), band: 1 }, trials: [], end: { drafts: 2, note: '' }, heldBack: { start: s(1, 1), end: s(1, 1) }, verdict: 'ADOPTED' as const, why: 'w', costUsd: 1, scored: { on: 3, of: 17 } };
+    const text = renderEvolve(r);
+    expect(text).toContain('Scored on 3 of your 17 rules: the ones a check reads.');
+    expect(text).toContain('Most of your rules are scored by nothing here. This adoption says the 3 that are did not get worse; it is no evidence that the work is better by your standard.');
+    // where most rules are read, the count is said and the warning is not
+    expect(renderEvolve({ ...r, scored: { on: 9, of: 10 } })).not.toMatch(/Most of your rules/);
+    // a record from before the count was kept says what it always said
+    const { scored: _unused, ...old } = r; void _unused;
+    expect(renderEvolve(old)).toContain('Scored on what the checks read');
+  });
+});

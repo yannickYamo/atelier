@@ -221,6 +221,13 @@ export interface Requirement {
    */
   readonly contested?: string;
   /**
+   * THE CHECK READS SOMETHING NEAR THE RULE, NOT THE RULE: it was tied to the owner's step by the step's subject
+   * (it speaks of sources and of figures) and not by what the step asks. Its failing is not the rule broken, so it
+   * is run and shown and blocks nothing (core/plan/execution-plan.ts), unless the owner makes the rule required
+   * with this check, which is them saying the check is what they meant.
+   */
+  readonly related?: true;
+  /**
    * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
    *
    * Orthogonal to carrier and to materiality. The carrier says how the behaviour is caused; this says

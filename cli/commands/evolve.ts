@@ -16,6 +16,7 @@ import { execFile, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { planFor } from '../../core/plan/execution-plan.js';
 import * as store from '../../core/state/store.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
@@ -213,6 +214,7 @@ export async function evolve(): Promise<void> {
           : `better on the briefs it worked on, and worse on the ones set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}): the gain did not carry, and the skill is left as it was.`;
     // `end` is what the search arrived at. After a stop that is where it had got to, with no reading on the briefs set aside.
     record = { schema: 1, skill: name, skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(),
+      scored: { on: scoredOn.length, of: planFor(std).rules.filter((p) => p.role !== 'HABIT').length },
       briefs: { dev: dev.map((b) => b.id), heldBack: heldBack.map((b) => b.id) }, start, baseline: { first, second, band }, trials, end: incumbent, heldBack: held, verdict, why,
       costUsd: Math.round(spent * 1e6) / 1e6, earlier: { heldBackReads: earlier.heldBackReads, notTriedAgain } };
   } finally {

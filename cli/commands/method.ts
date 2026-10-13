@@ -79,7 +79,8 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
 export function shortScreen(ps: readonly MethodProposal[]): string[] {
   const stated = ps.filter((p) => p.origin === 'STATED');
   const cover = (p: MethodProposal): Observes | null => observesOf(p.statement, p.measurement, false);
-  const whole = stated.filter((p) => cover(p)?.coverage === 'FULL'); const part = stated.filter((p) => cover(p)?.coverage === 'PARTIAL');
+  const near = stated.filter((p) => p.related);
+  const whole = stated.filter((p) => !p.related && cover(p)?.coverage === 'FULL'); const part = stated.filter((p) => !p.related && cover(p)?.coverage === 'PARTIAL');
   const judged = stated.filter((p) => !p.measurement); const shown = ps.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement);
   // What a step read by a section name will look for, in a few words: the owner checks the reading, not the machinery.
   const lookedFor = (p: MethodProposal): string => {
@@ -94,6 +95,8 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
     '', 'A method note makes rules of your own: atelier new <your-work> --method <how-you-do-it.md>'];
   const out: string[] = [`${stated.length} step(s) in your method.`];
   if (whole.length) out.push('', `Checked on every run (${whole.length}):`, ...whole.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}${disagrees(p)}`));
+  if (near.length) out.push('', `You judge these; a check of something near each is shown on every run, and blocks nothing (${near.length}):`,
+    ...near.map((p) => `  - ${p.statement}\n      shown: ${lookedFor(p)}`));
   if (part.length) out.push('', `Checked in part: the rest is yours to read (${part.length}):`,
     ...part.map((p) => `  - ${p.statement}\n      checked: ${lookedFor(p)}\n      not checked: ${cover(p)?.unchecked ?? ''}${disagrees(p)}`));
   if (judged.length) out.push('', `You judge these yourself (${judged.length}):`, ...judged.map((p) => `  - ${p.statement}`));
@@ -181,13 +184,15 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     ...(p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement ? { wordedFromCheck: true as const } : {}),
     // A stated step the owner's own work does not do: theirs, checked, and not enforced until they confirm it.
     ...(p.origin === 'STATED' && p.conflict && !confirmed ? { contested: p.conflict } : {}),
+    // A check tied to the step by its subject, not by what it asks: kept and shown, and it blocks nothing.
+    ...(p.origin === 'STATED' && p.related ? { related: true as const } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decided = bases.map((base, i) => {
     // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
     // example is a preference until the owner says otherwise.
     const p = proposals[i];
-    const enforce = p.measurement && !base.contested;
+    const enforce = p.measurement && !base.contested && !base.related;
     const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(enforce ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: 'PREFERRED' });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;

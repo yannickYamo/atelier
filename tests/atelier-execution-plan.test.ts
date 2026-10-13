@@ -133,3 +133,33 @@ const ALLOWED: string[] = [
   // the rule's own field. It is a gate before any draft, older than the plan, and is listed so it is not forgotten.
   'core/state/prerequisite.ts',
 ].sort();
+
+describe('a check tied to a step by its subject, and not by what the step asks, blocks nothing', () => {
+  // "Every claim in Bottom Line should trace to a numbered Evidence item" was given the lookup of figures in the
+  // material. A figure missing from the material is not that rule broken: related is not a part of. Such a check is
+  // run and shown, and its failing fails nothing of the owner's.
+  const NOTE = '1. Every claim in Bottom Line should trace to a numbered Evidence item, cited in square brackets like [3].\n2. Name the source the first time I cite someone else\'s idea or figure.\n3. Keep the whole piece between 5 and 400 words.\n4. Every figure must be sourced from the material you were given.\n5. Keep numbers as they appeared at source.\n';
+  const EXAMPLE = '## Bottom Line\n\nThey lead on price [1].\n\n## Evidence\n\n1. Their pricing page, 4 May.\n';
+  it('built as the owner\'s rule, with its check, and not enforced', async () => {
+    const { methodProposals } = await import('../core/method/standard.js'); const { decideSteps } = await import('../cli/commands/method.js');
+    const proposals = methodProposals(NOTE, { task: 't', material: [], reference: EXAMPLE }).filter((p) => p.origin === 'STATED');
+    expect(proposals.map((p) => [p.measurement?.observer ?? null, p.related ?? false])).toEqual([['CITED', true], ['CITED', true], ['LENGTH', false], ['CITED', false], ['CITED', false]]);
+    let n = 0; const { decided } = decideSteps(proposals, () => `x${++n}`);
+    const p = planFor({ requirements: decided });
+    expect(p.rules.map((r) => [r.id, r.role, r.enforced, r.notEnforced, r.onMiss])).toEqual([['x1', 'RULE', false, 'RELATED_CHECK', 'SHOW'], ['x2', 'RULE', false, 'RELATED_CHECK', 'SHOW'], ['x3', 'RULE', true, null, 'REDRAFT'],
+      // figures that must come from the source: the lookup is what the step asks, and it is enforced
+      ['x4', 'RULE', true, null, 'REWRITE'], ['x5', 'RULE', true, null, 'REWRITE']]);
+    expect(p.readsMaterial).toBe(true);
+    // its check failing blocks nothing, passes nothing, and says why
+    const record = buildRecord({ requirements: decided, checked: [{ id: 'x1', required: false, verdict: 'VIOLATED', detail: '2 figures not in the material' }, { id: 'x2', required: false, verdict: 'MET', detail: 'all found' },
+      { id: 'x3', required: true, verdict: 'MET', detail: '40 words' }], waived: new Map(), request: null, claims: null, copying: null });
+    expect(record.state).toBe('NEEDS_REVIEW');
+    expect(record.entries.slice(0, 2).map((e) => [e.result, e.reason, e.required])).toEqual([['UNVERIFIED', 'OBSERVER_UNQUALIFIED', true], ['UNVERIFIED', 'OBSERVER_UNQUALIFIED', true]]);
+    expect(record.entries[0].observation.evidence).toMatch(/2 figures not in the material\. This check reads something near your rule and not the rule itself, so it blocks nothing/);
+  });
+  it('the owner making the rule required is the owner saying the check is the rule: then it is enforced', async () => {
+    const related = stated('x7', 'Name the source of every figure.', { observer: 'CITED', params: { allow: 0 } }, { materiality: null, related: true, obligation: 'EXECUTION' });
+    expect(planFor({ requirements: [related] }).rules[0]).toMatchObject({ enforced: false, notEnforced: 'RELATED_CHECK' });
+    expect(planFor({ requirements: [{ ...related, materiality: 'REQUIRED' as const }] }).rules[0]).toMatchObject({ enforced: true, notEnforced: null });
+  });
+});
