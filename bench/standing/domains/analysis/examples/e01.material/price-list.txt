@@ -1,0 +1,4 @@
+PRICE LIST (per month, billed monthly)
+Acme Desk: 8 dollars per seat, minimum 1 seat
+Fennel HQ: 12 dollars per seat, minimum 10 seats
+Kelp: 17 dollars per seat, minimum 25 seats

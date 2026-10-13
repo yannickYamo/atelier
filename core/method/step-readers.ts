@@ -149,6 +149,29 @@ function wholeLength(step: string, counts: readonly RegExpMatchArray[]): Measure
   return { observer: 'LENGTH', params: { unit: [b.unit], ...(b.min !== null ? { min: b.min } : {}), ...(b.max !== null ? { max: b.max } : {}) } };
 }
 
+/**
+ * THE LENGTH OF ONE SECTION, STATED: "Keep the How it works section under 80 words", "the Summary section is two
+ * or three sentences: between 2 and 3 sentences". Read only where the step names exactly one section the example
+ * has, as "the X section" at its start, and gives its count in one of the plain forms; a soft wording or a negation
+ * is a judgement. Stated, so needed: the check fails a work that leaves the section out (`need`).
+ */
+export function sectionLength(step: string, sections: readonly string[]): Measurement | null {
+  if (SOFT.test(step) || negated(step)) return null;
+  const low = lowered(step); const counts = countsIn(step);
+  // The section is what the step is about: it opens the step, after at most a verb that sets a length. "Unlike the
+  // Summary section, keep the whole piece under 200 words" and "each sentence in the Summary section" are about
+  // something else, as is any step that also speaks of another part or of the piece.
+  const named = sections.filter((sec) => norm(sec).length >= 3 && new RegExp(`^ (?:(?:keep|hold|limit|cap|write) )?(?:the |a |an |your )?${norm(sec)} section `).test(low));
+  if (named.length !== 1 || !counts.length) return null;
+  // (The section's own name may be a word for a part: "the Summary section" is still about that section.)
+  const rest = low.replace(` ${norm(named[0])} section `, ' ');
+  if (/ (?:piece|whole|work|document|page|after|before|unlike|links?) /.test(rest) || PART.test(rest.replace(/\bsections?\b/g, ' '))) return null;
+  const range = rangeOf(step);
+  const b = range ? (counts.length === 1 ? range : null) : boundsOf(step, counts.length);
+  if (!b || (b.min === null && b.max === null) || (b.min !== null && b.max !== null && b.min > b.max)) return null;
+  return { observer: 'LENGTH', params: { unit: [b.unit], in: [named[0]], need: 1, ...(b.min !== null ? { min: b.min } : {}), ...(b.max !== null ? { max: b.max } : {}) } };
+}
+
 /** 'The last paragraph starts with "In short,"'. */
 function edgeWords(step: string): Measurement | null {
   const edges = [...step.matchAll(/\b(last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b/gi)];

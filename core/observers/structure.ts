@@ -275,6 +275,25 @@ function edgeObserver(id: 'OPENING' | 'CLOSING'): Observer {
   };
 }
 
+/**
+ * What a named section holds: everything from its heading to the next one at its level or above, or null where the
+ * text has no such section. Named by its words, as the presence check names it: "Plan" is not "Planning context".
+ * In a page of markup every heading below the title is read at one level, so a sub-heading ends the section.
+ */
+export function sectionBodyOf(raw: string, name: string, labels = false, siblings: readonly string[] = []): string | null {
+  const text = visible(raw);
+  const words = (x: string): string => ` ${x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+  // Where sections are labels, the other sections' names are what end this one: read with its own name alone, a
+  // bare "Summary" ran to the end of the document.
+  const heads = sectionHeadsOf(text, labels, labels ? [...new Set([name, ...siblings])] : undefined);
+  // The section of that name; where none is, the first whose name holds it ("Summary" in "Summary of findings").
+  const exact = heads.findIndex((h) => words(h.text) === words(name));
+  const i = exact !== -1 ? exact : heads.findIndex((h) => words(h.text).includes(words(name)));
+  if (i === -1) return null;
+  const next = heads.slice(i + 1).find((h) => h.level <= heads[i].level);
+  return text.slice(heads[i].end, next ? next.start : text.length);
+}
+
 export const OPENING = edgeObserver('OPENING');
 export const CLOSING = edgeObserver('CLOSING');
 

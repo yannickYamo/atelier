@@ -34,10 +34,20 @@ comparison is of what a person gets without steering.
 `{ fails: [...] }`, each failure starting with its rule's id). The examples and the checklist are written from the
 same hidden standard before any arm runs, and every example passes the checklist.
 
-Two domains so far. `explainer`: twelve model-written plain-language explanations. `code-review`: twelve golden
-reviews to a six-step method, and ten changes with one planted defect each (`gen.mjs` built it once; `truth.json`
-holds each file and the defect's line). Contract drafting and method documents are to come. The examples are
-synthetic and the checklists are the builder's: this is a development gate, not evidence about anyone's real work.
+Four domains, one for each kind of work the comparison is about:
+
+- `explainer`: twelve model-written plain-language explanations that keep six habits.
+- `code-review`: twelve golden reviews to a six-step method, and ten changes with one planted defect each
+  (`gen.mjs` built it once; `truth.json` holds each file and the defect's line).
+- `contract`: a mutual confidentiality agreement drafted from a term sheet to an eight-step method. The parties,
+  the term in months and the governing law must be the term sheet's, and no figure may be added.
+- `analysis`: a competitive analysis of three vendors on price to a six-step method. The verdict must name the
+  vendor that costs least for the team in the request, and each vendor's monthly cost must be worked right.
+
+`contract` and `analysis` make their cases in code (`cases.mjs`): the checker knows the right answer because it is
+computed, never read from an output. Their twelve examples were written once by `gen-examples.mjs` and kept only
+where the domain's checker passed them. The examples are synthetic and the checklists are the builder's: this is a
+development gate, not evidence about anyone's real work.
 
 One arm can be run for more than one skill with `--label` (`--arm invoke --label invoke-method`); `score.mjs`
 pairs `invoke-<x>` with `export-<x>` for the second gate.

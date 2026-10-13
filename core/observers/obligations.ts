@@ -16,6 +16,7 @@ import { workedFromMaterial } from '../loop/derived.js';
 import { citedLines } from '../loop/locators.js';
 import { proseWords } from './style.js';
 import { sentencesOf } from './text.js';
+import { sectionBodyOf } from './structure.js';
 
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -313,25 +314,34 @@ export const LINES: Observer = {
  * three sentences", "no sentence longer than 25 words". Counted the way a person counts: words of prose, characters
  * of the text as delivered (less front matter), sentences (a list item counts as one); `sentence` is the longest
  * sentence, in words. Words are words of prose: a heading, a table and a code block are not counted. A stated length is the
- * method's; a request that names its own length sets it for that run (cli/commands/invoke.ts).
+ * method's; a request that names its own length sets it for that run (cli/commands/invoke.ts). With `in`, the
+ * length is that of one named section.
  */
 export const LENGTH: Observer = {
   id: 'LENGTH',
   describe: (p) => {
     const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
     const range = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
-    return unit === 'sentence' ? `no sentence over ${hi} words` : `${range} ${unit}`;
+    const where = list(p, 'in')[0];
+    return unit === 'sentence' ? `no sentence over ${hi} words` : `${where ? `the "${where}" section: ` : ''}${range} ${unit}`;
   },
   validate: (p) => {
     const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
     if (!['words', 'characters', 'sentences', 'sentence'].includes(unit)) return 'unit is words, characters, sentences or sentence';
     if (lo === null && hi === null) return 'needs min or max';
     if (unit === 'sentence' && hi === null) return 'the longest sentence needs max';
+    if (unit === 'sentence' && list(p, 'in').length) return 'the longest sentence is read over the whole work, not one section';
     return lo !== null && hi !== null && lo > hi ? 'min cannot exceed max' : null;
   },
-  observe(text, p): ObserverResult {
-    if (!text.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
+  observe(whole, p): ObserverResult {
+    if (!whole.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
     const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    // THE LENGTH OF ONE SECTION (`in`), where the owner stated it of a section or their pieces keep one: what the
+    // section holds is counted, and a text without the section is another rule's to fail.
+    const where = list(p, 'in')[0];
+    const text = where ? sectionBodyOf(whole, where, Boolean(num(p, 'labels')), list(p, 'sections')) : whole;
+    // A length the owner stated of a section (`need`) is not met by leaving the section out.
+    if (text === null) return { verdict: num(p, 'need') ? 'VIOLATED' : 'NOT_APPLICABLE', spans: [], value: null, detail: `no "${where}" section to measure` };
     if (unit === 'sentence') {
       const long = sentencesOf(text).filter((s) => hi !== null && s.words > hi);
       return long.length ? { verdict: 'VIOLATED', value: long.length, detail: `${long.length} sentence(s) over ${hi} words (the longest: ${Math.max(...long.map((s) => s.words))})`,
@@ -342,7 +352,7 @@ export const LENGTH: Observer = {
     const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length : proseWords(text);
     const off = lo !== null && n < lo ? 'short' : hi !== null && n > hi ? 'long' : null;
     const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
-    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${n} ${unit} (${asked})${off ? `: ${off}` : ''}` };
+    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${where ? `"${where}": ` : ''}${n} ${unit} (${asked})${off ? `: ${off}` : ''}` };
   },
 };
 

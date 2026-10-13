@@ -435,7 +435,9 @@ describe('what the examples show about how they are written', () => {
     const { countedFromExamples } = await import('../core/method/standard.js');
     const offered = countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1)));
     expect(offered.length).toBeGreaterThan(0);
-    for (const p of offered) expect(p).toMatchObject({ origin: 'SHOWN_BY_EXAMPLE', counted: true, demoted: null, onExample: 'held in all 6 of your examples' });
+    for (const p of offered) expect(p).toMatchObject({ origin: 'SHOWN_BY_EXAMPLE', counted: true, demoted: null, onExample: 'set where all 6 of your examples meet it' });
+    // never the length of a sentence: a count is not a rhythm
+    expect(offered.map((p) => p.measurement?.observer)).not.toContain('SENTENCE_LENGTH');
     expect(offered.map((p) => p.measurement?.observer)).toContain('PARAGRAPH_LENGTH');
   });
   it('nothing from two pieces, or from too little text to count', async () => {
@@ -449,5 +451,80 @@ describe('what the examples show about how they are written', () => {
     const lines = describeMethod(countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1))), 'FULL_REPRO_CASE').join('\n');
     expect(lines).toContain('Counted from your examples, and not in your method: how they are written.');
     expect(lines).not.toContain('Shown by your example, and not in your method');
+  });
+});
+
+// The length of one section: stated by the owner, or kept by every example. The study behind it: twelve HTML
+// explainers whose "How it works" section ran 61 to 76 words, and outputs of 98 to 122 that nothing measured.
+describe('how long one section runs', () => {
+  const filler = (n: number): string => Array.from({ length: n }, (_, i) => `word${i % 9}`).join(' ') + '.';
+  const page = (how: number, id: number) => ({ id: `e${id}.md`, task: 'Explain it.', material: [],
+    reference: `<!doctype html>\n<html><head><style>p { margin: 0; color: #333; }</style></head><body>\n<h1>Topic ${id}</h1>\n<h2>What it is</h2>\n<p>${filler(30 + id)}</p>\n<h2>How it works</h2>\n<p>${filler(how)}</p>\n<h2>Why it matters</h2>\n<p>${filler(20 + id * 9)}</p>\n</body></html>\n` });
+  const examples = [61, 68, 76, 64, 70].map((how, i) => page(how, i + 1));
+  it('what every example keeps is offered as shown: the span holds the examples and not an output of 109 words', async () => {
+    const { sectionLengthsFromExamples } = await import('../core/method/standard.js');
+    const { measure } = await import('../core/observers/registry.js');
+    const offered = sectionLengthsFromExamples(examples);
+    const how = offered.find((p) => p.statement.startsWith('The How it works section'));
+    expect(how).toMatchObject({ statement: 'The How it works section runs 61 to 76 words in my pieces.', counted: true, origin: 'SHOWN_BY_EXAMPLE',
+      measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], min: 46, max: 91 } } });
+    for (const e of examples) expect(measure(e.reference, how!.measurement!).verdict, e.id).toBe('MET');
+    expect(measure(page(109, 9).reference, how!.measurement!)).toMatchObject({ verdict: 'VIOLATED', detail: '"How it works": 109 words (46 to 91): long' });
+  });
+  it('a section that doubles from one piece to the next has no usual length, and two pieces show none', async () => {
+    const { sectionLengthsFromExamples } = await import('../core/method/standard.js');
+    expect(sectionLengthsFromExamples(examples).some((p) => p.statement.startsWith('The Why it matters section'))).toBe(false);
+    expect(sectionLengthsFromExamples(examples.slice(0, 2))).toEqual([]);
+  });
+  it('a stated length of a section is held of that section, and only in the plain forms', () => {
+    const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, examples[0])[0]; return p.measurement ? [p.measurement.observer, p.measurement.params] : p.demoted ? 'to settle' : null; };
+    expect(check('Keep the How it works section under 80 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['How it works'], need: 1, max: 79 }]);
+    expect(check('The What it is section is between 20 and 60 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['What it is'], need: 1, min: 20, max: 60 }]);
+    expect(check('Keep the How it works section under 40 words.')).toBe('to settle');
+    for (const step of ['Ideally the How it works section is under 80 words.', 'The How it works section is never over 80 words.', 'Each section is under 80 words.', 'The Mechanics section is under 80 words.'])
+      expect(check(step), step).toBeNull();
+  });
+  it('a text without the section is another rule\'s to fail', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    expect(measure('## Other\nSome words here.\n', { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], max: 80 } })).toMatchObject({ verdict: 'NOT_APPLICABLE', detail: 'no "How it works" section to measure' });
+  });
+});
+
+// An independent review of the section lengths and of the counted rules.
+describe('what a review of the section lengths found', () => {
+  const body = (n: number): string => Array.from({ length: n }, (_, i) => `word${i % 9}`).join(' ') + '.';
+  it('a step about something else that mentions a section states no length of it', () => {
+    const example = { task: 'Review.', material: [], reference: `## Summary\n${body(12)}\n\n## Verdict\n${body(8)}\n` };
+    for (const step of ['Unlike the Summary section, keep the whole piece under 200 words.', 'After the Summary section write at least 300 words.', 'The Summary section has at most 3 bullets and the piece is under 500 words.',
+      'Each sentence in the Summary section is under 20 words.', 'The Summary section links to a page of at most 500 words.']) expect(methodProposals(`- ${step}\n`, example)[0].measurement, step).toBeNull();
+  });
+  it('sections written as bare names are measured one at a time, not to the end of the work', async () => {
+    const { sectionBodyOf } = await import('../core/observers/structure.js');
+    const { proseWords } = await import('../core/observers/style.js');
+    const note = `Summary\n\n${body(10)}\n\nVerdict\n\n${body(20)}\n\nRisks\n\n${body(30)}\n`;
+    expect(proseWords(sectionBodyOf(note, 'Summary', true, ['Summary', 'Verdict', 'Risks']) ?? '')).toBe(10);
+    expect(proseWords(sectionBodyOf(note, 'Verdict', true, ['Summary', 'Verdict', 'Risks']) ?? '')).toBe(20);
+  });
+  it('the section of that name is measured, before one whose name only holds it', async () => {
+    const { sectionBodyOf } = await import('../core/observers/structure.js');
+    const { proseWords } = await import('../core/observers/style.js');
+    const text = `## Executive summary\n${body(40)}\n\n## Summary\n${body(7)}\n`;
+    expect(proseWords(sectionBodyOf(text, 'Summary') ?? '')).toBe(7);
+  });
+  it('a stated length is not met by leaving the section out; one only shown does not apply', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    const text = `## Other\n${body(5)}\n`;
+    expect(measure(text, { observer: 'LENGTH', params: { unit: ['words'], in: ['Summary'], need: 1, max: 80 } }).verdict).toBe('VIOLATED');
+    expect(measure(text, { observer: 'LENGTH', params: { unit: ['words'], in: ['Summary'], max: 80 } }).verdict).toBe('NOT_APPLICABLE');
+  });
+  it('a section every piece writes word for word alike has no length to offer, a stated one is not offered again, and no more than six are', async () => {
+    const { sectionLengthsFromExamples, countedOffers } = await import('../core/method/standard.js');
+    const piece = (id: number, n: number) => ({ id: `e${id}.md`, reference: `## Summary\n${body(n)}\n\n## Verdict\nRequest changes\n` });
+    const cases = [piece(1, 20), piece(2, 24), piece(3, 28)];
+    expect(sectionLengthsFromExamples(cases).map((p) => p.statement)).toEqual(['The Summary section runs 20 to 28 words in my pieces.']);
+    const stated = methodProposals('- Keep the Summary section under 40 words.\n', { task: 'x', material: [], reference: cases[0].reference });
+    expect(countedOffers(stated, cases).some((p) => p.statement.startsWith('The Summary section'))).toBe(false);
+    const many = (id: number) => ({ id: `m${id}.md`, reference: Array.from({ length: 9 }, (_, k) => `## Part ${'ABCDEFGHI'[k]}\n${body(20 + id + k)}\n`).join('\n') });
+    expect(countedOffers([], [many(1), many(2), many(3)]).length).toBeLessThanOrEqual(6);
   });
 });

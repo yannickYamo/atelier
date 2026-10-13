@@ -7,6 +7,32 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: the length of one section, stated or kept by every example
+
+In the closing study every one of twelve explainers held its "How it works" section to 61 to 76 words. Nothing
+measured the length of a section, so that habit was never a candidate rule, and the skill wrote 98 to 122.
+
+- **Kept by every example:** in a build from a folder, for a section every piece has, the span of its lengths is
+  offered as how the pieces are written ("The How it works section runs 61 to 76 words in my pieces"), widened as
+  the length of a whole piece is (46 to 91), shown and not required. Not for a section whose longest is twice its
+  shortest or more, nor from fewer than three pieces.
+- **Stated by the owner:** "Keep the How it works section under 80 words" is held of that section, where the step
+  names exactly one section the example has and gives the count in a plain form. An example that breaks it is the
+  owner's to settle.
+- The check (`LENGTH` with `in`) counts what the section holds; a text without the section is the presence
+  rule's to fail. A request that states the length of the whole work does not set a section's aside.
+
+- **Narrowly, again.** A review of the first version found a step about something else read as a section's
+  length ("unlike the Summary section, keep the whole piece under 200 words"), a section written as a bare name
+  measured to the end of the work, and a stated length met by leaving the section out. Each is a test. A stated
+  length now fails a work without the section; a section every piece writes word for word alike is offered no
+  length; one the owner already stated is not offered again; and no more than six counted rules are offered.
+- The counted rules of style never include the length of a sentence: a count is not a rhythm.
+
+The test that holds it reads HTML examples: the offered span holds every example and fails an output of 109 words.
+
+The standing comparison has its two missing domains: `contract` and `analysis` (bench/standing/README.md).
+
 ### Added, for 2.0: a method build also counts how the examples are written
 
 `atelier method <note> --golden <folder>` held the owner's steps and served their pieces, and read nothing of how

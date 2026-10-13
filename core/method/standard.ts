@@ -25,11 +25,14 @@
 import type { Requirement, Measurement } from '../state/canonical-state.js';
 import type { GoldenCase } from '../golden/case.js';
 import { measure, type CheckContext } from '../observers/registry.js';
-import { headingsOf, sectionHeadsOf } from '../observers/structure.js';
+import { headingsOf, sectionHeadsOf, sectionBodyOf } from '../observers/structure.js';
+import { proseWords } from '../observers/style.js';
+import { ownLengthBand } from '../intake/length.js';
+import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
-import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount } from './step-readers.js';
+import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
 
@@ -184,8 +187,9 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
     const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
     if (columnsSaid(best) > 0 || outline.tables.length === 1) return { observer: 'TABLE', params: { columns: best.header.filter(Boolean), minRows: 1 } };
   }
-  const counted = statedCount(step);
-  if (counted) return counted;
+  const counted = sectionLength(step, outline.sections) ?? statedCount(step);
+  // Where the example's sections are labels, a section's length is read between them: the check carries their names.
+  if (counted) return outline.labels && counted.observer === 'LENGTH' && counted.params.in ? { ...counted, params: { ...counted.params, labels: 1, sections: [...outline.sections] } } : counted;
   // A step that names the form of a citation ("cite each item as path:line") is held by looking each one up.
   // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
   // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
@@ -328,8 +332,45 @@ export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 
 export function countedFromExamples(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
   if (cases.length < 3) return [];
   const texts = cases.map((c) => c.reference);
+  // Not the length of a sentence: a count is not a rhythm, and pace is a rule only where it is a detected signature
+  // (../observers/rhythm-signature.ts), which a build that calls no model does not read.
   return deriveMeasuredRules(cases.map((c) => ({ id: c.id, text: c.reference })), [], 'MACHINE_DISCOVERED')
-    .filter((m) => m.requirement.measurement && !m.conformance.weak && piecesBreaking(texts, m.requirement.measurement).length === 0)
+    .filter((m) => m.requirement.measurement && !['SENTENCE_LENGTH', 'RHYTHM', 'DISTRIBUTION'].includes(m.requirement.measurement.observer) && piecesBreaking(texts, m.requirement.measurement).length === 0)
     .map((m) => ({ statement: m.requirement.statement, origin: 'SHOWN_BY_EXAMPLE' as const, obligation: 'DELIVERABLE' as const, measurement: m.requirement.measurement ?? null,
-      onExample: `held in all ${cases.length} of your examples`, demoted: null, counted: true as const }));
+      onExample: `set where all ${cases.length} of your examples meet it`, demoted: null, counted: true as const }));
+}
+
+/**
+ * HOW LONG EACH SECTION RUNS, WHERE THE EXAMPLES KEEP ONE. Twelve explainers each held their "How it works" section
+ * to 61 to 76 words, nothing measured a section, and the skill wrote 98 to 122. For a section every example has,
+ * the span of its lengths is offered as how the pieces are written (shown, not required), widened as the length of
+ * a whole piece is (`ownLengthBand`). Not for a section whose longest is twice its shortest or more: a part that
+ * doubles from one piece to the next has no usual length.
+ */
+export function sectionLengthsFromExamples(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
+  if (cases.length < 3) return [];
+  const outlines = cases.map((c) => outlineOf(c.reference));
+  const labels = outlines.every((o) => o.labels);
+  const shared = outlines[0].sections.filter((sec) => outlines.every((o) => o.sections.some((x) => norm(x) === norm(sec))));
+  return shared.flatMap((sec): (MethodProposal & { spread: number })[] => {
+    const lengths = cases.map((c) => proseWords(sectionBodyOf(c.reference, sec, labels, shared) ?? ''));
+    const lo = Math.min(...lengths); const hi = Math.max(...lengths); const band = ownLengthBand([lo, hi]);
+    // Not a section every piece writes word for word alike (a one-word verdict): that is wording, not a length.
+    if (!band || lo < 1 || hi === lo || hi >= lo * 2) return [];
+    return [{ statement: `The ${sec} section runs ${lo} to ${hi} words in my pieces.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', counted: true, demoted: null, spread: hi / lo,
+      measurement: { observer: 'LENGTH', params: { unit: ['words'], in: [sec], min: band[0], max: band[1], ...(labels ? { labels: 1, sections: [...shared] } : {}) } },
+      onExample: `set where all ${cases.length} of your examples meet it` }];
+    // The most even first: where there are more than a skill should carry, those are the habits.
+  }).sort((a, b) => a.spread - b.spread).map(({ spread: _spread, ...p }) => p);
+}
+
+/**
+ * EVERYTHING COUNTED FROM THE EXAMPLES THAT A BUILD OFFERS: how the pieces are written, then how long their sections
+ * run, less any section whose length the owner already stated, and no more than a skill carries of one kind
+ * (../observers/selection.ts, `PER_ROLE_LIMIT`): served all at once, rules crowd each other out.
+ */
+export function countedOffers(stated: readonly MethodProposal[], cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
+  const said = new Set(stated.flatMap((p) => (p.measurement?.observer === 'LENGTH' ? ((p.measurement.params.in as readonly string[] | undefined) ?? []).map(norm) : [])));
+  const sectionsLeft = sectionLengthsFromExamples(cases).filter((p) => !((p.measurement?.params.in as readonly string[] | undefined) ?? []).some((x) => said.has(norm(x))));
+  return [...countedFromExamples(cases), ...sectionsLeft].slice(0, PER_ROLE_LIMIT);
 }

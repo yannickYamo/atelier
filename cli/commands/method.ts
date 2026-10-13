@@ -23,7 +23,7 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedFromExamples, stepsOf, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, stepsOf, type MethodProposal } from '../../core/method/standard.js';
 import { readCase, corpusFiles } from '../corpus.js';
 import { observerFor } from '../../core/observers/registry.js';
 import { ratifyClose } from './ratify.js';
@@ -60,7 +60,7 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
   block('Yours to settle: your method says it, and your finished work does not hold it', stated.filter((p) => p.demoted), (p) => `${p.demoted}. Kept as a judgement until the method or the example changes.`);
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);
-  block('Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so', counted, (p) => `your examples: ${p.onExample ?? 'held'}`);
+  block('Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so', counted, (p) => `${looksFor(p)}${p.onExample ?? 'held'}`);
   if (cls !== 'FULL_REPRO_CASE') out.push('', cls === 'TASK_AND_REFERENCE'
     ? 'Your example carries its task and no material, so nothing about what the work is made from can be checked.'
     : 'Your example carries neither its task nor its material: only what the work contains can be checked. Add `request:` to its front matter and a `<example>.material` folder beside it.');
@@ -144,7 +144,8 @@ function decideSteps(proposals: readonly MethodProposal[], nextId: () => string)
     materiality: null, realizationTolerance: null, outputShape: null,
     // A rule counted off the examples is a rule of style: it carries no obligation of the method, so a sentence
     // that breaks it is rewritten, and the work is not written again for it.
-    ...(p.counted ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
+    // (A length is the exception: no sentence carries it, so made required it is met by writing the work again.)
+    ...(p.counted && p.measurement?.observer !== 'LENGTH' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decided = bases.map((base, i) => {
@@ -168,7 +169,7 @@ export async function method(): Promise<void> {
   const read = proposalsAcross(note, cases);
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
-  const proposals = [...read.proposals, ...countedFromExamples(cases)];
+  const proposals = [...read.proposals, ...countedOffers(read.proposals, cases)];
   const example = cases[lead];
   console.log(`Method: ${basename(notePath)}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}; checks read from ${example.id}, then held against the rest`}${example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of describeMethod(proposals, example.caseClass)) console.log(line);

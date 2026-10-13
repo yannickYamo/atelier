@@ -167,7 +167,8 @@ export const wordsOutside = (n: number, band: readonly [number, number]): number
  */
 export function lengthRulesTheRequestSets(std: Standard | null, stated: StatedLength | null): Requirement[] {
   if (!std || !stated) return [];
-  return std.requirements.filter((q) => q.measurement?.observer === 'LENGTH'
+  // The length of the whole work only: a request for 600 words says nothing about how long one section runs.
+  return std.requirements.filter((q) => q.measurement?.observer === 'LENGTH' && !q.measurement.params.in
     && ((q.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === stated.unit);
 }
 
