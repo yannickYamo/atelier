@@ -17,7 +17,7 @@ export async function ask({ system, user, model, max = 1500, tag = '', log }) {
     const j = await r.json();
     if (!r.ok) throw new Error(`${r.status} ${JSON.stringify(j).slice(0, 300)}`);
     if (log) appendFileSync(log, `${JSON.stringify({ tag, model, in: j.usage.input_tokens, out: j.usage.output_tokens, stop: j.stop_reason })}\n`);
-    return { text: j.content.filter((c) => c.type === 'text').map((c) => c.text).join('').trim(), cut: j.stop_reason === 'max_tokens' };
+    return { text: j.content.filter((c) => c.type === 'text').map((c) => c.text).join('').trim(), cut: j.stop_reason === 'max_tokens', refused: j.stop_reason === 'refusal' };
   }
   throw new Error('the model did not answer after four tries');
 }

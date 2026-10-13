@@ -7,6 +7,35 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Studies: the standing comparison on its four domains
+
+One run a task for the runtime, two for the prompt arms; the Atelier skill is the one built by
+`atelier method <note> --golden <folder>` from the domain's method and its twelve examples. Outputs failing each
+domain's checklist:
+
+| arm | explainer | code review | contract | analysis |
+|---|---|---|---|---|
+| the examples pasted | 12 of 20 | 20 of 20 | 8 of 8 (12 refused by the model) | 16 of 20 |
+| the method and the examples | 1 of 20 | 20 of 20 | 20 of 20 | 5 of 20 |
+| the Atelier skill as a plain prompt | not run | not run | 20 of 20 | 2 of 20 |
+| the Atelier skill, `atelier invoke` | 0 of 20 | 1 of 10 | 10 of 10 | 1 of 10 |
+
+- **Contract is a miss for every arm, on one rule:** the method's "between 220 and 420 words". The twelve examples
+  run 405 to 419; the prompt arms wrote 437 to 500 and the runtime 425 to 436. Every other rule of the agreement
+  (the parties, the term, the governing law, no added figure, no "best efforts") held in every output of every arm.
+  The runtime came nearest and still failed all ten: told its count and given a length to aim for, the writer cut
+  about half of what it was over, twice (476, 453, 434 on one task). The run says so: "Still broken after repair".
+- **Analysis:** the verdict must name the vendor that costs least and each monthly cost must be worked right. The
+  runtime's one failure is a cost worked wrong. The method's step "every figure must be sourced from the price list
+  or worked from it" was left a judgement at build: the figure check read 19 of an example's 33 figures as given.
+- **Code review** is not like for like (the runtime numbers the lines of the diff); **explainer** is as below.
+- The pasted arm's twelve refusals on contracts are the model's, and are not scored.
+
+What changed from it: a miss of length is now said as a number ("long by 51"), the writer is given a length to aim
+for inside the limit, and a draft whose only miss is length is written once more. That moved the contracts from
+427-469 words to 425-436, and did not bring one under 420. Synthetic cases, the builder's checklists, ten tasks a
+domain: development evidence.
+
 ### Added, for 2.0: the length of one section, stated or kept by every example
 
 In the closing study every one of twelve explainers held its "How it works" section to 61 to 76 words. Nothing

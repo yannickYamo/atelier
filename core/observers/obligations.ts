@@ -352,7 +352,9 @@ export const LENGTH: Observer = {
     const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length : proseWords(text);
     const off = lo !== null && n < lo ? 'short' : hi !== null && n > hi ? 'long' : null;
     const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
-    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${where ? `"${where}": ` : ''}${n} ${unit} (${asked})${off ? `: ${off}` : ''}` };
+    // How far off, said as a number: told only "long", a writer asked for at most 420 words came back at 469.
+    const by = off === 'long' ? n - (hi ?? n) : off === 'short' ? (lo ?? n) - n : 0;
+    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${where ? `"${where}": ` : ''}${n} ${unit} (${asked})${off ? `: ${off} by ${by}` : ''}` };
   },
 };
 

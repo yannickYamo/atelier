@@ -19,13 +19,15 @@ const rows = Object.entries(arms).map(([arm, rs]) => {
   const got = rs.filter((r) => r.output); const checked = got.map((r) => check(r.output, r));
   const byRule = {};
   for (const c of checked) for (const f of c.fails) { const k = f.split(' ')[0]; byRule[k] = (byRule[k] ?? 0) + 1; }
-  return { arm, outputs: rs.length, empty: rs.length - got.length, failing: checked.filter((c) => c.fails.length).length + (rs.length - got.length), byRule,
+  // An arm that returned nothing (a refusal by the model, an error) wrote no work to hold to the standard: said
+  // apart and left out of the failing share, never scored as a failure of the standard.
+  return { arm, outputs: got.length, empty: rs.length - got.length, failing: checked.filter((c) => c.fails.length).length, byRule,
     // what a domain's checker reports beside its failures (code review: the defect cited within two lines)
     near: checked.some((c) => 'near' in c) ? checked.filter((c) => c.near).length : null,
     cuts: got.reduce((a, r) => a + (r.cut ?? []).length, 0), usdPerOutput: got.some((r) => r.costUsd) ? got.reduce((a, r) => a + (r.costUsd ?? 0), 0) / got.length : null,
     secondsPerOutput: got.reduce((a, r) => a + r.seconds, 0) / (got.length || 1) };
 });
-const rate = (a) => { const r = rows.find((x) => x.arm === a); return r ? r.failing / r.outputs : null; };
+const rate = (a) => { const r = rows.find((x) => x.arm === a); return r && r.outputs ? r.failing / r.outputs : null; };
 // An arm labelled invoke-<x> is the runtime of the skill whose export is export-<x>.
 const gates = {};
 for (const r of rows.filter((x) => x.arm.startsWith('invoke'))) {
@@ -35,6 +37,6 @@ for (const r of rows.filter((x) => x.arm.startsWith('invoke'))) {
 }
 if (process.argv.includes('--json')) console.log(JSON.stringify({ rows, gates }, null, 1));
 else {
-  for (const r of rows) console.log(`${r.arm.padEnd(15)} ${String(r.failing).padStart(3)} of ${String(r.outputs).padEnd(3)} failing  ${Object.entries(r.byRule).map(([k, n]) => `${k}:${n}`).join(' ').padEnd(28)} cuts ${r.cuts}  ${r.near === null ? '' : `near ${r.near}  `}${r.usdPerOutput === null ? '' : `$${r.usdPerOutput.toFixed(3)}/output  `}${r.secondsPerOutput.toFixed(0)} s/output`);
+  for (const r of rows) console.log(`${r.arm.padEnd(15)} ${String(r.failing).padStart(3)} of ${String(r.outputs).padEnd(3)} failing  ${Object.entries(r.byRule).map(([k, n]) => `${k}:${n}`).join(' ').padEnd(28)} cuts ${r.cuts}  ${r.near === null ? '' : `near ${r.near}  `}${r.usdPerOutput === null ? '' : `$${r.usdPerOutput.toFixed(3)}/output  `}${r.secondsPerOutput.toFixed(0)} s/output${r.empty ? `  (${r.empty} returned nothing: not scored)` : ''}`);
   for (const [name, ok] of Object.entries(gates)) console.log(`${ok === null ? 'not run' : ok ? 'PASS   ' : 'FAIL   '} ${name}`);
 }

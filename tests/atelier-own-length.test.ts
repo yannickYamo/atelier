@@ -97,7 +97,7 @@ describe('what a draft left unmet, and what the one more draft is told', () => {
     expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
     expect(read?.({ output: words(248), report: report(['x1']) })).toEqual([
       { id: 'x1', statement: 'x1 must hold.', detail: 'x1 detail' },
-      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words', off: 16 }]);
+      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words, 16 too many', off: 16, aim: 'aim for 216 words or fewer' }]);
   });
   it('a skill with nothing of the kind to read has no such step', async () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
@@ -174,5 +174,33 @@ describe('the one more draft: what is kept, what is said, what is recorded', () 
     const r = await drive(`NOSECTION ${words(200)}`, new Error('no model\nstack'));
     expect(r.out.output).toBe(`NOSECTION ${words(200)}`);
     expect(r.notes[0]).toContain('the draft to add them could not be written (no model)');
+  });
+});
+
+describe('after a miss of length the writer is given something to aim for, and one more try', () => {
+  it('the aim is inside the limit by as much as the draft was outside it, and by a tenth of the limit at most', async () => {
+    const { lengthAim } = await import('../cli/commands/invoke.js');
+    expect(lengthAim(441, 220, 420)).toBe('aim for 399 words or fewer');
+    expect(lengthAim(600, 220, 420)).toBe('aim for 378 words or fewer');
+    expect(lengthAim(180, 220, 420)).toBe('aim for 242 words or more');
+    expect(lengthAim(300, 220, 420)).toBeUndefined();
+  });
+  it('a stated length in words that a draft misses is read with how far and what to aim for', async () => {
+    const { unmetReader, redraftNote } = await import('../cli/commands/invoke.js');
+    const std = { requirements: [{ requirementId: 'x7', statement: 'Between 220 and 420 words.', materiality: 'REQUIRED', obligation: 'DELIVERABLE', measurement: { observer: 'LENGTH', params: { unit: ['words'], min: 220, max: 420 } } }] } as never;
+    const report = { failed: true, checked: [{ requirementId: 'x7', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', spans: [], value: 471, detail: '471 words (220 to 420): long by 51' } }] } as never;
+    const [miss] = unmetReader(std, null)?.({ output: 'x', report }) ?? [];
+    expect(miss).toMatchObject({ id: 'x7', off: 51, aim: 'aim for 378 words or fewer' });
+    expect(redraftNote([miss], 'd')).toContain('- Between 220 and 420 words. (471 words (220 to 420): long by 51; aim for 378 words or fewer)');
+  });
+  it('still long after one more draft, and only length unmet: once more, and no third', async () => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const queue = [words(450), words(410), words(300)]; const asked: string[] = []; const notes: string[] = [];
+    const made = (t: string) => ({ output: t, repair: null, report: { failed: false, checked: [] } }) as never;
+    const unmet = (d: { output: string }) => { const n = d.output.split(/\s+/).length; return n > 420 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 420, aim: 'aim for 399 words or fewer' }] : []; };
+    const out = await withRedraft(async (t) => made(t), { unmet: unmet, notes, redraft: async (note) => { asked.push(note); return queue.shift() ?? ''; } })(words(480)) as unknown as { output: string };
+    expect(asked).toHaveLength(2);
+    expect(out.output).toBe(words(410));
+    expect(notes).toHaveLength(2);
   });
 });

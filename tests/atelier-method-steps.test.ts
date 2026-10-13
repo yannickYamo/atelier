@@ -383,7 +383,7 @@ describe('a rule stated as a count or as quoted words', () => {
   it('the checks read as a person would count', async () => {
     const { measure } = await import('../core/observers/registry.js');
     expect(measure('One two three. Four five.', { observer: 'LENGTH', params: { unit: ['sentences'], min: 2, max: 3 } })).toMatchObject({ verdict: 'MET', detail: '2 sentences (2 to 3)' });
-    expect(measure('A tweet of thirty-one characters', { observer: 'LENGTH', params: { unit: ['characters'], max: 30 } })).toMatchObject({ verdict: 'VIOLATED', detail: '32 characters (at most 30): long' });
+    expect(measure('A tweet of thirty-one characters', { observer: 'LENGTH', params: { unit: ['characters'], max: 30 } })).toMatchObject({ verdict: 'VIOLATED', detail: '32 characters (at most 30): long by 2' });
     const long = measure(`Short one. The ${Array.from({ length: 29 }, (_, i) => `w${i}`).join(' ')}.`, { observer: 'LENGTH', params: { unit: ['sentence'], max: 25 } });
     expect(long).toMatchObject({ verdict: 'VIOLATED', detail: '1 sentence(s) over 25 words (the longest: 30)' });
     expect(long.spans).toHaveLength(1);
@@ -469,7 +469,7 @@ describe('how long one section runs', () => {
     expect(how).toMatchObject({ statement: 'The How it works section runs 61 to 76 words in my pieces.', counted: true, origin: 'SHOWN_BY_EXAMPLE',
       measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], min: 46, max: 91 } } });
     for (const e of examples) expect(measure(e.reference, how!.measurement!).verdict, e.id).toBe('MET');
-    expect(measure(page(109, 9).reference, how!.measurement!)).toMatchObject({ verdict: 'VIOLATED', detail: '"How it works": 109 words (46 to 91): long' });
+    expect(measure(page(109, 9).reference, how!.measurement!)).toMatchObject({ verdict: 'VIOLATED', detail: '"How it works": 109 words (46 to 91): long by 18' });
   });
   it('a section that doubles from one piece to the next has no usual length, and two pieces show none', async () => {
     const { sectionLengthsFromExamples } = await import('../core/method/standard.js');

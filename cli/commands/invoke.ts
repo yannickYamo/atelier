@@ -995,10 +995,24 @@ export const STRICT_EXIT = 3;
  * length, a citation that is no line of the material, the length the author's own pieces run. Each is said in the
  * owner's words with what the check found, so that one more draft can be told all of them at once.
  */
-export interface Unmet { readonly id: string; readonly statement: string; readonly detail: string; /** how far off, where that is a number: the less the better */ readonly off?: number }
+export interface Unmet { readonly id: string; readonly statement: string; readonly detail: string; /** how far off, where that is a number: the less the better */ readonly off?: number;
+  /** a miss of length, in words: what the writer is told to aim for, since told only the limit it lands just past it again */ readonly aim?: string }
 export const LENGTH_ID = 'length';
 /** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
 export const LENGTH_REDRAFT_PIECES = 9;
+/** How many times a draft is written again: once, and once more for a length alone. */
+const REDRAFTS = 2;
+
+/**
+ * WHAT TO AIM FOR, AFTER A MISS OF LENGTH. Told "at most 420 words" a writer came back at 469, and told "38 too
+ * many" it cut 30. So the aim is set inside the limit by as much as the draft was outside it, and by a tenth of the
+ * limit at most: a target the writer overshoots into the range, where the limit itself is one it overshoots out of.
+ */
+export function lengthAim(n: number, lo: number | null, hi: number | null): string | undefined {
+  if (hi !== null && n > hi) return `aim for ${Math.max(hi - (n - hi), Math.round(hi * 0.9))} words or fewer`;
+  if (lo !== null && n < lo) return `aim for ${Math.min(lo + (lo - n), Math.round(lo * 1.1))} words or more`;
+  return undefined;
+}
 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
 export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
@@ -1006,19 +1020,30 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   // citation that is no line of the material, since the right number is on the page the writer was given.
   const must = new Map(std.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && (r.obligation === 'DELIVERABLE' || r.measurement.observer === 'LINES')).map((r) => [r.requirementId, r.statement]));
   if (!must.size && !own) return null;
+  // A length the method states in words is a miss of length too: how far, and what to aim for.
+  const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
+    ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null }] as const] : [])));
+  const ruleMiss = (x: VerifyReport['checked'][number]): Unmet => {
+    const base = { id: x.requirementId, statement: must.get(x.requirementId) ?? x.requirementId, detail: x.result.detail };
+    const lim = limits.get(x.requirementId); const n = x.result.value;
+    if (!lim || typeof n !== 'number') return base;
+    const aim = lengthAim(n, lim.lo, lim.hi);
+    return { ...base, off: lim.hi !== null && n > lim.hi ? n - lim.hi : lim.lo !== null && n < lim.lo ? lim.lo - n : 0, ...(aim ? { aim } : {}) };
+  };
   return (d) => {
-    const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED')
-      .map((x) => ({ id: x.requirementId, statement: must.get(x.requirementId) ?? x.requirementId, detail: x.result.detail }));
+    const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss);
     const n = own ? proseWords(d.output) : 0;
-    return own && againstBand(n, own.band) !== 'met'
-      ? [...rules, { id: LENGTH_ID, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`, detail: `${n} words`, off: wordsOutside(n, own.band) }] : rules;
+    if (!own || againstBand(n, own.band) === 'met') return rules;
+    const aim = lengthAim(n, own.band[0], own.band[1]);
+    return [...rules, { id: LENGTH_ID, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`,
+      detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}) }];
   };
 }
 
 /** What the writer is told before the one more draft: everything unmet, and the draft it is to keep what it can of. */
 export function redraftNote(unmet: readonly Unmet[], draft: string): string {
-  return `An earlier draft did not hold what this work requires:\n${unmet.map((u) => `- ${u.statement} (${u.detail})`).join('\n')}\n`
-    + 'Write the whole piece again so that each of them holds. Keep what the earlier draft says wherever it can stay. '
+  return `An earlier draft did not hold what this work requires:\n${unmet.map((u) => `- ${u.statement} (${u.detail}${u.aim ? `; ${u.aim}` : ''})`).join('\n')}\n`
+    + 'Write the whole piece again so that each of them holds. Keep what the earlier draft says wherever it can stay. Where a length is given to aim for, cut or add until you are there, and count before you finish. '
     + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.\n\n'
     + `The earlier draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
 }
@@ -1046,8 +1071,8 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
 }
 
 /**
- * ONE MORE DRAFT, TOLD EVERYTHING THE FIRST DID NOT HOLD (`unmetReader`). Written once, put through the same checks,
- * and kept only if it is nearer to holding them and breaks no more of any other REQUIRED rule: counted apart, since
+ * ONE MORE DRAFT, TOLD EVERYTHING THE FIRST DID NOT HOLD (`unmetReader`). Written once (and once more where only a
+ * length is still unmet), put through the same checks, and kept only if it is nearer to holding them and breaks no more of any other REQUIRED rule: counted apart, since
  * a draft that adds a section and breaks another rule would otherwise read as no worse. It is told never to fill a
  * table or a section with what it was not given: a figure the material does not hold is the claim check's either way.
  */
@@ -1057,26 +1082,31 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length your pieces run (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
   const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : 'the method requires');
+  const others = (x: Delivered, us: readonly Unmet[]): number => brokenIn(x.report).filter((id) => !us.some((u) => u.id === id)).length;
   return async (draft: string) => {
-    const d = await refine(draft);
-    const missing = c.unmet(d);
+    let d = await refine(draft);
+    let missing = c.unmet(d);
     if (!missing.length) return d;
     // What is recorded as broken before is rules, by their ids: the length is no rule of the standard, and counted
     // as one it was reported as a rule held "once the draft was corrected" and read as a recurrence.
     const ids = missing.filter((u) => u.id !== LENGTH_ID).map((u) => u.id);
     const say = (x: Delivered, note: string): Delivered => { c.notes.push(note); return noted(x, note, ids); };
-    try {
-      const piece = await c.redraft(redraftNote(missing, d.output));
-      const d2 = await refine(piece);
-      const missing2 = c.unmet(d2);
-      const others = (x: Delivered, us: readonly Unmet[]): number => brokenIn(x.report).filter((id) => !us.some((u) => u.id === id)).length;
-      const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);
-      const outcome = redraftOutcome(missing, missing2, better, named, whose);
-      if (better && !d2.repair) return say({ ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the work requires named' } }, outcome);
-      return say(better ? d2 : d, outcome);
-    } catch (err) {
-      return say(d, `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
+    // Once; and once more where everything still unmet is a length, which a writer nears by halves.
+    for (let round = 0; round < REDRAFTS && missing.length && (round === 0 || missing.every((u) => u.aim)); round += 1) {
+      try {
+        const piece = await c.redraft(redraftNote(missing, d.output));
+        const d2 = await refine(piece);
+        const missing2 = c.unmet(d2);
+        const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);
+        const outcome = redraftOutcome(missing, missing2, better, named, whose);
+        if (!better) return say(d, outcome);
+        d = say(d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the work requires named' } }, outcome);
+        missing = missing2;
+      } catch (err) {
+        return say(d, `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
+      }
     }
+    return d;
   };
 }
 

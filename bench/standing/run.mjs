@@ -63,7 +63,7 @@ await pool(jobs, arm === 'invoke' ? 3 : 4, async ({ t, r }) => {
   if (existsSync(file)) return;
   const t0 = Date.now();
   const rec = arm === 'invoke' ? await invoke(t)
-    : await ask({ system, user: `${t.request}${withMaterial(t)}`, model, tag: arm, log: join(out, 'tokens.jsonl') }).then((a) => ({ output: a.text, cutOff: a.cut }));
+    : await ask({ system, user: `${t.request}${withMaterial(t)}`, model, tag: arm, log: join(out, 'tokens.jsonl') }).then((a) => ({ output: a.text, cutOff: a.cut, ...(a.refused ? { refused: true } : {}) }));
   writeFileSync(file, JSON.stringify({ arm: label, task: t.id, run: r, seconds: (Date.now() - t0) / 1000, ...rec }, null, 1));
 });
 console.log(`${label}: ${jobs.length} output(s) in ${out}`);
