@@ -126,7 +126,10 @@ atelier run "review this change" --with change.diff     # run: the work, then a 
 atelier fix "it missed the migration cost"   # react: what was wrong, in your own words
 ```
 
-A run ends with one of three words:
+Under the work a run prints its evaluation: each of your rules, in your words, with a mark (met, not met, yours
+to judge, or not checked on this run and why) and what was found; what every run is also checked for (nothing
+copied from your examples, facts traced to your material); and what was done to the draft. It opens with one of
+three words:
 
 - **BLOCKED**: a rule you require, and that code can check, was not met. The work is shown and is not deliverable; the
   line names the rule and what was found. Exit 1.
@@ -134,7 +137,8 @@ A run ends with one of three words:
   machine reads) and is counted on the line.
 - **CERTIFIED**: every rule you require was checked and met, and nothing was left to anyone's judgement.
 
-`--report` on either command adds the whole account: every check, what a draft cost, what was written again. Every
+`--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
+would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every
 other command is under `atelier lab`. `atelier invoke` is `atelier run` with that account always on, and is what
 scripts and other tools call.
 

@@ -12,12 +12,16 @@ import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { runState, type RunFacts } from '../../core/eval/run-state.js';
+import { renderRunCard, type RunCard, type RuleLine } from '../../core/eval/run-card.js';
 import { targetOf } from '../../core/observers/obligations.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
-  readonly report: readonly string[]; readonly eval: EvalSummary | null }
+  readonly report: readonly string[]; readonly eval: EvalSummary | null;
+  /** every rule as it fared on the delivered text (cli/commands/invoke.ts, `rulesFared`); absent from a run that was not checked */
+  readonly rules?: { readonly checked: readonly { readonly id: string; readonly statement: string; readonly materiality: string | null; readonly verdict: string; readonly detail: string }[];
+    readonly unchecked: readonly { readonly id: string; readonly statement: string }[] } | null }
 
 /**
  * WHAT THE PERSON TYPED, SORTED BY WHERE IT STANDS, never by what it says: the task is the first word that is no
@@ -75,6 +79,41 @@ export function linesFor(run: EngineRun, judgement: number): string[] {
   return [line, ...(done ? [done] : []), next];
 }
 
+/**
+ * THE EVALUATION OF THE RUN, RULE BY RULE, IN THE OWNER'S WORDS (core/eval/run-card.ts). Their required rules in the
+ * order they wrote them, each met, not met, theirs to judge, or not checked on this run and why; how many of the
+ * habits seen in their examples the text kept; and what every run is read for beyond their rules.
+ */
+export function cardFor(run: EngineRun, requirements: readonly Requirement[]): RunCard {
+  const fared = new Map((run.rules?.checked ?? []).map((c) => [c.id, c]));
+  const live = requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
+  const isJudgement = (r: Requirement): boolean => !r.measurement && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT');
+  const waived = new Map((run.eval?.gates.applicability.waived ?? []).map((w) => [w.id, w.why]));
+  const rules: RuleLine[] = live.filter((r) => isJudgement(r) || (r.materiality === 'REQUIRED' && r.measurement)).map((r) => {
+    if (isJudgement(r)) return { statement: r.statement, status: 'judge' };
+    const f = fared.get(r.requirementId);
+    if (waived.has(r.requirementId)) return { statement: r.statement, status: 'not-checked', detail: `not checked on this run: ${waived.get(r.requirementId)}` };
+    if (!f || f.verdict === 'NOT_APPLICABLE') return { statement: r.statement, status: 'not-checked', detail: f?.detail ? `not checked on this run: ${f.detail}` : 'not checked on this run' };
+    return { statement: r.statement, status: f.verdict === 'VIOLATED' ? 'broken' : 'met', detail: f.detail };
+  });
+  const shown = live.filter((r) => r.measurement && r.materiality !== 'REQUIRED').map((r) => fared.get(r.requirementId)).filter((f) => f && f.verdict !== 'NOT_APPLICABLE');
+  const g = run.eval?.gates; const also: RuleLine[] = [];
+  if (g?.copying) also.push({ statement: 'Nothing copied from your examples', status: g.copying.longest >= g.copying.limit ? 'broken' : 'met', detail: `the longest run of words shared with them: ${g.copying.longest} (limit ${g.copying.limit})` });
+  if (g) {
+    const c = g.claims; const nothingBound = (c.unmeasured ?? '').startsWith('no material');
+    also.push(c.state === 'off' ? { statement: 'Facts traced to your material', status: 'not-checked', detail: 'turned off for this run' }
+      : nothingBound ? { statement: 'Facts traced to your material', status: 'not-checked', detail: 'no material was given to trace them to' }
+        : c.delivered > 0 ? { statement: 'Facts traced to your material', status: 'broken', detail: `${c.delivered} not found in it and still in the text` }
+          : c.listed + c.unconfirmed > 0 ? { statement: 'Facts traced to your material', status: 'not-checked', detail: `${c.listed + c.unconfirmed} could not be found in it: listed for you with --report` }
+            : { statement: 'Facts traced to your material', status: 'met' });
+  }
+  const { state, line } = runState(factsOf(run, judgementRules(requirements)));
+  const cut = run.cut?.length ?? 0;
+  const done = [run.report.some((l) => l.startsWith('Written again')) ? 'written again once to meet your rules' : '', cut ? `${cut} sentence${cut === 1 ? '' : 's'} removed (not found in your material)` : ''].filter(Boolean);
+  return { state, stateLine: line, rules, habits: shown.length ? { kept: shown.filter((f) => f?.verdict === 'MET').length, of: shown.length } : null, also,
+    costUsd: run.costUsd, seconds: (run.eval?.durationMs ?? 0) / 1000, drafts: run.eval?.drafts ?? 1, done, invocationId: run.invocationId };
+}
+
 /** The skill a run is for: the one named, or the one this folder built. Never a guess between two. */
 function skillFor(named: string | null): string {
   return named ?? loadSession().skillName ?? die('which skill? This folder has built none. Name it: atelier run --skill <name> "<task>"');
@@ -107,8 +146,9 @@ export async function run(): Promise<void> {
   const work = result?.output ?? null;
   if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
   console.log(`${work.trimEnd()}\n`);
-  const lines = linesFor(result, judgementRules(std?.requirements ?? []));
-  for (const l of lines) console.log(l);
+  // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
+  const card = cardFor(result, std?.requirements ?? []);
+  for (const l of renderRunCard(card, process.stdout.columns || 100)) console.log(l);
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
-  process.exitCode = lines[0].startsWith('BLOCKED') ? 1 : engine.code;
+  process.exitCode = card.state === 'BLOCKED' ? 1 : engine.code;
 }

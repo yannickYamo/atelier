@@ -22,6 +22,13 @@ results said they did not help. A person needs three things from it.
   left is yours to judge, and is counted) or **CERTIFIED** (every required rule was checked and met). A rule you
   require is required whether or not a check exists for it, so CHECKED is never rounded up. In a folder that built
   one skill, the skill need not be named. `atelier invoke` is the same run with its whole report, unchanged.
+- **The evaluation is part of what a run returns.** Under the work: each of the owner's rules in their own words,
+  one a line, met, not met, theirs to judge, or not checked on this run and why, with what was found ("414 words
+  (220 to 420)", "3 of 3 citations point at a line of the material"); how many of the habits seen in their examples
+  the text kept; what every run is also read for (nothing copied from their examples, facts traced to their
+  material); what was done to the draft; and how to say whether they would use it (`atelier rate`). The engine's
+  panel said the same in its own vocabulary (gates, applicability, instruments), and a first version of this
+  command replaced it with one line: the evaluation is the product, and is shown.
 - **`atelier fix "<what was wrong>"`** is unchanged.
 - **`atelier --help`** is those three. Every other command is listed by `atelier lab`, by what it is for, with the
   ones whose studies did not show a gain named as experimental. Nothing was removed: each still answers to its name.

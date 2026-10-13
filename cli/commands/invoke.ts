@@ -185,6 +185,13 @@ export function ownLengthLine(output: string, band: readonly [number, number], s
   return `Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}, shortest to longest${how === 'met' ? '' : `, and this is ${how} of what they span (${band[0]} to ${band[1]})`}.`;
 }
 
+/** Each rule as it fared on the delivered text, and the rules no check reads: the evaluation, rule by rule. */
+export function rulesFared(report: VerifyReport | null): { checked: { id: string; statement: string; materiality: string | null; verdict: string; detail: string }[]; unchecked: { id: string; statement: string }[] } | null {
+  if (!report) return null;
+  return { checked: report.checked.map((c) => ({ id: c.requirementId, statement: c.statement ?? c.requirementId, materiality: c.materiality ?? null, verdict: c.result.verdict, detail: c.result.detail })),
+    unchecked: report.unchecked.map((u) => ({ id: u.requirementId, statement: u.statement })) };
+}
+
 /** One draft's counts, as `invoke --drafts N` ranks them. */
 export interface DraftScore {
   readonly req: number; readonly taste: number; readonly tells: number; readonly all: number; readonly signal: number | null; readonly style: number;
@@ -647,6 +654,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     process.stdout.write(`${JSON.stringify({
       output: refused ? null : rec.output, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
+      // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
+      rules: rulesFared((delivered as Delivered | null)?.report ?? null),
       withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
         outside: rec.fidelity.reading?.outside.map((o) => o.id) ?? [], detector: rec.fidelity.reading?.detector?.p ?? null,

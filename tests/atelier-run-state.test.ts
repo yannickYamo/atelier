@@ -77,3 +77,47 @@ describe('what a review of `atelier run` found', () => {
     expect(sortArgs(['a task', '--json'])).toMatchObject({ task: 'a task', machine: true, rest: ['--json'] });
   });
 });
+
+// The evaluation is part of what a run returns: every rule, as it fared, in the owner's words.
+describe('the evaluation card', () => {
+  const req = (id: string, statement: string, o: object = {}) => ({ requirementId: id, statement, authority: 'USER_AUTHORED', materiality: 'REQUIRED', ...o }) as never;
+  const requirements = [req('x1', 'Open with a Summary section.', { measurement: { observer: 'PRESENCE', params: {} } }), req('x2', 'Between 220 and 420 words.', { measurement: { observer: 'LENGTH', params: {} } }),
+    req('x3', 'Weigh the risk before the style.', { materiality: null, obligation: 'JUDGEMENT' }), req('c1', 'I keep paragraphs to 3 sentences at most.', { materiality: 'PREFERRED', measurement: { observer: 'PARAGRAPH_LENGTH', params: {} } }),
+    req('x9', 'Rejected.', { authority: 'EXPERT_REJECTED' })];
+  const engine = (broken: boolean) => ({ output: 'w', invocationId: 'i8e8c', costUsd: 0.203, toCheck: [], cut: broken ? ['An invented figure.'] : [], report: broken ? ['Written again: ...'] : [],
+    rules: { checked: [{ id: 'x1', statement: 's', materiality: 'REQUIRED', verdict: 'MET', detail: 'everything it must contain is there' },
+      { id: 'x2', statement: 's', materiality: 'REQUIRED', verdict: broken ? 'VIOLATED' : 'MET', detail: broken ? '469 words (220 to 420): long by 49' : '401 words (220 to 420)' },
+      { id: 'c1', statement: 's', materiality: 'PREFERRED', verdict: 'MET', detail: 'd' }], unchecked: [{ id: 'x3', statement: 's' }] },
+    eval: { durationMs: 55_000, drafts: 2, result: { conformant: !broken, reasons: [] }, gates: { required: { applicable: 2, held: broken ? 1 : 2, broken: broken ? [{ id: 'x2', label: 'Between 220 and 420 words.', detail: '469 words (220 to 420): long by 49' }] : [] },
+      claims: { state: 'checked', delivered: 0, unconfirmed: 0, cut: 0, listed: 0, unmeasured: 'no material was bound to check against' }, copying: { longest: 10, limit: 12 }, applicability: { waived: [] } } } }) as never;
+  it('each of the owner\'s rules, in their words: met with what was found, theirs to judge, or not met', async () => {
+    const { cardFor } = await import('../cli/commands/run.js');
+    const card = cardFor(engine(false), requirements);
+    expect(card.state).toBe('CHECKED');
+    expect(card.rules).toEqual([{ statement: 'Open with a Summary section.', status: 'met', detail: 'everything it must contain is there' },
+      { statement: 'Between 220 and 420 words.', status: 'met', detail: '401 words (220 to 420)' }, { statement: 'Weigh the risk before the style.', status: 'judge' }]);
+    expect(card.habits).toEqual({ kept: 1, of: 1 });
+    expect(card.also.map((a) => [a.statement, a.status])).toEqual([['Nothing copied from your examples', 'met'], ['Facts traced to your material', 'not-checked']]);
+  });
+  it('as printed: the state, the rules one a line with a mark, what else is checked, what was done, and what to do next', async () => {
+    const { cardFor } = await import('../cli/commands/run.js');
+    const { renderRunCard } = await import('../core/eval/run-card.js');
+    const text = renderRunCard(cardFor(engine(true), requirements), 100).join('\n');
+    expect(text).toMatch(/^── Evaluation · BLOCKED ─+ \$0\.20 · 55 s ──\n {2}1 required rule not met: "Between 220 and 420 words\." \(469 words \(220 to 420\): long by 49\)/);
+    expect(text).toContain('  Your rules\n    ✓  Open with a Summary section.\n    ✗  Between 220 and 420 words.\n         469 words (220 to 420): long by 49\n    ?  Weigh the risk before the style.\n         for you to judge');
+    expect(text).toContain('From your examples (not required): 1 of 1 habits kept');
+    expect(text).toContain('    –  Facts traced to your material\n         no material was given to trace them to');
+    expect(text).toContain('What was done: 2 drafts written, the better one kept · written again once to meet your rules · 1 sentence removed (not found in your material)');
+    expect(text).toContain('atelier rate i8e8c yes|no "why"');
+    expect(text).not.toMatch(/GATES|applicability|REQUIRED|UNSOURCED|instrument/);
+  });
+  it('a rule set aside for the run is shown as not checked, with why, and a met length shows its count', async () => {
+    const { cardFor } = await import('../cli/commands/run.js');
+    const { renderRunCard } = await import('../core/eval/run-card.js');
+    const e = engine(false) as { eval: { gates: { applicability: { waived: { id: string; why: string }[] } } } };
+    e.eval.gates.applicability.waived = [{ id: 'x2', why: 'the request states its own length (about 600 words)' }];
+    const card = cardFor(e as never, requirements);
+    expect(card.rules[1]).toEqual({ statement: 'Between 220 and 420 words.', status: 'not-checked', detail: 'not checked on this run: the request states its own length (about 600 words)' });
+    expect(renderRunCard(cardFor(engine(false), requirements)).join('\n')).toContain('    ✓  Between 220 and 420 words.\n         401 words (220 to 420)');
+  });
+});

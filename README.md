@@ -23,14 +23,14 @@ Think of it as three things you do, and one it does for you:
 
 1. **Give it your method and your finished work.** Each step you wrote is your rule, in your words. Where code can hold a step it is checked on every run; the rest is yours to judge, and is said to be. With no written method, it reads the rules off your examples and you approve them.
 2. **Build it once.** The standard is hashed and versioned the moment you accept it. No model update, optimizer or judge can move it.
-3. **Run it, and react.** Every output is written, checked and repaired, and comes back with a line that says where it stands: blocked, checked, or certified. When something is wrong, you say so in your own words.
+3. **Run it, and react.** Every output is written, checked and repaired, and comes back with its evaluation: each of your rules, met or not or yours to judge, under one word that says where it stands (blocked, checked, or certified). When something is wrong, you say so in your own words.
 4. **It improves itself, and keeps a change only when it measures better.** Atelier mines its own records for what keeps going wrong, searches for a better way to carry your rules, and installs a winner only when the gate allows it.
 
 Instead of a model that re-guesses your rules on every run, you get rules you approved, kept in a file outside the model, and a verdict on every output.
 
 ```bash
 atelier new ./my-work --method how-we-do-it.md    # build: your method and your finished examples
-atelier run "the next piece of work"               # run: the work, then a line that says where it stands
+atelier run "the next piece of work"               # run: the work, and its evaluation rule by rule
 atelier fix "what was wrong"                       # react: in your own words
 ```
 
