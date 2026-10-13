@@ -7,6 +7,33 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: one more draft is told everything the first did not hold
+
+A draft that lacked a section the method requires was written once more with the section named. A draft that ran
+long, or cited a line that is not in the material, had no such step, or had one of its own. They are one step now.
+
+- **What it reads** (`unmetReader`): what no sentence rewrite fixes. A section, a table or a stated length the
+  method requires; a citation that is no line of the material; and, when the request names no length, a draft
+  outside what the author's own pieces span.
+- **What the writer is told** (`redraftNote`): each of them in the owner's words with what the check found, and the
+  earlier draft itself, to keep what it says wherever it can stay. The step before this one sent the instruction
+  without the draft it spoke of.
+- **What is kept:** the second draft only when it is nearer to holding them (fewer unmet, or as many and less far
+  off in length) and breaks no more of any other required rule. One draft, never a loop.
+- **Rules before length.** A draft at the right length that drops a section the method requires is not nearer,
+  and one that adds the section and runs a few words long is. The length is no rule of the standard and is never
+  recorded as one.
+- **For its length, only on evidence:** a skill built from nine pieces or more. With n pieces the next one falls
+  between the shortest and the longest (n - 1) times in (n + 1), four in five at nine; on fewer the drafts are
+  still chosen by length, which costs nothing. `--no-redraft` turns the step off.
+- A skill with nothing of the kind to read has no such step, and costs what it did.
+
+One run a task, before the last three points were added: on ten explanations the step fired once (272 words to
+inside the span), and on ten code reviews three times (306, 311 and 316 words to inside it, one of them with a bad
+citation named in the same note). Outputs failing the checklists: 2 of 10 and 2 of 10, where the runs before had
+2 of 10 and 1 of 10: no difference ten outputs can show. A redraft is one more draft and one more pass of checks,
+so a run that needs it costs about half as much again.
+
 ### Fixed, for 2.0: a page of markup is measured as what its reader sees
 
 A closing study built a skill from twelve explainers written as single HTML pages. Discovery measured the markup:

@@ -43,6 +43,8 @@ export interface Voice {
   readonly holdsBackOf?: readonly string[];
   /** the shortest and the longest of the author's pieces, in prose words (`lengthSpan`): what an output is held to when the request names no length. Kept with the stored voice, never in a package */
   readonly lengthSpan?: readonly [number, number];
+  /** how many pieces `lengthSpan` was read from: a span of three says little about how long the fourth runs */
+  readonly lengthPieces?: number;
   /** pieces chosen to span the author's modes, served as reference files: whole (`selectVoicePieces`), or as excerpts */
   readonly pieces?: readonly string[];
   /** how `pieces` are shown. Absent: whole, which is every skill built before excerpts existed */

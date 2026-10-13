@@ -540,12 +540,20 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ownBand = ownLengthApplies({ stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
     answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections') })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
+  // What one more draft would be told, when a draft leaves it unmet (`withRedraft`).
+  const ownSpan = store.getVoice(L)?.lengthSpan;
+  // A draft is written again for its length only on evidence that a piece of the author's runs inside the span: with
+  // n pieces the next one falls between the shortest and the longest (n - 1) times in (n + 1), which is four in
+  // five from nine pieces. On fewer the drafts are still chosen by length, which costs nothing. --no-redraft turns
+  // the step off whole.
+  const enough = (store.getVoice(L)?.lengthPieces ?? 0) >= LENGTH_REDRAFT_PIECES;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withMethod(refineDraft({ client, budget, name, std, checks, taste }), { client, budget, std, servedText: servedForRun, task: taskForRun, notes: completions }), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineDraft({ client, budget, name, std, checks, taste }), unmet ? { unmet, notes: completions, redraft: async (note) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {})).piece } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
       shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
@@ -982,45 +990,91 @@ export const STRICT_EXIT = 3;
  * content the writer does not have: a part it cannot give, it must say so. A reader that cannot answer changes nothing.
  */
 /**
- * WHAT THE METHOD REQUIRES THE WORK TO CONTAIN, AND THE DRAFT LEFT OUT: WRITTEN AGAIN, WITH IT NAMED. A missing
- * section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone). One more draft is
- * written with each missing thing named in the owner's own words, put through the same checks, and kept only if it
- * leaves fewer of them out and breaks no more REQUIRED rules. It is told never to fill a table or a section with
- * what it was not given: a figure the material does not hold is cut by the claim check either way.
+ * WHAT A DRAFT DID NOT HOLD THAT NO SENTENCE REWRITE FIXES: a section or a table the method requires, a stated
+ * length, a citation that is no line of the material, the length the author's own pieces run. Each is said in the
+ * owner's words with what the check found, so that one more draft can be told all of them at once.
  */
-function withMethod(refine: (draft: string) => Promise<Delivered>,
-  c: { client: InferenceClient; budget: Budget; std: Standard; servedText: string; task: string; notes: string[] } | null) {
-  // And a citation that is not a line of the material (LINES): not a sentence to rewrite either, since the right
-  // number is on the page the writer was given, not in the sentence.
-  const must = new Map((c?.std.requirements ?? []).filter((r) => r.measurement && r.materiality === 'REQUIRED' && (r.obligation === 'DELIVERABLE' || r.measurement.observer === 'LINES')).map((r) => [r.requirementId, r.statement]));
-  if (!c || !must.size) return refine;
-  const missingIn = (d: Delivered): string[] => d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
+export interface Unmet { readonly id: string; readonly statement: string; readonly detail: string; /** how far off, where that is a number: the less the better */ readonly off?: number }
+export const LENGTH_ID = 'length';
+/** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
+export const LENGTH_REDRAFT_PIECES = 9;
+
+/** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
+export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
+  // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
+  // citation that is no line of the material, since the right number is on the page the writer was given.
+  const must = new Map(std.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && (r.obligation === 'DELIVERABLE' || r.measurement.observer === 'LINES')).map((r) => [r.requirementId, r.statement]));
+  if (!must.size && !own) return null;
+  return (d) => {
+    const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED')
+      .map((x) => ({ id: x.requirementId, statement: must.get(x.requirementId) ?? x.requirementId, detail: x.result.detail }));
+    const n = own ? proseWords(d.output) : 0;
+    return own && againstBand(n, own.band) !== 'met'
+      ? [...rules, { id: LENGTH_ID, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`, detail: `${n} words`, off: wordsOutside(n, own.band) }] : rules;
+  };
+}
+
+/** What the writer is told before the one more draft: everything unmet, and the draft it is to keep what it can of. */
+export function redraftNote(unmet: readonly Unmet[], draft: string): string {
+  return `An earlier draft did not hold what this work requires:\n${unmet.map((u) => `- ${u.statement} (${u.detail})`).join('\n')}\n`
+    + 'Write the whole piece again so that each of them holds. Keep what the earlier draft says wherever it can stay. '
+    + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.\n\n'
+    + `The earlier draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
+}
+
+/**
+ * Is `after` nearer to holding everything than `before`? Rules first: fewer of them unmet, never more. A length is
+ * the tie-break between drafts that leave the same number of rules unmet: a draft at the right length that drops a
+ * section the method requires is not nearer, and one that adds the section and runs a few words long is.
+ */
+export const nearer = (after: readonly Unmet[], before: readonly Unmet[]): boolean => {
+  const rules = (xs: readonly Unmet[]): number => xs.filter((u) => u.id !== LENGTH_ID).length;
+  const far = (xs: readonly Unmet[]): number => xs.reduce((n, u) => n + (u.off ?? 0), 0);
+  return rules(after) < rules(before) || (rules(after) === rules(before) && far(after) < far(before));
+};
+
+/** What the run says the one more draft did, in the owner's terms; a draft written again for its length alone says the two lengths. */
+function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept: boolean, named: (us: readonly Unmet[]) => string, whose: (us: readonly Unmet[]) => string): string {
+  if (before.every((u) => u.id === LENGTH_ID)) {
+    const now = after.find((u) => u.id === LENGTH_ID);
+    return kept ? `Written again for length: the first draft ran ${before[0].detail}, outside what your pieces span; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
+      : `The draft runs ${before[0].detail}, outside what your pieces span; one more draft did not do better, so the first is kept.`;
+  }
+  return kept ? `Written again: the first draft left out ${before.length} thing(s) ${whose(before)} (${named(before)}); it now leaves out ${after.length}${after.length ? ` (${named(after)})` : ''}.`
+    : `The draft leaves out ${before.length} thing(s) ${whose(before)} (${named(before)}); one more draft did not do better, so the first is kept.`;
+}
+
+/**
+ * ONE MORE DRAFT, TOLD EVERYTHING THE FIRST DID NOT HOLD (`unmetReader`). Written once, put through the same checks,
+ * and kept only if it is nearer to holding them and breaks no more of any other REQUIRED rule: counted apart, since
+ * a draft that adds a section and breaks another rule would otherwise read as no worse. It is told never to fill a
+ * table or a section with what it was not given: a figure the material does not hold is the claim check's either way.
+ */
+export function withRedraft(refine: (draft: string) => Promise<Delivered>,
+  c: { unmet: (d: Delivered) => Unmet[]; redraft: (note: string) => Promise<string>; notes: string[] } | null) {
+  if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
-  const named = (ids: readonly string[]): string => ids.map((id) => { const st = must.get(id) ?? id; return `${id}: "${st.length > 70 ? `${st.slice(0, 67)}...` : st}"`; }).join('; ');
+  const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length your pieces run (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
+  const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : 'the method requires');
   return async (draft: string) => {
     const d = await refine(draft);
-    const missing = missingIn(d);
+    const missing = c.unmet(d);
     if (!missing.length) return d;
+    // What is recorded as broken before is rules, by their ids: the length is no rule of the standard, and counted
+    // as one it was reported as a rule held "once the draft was corrected" and read as a recurrence.
+    const ids = missing.filter((u) => u.id !== LENGTH_ID).map((u) => u.id);
+    const say = (x: Delivered, note: string): Delivered => { c.notes.push(note); return noted(x, note, ids); };
     try {
-      const said = missing.map((id) => `- ${must.get(id) ?? id} (${d.report.checked.find((x) => x.requirementId === id)?.result.detail ?? 'missing'})`).join('\n');
-      const note = `An earlier draft did not hold what this work requires:\n${said}\nWrite the whole piece again so that each of them holds, in the order the method gives. `
-        + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.';
-      const piece = (await spendOneWithResult(c.client, c.budget, c.servedText, c.task, null, note, {})).piece;
+      const piece = await c.redraft(redraftNote(missing, d.output));
       const d2 = await refine(piece);
-      const missing2 = missingIn(d2);
-      // Fewer of the method's things left out, and no more of any OTHER required rule broken: counted apart, since a
-      // draft that adds a section and breaks another rule would otherwise read as no worse.
-      const others = (x: Delivered): number => brokenIn(x.report).filter((id) => !must.has(id)).length;
-      const better = missing2.length < missing.length && others(d2) <= others(d);
-      const say = (x: Delivered, note: string): Delivered => { c.notes.push(note); return noted(x, note, missing); };
-      const outcome = better ? `Written again: the first draft left out ${missing.length} thing(s) the method requires (${named(missing)}); it now leaves out ${missing2.length}${missing2.length ? ` (${named(missing2)})` : ''}.`
-        : `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); one more draft did not do better, so the first is kept.`;
-      if (better && !d2.repair) return say({ ...d2, repair: { passes: 0, violatedBefore: missing, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the method requires named' } }, outcome);
+      const missing2 = c.unmet(d2);
+      const others = (x: Delivered, us: readonly Unmet[]): number => brokenIn(x.report).filter((id) => !us.some((u) => u.id === id)).length;
+      const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);
+      const outcome = redraftOutcome(missing, missing2, better, named, whose);
+      if (better && !d2.repair) return say({ ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the work requires named' } }, outcome);
       return say(better ? d2 : d, outcome);
     } catch (err) {
-      const failed = `The draft leaves out ${missing.length} thing(s) the method requires (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`;
-      c.notes.push(failed);
-      return noted(d, failed, missing);
+      return say(d, `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);
     }
   };
 }

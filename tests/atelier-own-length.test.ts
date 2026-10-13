@@ -79,3 +79,100 @@ describe('what the run says, and which stated lengths a request sets aside', () 
     expect(lineCitationsLine('Nothing cited.', material)).toContain('none found in the output');
   });
 });
+
+// One more draft, told everything the first did not hold: the method's missing parts, a bad citation, the length.
+describe('what a draft left unmet, and what the one more draft is told', () => {
+  const rule = (id: string, observer: string, obligation?: string) => ({ requirementId: id, statement: `${id} must hold.`, materiality: 'REQUIRED', ...(obligation ? { obligation } : {}), measurement: { observer, params: {} } });
+  const std = { requirements: [rule('x1', 'PRESENCE', 'DELIVERABLE'), rule('x2', 'LINES', 'EXECUTION'), rule('c1', 'LEXICON')] } as never;
+  const report = (broken: readonly string[]) => ({ failed: broken.length > 0, checked: ['x1', 'x2', 'c1'].map((id) => ({ requirementId: id, materiality: 'REQUIRED', result: { verdict: broken.includes(id) ? 'VIOLATED' : 'MET', spans: [], value: 0, detail: `${id} detail` } })) }) as never;
+  it('a missing part of the method and a bad citation are unmet; a banned word is a sentence to rewrite, and is not', async () => {
+    const { unmetReader } = await import('../cli/commands/invoke.js');
+    const read = unmetReader(std, null);
+    expect(read?.({ output: words(210), report: report(['x1', 'x2', 'c1']) }).map((u) => u.id)).toEqual(['x1', 'x2']);
+    expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
+  });
+  it('the length is unmet when the request named none and the draft is outside what the pieces span', async () => {
+    const { unmetReader, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const read = unmetReader(std, { band: [187, 232], span: [202, 217] });
+    expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
+    expect(read?.({ output: words(248), report: report(['x1']) })).toEqual([
+      { id: 'x1', statement: 'x1 must hold.', detail: 'x1 detail' },
+      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words', off: 16 }]);
+  });
+  it('a skill with nothing of the kind to read has no such step', async () => {
+    const { unmetReader } = await import('../cli/commands/invoke.js');
+    expect(unmetReader({ requirements: [rule('c1', 'LEXICON')] } as never, null)).toBeNull();
+    expect(unmetReader({ requirements: [] } as never, { band: [1, 2], span: [1, 2] })).not.toBeNull();
+  });
+  it('the note names each with what the check found, and carries the draft it is to keep what it can of', async () => {
+    const { redraftNote } = await import('../cli/commands/invoke.js');
+    const note = redraftNote([{ id: 'x1', statement: 'Open with a Verdict section.', detail: 'no "Verdict" section' }, { id: 'length', statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words' }], 'The first draft.\n');
+    expect(note).toContain('- Open with a Verdict section. (no "Verdict" section)\n- Write it at the length my pieces run: 202 to 217 words (248 words)');
+    expect(note).toContain('Keep what the earlier draft says wherever it can stay.');
+    expect(note).toContain('<earlier-draft>\nThe first draft.\n</earlier-draft>');
+  });
+  it('a second draft is nearer with fewer things unmet, or as many and less far off', async () => {
+    const { nearer } = await import('../cli/commands/invoke.js');
+    const length = (off: number) => ({ id: 'length', statement: 's', detail: 'd', off });
+    const x1 = { id: 'x1', statement: 's', detail: 'd' };
+    expect(nearer([], [x1])).toBe(true);
+    expect(nearer([length(10)], [length(50)])).toBe(true);
+    expect(nearer([length(50)], [length(50)])).toBe(false);
+    expect(nearer([x1, length(1)], [length(50)])).toBe(false);
+    expect(nearer([x1], [x1])).toBe(false);
+  });
+});
+
+describe('the one more draft: what is kept, what is said, what is recorded', () => {
+  interface Out { output: string; repair: null | { violatedBefore: string[]; notes?: string[] }; report: { failed: boolean; checked: { requirementId: string; materiality: string; result: { verdict: string; spans: never[]; value: number; detail: string } }[] } }
+  const made = (text: string, broken: readonly string[] = []): Out => ({ output: text, repair: null, report: { failed: broken.length > 0, checked: broken.map((id) => ({ requirementId: id, materiality: 'REQUIRED', result: { verdict: 'VIOLATED', spans: [], value: 1, detail: `${id} is missing` } })) } });
+  // a draft of `n` words; one starting "NOSECTION" lacks the required section x1; one starting "BREAKS" breaks another rule
+  const drive = async (first: string, second: string | Error) => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const notes: string[] = []; const asked: string[] = [];
+    const refine = async (t: string) => made(t, [...(t.startsWith('NOSECTION') ? ['x1'] : []), ...(t.startsWith('BREAKS') ? ['c9'] : [])]) as never;
+    const unmet = (d: { output: string; report: Out['report'] }) => {
+      const n = d.output.split(/\s+/).length;
+      return [...d.report.checked.filter((c) => c.requirementId === 'x1').map(() => ({ id: 'x1', statement: 'Open with a Verdict section.', detail: 'no "Verdict" section' })),
+        ...(n > 232 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 232 }] : [])];
+    };
+    const run = withRedraft(refine, { unmet: unmet as never, notes, redraft: async (note) => { asked.push(note); if (second instanceof Error) throw second; return second; } });
+    return { out: await run(first) as unknown as Out, notes, asked };
+  };
+  it('nothing unmet: delivered as written, with no second call', async () => {
+    const r = await drive(words(210), words(200));
+    expect(r.asked).toEqual([]);
+    expect(r.out.output).toBe(words(210));
+  });
+  it('long, then inside: kept, said as two lengths, and no rule recorded as broken', async () => {
+    const r = await drive(words(272), words(226));
+    expect(r.asked[0]).toContain(`<earlier-draft>\n${words(272)}\n</earlier-draft>`);
+    expect(r.out.output).toBe(words(226));
+    expect(r.notes).toEqual(['Written again for length: the first draft ran 272 words, outside what your pieces span; it is now inside it.']);
+    expect(r.out.repair?.violatedBefore).toEqual([]);
+  });
+  it('long, then nearer and still long: kept and said so; no nearer: the first stands', async () => {
+    expect((await drive(words(282), words(242))).notes[0]).toContain('it now runs 242 words, nearer and still outside');
+    const same = await drive(words(282), words(290));
+    expect(same.out.output).toBe(words(282));
+    expect(same.notes[0]).toContain('one more draft did not do better, so the first is kept');
+  });
+  it('a length is never bought with a rule: a draft at the right length that drops the section is not kept', async () => {
+    const r = await drive(words(272), `NOSECTION ${words(200)}`);
+    expect(r.out.output).toBe(words(272));
+  });
+  it('a missing section, then present: kept, and the rule is what is recorded as broken before', async () => {
+    const r = await drive(`NOSECTION ${words(200)}`, words(205));
+    expect(r.out.output).toBe(words(205));
+    expect(r.notes[0]).toMatch(/^Written again: the first draft left out 1 thing\(s\) the method requires \(x1: "Open with a Verdict section\."\); it now leaves out 0\.$/);
+    expect(r.out.repair?.violatedBefore).toEqual(['x1']);
+  });
+  it('a second draft that holds the section and breaks another rule is not kept', async () => {
+    expect((await drive(`NOSECTION ${words(200)}`, `BREAKS ${words(200)}`)).out.output).toBe(`NOSECTION ${words(200)}`);
+  });
+  it('a draft that could not be written costs the person nothing, and is said', async () => {
+    const r = await drive(`NOSECTION ${words(200)}`, new Error('no model\nstack'));
+    expect(r.out.output).toBe(`NOSECTION ${words(200)}`);
+    expect(r.notes[0]).toContain('the draft to add them could not be written (no model)');
+  });
+});

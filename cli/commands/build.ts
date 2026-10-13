@@ -491,8 +491,9 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // And how long their pieces run, shortest to longest, over the same pieces: what an output is held to when the
   // request names no length (core/intake/length.ts, `ownLengthBand`). Stored the same way.
   const span = everyPiece.length ? lengthSpan(everyPiece) : voice?.lengthSpan ?? null;
-  const { standardWording: _was, lengthSpan: _span, ...voiceWithout } = voice ?? {}; void _was; void _span;
-  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span } : {}) } : voice;
+  const lengthPieces = everyPiece.length > 0 ? everyPiece.length : voice?.lengthPieces ?? 0;
+  const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n;
+  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}) } : voice;
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));

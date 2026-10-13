@@ -90,7 +90,7 @@ export function planRepair(text: string, report: VerifyReport,
     // WHAT A METHOD REQUIRES IS NEVER REPAIRED BY REWRITING A SENTENCE. A missing section or table is not a sentence
     // that went wrong: rewritten into the last paragraph it becomes prose that mentions the section, which reads as
     // done and is not. It is answered by writing the piece again with what is missing named (cli/commands/invoke.ts,
-    // `withMethod`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
+    // `withRedraft`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
     // which takes the figure out and claims nothing in its place. Held to keep every figure, the rewrite that cut it
     // was refused and the figure delivered; so that figure, and only it, is what the rewrite may lose.
     // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
