@@ -10,8 +10,7 @@
 // Nothing here decides what a result means: each entry states its facts and `entry` (./record.ts) judges them.
 
 import type { Requirement } from '../state/canonical-state.js';
-import { targetOf } from '../observers/obligations.js';
-import { observes } from './observes.js';
+import { planFor, type PlannedRule } from '../plan/execution-plan.js';
 import { entry, recordOf, type Entry, type EvaluationRecord, type Observation } from './record.js';
 
 export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string }
@@ -42,31 +41,28 @@ export interface RecordFacts {
   readonly replaced?: ReadonlySet<string>;
 }
 
-const isJudgement = (r: Requirement): boolean => !r.measurement && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT');
 const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: null };
 
-function standardEntry(r: Requirement, f: RecordFacts): Entry | null {
-  // What the owner stated is theirs whether or not its check may block yet (`contested`).
-  const required = r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested);
-  const base = { id: r.requirementId, source: 'METHOD' as const, statement: r.statement };
-  if (isJudgement(r)) return entry({ ...base, dimension: 'STANDARD', required: true, observation: NOTHING, verdict: null });
-  const o = observes(r);
-  if (!o) return null;
-  const dimension = required ? 'STANDARD' as const : 'HABIT' as const;
-  const source = required ? 'METHOD' as const : 'EXAMPLE' as const;
-  const line = f.checked?.find((c) => c.id === r.requirementId);
-  const why = f.waived.get(r.requirementId);
+/** One rule of the standard as it fared: what it is and whether its check may block come from the plan, never from here. */
+function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
+  const required = p.role !== 'HABIT';
+  const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: required ? 'METHOD' as const : 'EXAMPLE' as const, required };
+  const o = p.check;
+  if (!o) return entry({ ...base, observation: NOTHING, verdict: null });
+  const line = f.checked?.find((c) => c.id === p.id);
+  const why = f.waived.get(p.id);
   // A reading of the rule that the owner's own finished work contradicts has not earned belief: it is shown, and
   // blocks nothing, until they confirm it.
-  const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: r.contested ? 'UNQUALIFIED' : 'DETERMINISTIC',
-    evidence: r.contested && evidence ? `${evidence}. Your own examples do not do this, so the rule blocks nothing until you confirm it` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
-  if (why) return entry({ ...base, dimension, source, required, observation: seen(why), applies: f.replaced?.has(r.requirementId) ? { replacedBy: why } : { setAside: why }, verdict: null });
+  const disputed = p.notEnforced === 'DISPUTED_BY_EXAMPLES';
+  const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: disputed ? 'UNQUALIFIED' : 'DETERMINISTIC',
+    evidence: disputed && evidence ? `${evidence}. Your own examples do not do this, so the rule blocks nothing until you confirm it` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
+  if (why) return entry({ ...base, observation: seen(why), applies: f.replaced?.has(p.id) ? { replacedBy: why } : { setAside: why }, verdict: null });
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
-  if (!line || (line.verdict === 'NOT_APPLICABLE' && targetOf(r.measurement?.observer ?? '') === 'BOUND_MATERIAL')) {
-    return entry({ ...base, dimension, source, required, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE' }, verdict: null });
+  if (!line || (line.verdict === 'NOT_APPLICABLE' && o.reads === 'BOUND_MATERIAL')) {
+    return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE' }, verdict: null });
   }
-  if (line.verdict === 'NOT_APPLICABLE') return entry({ ...base, dimension, source, required, observation: seen(line.detail), applies: false, verdict: null });
-  return entry({ ...base, dimension, source, required, observation: seen(line.detail), verdict: line.verdict });
+  if (line.verdict === 'NOT_APPLICABLE') return entry({ ...base, observation: seen(line.detail), applies: false, verdict: null });
+  return entry({ ...base, observation: seen(line.detail), verdict: line.verdict });
 }
 
 /** The check's own required lines that are no rule of the standard: the format's hard limits, phrases learned as a machine's. */
@@ -114,6 +110,7 @@ function evidenceEntries(f: RecordFacts): Entry[] {
 
 /** The record of one output. */
 export function buildRecord(f: RecordFacts): EvaluationRecord {
-  const live = f.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
-  return recordOf([...live.flatMap((r) => standardEntry(r, f) ?? []), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)]);
+  // A habit with no check is nothing a run can say anything about: it is the writer's to have been shown.
+  const rules = planFor({ requirements: f.requirements }).rules.filter((p) => p.role !== 'HABIT' || p.check);
+  return recordOf([...rules.map((p) => standardEntry(p, f)), ...systemEntries(f), ...requestEntries(f), ...evidenceEntries(f)]);
 }

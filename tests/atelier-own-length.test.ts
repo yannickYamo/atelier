@@ -204,3 +204,34 @@ describe('after a miss of length the writer is given something to aim for, and o
     expect(notes).toHaveLength(2);
   });
 });
+
+describe('a draft that only runs long is cut, not written again', () => {
+  it('the writer is told how many words to remove from the piece it is shown, and what to leave alone', async () => {
+    const { trimNote } = await import('../cli/commands/invoke.js');
+    const note = trimNote([{ id: 'x7', statement: 'Between 220 and 420 words.', detail: '439 words (220 to 420): long by 19', off: 19, aim: 'aim for 401 words or fewer' }], 'the draft');
+    expect(note).toContain('runs too long: 439 words (220 to 420): long by 19.');
+    expect(note).toContain('until it runs 401 words or fewer (at least 19 fewer than now)');
+    expect(note).toContain('Keep every heading, section, table, list item, name, figure and citation exactly as it is');
+    expect(note).toContain('<earlier-draft>\nthe draft\n</earlier-draft>');
+    expect(note).not.toMatch(/Write the whole piece again/);
+  });
+  it('it is cut up to three times, each pass from the last, and stops when it is inside', async () => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const words = (n: number): string => Array.from({ length: n }, () => 'w').join(' ');
+    const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
+    const unmet = (x: { output: string }) => { const n = x.output.split(/\s+/).length; return n > 420 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 420, aim: 'aim for 400 words or fewer' }] : []; };
+    const sizes = [450, 430, 418, 300]; const notes: string[] = [];
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return words(sizes.shift()!); } })(words(469));
+    expect(out.output.split(/\s+/).length).toBe(418);
+    expect(notes).toHaveLength(3);
+    for (const n of notes) expect(n).toMatch(/^The draft below holds what this work requires and runs too long/);
+  });
+  it('a draft that also lacks something is written again as before, never trimmed', async () => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
+    const notes: string[] = [];
+    await withRedraft(async (t: string) => d(t), { unmet: (x) => (x.output === 'first' ? [{ id: 'x1', statement: 'a section', detail: 'missing' }, { id: LENGTH_ID, statement: 'length', detail: '500 words', off: 80, aim: 'aim for 400 words or fewer' }] : []),
+      notes: [], redraft: async (note) => { notes.push(note); return 'second'; } })('first');
+    expect(notes[0]).toMatch(/^An earlier draft did not hold what this work requires/);
+  });
+});

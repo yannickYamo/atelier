@@ -60,6 +60,7 @@ import { assertHistoryNotServed, foldRepairs } from '../../core/architecture/rep
 import type { SkillVersion, InvocationSettings } from '../../core/state/canonical-state.js';
 import * as store from '../../core/state/store.js';
 import { listsBecause, unmeasuredKind } from '../../core/loop/claim-extract.js';
+import { planFor } from '../../core/plan/execution-plan.js';
 import { checkSatisfiable, describeSatisfiability, type SatisfiabilityVerdict } from '../../core/state/prerequisite.js';
 import { resolveProvenance } from '../../core/fidelity/provenance.js';
 
@@ -158,8 +159,7 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
 export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: boolean; contract: boolean; answers: boolean; outOfRegister: boolean; sections: boolean; ruled?: boolean }): boolean =>
   !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections && !c.ruled;
 /** Does the owner require a length of the whole work, in words? Then that is the length, and their pieces' span adds no second one. */
-export const lengthIsRuled = (std: Standard | null): boolean => Boolean(std?.requirements.some((r) => r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'LENGTH'
-  && !r.measurement.params.in && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'));
+export const lengthIsRuled = (std: Standard | null): boolean => (std ? planFor(std).rulesLength : false);
 /** How many words a count is outside a band; 0 inside it. */
 export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
 
@@ -1030,6 +1030,8 @@ export const LENGTH_ID = 'length';
 export const LENGTH_REDRAFT_PIECES = 9;
 /** How many times a draft is written again: once, and once more for a length alone. */
 const REDRAFTS = 2;
+/** A draft that only runs long is cut up to this many times: each pass removes words from the last. */
+const TRIMS = 3;
 
 /**
  * WHAT TO AIM FOR, AFTER A MISS OF LENGTH. Told "at most 420 words" a writer came back at 469, and told "38 too
@@ -1046,7 +1048,8 @@ export function lengthAim(n: number, lo: number | null, hi: number | null): stri
 export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
   // citation that is no line of the material, since the right number is on the page the writer was given.
-  const must = new Map(std.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && (r.obligation === 'DELIVERABLE' || r.measurement.observer === 'LINES')).map((r) => [r.requirementId, r.statement]));
+  // Which rules those are is the plan's to say (core/plan/execution-plan.ts): the ones a miss of is written again for.
+  const must = new Map(planFor(std).rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => [p.id, p.statement]));
   if (!must.size && !own && !asked) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
@@ -1080,6 +1083,24 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
     + 'Write the whole piece again so that each of them holds. Keep what the earlier draft says wherever it can stay. Where a length is given to aim for, cut or add until you are there, and count before you finish. '
     + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.\n\n'
     + `The earlier draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
+}
+
+/** Is everything a draft still misses that it runs too long? Then it is trimmed, not written again. */
+const onlyTooLong = (unmet: readonly Unmet[]): boolean => unmet.length > 0 && unmet.every((u) => u.aim?.endsWith('or fewer'));
+
+/**
+ * A DRAFT THAT HOLDS EVERYTHING AND RUNS LONG IS CUT, NOT REWRITTEN. Asked to write the piece again at the right
+ * length, a writer changes what was right and lands a few words past the limit once more (469, then 439, then 422
+ * against 420). Asked to remove words from the piece it is shown, with the number to remove and what to leave
+ * alone, it has one thing to do. The number is the miss plus the margin `lengthAim` sets inside the limit.
+ */
+export function trimNote(unmet: readonly Unmet[], draft: string): string {
+  const over = Math.max(...unmet.map((u) => u.off ?? 0)); const to = /aim for (\d[\d,]*) words or fewer/.exec(unmet.find((u) => u.aim)?.aim ?? '')?.[1];
+  return `The draft below holds what this work requires and runs too long: ${unmet.map((u) => u.detail).join('; ')}.\n`
+    + `Return the same piece with words removed${to ? ` until it runs ${to} words or fewer (at least ${over} fewer than now)` : ` (at least ${over})`}. `
+    + 'Cut what adds least: a restated point, a qualifier, a clause that repeats its sentence. Keep every heading, section, table, list item, name, figure and citation exactly as it is, in the same order. '
+    + 'Add nothing and reword nothing you do not have to. Count the words before you finish.\n\n'
+    + `The draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
 }
 
 /**
@@ -1126,9 +1147,10 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     const ids = missing.filter((u) => u.id !== LENGTH_ID).map((u) => u.id);
     const say = (x: Delivered, note: string): Delivered => { c.notes.push(note); return noted(x, note, ids); };
     // Once; and once more where everything still unmet is a length, which a writer nears by halves.
-    for (let round = 0; round < REDRAFTS && missing.length && (round === 0 || missing.every((u) => u.aim)); round += 1) {
+    // And where all that is left is that it runs long, the piece is cut, up to three times, not written again.
+    for (let round = 0; missing.length && (onlyTooLong(missing) ? round < TRIMS : round < REDRAFTS && (round === 0 || missing.every((u) => u.aim))); round += 1) {
       try {
-        const piece = await c.redraft(redraftNote(missing, d.output));
+        const piece = await c.redraft(onlyTooLong(missing) ? trimNote(missing, d.output) : redraftNote(missing, d.output));
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
         const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);

@@ -529,3 +529,21 @@ describe('what a review of the section lengths found', () => {
     expect(countedOffers([], [many(1), many(2), many(3)]).length).toBeLessThanOrEqual(6);
   });
 });
+
+describe('what a real template taught the readers', () => {
+  it('a form to fill in is not a step: a line that is mostly bracketed blanks instructs nobody', async () => {
+    const { stepsOf } = await import('../core/method/standard.js');
+    const note = '1. Classify the competitor type.\n\n> One-line: [What this competitor is, who they serve, primary moat] > Evidence ceiling: [Decision-grade / Usable / Background only]\n\n- [ ] All claims tagged with mode and quality\n- Name the buyer [the person who signs] in the first line.\n';
+    expect(stepsOf(note).map((x) => x.text)).toEqual(['Classify the competitor type.', 'All claims tagged with mode and quality', 'Name the buyer [the person who signs] in the first line.']);
+  });
+  it('a table column named after the company the example is about is that piece\'s own, with or without its task', () => {
+    const reference = `## Moats\n\nWe looked at how Payloom sells, and what Payloom charges, because Payloom is the buyer here.\n\n| Moat | Significance to Payloom |\n|---|---|\n| Scale | High |\n\n## Next\n\n| Signal | Action |\n|---|---|\n| A loss | Call |\n`;
+    const shown = methodProposals('- Weigh the moats.\n', { task: null, material: [], reference }).filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
+    expect(shown).toEqual([['signal', 'action']]);
+  });
+  it('a count of characters beside a count of words is a second limit: neither is held as the length of the piece', async () => {
+    const { statedLength, notHeldBecause } = await import('../core/intake/length.js');
+    const r = 'Write a post explaining why we cap commit messages at 72 characters and under 50 words.';
+    expect(notHeldBecause(r, statedLength(r)!)).toMatch(/names more than one count \(72 characters, 50 words\)/);
+  });
+});

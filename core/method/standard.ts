@@ -94,7 +94,10 @@ export function stepsOf(note: string): MethodStep[] {
   const instructs = (t: string): boolean => RULE.test(t) && !(DESCRIBES.test(t) && !RULE.test(t.replace(DESCRIBES, ' ')));
   const steps = items.length ? [...items, ...prose.filter((s) => instructs(s.text))] : prose;
   const seen = new Set<string>();
-  return steps.map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
+  // A TEMPLATE'S BLANKS ARE NOT STEPS. "> One-line: [What this competitor is, who they serve] > Evidence ceiling:
+  // [Decision-grade / Usable]" is a form to fill in: where the bracketed blanks are most of a line, it instructs nobody.
+  const blanks = (t: string): boolean => (t.match(/\[[^\]]{3,}\]/g) ?? []).join('').length * 2 > t.length;
+  return steps.map(clean).filter((s) => s.text.length >= 8 && !blanks(s.text) && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
 }
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
@@ -265,6 +268,12 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     const givenRaw = [example.task ?? '', ...example.material.map((x) => x.text)].join(' ');
     const lower = new Set(givenRaw.match(/\b[a-z][a-zA-Z]{3,}\b/g) ?? []);
     const proper = new Set((givenRaw.match(/\b[A-Z][a-zA-Z]{3,}\b/g) ?? []).map((w) => w.toLowerCase()).filter((w) => !lower.has(w)));
+    // And a name the piece itself keeps using: capitalised in the middle of a sentence three times or more, and
+    // never written small. An example handed over without its task still names the company it is about.
+    const small = new Set(example.reference.match(/\b[a-z][a-zA-Z]{3,}\b/g) ?? []); const mid = new Map<string, number>();
+    for (const m of example.reference.matchAll(/(?<=[a-z,;] )([A-Z][a-zA-Z]{3,})\b/g)) mid.set(m[1], (mid.get(m[1]) ?? 0) + 1);
+    const named = new Set([...mid].filter(([w, k]) => k >= 3 && !small.has(w.toLowerCase())).map(([w]) => w.toLowerCase()));
+    if (columns.some((c) => norm(c).split(' ').some((w) => named.has(w)))) continue;
     if (columns.some((c) => norm(c).split(' ').some((w) => proper.has(w) && given.includes(` ${w} `)))) continue;
     const m: Measurement = { observer: 'TABLE', params: { columns, minRows: 1 } };
     out.push({ statement: `The work includes a table with the columns ${columns.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, conflict: null });

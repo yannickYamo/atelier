@@ -12,10 +12,10 @@ import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
 import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
-import { targetOf } from '../../core/observers/obligations.js';
+import { planFor } from '../../core/plan/execution-plan.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { listEvals } from '../../core/state/eval-store.js';
-import type { Requirement } from '../../core/state/canonical-state.js';
+import type { StandardVersion } from '../../core/state/canonical-state.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
   readonly report: readonly string[]; readonly eval: EvalSummary | null;
@@ -87,10 +87,7 @@ function skillFor(named: string | null): string {
 }
 
 /** Does the skill check the work against material, with none given? Said before the draft, and never a refusal. */
-function needsMaterial(requirements: readonly Requirement[], L: store.StoreLayout): boolean {
-  const against = requirements.some((r) => r.materiality === 'REQUIRED' && r.measurement && targetOf(r.measurement.observer) === 'BOUND_MATERIAL');
-  return against && !store.getMaterial(L).length && !boundMaterial().length;
-}
+const needsMaterial = (std: Pick<StandardVersion, 'requirements'>, L: store.StoreLayout): boolean => planFor(std).readsMaterial && !store.getMaterial(L).length && !boundMaterial().length;
 
 export async function run(): Promise<void> {
   const typed = sortArgs(argv.slice(1));
@@ -112,7 +109,7 @@ export async function run(): Promise<void> {
   const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
   // NEVER REFUSED FOR WHAT IS MISSING: the work is written, the rules that needed the material are shown as not
   // checked, and the person is told how to have them checked.
-  if (std && needsMaterial(std.requirements, L)) process.stderr.write('This skill checks the work against material you give it, and none was given: those rules will show as not checked. To have them checked, add --with <file>.\n');
+  if (std && needsMaterial(std, L)) process.stderr.write('This skill checks the work against material you give it, and none was given: those rules will show as not checked. To have them checked, add --with <file>.\n');
   if (process.stderr.isTTY) process.stderr.write('writing…\n');
   const engine = await new Promise<{ code: number; out: string; err: string }>((done) => {
     execFile(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'], { maxBuffer: 1 << 26, env: process.env },

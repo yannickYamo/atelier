@@ -28,6 +28,7 @@ import type { GoldenCase } from '../../core/golden/case.js';
 import { proposalsAcross, countedOffers, stepsOf, type MethodProposal } from '../../core/method/standard.js';
 import { readCase, corpusFiles } from '../corpus.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
+import { planFor, describePlan } from '../../core/plan/execution-plan.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 
@@ -267,7 +268,9 @@ export async function method(): Promise<void> {
   // Required is what a run is held to. What the example showed is checked and reported, and fails nothing: said apart,
   // so that the count of what is enforced is never larger than it is.
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
-  const against = decided.some((r) => r.obligation === 'EXECUTION' && r.measurement && r.materiality === 'REQUIRED');
+  const plan = planFor({ requirements: decided }); const against = plan.readsMaterial;
+  // What the skill will do with each rule, for whoever asks for the whole account.
+  if (whole) { console.log('\nWhat a run does with each rule:'); for (const l of describePlan(plan)) console.log(l); }
   console.log(`\nYour skill "${name}" is ready.`);
   if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
   console.log(`  Use it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);

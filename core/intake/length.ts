@@ -216,8 +216,9 @@ export function statedLength(request: string): StatedLength | null {
  */
 export function notHeldBecause(request: string, s: StatedLength): string | null {
   if (s.unit !== 'words') return `a length in ${s.unit} is not counted`;
-  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*words?\b/gi) ?? [];
-  if (counts.length > 1) return `the request names more than one count of words (${counts.map((c) => c.trim()).join(', ')}), and which is the length of the piece is yours to say`;
+  // (A count of characters beside it is a second limit too: "72 characters and under 50 words" is about something else.)
+  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*(?:words?|characters?|chars?)\b/gi) ?? [];
+  if (counts.length > 1) return `the request names more than one count${counts.every((c) => /words?$/i.test(c.trim())) ? ' of words' : ''} (${counts.map((c) => c.trim()).join(', ')}), and which is the length of the piece is yours to say`;
   const after = request.slice(request.indexOf(s.raw) + s.raw.length);
   if (request.includes(s.raw) && /^\s+(?:that|which|who|every|each)\b/i.test(after)) return 'the count may be what the piece is about, not how long it is';
   return null;
