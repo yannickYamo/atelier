@@ -42,4 +42,3 @@ describe('what the writer is told when a piece is written again', () => {
     expect(statedLength('Review this change.')).toBeNull();
   });
 });
-});
