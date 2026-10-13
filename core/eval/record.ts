@@ -124,7 +124,7 @@ export function standingOf(r: EvaluationRecord): Standing {
   const rules = failed.filter((e) => e.dimension === 'STANDARD');
   const reasons = [
     ...(rules.length ? [`${rules.length} required rule${rules.length === 1 ? '' : 's'} broken (${rules.map((e) => `${e.id} "${label(e.statement)}"`).join(', ')})`] : []),
-    ...failed.filter((e) => e.dimension !== 'STANDARD').map((e) => (e.dimension === 'REQUEST' ? `the length the request asks for was not met (${e.observation.evidence ?? 'not met'})` : e.observation.evidence ?? e.statement)),
+    ...failed.filter((e) => e.dimension !== 'STANDARD').map((e) => (e.dimension === 'REQUEST' ? `the length the request asks for was not met (${e.observation.evidence ?? 'not met'})` : `${e.statement}: ${e.observation.evidence ?? 'not met'}`)),
     ...r.entries.filter(unfinished).map((e) => e.observation.incomplete ?? ''),
   ];
   return { state: r.state, verified: r.state === 'VERIFIED', deliverable: reasons.length === 0, reasons };

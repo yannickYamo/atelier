@@ -87,3 +87,21 @@ describe('a piece written again is written as the first was: under its settings,
       'Your skill has changed since this piece was written (it was v1aaaaaa, it is now v2bbbbbb): the piece is written again by the skill as it is now.']);
   });
 });
+
+describe('a setting typed beside the complaint replaces the first run\'s, and is never given twice', () => {
+  it('the same option in both: the one typed now is the one passed, once, however either was written', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [], settings: ['--model', 'm', '--drafts=2', '--no-redraft', '--cap', '3'], skillVersion: 'v1' };
+    const r = replayOf('s', last, ['too long'], ['--model=n', '--drafts', '3'], 'v1', () => true);
+    expect(r.args.slice(r.args.indexOf('--provenance') + 2)).toEqual(['--no-redraft', '--cap', '3', '--model=n', '--drafts', '3']);
+  });
+  it('twice in a row with the same setting typed: still once', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [], settings: ['--cap', '2'], skillVersion: 'v1' };
+    expect(replayOf('s', last, ['x', 'y'], ['--cap', '2'], 'v1', () => true).args.filter((a) => a === '--cap').length).toBe(1);
+  });
+  it('a bare "--" is no setting: kept, it would turn everything typed after it into words of the task', async () => {
+    const { settingsOfRun } = await import('../cli/commands/invoke.js');
+    expect(settingsOfRun(['invoke', '--model', 'm', '--', '--drafts', '2'])).toEqual(['--model', 'm', '--drafts', '2']);
+  });
+});

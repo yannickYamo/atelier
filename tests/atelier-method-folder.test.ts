@@ -240,6 +240,22 @@ describe('a build that stopped half-way is finished by building again', () => {
     expect(again.code, again.out).toBe(0);
     expect(existsSync(join(proj, '.claude', 'skills', 'reviews', 'SKILL.md'))).toBe(true);
   }, 120_000);
+  it('a folder whose build stopped before anything was stored does not thereby own the name: built meanwhile by another, it is theirs', () => {
+    const b = seed(['Approve', 'Request changes', 'Comment']);
+    writeFileSync(join(b.proj, '.claude'), 'not a folder');
+    expect(b.run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes').code).not.toBe(0);
+    rmSync(join(b.proj, '.claude'));
+    // as if it had stopped before the standard was stored: nothing of that name is in the store
+    rmSync(join(b.data, 'skills', 'review'), { recursive: true, force: true });
+    const other = mkdtempSync(join(tmpdir(), 'atelier-mf-other-')); mkdirSync(join(other, 'examples'));
+    writeFileSync(join(other, 'method.md'), NOTE.replace('Summary', 'Overview')); writeFileSync(join(other, 'examples', 'e1.md'), piece('Approve', 4).replace('Summary', 'Overview'));
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: b.data, ATELIER_PROJECT_DIR: other }; delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+    execFileSync('node', [CLI, 'new', 'examples', '--method', 'method.md', '--name', 'review', '--yes'], { encoding: 'utf8', cwd: other, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const again = b.run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes');
+    expect(again.code).not.toBe(0);
+    expect(again.out).toMatch(/a skill called "review" already exists, and this folder did not build it/);
+    expect(readFileSync(join(other, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('Overview');
+  }, 120_000);
   it('a skill of that name built in another folder is still somebody else\'s, stopped build or not', () => {
     const a = seed(['Approve', 'Request changes', 'Comment']);
     expect(a.run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes').code).toBe(0);

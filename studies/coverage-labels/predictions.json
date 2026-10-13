@@ -1,0 +1,77 @@
+[
+ {
+  "id": "blog-post-07",
+  "coverage": "PARTIAL",
+  "unchecked": "short-form post stay between 400 and 600 words, and cut before padding"
+ },
+ {
+  "id": "blog-post-13",
+  "coverage": "PARTIAL",
+  "unchecked": "Numbers"
+ },
+ {
+  "id": "blog-post-18",
+  "coverage": "FULL",
+  "unchecked": null
+ },
+ {
+  "id": "blog-post-27",
+  "coverage": "PARTIAL",
+  "unchecked": "whether each figure names its source, and whether it is used as the source means it"
+ },
+ {
+  "id": "code-review-11",
+  "coverage": "PARTIAL",
+  "unchecked": "whether each item carries a citation, and whether the cited line is the right one"
+ },
+ {
+  "id": "code-review-21",
+  "coverage": "PARTIAL",
+  "unchecked": "Test Coverage"
+ },
+ {
+  "id": "contract-03",
+  "coverage": "PARTIAL",
+  "unchecked": "names both parties exactly as the term sheet does: full legal name, entity type and registered number"
+ },
+ {
+  "id": "contract-09",
+  "coverage": "PARTIAL",
+  "unchecked": "Key Terms"
+ },
+ {
+  "id": "contract-24",
+  "coverage": "PARTIAL",
+  "unchecked": "Open Points"
+ },
+ {
+  "id": "teardown-03",
+  "coverage": "PARTIAL",
+  "unchecked": "three sentences at most, that says whether they're a threat to us and in which segment"
+ },
+ {
+  "id": "teardown-07",
+  "coverage": "FULL",
+  "unchecked": null
+ },
+ {
+  "id": "teardown-14",
+  "coverage": "PARTIAL",
+  "unchecked": "Pricing"
+ },
+ {
+  "id": "teardown-17",
+  "coverage": "PARTIAL",
+  "unchecked": "Feature Comparison"
+ },
+ {
+  "id": "teardown-24",
+  "coverage": "PARTIAL",
+  "unchecked": "whether each figure names its source, and whether it is used as the source means it"
+ },
+ {
+  "id": "teardown-32",
+  "coverage": "PARTIAL",
+  "unchecked": "whether each figure names its source, and whether it is used as the source means it"
+ }
+]

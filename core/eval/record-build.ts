@@ -62,8 +62,10 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
     evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
   if (why) return entry({ ...base, observation: seen(why), applies: f.replaced?.has(p.id) ? { replacedBy: why } : { setAside: why }, verdict: null });
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
+  // Only a check of the text that did not run at all is an evaluation that did not finish. A check that ran and has
+  // no line for this rule left it out on purpose (it applies under a condition, which is a judgement): the owner's.
   if (!line || (line.verdict === 'NOT_APPLICABLE' && o.reads === 'BOUND_MATERIAL')) {
-    return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE', ...(line ? {} : { incomplete: `not checked: ${p.id} (the check did not run)` }) }, verdict: null });
+    return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE', ...(f.checked === null ? { incomplete: `not checked: ${p.id} (the check did not run)` } : {}) }, verdict: null });
   }
   if (line.verdict === 'NOT_APPLICABLE') return entry({ ...base, observation: seen(line.detail), applies: false, verdict: null });
   return entry({ ...base, observation: seen(line.detail), verdict: line.verdict });

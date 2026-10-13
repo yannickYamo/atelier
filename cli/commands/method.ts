@@ -213,7 +213,13 @@ export async function method(): Promise<void> {
   // word: two people whose method file is called method.md would each overwrite the other's skill.
   // (Looking builds nothing, so `--review` is never refused: it shows what would be built.)
   const looking = argv.includes('--review');
-  if (!looking && store.getActive({ root: DATA, skillName: name }) && s.skillName !== name) {
+  // A BUILD THAT STOPPED HALF-WAY left the name in this folder's session before anything was stored (below). That
+  // makes the skill this folder's only where it already was, or where what is stored under the name now is the
+  // standard this very build closed: a name that was free then and was built meanwhile by someone else is theirs.
+  const LN = { root: DATA, skillName: name }; const activeNow = store.getActive(LN);
+  const stored = activeNow ? store.getSkillVersion(LN, activeNow)?.standardVersionHash ?? null : null;
+  const mine = s.skillName === name && (s.claim === undefined || s.claim.owned || (stored !== null && stored === s.run.standardVersionHash));
+  if (!looking && activeNow && !mine) {
     die(`a skill called "${name}" already exists, and this folder did not build it. Give this one a name of its own: --name <name>.`);
   }
   // ONE PROJECT, ONE STANDARD. A folder that holds another skill's rules would have these added to them. The same
@@ -259,7 +265,7 @@ export async function method(): Promise<void> {
   // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
   // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
   // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
-  s = { ...s, skillName: name, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
+  s = { ...s, skillName: name, claim: { owned: Boolean(activeNow) }, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer

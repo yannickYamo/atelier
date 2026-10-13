@@ -72,6 +72,8 @@ only partly observed, or the owner's word was moved by a measurement.
 - **A piece written again by `atelier fix` is written under the first run's settings** (model, drafts, cap, what
   was turned off), with what is typed beside the complaint taking precedence. Where the first run kept no
   settings, a file given with it is gone, or the skill has changed since, the fix says so before it writes.
+- **A length said of a section is that section's, with or without the word "section"**, and a step that only
+  refers to a table ("three to five rows in that table") is no longer given the table's column check.
 - **A build that stopped half-way is finished by running it again.** Stopped between storing the standard and
   installing the skill, the same command was refused with "a skill called … already exists, and this folder did
   not build it".
@@ -153,6 +155,20 @@ now also reports what a passing output costs.
 - A skill rebuilt from nine pieces or more may write one or two more drafts when a draft misses its length;
   `--no-redraft` turns that off.
 - A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
+
+### Studies: how much of a rule its check reads, on 160 steps the reader had not seen (development evidence, $0)
+
+Four method notes of 40 steps each, written from a brief that said nothing of how Atelier reads a step, compiled by
+the method reader and labelled without sight of its answers (`studies/coverage-labels`; notes and labels by a model,
+one labeller). The reader compiled 21 of the 160 to a check and called 1 fully read; the labels found no false
+FULL (0 of 1, which bounds nothing) and found 8 checks that read something the step does not ask: a step that
+mentions a table given the table's column check, a step about how to cite given the lookup in the material. One
+section's 70-word limit was compiled as the whole document's. Two narrow fixes followed (a count in a step that
+opens on a section is that section's or nobody's; a step is held to a table only where it asks for one), each with
+a test in the reader, and the set was scored again: 15 compiled, 12 agreeing, the 3 left being the citation class,
+shown as read in part. The larger finding is what is not compiled: of the 139 steps left with no check, a script
+could verify the whole of 53 and part of 49 by the labeller's judgement. The method reader turns about one step in
+ten of an expert's notes into a check; the rest is the owner's to read on every run.
 
 ### Studies: twelve examples against three (development evidence)
 

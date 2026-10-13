@@ -596,6 +596,12 @@ export interface ProposalSet {
 export interface Session {
   run: Run; skillName: string | null; evidence: ExpertEvidence | null;
   /**
+   * How this folder came to carry `skillName` before its build finished (cli/commands/method.ts). `owned`: a skill
+   * of that name was already this folder's. Not owned: the name was free when the build began, and is this
+   * folder's only if the skill now stored under it is the one this build was storing. Absent: set by a finished build.
+   */
+  claim?: { owned: boolean };
+  /**
    * The project this run belongs to, recorded so an orphan can be identified.
    *
    * The file name carries a hash of the directory PATH, so renaming or moving a project mid-run

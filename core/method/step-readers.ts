@@ -166,16 +166,26 @@ function wholeLength(step: string, counts: readonly RegExpMatchArray[]): Measure
  * has, as "the X section" at its start, and gives its count in one of the plain forms; a soft wording or a negation
  * is a judgement. Stated, so needed: the check fails a work that leaves the section out (`need`).
  */
+/** A section's name as a step says it: a heading's own numbering ("6. Term and Termination") is not part of the name. */
+const spoken = (sec: string): string => norm(sec).replace(/^\d+ /, '');
+const opensWith = (sec: string): RegExp => new RegExp(`^ (?:(?:keep|hold|limit|cap|write) )?(?:the |a |an |your )?${spoken(sec)} (?:section )?`);
+/**
+ * THE SECTIONS OF THE EXAMPLE A STEP OPENS ON, with or without the word "section": "Keep Who They Sell To under 70
+ * words", "Term and Termination gives the start date…". Such a step is about that section. Whatever count it gives
+ * is never a length of the whole work: read as one, a 70-word limit on one section became a 70-word limit on the piece.
+ */
+export const sectionsOpening = (step: string, sections: readonly string[]): string[] => { const low = lowered(step); return sections.filter((sec) => spoken(sec).length >= 3 && opensWith(sec).test(low)); };
+
 export function sectionLength(step: string, sections: readonly string[]): Measurement | null {
   if (SOFT.test(step) || negated(step)) return null;
   const low = lowered(step); const counts = countsIn(step);
   // The section is what the step is about: it opens the step, after at most a verb that sets a length. "Unlike the
   // Summary section, keep the whole piece under 200 words" and "each sentence in the Summary section" are about
   // something else, as is any step that also speaks of another part or of the piece.
-  const named = sections.filter((sec) => norm(sec).length >= 3 && new RegExp(`^ (?:(?:keep|hold|limit|cap|write) )?(?:the |a |an |your )?${norm(sec)} section `).test(low));
+  const named = sectionsOpening(step, sections);
   if (named.length !== 1 || !counts.length) return null;
   // (The section's own name may be a word for a part: "the Summary section" is still about that section.)
-  const rest = low.replace(` ${norm(named[0])} section `, ' ');
+  const rest = low.replace(opensWith(named[0]), ' ');
   if (/ (?:piece|whole|work|document|page|after|before|unlike|links?) /.test(rest) || PART.test(rest.replace(/\bsections?\b/g, ' '))) return null;
   const range = rangeOf(step);
   const b = range ? (counts.length === 1 ? range : null) : boundsOf(step, counts.length);

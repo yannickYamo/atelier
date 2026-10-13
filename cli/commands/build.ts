@@ -544,7 +544,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
       console.log(`  atelier revert    puts every one of those files back exactly as it was\n`);
     }
 
-    saveSession({ ...s, skillName: name });
+    saveSession({ ...s, skillName: name, claim: undefined });
     console.log(`StandardVersion ${v.standardVersionHash} · architecture ${arch.architectureHash}`);
 
   // ── WHICH PARTS THIS SYSTEM CAN KEEP HONEST, AND WHICH STAY YOURS ────────────────────────
@@ -573,7 +573,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
-  saveSession({ ...s, skillName: name });
+  // The build is finished: the name is this folder's outright, and no longer a claim made before it was (cli/commands/method.ts).
+  saveSession({ ...s, skillName: name, claim: undefined });
   reportInstalled(host, inst.installedAt, name, v, arch, pkg.packageHash);
   reportObservedBoundaries(arch, v, name);
   showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0, opts.closing !== false);

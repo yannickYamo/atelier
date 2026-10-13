@@ -1,0 +1,298 @@
+[
+ {
+  "id": "blog-post-07",
+  "domain": "blog-post",
+  "rule": "For a short-form post stay between 400 and 600 words, and cut before padding.",
+  "checkReads": "400 to 600 words",
+  "observer": "LENGTH",
+  "params": {
+   "unit": [
+    "words"
+   ],
+   "min": 400,
+   "max": 600
+  }
+ },
+ {
+  "id": "blog-post-13",
+  "domain": "blog-post",
+  "rule": "The Numbers contains a table with the columns Metric, Before, After and Change.",
+  "checkReads": "a table with the columns metric, before, after, change",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "metric",
+    "before",
+    "after",
+    "change"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "blog-post-14",
+  "domain": "blog-post",
+  "rule": "Three to five rows in that table, and every figure carries its unit.",
+  "checkReads": "a table with the columns metric, before, after, change",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "metric",
+    "before",
+    "after",
+    "change"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "blog-post-15",
+  "domain": "blog-post",
+  "rule": "Every number in the prose must match the table to the digit; never round one and not the other.",
+  "checkReads": "a table with the columns metric, before, after, change",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "metric",
+    "before",
+    "after",
+    "change"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "blog-post-16",
+  "domain": "blog-post",
+  "rule": "State how the measurements were taken (tool, sample, period) in one sentence right below the table.",
+  "checkReads": "a table with the columns metric, before, after, change",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "metric",
+    "before",
+    "after",
+    "change"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "blog-post-18",
+  "domain": "blog-post",
+  "rule": "Never use \"blazing\", \"game-changer\", \"seamless\", \"leverage\" or \"robust\".",
+  "checkReads": "none of: blazing, game-changer, seamless, leverage, robust",
+  "observer": "LEXICON",
+  "params": {
+   "terms": [
+    "blazing",
+    "game-changer",
+    "seamless",
+    "leverage",
+    "robust"
+   ]
+  }
+ },
+ {
+  "id": "blog-post-27",
+  "domain": "blog-post",
+  "rule": "Name the source the first time I cite someone else's idea or figure; quoted text goes in quote marks, exactly as written.",
+  "checkReads": "every figure is one the request or the material gives",
+  "observer": "CITED",
+  "params": {
+   "allow": 0
+  }
+ },
+ {
+  "id": "code-review-11",
+  "domain": "code-review",
+  "rule": "Each blocking issue cites the file path with a line number, in backticks, like src/billing/retry.py:142.",
+  "checkReads": "every path:line cited is a line of the material with something on it",
+  "observer": "LINES",
+  "params": {
+   "min": 0
+  }
+ },
+ {
+  "id": "code-review-21",
+  "domain": "code-review",
+  "rule": "Test Coverage is a table with the columns Scenario, Covered and Where.",
+  "checkReads": "a table with the columns scenario, covered, where",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "scenario",
+    "covered",
+    "where"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "code-review-23",
+  "domain": "code-review",
+  "rule": "Put between 3 and 6 rows in the Test Coverage table, and choose the scenarios that would hurt most in production, not the easy ones.",
+  "checkReads": "a table with the columns scenario, covered, where",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "scenario",
+    "covered",
+    "where"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "contract-03",
+  "domain": "contract",
+  "rule": "Open with a Parties section that names both parties exactly as the term sheet does: full legal name, entity type and registered number.",
+  "checkReads": "a \"Parties\" section, with something in it, opening the work",
+  "observer": "PRESENCE",
+  "params": {
+   "sections": [
+    "Parties"
+   ],
+   "body": 1,
+   "opens": 1
+  }
+ },
+ {
+  "id": "contract-09",
+  "domain": "contract",
+  "rule": "Key Terms is a table with the columns Term, Position and Term Sheet Ref.",
+  "checkReads": "a table with the columns term, position, term sheet ref",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "term",
+    "position",
+    "term sheet ref"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "contract-21",
+  "domain": "contract",
+  "rule": "Term and Termination gives the start date, the duration, the survival period and the notice period, in that order, in at most 3 sentences.",
+  "checkReads": "at most 3 sentences",
+  "observer": "LENGTH",
+  "params": {
+   "unit": [
+    "sentences"
+   ],
+   "max": 3
+  }
+ },
+ {
+  "id": "contract-24",
+  "domain": "contract",
+  "rule": "Open Points is a table with the columns Point, Term Sheet Says and Recommended Position.",
+  "checkReads": "a table with the columns point, term sheet says, recommended position",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "point",
+    "term sheet says",
+    "recommended position"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "teardown-03",
+  "domain": "teardown",
+  "rule": "Open with a Bottom Line section, three sentences at most, that says whether they're a threat to us and in which segment.",
+  "checkReads": "a \"Bottom Line\" section, with something in it, opening the work",
+  "observer": "PRESENCE",
+  "params": {
+   "sections": [
+    "Bottom Line"
+   ],
+   "body": 1,
+   "opens": 1
+  }
+ },
+ {
+  "id": "teardown-07",
+  "domain": "teardown",
+  "rule": "Keep Who They Sell To under 70 words.",
+  "checkReads": "at most 69 words",
+  "observer": "LENGTH",
+  "params": {
+   "unit": [
+    "words"
+   ],
+   "max": 69
+  }
+ },
+ {
+  "id": "teardown-14",
+  "domain": "teardown",
+  "rule": "Pricing is a table with the columns Plan, Price, Billing Unit and Notable Limit.",
+  "checkReads": "a table with the columns plan, price, billing unit, notable limit",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "plan",
+    "price",
+    "billing unit",
+    "notable limit"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "teardown-15",
+  "domain": "teardown",
+  "rule": "Copy prices from their public pricing page exactly, currency and period included, and note the date I captured them beneath the table.",
+  "checkReads": "a table with the columns capability, them, us, edge",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "capability",
+    "them",
+    "us",
+    "edge"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "teardown-17",
+  "domain": "teardown",
+  "rule": "Feature Comparison is a table with the columns Capability, Them, Us and Edge.",
+  "checkReads": "a table with the columns capability, them, us, edge",
+  "observer": "TABLE",
+  "params": {
+   "columns": [
+    "capability",
+    "them",
+    "us",
+    "edge"
+   ],
+   "minRows": 1
+  }
+ },
+ {
+  "id": "teardown-24",
+  "domain": "teardown",
+  "rule": "Every claim in Bottom Line should trace to a numbered Evidence item, cited in square brackets like [3].",
+  "checkReads": "every figure is one the request or the material gives",
+  "observer": "CITED",
+  "params": {
+   "allow": 0
+  }
+ },
+ {
+  "id": "teardown-32",
+  "domain": "teardown",
+  "rule": "Keep numbers as they appeared at source: seat counts, prices, limits, and review scores together with the number of reviews.",
+  "checkReads": "every figure is one the request or the material gives",
+  "observer": "CITED",
+  "params": {
+   "allow": 0
+  }
+ }
+]

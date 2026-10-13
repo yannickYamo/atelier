@@ -21,7 +21,7 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { measure } from '../../core/observers/registry.js';
 import { countWords } from '../../core/eval/size.js';
 import { goldenCase, servedFor, whyNotRunnable, repeatsReference, CARRIED_RUN, countClasses } from '../../core/golden/case.js';
-import { standingOf } from '../../core/eval/record.js';
+import { standingOf, type EvaluationRecord } from '../../core/eval/record.js';
 import { acts } from '../../core/observers/verify.js';
 import { renderReproduction, countsOf, type CaseOutcome, type ReproductionRecord, shapeAgainst, hasShape } from '../../core/eval/reproduce.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
@@ -50,7 +50,7 @@ export const reproductionFile = (L: store.StoreLayout): string => join(L.root, '
 interface InvokeJson { output?: string | null; delivered?: boolean; costUsd?: number; invocationId?: string; eval?: EvalSummary | null }
 
 /** A text checked by `atelier verify`, as that command prints it with --json. */
-interface VerifyJson { failed?: boolean; checked?: { requirementId: string; materiality: string; enforced?: boolean; result: { verdict: string } }[] }
+interface VerifyJson { failed?: boolean; record?: EvaluationRecord; checked?: { requirementId: string; materiality: string; enforced?: boolean; result: { verdict: string } }[] }
 
 export async function reproduce(): Promise<void> {
   const name = skillArg('--skill <name> required: atelier reproduce --skill <name>');
@@ -172,7 +172,8 @@ export async function reproduce(): Promise<void> {
         const unsourced = v.checked.some((x) => x.requirementId === 'UNSOURCED' && x.result.verdict === 'VIOLATED');
         const shared = repeatsReference(text, c, servedTexts);
         const bareShape = shapeAgainst(text, c.reference);
-        const ok = v.failed !== true && shared < CARRIED_RUN && hasShape(bareShape);
+        // The same bar as a run of the skill is held to: the record's standing, where the check kept a record.
+        const ok = (v.record ? standingOf(v.record).deliverable : v.failed !== true) && shared < CARRIED_RUN && hasShape(bareShape);
         outcomes.push({ ...blank(c.id, c.reference), state: 'ran', conformant: ok, shape: bareShape,
           ...(!hasShape(bareShape) ? { why: `it lacks ${bareShape.sections.missing.length} of the ${bareShape.sections.of} section(s) your held-back piece has: ${bareShape.sections.missing.join(', ')}` } : {}), required: { held: req.filter((x) => x.result.verdict === 'MET').length, applicable: req.length },
           claims: { qualified: false, instrument: 'atelier verify', unsupported: unsourced ? 1 : 0 }, sharedWithReference: shared,

@@ -24,6 +24,16 @@ export const MIN_TREND = 5;
 const pct = (x: number): string => `${Math.round(x * 100)}%`;
 const rate = (x: number, n: number): string => (n ? `${pct(x / n)} (${x}/${n}, 95% ${pct(wilson(x, n).lo)}–${pct(wilson(x, n).hi)})` : 'no runs');
 
+/**
+ * WHERE THE EVALUATION AND THE OWNER PART, over the runs the owner rated. Said verified and they would not use it:
+ * the evaluation gave an assurance it had not earned, or the standard is missing what they wanted. Blocked and they
+ * would use it: the evaluation refused what was right. Counts with their N, never a rate over runs nobody rated.
+ */
+export function disagreement(evals: readonly Pick<EvalSummary, 'invocationId' | 'record'>[], shipOf: (id: string) => boolean | undefined): { verified: { rated: number; wouldNotUse: number }; blocked: { rated: number; wouldUse: number } } {
+  const at = (state: string, ship: boolean): number => evals.filter((e) => e.record?.state === state && shipOf(e.invocationId) === ship).length;
+  return { verified: { rated: at('VERIFIED', true) + at('VERIFIED', false), wouldNotUse: at('VERIFIED', false) }, blocked: { rated: at('BLOCKED', true) + at('BLOCKED', false), wouldUse: at('BLOCKED', true) } };
+}
+
 export function evaluate(): void {
   const name = skillArg();
   const L: store.StoreLayout = { root: DATA, skillName: name };
@@ -49,7 +59,7 @@ export function evaluate(): void {
     // Where each run stood (core/eval/record.ts); a run recorded before the record existed is counted apart.
     const stood = (st: string): number => es.filter((e) => e.record?.state === st).length;
     const states = { verified: stood('VERIFIED'), needsReview: stood('NEEDS_REVIEW'), blocked: stood('BLOCKED'), unrecorded: es.filter((e) => !e.record).length };
-    return { release, runs: es.length, states, conformant, rated: rated.length, wouldShip: yes,
+    return { release, runs: es.length, states, conformant, rated: rated.length, wouldShip: yes, parted: disagreement(es, (id) => byRun.get(id)?.ship),
       cost: { p50: quantile(costs, 0.5), p90: quantile(costs, 0.9) }, durationMs: { p50: quantile(times, 0.5), p90: quantile(times, 0.9) } };
   });
   const brokenCount = new Map<string, number>();
@@ -58,7 +68,7 @@ export function evaluate(): void {
   for (const e of evals) for (const r of e.result.reasons) { const k = r.replace(/\(.*\)/, '').replace(/\d+/g, 'N').trim(); reasonCount.set(k, (reasonCount.get(k) ?? 0) + 1); }
   const complaints = new Map<string, number>();
   // The complaints `atelier fix` recorded, grouped by the rule the diagnosis attributed them to.
-  for (const f of store.listFeedback(L)) { const k = f.requirementId ? `about rule ${f.requirementId}` : 'not yet diagnosed'; complaints.set(k, (complaints.get(k) ?? 0) + 1); }
+  for (const f of store.listFeedback(L)) { const k = f.about === 'EVALUATION' ? 'that the evaluation was wrong about the work' : f.requirementId ? `about rule ${f.requirementId}` : 'not yet diagnosed'; complaints.set(k, (complaints.get(k) ?? 0) + 1); }
   const noRating = ratings.filter((r) => !r.ship).map((r) => r.why).filter((w): w is string => Boolean(w));
   const queue = evals.filter((e) => !byRun.has(e.invocationId))
     .sort((a, b) => Number(a.record ? a.record.state !== 'BLOCKED' : a.result.conformant) - Number(b.record ? b.record.state !== 'BLOCKED' : b.result.conformant)
@@ -89,8 +99,10 @@ export function evaluate(): void {
       console.log(`    needs review   ${rate(c.states.needsReview, recorded)}   nothing seen to fail; part of it is yours to read`);
       console.log(`    blocked        ${rate(c.states.blocked, recorded)}   a requirement seen to fail`);
     }
-    console.log(`    strict bar     ${rate(c.conformant, c.runs)}   would be delivered under --strict`);
+    console.log(`    strict bar     ${rate(c.conformant, c.runs)}   would be delivered under --strict (nothing seen to fail; not the same as verified)`);
     console.log(`    would ship     ${c.rated ? rate(c.wouldShip, c.rated) : `not rated yet: atelier rate <run> yes|no`}`);
+    if (c.parted.verified.rated) console.log(`    said verified, and you would not use it   ${c.parted.verified.wouldNotUse} of ${c.parted.verified.rated} rated`);
+    if (c.parted.blocked.rated) console.log(`    blocked, and you would use it             ${c.parted.blocked.wouldUse} of ${c.parted.blocked.rated} rated`);
     console.log(`    cost           median $${c.cost.p50.toFixed(2)} · 90th $${c.cost.p90.toFixed(2)}`);
     console.log(`    time           median ${(c.durationMs.p50 / 1000).toFixed(1)} s · 90th ${(c.durationMs.p90 / 1000).toFixed(1)} s`);
   }

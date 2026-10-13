@@ -165,3 +165,39 @@ describe('a count of cases reproduced says how many of them were verified in ful
     expect(heldOf({ ok: 5, n: 6, costUsd: 0, missing: {} })).toBe('5 of 6 with nothing seen to fail');
   });
 });
+
+describe('where the evaluation and the owner part, counted over rated runs', () => {
+  it('said verified and the owner would not use it; blocked and the owner would: each over the rated runs that stood there', async () => {
+    const { disagreement } = await import('../cli/commands/eval.js');
+    const run = (id: string, state: string | null) => ({ invocationId: id, ...(state ? { record: { state } } : {}) }) as never;
+    const evals = [run('a', 'VERIFIED'), run('b', 'VERIFIED'), run('c', 'VERIFIED'), run('d', 'NEEDS_REVIEW'), run('e', 'BLOCKED'), run('f', 'BLOCKED'), run('g', null)];
+    const rated = new Map([['a', true], ['b', false], ['d', false], ['e', true], ['f', false], ['g', false]]);
+    expect(disagreement(evals, (id) => rated.get(id))).toEqual({ verified: { rated: 2, wouldNotUse: 1 }, blocked: { rated: 2, wouldUse: 1 } });
+  });
+  it('with nothing rated there is nothing to say', async () => {
+    const { disagreement } = await import('../cli/commands/eval.js');
+    expect(disagreement([{ invocationId: 'a', record: { state: 'VERIFIED' } } as never], () => undefined)).toEqual({ verified: { rated: 0, wouldNotUse: 0 }, blocked: { rated: 0, wouldUse: 0 } });
+  });
+});
+
+describe('a rule that was not checked because it does not apply everywhere is not an evaluation that failed', () => {
+  // A measured rule under a condition ("when the piece is a rebuttal") is listed by the check and never run: whether
+  // its condition holds is a judgement. That is a rule left to the owner. It is not a check that broke, and a skill
+  // that has one must still be deliverable under --strict.
+  const conditional = { ...LENGTH, requirementId: 'x3', appliesWhen: 'the piece is a rebuttal' } as Requirement;
+  it('through a run: delivered, needs review, and the rule is the owner\'s to read', () => {
+    const e = buildRunEval(input({ std: std(LENGTH, conditional), report: report(line('x2', 'MET'), line('UNSOURCED', 'MET')) }));
+    expect(e.record?.entries.find((x) => x.id === 'x3')).toMatchObject({ result: 'UNVERIFIED' });
+    expect(e.record?.entries.find((x) => x.id === 'x3')?.observation.incomplete).toBeUndefined();
+    expect(e.result).toEqual({ conformant: true, reasons: [] });
+    expect(e.record?.state).toBe('NEEDS_REVIEW');
+  });
+  it('where the whole check could not run, every rule with a check is unfinished, and it is refused', () => {
+    const r = buildRecord(facts({ requirements: [LENGTH], checked: null }));
+    expect(standingOf(r)).toMatchObject({ deliverable: false, reasons: ['not checked: x2 (the check did not run)'] });
+  });
+  it('a refusal for something found names what it is about', () => {
+    const e = buildRunEval(input({ report: report(line('x1', 'MET'), line('x2', 'MET'), line('UNSOURCED', 'VIOLATED', 2)) }));
+    expect(e.result.reasons).toEqual(['Every specific in the work is found in what you supplied: 2 not found in it, and still in the text']);
+  });
+});

@@ -1,0 +1,107 @@
+[
+ {
+  "id": "blog-post-07",
+  "label": "PARTIAL",
+  "unread": "that cuts were made rather than padding added; that the post is short-form"
+ },
+ {
+  "id": "blog-post-13",
+  "label": "PARTIAL",
+  "unread": "that the table sits in The Numbers section"
+ },
+ {
+  "id": "blog-post-14",
+  "label": "NONE",
+  "unread": "row count of three to five; units on every figure"
+ },
+ {
+  "id": "blog-post-15",
+  "label": "NONE",
+  "unread": "prose numbers matching table numbers to the digit"
+ },
+ {
+  "id": "blog-post-16",
+  "label": "NONE",
+  "unread": "one-sentence method statement directly below the table"
+ },
+ {
+  "id": "blog-post-18",
+  "label": "FULL",
+  "unread": ""
+ },
+ {
+  "id": "blog-post-27",
+  "label": "NONE",
+  "unread": "source named at first citation; quotes in quote marks and verbatim"
+ },
+ {
+  "id": "code-review-11",
+  "label": "NONE",
+  "unread": "that each blocking issue carries a path:line citation, and in backticks (check passes with no citations)"
+ },
+ {
+  "id": "code-review-21",
+  "label": "PARTIAL",
+  "unread": "that the table is the Test Coverage section"
+ },
+ {
+  "id": "code-review-23",
+  "label": "NONE",
+  "unread": "row count of 3 to 6; choice of the most harmful scenarios"
+ },
+ {
+  "id": "contract-03",
+  "label": "PARTIAL",
+  "unread": "both parties named as in the term sheet with legal name, entity type and registered number"
+ },
+ {
+  "id": "contract-09",
+  "label": "PARTIAL",
+  "unread": "that the table is the Key Terms section"
+ },
+ {
+  "id": "contract-21",
+  "label": "PARTIAL",
+  "unread": "start date, duration, survival and notice periods present and in that order; count is not scoped to the section"
+ },
+ {
+  "id": "contract-24",
+  "label": "PARTIAL",
+  "unread": "that the table is the Open Points section"
+ },
+ {
+  "id": "teardown-03",
+  "label": "PARTIAL",
+  "unread": "three-sentence limit; statement of threat and segment"
+ },
+ {
+  "id": "teardown-07",
+  "label": "FULL",
+  "unread": ""
+ },
+ {
+  "id": "teardown-14",
+  "label": "PARTIAL",
+  "unread": "that the table is the Pricing section"
+ },
+ {
+  "id": "teardown-15",
+  "label": "NONE",
+  "unread": "prices copied exactly with currency and period; capture date beneath the pricing table"
+ },
+ {
+  "id": "teardown-17",
+  "label": "PARTIAL",
+  "unread": "that the table is the Feature Comparison section"
+ },
+ {
+  "id": "teardown-24",
+  "label": "NONE",
+  "unread": "Bottom Line claims carrying [n] citations to numbered Evidence items"
+ },
+ {
+  "id": "teardown-32",
+  "label": "PARTIAL",
+  "unread": "review scores paired with review counts; figures attached to the right thing and not reformatted"
+ }
+]

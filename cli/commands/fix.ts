@@ -121,8 +121,17 @@ export function replayOf(name: string, last: LastRun, complaints: readonly strin
   const notes = files.filter((w) => !there(w.path)).map((w) => `${w.path} is no longer there, so the piece is written again without it.`);
   if (last.settings === undefined) notes.push('The settings of the first run were not kept (it was made by an earlier version), so the piece is written again under the defaults: if you chose a model or a number of drafts then, type them beside the complaint.');
   if (last.skillVersion && activeVersion && last.skillVersion !== activeVersion) notes.push(`Your skill has changed since this piece was written (it was ${last.skillVersion.slice(0, 8)}, it is now ${activeVersion.slice(0, 8)}): the piece is written again by the skill as it is now.`);
+  // An option typed now replaces the first run's: given twice, the run refuses it.
+  const nameOf = (t: string): string | null => (t.startsWith('--') ? t.slice(2).split('=')[0] : null);
+  const now = new Set(typed.map(nameOf).filter((n): n is string => n !== null));
+  const kept: string[] = []; const first = last.settings ?? [];
+  for (let i = 0; i < first.length; i += 1) {
+    const n = nameOf(first[i]); const valued = n !== null && !first[i].includes('=') && first[i + 1] !== undefined && nameOf(first[i + 1]) === null;
+    if (n === null || !now.has(n)) kept.push(first[i], ...(valued ? [first[i + 1]] : []));
+    if (valued) i += 1;
+  }
   return { notes, args: ['run', last.asked ?? '', '--skill', name, '--correcting', complaints.join(' Also: '), '--provenance', FIX_RUN,
-    ...files.filter((w) => there(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...(last.settings ?? []), ...typed] };
+    ...files.filter((w) => there(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...kept, ...typed] };
 }
 
 /** The complaint, kept once, against the run it is about. About the work: also a "no" to "would you use it as it is", with the reason. */

@@ -563,3 +563,35 @@ describe('blanks and names, read more carefully', () => {
   });
 });
 
+
+describe('what a blind set of method notes showed: a check tied to a step that asks for something else', () => {
+  // 160 steps written by someone who had not seen the reader (studies/coverage-labels). Two classes of wrong check.
+  const EXAMPLE = '## Bottom Line\n\nShip it.\n\n## Who They Sell To\n\nMid-market finance teams of ten to fifty people.\n\n## 6. Term and Termination\n\nStarts 1 May. Two years.\n\n## Numbers\n\n| Metric | Before | After | Change |\n|---|---|---|---|\n| p95 | 900 ms | 300 ms | -67% |\n';
+  const of = (step: string) => methodProposals(`1. ${step}\n`, { task: 't', material: [], reference: EXAMPLE }).find((p) => p.origin === 'STATED')?.measurement ?? null;
+  it('a length said of a section the example has is that section\'s, with or without the word "section": never the whole work\'s', () => {
+    expect(of('Keep Who They Sell To under 70 words.')).toEqual({ observer: 'LENGTH', params: { unit: ['words'], in: ['Who They Sell To'], need: 1, max: 69 } });
+    expect(of('Keep the Who They Sell To section under 70 words.')).toEqual({ observer: 'LENGTH', params: { unit: ['words'], in: ['Who They Sell To'], need: 1, max: 69 } });
+    expect(of('Bottom Line is at most 40 words.')).toMatchObject({ observer: 'LENGTH', params: { in: ['Bottom Line'], max: 40 } });
+  });
+  it('and where the step says more of that section than its length, it is the owner\'s to judge: still never the whole work\'s', () => {
+    // "in at most 3 sentences" read as the whole document being 3 sentences long
+    expect(of('Term and Termination gives the start date, the duration, the survival period and the notice period, in that order, in at most 3 sentences.')).toBeNull();
+    expect(of('Who They Sell To names the buyer and the user, each in under 20 words.')).toBeNull();
+  });
+  it('a length of the whole work is still read, whatever sections the example has', () => {
+    expect(of('Hold the whole teardown to 400 to 600 words.')).toMatchObject({ observer: 'LENGTH', params: { min: 400, max: 600 } });
+    expect(of('Keep it under 500 words.')?.params.in).toBeUndefined();
+    expect(of('Keep it under 500 words.')).toMatchObject({ observer: 'LENGTH', params: { max: 499 } });
+  });
+  it('a step that speaks of a table already there asks for no table: its check would read what the step does not ask', () => {
+    expect(of('Three to five rows in that table, and every figure carries its unit.')).toBeNull();
+    expect(of('State how the measurements were taken in one sentence right below the table.')).toBeNull();
+    expect(of('Every number in the prose must match the table to the digit.')).toBeNull();
+    expect(of('Copy prices exactly, and note the date I captured them beneath the table.')).toBeNull();
+  });
+  it('a step that asks for a table is still held to the example\'s', () => {
+    expect((of('Include a table of the numbers.')?.params.columns as string[]).map((c) => c.toLowerCase())).toEqual(['metric', 'before', 'after', 'change']);
+    expect(of('Numbers holds one table, with Before and After side by side.')).toMatchObject({ observer: 'TABLE' });
+    expect(of('Add a table with the columns Metric, Before, After and Change.')).toEqual({ observer: 'TABLE', params: { columns: ['metric', 'before', 'after', 'change'], minRows: 1 } });
+  });
+});

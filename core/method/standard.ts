@@ -33,7 +33,7 @@ import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
-import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength } from './step-readers.js';
+import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
 
@@ -194,12 +194,18 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
     const closes = /^(?:end|close|finish|conclude)/.test(named[named.length - 1].verb);
     return sectionsCheck(sections, outline, { opens, closes: closes && !(opens && sections.length === 1), options: optionsOf(step) });
   }
-  if (/\btables?\b/i.test(step) && outline.tables.length) {
+  // A STEP THAT ASKS FOR A TABLE ("include a table of…", "holds one table") is held to the example's. One that speaks
+  // of a table already there ("three to five rows in that table", "right below the table") asks for something else,
+  // which nothing here reads: tied to the table's columns, its check read what the step does not ask.
+  if (/\b(?:an?|one|two|three|\d+)\s+(?:[\w-]+\s+){0,3}tables?\b|\btables?\s+(?:with|of|showing|comparing|listing)\b/i.test(step) && outline.tables.length) {
     const columnsSaid = (t: (typeof outline.tables)[number]): number => t.header.filter((h) => h.length >= 3 && said.includes(` ${norm(h)} `)).length;
     const best = [...outline.tables].sort((a, b) => columnsSaid(b) - columnsSaid(a))[0];
     if (columnsSaid(best) > 0 || outline.tables.length === 1) return { observer: 'TABLE', params: { columns: best.header.filter(Boolean), minRows: 1 } };
   }
-  const counted = sectionLength(step, outline.sections) ?? statedCount(step);
+  // A count in a step that opens on one of the example's sections is that section's. Where it could not be read as
+  // the section's length, it is not thereby the whole work's: it is the owner's to judge.
+  const whole = (m: Measurement | null): Measurement | null => (m?.observer === 'LENGTH' && !m.params.in && sectionsOpening(step, outline.sections).length ? null : m);
+  const counted = sectionLength(step, outline.sections) ?? whole(statedCount(step));
   // Where the example's sections are labels, a section's length is read between them: the check carries their names.
   if (counted) return outline.labels && counted.observer === 'LENGTH' && counted.params.in ? { ...counted, params: { ...counted.params, labels: 1, sections: [...outline.sections] } } : counted;
   // A step that names the form of a citation ("cite each item as path:line") is held by looking each one up.

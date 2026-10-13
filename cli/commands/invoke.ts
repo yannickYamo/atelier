@@ -1517,7 +1517,7 @@ export function settingsOfRun(tokens: readonly string[] = argv.slice(1)): string
   const out: string[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const t = tokens[i];
-    if (!t.startsWith('--')) continue;
+    if (!t.startsWith('--') || t === '--') continue;
     const eq = t.indexOf('='); const name = t.slice(2, eq === -1 ? undefined : eq);
     const next = eq === -1 && (VALUED_OPTIONS.includes(name) || name === 'with') && tokens[i + 1] !== undefined;
     if (!NOT.includes(name)) out.push(t, ...(next ? [tokens[i + 1]] : []));
