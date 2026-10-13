@@ -317,7 +317,7 @@ export function deriveMeasuredRules(read: readonly Piece[], held: readonly Piece
     out.push({
       requirement: { requirementId: `m${n}`, statement: statement(measurement), appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
         evidence: fitted ? `${evidence}; ${fitNote(computed, fitted, own)}` : evidence,
-        evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, measurement },
+        evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true, measurement },
       // Against the limit as computed: the held-out pieces helped set a fitted one, so they cannot check it.
       conformance: { ...conformanceOn(checkOn, computed), independent: held.length > 0, ...(fitted ? { fitted: true } : {}) },
     });

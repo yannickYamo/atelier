@@ -206,6 +206,13 @@ export interface Requirement {
    */
   readonly outputShape: Readonly<Record<string, unknown>> | null;
   /**
+   * The statement was written BY THE MACHINE FROM ITS CHECK (a count read off the examples, a section order shown by
+   * them), so the check reads all the statement says. Absent on anything a person or a model worded: there, how much
+   * of the sentence the check reads is worked out from the sentence (core/eval/observes.ts). Dropped whenever the
+   * check or the wording is changed afterwards.
+   */
+  readonly wordedFromCheck?: true;
+  /**
    * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
    *
    * Orthogonal to carrier and to materiality. The carrier says how the behaviour is caused; this says

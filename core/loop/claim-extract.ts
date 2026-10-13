@@ -253,9 +253,12 @@ export function unmeasuredKind(cls: string | null | undefined, list: readonly Qu
  * person asking for a visible slot where a story was not theirs: nothing is lost from sight, so it needs no
  * material, only a kind of work the check was not shown to misread.
  */
+/** Why the claim check lists and does not decide, where nothing was supplied to look a specific up in. */
+export const NO_MATERIAL = 'no material was bound to check against';
+
 export function listsBecause(ctx: { readonly cls?: string | null; readonly bound: boolean; readonly slots?: boolean }, list: readonly QualifiedReader[] = QUALIFIED_READERS): string | null {
   if (ctx.slots) { const k = unmeasuredKind(ctx.cls, list); return k ? `the claim check is not measured on ${k}` : null; }
-  if (!ctx.bound) return 'no material was bound to check against';
+  if (!ctx.bound) return NO_MATERIAL;
   if (!ctx.cls?.trim() || ctx.cls.trim().toLowerCase() === 'none') return 'the skill names no kind of work the claim check was measured on';
   const kind = unmeasuredKind(ctx.cls, list);
   return kind ? `the claim check is not measured on ${kind}` : null;

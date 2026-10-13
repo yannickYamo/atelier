@@ -13,8 +13,16 @@ export const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9% ]+
 export const lowered = (step: string): string => ` ${step.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, ' ').trim()} `;
 
 /** The columns a step gives a table: "a table with the columns Vendor, Price and Minimum". Two or more, or none. */
-export const tableColumns = (step: string): string[] => /\btable\b[^.]*?\bcolumns?\s+(?:of\s+|named\s+|called\s+|:\s*)?(.+?)\s*(?:[.;]|$)/i.exec(step)?.[1]
-    ?.split(/\s*,\s*(?:and\s+)?|\s+and\s+/).map((c) => norm(c)).filter((c) => c.length >= 2 && c.split(' ').length <= 5) ?? [];
+export const tableColumns = (step: string): string[] => {
+  const said = /\btable\b[^.]*?\bcolumns?\s+(?:of\s+|named\s+|called\s+|:\s*)?(.+?)\s*(?:[.;]|$)/i.exec(step)?.[1];
+  if (!said) return [];
+  const columns = said.split(/\s*,\s*(?:and\s+)?|\s+and\s+/).map((c) => norm(c));
+  // A NAME IS A NAME. "…Vendor and Price, one row for each vendor" and "…Price in the Risks section" say more than
+  // which columns: read as names, the rest of the sentence became a column no work has. Where any part reads as
+  // more than a name, the step is not read as a list of columns at all.
+  const more = /\b(?:one|each|every|per|in|with|for|row|rows|under|after|before|where|when|that|which|sorted|ordered)\b/;
+  return columns.every((c) => c.length >= 2 && c.split(' ').length <= 5 && !more.test(c)) ? columns : [];
+};
 
 // A STEP THAT FORBIDS A SECTION, OR ASKS FOR IT ONLY SOMETIMES, DOES NOT REQUIRE IT. "Do not end with a Sources
 // section unless asked" and "add a Risks section only when billing is touched" are judgements about when.
@@ -28,7 +36,9 @@ const WHEN = /^(?:only|unless|if|when|whenever|except|optional(?:ly)?|rarely|som
  * merge. Write None when there are none." asks for the section; its "not" and "when" describe what goes in it. What
  * follows a colon is the same sentence: "holds one of: Approve, Request changes, or Comment only." is a list.
  */
-export const isConditional = (step: string): boolean => step.split(/(?<=[.:;!?])\s+/).some((c) => COND.test(c) && /\b(?:sections?|headings?|tables?|parts?|it|its|them)\b/i.test(c))
+// "Open each section with a Summary heading" is about every section, which nothing here reads: not one section's place.
+const OF_EVERY = /\b(?:each|every|all)\s+(?:sections?|parts?|headings?|pages?)\b/i;
+export const isConditional = (step: string): boolean => OF_EVERY.test(step) || step.split(/(?<=[.:;!?])\s+/).some((c) => COND.test(c) && /\b(?:sections?|headings?|tables?|parts?|it|its|them)\b/i.test(c))
     || step.split(/(?<=[.;!?])\s+/).some((c, i) => i > 0 && WHEN.test(c.trim()));
 
 const PUTS = ['with', 'in', 'under', 'include', 'includes', 'add', 'adds', 'have', 'has', 'contain', 'contains', 'write', 'provide', 'provides', 'need', 'needs', 'there must be', 'there is'];
@@ -115,10 +125,11 @@ const UNIT = String.raw`(words?|characters?|sentences?)`;
 const unitOf = (u: string): string => (u.toLowerCase().startsWith('word') ? 'words' : u.toLowerCase().startsWith('char') ? 'characters' : 'sentences');
 /** Every number the step gives with a unit of length. */
 const countsIn = (step: string): RegExpMatchArray[] => [...step.matchAll(new RegExp(String.raw`\d[\d,]*\s+${UNIT}\b`, 'gi'))];
-const PART = /\b(?:per|each|every|title|headline|subject line|summary|intro(?:duction)?|hook|bullets?|items?|paragraphs?|sections?|quot(?:e|es|ed|ation)|examples?|captions?|headings?|replies|posts)\b/i;
+const PART = /\b(?:per|each|every|title|headline|subject(?: line)?|summary|intro(?:duction)?|hook|bullets?|items?|paragraphs?|sections?|quot(?:e|es|ed|ation)|examples?|captions?|headings?|replies|posts|sentences?|lines?|lede|lead|abstract|descriptions?|tagline|opening|closing|first|last|a sentence)\b/i;
 /** Is a count the length of a part ("each bullet", "3 examples of 20 words"), which nothing here measures? */
+// (Read with the counts themselves taken out: in "at least 5 sentences" the sentences are the unit, not a part.)
 const ofAPart = (step: string, counts: readonly RegExpMatchArray[]): boolean =>
-  PART.test(step) || counts.some((m) => /^\s+(?:of|in the|for|from|like|by)\b/i.test(step.slice((m.index ?? 0) + m[0].length)));
+  PART.test(counts.reduce((s, m) => s.replace(m[0], ' '), step)) || counts.some((m) => /^\s+(?:of|in the|for|from|like|by)\b/i.test(step.slice((m.index ?? 0) + m[0].length)));
 
 /** "Between 150 and 230 words", "150–230 words". */
 function rangeOf(step: string): { unit: string; min: number; max: number } | null {
@@ -174,8 +185,10 @@ export function sectionLength(step: string, sections: readonly string[]): Measur
 
 /** 'The last paragraph starts with "In short,"'. */
 function edgeWords(step: string): Measurement | null {
-  const edges = [...step.matchAll(/\b(last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b/gi)];
-  const edge = edges.length === 1 ? new RegExp(String.raw`\b(?:last|final|closing|first|opening)\s+(?:paragraph|line|sentence)\b[^.]*?\b(?:starts?|begins?|opens?)\s+with\s+((?:${QUOTED}\s*(?:,|or)?\s*)+)`, 'iu').exec(step) : null;
+  // The check reads how a PARAGRAPH starts: "the last sentence starts with" is about another thing, and is not read.
+  const edges = [...step.matchAll(/\b(last|final|closing|first|opening)\s+paragraph\b/gi)];
+  if (/\b(?:last|final|closing|first|opening)\s+(?:line|sentence)\b/i.test(step)) return null;
+  const edge = edges.length === 1 ? new RegExp(String.raw`\b(?:last|final|closing|first|opening)\s+paragraph\b[^.]*?\b(?:starts?|begins?|opens?)\s+with\s+((?:${QUOTED}\s*(?:,|or)?\s*)+)`, 'iu').exec(step) : null;
   if (edge && !negated(step)) {
     const starts = quotedIn(edge[1]);
     if (starts.length) return { observer: 'PRESENCE', params: { in: [/^(?:first|opening)$/i.test(edges[0][1]) ? 'first' : 'last'], starts } };
@@ -206,8 +219,8 @@ function bannedWords(step: string): Measurement | null {
  *   over 100 words" read by its comparator alone is the opposite of what was written;
  *   a banned word only where the quoted words end the sentence ('never use "very" in headings' bans it somewhere).
  *
- * Each is then held against every example before it is a rule (`acrossExamples`): a count the owner's own pieces
- * break is put to them, not built.
+ * Each is then held against every example (`acrossExamples`): a count the owner's own pieces break is still the
+ * owner's rule, and is shown to them with the pieces that break it.
  */
 export function statedCount(step: string): Measurement | null {
   if (SOFT.test(step)) return null;

@@ -9,11 +9,13 @@ import * as fstore from '../core/state/fidelity-store.js';
 import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
 import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
-import { overlapIndex } from '../core/observers/overlap.js';
+import { overlapIndex, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
 import { bandsFor } from '../core/fidelity/profile.js';
 import { localiseBands } from '../core/fidelity/context.js';
-import { QUALIFIED_READERS, DISPUTED_WHY } from '../core/loop/claim-extract.js';
+import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL } from '../core/loop/claim-extract.js';
 import type { EvalSummary } from '../core/eval/summary.js';
+import { buildRecord } from '../core/eval/record-build.js';
+import type { EvaluationRecord } from '../core/eval/record.js';
 import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
@@ -48,6 +50,9 @@ export interface RunEvalInput {
   readonly contract: boolean;
   /** what the request asked for against the delivered text, when it was read (strict delivery) */
   readonly coverage?: RequestCoverage | null;
+  /** the length the request states in words, against what was written; null when it states none */
+  /** `met` null: the request states a length that could not be held to (another unit, or more than one reading) */
+  readonly request?: { readonly asked: string; readonly met: boolean | null; readonly detail: string } | null;
   /** strict delivery: how many redraws were allowed, and whether a nonconformant output was let through by flag */
   readonly strict?: { readonly redraws: number; readonly allowed: boolean } | null;
 }
@@ -61,7 +66,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // own gate below. A structured output is held by its contract, not by prose rules.
   const req = x.contract ? [] : (final?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict !== 'NOT_APPLICABLE'
     && !waived.has(c.requirementId) && !c.requirementId.startsWith('UNSOURCED'));
-  const broken = req.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ id: c.requirementId, detail: c.result.detail.slice(0, 80), label: shortLabel(c.statement) }));
+  const broken = req.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ id: c.requirementId, detail: c.result.detail, label: shortLabel(c.statement) }));
   // THE CLAIM GATE, counted on the delivered text: spans still flagged on the gating line, spans unconfirmed,
   // whether the qualified reader could run; cut from the repair record.
   const line = (id: string): RuleCheck | undefined => final?.checked.find((c) => c.requirementId === id);
@@ -93,6 +98,10 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   if (state === 'checked' && counts.delivered) reasons.push(`${counts.delivered} invented claim(s) delivered`);
   if (state === 'checked' && counts.unconfirmed) reasons.push(`${counts.unconfirmed} specific(s) unconfirmed: confirm them or bind your material`);
   if (longest !== null && longest >= COPY_LIMIT) reasons.push(`a ${longest}-word run copied from your pieces`);
+  if (x.request?.met === false) reasons.push(`the length the request asks for was not met (${x.request.detail})`);
+  // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
+  const record = x.contract || !std ? undefined : recordForText({ L: x.L, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
+    waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut });
 
   // FIDELITY: the delivered text's reading, beside the author's held-back pieces read the same way.
   const reading = rec.fidelity?.reading ?? null;
@@ -141,7 +150,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     schema: 1, invocationId: rec.invocationId, skill: x.L.skillName, skillVersion: rec.skillVersionHash, at: rec.at,
     release: rec.fidelity?.release ?? null, model: rec.observedRuntime.resolvedModel ?? rec.runtimeBinding.requestedModel ?? null,
     drafts: x.drafts, costUsd: Math.round(x.costUsd * 10000) / 10000, ...(x.spend ? { spend: x.spend } : {}), ...(x.sent ? { sent: x.sent } : {}), durationMs: Math.round(x.durationMs),
-    result: { conformant: reasons.length === 0, reasons },
+    result: { conformant: reasons.length === 0, reasons }, ...(record ? { record } : {}),
     gates: {
       required: { held: req.length - broken.length, applicable: req.length, broken, ...(x.contract ? { contract: true } : {}) },
       claims: { state, ...counts, agreement, instrument: x.sensor?.instrument ?? null, answers: x.answers, ...(x.unmeasured ? { unmeasured: x.unmeasured } : {}),
@@ -170,6 +179,36 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     ...(context ? { context } : {}),
     notMeasured,
   };
+}
+
+const CLAIM_LINES = [INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS];
+const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM_LINES.includes(id);
+
+/**
+ * THE RECORD OF ONE TEXT AGAINST ONE STANDARD (core/eval/record.ts), from the check of it. `invoke` builds it for
+ * the text it delivers and `verify` for the text it is handed: one function, so the two cannot say different things
+ * about the same words under the same standard.
+ */
+export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; text: string; report: VerifyReport | null; sensor: ClaimSensor | undefined; claimsOff: boolean; answers: boolean;
+  unmeasured: string | null; waived?: ReadonlyMap<string, string>; request?: { asked: string; met: boolean | null; detail: string } | null; cut?: number }): EvaluationRecord {
+  const line = (id: string): RuleCheck | undefined => x.report?.checked.find((c) => c.requirementId === id);
+  const spans = (id: string): number => (line(id)?.result.verdict === 'VIOLATED' ? line(id)?.result.spans.length ?? 0 : 0);
+  const state = x.claimsOff ? 'off' as const : !x.report || line(UNREAD) ? 'not-checked' as const : 'checked' as const;
+  // WHETHER THE CLAIM CHECK MAY DECIDE IS DECIDED ONCE (core/loop/claim-extract.ts, `listsBecause`): where it may,
+  // what it finds lands on the gating line and fails the text; where it may not, it is listed. The record says the same.
+  // (And where the check did fail the text on its gating line, it decided: the record cannot say less than the check.)
+  const deciding = !x.unmeasured || spans('UNSOURCED') > 0;
+  const voice = store.getVoice(x.L); const served = [...(voice?.passages ?? []), ...(voice?.pieces ?? [])];
+  const shared = served.length ? overlapIndex(served, voice?.standardWording ?? [], { words: true })(x.text) : null;
+  return buildRecord({
+    requirements: x.std.requirements, waived: x.waived ?? new Map(), request: x.request ?? null,
+    checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: c.materiality === 'REQUIRED', verdict: c.result.verdict, detail: c.result.detail })) : null,
+    claims: { state, bound: x.unmeasured !== NO_MATERIAL || spans('UNSOURCED') > 0, qualified: deciding, why: x.unmeasured,
+      delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0 },
+    // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
+    copying: shared ? { longest: shared.longestShared, limit: COPY_LIMIT, tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
+    replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
+  });
 }
 
 /** Flags on the public-facts line that only one of the two reads raised. */

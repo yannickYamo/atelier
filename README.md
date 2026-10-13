@@ -23,7 +23,7 @@ Think of it as three things you do, and one it does for you:
 
 1. **Give it your method and your finished work.** Each step you wrote is your rule, in your words. Where code can hold a step it is checked on every run; the rest is yours to judge, and is said to be. With no written method, it reads the rules off your examples and you approve them.
 2. **Build it once.** The standard is hashed and versioned the moment you accept it. No model update, optimizer or judge can move it.
-3. **Run it, and react.** Every output is written, checked and repaired, and comes back with its evaluation: each of your rules, met or not or yours to judge, under one word that says where it stands (blocked, checked, or certified). When something is wrong, you say so in your own words.
+3. **Run it, and react.** Every output is written, checked and repaired, and comes back with its evaluation: each of your rules marked as verified, failed, checked in part or yours to judge, under one word that says where it stands (blocked, needs review, or verified). When something is wrong, you say so in your own words.
 4. **It improves itself, and keeps a change only when it measures better.** Atelier mines its own records for what keeps going wrong, searches for a better way to carry your rules, and installs a winner only when the gate allows it.
 
 Instead of a model that re-guesses your rules on every run, you get rules you approved, kept in a file outside the model, and a verdict on every output.
@@ -78,43 +78,48 @@ The claim check treats writing and answers differently on purpose. Deleting an i
 
 ## What you see after every run
 
-**Every run ends with its own evaluation, so you know whether you can ship it before you read it.**
+**Every run ends with its own evaluation, and a tick never says more than was checked.**
 
-The first line is the answer: conformant or not. Below it are the checks that decide it, then how close the piece sits to your own range, then the instruments that only watch. The last line says what wasn't measured. There's no overall score, because adding the checks up would hide the one that failed.
+The first line says where the work stands. Under it are three layers that are different promises: your rules in your own words, what this request asked for, and whether the specifics trace to what you supplied. A rule a check read only part of is marked `~`, with the part it read and the part left to you. A rule no check can read is marked `?`. Nothing is added up into a score.
 
-This is the layout. The claim reader's rates are its real measured ones; the rest is an example run.
+This is the layout, from the renderer, on an example run.
 
 ```text
-── Atelier · blog · release 96a48e75 · claude-opus-5 · 2 drafts ──────────────────────────── $0.38 · 41 s ──
-  RESULT  NOT CONFORMANT: 1 required rule broken (c12)
+── Evaluation · BLOCKED ──────────────────────────────────────────────────────────── $0.09 · 24 s ──
+  Not usable as it stands: 1 requirement seen to fail. 2 of 7 verified, 4 left for you.
 
-  GATES  binary, every run
-  FAIL  required rules   5/6 held: broken c12 (the opening paragraph: 62 words, at most 50)
-  PASS  invented claims  0 delivered · 1 cut · 2 listed to check
-                       claim reader (claude-haiku-4-5): caught 46/46 planted, left 39/48 clean alone, on
-                       product essays
-  PASS  copying          longest run shared with your pieces: 6 words (limit 12)
-  PASS  format           bare request ("return only the post"): standard applied in full
-  INFO  applicability    31 applied · 1 not applicable
-                       1 waived, each with a reason (the material it needs is not bound)
+  Your rules
+    ✓  Open with a Verdict section that holds one of: Approve, Request changes, Comment.
+    ~  Then a Must fix section: every defect that blocks the merge, cited as path:line.
+         checked, and held: a "Must fix" section, with something in it
+         not checked, yours to read: every defect that blocks the merge, cited as path:line
+    ~  Cite only lines the change adds.
+         checked, and held: every path:line cited is a line of the material with something on it
+         not checked, yours to read: whether each item carries a citation, and whether the cited
+         line is the right one
+    ✗  Keep the whole review under 300 words.
+         found: 341 words (at most 299): long by 42
+    ?  Weigh the risk of the change before the style of it.
+         for you to judge: no check reads this
 
-  FIDELITY  descriptive · bands from 9 of your pieces (profile cfd55277)
-    in your range     7 of 9 steering features · your reserved pieces: median 8 of 9 (n=3)
-    furthest outside  cadence 0.41 (yours 0.05 to 0.32) · passive constructions 2.9 (yours 0 to 2.1)
-    facts used        3 of 4 supplied
+  Evidence
+    ?  Every specific in the work is found in what you supplied
+         read, and not to be relied on: 2 could not be found in it: listed for you (the claim check
+         is not measured on code review)
+    ✓  No passage is lifted from one of your examples
+         the longest shared run is 5 words
 
-  MONITORS  shown only, never gate
-    style detector    P(model-written) 0.57 · valid for claude-opus-5 · not qualified yet (atelier qualify)
-    taste reader      7 followed · 0 missed · 4 unclear
-                       not validated: label it with atelier taste --calibrate
+  From your examples (not required): 1 of 2 habits kept
+         not kept: No hedging words. (2 hedging words in 341)
 
-  not measured: argument, stance and content (read by the taste reader, a monitor); voice beyond the 9
-                       counted features
-  trace: atelier report i7c41a09e2b · over runs: atelier eval --skill blog
-                       would you ship it? atelier rate i7c41a09e2b yes|no
+  What was done: 2 drafts written, the better one kept · written again once for what was missing; 1
+  thing is still missing
+
+  Next: run it again. If a rule is wrong about your work: atelier fix "<what was wrong>"
+  Every check in full: add --report · Over all your runs: atelier lab eval
 ```
 
-`atelier report <run>` adds the trace, step by step. `atelier rate <run> yes|no` records the one answer only you can give: would you ship it as is? `atelier eval` reports that per release. Agents read the same data with `atelier report --json` or the MCP tool `atelier_skill_report`.
+Work with judgement in it is never called verified by a machine: the card says what is left for you to read. `atelier rate <run> yes|no` records the one answer only you can give: would you use it as it is? `atelier report <run>` adds the engine's own account and the trace, and `atelier lab eval` reports every run. Agents read the same record through `--json` and the MCP check.
 
 ## What's proven, and what isn't
 

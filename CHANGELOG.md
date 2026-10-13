@@ -7,7 +7,65 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
-### Changed, for 2.0: three commands, and one line under the work
+### Changed, for 2.0: one evaluation record, and a mark never says more than was observed
+
+A tick beside "Open with a Parties section that names both parties exactly as the term sheet does" said the whole
+rule held, and the check had read that a Parties section opens the work. A length the owner stated was set aside
+when their examples ran longer. A request for 400 words answered with 187 read as checked. Four screens each
+decided again what a result meant. These were one mistake made four times: something was shown as known that was
+only partly observed, or the owner's word was moved by a measurement.
+
+- **One record, judged in one place** (`core/eval/record.ts`). Every requirement on an output is an entry with two
+  things kept apart: whether it is required (the owner's, and nothing measured changes it) and what was observed of
+  it (the proposition a check read, whether that covers the whole rule, part of it or none, and whether the
+  observer can be believed). A requirement passes only when a deterministic or qualified observer read the whole of
+  it and it held. A part that fails still fails the rule. Everything else is unverified, and unverified never
+  blocks. `atelier run`, `--json` (`eval.record`), `atelier report`, `atelier verify` (`record`), the MCP check
+  (`state`, `notVerified`) and `atelier lab eval` read this record and decide nothing themselves.
+- **How much of a rule its check reads is said** (`core/eval/observes.ts`). A rule in your words is covered in full
+  only when every word of it that carries meaning is one the check accounts for; what is left is named, at the
+  build ("checked in part: the rest is yours to read") and on every run (`~`, with "not checked, yours to read").
+  A word the reading does not know costs a tick and never grants one, and a word of place, order, count or choice
+  is the check's only where the check holds it: "Include a Sources section at the end" over a check that reads only
+  that the section exists is read in part. A check against the material (figures given, lines cited) never reads
+  whether the citation is the right one, and says so. A rule the machine worded from its own check (a count read
+  off your examples) is that check; a sentence a person or a model wrote is never taken for one.
+- **What you state is required, whatever your examples do.** A stated step keeps its check when your own finished
+  work does not follow it. The build stops once to ask, with the pieces and what was found: `--yes` keeps the rule
+  as written, or you change the method. Nothing else stops a build. Agreement between examples decides only what
+  was read off the examples. Steps about a part of the work ("keep sentences under 25 words", "the lede under 40
+  words", "open each section with…") are no longer read as a rule on the whole of it: they are yours to judge.
+- **The request's own length is held as the request's.** "In about 300 words" is an entry of its own, counted on
+  the delivered text, shown with what was written and what it allows; a draft that misses it is written again, and
+  a miss blocks. The method's default length is shown as replaced for that run, not as unchecked. A length is held
+  only where the request reads one way: "a 400-word post, each paragraph under 60 words" names two counts, and a
+  length in sentences is not counted, so each is shown as not counted and left to you, never guessed.
+- **Where the owner requires a length, their examples add no second one.** A draft was being written again toward
+  both the stated limit and the span of the examples.
+- **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your
+  standard wording and is not counted. A run shared with one piece, with that left out, is a lifted passage: it is
+  shown with the words themselves, and blocks only where there were pieces enough to tell the two apart. A
+  held-back reference appearing in an output is leakage, and is `atelier reproduce`'s to find.
+- **The taste reader is off unless asked for** (`--taste`). It is a model's reading of your rules and has not
+  earned a say in whether work can be used.
+- **One exit code.** `atelier run`, with `--json` or `--answer-only` too, and `atelier verify` exit 1 where
+  something required was seen to fail, and only there; `verify --json` and the MCP check report `failed` the same
+  way, and under a check that held say where it reads only part of its rule.
+
+`tests/atelier-invariants.test.ts` states eight properties these changes rest on, over every combination of what
+can be observed of a requirement: automation never changes what the owner requires; nothing read off examples
+blocks before the owner adopts it; a partial observation never passes; an unqualified reader never blocks; what a
+request asks is not replaced by what the examples tend to do; a repair cannot break a required rule the draft was
+meeting; a test run or a held-back case is never learned from; and every surface says the same thing about the
+same run. The file is frozen: a new bug becomes a test of the reader or the check it was in.
+
+**If you are upgrading:** a skill built from a method whose examples break a stated rule now enforces that rule,
+where it was left as a judgement; `eval.result.conformant` is unchanged and remains what `--strict` delivers by;
+scripts that read where a run stands should read `eval.record.state`; `--no-taste` is now the default;
+`atelier verify` now exits 1 for a passage lifted from one of your examples, and exits 0 (NEEDS REVIEW) where the
+claim reader could not run or left specifics unconfirmed, which it failed before.
+
+### Changed, for 2.0: three commands, and the evaluation under the work
 
 The tool answered to fifty-nine commands and a run read thirty-eight flags, many of them for studies whose own
 results said they did not help. A person needs three things from it.
@@ -17,18 +75,17 @@ results said they did not help. A person needs three things from it.
   examples as before. The screen is your own steps in three groups (checked on every run, yours to judge, seen in
   your examples) and three lines to say the skill is ready. How each check is made, and the build's own account, is
   `--report`.
-- **`atelier run "<task>"`** does new work and prints it with one line under it: **BLOCKED** (a required rule that
-  can be checked was not met: shown, not deliverable, exit 1), **CHECKED** (everything checkable was met; what is
-  left is yours to judge, and is counted) or **CERTIFIED** (every required rule was checked and met). A rule you
-  require is required whether or not a check exists for it, so CHECKED is never rounded up. In a folder that built
-  one skill, the skill need not be named. `atelier invoke` is the same run with its whole report, unchanged.
-- **The evaluation is part of what a run returns.** Under the work: each of the owner's rules in their own words,
-  one a line, met, not met, theirs to judge, or not checked on this run and why, with what was found ("414 words
-  (220 to 420)", "3 of 3 citations point at a line of the material"); how many of the habits seen in their examples
-  the text kept; what every run is also read for (nothing copied from their examples, facts traced to their
-  material); what was done to the draft; and how to say whether they would use it (`atelier rate`). The engine's
-  panel said the same in its own vocabulary (gates, applicability, instruments), and a first version of this
-  command replaced it with one line: the evaluation is the product, and is shown.
+- **`atelier run "<task>"`** does new work and prints it with its evaluation under it, opening with where the work
+  stands: **BLOCKED** (something required was seen to fail: shown, not usable as it stands, exit 1), **NEEDS REVIEW**
+  (nothing was seen to fail, and part of what you require was not read in full by a check) or **VERIFIED**
+  (everything required was read in full and held). A rule you require is required whether or not a check can read
+  it, so work with judgement in it is never VERIFIED by a machine. In a folder that built one skill, the skill need
+  not be named. `atelier invoke` is the same run with its whole report.
+- **The evaluation is part of what a run returns**, in three layers that are different promises and are never
+  merged: your rules, in your words; what this request set (a length it asked for); and evidence (specifics traced
+  to what you supplied, no passage lifted from one of your examples). Under them, the habits seen in your examples,
+  counted and blocking nothing; what was done to the draft; and one next step. A failure is shown whole: the rule,
+  and everything the check found.
 - **`atelier fix "<what was wrong>"`** is unchanged.
 - **`atelier --help`** is those three. Every other command is listed by `atelier lab`, by what it is for, with the
   ones whose studies did not show a gain named as experimental. Nothing was removed: each still answers to its name.
@@ -36,14 +93,14 @@ results said they did not help. A person needs three things from it.
 A first-time walk through the three commands, by someone who had not seen them, found the first version of them
 harder than it said, and each point is fixed and tested:
 - three of four builds needed a second command. The build is one call: a step read as a check by a section name
-  says what it will look for ("checked as: a "Must fix" section"), a step the owner's own work does not do is left
-  for them to judge and named with the piece, and `--review` looks without building;
+  says what it will look for ("checked as: a "Must fix" section"), a step the owner's own work does not do stays
+  required as they wrote it and is named with the piece, and `--review` looks without building;
 - four skills built from four files called `method.md` were all named "method". The name is the work's folder, or
   the note's, or the folder the person is in, whichever is not the name every such thing has;
 - changing the method meant a new folder. Built again in the same folder, it is a new version of the same skill;
-- a run that was not conformant for a reason that is no rule of the owner's (a passage copied from their pieces)
-  read CHECKED. The engine's verdict stands, in its words; a sentence removed from the work is said under it; a rule
-  set aside for the run keeps it from CERTIFIED;
+- a run blocked for a reason that is no rule of the owner's (a passage lifted from one of their pieces) read as
+  usable. It is an entry of the evaluation like any other, with the shared words shown; a sentence removed from the
+  work is said under it; a rule set aside for the run is shown as not checked, with why;
 - a task that happened to equal another argument's value was taken for that argument. What is typed is sorted by
   where it stands;
 - a skill that checks the work against material was run without any and blocked on every citation. It says so

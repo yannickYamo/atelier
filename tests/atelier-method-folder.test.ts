@@ -40,15 +40,21 @@ describe('atelier method <note> --golden <folder>', () => {
     expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(true);
   }, 120_000);
 
-  it('a step one example does not do is named with the piece and left to the owner; the skill is built in the one call', () => {
+  it('a step one example does not do stays required and is named with the piece; the skill is built in the one call', () => {
     const { proj, run } = seed(['Approve', 'Looks fine to me', 'Comment']);
-    const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review');
+    // asked once: nothing is built until the owner keeps the rule or changes the method
+    const asked = run('method', 'method.md', '--golden', 'examples', '--name', 'review');
+    expect(asked.code).toBe(1);
+    expect(asked.out).toMatch(/Nothing has been built: 1 of your steps is not what your own examples do \(marked ! above\)\.\n {2}Keep it as written, required on every run: atelier method method\.md --golden examples .*--name review --yes/);
+    expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(false);
+    const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--yes');
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toMatch(/Left for you to judge, because your own work does not do it \(1\):\n {2}- End with a Verdict section[^\n]*\n {6}1 of your examples do not do this\./);
+    expect(r.out).toMatch(/Checked on every run \(3\):[\s\S]*- End with a Verdict section[^\n]*\n {6}! 1 of your examples does not do this: e2\.md \([^\n]*\)\.\n {8}Yours to settle: keep it as written \(required on every run\), or change the method\./);
+    expect(r.out).not.toMatch(/Left for you to judge/);
     expect(r.out).toContain('Your skill "review" is ready.');
     expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(true);
-    // the whole account names the piece and what the check found
-    expect(run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--review', '--report').out).toContain('1 of your examples do not hold it as a check would read it: e2.md');
+    // the whole account names the piece and what the check found too
+    expect(run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--review', '--report').out).toContain('! 1 of your examples does not do this: e2.md');
   }, 120_000);
   it('built again in the same folder after the method changes, it is a new version of the same skill', () => {
     const { proj, run } = seed(['Approve', 'Request changes', 'Comment']);

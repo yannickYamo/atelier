@@ -1,9 +1,9 @@
-// atelier/cli/commands/run.ts — `atelier run "<task>"`: the work, and one line that says whether it can be used.
+// cli/commands/run.ts — `atelier run "<task>"`: the work, and under it the evaluation of it.
 //
-// `atelier invoke` is the engine and keeps its long report: every rule, every reading, what a draft cost. A person
-// who asked for a piece of work reads none of that first. `run` asks the engine for the same run and prints the work,
-// the state of it (core/eval/run-state.ts) and at most two more lines. The full report is one flag away (--report)
-// and is always kept with the run.
+// `atelier invoke` is the engine and keeps its long report: every reading, what a draft cost, what was tried. `run`
+// asks the engine for the same run and prints the work and its evaluation card (core/eval/run-card.ts), drawn from
+// the run's one record (core/eval/record.ts): the owner's rules, what the request set, what was traced, each with
+// what was observed of it. The engine's whole report is one flag away (--report) and is always kept with the run.
 //
 // It runs the engine as it is, in a process of its own, and reads the record it writes: there is one way a run
 // happens, and this is a way of showing it.
@@ -11,10 +11,10 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { DATA, VALUED_OPTIONS, argv, die, flag, loadSession, boundMaterial } from '../runtime.js';
 import * as store from '../../core/state/store.js';
-import { runState, type RunFacts } from '../../core/eval/run-state.js';
-import { renderRunCard, type RunCard, type RuleLine } from '../../core/eval/run-card.js';
+import { renderRunCard, type RunCard } from '../../core/eval/run-card.js';
 import { targetOf } from '../../core/observers/obligations.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
+import { listEvals } from '../../core/state/eval-store.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 
 export interface EngineRun { readonly output: string | null; readonly invocationId: string; readonly costUsd: number; readonly cut?: readonly string[]; readonly toCheck: readonly string[];
@@ -47,71 +47,38 @@ export function sortArgs(tokens: readonly string[]): { skill: string | null; tas
 }
 
 /**
- * The owner's rules no machine checks: a step of their method read as judgement, or a rule they made required that
- * carries no check. Required by them all the same, and counted so that a run never reads as more certain than it is.
+ * WHAT WAS DONE TO THE DRAFT, in plain words, from what the run recorded: written again and why and whether that
+ * worked, what was removed.
  */
-export const judgementRules = (requirements: readonly Requirement[]): number =>
-  requirements.filter((r) => !r.measurement && r.authority !== 'EXPERT_REJECTED' && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT')).length;
-
-/** What the state line is made from: the run's own evaluation, and the owner's rules no machine checked on it. */
-export function factsOf(run: Pick<EngineRun, 'eval' | 'toCheck'>, judgement: number): RunFacts {
-  const required = run.eval?.gates.required;
-  // With nothing bound to check a specific against, every specific is "to check": that is the report's to list, and
-  // says nothing about this run. Counted here only where there was material and something was not found in it.
-  const nothingBound = (run.eval?.gates.claims.unmeasured ?? '').startsWith('no material');
-  // A rule set aside for this run (it waits for material, the request set its own length) was not checked on it.
-  const waived = run.eval?.gates.applicability.waived.length ?? 0;
-  const broken = (required?.broken ?? []).map((b) => ({ id: b.id, detail: b.detail, ...('label' in b && typeof b.label === 'string' ? { label: b.label } : {}) }));
-  // THE ENGINE'S VERDICT STANDS. A run it calls not conformant for a reason that is no rule of the owner's (a passage
-  // copied from their pieces, an invented claim delivered) is blocked for that reason, in its words.
-  const verdict = run.eval && !run.eval.result.conformant && !broken.length ? [{ id: 'verdict', detail: run.eval.result.reasons[0] ?? 'the run did not conform' }] : [];
-  return { applicable: required?.applicable ?? 0, held: required?.held ?? 0, judgement: judgement + waived, toCheck: nothingBound ? 0 : run.toCheck.length, broken: [...broken, ...verdict] };
+export function doneOf(run: Pick<EngineRun, 'report' | 'cut'>): string[] {
+  // The engine's sentence names rules by their ids and quotes each: here, only what happened.
+  const said = run.report.find((l) => /^(?:Written again|The draft (?:runs|leaves out))/.test(l)) ?? '';
+  const still = Number(/it now leaves out (\d+)/.exec(said)?.[1] ?? 0);
+  const again = !said ? '' : /did not do better|could not be written/.test(said) ? 'one more draft was tried and was no better, so the first was kept'
+    : said.includes('nearer and still outside') || still ? `written again once for what was missing${still ? `; ${still} thing${still === 1 ? ' is' : 's are'} still missing` : '; the length is nearer and still off'}` : 'written again once, and it now holds what was missing';
+  const cut = run.cut?.length ?? 0;
+  return [again, cut ? `${cut} sentence${cut === 1 ? '' : 's'} removed (not found in your material)` : ''].filter(Boolean);
 }
 
-/** The lines under the work: its state, what was done to it when anything was, and where to go next. */
-export function linesFor(run: EngineRun, judgement: number): string[] {
-  const { state, line } = runState(factsOf(run, judgement));
-  const cut = run.cut?.length ?? 0;
-  const done = [run.report.some((l) => l.startsWith('Written again')) ? 'It was written again once to meet your rules.' : '',
-    cut ? `${cut} sentence${cut === 1 ? ' was' : 's were'} removed: not found in the material you gave. See them with --report.` : ''].filter(Boolean).join(' ');
-  const next = state === 'BLOCKED' ? 'Not deliverable as it stands. What was checked: add --report · wrong about your work? atelier fix "<what was wrong>"'
-    : 'Not right? atelier fix "<what was wrong>" · everything this run checked: add --report';
-  return [line, ...(done ? [done] : []), next];
+/** The card of a run: its record (core/eval/record.ts), what it cost, and what was done to the draft. */
+export function cardFor(run: EngineRun): RunCard | null {
+  const record = run.eval?.record;
+  if (!record) return null;
+  return { record, costUsd: run.costUsd, seconds: (run.eval?.durationMs ?? 0) / 1000, drafts: run.eval?.drafts ?? 1, done: doneOf(run), invocationId: run.invocationId };
 }
 
 /**
- * THE EVALUATION OF THE RUN, RULE BY RULE, IN THE OWNER'S WORDS (core/eval/run-card.ts). Their required rules in the
- * order they wrote them, each met, not met, theirs to judge, or not checked on this run and why; how many of the
- * habits seen in their examples the text kept; and what every run is read for beyond their rules.
+ * CAN THE WORK BE USED AS IT STANDS, AS AN EXIT CODE: the same rule however the run was asked for. Blocked is 1.
+ * A run with no record is judged by the engine's own bar where it has one (a structured output held by its
+ * contract), and is 1 where nothing evaluated it at all.
  */
-export function cardFor(run: EngineRun, requirements: readonly Requirement[]): RunCard {
-  const fared = new Map((run.rules?.checked ?? []).map((c) => [c.id, c]));
-  const live = requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
-  const isJudgement = (r: Requirement): boolean => !r.measurement && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT');
-  const waived = new Map((run.eval?.gates.applicability.waived ?? []).map((w) => [w.id, w.why]));
-  const rules: RuleLine[] = live.filter((r) => isJudgement(r) || (r.materiality === 'REQUIRED' && r.measurement)).map((r) => {
-    if (isJudgement(r)) return { statement: r.statement, status: 'judge' };
-    const f = fared.get(r.requirementId);
-    if (waived.has(r.requirementId)) return { statement: r.statement, status: 'not-checked', detail: `not checked on this run: ${waived.get(r.requirementId)}` };
-    if (!f || f.verdict === 'NOT_APPLICABLE') return { statement: r.statement, status: 'not-checked', detail: f?.detail ? `not checked on this run: ${f.detail}` : 'not checked on this run' };
-    return { statement: r.statement, status: f.verdict === 'VIOLATED' ? 'broken' : 'met', detail: f.detail };
-  });
-  const shown = live.filter((r) => r.measurement && r.materiality !== 'REQUIRED').map((r) => fared.get(r.requirementId)).filter((f) => f && f.verdict !== 'NOT_APPLICABLE');
-  const g = run.eval?.gates; const also: RuleLine[] = [];
-  if (g?.copying) also.push({ statement: 'Nothing copied from your examples', status: g.copying.longest >= g.copying.limit ? 'broken' : 'met', detail: `the longest run of words shared with them: ${g.copying.longest} (limit ${g.copying.limit})` });
-  if (g) {
-    const c = g.claims; const nothingBound = (c.unmeasured ?? '').startsWith('no material');
-    also.push(c.state === 'off' ? { statement: 'Facts traced to your material', status: 'not-checked', detail: 'turned off for this run' }
-      : nothingBound ? { statement: 'Facts traced to your material', status: 'not-checked', detail: 'no material was given to trace them to' }
-        : c.delivered > 0 ? { statement: 'Facts traced to your material', status: 'broken', detail: `${c.delivered} not found in it and still in the text` }
-          : c.listed + c.unconfirmed > 0 ? { statement: 'Facts traced to your material', status: 'not-checked', detail: `${c.listed + c.unconfirmed} could not be found in it: listed for you with --report` }
-            : { statement: 'Facts traced to your material', status: 'met' });
-  }
-  const { state, line } = runState(factsOf(run, judgementRules(requirements)));
-  const cut = run.cut?.length ?? 0;
-  const done = [run.report.some((l) => l.startsWith('Written again')) ? 'written again once to meet your rules' : '', cut ? `${cut} sentence${cut === 1 ? '' : 's'} removed (not found in your material)` : ''].filter(Boolean);
-  return { state, stateLine: line, rules, habits: shown.length ? { kept: shown.filter((f) => f?.verdict === 'MET').length, of: shown.length } : null, also,
-    costUsd: run.costUsd, seconds: (run.eval?.durationMs ?? 0) / 1000, drafts: run.eval?.drafts ?? 1, done, invocationId: run.invocationId };
+export const exitFor = (e: EvalSummary | null | undefined): number => (e?.record ? (e.record.state === 'BLOCKED' ? 1 : 0) : e ? (e.result.conformant ? 0 : 1) : 1);
+
+/** The evaluation of the run a machine asked for: from its JSON, or (for the bare answer) the one it stored since it began. */
+function evalOfMachineRun(stdout: string, L: store.StoreLayout, began: string): EvalSummary | null {
+  try { const j = JSON.parse(stdout) as Partial<EngineRun>; if (j && typeof j === 'object' && 'invocationId' in j) return j.eval ?? null; } catch { /* the bare answer */ }
+  const last = listEvals(L)[0];
+  return last && last.at >= began ? last : null;
 }
 
 /** The skill a run is for: the one named, or the one this folder built. Never a guess between two. */
@@ -130,8 +97,16 @@ export async function run(): Promise<void> {
   const name = skillFor(typed.skill ?? flag('--skill') ?? null);
   const task = typed.task ?? die('give it something to do: atelier run "<your task>"');
   const engineArgs = ['invoke', '--skill', name, `--task=${task}`, ...typed.rest];
-  // Asked for a machine's format, it is the engine's own output, untouched.
-  if (typed.machine) { process.exitCode = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs], { stdio: 'inherit' }).status ?? 1; return; }
+  // Asked for a machine's format, it is the engine's own output, untouched. The exit code is the run's all the same:
+  // a script that reads only the code must not take a blocked output for a usable one.
+  if (typed.machine) {
+    const began = new Date().toISOString();
+    const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs], { stdio: ['inherit', 'pipe', 'inherit'], encoding: 'utf8', maxBuffer: 1 << 26 });
+    process.stdout.write(r.stdout);
+    const code = r.status ?? 1;
+    process.exitCode = code !== 0 ? code : exitFor(evalOfMachineRun(r.stdout, { root: DATA, skillName: name }, began));
+    return;
+  }
   const L = { root: DATA, skillName: name };
   const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null;
   const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
@@ -147,8 +122,9 @@ export async function run(): Promise<void> {
   if (!result || work === null) { process.stderr.write(engine.err); process.exitCode = engine.code || 1; return; }
   console.log(`${work.trimEnd()}\n`);
   // THE EVALUATION IS PART OF WHAT A RUN RETURNS, not a report behind a flag: every rule, as it fared.
-  const card = cardFor(result, std?.requirements ?? []);
-  for (const l of renderRunCard(card, process.stdout.columns || 100)) console.log(l);
+  const card = cardFor(result);
+  const without = result.eval ? `  A structured output, held by its contract: ${result.eval.result.conformant ? 'it conforms' : `it does not conform (${result.eval.result.reasons.join('; ')})`}.` : '  This run was not evaluated: nothing is known about whether it holds your rules. See why: add --report';
+  for (const l of card ? renderRunCard(card, process.stdout.columns || 100) : ['── Evaluation ──', without]) console.log(l);
   if (typed.report) console.log(`\n${result.report.join('\n')}`);
-  process.exitCode = card.state === 'BLOCKED' ? 1 : engine.code;
+  process.exitCode = engine.code !== 0 ? engine.code : exitFor(result.eval);
 }

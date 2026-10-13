@@ -206,9 +206,32 @@ export function statedLength(request: string): StatedLength | null {
   return located(request).at(-1)?.stated ?? null;
 }
 
-/** How a count sits against a stated length: inside it, or short or long of it. A target is met within a tenth. */
-export function againstStated(count: number, s: StatedLength): 'met' | 'short' | 'long' {
+/**
+ * IS THE LENGTH THE REQUEST STATES ONE A RUN CAN BE HELD TO? Reading a length to tell the writer about it is cheap to
+ * get wrong; blocking the work and paying for another draft on it is not. So it is held only where there is no
+ * second reading: a count of words, the only count of words in the request, and not the subject of what follows
+ * ("10 words that changed our roadmap"). "A 400-word post, each paragraph under 60 words" names two, and which is
+ * the length of the piece is the person's to say: it is shown as not counted, never guessed.
+ * Returns null where it can be held, or why it cannot.
+ */
+export function notHeldBecause(request: string, s: StatedLength): string | null {
+  if (s.unit !== 'words') return `a length in ${s.unit} is not counted`;
+  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*words?\b/gi) ?? [];
+  if (counts.length > 1) return `the request names more than one count of words (${counts.map((c) => c.trim()).join(', ')}), and which is the length of the piece is yours to say`;
+  const after = request.slice(request.indexOf(s.raw) + s.raw.length);
+  if (request.includes(s.raw) && /^\s+(?:that|which|who|every|each)\b/i.test(after)) return 'the count may be what the piece is about, not how long it is';
+  return null;
+}
+
+/** The fewest and the most a stated length allows; null where it sets no such end. A target is met within a tenth. */
+export function statedBounds(s: StatedLength): readonly [number | null, number | null] {
   const lo = s.kind === 'range' || s.kind === 'min' ? s.min : s.kind === 'max' ? null : s.kind === 'exact' ? s.target : (s.target ?? 0) * 0.9;
   const hi = s.kind === 'range' || s.kind === 'max' ? s.max : s.kind === 'min' ? null : s.kind === 'exact' ? s.target : (s.target ?? 0) * 1.1;
+  return [lo, hi];
+}
+
+/** How a count sits against a stated length: inside it, or short or long of it. */
+export function againstStated(count: number, s: StatedLength): 'met' | 'short' | 'long' {
+  const [lo, hi] = statedBounds(s);
   return lo !== null && count < lo ? 'short' : hi !== null && count > hi ? 'long' : 'met';
 }

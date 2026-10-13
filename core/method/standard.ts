@@ -11,9 +11,10 @@
 //                 where an artifact shows it. A step carried out in the writer's head leaves none, and is not this.
 //   JUDGEMENT     everything else. Stated, shown to the writer, reported as not measured. Never called checked.
 //
-// A STEP GETS A CHECK ONLY WHEN THE EXAMPLE PASSES IT. The owner's finished work is the method carried out. A check
-// their own example fails is reading something they did not mean, so the step stays theirs, as a judgement, and the
-// screen says the example did not hold it as a check reads it: that is a question for the owner, not a rule.
+// A STEP THE OWNER STATED KEEPS ITS CHECK WHATEVER THEIR EXAMPLE DOES. What they say is required is required. Where
+// their own finished work does not do it, either the rule is newer than the work or the step was read as something
+// they did not mean: the disagreement is carried with the step (`conflict`) and put to them once, before anything
+// is built (cli/commands/method.ts). It is never settled here, in either direction.
 //
 // WHAT THE EXAMPLE SHOWS AND THE METHOD DID NOT SAY (its sections in order, its tables, that its figures are all in
 // the material) is proposed, never assumed: one example cannot tell a habit from an accident.
@@ -126,11 +127,15 @@ export interface MethodProposal {
   readonly measurement: Measurement | null;
   /** how the finished example fares on the check, in words; null when there is none */
   readonly onExample: string | null;
-  /** a stated step whose check the example did not pass: kept as the owner's, as a judgement, with why */
-  readonly demoted: string | null;
+  /**
+   * A stated step whose check the owner's own finished work does not pass, with which pieces and what was found.
+   * THE STEP STANDS AS WRITTEN: what the owner says is required is required, and their examples are evidence about
+   * the examples. The disagreement is shown once, at the build, for them to keep the rule or change it.
+   */
+  readonly conflict: string | null;
   /**
    * The check was tied to the step by a section name of the example, not by the step's wording alone ("State the
-   * constraints in a Regulation section"). A reading of what the owner meant: shown, and built only on their yes.
+   * constraints in a Regulation section"). A reading of what the owner meant: said beside the step on the build screen.
    */
   readonly byName?: true;
   /**
@@ -207,19 +212,18 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
   const context: CheckContext = { ...(example.task ? { request: example.task } : {}), material: example.material };
   const read = (m: Measurement): { verdict: string; detail: string } => { const r = measure(example.reference, m, context); return { verdict: r.verdict, detail: r.detail }; };
   const out: MethodProposal[] = []; const claimed = new Set<string>(); const claimedSections = new Set<string>();
+  // A step the example does not hold keeps its check: the owner stated it. What the example did is said beside it.
+  // (A check against the material says nothing of an example handed over without its material.)
+  const unreadable = (m: Measurement): boolean => targetOf(m.observer) === 'BOUND_MATERIAL' && !example.material.length;
+  const against = (r: { verdict: string; detail: string }, m: Measurement): string | null => (r.verdict === 'VIOLATED' && !unreadable(m) ? `your example does not do this (${r.detail})` : null);
   for (const step of stepsOf(note)) {
     const how: { byName?: boolean } = {};
     const m = checkNamedBy(step.text, outline, how);
-    if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, demoted: null }); continue; }
+    if (!m) { out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }); continue; }
     const r = read(m);
-    if (r.verdict !== 'MET') {
-      out.push({ statement: step.text, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: r.detail,
-        demoted: r.verdict === 'NOT_APPLICABLE' ? `it cannot be read on your example (${r.detail})` : `your example does not hold it as a check would read it (${r.detail})` });
-      continue;
-    }
     claimed.add(m.observer === 'TABLE' ? `TABLE:${(m.params.columns as readonly string[]).join('|')}` : m.observer);
     if (m.observer === 'PRESENCE') for (const sec of ((m.params.sections as readonly string[] | undefined) ?? [])) claimedSections.add(norm(sec));
-    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null, ...(how.byName ? { byName: true as const } : {}) });
+    out.push({ statement: step.text, origin: 'STATED', obligation: targetOf(m.observer) === 'BOUND_MATERIAL' ? 'EXECUTION' : 'DELIVERABLE', measurement: m, onExample: unreadable(m) ? 'could not be read on it: it carries no material' : r.detail, conflict: against(r, m), ...(how.byName ? { byName: true as const } : {}) });
   }
   // WHAT THE NOTE LAYS OUT AS A TEMPLATE: its own section headings and its own tables are the owner saying what the
   // work contains, as plainly as a sentence would. Each is held against the example like any stated step: sections
@@ -233,8 +237,7 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     const m = sectionsCheck(shared, outline);
     const r = read(m); const statement = `The work has these sections, in this order: ${shared.join(', ')}.`;
     for (const n of shared) claimedSections.add(norm(n));
-    if (r.verdict === 'MET') out.push({ statement, origin: 'STATED', obligation: 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null });
-    else out.push({ statement, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: r.detail, demoted: `your example does not hold it as a check would read it (${r.detail})` });
+    out.push({ statement, origin: 'STATED', obligation: 'DELIVERABLE', measurement: m, onExample: r.detail, conflict: against(r, m) });
   }
   for (const t of tablesOf(note)) {
     // A template's cells are placeholders; its header is the statement.
@@ -242,14 +245,14 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     if (columns.length < 2 || claimed.has(`TABLE:${columns.join('|')}`)) continue;
     const m: Measurement = { observer: 'TABLE', params: { columns, minRows: 1 } };
     const r = read(m); const statement = `The work includes a table with the columns ${columns.join(', ')}.`;
-    if (r.verdict === 'MET') { claimed.add(`TABLE:${columns.join('|')}`); out.push({ statement, origin: 'STATED', obligation: 'DELIVERABLE', measurement: m, onExample: r.detail, demoted: null }); }
-    else out.push({ statement, origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, onExample: r.detail, demoted: `your example does not hold it as a check would read it (${r.detail})` });
+    claimed.add(`TABLE:${columns.join('|')}`);
+    out.push({ statement, origin: 'STATED', obligation: 'DELIVERABLE', measurement: m, onExample: r.detail, conflict: against(r, m) });
   }
   // WHAT THE EXAMPLE SHOWS AND NO STEP SAID. Proposed in plain words, each with the check it would carry.
   const unsaid = outline.sections.filter((sec) => !claimedSections.has(norm(sec)) && ![...claimedSections].some((c) => norm(sec).includes(c)));
   if (unsaid.length >= 2) {
     const m = sectionsCheck(unsaid, outline);
-    if (read(m).verdict === 'MET') out.push({ statement: `The work has these sections, in this order: ${unsaid.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, demoted: null });
+    if (read(m).verdict === 'MET') out.push({ statement: `The work has these sections, in this order: ${unsaid.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, conflict: null });
   }
   for (const t of outline.tables) {
     const columns = t.header.filter(Boolean);
@@ -264,42 +267,45 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     const proper = new Set((givenRaw.match(/\b[A-Z][a-zA-Z]{3,}\b/g) ?? []).map((w) => w.toLowerCase()).filter((w) => !lower.has(w)));
     if (columns.some((c) => norm(c).split(' ').some((w) => proper.has(w) && given.includes(` ${w} `)))) continue;
     const m: Measurement = { observer: 'TABLE', params: { columns, minRows: 1 } };
-    out.push({ statement: `The work includes a table with the columns ${columns.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, demoted: null });
+    out.push({ statement: `The work includes a table with the columns ${columns.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, conflict: null });
   }
   if (!claimed.has('CITED') && example.material.length && figuresOf(example.reference).length >= 3) {
     const m: Measurement = { observer: 'CITED', params: { allow: 0 } };
     const r = read(m);
-    if (r.verdict === 'MET') out.push({ statement: 'Every figure in the work is one the request or the material gives.', origin: 'SHOWN_BY_EXAMPLE', obligation: 'EXECUTION', measurement: m, onExample: r.detail, demoted: null });
+    if (r.verdict === 'MET') out.push({ statement: 'Every figure in the work is one the request or the material gives.', origin: 'SHOWN_BY_EXAMPLE', obligation: 'EXECUTION', measurement: m, onExample: r.detail, conflict: null });
   }
   return out;
 }
 
 /**
- * THE SAME METHOD, HELD AGAINST EVERY EXAMPLE. A check read off one example and the note is a reading; the owner's
- * other finished pieces are the test of it. A stated step keeps its check only when every example it can be read on
- * holds it: one that does not is the owner's to settle, exactly as when the single example fails, with the count
- * and the pieces named. What one example shows and the others do not was that piece's own, and is dropped. An owner
- * who hands over twelve pieces and is told a required rule fails three of them has been given the wrong rule, so no
- * such rule is built.
+ * THE SAME METHOD, HELD AGAINST EVERY EXAMPLE. Two kinds of rule, held two ways. What was read OFF an example is a
+ * reading, and the owner's other finished pieces are the test of it: what one shows and another does not was that
+ * piece's own, and is dropped. What the owner STATED is theirs: it keeps its check whatever their pieces do, and the
+ * pieces that do not do it are counted and named beside it (`conflict`), once, at the build. An owner told that a
+ * rule they wrote fails three of their twelve pieces can keep the rule or change it; a machine that quietly stopped
+ * checking it has changed what they meant by good.
  *
  * A check read against what a piece was made from is read only on the examples that carry their material: a piece
  * handed over without its sources says nothing about whether its figures were given. The count says which it is.
  */
-export function acrossExamples(proposals: readonly MethodProposal[], others: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[]): MethodProposal[] {
+export function acrossExamples(proposals: readonly MethodProposal[], others: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[], leadId?: string): MethodProposal[] {
   if (!others.length) return [...proposals];
   return proposals.flatMap((p): MethodProposal[] => {
     const m = p.measurement;
-    if (!m || p.demoted) return [p];
+    if (!m) return [p];
     const bound = targetOf(m.observer) === 'BOUND_MATERIAL';
     const results = others.filter((c) => !bound || c.material.length).map((c) => ({ id: c.id, r: measure(c.reference, m, { ...(c.task ? { request: c.task } : {}), material: c.material } satisfies CheckContext) }))
       .filter((x) => x.r.verdict !== 'NOT_APPLICABLE');
     const fails = results.filter((x) => x.r.verdict === 'VIOLATED'); const n = results.length + 1; const all = others.length + 1;
     const on = n === all ? `your ${all} examples` : `the ${n} of your ${all} examples it can be read on${bound ? ' (those that carry their material)' : ''}`;
-    if (!fails.length) return [{ ...p, onExample: n === all ? `held in all ${all} of your examples` : `held in all ${n} of your ${all} examples it can be read on${bound ? ' (those that carry their material)' : ''}` }];
+    if (!fails.length && !p.conflict) return [{ ...p, onExample: n === all ? `held in all ${all} of your examples` : `held in all ${n} of your ${all} examples it can be read on${bound ? ' (those that carry their material)' : ''}` }];
+    // EXAMPLE AGREEMENT GATES ONLY WHAT WAS READ FROM THE EXAMPLES. What one piece shows and another does not was that
+    // piece's own, and is dropped. What the owner stated stands, with the pieces that do not do it named.
     if (p.origin === 'SHOWN_BY_EXAMPLE') return [];
-    const named = fails.slice(0, 3).map((x) => `${x.id} (${x.r.detail})`).join('; ');
-    return [{ statement: p.statement, origin: p.origin, obligation: 'JUDGEMENT', measurement: null, onExample: `held in ${n - fails.length} of ${on}`,
-      demoted: `${fails.length} of your examples do not hold it as a check would read it: ${named}${fails.length > 3 ? `; and ${fails.length - 3} more` : ''}` }];
+    const lead = p.conflict ? [p.conflict.replace(/^your example does not do this /, `${leadId ?? 'the first'} `)] : [];
+    const named = [...lead, ...fails.map((x) => `${x.id} (${x.r.detail})`)]; const k = named.length;
+    return [{ ...p, onExample: `held in ${n - k} of ${on}`,
+      conflict: `${k} of your examples ${k === 1 ? 'does' : 'do'} not do this: ${named.slice(0, 3).join('; ')}${k > 3 ? `; and ${k - 3} more` : ''}` }];
   });
 }
 
@@ -311,13 +317,11 @@ export function acrossExamples(proposals: readonly MethodProposal[], others: rea
  * piece they are read against.
  */
 export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 'task' | 'material' | 'reference'> & { readonly id: string })[]): { lead: number; proposals: MethodProposal[] } {
-  let best = { lead: 0, proposals: [] as MethodProposal[], held: -1 };
+  let best = { lead: 0, proposals: [] as MethodProposal[], held: -Infinity };
   cases.forEach((c, i) => {
-    // A step the piece read from breaks is said by that piece's name, as one another piece breaks is.
-    const read = methodProposals(note, c).map((p) => (cases.length > 1 && p.demoted ? { ...p, demoted: p.demoted.replace(/\byour example\b/, c.id) } : p));
-    const proposals = acrossExamples(read, cases.filter((_, k) => k !== i));
-    // A step that became a check and that some piece then broke is read too: it is put to the owner, by name.
-    const held = proposals.filter((p) => p.origin === 'STATED' && (p.measurement ?? p.demoted)).length;
+    const proposals = acrossExamples(methodProposals(note, c), cases.filter((_, k) => k !== i), c.id);
+    // The most steps read as checks; among equals, the piece the fewest of them disagree with.
+    const held = proposals.filter((p) => p.origin === 'STATED' && p.measurement).length * 1000 - proposals.filter((p) => p.conflict).length;
     if (held > best.held) best = { lead: i, proposals, held };
   });
   return { lead: best.lead, proposals: best.proposals };
@@ -337,7 +341,7 @@ export function countedFromExamples(cases: readonly (Pick<GoldenCase, 'reference
   return deriveMeasuredRules(cases.map((c) => ({ id: c.id, text: c.reference })), [], 'MACHINE_DISCOVERED')
     .filter((m) => m.requirement.measurement && !['SENTENCE_LENGTH', 'RHYTHM', 'DISTRIBUTION'].includes(m.requirement.measurement.observer) && piecesBreaking(texts, m.requirement.measurement).length === 0)
     .map((m) => ({ statement: m.requirement.statement, origin: 'SHOWN_BY_EXAMPLE' as const, obligation: 'DELIVERABLE' as const, measurement: m.requirement.measurement ?? null,
-      onExample: `set where all ${cases.length} of your examples meet it`, demoted: null, counted: true as const }));
+      onExample: `set where all ${cases.length} of your examples meet it`, conflict: null, counted: true as const }));
 }
 
 /**
@@ -357,7 +361,7 @@ export function sectionLengthsFromExamples(cases: readonly (Pick<GoldenCase, 're
     const lo = Math.min(...lengths); const hi = Math.max(...lengths); const band = ownLengthBand([lo, hi]);
     // Not a section every piece writes word for word alike (a one-word verdict): that is wording, not a length.
     if (!band || lo < 1 || hi === lo || hi >= lo * 2) return [];
-    return [{ statement: `The ${sec} section runs ${lo} to ${hi} words in my pieces.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', counted: true, demoted: null, spread: hi / lo,
+    return [{ statement: `The ${sec} section runs ${lo} to ${hi} words in my pieces.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', counted: true, conflict: null, spread: hi / lo,
       measurement: { observer: 'LENGTH', params: { unit: ['words'], in: [sec], min: band[0], max: band[1], ...(labels ? { labels: 1, sections: [...shared] } : {}) } },
       onExample: `set where all ${cases.length} of your examples meet it` }];
     // The most even first: where there are more than a skill should carry, those are the habits.

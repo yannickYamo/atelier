@@ -28,7 +28,8 @@ const N = 6;
  * How much of one text is lifted from the corpus: six-word runs it shares, and its longest shared run in words.
  * `standard` counts the shared six-word runs left out of both as the author's standard wording (see below).
  */
-export interface CorpusOverlap { readonly shared6: number; readonly longestShared: number; readonly standard?: number }
+export interface CorpusOverlap { readonly shared6: number; readonly longestShared: number; readonly standard?: number;
+  /** the words of the longest shared run, as the text has them: what a person is shown when the run is too long */ readonly longestWords?: string }
 
 /** A six-word run found in at least this many separate pieces of the author's is their standard wording. */
 export const STANDARD_WORDING_PIECES = 3;
@@ -43,7 +44,7 @@ export const STANDARD_WORDING_PIECES = 3;
  * count and reported apart. Words lifted from one or two pieces are still copying, at any length. Without it,
  * nothing is left out and the reading is what it always was.
  */
-export function overlapIndex(corpus: readonly string[], standardWording: readonly string[] = []): (text: string) => CorpusOverlap {
+export function overlapIndex(corpus: readonly string[], standardWording: readonly string[] = [], opts: { /** also return the words of the longest shared run */ words?: boolean } = {}): (text: string) => CorpusOverlap {
   // EVERY SIX-WORD RUN OF EVERY PIECE, WITH WHERE IT STARTS: built once. A text is then read in one pass, and a run
   // it shares with a piece is followed along that piece a word at a time, never searched for again. The check exists
   // for the output that copies a long stretch, and read the earlier way that was the output it was slowest on.
@@ -76,11 +77,11 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
       }
       after = here;
     }
-    let shared6 = 0; let longestShared = 0; let left = 0;
+    let shared6 = 0; let longestShared = 0; let left = 0; let from = 0;
     for (let i = 0; i < grams.length; i++) {
       if (!run[i]) continue;
       if (standard.has(grams[i])) left += 1; else shared6 += 1;
-      if (!standard.size) { longestShared = Math.max(longestShared, run[i]); continue; }
+      if (!standard.size) { if (run[i] > longestShared) { longestShared = run[i]; from = i; } continue; }
       // A run that lies inside the one read just before it holds nothing that one did not.
       if (i > 0 && run[i - 1] > run[i]) continue;
       // WHAT COUNTS OF THE RUN is the longest stretch of its words that some six-word run outside the standard wording
@@ -91,10 +92,11 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
       for (let k = i; k < j; k++) {
         if (k + N <= j && !standard.has(grams[k])) reach = k + N - 1;
         stretch = k <= reach ? stretch + 1 : 0;
-        longestShared = Math.max(longestShared, stretch);
+        if (stretch > longestShared) { longestShared = stretch; from = k - stretch + 1; }
       }
     }
-    return standard.size ? { shared6, longestShared, standard: left } : { shared6, longestShared };
+    const longestWords = opts.words && longestShared ? { longestWords: w.slice(from, from + longestShared).join(' ') } : {};
+    return standard.size ? { shared6, longestShared, standard: left, ...longestWords } : { shared6, longestShared, ...longestWords };
   };
 }
 

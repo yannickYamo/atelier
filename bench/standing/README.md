@@ -59,3 +59,11 @@ development gate, not evidence about anyone's real work.
 
 One arm can be run for more than one skill with `--label` (`--arm invoke --label invoke-method`); `score.mjs`
 pairs `invoke-<x>` with `export-<x>` for the second gate.
+
+## This set is frozen
+
+The four domains, their methods, examples, tasks and checks do not change, so that a result from one month can be
+read against a result from another. A bug found while running them does not become a new case here: it becomes a
+test of the reader or the check it was in (`tests/`), where it fails for one reason. What a result means is pinned
+by `tests/atelier-invariants.test.ts`. A new domain is a new directory with its own recorded runs, added whole.
+

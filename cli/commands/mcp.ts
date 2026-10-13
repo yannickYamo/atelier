@@ -20,6 +20,9 @@ import { checksFor } from '../checks.js';
 import { skillCardFor } from '../skill-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import { renderPanel } from '../../core/eval/summary.js';
+import { recordForText } from '../eval-run.js';
+import { stateLine } from '../../core/eval/run-card.js';
+import { needsReview, partlyChecked } from '../../core/eval/record.js';
 import { getEval } from '../../core/state/eval-store.js';
 import { createInterface } from 'node:readline';
 import { existsSync, readdirSync } from 'node:fs';
@@ -108,7 +111,11 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
     const material = [...store.getMaterial(L).map((m) => m.text), typeof args.material === 'string' ? args.material : ''].join('\n\n');
     // The rules read against what the text was made from (figures given, lines cited) are given the same material.
     const named = [...store.getMaterial(L).map((m) => ({ name: m.name, text: m.text })), ...(typeof args.material === 'string' && args.material.trim() ? [{ name: 'material', text: args.material }] : [])];
-    const report = await checkDraftAsync(skill, v, text, checksFor(L, { material, task: typeof args.task === 'string' ? args.task : '', context: { ...(typeof args.task === 'string' && args.task ? { request: args.task } : {}), material: named }, ...(typeof args.class === 'string' ? { cls: args.class } : {}), bound: store.getMaterial(L).length > 0 || (typeof args.material === 'string' && args.material.trim().length > 0) }));
+    const checks = checksFor(L, { material, task: typeof args.task === 'string' ? args.task : '', context: { ...(typeof args.task === 'string' && args.task ? { request: args.task } : {}), material: named }, ...(typeof args.class === 'string' ? { cls: args.class } : {}), bound: store.getMaterial(L).length > 0 || (typeof args.material === 'string' && args.material.trim().length > 0) });
+    const report = await checkDraftAsync(skill, v, text, checks);
+    // The same record a run carries (cli/eval-run.ts): an agent checking its own text is told what was read in full,
+    // what in part and what not at all, and never takes "nothing failed" for "verified".
+    const record = recordForText({ L, std: v, text, report, sensor: checks.claimSensor, claimsOff: false, answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
     // The reading-based rules, on request: this calls a model, and every other check here is free.
     // A miss on a rule where the reader holds VETO fails the check, as on the command line. A reader that
     // cannot run costs nothing of the counted report: it is said, and the counted result stands.
@@ -126,7 +133,8 @@ const call = async (name: string, args: Record<string, unknown>): Promise<{ text
         taste = { text: `(the taste reader could not run: ${(e as Error).message.split('\n')[0]})`, failed: false, verdicts: [], couldNotRun: true };
       }
     }
-    return { isError: false, text: `${describeVerify(report)}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${JSON.stringify({ failed: report.failed || (taste?.failed ?? false),
+    return { isError: false, text: `${describeVerify(report, partlyChecked(record))}${taste ? `\n\n${taste.text}` : ''}${cls.note ? `\n(${cls.note})` : ''}\n\n${record.state.replace('_', ' ')}: ${stateLine(record)}\n\n${JSON.stringify({ failed: record.state === 'BLOCKED' || (taste?.failed ?? false), state: record.state,
+      notVerified: record.entries.filter(needsReview).map((e) => ({ rule: e.id, statement: e.statement, why: e.reason, ...(e.observation.unchecked ? { unchecked: e.observation.unchecked } : {}) })),
       violations: report.checked.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ rule: c.requirementId, materiality: c.materiality,
         detail: c.result.detail, spans: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) })),
       ...(taste ? { taste: taste.verdicts, ...(taste.couldNotRun ? { tasteCouldNotRun: true } : {}) } : {}) })}` };

@@ -20,7 +20,7 @@ function read(name: string): { steps: Record<string, string>; sections: string[]
   for (const p of methodProposals(readFileSync(`${DIR}${name}.method.md`, 'utf8'), { task: m[1], material, reference: m[2] })) {
     if (p.origin !== 'STATED') continue;
     const x = p.measurement;
-    steps[p.statement.split(/\s+/).slice(0, 5).join(' ')] = !x ? (p.demoted ? 'to settle' : 'judgement')
+    steps[p.statement.split(/\s+/).slice(0, 5).join(' ')] = p.conflict ? 'to settle' : !x ? 'judgement'
       : x.observer === 'PRESENCE' ? `section ${(x.params.sections as string[]).join('+').toLowerCase()}${x.params.opens ? ', opens' : ''}${x.params.closes ? ', closes' : ''}`
         : x.observer === 'TABLE' ? `table ${(x.params.columns as string[]).length}` : x.observer.toLowerCase();
   }
@@ -164,8 +164,9 @@ describe('what a review of the first version found', () => {
   it('a step that names two sections, one the example lacks, is not checked on the other alone', () => {
     for (const step of ['Open with a Glossary section and include a Summary section.', 'Include a Summary section, then end with a Sources section.']) {
       const p = methodProposals(`- ${step}\n`, example)[0];
-      expect(p.measurement, step).toBeNull();
-      expect(p.demoted, step).toMatch(/your example does not hold it/);
+      // the owner named both: both are checked, and the example that lacks one is said to
+      expect((p.measurement?.params.sections as string[]).length, step).toBe(2);
+      expect(p.conflict, step).toMatch(/your example does not do this/);
     }
   });
   it('a first line that is a rule or an instruction is a step, whatever its punctuation; a note called Inputs still has steps', () => {
@@ -202,7 +203,7 @@ describe('what a second review found', () => {
     expect(names('STATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n\nAnna Lindqvist\n\nHead of Platform\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
   });
   const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Background\nWe met.\n\n## Risks\nFew.\n\n## Next steps\nShip.\n' };
-  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : p.demoted ? 'to settle' : null; };
+  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
   it('"and" joins two sections of a list, not two clauses', () => {
     expect(check('Include a Summary section, then a Risks section.')).toBe('Summary+Risks');
     expect(check('Include a Summary section and a Risks section.')).toBe('Summary+Risks');
@@ -287,10 +288,10 @@ describe('a step that gives its place in the order, a closed set, or the form of
     expect(options('End with a Verdict section that is one of Approve, Request changes or Comment (with a reason).')).toEqual(['Approve', 'Request changes', 'Comment']);
     expect(options('End with a Verdict section. In the Summary, name one of the authors, the reviewer or the owner.')).toBeNull();
     expect(options('End with a Verdict section written by one of the leads or their deputy.')).toBeNull();
-    expect(first('End with a Verdict section that holds one of: Approve, Request changes, Comment.')).toMatchObject({ obligation: 'DELIVERABLE', demoted: null });
+    expect(first('End with a Verdict section that holds one of: Approve, Request changes, Comment.')).toMatchObject({ obligation: 'DELIVERABLE', conflict: null });
   });
-  it('an example whose verdict is none of them is the owner\'s to settle', () => {
-    expect(first('End with a Verdict section that holds one of: Approve, Reject, Comment.')).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, demoted: expect.stringContaining('does not start with one of') as string });
+  it('an example whose verdict is none of them: the rule stands as the owner wrote it, and the example is said to disagree', () => {
+    expect(first('End with a Verdict section that holds one of: Approve, Reject, Comment.')).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' }, conflict: expect.stringContaining('does not start with one of') as string });
   });
   it('"cite each item as path:line" is held by looking each citation up, and asks for none where there is none', () => {
     expect(first('Cite each Must fix item as path:line, the line number in the new file, and cite only lines the diff adds.')).toMatchObject({ obligation: 'EXECUTION', measurement: { observer: 'LINES', params: { min: 0 } } });
@@ -312,12 +313,12 @@ describe('a method held against every example', () => {
     const ps = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1));
     expect(ps.filter((p) => p.measurement).map((p) => p.onExample)).toEqual(['held in all 3 of your examples', 'held in all 3 of your examples', 'held in all 3 of your examples']);
   });
-  it('a step one example breaks is the owner\'s to settle, with the count and the piece named', async () => {
+  it('a step one example breaks stays the owner\'s rule, checked, with the count and the piece named', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
     const all = cases([piece('Approve'), piece('Looks fine to me'), piece('Comment')]);
     const verdict = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1)).find((p) => p.statement.startsWith('End with'));
-    expect(verdict).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, onExample: 'held in 2 of your 3 examples' });
-    expect(verdict?.demoted).toContain('1 of your examples do not hold it as a check would read it: e2.md');
+    expect(verdict).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' }, onExample: 'held in 2 of your 3 examples' });
+    expect(verdict?.conflict).toContain('1 of your examples does not do this: e2.md');
   });
   it('what only the first example shows is that piece\'s own, and is dropped', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
@@ -342,9 +343,9 @@ describe('which example the checks are read from, and which examples a check can
       .map((x, i) => ({ id: `e${i + 1}.md`, task: 'Review this.', material: [], reference: piece(x) }));
     const { lead, proposals } = proposalsAcross(NOTE, cases);
     expect(lead).toBe(1);
-    // the step is now a check the first piece fails, so it is the owner's to settle, by name: never a silent judgement
-    expect(proposals.find((p) => p.statement.startsWith('Then a Must fix'))).toMatchObject({ obligation: 'JUDGEMENT', demoted: expect.stringContaining('e1.md') as string });
-    expect(proposals.filter((p) => p.measurement).length).toBe(2);
+    // the step is a check the first piece fails: it stays required, and the piece is named. Never a silent judgement
+    expect(proposals.find((p) => p.statement.startsWith('Then a Must fix'))).toMatchObject({ obligation: 'DELIVERABLE', conflict: expect.stringContaining('e1.md') as string });
+    expect(proposals.filter((p) => p.measurement).length).toBe(3);
   });
   it('a check against the material is read only on the examples that carry theirs', async () => {
     const { acrossExamples } = await import('../core/method/standard.js');
@@ -361,7 +362,7 @@ describe('which example the checks are read from, and which examples a check can
 describe('a rule stated as a count or as quoted words', () => {
   const sentence = 'You plug it in and the current pushes the charge across to the far side.';
   const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
-  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? [p.measurement.observer, p.measurement.params] : p.demoted ? 'to settle' : null; };
+  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
   it('a length, in the unit it was stated in', () => {
     expect(check('Between 100 and 230 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 230 }]);
     expect(check('Keep it under 2,000 characters.')).toEqual(['LENGTH', { unit: ['characters'], max: 1999 }]);
@@ -394,7 +395,7 @@ describe('a rule stated as a count or as quoted words', () => {
 describe('a count or quoted words are read narrowly', () => {
   const sentence = 'You plug it in and the current pushes the charge across to the far side.';
   const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
-  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? [p.measurement.observer, p.measurement.params] : p.demoted ? 'to settle' : null; };
+  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
   it('a negation is never read by its comparator alone', () => {
     for (const step of ['Never go over 100 words.', 'Do not write more than 100 words.', 'Never under 100 words.', 'Don\'t write less than 50 words.',
       'The last line never starts with "In conclusion".', 'The first sentence does not begin with "I".', 'The last paragraph cannot begin with "In short,".']) expect(check(step), step).toBeNull();
@@ -435,7 +436,7 @@ describe('what the examples show about how they are written', () => {
     const { countedFromExamples } = await import('../core/method/standard.js');
     const offered = countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1)));
     expect(offered.length).toBeGreaterThan(0);
-    for (const p of offered) expect(p).toMatchObject({ origin: 'SHOWN_BY_EXAMPLE', counted: true, demoted: null, onExample: 'set where all 6 of your examples meet it' });
+    for (const p of offered) expect(p).toMatchObject({ origin: 'SHOWN_BY_EXAMPLE', counted: true, conflict: null, onExample: 'set where all 6 of your examples meet it' });
     // never the length of a sentence: a count is not a rhythm
     expect(offered.map((p) => p.measurement?.observer)).not.toContain('SENTENCE_LENGTH');
     expect(offered.map((p) => p.measurement?.observer)).toContain('PARAGRAPH_LENGTH');
@@ -477,7 +478,7 @@ describe('how long one section runs', () => {
     expect(sectionLengthsFromExamples(examples.slice(0, 2))).toEqual([]);
   });
   it('a stated length of a section is held of that section, and only in the plain forms', () => {
-    const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, examples[0])[0]; return p.measurement ? [p.measurement.observer, p.measurement.params] : p.demoted ? 'to settle' : null; };
+    const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, examples[0])[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
     expect(check('Keep the How it works section under 80 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['How it works'], need: 1, max: 79 }]);
     expect(check('The What it is section is between 20 and 60 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['What it is'], need: 1, min: 20, max: 60 }]);
     expect(check('Keep the How it works section under 40 words.')).toBe('to settle');

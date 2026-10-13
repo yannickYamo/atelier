@@ -122,20 +122,34 @@ is built and tested offline; it has not yet looked after a live skill for weeks.
 
 ```bash
 atelier new ./reviews --method review.md     # build: your finished work, and a note of how you do it
-atelier run "review this change" --with change.diff     # run: the work, then a line that says where it stands
+atelier run "review this change" --with change.diff     # run: the work, then its evaluation, rule by rule
 atelier fix "it missed the migration cost"   # react: what was wrong, in your own words
 ```
 
-Under the work a run prints its evaluation: each of your rules, in your words, with a mark (met, not met, yours
-to judge, or not checked on this run and why) and what was found; what every run is also checked for (nothing
-copied from your examples, facts traced to your material); and what was done to the draft. It opens with one of
-three words:
+Under the work a run prints its evaluation, in three layers that are kept apart because they are different
+promises: **your rules**, in your words; **this request** (a length it asked for); and **evidence** (every specific
+traced to what you supplied, no passage lifted from one of your examples). Below them, the habits seen in your
+examples, which are counted and block nothing, and what was done to the draft. Each line carries one of four marks,
+and a mark never says more than was observed:
 
-- **BLOCKED**: a rule you require, and that code can check, was not met. The work is shown and is not deliverable; the
-  line names the rule and what was found. Exit 1.
-- **CHECKED**: everything that can be checked was met. What is left is yours to judge (a step of your method no
-  machine reads) and is counted on the line.
-- **CERTIFIED**: every rule you require was checked and met, and nothing was left to anyone's judgement.
+| mark | means |
+|---|---|
+| `✓` | a check read the whole of the rule, and it held |
+| `✗` | a check saw it fail; everything it found is shown |
+| `~` | a check read part of the rule and that part held; the part it did not read is named, and is yours |
+| `?` | no check reads it: yours to judge |
+
+The evaluation opens with where the work stands:
+
+- **BLOCKED**: something required was seen to fail. The work is shown and is not usable as it stands. Exit 1.
+- **NEEDS REVIEW**: nothing was seen to fail, and part of what you require was not read in full by a check. The
+  line counts what was verified and what is left for you.
+- **VERIFIED**: everything required was read in full, and held.
+
+A rule you wrote is required whether or not a check can read it, so work with judgement in it is never VERIFIED by
+a machine: it is yours to finish reading. A rule you stated stays required when your own examples do not follow
+it; the build stops once to ask, and you keep the rule as written (`--yes`) or change the method. `atelier verify`, `atelier report`,
+`--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.
 
 `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
 would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every

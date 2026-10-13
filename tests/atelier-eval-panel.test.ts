@@ -63,7 +63,7 @@ describe('the panel', () => {
       gates: { ...base.gates, required: { held: 5, applicable: 6, broken: [{ id: 'c12', detail: 'the opening paragraph: 62 words' }] } } };
     const p = flat(renderPanel(e));
     expect(p.split('\n')[1]).toBe('  RESULT  NOT CONFORMANT: 1 required rule broken (c12)');
-    expect(p).toMatch(/FAIL {2}required rules {3}5\/6 held: broken c12/);
+    expect(p).toMatch(/FAIL {2}required rules {3}5\/6 held by their checks: broken c12/);
   });
   it('the claim reader down: FAIL "not checked", never a pass', () => {
     const e: EvalSummary = { ...base, result: { conformant: false, reasons: ['invented claims not checked: the claim reader could not run'] },

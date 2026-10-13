@@ -56,12 +56,17 @@ export function verifyText(skill: string, v: StandardVersion, text: string, cont
   };
 }
 
-export function describeVerify(r: VerifyReport): string {
+/**
+ * The check, line by line: each mark is the verdict of a check. `partly`: the rules whose check reads only part of
+ * them (core/eval/record.ts); under such a check that held, the line says so and names the part nobody read. Given them, the last line is left to the caller, who has the record.
+ */
+export function describeVerify(r: VerifyReport, partly?: ReadonlyMap<string, string>): string {
   const lines: string[] = [];
   for (const c of r.checked) {
     const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (c.materiality === 'REQUIRED' ? 'FAIL' : 'warn') : 'n/a ';
     lines.push(`${mark}  ${c.requirementId}  ${c.statement}`);
     lines.push(`        ${c.result.detail}`);
+    if (c.result.verdict === 'MET' && partly?.has(c.requirementId)) lines.push(`        the check held, and it reads only part of this rule. Not checked, yours to read: ${partly.get(c.requirementId)}`);
     for (const s of c.result.spans.slice(0, 5)) lines.push(`        › "${s.text.length > 90 ? `${s.text.slice(0, 87)}…` : s.text}"  (${s.why})`);
     if (c.result.spans.length > 5) lines.push(`        › …and ${c.result.spans.length - 5} more`);
   }
@@ -73,7 +78,7 @@ export function describeVerify(r: VerifyReport): string {
     for (const c of r.conditional) lines.push(`  to check ${c.requirementId} on every text: atelier amend --skill ${r.skill} --rule ${c.requirementId} --applies-when GENERAL --reason "<why>"`);
   }
   if (r.unchecked.length) lines.push(`\n${r.unchecked.length} rule(s) are about judgement, not measurement, and no count checks them: ${r.unchecked.map((u) => u.requirementId).join(', ')} (the taste reader reads them: verify --taste)`);
-  lines.push(r.failed ? '\nA REQUIRED rule is broken.' : '\nNo REQUIRED rule is broken.');
+  if (!partly) lines.push(r.failed ? '\nA REQUIRED rule is broken.' : '\nNo REQUIRED rule is broken.');
   return lines.join('\n');
 }
 

@@ -6,11 +6,13 @@
 //
 // What the owner sees is their own steps, each marked with what it is: something the output must contain (checked
 // by code on every output), something the work must be made from (checked against the material), or a judgement
-// (shown to the writer and reported as not measured). A step whose check their own example does not pass is kept
-// as theirs and asked about: the template and the finished work disagree, and only the owner knows which is right.
+// (shown to the writer and left to them). A step their own example does not do stays required as they wrote it,
+// and the disagreement is shown once, here: the owner keeps the rule or changes the method. Beside each check is how
+// much of the step it reads (core/eval/observes.ts): a step read in part is said to be read in part.
 // What the example shows that no step said is proposed, and is shown, never required, until they say so.
 //
-// Nothing here calls a model (core/method/standard.ts). `--yes` accepts exactly what the screen showed.
+// Nothing here calls a model (core/method/standard.ts). The build is one call; `--yes` is asked for only where a
+// stated step disagrees with the owner's examples, and keeps the step as written.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
@@ -25,7 +27,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
 import { proposalsAcross, countedOffers, stepsOf, type MethodProposal } from '../../core/method/standard.js';
 import { readCase, corpusFiles } from '../corpus.js';
-import { observerFor } from '../../core/observers/registry.js';
+import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 
@@ -36,7 +38,10 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   const out: string[] = [];
   const stated = ps.filter((p) => p.origin === 'STATED'); const shown = ps.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && !p.counted);
   const counted = ps.filter((p) => p.counted);
-  const of = (k: MethodProposal['obligation']): MethodProposal[] => stated.filter((p) => p.obligation === k && !p.demoted);
+  const of = (k: MethodProposal['obligation']): MethodProposal[] => stated.filter((p) => p.obligation === k);
+  // How much of the step the check reads, and what their own work did: both said beside it.
+  const beside = (p: MethodProposal): string => { const o = observesOf(p.statement, p.measurement, false);
+    return `${o?.coverage === 'PARTIAL' ? `\n      not checked, yours to read: ${o.unchecked}` : ''}${p.conflict ? `\n      ! ${p.conflict}. Required as you wrote it: change the method if that is not what you meant.` : ''}`; };
   const block = (title: string, items: readonly MethodProposal[], note: (p: MethodProposal) => string): void => {
     if (!items.length) return;
     out.push('', `${title} (${items.length})`);
@@ -47,18 +52,14 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   // check, and "everything it must contain is there" does not say which section a step was tied to.
   const looksFor = (p: MethodProposal): string => {
     const m = p.measurement;
-    if (m?.observer === 'PRESENCE' && Array.isArray(m.params.sections)) {
-      const names = (m.params.sections as readonly string[]).map((n) => `"${n}"`).join(', ');
-      return `checks for: ${names.includes(',') ? `the sections ${names}` : `a section ${names}`}, with something in it${m.params.opens ? ', opening the work' : ''}${m.params.closes ? ', ending the work' : ''}${Array.isArray(m.params.options) ? `, starting with one of ${(m.params.options as readonly string[]).map((o) => `"${o}"`).join(', ')} on a line of its own` : ''}${p.byName ? ' (read from your example\'s section names)' : ''}; `;
-    }
-    if (m?.observer === 'TABLE' && Array.isArray(m.params.columns)) return `checks for: a table with the columns ${(m.params.columns as readonly string[]).join(', ')}; `;
+    if (m?.observer === 'PRESENCE' && Array.isArray(m.params.sections)) return `checks for: ${propositionOf(m)}${p.byName ? ' (read from your example\'s section names)' : ''}; `;
+    if (m?.observer === 'TABLE' && Array.isArray(m.params.columns)) return `checks for: ${propositionOf(m)}; `;
     // Any other check the step became, in the check's own words: a length, a banned word, how a paragraph starts.
-    return m ? `checks for: ${observerFor(m.observer).describe(m.params)}; ` : '';
+    return m ? `checks for: ${propositionOf(m)}; ` : '';
   };
-  block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}`);
-  block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? 'checks for: every path:line cited is a line of the material with something on it (for a diff, a line the change adds); ' : ''}your example: ${p.onExample ?? 'held'}`);
+  block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}${beside(p)}`);
+  block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? 'checks for: every path:line cited is a line of the material with something on it (for a diff, a line the change adds); ' : ''}your example: ${p.onExample ?? 'held'}${beside(p)}`);
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
-  block('Yours to settle: your method says it, and your finished work does not hold it', stated.filter((p) => p.demoted), (p) => `${p.demoted}. Kept as a judgement until the method or the example changes.`);
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);
   block('Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so', counted, (p) => `${looksFor(p)}${p.onExample ?? 'held'}`);
   if (cls !== 'FULL_REPRO_CASE') out.push('', cls === 'TASK_AND_REFERENCE'
@@ -70,25 +71,27 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
 /**
  * THE SCREEN A PERSON BUILDS FROM: their steps, in their words, in three groups. What is checked on every run; what
  * is theirs to judge; what their examples show. How each check is made, and how every example fared, is the long
- * form above (`--report`). Two things stay on this screen because they are the owner's to act on: a step read as a
- * check by a section name of theirs (said beside it, so they can see it is what they meant), and a step their own
- * finished work does not hold.
+ * form above (`--report`). Three things stay on this screen because they are the owner's to act on: a step read as a
+ * check by a section name of theirs (said beside it, so they can see it is what they meant); a step a check reads
+ * only part of, with the part that is left to them; and a step their own finished work does not do.
  */
 export function shortScreen(ps: readonly MethodProposal[]): string[] {
   const stated = ps.filter((p) => p.origin === 'STATED');
-  const checked = stated.filter((p) => p.measurement && !p.demoted); const judged = stated.filter((p) => !p.measurement && !p.demoted);
-  const settle = stated.filter((p) => p.demoted); const shown = ps.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement);
+  const cover = (p: MethodProposal): Observes | null => observesOf(p.statement, p.measurement, false);
+  const whole = stated.filter((p) => cover(p)?.coverage === 'FULL'); const part = stated.filter((p) => cover(p)?.coverage === 'PARTIAL');
+  const judged = stated.filter((p) => !p.measurement); const shown = ps.filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement);
   // What a step read by a section name will look for, in a few words: the owner checks the reading, not the machinery.
   const lookedFor = (p: MethodProposal): string => {
     const sections = p.measurement?.observer === 'PRESENCE' ? p.measurement.params.sections as readonly string[] | undefined : undefined;
-    return sections?.length ? sections.map((x) => `a "${x}" section`).join(', ') : p.measurement ? observerFor(p.measurement.observer).describe(p.measurement.params) : '';
+    return sections?.length ? sections.map((x) => `a "${x}" section`).join(', ') : p.measurement ? propositionOf(p.measurement) : '';
   };
-  // Which piece, without the check's own account of it (that is the long form's).
-  const who = (p: MethodProposal): string => /^(\S+\.\w+) does not hold it/.exec(p.demoted ?? '')?.[1] ?? (/^(\d+) of your examples/.exec(p.demoted ?? '') ? `${/^(\d+)/.exec(p.demoted ?? '')?.[1]} of your examples` : 'your example');
+  // A STATED RULE THE OWNER'S OWN WORK DOES NOT DO IS STILL THEIR RULE. Said once, here, with the piece and what it did.
+  const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Yours to settle: keep it as written (required on every run), or change the method.` : '');
   const out: string[] = [`${stated.length} step(s) in your method.`];
-  if (checked.length) out.push('', `Checked on every run (${checked.length}):`, ...checked.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}`));
+  if (whole.length) out.push('', `Checked on every run (${whole.length}):`, ...whole.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}${disagrees(p)}`));
+  if (part.length) out.push('', `Checked in part: the rest is yours to read (${part.length}):`,
+    ...part.map((p) => `  - ${p.statement}\n      checked: ${lookedFor(p)}\n      not checked: ${cover(p)?.unchecked ?? ''}${disagrees(p)}`));
   if (judged.length) out.push('', `You judge these yourself (${judged.length}):`, ...judged.map((p) => `  - ${p.statement}`));
-  if (settle.length) out.push('', `Left for you to judge, because your own work does not do it (${settle.length}):`, ...settle.map((p) => `  - ${p.statement}\n      ${who(p)} ${/^\d/.test(who(p)) ? 'do' : 'does'} not do this. Change the method or the example to have it checked.`));
   if (shown.length) out.push('', `Also learned from your examples: ${shown.length} habit${shown.length === 1 ? '' : 's'} (see them with --report).`);
   return out;
 }
@@ -154,7 +157,7 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
  * sentence: authored by them, and required where code can hold an output to it. One read off the example is the
  * machine's reading that they approved: a preference until they say otherwise.
  */
-function decideSteps(proposals: readonly MethodProposal[], nextId: () => string): { decided: Requirement[]; ledger: RatificationLedger } {
+export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string): { decided: Requirement[]; ledger: RatificationLedger } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
     // A prohibition opens with one. "Then a Suggestions section: improvements that do not block the merge" asks for
@@ -168,6 +171,8 @@ function decideSteps(proposals: readonly MethodProposal[], nextId: () => string)
     // that breaks it is rewritten, and the work is not written again for it.
     // (A length is the exception: no sentence carries it, so made required it is met by writing the work again.)
     ...(p.counted && p.measurement?.observer !== 'LENGTH' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
+    // What was read off the examples is worded from its check; a step is the owner's sentence.
+    ...(p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement ? { wordedFromCheck: true as const } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decided = bases.map((base, i) => {
@@ -225,6 +230,17 @@ export async function method(): Promise<void> {
   // `--review` looks and builds nothing. Otherwise the skill is built from exactly what the screen showed: a reading
   // the owner did not mean is corrected by changing the method and building again, which is one command.
   if (looking) { console.log(`\nNothing has been built. To build exactly this: atelier ${typedWithout(['--review'])} --name ${name}`); return; }
+  // A RULE THE OWNER STATED AND THEIR OWN WORK DOES NOT FOLLOW IS THEIRS TO KEEP OR CHANGE, ONCE, HERE. It is never
+  // dropped and never quietly enforced: the step may mean what it says (and the examples are older than the rule), or
+  // it may have been read as something the owner did not mean. Nothing else stops a build.
+  const disputed = proposals.filter((p) => p.conflict);
+  if (disputed.length && !argv.includes('--yes')) {
+    console.log(`\nNothing has been built: ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above).`);
+    console.log(`  Keep ${disputed.length === 1 ? 'it' : 'them'} as written, required on every run: atelier ${typedWithout(['--yes'])} --name ${name} --yes`);
+    console.log('  Or change the method, and build again.');
+    process.exitCode = 1;
+    return;
+  }
   if (again) { archiveSession(); s = loadSession(); }
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────

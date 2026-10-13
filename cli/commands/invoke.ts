@@ -50,7 +50,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords } from '../../core/eval/size.js';
-import { statedLength, statedLengths, againstStated, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
+import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
@@ -155,8 +155,11 @@ export function resolveServedVersion(L: store.StoreLayout, wanted: string, conte
  * the request; the request is in the register the pieces are in; and the run is not a contract check or a long
  * piece planned section by section. Anywhere else the span of the pieces says nothing about this output.
  */
-export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: boolean; contract: boolean; answers: boolean; outOfRegister: boolean; sections: boolean }): boolean =>
-  !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections;
+export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: boolean; contract: boolean; answers: boolean; outOfRegister: boolean; sections: boolean; ruled?: boolean }): boolean =>
+  !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections && !c.ruled;
+/** Does the owner require a length of the whole work, in words? Then that is the length, and their pieces' span adds no second one. */
+export const lengthIsRuled = (std: Standard | null): boolean => Boolean(std?.requirements.some((r) => r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'LENGTH'
+  && !r.measurement.params.in && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'));
 /** How many words a count is outside a band; 0 inside it. */
 export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
 
@@ -183,6 +186,14 @@ export function lineCitationsLine(output: string, material: readonly { name: str
 export function ownLengthLine(output: string, band: readonly [number, number], span: readonly [number, number]): string {
   const written = proseWords(output); const how = againstBand(written, band);
   return `Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}, shortest to longest${how === 'met' ? '' : `, and this is ${how} of what they span (${band[0]} to ${band[1]})`}.`;
+}
+
+/** The length a request states in words, against what was written: the request's own constraint on this one output. */
+export function requestLength(output: string, asked: StatedLength): { asked: string; met: boolean | null; detail: string } {
+  const written = countWords(output); const how = againstStated(written, asked);
+  const [lo, hi] = statedBounds(asked); const n = (x: number): string => Math.round(x).toLocaleString('en-US');
+  const allows = lo !== null && hi !== null ? (lo === hi ? `exactly ${n(lo)}` : `${n(lo)} to ${n(hi)}`) : lo !== null ? `${n(lo)} or more` : hi !== null ? `${n(hi)} or fewer` : '';
+  return { asked: asked.raw, met: how === 'met', detail: `${written.toLocaleString('en-US')} words written${how === 'met' ? '' : `: too ${how}, it allows ${allows}`}` };
 }
 
 /** Each rule as it fared on the delivered text, and the rules no check reads: the evaluation, rule by rule. */
@@ -368,7 +379,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const carryNote = (carryNoteFile !== undefined ? (existsSync(carryNoteFile) ? readFileSync(carryNoteFile, 'utf8') : die(`--carry-note ${carryNoteFile}: there is no such file.`)) : methodCarry?.note ?? '').trim();
   const nDrafts = Math.max(1, Math.floor(numericFlag('--drafts', runSettings ? runSettings.drafts : methodCarry?.drafts ?? (store.getVoice(L)?.pieces?.length ? 2 : 1))));
   const editBudget = runSettings && !argv.includes('--no-repair') ? Math.max(0, Math.floor(numericFlag('--edits', runSettings.editBudget))) : 0;
-  const taste = std && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
+  // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md): it runs
+  // only when asked for (--taste). A run is held to what code can read and what the owner judges.
+  const taste = std && argv.includes('--taste') && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
@@ -546,7 +559,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const completions: string[] = [];
   // THE AUTHOR'S OWN LENGTH, WHERE IT APPLIES (`ownLengthApplies`): one more thing the drafts are chosen by.
   const ownBand = ownLengthApplies({ stated: Boolean(stated), asked: Boolean(lengthAsked), shape: shape === 'SHAPE', contract: contractFile !== null,
-    answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections') })
+    answers: checks.format?.claims === 'list' || (std ? isReplyWork(std.workType) : false), outOfRegister: register?.status === 'out', sections: argv.includes('--sections'), ruled: lengthIsRuled(std) })
     ? ownLengthBand(store.getVoice(L)?.lengthSpan) : null;
   // What one more draft would be told, when a draft leaves it unmet (`withRedraft`).
   const ownSpan = store.getVoice(L)?.lengthSpan;
@@ -555,7 +568,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // five from nine pieces. On fewer the drafts are still chosen by length, which costs nothing. --no-redraft turns
   // the step off whole.
   const enough = (store.getVoice(L)?.lengthPieces ?? 0) >= LENGTH_REDRAFT_PIECES;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null) : null;
+  // A length the request states in words is held as the request's own: a draft that misses it is written again.
+  // Only where it can be read one way (core/intake/length.ts, `notHeldBecause`); otherwise it is shown as not counted.
+  const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
+  const askedWords = stated && contractFile === null && !notHeld ? stated : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
@@ -628,6 +645,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       spend: spentBy,
       sent: { skill: countWords(servedForRun) - countWords(impl.text) - countWords(carryBlock), added: countWords(impl.text) + countWords(carryBlock) + perDraftWords, request: countWords(taskForRun) },
       durationMs: Date.now() - started, drafts: nDrafts, report: finalReport, contract: contractFile !== null,
+      request: askedWords ? requestLength(rec.output, askedWords) : stated && notHeld ? { asked: stated.raw, met: null, detail: notHeld } : null,
       applicability: rec.fidelity?.applicability ?? (std ? applicability(name, std, rec.output, waived, withheld, checks.context) : []),
       // WHAT THE REQUEST ASKED FOR, AGAINST THE DELIVERED TEXT: read under strict delivery, from the run's cache when
       // the loop already read this text. A monitor on the panel: it never decides the verdict.
@@ -1005,7 +1023,8 @@ export const STRICT_EXIT = 3;
  * owner's words with what the check found, so that one more draft can be told all of them at once.
  */
 export interface Unmet { readonly id: string; readonly statement: string; readonly detail: string; /** how far off, where that is a number: the less the better */ readonly off?: number;
-  /** a miss of length, in words: what the writer is told to aim for, since told only the limit it lands just past it again */ readonly aim?: string }
+  /** a miss of length, in words: what the writer is told to aim for, since told only the limit it lands just past it again */ readonly aim?: string;
+  /** whose length was missed, where it is the request's and not the span of the author's pieces */ readonly of?: 'request' }
 export const LENGTH_ID = 'length';
 /** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
 export const LENGTH_REDRAFT_PIECES = 9;
@@ -1024,11 +1043,11 @@ export function lengthAim(n: number, lo: number | null, hi: number | null): stri
 }
 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
-export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
+export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
   // citation that is no line of the material, since the right number is on the page the writer was given.
   const must = new Map(std.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && (r.obligation === 'DELIVERABLE' || r.measurement.observer === 'LINES')).map((r) => [r.requirementId, r.statement]));
-  if (!must.size && !own) return null;
+  if (!must.size && !own && !asked) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
     ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null }] as const] : [])));
@@ -1041,6 +1060,12 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   };
   return (d) => {
     const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss);
+    if (asked) {
+      const written = countWords(d.output); const [lo, hi] = statedBounds(asked);
+      if (againstStated(written, asked) === 'met') return rules;
+      const aim = lengthAim(written, lo, hi); const off = Math.round(hi !== null && written > hi ? written - hi : (lo ?? 0) - written);
+      return [...rules, { id: LENGTH_ID, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${hi !== null && written > hi ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}) }];
+    }
     const n = own ? proseWords(d.output) : 0;
     if (!own || againstBand(n, own.band) === 'met') return rules;
     const aim = lengthAim(n, own.band[0], own.band[1]);
@@ -1071,9 +1096,9 @@ export const nearer = (after: readonly Unmet[], before: readonly Unmet[]): boole
 /** What the run says the one more draft did, in the owner's terms; a draft written again for its length alone says the two lengths. */
 function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept: boolean, named: (us: readonly Unmet[]) => string, whose: (us: readonly Unmet[]) => string): string {
   if (before.every((u) => u.id === LENGTH_ID)) {
-    const now = after.find((u) => u.id === LENGTH_ID);
-    return kept ? `Written again for length: the first draft ran ${before[0].detail}, outside what your pieces span; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
-      : `The draft runs ${before[0].detail}, outside what your pieces span; one more draft did not do better, so the first is kept.`;
+    const now = after.find((u) => u.id === LENGTH_ID); const what = before[0].of === 'request' ? 'what the request asks for' : 'what your pieces span';
+    return kept ? `Written again for length: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
+      : `The draft runs ${before[0].detail}, outside ${what}; one more draft did not do better, so the first is kept.`;
   }
   return kept ? `Written again: the first draft left out ${before.length} thing(s) ${whose(before)} (${named(before)}); it now leaves out ${after.length}${after.length ? ` (${named(after)})` : ''}.`
     : `The draft leaves out ${before.length} thing(s) ${whose(before)} (${named(before)}); one more draft did not do better, so the first is kept.`;
@@ -1089,7 +1114,7 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
   c: { unmet: (d: Delivered) => Unmet[]; redraft: (note: string) => Promise<string>; notes: string[] } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
-  const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length your pieces run (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
+  const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
   const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : 'the method requires');
   const others = (x: Delivered, us: readonly Unmet[]): number => brokenIn(x.report).filter((id) => !us.some((u) => u.id === id)).length;
   return async (draft: string) => {
@@ -1432,7 +1457,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     contextJudge: checks.judge ? `${process.env.ATELIER_CLAIMS_MODEL ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
-    flags: { drafts: nDrafts, noTaste: argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
+    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
   };
 }
 

@@ -142,27 +142,27 @@ describe('a method and one example become requirements of three kinds', () => {
     expect(of(/^End with a Risks/)).toMatchObject({ obligation: 'DELIVERABLE' });
   });
   it('a step that names none of these is a judgement, with no check and no claim that it is measured', () => {
-    expect(of(/^Weigh switching cost/)).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, demoted: null });
+    expect(of(/^Weigh switching cost/)).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, conflict: null });
   });
-  it('a step the owner\'s own example does not hold is kept as theirs, as a judgement, and asked about', () => {
+  it('a step the owner\'s own example does not do stays required as they wrote it, and the disagreement is shown', () => {
     const disagree = methodProposals(`${NOTE}6. Include a table with the columns Vendor and Contract length.\n`, { task: TASK, material: context.material, reference: EXAMPLE.replace('## Risks', '## Caveats') });
     const risks = disagree.find((p) => p.statement.startsWith("End with a Risks"));
-    expect(risks).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null });
-    expect(risks?.demoted).toBe('your example does not hold it as a check would read it (no "Risks" section)');
+    expect(risks).toMatchObject({ origin: 'STATED', obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' } });
+    expect(risks?.conflict).toBe('your example does not do this (no "Risks" section)');
     // a table whose columns the step names is held against those columns, never against whatever table the example has
     const contract = disagree.find((p) => p.statement.includes('Contract length'));
-    expect(contract?.demoted).toBe('your example does not hold it as a check would read it (the table lacks the column(s) "contract length")');
+    expect(contract?.conflict).toBe('your example does not do this (the table lacks the column(s) "contract length")');
     const lines = describeMethod(disagree, 'FULL_REPRO_CASE').join('\n');
-    expect(lines).toMatch(/Checked on every output: what the work must contain \(2\)/);
+    expect(lines).toMatch(/Checked on every output: what the work must contain \(4\)/);
     expect(lines).toMatch(/Checked against the material: what the work must be made from \(1\)/);
-    expect(lines).toMatch(/Yours to settle: your method says it, and your finished work does not hold it \(2\)/);
+    expect(lines.match(/! your example does not do this .*Required as you wrote it: change the method if that is not what you meant\./g)).toHaveLength(2);
   });
-  it('a template table in the note that the example does not hold is a question, never a rule', () => {
+  it('a template table in the note that the example does not hold is the owner\'s rule, with the disagreement said', () => {
     const withTemplate = `${NOTE}\n## Template\n\n| Vendor | Contract length | Exit fee |\n|---|---|---|\n| [name] | [months] | [amount] |\n`;
     const p = methodProposals(withTemplate, { task: TASK, material: context.material, reference: EXAMPLE }).find((x) => x.statement.includes('contract length'));
-    expect(p).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null });
-    expect(p?.demoted).toMatch(/^your example does not hold it as a check would read it \(the table lacks the column\(s\) "contract length", "exit fee"\)$/);
-    expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/Yours to settle: your method says it, and your finished work does not hold it \(1\)/);
+    expect(p).toMatchObject({ origin: 'STATED', obligation: 'DELIVERABLE', measurement: { observer: 'TABLE' } });
+    expect(p?.conflict).toMatch(/^your example does not do this \(the table lacks the column\(s\) "contract length", "exit fee"\)$/);
+    expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/! your example does not do this/);
   });
   it('a step that only mentions a section in passing is a judgement, never a check on the work\'s shape', () => {
     const ps2 = methodProposals('1. Move to the Next section only after the Verdict is settled.\n2. Never give a Verdict before the comparison is read.\n', { task: TASK, material: context.material, reference: EXAMPLE });
@@ -172,8 +172,8 @@ describe('a method and one example become requirements of three kinds', () => {
     const template = '## Risks\n\nWhat could go wrong.\n\n## Verdict\n\nWho wins.\n\n- Weigh switching cost.\n';
     const p = methodProposals(template, { task: TASK, material: context.material, reference: EXAMPLE }).find((x) => x.statement.includes('these sections') && x.origin === 'STATED');
     expect(p?.statement).toBe('The work has these sections, in this order: Risks, Verdict.');
-    expect(p).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
-    expect(p?.demoted).toMatch(/sections out of order/);
+    expect(p).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Risks', 'Verdict'] } } });
+    expect(p?.conflict).toMatch(/sections out of order/);
     // in the example's order it is held, and stated sections are not proposed again from the example
     const agree = methodProposals('## Verdict\n\nWho wins.\n\n## Risks\n\nWhat could go wrong.\n\n- Weigh switching cost.\n', { task: TASK, material: context.material, reference: EXAMPLE });
     expect(agree.find((x) => x.origin === 'STATED' && x.statement.includes('these sections'))).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Verdict', 'Risks'] } } });
@@ -195,9 +195,10 @@ describe('a method and one example become requirements of three kinds', () => {
       'The work has these sections, in this order: Verdict, The comparison, Risks.', 'The work includes a table with the columns vendor, price per seat, minimum.',
       'Every figure in the work is one the request or the material gives.']);
   });
-  it('with no material, nothing about what the work is made from is checked, and the screen says so', () => {
+  it('with no material, the step about what the work is made from keeps its check, and the screen says it could not be read on the example', () => {
     const bare = methodProposals(NOTE, { task: TASK, material: [], reference: EXAMPLE });
-    expect(bare.find((p) => p.statement.startsWith("Every figure"))).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
+    // the owner stated it: it is checked on every run that is given material, whatever the example carried
+    expect(bare.find((p) => p.statement.startsWith("Every figure"))).toMatchObject({ obligation: 'EXECUTION', measurement: { observer: 'CITED' }, conflict: null });
     expect(describeMethod(bare, 'TASK_AND_REFERENCE').join('\n')).toMatch(/Your example carries its task and no material, so nothing about what the work is made from can be checked\./);
   });
 });
@@ -280,20 +281,21 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(await count()).toBe(before);
   });
 
-  it('a step the example does not do is said by the piece\'s name and left for the owner to judge', () => {
+  it('a step the example does not do stays required, and the disagreement is said once, on the build screen', () => {
     writeFileSync(join(proj, 'asks.md'), '- Open with a Verdict section.\n- End with a Appendix section.\n');
     const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Left for you to judge, because your own work does not do it \(1\):\n {2}- End with a Appendix section\.\n {6}your example does not do this\. Change the method or the example to have it checked\./);
+    expect(r.out).toMatch(/Checked on every run \(2\):\n {2}- Open with a Verdict section\.\n {2}- End with a Appendix section\.\n {6}! your example does not do this \(no "Appendix" section\)\.\n {8}Yours to settle: keep it as written \(required on every run\), or change the method\./);
     expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method asks\.md --golden acme\.md .*--name asks/);
     expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });
 
-  it('a check read from the example\'s own section names says what it will look for, in a few words', () => {
+  it('a step a check reads only part of is said to be read in part, with the part left to the owner', () => {
     writeFileSync(join(proj, 'reads.md'), '- Put who wins under a Verdict heading.\n');
     const r = atelier('method', 'reads.md', '--golden', 'acme.md', '--name', 'reads', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Checked on every run \(1\):\n {2}- Put who wins under a Verdict heading\.\n {6}checked as: a "Verdict" section/);
+    expect(r.out).toMatch(/Checked in part: the rest is yours to read \(1\):\n {2}- Put who wins under a Verdict heading\.\n {6}checked: a "Verdict" section\n {6}not checked: Put who wins\n/);
+    expect(r.out).not.toMatch(/Checked on every run/);
     expect(existsSync(join(data, 'skills', 'reads'))).toBe(false);
   });
 
@@ -303,7 +305,9 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.code, `${r.err}${r.out}`).toBe(0);
     expect(r.out).toMatch(/Your skill "analysis" is ready\./);
     // the short screen: the owner's steps in three groups, and none of the build's own account
-    expect(r.out).toMatch(/5 step\(s\) in your method\.\n\nChecked on every run \(4\):/);
+    expect(r.out).toMatch(/5 step\(s\) in your method\.\n\nChecked on every run \(2\):/);
+    expect(r.out).toMatch(/Checked in part: the rest is yours to read \(2\):\n {2}- Open with a Verdict section that says who wins, and for whom\.\n {6}checked: a "Verdict" section\n {6}not checked: says who wins, and for whom\n/);
+    expect(r.out).toMatch(/You judge these yourself \(1\):/);
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
     expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
     expect(await count()).toBe(before);

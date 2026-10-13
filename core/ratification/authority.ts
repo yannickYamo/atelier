@@ -95,9 +95,10 @@ const measurementAfter = (shown: Requirement, d: DecisionInput): Measurement | u
   return shown.measurement;
 };
 const withMeasurement = (r: Requirement, m: Measurement | undefined): Requirement => {
-  const { measurement: _dropped, ...rest } = r;
-  void _dropped;
-  return m ? { ...rest, measurement: m } : rest;
+  const { measurement: was, wordedFromCheck: worded, ...rest } = r;
+  // The statement was worded from its check only while it still carries that check, and that wording.
+  const still = worded && m !== undefined && m === was ? { wordedFromCheck: true as const } : {};
+  return m ? { ...rest, ...still, measurement: m } : rest;
 };
 
 function validateObligation(id: string, d: DecisionInput): {
