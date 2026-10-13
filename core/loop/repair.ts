@@ -17,7 +17,7 @@
 //      ratified measurement; the loop has no authority to relax a target to make a draft pass.
 
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
-import type { VerifyReport } from '../observers/verify.js';
+import { acts, type VerifyReport } from '../observers/verify.js';
 import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
 
@@ -85,7 +85,7 @@ export function planRepair(text: string, report: VerifyReport,
   const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; whole: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
-    if (requiredOnly && c.materiality !== 'REQUIRED') continue;
+    if (requiredOnly && !acts(c)) continue;
     if (opts.phase && (c.phase ?? 'STYLE') !== opts.phase) continue;
     // WHAT A METHOD REQUIRES IS NEVER REPAIRED BY REWRITING A SENTENCE. A missing section or table is not a sentence
     // that went wrong: rewritten into the last paragraph it becomes prose that mentions the section, which reads as
@@ -301,7 +301,7 @@ export function regressions(before: VerifyReport, after: VerifyReport): string[]
 export function acceptRepair(before: VerifyReport, after: VerifyReport): RegressionVerdict {
   const worse = regressions(before, after);
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
-  const broken = (r: VerifyReport) => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
+  const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
   const req = (r: VerifyReport): number => broken(r).length;
   // Progress is fewer broken REQUIRED rules, or the same rules broken in fewer places: fixing one of two
   // invented figures is a step, and discarding it threw away a good placeholder and ended the loop.

@@ -33,7 +33,7 @@ import * as fstore from '../../core/state/fidelity-store.js';
 import { checkDraftAsync } from '../../core/loop/run-repair.js';
 import { readFidelity, inBandShare } from '../../core/fidelity/profile.js';
 import { checkClass } from '../../core/observers/doc-class.js';
-import type { VerifyReport } from '../../core/observers/verify.js';
+import { acts, type VerifyReport } from '../../core/observers/verify.js';
 import type { FidelityReading } from '../../core/fidelity/types.js';
 import { checksFor } from '../checks.js';
 import { DATA, argv, flag, positional, assertSkillName } from '../runtime.js';
@@ -78,7 +78,7 @@ export function scoreOf(report: VerifyReport, reading: FidelityReading | null): 
   for (const c of report.checked) {
     const floor = FLOOR.test(c.requirementId);
     let counts: ScoreComponent | null = null;
-    if (!floor && c.materiality === 'REQUIRED' && (c.result.verdict === 'MET' || c.result.verdict === 'VIOLATED')) {
+    if (!floor && acts(c) && (c.result.verdict === 'MET' || c.result.verdict === 'VIOLATED')) {
       counts = 'required'; applicable += 1; if (c.result.verdict === 'MET') met += 1;
     }
     if (c.requirementId === 'UNSOURCED') {

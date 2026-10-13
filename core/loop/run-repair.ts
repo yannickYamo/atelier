@@ -8,7 +8,8 @@ import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
-import { verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
+import { acts, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
+import { planFor } from '../plan/execution-plan.js';
 import { unsourcedClaims, claimUnitsOf } from './claims.js';
 import { derivedFromKnown } from './derived.js';
 import { answerWorkClaims, answerSentences, judgedOnly } from './answer-claims.js';
@@ -26,7 +27,7 @@ import { createHash } from 'node:crypto';
 /** Repair pairs kept per invocation: the raw material for "write this, not that" examples, bounded. */
 const MAX_PAIRS_KEPT = 12;
 const sha = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
-const broken = (r: VerifyReport): string[] => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').map((c) => c.requirementId);
+const broken = (r: VerifyReport): string[] => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId);
 
 /**
  * Cut one flagged claim. A sentence goes the way `cutSpan` cuts it. A heading or a table row is a line
@@ -112,11 +113,11 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
   const tellLine = tellRule && opts.learnedTells?.length ? [{ requirementId: `${tellRule.requirementId}·learned`, statement: 'Phrases this skill\'s drafts keep repeating across unrelated topics, which your pieces never use.',
-    materiality: tellRule.materiality, phase: 'STYLE' as const, observer: 'LEXICON', pattern: 'MACHINE_TELL',
+    materiality: tellRule.materiality, enforced: planFor(v).rules.find((p) => p.id === tellRule.requirementId)?.enforced ?? false, phase: 'STYLE' as const, observer: 'LEXICON', pattern: 'MACHINE_TELL',
     result: { verdict: learned.length ? 'VIOLATED' as const : 'MET' as const, value: learned.length,
       spans: learned.map((sp) => ({ ...sp, why: `"${sp.text}", a phrase this skill's drafts repeat and your pieces never use` })),
       detail: learned.length ? `${learned.length} learned machine phrase(s)` : 'none of the learned machine phrases' } }] : [];
-  const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || (tellRule?.materiality === 'REQUIRED' && learned.length > 0) };
+  const report = { ...base, checked: [...base.checked, ...tellLine], failed: base.failed || tellLine.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
   const fmt = opts.format ? checkFormat(text, opts.format) : null;
   const fmtLines = opts.format && fmt ? [
     { requirementId: 'FORMAT', statement: `What ${opts.format.label} holds.`, materiality: 'REQUIRED', phase: 'STYLE' as const,
@@ -210,7 +211,7 @@ function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>): VerifyRep
   if (!waived?.size) return r;
   const checked = r.checked.map((c) => (waived.has(c.requirementId)
     ? { ...c, result: { verdict: 'NOT_APPLICABLE' as const, spans: [], value: null, detail: `withheld for this run: ${waived.get(c.requirementId) ?? ''}` } } : c));
-  return { ...r, checked, failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED') };
+  return { ...r, checked, failed: checked.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
 }
 
 /** A sentence that attributes or cites: its source is a claim of its own, whatever its figures. */
@@ -230,7 +231,7 @@ export async function checkDraftAsync(skill: string, v: StandardVersion, text: s
 
 /** The spans the gating claim check flagged: whole claim units. Only a REQUIRED line cuts; a listed one never does. */
 const flaggedClaims = (r: VerifyReport): readonly { start: number; end: number; text: string }[] =>
-  r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
+  r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c) && c.result.verdict === 'VIOLATED')?.result.spans ?? [];
 /** The specifics a `list` format leaves in for the person to check. */
 export const listedClaims = (r: VerifyReport): string[] =>
   (r.checked.find((c) => c.requirementId === CLAIMS_TO_CHECK && c.result.verdict === 'VIOLATED')?.result.spans ?? []).map((sp) => sp.text.trim().slice(0, 160));
@@ -282,7 +283,7 @@ export function claimMemory(): ClaimMemory {
     const checked = report.checked.map((c) => (c !== line ? c : { ...c, result: { ...c.result, spans: kept, value: kept.length,
       verdict: kept.length ? 'VIOLATED' as const : 'MET' as const,
       detail: `${c.result.detail}; ${settled} sentence(s) already passed or listed for you to check kept that verdict` } }));
-    return { ...report, checked, failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED') };
+    return { ...report, checked, failed: checked.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
   }
 }
 
@@ -331,9 +332,9 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
     // standard requires: deleting the sentence that carried one fixed a doubt by breaking a certainty.
     // REQUIRED rules only: a preference does not outweigh an invented figure. And not under --placeholders: the
     // person asked for a visible slot, which hides nothing. With no counted REQUIRED rule there is nothing to read.
-    const guarded = !opts.placeholders && v.requirements.some((q) => q.materiality === 'REQUIRED' && q.measurement);
+    const guarded = !opts.placeholders && planFor(v).rules.some((p) => p.enforced);
     const brokenIn = (t: string): Set<string> => new Set(!guarded ? [] : checkDraft(skill, v, t, { ...opts, guardClaims: false }).checked
-      .filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
+      .filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
     let held = brokenIn(next);
     for (const sp of spans) {
       const without = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);

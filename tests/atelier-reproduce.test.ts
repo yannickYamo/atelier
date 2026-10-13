@@ -80,7 +80,7 @@ describe('through the binary: one full case held back, run on its task and mater
     const r = atelier('reproduce', '--skill', 'analysis');
     expect(r.code, `${r.err}${r.out}`).toBe(0);
     expect(r.out).toMatch(/^reproduced {5} (acme|borealis)\.md$/m);
-    expect(r.out).toMatch(/REPRODUCTION ON WORK THE SKILL NEVER SAW · analysis · 1 case\n {2}1 of 1 {3}reproduced: the run's own verdict was "conformant"/);
+    expect(r.out).toMatch(/REPRODUCTION ON WORK THE SKILL NEVER SAW · analysis · 1 case\n {2}1 of 1 {3}reproduced: nothing required was seen to fail on the run/);
     // the pattern check is not a qualified reader, and the record does not say facts were read
     expect(r.out).toMatch(/not read {3}unsupported specifics: no qualified reader read every case, so the pattern check decided/);
     expect(r.out).toMatch(/\(patterns only\)/);
@@ -280,9 +280,9 @@ describe('the record is a count of cases, read beside the expert\'s own work', (
   const rec = (cases: CaseOutcome[], heldBack = { full: cases.length, taskOnly: 0, referenceOnly: 0 }, timesRun = 1): ReproductionRecord => ({ schema: 1, skill: 'x', skillVersion: 'a', standardVersion: 'b', at: '', heldBack, cases, notCheckable: 2, timesRun, costUsd: 0 });
   it('binary per case; rules and facts are never added into one number', () => {
     const r = rec([one({}), one({ id: 'b.md', conformant: false, required: { held: 4, applicable: 5 } }), one({ id: 'c.md', conformant: false, claims: { qualified: true, instrument: 'reader', unsupported: 2 } }), one({ id: 'd.md', reference: { met: 4, applicable: 5 } })]);
-    expect(countsOf(r)).toEqual({ ran: 4, reproduced: 2, notObserved: 0, refused: 0, factSafe: 3, required: { held: 19, applicable: 20 }, reference: { met: 19, applicable: 20, whole: 3 }, shape: null });
+    expect(countsOf(r)).toEqual({ ran: 4, reproduced: 2, notObserved: 0, verified: null, refused: 0, factSafe: 3, required: { held: 19, applicable: 20 }, reference: { met: 19, applicable: 20, whole: 3 }, shape: null });
     const text = renderReproduction(r);
-    expect(text).toMatch(/· 4 cases\n {2}2 of 4 {3}reproduced: the run's own verdict was "conformant"\n {2}3 of 4 {3}with no unsupported specific, read by a qualified reader\n {2}19 of 20 {3}required rules met, over the 4 cases\n {2}19 of 20 {3}on your own held-back work, for the counted required rules that apply to every piece; 3 of 4 of your pieces meet every one/);
+    expect(text).toMatch(/· 4 cases\n {2}2 of 4 {3}reproduced: nothing required was seen to fail on the run\n {2}3 of 4 {3}with no unsupported specific, read by a qualified reader\n {2}19 of 20 {3}required rules met, over the 4 cases\n {2}19 of 20 {3}on your own held-back work, for the counted required rules that apply to every piece; 3 of 4 of your pieces meet every one/);
     expect(text).toMatch(/2 required rules cannot be checked by code, and are in none of these counts/);
     expect(text).toMatch(/Where your own piece breaks such a rule, the rule asks for more than your work does/);
     expect(text).toMatch(/4 cases: a count, not a rate\./);
@@ -292,7 +292,7 @@ describe('the record is a count of cases, read beside the expert\'s own work', (
     const r = rec([one({}), one({ id: 'b.md', conformant: false, refused: true, claims: null }), one({ id: 'c.md', state: 'not-run', why: 'its task repeats 12 words in a row of the finished work', conformant: null, required: null, claims: null })]);
     expect(countsOf(r)).toMatchObject({ ran: 2, reproduced: 1, refused: 1, factSafe: 1 });
     const text = renderReproduction(r);
-    expect(text).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant" \(1 refused under strict delivery, counted as not reproduced\)/);
+    expect(text).toMatch(/1 of 2 {3}reproduced: nothing required was seen to fail on the run \(1 refused under strict delivery, counted as not reproduced\)/);
     expect(text).toMatch(/not run: c\.md: its task repeats 12 words in a row of the finished work/);
     expect(text).toMatch(/not reproduced {2}b\.md {2}· {2}5\/5 rules · refused, nothing delivered/);
   });

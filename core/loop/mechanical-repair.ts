@@ -8,7 +8,7 @@
 
 import type { StandardVersion } from '../state/canonical-state.js';
 import { isMarkup } from '../observers/visible.js';
-import type { VerifyReport } from '../observers/verify.js';
+import { acts, type VerifyReport } from '../observers/verify.js';
 import { paragraphSentences } from '../observers/text.js';
 
 /**
@@ -75,7 +75,7 @@ export function splitLongParagraphs(text: string, max: number): string {
  * paragraph-length rule is broken.
  */
 export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string): { text: string; fixed: string[] } {
-  const broken = new Set(report.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
+  const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
   let out = text; const fixed: string[] = [];
   for (const r of v.requirements) {
     if (!broken.has(r.requirementId) || !r.measurement) continue;

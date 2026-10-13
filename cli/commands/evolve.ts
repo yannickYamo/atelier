@@ -23,7 +23,7 @@ import { readCase } from '../corpus.js';
 import { releaseFor } from '../fidelity.js';
 import { DATA, argv, die, flag, numericFlag, skillArg, runFile } from '../runtime.js';
 import { MIN_BRIEFS, NOTE_HEAD, allowance, carryKey, leak, noiseBand, priorSearches, readRun, steadyBriefs, proposals, renderEvolve, rule, scoreOf, splitBriefs,
-  type Brief, type BriefResult, type Carry, type EvolveRecord, type Scored, type Trial } from '../../core/evolve/loop.js';
+  heldOf, type Brief, type BriefResult, type Carry, type EvolveRecord, type Scored, type Trial } from '../../core/evolve/loop.js';
 
 const HANDED_ON = ['--provider', '--base-url', '--model', '--target-model', '--target-provider', '--target-base-url', '--price-in', '--price-out', '--claims', '--max-tokens'] as const;
 const handedOn = (): string[] => HANDED_ON.flatMap((f) => { const v = flag(f); return v === undefined ? [] : [`${f}=${v}`]; });
@@ -146,7 +146,7 @@ export async function evolve(): Promise<void> {
     const results: BriefResult[] = [];
     for (const b of bs) { const r = state.stopped ? null : await runOne(b, carry); if (!r) break; results.push(r); }
     const s = scoreOf(results);
-    say(`  ${what}: ${s.ok} of ${s.n} conformant · $${s.costUsd.toFixed(2)}${results.length < bs.length ? ` (stopped after ${results.length} of ${bs.length})` : ''}`);
+    say(`  ${what}: ${heldOf(s)} · $${s.costUsd.toFixed(2)}${results.length < bs.length ? ` (stopped after ${results.length} of ${bs.length})` : ''}`);
     return s;
   };
 

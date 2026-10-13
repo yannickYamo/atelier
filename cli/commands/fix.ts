@@ -24,7 +24,7 @@
 // equals the hash after, asserted where the candidate is minted and again before promotion —
 // `assertStandardUnchanged` throws; it does not log.
 
-import { verifyText } from '../../core/observers/verify.js';
+import { acts, verifyText } from '../../core/observers/verify.js';
 import { regressions } from '../../core/loop/repair.js';
 import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { describeBackup } from '../../adapters/install-tree.js';
@@ -65,6 +65,8 @@ import { writeAtomic } from '../../core/state/fs-atomic.js';
 const FIX_RUN: Provenance = 'FIX_EVALUATION';
 
 interface LastRun { readonly invocationId: string; readonly skillName: string; readonly asked?: string; readonly with?: readonly { readonly name: string; readonly path: string }[];
+  /** the settings the run was written under, as typed, and the skill version that wrote it; absent from a run made before these were kept */
+  readonly settings?: readonly string[]; readonly skillVersion?: string;
   /** set when the last run was itself a piece written again: the run first complained about, and everything said of it so far */
   readonly correcting?: { readonly of: string; readonly complaints: readonly string[] } }
 export type FixRoute = 'THIS_OUTPUT' | 'EVERY_RUN' | 'EVALUATION';
@@ -108,6 +110,21 @@ export function settingsTyped(complaint: string, typed: readonly string[] = argv
   return out;
 }
 
+/**
+ * HOW A PIECE IS WRITTEN AGAIN: what was asked, the files given with it that are still there, the settings of the
+ * first run and then what is typed now (the person's word now is the last). Whatever of the first run cannot be
+ * had again is said, in `notes`: a piece written under other settings or by a changed skill is never passed off as
+ * the same run.
+ */
+export function replayOf(name: string, last: LastRun, complaints: readonly string[], typed: readonly string[], activeVersion: string | null, there: (path: string) => boolean = existsSync): { args: string[]; notes: string[] } {
+  const files = last.with ?? [];
+  const notes = files.filter((w) => !there(w.path)).map((w) => `${w.path} is no longer there, so the piece is written again without it.`);
+  if (last.settings === undefined) notes.push('The settings of the first run were not kept (it was made by an earlier version), so the piece is written again under the defaults: if you chose a model or a number of drafts then, type them beside the complaint.');
+  if (last.skillVersion && activeVersion && last.skillVersion !== activeVersion) notes.push(`Your skill has changed since this piece was written (it was ${last.skillVersion.slice(0, 8)}, it is now ${activeVersion.slice(0, 8)}): the piece is written again by the skill as it is now.`);
+  return { notes, args: ['run', last.asked ?? '', '--skill', name, '--correcting', complaints.join(' Also: '), '--provenance', FIX_RUN,
+    ...files.filter((w) => there(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...(last.settings ?? []), ...typed] };
+}
+
 /** The complaint, kept once, against the run it is about. About the work: also a "no" to "would you use it as it is", with the reason. */
 function keep(L: store.StoreLayout, inv: InvocationRecord, complaint: string, about: 'WORK' | 'EVALUATION'): void {
   store.putFeedbackOnce(L, { feedbackId: `f${sha(`${inv.invocationId}|${complaint}`).slice(0, 10)}`, invocationId: inv.invocationId, complaint, at: new Date().toISOString(), ...(about === 'EVALUATION' ? { about } : {}) });
@@ -122,11 +139,9 @@ function keep(L: store.StoreLayout, inv: InvocationRecord, complaint: string, ab
 function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationRecord, last: LastRun, complaint: string): void {
   keep(L, inv, complaint, 'WORK');
   const complaints = [...(last.correcting?.complaints ?? []).filter((c) => c !== complaint), complaint];
-  const missing = (last.with ?? []).filter((w) => !existsSync(w.path));
-  for (const w of missing) console.log(`(${w.path} is no longer there, so the piece is written again without it.)`);
+  const { args, notes } = replayOf(name, last, complaints, settingsTyped(complaint), store.getActive(L));
+  for (const n of notes) console.log(`(${n})`);
   console.log(`Writing this piece again with ${complaints.length > 1 ? `everything you have said of it (${complaints.length} things)` : 'that'} put right. Your skill is not changed.\n`);
-  const args = ['run', last.asked ?? '', '--skill', name, '--correcting', complaints.join(' Also: '), '--provenance', FIX_RUN,
-    ...(last.with ?? []).filter((w) => existsSync(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...settingsTyped(complaint)];
   const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args], { stdio: 'inherit' });
   // The run just made left its own pointer: it is marked as a correction of the first, so that what is said next
   // (again, --always, --evaluation) is about the piece complained of and carries what was already said.
@@ -501,7 +516,7 @@ async function settleBlindPick(
     // its own. A PREFERRED rule getting worse still withholds the "count favours it" reading below; it
     // just cannot reject without a person.
     const worseRules = new Set(regressions(champReport, candReport));
-    const breaks = candReport.checked.some((c) => worseRules.has(c.requirementId) && c.materiality === 'REQUIRED');
+    const breaks = candReport.checked.some((c) => worseRules.has(c.requirementId) && acts(c));
     const breaksAny = worseRules.size > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
     const champLetter = championFirst ? 'a' : 'b';

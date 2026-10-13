@@ -21,6 +21,8 @@ import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { measure } from '../../core/observers/registry.js';
 import { countWords } from '../../core/eval/size.js';
 import { goldenCase, servedFor, whyNotRunnable, repeatsReference, CARRIED_RUN, countClasses } from '../../core/golden/case.js';
+import { standingOf } from '../../core/eval/record.js';
+import { acts } from '../../core/observers/verify.js';
 import { renderReproduction, countsOf, type CaseOutcome, type ReproductionRecord, shapeAgainst, hasShape } from '../../core/eval/reproduce.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, argv, die, flag, loadSession, numericFlag, skillArg, runFile, clientAndBinding, sha } from '../runtime.js';
@@ -48,7 +50,7 @@ export const reproductionFile = (L: store.StoreLayout): string => join(L.root, '
 interface InvokeJson { output?: string | null; delivered?: boolean; costUsd?: number; invocationId?: string; eval?: EvalSummary | null }
 
 /** A text checked by `atelier verify`, as that command prints it with --json. */
-interface VerifyJson { failed?: boolean; checked?: { requirementId: string; materiality: string; result: { verdict: string } }[] }
+interface VerifyJson { failed?: boolean; checked?: { requirementId: string; materiality: string; enforced?: boolean; result: { verdict: string } }[] }
 
 export async function reproduce(): Promise<void> {
   const name = skillArg('--skill <name> required: atelier reproduce --skill <name>');
@@ -166,7 +168,7 @@ export async function reproduce(): Promise<void> {
         let v: VerifyJson | null = null;
         try { v = JSON.parse(vout.slice(vout.indexOf('{'))) as VerifyJson; } catch { /* verify printed no result */ }
         if (!v?.checked) { outcomes.push(notRun(c.id, c.reference, 'its output could not be checked')); say(`not run         ${c.id}`); continue; }
-        const req = v.checked.filter((x) => x.materiality === 'REQUIRED' && x.result.verdict !== 'NOT_APPLICABLE' && x.requirementId !== 'UNSOURCED');
+        const req = v.checked.filter((x) => acts(x) && x.result.verdict !== 'NOT_APPLICABLE' && x.requirementId !== 'UNSOURCED');
         const unsourced = v.checked.some((x) => x.requirementId === 'UNSOURCED' && x.result.verdict === 'VIOLATED');
         const shared = repeatsReference(text, c, servedTexts);
         const bareShape = shapeAgainst(text, c.reference);
@@ -215,10 +217,12 @@ export async function reproduce(): Promise<void> {
       const shape = shapeAgainst(j.output, c.reference);
       const lacks = hasShape(shape) ? [] : shape.sections.missing;
       const observed = rules.applicable > 0;
-      const conformant = observed ? ev.result.conformant && !carried && lacks.length === 0 : null;
+      // The run's standing is its record's (core/eval/record.ts); a run from before the record keeps its own yes/no.
+      const standing = ev.record ? standingOf(ev.record) : null;
+      const conformant = observed ? (standing ? standing.deliverable : ev.result.conformant) && !carried && lacks.length === 0 : null;
       const brokenIds = ev.gates.required.broken.map((b) => b.id);
       const mine = blank(c.id, c.reference);
-      outcomes.push({ ...mine, state: 'ran', conformant, shape, required: { ...rules, broken: brokenIds }, claims, sharedWithReference: shared,
+      outcomes.push({ ...mine, state: 'ran', conformant, ...(standing ? { verified: standing.verified } : {}), shape, required: { ...rules, broken: brokenIds }, claims, sharedWithReference: shared,
         invocationId: j.invocationId ?? null, outputHash: sha(j.output), sharedWithCarriedPieces: ev.gates.copying?.longest ?? null,
         alsoBrokenByReference: brokenIds.filter((id) => (mine.reference.broken ?? []).includes(id)),
         ...(!observed ? { why: 'no required rule is checked by code on this case, so it is not read as reproduced or not' } : {}),

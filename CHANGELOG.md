@@ -59,6 +59,23 @@ only partly observed, or the owner's word was moved by a measurement.
   something required was seen to fail, and only there; `verify --json` and the MCP check report `failed` the same
   way, and under a check that held say where it reads only part of its rule.
 
+- **The yes/no kept with a run is the record's** (`standingOf`, `core/eval/record.ts`). `eval.result.conformant`,
+  which `--strict` delivers by and `atelier lab eval`, `atelier reproduce` and `atelier evolve` count, was worked
+  out beside the record from its own list of reasons. It is now read from the record: nothing required was seen
+  to fail, and every check that exists finished. It does not mean verified. A run delivered under `--strict` with
+  part of a rule unread says so; `reproduce` and `evolve` print how many of the runs they count were verified in
+  full beside how many had nothing seen to fail. An evaluation that did not finish (the claim reader could not
+  run, the claim check was turned off, specifics the reader could not decide) is never a pass under `--strict`.
+- **Whether a failed check may act is the plan's, carried on the check line** (`RuleCheck.enforced`, `acts`).
+  Blocking, the sentence rewrite, the mechanical fixes and every count of broken rules read it there; a test lists
+  the files that may still read a rule's own `materiality`, and none of them writes, checks or repairs a run.
+- **A piece written again by `atelier fix` is written under the first run's settings** (model, drafts, cap, what
+  was turned off), with what is typed beside the complaint taking precedence. Where the first run kept no
+  settings, a file given with it is gone, or the skill has changed since, the fix says so before it writes.
+- **A build that stopped half-way is finished by running it again.** Stopped between storing the standard and
+  installing the skill, the same command was refused with "a skill called … already exists, and this folder did
+  not build it".
+
 `tests/atelier-invariants.test.ts` states eight properties these changes rest on, over every combination of what
 can be observed of a requirement: automation never changes what the owner requires; nothing read off examples
 blocks before the owner adopts it; a partial observation never passes; an unqualified reader never blocks; what a
@@ -67,7 +84,7 @@ meeting; a test run or a held-back case is never learned from; and every surface
 same run. The file is frozen: a new bug becomes a test of the reader or the check it was in.
 
 **If you are upgrading:** a skill built from a method whose examples break a stated rule now checks that rule on
-every run and shows the result, where it was left as a judgement, and enforces it once you confirm it; `eval.result.conformant` is unchanged and remains what `--strict` delivers by;
+every run and shows the result, where it was left as a judgement, and enforces it once you confirm it; `eval.result.conformant` is now read from the record: it no longer refuses for a shared run of words where there were too few examples to tell your standard wording from a lifted passage, and is otherwise what it was;
 scripts that read where a run stands should read `eval.record.state`; `--no-taste` is now the default;
 `atelier verify` now exits 1 for a passage lifted from one of your examples, and exits 0 (NEEDS REVIEW) where the
 claim reader could not run or left specifics unconfirmed, which it failed before.

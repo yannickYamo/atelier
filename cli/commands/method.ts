@@ -256,7 +256,10 @@ export async function method(): Promise<void> {
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
   const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed);
-  s = { ...s, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
+  // WHOSE BUILD THIS IS, WRITTEN BEFORE ANYTHING ELSE IS. A build that stops after the standard is stored and before
+  // the skill is installed leaves a skill of this name behind: with the name kept here, the same command run again
+  // knows the skill as this folder's and finishes it. Without it, the person was told somebody else had built it.
+  s = { ...s, skillName: name, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 
   // The finished example is installed with the skill as the one worked example: what good looks like, for a writer

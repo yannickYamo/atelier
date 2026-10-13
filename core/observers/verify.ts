@@ -10,11 +10,18 @@ import { measure, observerFor, type ObserverResult } from './registry.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
 import type { CutAuthority } from '../loop/cut-authority.js';
+import { planFor } from '../plan/execution-plan.js';
 
 export interface RuleCheck {
   readonly requirementId: string;
   readonly statement: string;
   readonly materiality: string | null;
+  /**
+   * MAY THIS LINE ACT WHEN IT FAILS: block the work, have a sentence rewritten, have something cut. For a rule of
+   * the standard it is the plan's to say (core/plan/execution-plan.ts) and is carried here; a line of the product's
+   * own (a format's limits, the invented-claim line) has no rule and acts when it is REQUIRED. Read with `acts`.
+   */
+  readonly enforced?: boolean;
   readonly result: ObserverResult;
   /** the observer that measured it; absent for the product's own floor lines */
   readonly observer?: string;
@@ -40,11 +47,15 @@ export interface VerifyReport {
   readonly failed: boolean;
 }
 
+/** May a failed line act (see `RuleCheck.enforced`): the one reading, for everything that repairs, blocks or counts. */
+export const acts = (c: { readonly enforced?: boolean; readonly materiality: string | null }): boolean => c.enforced ?? c.materiality === 'REQUIRED';
+
 export function verifyText(skill: string, v: StandardVersion, text: string, context?: CheckContext): VerifyReport {
   const live = v.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED' && r.materiality !== 'INCIDENTAL');
   const measured = live.filter((r): r is Requirement & { measurement: NonNullable<Requirement['measurement']> } => Boolean(r.measurement));
+  const enforced = new Map(planFor(v).rules.map((p) => [p.id, p.enforced]));
   const checked: RuleCheck[] = measured.filter((r) => isGeneralScope(r.appliesWhen))
-    .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, result: measure(text, r.measurement, context),
+    .map((r) => ({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, enforced: enforced.get(r.requirementId) ?? false, result: measure(text, r.measurement, context),
       observer: r.measurement.observer, phase: r.phase ?? 'STYLE', ...(r.obligation ? { obligation: r.obligation } : {}),
       ...(r.measurement.observer === 'PATTERN_RATE' && Array.isArray(r.measurement.params.pattern) ? { pattern: String(r.measurement.params.pattern[0]) } : {}) }));
   return {
@@ -52,7 +63,7 @@ export function verifyText(skill: string, v: StandardVersion, text: string, cont
     unchecked: live.filter((r) => !r.measurement).map((r) => ({ requirementId: r.requirementId, statement: r.statement })),
     conditional: measured.filter((r) => !isGeneralScope(r.appliesWhen))
       .map((r) => ({ requirementId: r.requirementId, statement: r.statement, appliesWhen: r.appliesWhen })),
-    failed: checked.some((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED'),
+    failed: checked.some((c) => acts(c) && c.result.verdict === 'VIOLATED'),
   };
 }
 
@@ -63,7 +74,7 @@ export function verifyText(skill: string, v: StandardVersion, text: string, cont
 export function describeVerify(r: VerifyReport, partly?: ReadonlyMap<string, string>): string {
   const lines: string[] = [];
   for (const c of r.checked) {
-    const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (c.materiality === 'REQUIRED' ? 'FAIL' : 'warn') : 'n/a ';
+    const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (acts(c) ? 'FAIL' : 'warn') : 'n/a ';
     lines.push(`${mark}  ${c.requirementId}  ${c.statement}`);
     lines.push(`        ${c.result.detail}`);
     if (c.result.verdict === 'MET' && partly?.has(c.requirementId)) lines.push(`        the check held, and it reads only part of this rule. Not checked, yours to read: ${partly.get(c.requirementId)}`);

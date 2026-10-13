@@ -12,7 +12,7 @@ import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf } from '../../core/observers/features.js';
-import { verifyText, type VerifyReport } from '../../core/observers/verify.js';
+import { acts, verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
@@ -20,6 +20,7 @@ import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type Fidel
 import type { RepairRecord, Requirement } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
+import { needsReview } from '../../core/eval/record.js';
 import { renderPanel, type EvalSummary } from '../../core/eval/summary.js';
 import { putEval } from '../../core/state/eval-store.js';
 import { renderRetrieved } from '../../core/fidelity/retrieval.js';
@@ -69,7 +70,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -598,7 +599,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
       const r = await checkDraftAsync(name, std, text, checks);
-      return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && c.materiality === 'REQUIRED')?.result.spans ?? []).map((sp) => sp.text);
+      return (r.checked.find((c) => c.requirementId === 'UNSOURCED' && acts(c))?.result.spans ?? []).map((sp) => sp.text);
     } : null, settingsFor(checks, taste, nDrafts, carryBlock ? carryNote : ''),
     // A structured output is JSON, not prose: no reading of it means anything against a prose range.
     fid && std && contractFile === null ? (output: string) => fidelityRecord(fid, output, trace, impl.retrieved, applicability(name, std, output, waived, withheld, checks.context), ledger,
@@ -676,6 +677,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     const why = evaluation ? evaluation.result.reasons.join('; ') : 'the run could not be evaluated';
     console.error(`atelier: not delivered (strict delivery): ${why}. The text is kept with the record: atelier report ${rec.invocationId}. To deliver it anyway, marked: --allow-nonconformant.`);
   }
+  // DELIVERED UNDER STRICT IS NOT VERIFIED. Strict refuses what was seen to fail and what could not be evaluated;
+  // what no check read in full is delivered, and said: a script that asked for strict must not read it as a pass of everything.
+  const left = strict && !refused && evaluation?.record?.state === 'NEEDS_REVIEW' ? evaluation.record.entries.filter(needsReview).length : 0;
+  if (left) console.error(`atelier: delivered (strict delivery): nothing required was seen to fail, and ${left} required thing${left === 1 ? ' was' : 's were'} not read in full by a check. Not verified: atelier report ${rec.invocationId}`);
   if (showPanel && evaluation) console.log(`\n${renderPanel(evaluation, { width: process.stdout.columns || 110, color: !process.env.NO_COLOR && process.stdout.isTTY && !machine })}\n`);
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
@@ -862,7 +867,7 @@ function refineDraft(c: DraftContext & { readonly client: InferenceClient; reado
 
 /** The REQUIRED rules a report finds broken. */
 const brokenIn = (r: Awaited<ReturnType<typeof checkDraftAsync>>): string[] =>
-  r.checked.filter((x) => x.materiality === 'REQUIRED' && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
+  r.checked.filter((x) => acts(x) && x.result.verdict === 'VIOLATED').map((x) => x.requirementId);
 
 /**
  * SEVERAL DRAFTS, THE BEST BY COUNT (`draftOrder`): the fewest REQUIRED rules broken, then the fewest
@@ -1472,7 +1477,7 @@ function draftScore(r: Awaited<ReturnType<typeof checkDraftAsync>>, std: Standar
   const style = r.checked.find((c) => std.requirements.find((q) => q.requirementId === c.requirementId)?.measurement?.observer === 'STYLE_DISTANCE')?.result.value ?? 0;
   return {
     ...(reading ? { outside: reading.outside.length, outsideBy: Math.round(reading.outside.reduce((n, o) => n + o.distance, 0) * 1000) / 1000, detector: reading.detector?.p ?? null } : {}),
-    req: r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED').length,
+    req: r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').length,
     all: r.checked.filter((c) => c.result.verdict === 'VIOLATED' && c.requirementId !== PUBLIC_FACTS).length,
     tells: r.checked.filter((c) => c.pattern === 'MACHINE_TELL').reduce((n, c) => n + c.result.spans.length, 0),
     signal: signalDistance(draft, signals),
@@ -1502,13 +1507,33 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
  * THE WHOLE COST, and the record. The writer's budget and the claim reader's are separate meters; what
  * this run spent on either is the process total since generation began.
  */
+/**
+ * THE SETTINGS A RUN WAS WRITTEN UNDER, as typed: which model, how many drafts, a cap, what was turned off. Kept
+ * with the run so a piece written again (`atelier fix`) is written as the first was. Not what names the run or the
+ * skill, not the files given (kept apart, by path), not a complaint it was answering, not a machine's format.
+ */
+export function settingsOfRun(tokens: readonly string[] = argv.slice(1)): string[] {
+  const NOT = ['skill', 'task', 'with', 'correcting', 'provenance', 'json', 'answer-only', 'quiet', 'panel', 'report', 'test-run'];
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    if (!t.startsWith('--')) continue;
+    const eq = t.indexOf('='); const name = t.slice(2, eq === -1 ? undefined : eq);
+    const next = eq === -1 && (VALUED_OPTIONS.includes(name) || name === 'with') && tokens[i + 1] !== undefined;
+    if (!NOT.includes(name)) out.push(t, ...(next ? [tokens[i + 1]] : []));
+    if (next) i += 1;
+  }
+  return out;
+}
+
 function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name: string; task: string; asked?: string; budget: Budget; spentBefore: number }): number {
   const spent = Math.max(r.budget.spentUsd, processSpentUsd() - r.spentBefore);
   const reader = spent - r.budget.spentUsd;
   report.detail(`invocation ${r.rec.invocationId}  ·  SkillVersion ${r.sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
   // What was asked, as typed, and the files given with it: what `atelier fix` needs to write this one piece again.
   writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: r.rec.invocationId, skillName: r.name, input: r.task, at: r.rec.at,
-    ...(r.asked !== undefined ? { asked: r.asked, with: boundMaterial().filter((m) => m.path).map((m) => ({ name: m.name, path: resolvePath(m.path) })) } : {}) }, null, 1));
+    ...(r.asked !== undefined ? { asked: r.asked, with: boundMaterial().filter((m) => m.path).map((m) => ({ name: m.name, path: resolvePath(m.path) })),
+      settings: settingsOfRun(), skillVersion: r.sv.skillVersionHash } : {}) }, null, 1));
   const details = runFile('last-invocation.txt');
   report.write(details);
   console.log(`$${spent.toFixed(2)} · everything this run checked: ${details} · not right? atelier fix "<what was wrong>"`);

@@ -56,3 +56,34 @@ describe('what the writer is told when a piece is written again', () => {
     expect(statedLength('Review this change.')).toBeNull();
   });
 });
+
+describe('a piece written again is written as the first was: under its settings, and it says what it could not recover', () => {
+  it('a run keeps the settings typed for the writing, and nothing that names the run, its material or a machine\'s format', async () => {
+    const { settingsOfRun } = await import('../cli/commands/invoke.js');
+    expect(settingsOfRun(['invoke', '--skill', 's', '--task=Review this.', '--model', 'm', '--drafts=2', '--no-redraft', '--with', 'notes=n.md', '--json', '--correcting', 'too long', '--provenance', 'p', '--cap', '3', 'a stray word', '--quiet']))
+      .toEqual(['--model', 'm', '--drafts=2', '--no-redraft', '--cap', '3']);
+    expect(settingsOfRun(['invoke', '--skill', 's', 'Review this.'])).toEqual([]);
+  });
+  it('the first run\'s settings come first and what is typed beside the complaint after, so the person\'s word now is the last', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [], settings: ['--model', 'm', '--drafts=2'], skillVersion: 'v1' };
+    const r = replayOf('s', last, ['too long'], ['--cap', '2'], 'v1', () => true);
+    expect(r.args.slice(0, 4)).toEqual(['run', 'Review this.', '--skill', 's']);
+    expect(r.args.slice(-5)).toEqual(['--model', 'm', '--drafts=2', '--cap', '2']);
+    expect(r.notes).toEqual([]);
+  });
+  it('a run from before settings were kept is written again under the defaults, and says so', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const r = replayOf('s', { invocationId: 'i1', skillName: 's', asked: 'Review this.' }, ['too long'], [], null, () => true);
+    expect(r.notes.join(' ')).toMatch(/settings of the first run were not kept.+under the defaults.+type them beside the complaint/);
+  });
+  it('a skill changed since the piece was written, or a file given with it that is gone, is said: never called the same run', async () => {
+    const { replayOf } = await import('../cli/commands/fix.js');
+    const last = { invocationId: 'i1', skillName: 's', asked: 'Review this.', with: [{ name: 'notes', path: '/gone/n.md' }, { name: 'sheet', path: '/here/s.md' }], settings: [], skillVersion: 'v1aaaaaaaaaa' };
+    const r = replayOf('s', last, ['too long'], [], 'v2bbbbbbbbbb', (p) => p === '/here/s.md');
+    expect(r.args).toContain('sheet=/here/s.md');
+    expect(r.args.join(' ')).not.toContain('/gone/n.md');
+    expect(r.notes).toEqual(['/gone/n.md is no longer there, so the piece is written again without it.',
+      'Your skill has changed since this piece was written (it was v1aaaaaa, it is now v2bbbbbb): the piece is written again by the skill as it is now.']);
+  });
+});

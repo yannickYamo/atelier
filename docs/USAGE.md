@@ -351,8 +351,12 @@ part of what the request asks is written once more; a draft that breaks a REQUIR
 (`--redraws <n>`, default 2); what still does not conform is refused with its reasons and exit code 3, and
 `atelier report <run>` shows the text. `--allow-nonconformant` delivers it anyway, marked. To make it the skill's
 way of running: `atelier fidelity --skill <name> --set delivery=strict`. It holds the REQUIRED rules that have a
-measurement and the claim check; a REQUIRED rule in prose with no measurement is read by the taste reader and is
-outside the guarantee.
+measurement and the claim check; a REQUIRED rule in prose with no measurement is outside the guarantee.
+
+Delivered under `--strict` means nothing required was seen to fail and every check finished. It does not mean
+verified: where a check read only part of a rule, or a rule is yours to judge, the run says how many such rules
+there are, and `eval.record.state` is `NEEDS_REVIEW`. A check that could not finish (the claim reader could not
+run, or left specifics undecided) is refused, never passed.
 
 ### What your request was read as
 

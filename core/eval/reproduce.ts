@@ -22,8 +22,13 @@ export interface CaseOutcome {
   /** `ran`: the case was run and has a verdict (a refusal under strict delivery is one). `not-run`: it could not be run, for the reason in `why` */
   readonly state: 'ran' | 'not-run';
   readonly why?: string;
-  /** the run's own verdict; false also when the output carried the reference's wording. null when it did not run */
+  /**
+   * Nothing required was seen to fail on the run and every check finished (core/eval/record.ts, `standingOf`); false
+   * also when the output carried the reference's wording. null when it did not run. This is NOT "verified"
+   */
   readonly conformant: boolean | null;
+  /** the run's record read every required thing in full and it held; absent where the run kept no record */
+  readonly verified?: boolean;
   /** strict delivery refused to deliver: counted as not reproduced */
   readonly refused?: boolean;
   readonly required: { readonly held: number; readonly applicable: number; /** the rules this run broke, by id */ readonly broken?: readonly string[] } | null;
@@ -148,6 +153,8 @@ export function countsOf(r: ReproductionRecord): {
   readonly ran: number; readonly reproduced: number; readonly refused: number;
   /** ran, and no required rule was checked by code on them: read as neither reproduced nor not */
   readonly notObserved: number;
+  /** of the cases reproduced, those whose run read every required thing in full; null when no run said */
+  readonly verified: number | null;
   /** cases with no unsupported specific, by a qualified reader on every case; null when any case was read by patterns alone */
   readonly factSafe: number | null;
   readonly required: { readonly held: number; readonly applicable: number };
@@ -161,6 +168,7 @@ export function countsOf(r: ReproductionRecord): {
     ran: done.length,
     reproduced: done.filter((c) => c.conformant === true).length,
     notObserved: done.filter((c) => c.conformant === null).length,
+    verified: done.some((c) => c.verified !== undefined) ? done.filter((c) => c.conformant === true && c.verified === true).length : null,
     refused: done.filter((c) => c.refused).length,
     factSafe: qualified ? done.filter((c) => !c.refused && c.claims?.unsupported === 0).length : null,
     required: { held: done.reduce((n, c) => n + (c.required?.held ?? 0), 0), applicable: done.reduce((n, c) => n + (c.required?.applicable ?? 0), 0) },
@@ -192,7 +200,8 @@ export function renderReproduction(r: ReproductionRecord): string {
     return out.join('\n');
   }
   out.push(r.arm === 'bare' ? `ONE-SHOT FLOOR: THE SAME HELD-BACK CASES, ONE PLAIN CALL EACH · read against ${r.skill} · ${s(c.ran, 'case')}` : `REPRODUCTION ON WORK THE SKILL NEVER SAW · ${r.skill} · ${s(c.ran, 'case')}`);
-  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : `the run's own verdict was "conformant"`}${c.shape?.of ? ', and the output has two thirds or more of the sections of the piece held back' : ''}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
+  out.push(`  ${c.reproduced} of ${c.ran}   reproduced: ${r.arm === 'bare' ? 'no required counted rule broken and nothing flagged as unsourced, by atelier verify' : 'nothing required was seen to fail on the run'}${c.shape?.of ? ', and the output has two thirds or more of the sections of the piece held back' : ''}${c.refused ? ` (${c.refused} refused under strict delivery, counted as not reproduced)` : ''}`);
+  if (c.verified !== null) out.push(`  ${c.verified} of ${c.ran}   verified in full: every required rule read whole by a check, and held. On the rest of those reproduced, part is left for a person to read`);
   out.push(c.factSafe === null
     ? '  not read   unsupported specifics: no qualified reader read every case, so the pattern check decided, and it misses what a reader finds'
     : `  ${c.factSafe} of ${c.ran}   with no unsupported specific, read by a qualified reader`);

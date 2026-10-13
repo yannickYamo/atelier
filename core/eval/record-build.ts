@@ -31,6 +31,8 @@ export interface RecordFacts {
     /** has the reader been measured on this kind of work, and is it the one deciding */
     readonly qualified: boolean; readonly why: string | null;
     readonly delivered: number; readonly open: number; readonly cut: number;
+    /** of those left open, the ones the reader could not decide either way: its reading of them did not finish */
+    readonly unconfirmed?: number;
   } | null;
   /**
    * The longest run of words shared with one of the owner's pieces, less their standard wording; and whether there
@@ -61,7 +63,7 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   if (why) return entry({ ...base, observation: seen(why), applies: f.replaced?.has(p.id) ? { replacedBy: why } : { setAside: why }, verdict: null });
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
   if (!line || (line.verdict === 'NOT_APPLICABLE' && o.reads === 'BOUND_MATERIAL')) {
-    return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE' }, verdict: null });
+    return entry({ ...base, observation: { ...seen(line?.detail ?? 'the check did not run'), coverage: 'NONE', ...(line ? {} : { incomplete: `not checked: ${p.id} (the check did not run)` }) }, verdict: null });
   }
   if (line.verdict === 'NOT_APPLICABLE') return entry({ ...base, observation: seen(line.detail), applies: false, verdict: null });
   return entry({ ...base, observation: seen(line.detail), verdict: line.verdict });
@@ -85,15 +87,17 @@ function evidenceEntries(f: RecordFacts): Entry[] {
   if (c) {
     const base = { id: 'specifics', dimension: 'EVIDENCE' as const, source: 'SYSTEM' as const, statement: 'Every specific in the work is found in what you supplied', required: true };
     const proposition = 'each figure, name, date and quotation, looked for in the request and the material';
-    if (c.state === 'off') out.push(entry({ ...base, observation: { proposition, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: 'turned off for this run' }, applies: { setAside: 'turned off for this run' }, verdict: null }));
-    else if (c.state === 'not-checked') out.push(entry({ ...base, observation: { proposition, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: 'the reader could not run' }, verdict: null }));
-    else if (!c.bound) out.push(entry({ ...base, observation: { proposition, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: c.open ? `no material was supplied to look them up in: ${c.open} listed for you` : 'no material was supplied to look them up in' }, verdict: null }));
+    // Specifics the reader could not decide either way: its reading did not finish, wherever else the entry lands.
+    const undecided = c.unconfirmed ? { incomplete: `${c.unconfirmed} specific${c.unconfirmed === 1 ? '' : 's'} unconfirmed: confirm them or bind your material` } : {};
+    if (c.state === 'off') out.push(entry({ ...base, observation: { proposition, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: 'turned off for this run', incomplete: 'invented claims not checked: turned off for this run (--allow-unsourced)' }, applies: { setAside: 'turned off for this run' }, verdict: null }));
+    else if (c.state === 'not-checked') out.push(entry({ ...base, observation: { proposition, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: 'the reader could not run', incomplete: 'invented claims not checked: the claim reader could not run' }, verdict: null }));
+    else if (!c.bound) out.push(entry({ ...base, observation: { proposition, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: c.open ? `no material was supplied to look them up in: ${c.open} listed for you` : 'no material was supplied to look them up in', ...undecided }, verdict: null }));
     else {
       const cut = c.cut ? `; ${c.cut} removed before delivery` : '';
       const evidence = c.delivered ? `${c.delivered} not found in it, and still in the text${cut}` : c.open ? `${c.open} could not be found in it: listed for you${cut}` : `all found${cut}`;
       // A specific left open is a part of the text nobody could vouch for: the reading is of the rest.
       out.push(entry({ ...base, observation: { proposition, coverage: c.open && !c.delivered ? 'PARTIAL' : 'FULL', qualification: c.qualified ? 'QUALIFIED' : 'UNQUALIFIED', evidence: c.qualified || !c.why ? evidence : `${evidence} (${c.why})`,
-        ...(c.open && !c.delivered ? { unchecked: `${c.open} specific${c.open === 1 ? '' : 's'} listed for you` } : {}) }, verdict: c.delivered ? 'VIOLATED' : 'MET' }));
+        ...(c.open && !c.delivered ? { unchecked: `${c.open} specific${c.open === 1 ? '' : 's'} listed for you` } : {}), ...undecided }, verdict: c.delivered ? 'VIOLATED' : 'MET' }));
     }
   }
   if (f.copying) {

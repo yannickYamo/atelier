@@ -2,7 +2,7 @@
 // rules, each held against every example; the examples are served with the skill and their lengths recorded.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -209,3 +209,47 @@ describe('atelier new <your-work>, with no method note and no model', () => {
   }, 120_000);
 });
 
+
+describe('a build that stopped half-way is finished by building again', () => {
+  // The standard is written, then the skill is installed. Stopped between the two (a full disk, a closed terminal,
+  // a folder that could not be written), the same command must finish it: never "this skill already exists, and
+  // this folder did not build it", said to the person whose folder built it.
+  it('stopped at the install: the same command, run again, builds the skill it was building', () => {
+    const { proj, run } = seed(['Approve', 'Request changes', 'Comment']);
+    writeFileSync(join(proj, '.claude'), 'not a folder');
+    const first = run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes');
+    expect(first.code).not.toBe(0);
+    expect(first.out).toMatch(/install failed/);
+    rmSync(join(proj, '.claude'));
+    const again = run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes');
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toContain('Your skill "review" is ready.');
+    expect(again.out).not.toMatch(/already exists|already holds/);
+    const skill = readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8');
+    // built once, not twice over: each step of the method is in the skill one time
+    expect(skill.match(/Open with a Summary section/g)?.length).toBe(1);
+    const run2 = run('lab', 'status', '--skill', 'review');
+    expect(run2.code, run2.out).toBe(0);
+  }, 120_000);
+  it('the same from examples alone, with no model', () => {
+    const { proj, run } = seed(['Approve', 'Request changes', 'Comment']);
+    writeFileSync(join(proj, '.claude'), 'not a folder');
+    expect(run('new', 'examples', '--no-model', '--name', 'reviews').code).not.toBe(0);
+    rmSync(join(proj, '.claude'));
+    const again = run('new', 'examples', '--no-model', '--name', 'reviews');
+    expect(again.code, again.out).toBe(0);
+    expect(existsSync(join(proj, '.claude', 'skills', 'reviews', 'SKILL.md'))).toBe(true);
+  }, 120_000);
+  it('a skill of that name built in another folder is still somebody else\'s, stopped build or not', () => {
+    const a = seed(['Approve', 'Request changes', 'Comment']);
+    expect(a.run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes').code).toBe(0);
+    const other = mkdtempSync(join(tmpdir(), 'atelier-mf-other-')); mkdirSync(join(other, 'examples'));
+    writeFileSync(join(other, 'method.md'), NOTE); writeFileSync(join(other, 'examples', 'e1.md'), piece('Approve', 4));
+    const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: a.data, ATELIER_PROJECT_DIR: other }; delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
+    let out: string; let code = 0;
+    try { out = execFileSync('node', [CLI, 'new', 'examples', '--method', 'method.md', '--name', 'review', '--yes'], { encoding: 'utf8', cwd: other, env, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    catch (e) { const x = e as { status: number; stdout: string; stderr: string }; code = x.status; out = x.stdout + x.stderr; }
+    expect(code).not.toBe(0);
+    expect(out).toMatch(/a skill called "review" already exists, and this folder did not build it/);
+  }, 120_000);
+});

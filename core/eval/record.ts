@@ -32,6 +32,11 @@ export interface Observation {
   readonly evidence: string | null;
   /** the part of the requirement no check read, in the owner's words, where coverage is PARTIAL */
   readonly unchecked?: string;
+  /**
+   * A check exists for this and did not finish its reading on this output: why, in plain words. Different from there
+   * being no check (a judgement that is the owner's): here the evaluation itself is incomplete.
+   */
+  readonly incomplete?: string;
 }
 
 export interface Entry {
@@ -88,6 +93,41 @@ export const needsReview = (e: Entry): boolean => e.required && (e.result === 'U
 export function stateOf(entries: readonly Entry[]): RunState {
   if (entries.some(blocks)) return 'BLOCKED';
   return entries.some(needsReview) ? 'NEEDS_REVIEW' : 'VERIFIED';
+}
+
+/** Did a check that exists not finish on this entry: the evaluation of it is incomplete, which is never a pass. */
+export const unfinished = (e: Entry): boolean => e.required && e.observation.incomplete !== undefined && e.result !== 'PASS' && e.result !== 'FAIL';
+
+/**
+ * WHAT A RECORD PERMITS, FOR EVERYTHING THAT ACTS ON A RUN. Read from the record and from nothing else: delivery
+ * under --strict, the yes/no kept with a run, and every count of runs are this, so none of them can say more than
+ * the record does.
+ *
+ *   verified      every required thing was read in full by an observer that can be believed, and held
+ *   deliverable   nothing required was seen to fail, and every check that exists finished. This is NOT verified:
+ *                 a run that needs review is deliverable, with what is left to the owner named
+ *   reasons       why it is not deliverable, in the record's own words; empty when it is
+ *
+ * A run with no record at all (its evaluation could not be built) has no standing: nothing may treat it as either.
+ */
+export interface Standing { readonly state: RunState; readonly verified: boolean; readonly deliverable: boolean; readonly reasons: readonly string[] }
+
+const label = (statement: string, max = 48): string => {
+  const s = statement.replace(/\s+/g, ' ').trim().replace(/[.:]$/, '');
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2)).replace(/[,;:]$/, '')}…`;
+};
+
+export function standingOf(r: EvaluationRecord): Standing {
+  const failed = r.entries.filter(blocks);
+  const rules = failed.filter((e) => e.dimension === 'STANDARD');
+  const reasons = [
+    ...(rules.length ? [`${rules.length} required rule${rules.length === 1 ? '' : 's'} broken (${rules.map((e) => `${e.id} "${label(e.statement)}"`).join(', ')})`] : []),
+    ...failed.filter((e) => e.dimension !== 'STANDARD').map((e) => (e.dimension === 'REQUEST' ? `the length the request asks for was not met (${e.observation.evidence ?? 'not met'})` : e.observation.evidence ?? e.statement)),
+    ...r.entries.filter(unfinished).map((e) => e.observation.incomplete ?? ''),
+  ];
+  return { state: r.state, verified: r.state === 'VERIFIED', deliverable: reasons.length === 0, reasons };
 }
 
 /** The rules a check read only part of, each with the part it did not read: for a surface that lists checks by line. */

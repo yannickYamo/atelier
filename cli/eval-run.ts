@@ -6,7 +6,7 @@
 
 import * as store from '../core/state/store.js';
 import * as fstore from '../core/state/fidelity-store.js';
-import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
+import { acts, type VerifyReport, type RuleCheck } from '../core/observers/verify.js';
 import { INCONCLUSIVE, UNREAD, CLAIMS_TO_CHECK, PUBLIC_FACTS } from '../core/loop/run-repair.js';
 import { featureOf } from '../core/observers/features.js';
 import { overlapIndex, STANDARD_WORDING_PIECES } from '../core/observers/overlap.js';
@@ -15,7 +15,7 @@ import { localiseBands } from '../core/fidelity/context.js';
 import { QUALIFIED_READERS, DISPUTED_WHY, NO_MATERIAL } from '../core/loop/claim-extract.js';
 import type { EvalSummary } from '../core/eval/summary.js';
 import { buildRecord } from '../core/eval/record-build.js';
-import type { EvaluationRecord } from '../core/eval/record.js';
+import { standingOf, type EvaluationRecord } from '../core/eval/record.js';
 import type { InvocationRecord, StandardVersion } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
 import type { ClaimSensor } from '../core/loop/claim-extract.js';
@@ -69,7 +69,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // REQUIRED RULES: every REQUIRED line of the full check of the delivered text (the standard's own rules, the
   // format's hard limits, the learned machine phrases), less those this run waived. The claim lines are their
   // own gate below. A structured output is held by its contract, not by prose rules.
-  const req = x.contract ? [] : (final?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict !== 'NOT_APPLICABLE'
+  const req = x.contract ? [] : (final?.checked ?? []).filter((c) => acts(c) && c.result.verdict !== 'NOT_APPLICABLE'
     && !waived.has(c.requirementId) && !c.requirementId.startsWith('UNSOURCED'));
   const broken = req.filter((c) => c.result.verdict === 'VIOLATED').map((c) => ({ id: c.requirementId, detail: c.result.detail, label: shortLabel(c.statement) }));
   // THE CLAIM GATE, counted on the delivered text: spans still flagged on the gating line, spans unconfirmed,
@@ -96,6 +96,8 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   const longest = served.length ? overlapIndex(served, voice?.standardWording ?? [])(rec.output).longestShared : null;
   const formatLine = line('FORMAT');
 
+  // WITH NO RECORD (a structured output held by its contract, or no standard at all) the engine's own bar stands:
+  // these reasons decide nothing where a record exists.
   const reasons: string[] = [];
   if (broken.length) reasons.push(`${broken.length} required rule${broken.length === 1 ? '' : 's'} broken (${broken.map((b) => `${b.id} "${b.label}"`).join(', ')})`);
   if (state === 'off') reasons.push('invented claims not checked: turned off for this run (--allow-unsourced)');
@@ -107,6 +109,9 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
   const record = x.contract || !std ? undefined : recordForText({ L: x.L, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
     waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut });
+  // THE YES/NO KEPT WITH THE RUN IS THE RECORD'S (core/eval/record.ts, `standingOf`): nothing required was seen to
+  // fail and every check finished. It is not "verified", and it is decided nowhere but there.
+  const standing = record ? standingOf(record) : { deliverable: reasons.length === 0, reasons };
 
   // FIDELITY: the delivered text's reading, beside the author's held-back pieces read the same way.
   const reading = rec.fidelity?.reading ?? null;
@@ -155,7 +160,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
     schema: 1, invocationId: rec.invocationId, skill: x.L.skillName, skillVersion: rec.skillVersionHash, at: rec.at,
     release: rec.fidelity?.release ?? null, model: rec.observedRuntime.resolvedModel ?? rec.runtimeBinding.requestedModel ?? null,
     drafts: x.drafts, costUsd: Math.round(x.costUsd * 10000) / 10000, ...(x.spend ? { spend: x.spend } : {}), ...(x.sent ? { sent: x.sent } : {}), durationMs: Math.round(x.durationMs),
-    result: { conformant: reasons.length === 0, reasons }, ...(record ? { record } : {}),
+    result: { conformant: standing.deliverable, reasons: [...standing.reasons] }, ...(record ? { record } : {}),
     gates: {
       required: { held: req.length - broken.length, applicable: req.length, broken, ...(x.contract ? { contract: true } : {}) },
       claims: { state, ...counts, agreement, instrument: x.sensor?.instrument ?? null, answers: x.answers, ...(x.unmeasured ? { unmeasured: x.unmeasured } : {}),
@@ -176,7 +181,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       ...(x.coverage ? { coverage: { asked: x.coverage.parts.length, given: x.coverage.parts.filter((p) => p.covered === true).length,
         missing: x.coverage.parts.filter((p) => p.covered === false).map((p) => p.words), unclear: x.coverage.parts.filter((p) => p.covered === null).length } } : {}),
     },
-    ...(x.strict ? { delivery: { mode: 'strict' as const, delivered: reasons.length === 0 || x.strict.allowed, redraws: x.strict.redraws } } : {}),
+    ...(x.strict ? { delivery: { mode: 'strict' as const, delivered: standing.deliverable || x.strict.allowed, redraws: x.strict.redraws } } : {}),
     ...(vr ? { voice: { mode: vr.mode, register: { status: vr.register.status, request: vr.register.request, corpus: vr.register.corpus, distance: vr.register.distance },
       carried: vr.carried.length, notCarried: vr.notCarried.length,
       passed: (vr.paragraphs ?? []).filter((p) => p.kept).length, refused: (vr.paragraphs ?? []).filter((p) => !p.kept && p.check !== 'not-tried').length,
@@ -207,9 +212,9 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
   const shared = served.length ? overlapIndex(served, voice?.standardWording ?? [], { words: true })(x.text) : null;
   return buildRecord({
     requirements: x.std.requirements, waived: x.waived ?? new Map(), request: x.request ?? null,
-    checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: c.materiality === 'REQUIRED', verdict: c.result.verdict, detail: c.result.detail })) : null,
+    checked: x.report ? x.report.checked.filter((c) => !isClaimLine(c.requirementId)).map((c) => ({ id: c.requirementId, statement: c.statement, required: acts(c), verdict: c.result.verdict, detail: c.result.detail })) : null,
     claims: { state, bound: x.unmeasured !== NO_MATERIAL || spans('UNSOURCED') > 0, qualified: deciding, why: x.unmeasured,
-      delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0 },
+      delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0, unconfirmed: spans(INCONCLUSIVE) },
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
     copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),

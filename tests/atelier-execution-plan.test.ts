@@ -88,3 +88,48 @@ describe('the runtime and the evaluation read the plan, and so agree', () => {
     expect(record.entries.filter((e) => e.dimension === 'HABIT').map((e) => e.id)).toEqual(['h1']);
   });
 });
+
+describe('whether a failed check may act is the plan\'s, carried on the check line and read from it everywhere', () => {
+  it('every line of a check of a text says what the plan says of its rule', async () => {
+    const { verifyText } = await import('../core/observers/verify.js');
+    const r = verifyText('s', { ...std, standardVersionHash: 'h' }, 'One line.');
+    expect(r.checked.length).toBeGreaterThan(3);
+    for (const c of r.checked) expect([c.requirementId, c.enforced]).toEqual([c.requirementId, of(c.requirementId).enforced]);
+    expect(r.checked.find((c) => c.requirementId === 'x6')?.enforced).toBe(false);
+  });
+  it('a line the plan does not enforce acts on nothing, whatever else it carries', async () => {
+    const { acts, describeVerify } = await import('../core/observers/verify.js');
+    const { mechanicalFixes } = await import('../core/loop/mechanical-repair.js');
+    const line = (enforced: boolean | undefined) => ({ requirementId: 'p1', statement: 'Paragraphs of at most 1 sentence.', materiality: 'REQUIRED', ...(enforced === undefined ? {} : { enforced }),
+      result: { verdict: 'VIOLATED' as const, value: 3, detail: 'a paragraph of 3 sentences', spans: [] } });
+    expect([acts(line(true)), acts(line(false)), acts(line(undefined)), acts({ materiality: 'PREFERRED' }), acts({ materiality: 'PREFERRED', enforced: true })]).toEqual([true, false, true, false, true]);
+    const rule = aRequirement({ requirementId: 'p1', statement: 'Paragraphs of at most 1 sentence.', materiality: 'REQUIRED', measurement: { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 1 } } });
+    const text = 'One. Two. Three.';
+    const report = (enforced: boolean) => ({ skill: 's', standardVersionHash: 'h', checked: [line(enforced)], unchecked: [], conditional: [], failed: enforced });
+    expect(mechanicalFixes({ requirements: [rule] } as unknown as StandardVersion, report(true), text).fixed.length).toBe(1);
+    expect(mechanicalFixes({ requirements: [rule] } as unknown as StandardVersion, report(false), text)).toEqual({ text, fixed: [] });
+    expect(describeVerify(report(false))).toMatch(/^warn {2}p1/);
+    expect(describeVerify(report(true))).toMatch(/^FAIL {2}p1/);
+  });
+  it('no file outside the plan decides from the rule\'s own field what a run does: the ones that read it are listed', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs'); const { join } = await import('node:path');
+    const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.ts') || p.endsWith('.mts') ? [p] : []; });
+    const reads = ['cli', 'core', 'renderers'].flatMap(walk).filter((p) => /materiality [!=]== 'REQUIRED'/.test(readFileSync(p, 'utf8'))).sort();
+    // The plan itself; what builds, shows or ratifies a standard (it is the owner's field there); and what counts a
+    // standard's rules for a report. Nothing that writes, checks, repairs or delivers a run is here: add one and say why.
+    expect(reads).toEqual(ALLOWED);
+  });
+});
+const ALLOWED: string[] = [
+  // builds, shows or ratifies a standard: the field is the owner's there, and nothing is run
+  'cli/commands/build.ts', 'cli/commands/review.ts', 'cli/skill-card.ts', 'core/architecture/compile.ts', 'core/ratification/suggest.ts', 'renderers/agent-skill/render.ts',
+  // counts or measures a standard's rules for a report or a study; decides nothing about a run
+  'cli/commands/evolve.ts', 'cli/commands/floor.ts', 'cli/commands/reproduce.ts', 'core/coverage/observation.ts', 'core/distinctiveness/measured.ts', 'core/eval/obligations.ts', 'core/fidelity/conditional-fidelity.ts',
+  // the reading of a check line when it carries no plan (a line of the product's own), in one function: `acts`
+  'core/observers/verify.ts',
+  // the plan itself
+  'core/plan/execution-plan.ts',
+  // KNOWN, AND A RUN'S: a rule that names material it needs (--with <name>=<file>) refuses a run that lacks it, from
+  // the rule's own field. It is a gate before any draft, older than the plan, and is listed so it is not forgotten.
+  'core/state/prerequisite.ts',
+].sort();
