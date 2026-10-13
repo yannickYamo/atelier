@@ -100,7 +100,7 @@ This is the layout, from the renderer, on an example run.
     ✗  Keep the whole review under 300 words.
          found: 341 words (at most 299): long by 42
     ?  Weigh the risk of the change before the style of it.
-         for you to judge: no check reads this
+       (no check reads the rule marked ? with nothing under it: it is yours to judge)
 
   Evidence
     ?  Every specific in the work is found in what you supplied
@@ -109,7 +109,7 @@ This is the layout, from the renderer, on an example run.
     ✓  No passage is lifted from one of your examples
          the longest shared run is 5 words
 
-  From your examples (not required): 1 of 2 habits kept
+  From your examples (not required): 0 of 1 habits kept
          not kept: No hedging words. (2 hedging words in 341)
 
   What was done: 2 drafts written, the better one kept · written again once for what was missing; 1

@@ -86,7 +86,7 @@ function skillFor(named: string | null): string {
   return named ?? loadSession().skillName ?? die('which skill? This folder has built none. Name it: atelier run --skill <name> "<task>"');
 }
 
-/** A skill that checks the work against material is not run without any: said before a draft is paid for. */
+/** Does the skill check the work against material, with none given? Said before the draft, and never a refusal. */
 function needsMaterial(requirements: readonly Requirement[], L: store.StoreLayout): boolean {
   const against = requirements.some((r) => r.materiality === 'REQUIRED' && r.measurement && targetOf(r.measurement.observer) === 'BOUND_MATERIAL');
   return against && !store.getMaterial(L).length && !boundMaterial().length;
@@ -110,7 +110,9 @@ export async function run(): Promise<void> {
   const L = { root: DATA, skillName: name };
   const active = store.getActive(L); const sv = active ? store.getSkillVersion(L, active) : null;
   const std = sv ? store.getStandard(L, sv.standardVersionHash) : null;
-  if (std && needsMaterial(std.requirements, L)) die(`this skill checks the work against material you give it, and none was given. Add it: atelier run "${task.length > 40 ? `${task.slice(0, 37)}...` : task}" --with <file>`);
+  // NEVER REFUSED FOR WHAT IS MISSING: the work is written, the rules that needed the material are shown as not
+  // checked, and the person is told how to have them checked.
+  if (std && needsMaterial(std.requirements, L)) process.stderr.write('This skill checks the work against material you give it, and none was given: those rules will show as not checked. To have them checked, add --with <file>.\n');
   if (process.stderr.isTTY) process.stderr.write('writing…\n');
   const engine = await new Promise<{ code: number; out: string; err: string }>((done) => {
     execFile(process.execPath, [...process.execArgv, process.argv[1], ...engineArgs, '--json'], { maxBuffer: 1 << 26, env: process.env },

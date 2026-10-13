@@ -117,6 +117,23 @@ export function standardWordingOf(pieces: readonly string[]): string[] {
   return [...seenIn].filter(([, n]) => n >= STANDARD_WORDING_PIECES).map(([g]) => g).sort();
 }
 
+/** Above this many pieces the reading below is made on the first of them, by text: it is a bound, not a census. */
+const SHARED_AMONG_MOST = 40;
+
+/**
+ * HOW MUCH THE AUTHOR'S OWN PIECES SHARE WITH ONE ANOTHER: the longest run of words any one of them shares with
+ * another, standard wording left out. An essayist's pieces share a few words; a contract drafter's share whole
+ * clauses, in two contracts out of twelve as often as in all of them. New work that shares no more with one example
+ * than the examples share among themselves is written the way this author writes, and is not a lifted passage; so
+ * this is the most a run may share before it is one (cli/eval-run.ts, `copyLimit`). Nothing is chosen here: the
+ * number is read off the pieces. Null on fewer pieces than can tell standard wording at all.
+ */
+export function sharedAmong(pieces: readonly string[], standardWording: readonly string[] = []): number | null {
+  const separate = [...new Set(pieces.map((p) => p.normalize('NFKC').trim()))].sort().slice(0, SHARED_AMONG_MOST);
+  if (separate.length < STANDARD_WORDING_PIECES) return null;
+  return Math.max(...separate.map((p, i) => overlapIndex(separate.filter((_, k) => k !== i), standardWording)(p).longestShared));
+}
+
 /**
  * HOW MUCH OF A SOURCE A REWRITE KEPT: the share of the output's sentences (six words or longer) whose
  * words are at least 80% those of one sentence of the source. A rewrite toward another author's voice kept

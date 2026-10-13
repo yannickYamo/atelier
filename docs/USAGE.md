@@ -148,7 +148,8 @@ The evaluation opens with where the work stands:
 
 A rule you wrote is required whether or not a check can read it, so work with judgement in it is never VERIFIED by
 a machine: it is yours to finish reading. A rule you stated stays required when your own examples do not follow
-it; the build stops once to ask, and you keep the rule as written (`--yes`) or change the method. `atelier verify`, `atelier report`,
+it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
+confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
 `--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.
 
 `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you

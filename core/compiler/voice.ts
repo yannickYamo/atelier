@@ -45,6 +45,8 @@ export interface Voice {
   readonly lengthSpan?: readonly [number, number];
   /** how many pieces `lengthSpan` was read from: a span of three says little about how long the fourth runs */
   readonly lengthPieces?: number;
+  /** the longest run of words any one of the author's pieces shares with another, standard wording left out (../observers/overlap.ts, `sharedAmong`). Kept with the stored voice, never in a package */
+  readonly sharedAmong?: number;
   /** pieces chosen to span the author's modes, served as reference files: whole (`selectVoicePieces`), or as excerpts */
   readonly pieces?: readonly string[];
   /** how `pieces` are shown. Absent: whole, which is every skill built before excerpts existed */

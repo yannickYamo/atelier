@@ -25,7 +25,7 @@ describe('the card, layer by layer', () => {
     expect(out).toContain('Not usable as it stands: 1 requirement seen to fail. 0 of 3 verified, 2 left for you.');
     expect(out).toContain('    ✗  Between 220 and 420 words.\n         found: 439 words (220 to 420): long by 19');
     expect(out).toContain('    ~  Open with a Parties section that names both parties exactly as the term sheet does.\n         checked, and held: a "Parties" section, with something in it, opening the work\n         not checked, yours to read: names both parties exactly as the term sheet does');
-    expect(out).toContain('    ?  Take every name from the term sheet.\n         for you to judge: no check reads this');
+    expect(out).toContain('    ?  Take every name from the term sheet.\n       (no check reads the rule marked ? with nothing under it: it is yours to judge)');
     expect(out).toContain('  Next: run it again. If a rule is wrong about your work: atelier fix "<what was wrong>"');
     expect(out).not.toMatch(/atelier rate/);
   });
@@ -87,6 +87,21 @@ describe('a lifted passage is shown, not only counted', () => {
   it('and the card carries them, with the most a run may share', () => {
     const r = buildRecord({ requirements: [], checked: [], waived: new Map(), request: null, claims: null, copying: { longest: 14, limit: 12, tellable: true, words: 'the receiving party shall hold' } });
     expect(r.entries[0].observation.evidence).toBe('a run of 14 words is shared with one of them (11 at most): "the receiving party shall hold"');
+  });
+});
+
+describe('a mistake in what the person gave never stops the work', () => {
+  it('a rule their own examples dispute is shown with what was found, not enforced, and said plainly either way', () => {
+    const disputed = rule('x3', 'Include a table with the columns Type and Rationale.', { observer: 'TABLE', params: { columns: ['type', 'rationale'], minRows: 1 } }, { materiality: null, contested: 'your example does not do this (the table lacks the column(s) "type")' });
+    for (const verdict of ['MET', 'VIOLATED'] as const) {
+      const r = buildRecord({ requirements: [disputed], checked: [{ id: 'x3', required: false, verdict, detail: 'a table with 2 of 2 column(s)' }], waived: new Map(), request: null, claims: null, copying: null });
+      expect(r.state).toBe('NEEDS_REVIEW');
+      expect(card(r).replace(/\s+/g, ' ')).toContain('checked, and not enforced: a table with 2 of 2 column(s). Your own examples do not do this, so the rule blocks nothing until you confirm it');
+    }
+  });
+  it('a comment at the top of a method note is not what the work is called', async () => {
+    const { kindOfWork } = await import('../cli/commands/method.js');
+    expect(kindOfWork('<!-- QUICK_MODE\nfocus: x\n-->\n\n# Competitive teardown\n\n1. Classify the competitor.', 'td', undefined)).toBe('competitive-teardown');
   });
 });
 

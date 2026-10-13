@@ -46,7 +46,8 @@ const isJudgement = (r: Requirement): boolean => !r.measurement && (r.materialit
 const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: null };
 
 function standardEntry(r: Requirement, f: RecordFacts): Entry | null {
-  const required = r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT';
+  // What the owner stated is theirs whether or not its check may block yet (`contested`).
+  const required = r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested);
   const base = { id: r.requirementId, source: 'METHOD' as const, statement: r.statement };
   if (isJudgement(r)) return entry({ ...base, dimension: 'STANDARD', required: true, observation: NOTHING, verdict: null });
   const o = observes(r);
@@ -55,7 +56,10 @@ function standardEntry(r: Requirement, f: RecordFacts): Entry | null {
   const source = required ? 'METHOD' as const : 'EXAMPLE' as const;
   const line = f.checked?.find((c) => c.id === r.requirementId);
   const why = f.waived.get(r.requirementId);
-  const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: 'DETERMINISTIC', evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
+  // A reading of the rule that the owner's own finished work contradicts has not earned belief: it is shown, and
+  // blocks nothing, until they confirm it.
+  const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: r.contested ? 'UNQUALIFIED' : 'DETERMINISTIC',
+    evidence: r.contested && evidence ? `${evidence}. Your own examples do not do this, so the rule blocks nothing until you confirm it` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
   if (why) return entry({ ...base, dimension, source, required, observation: seen(why), applies: f.replaced?.has(r.requirementId) ? { replacedBy: why } : { setAside: why }, verdict: null });
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
   if (!line || (line.verdict === 'NOT_APPLICABLE' && targetOf(r.measurement?.observer ?? '') === 'BOUND_MATERIAL')) {
@@ -102,7 +106,7 @@ function evidenceEntries(f: RecordFacts): Entry[] {
     // passage: the run is counted and shown, and blocks nothing.
     const k = f.copying;
     out.push(entry({ id: 'lifted', dimension: 'EVIDENCE', source: 'SYSTEM', statement: 'No passage is lifted from one of your examples', required: true,
-      observation: { proposition: `the longest run of words shared with one example, less wording that recurs across them (limit ${k.limit - 1})`, coverage: 'FULL',
+      observation: { proposition: `the longest run of words shared with one example, less wording that recurs across them (at most ${k.limit - 1}: what your own examples share with one another, and never fewer than 11)`, coverage: 'FULL',
         qualification: k.tellable ? 'DETERMINISTIC' : 'UNQUALIFIED', evidence: `${k.longest >= k.limit ? `a run of ${k.longest} words is shared with one of them (${k.limit - 1} at most)${k.words ? `: "${k.words}"` : ''}` : `the longest shared run is ${k.longest} words`}${k.tellable ? '' : ' (too few examples to tell your standard wording from a lifted passage)'}` }, verdict: k.longest >= k.limit ? 'VIOLATED' : 'MET' }));
   }
   return out;

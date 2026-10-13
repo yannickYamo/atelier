@@ -155,7 +155,7 @@ describe('a method and one example become requirements of three kinds', () => {
     const lines = describeMethod(disagree, 'FULL_REPRO_CASE').join('\n');
     expect(lines).toMatch(/Checked on every output: what the work must contain \(4\)/);
     expect(lines).toMatch(/Checked against the material: what the work must be made from \(1\)/);
-    expect(lines.match(/! your example does not do this .*Required as you wrote it: change the method if that is not what you meant\./g)).toHaveLength(2);
+    expect(lines.match(/! your example does not do this .*Checked and shown on every run; it blocks nothing until you confirm it \(--yes\)\./g)).toHaveLength(2);
   });
   it('a template table in the note that the example does not hold is the owner\'s rule, with the disagreement said', () => {
     const withTemplate = `${NOTE}\n## Template\n\n| Vendor | Contract length | Exit fee |\n|---|---|---|\n| [name] | [months] | [amount] |\n`;
@@ -285,7 +285,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
     writeFileSync(join(proj, 'asks.md'), '- Open with a Verdict section.\n- End with a Appendix section.\n');
     const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Checked on every run \(2\):\n {2}- Open with a Verdict section\.\n {2}- End with a Appendix section\.\n {6}! your example does not do this \(no "Appendix" section\)\.\n {8}Yours to settle: keep it as written \(required on every run\), or change the method\./);
+    expect(r.out).toMatch(/Checked on every run \(2\):\n {2}- Open with a Verdict section\.\n {2}- End with a Appendix section\.\n {6}! your example does not do this \(no "Appendix" section\)\.\n {8}Checked and shown on every run; it blocks nothing until you confirm it\./);
     expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method asks\.md --golden acme\.md .*--name asks/);
     expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });

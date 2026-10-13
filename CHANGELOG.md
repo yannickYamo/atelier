@@ -31,9 +31,10 @@ only partly observed, or the owner's word was moved by a measurement.
   whether the citation is the right one, and says so. A rule the machine worded from its own check (a count read
   off your examples) is that check; a sentence a person or a model wrote is never taken for one.
 - **What you state is required, whatever your examples do.** A stated step keeps its check when your own finished
-  work does not follow it. The build stops once to ask, with the pieces and what was found: `--yes` keeps the rule
-  as written, or you change the method. Nothing else stops a build. Agreement between examples decides only what
-  was read off the examples. Steps about a part of the work ("keep sentences under 25 words", "the lede under 40
+  work does not follow it, and the build never stops for the disagreement: the skill is built, the rule is yours,
+  checked and shown on every run with what was found, and it blocks nothing until you confirm it (`--yes`) or
+  change the method. A reading of your rule that your own work contradicts has not earned the right to block.
+  Agreement between examples decides only what was read off the examples. Steps about a part of the work ("keep sentences under 25 words", "the lede under 40
   words", "open each section with…") are no longer read as a rule on the whole of it: they are yours to judge.
 - **The request's own length is held as the request's.** "In about 300 words" is an entry of its own, counted on
   the delivered text, shown with what was written and what it allows; a draft that misses it is written again, and
@@ -44,10 +45,16 @@ only partly observed, or the owner's word was moved by a measurement.
   both the stated limit and the span of the examples.
 - **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your
   standard wording and is not counted. A run shared with one piece, with that left out, is a lifted passage: it is
-  shown with the words themselves, and blocks only where there were pieces enough to tell the two apart. A
+  shown with the words themselves, and blocks only where there were pieces enough to tell the two apart. How long
+  a run may be is read from your own work: twelve words, or one more than the longest run any of your pieces
+  shares with another where that is longer. An essayist's pieces share a few words and a contract drafter's share
+  whole clauses, and new work that shares no more with one example than the examples share among themselves is
+  written the way you write. A
   held-back reference appearing in an output is leakage, and is `atelier reproduce`'s to find.
 - **The taste reader is off unless asked for** (`--taste`). It is a model's reading of your rules and has not
   earned a say in whether work can be used.
+- **A run is never refused for what is missing.** A skill that reads the work against material, run without any,
+  writes the work and shows those rules as not checked, with how to have them checked.
 - **One exit code.** `atelier run`, with `--json` or `--answer-only` too, and `atelier verify` exit 1 where
   something required was seen to fail, and only there; `verify --json` and the MCP check report `failed` the same
   way, and under a check that held say where it reads only part of its rule.
@@ -59,8 +66,8 @@ request asks is not replaced by what the examples tend to do; a repair cannot br
 meeting; a test run or a held-back case is never learned from; and every surface says the same thing about the
 same run. The file is frozen: a new bug becomes a test of the reader or the check it was in.
 
-**If you are upgrading:** a skill built from a method whose examples break a stated rule now enforces that rule,
-where it was left as a judgement; `eval.result.conformant` is unchanged and remains what `--strict` delivers by;
+**If you are upgrading:** a skill built from a method whose examples break a stated rule now checks that rule on
+every run and shows the result, where it was left as a judgement, and enforces it once you confirm it; `eval.result.conformant` is unchanged and remains what `--strict` delivers by;
 scripts that read where a run stands should read `eval.record.state`; `--no-taste` is now the default;
 `atelier verify` now exits 1 for a passage lifted from one of your examples, and exits 0 (NEEDS REVIEW) where the
 claim reader could not run or left specifics unconfirmed, which it failed before.

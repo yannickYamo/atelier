@@ -45,8 +45,9 @@ function under(e: Entry): string[] {
   if (e.reason === 'SET_ASIDE' || e.reason === 'REPLACED_BY_REQUEST') return [`not checked on this run: ${o.evidence ?? 'set aside'}`];
   if (e.reason === 'DOES_NOT_APPLY') return [`does not apply to this output${o.evidence ? `: ${o.evidence}` : ''}`];
   if (e.reason === 'PARTLY_CHECKED') return [`checked, and held: ${o.proposition ?? ''}`, `not checked, yours to read: ${o.unchecked ?? 'the rest of it'}`];
-  if (e.reason === 'OBSERVER_UNQUALIFIED') return [`read, and not to be relied on: ${o.evidence ?? ''}`];
-  if (e.reason === 'NOT_MACHINE_CHECKABLE') return [o.proposition === null ? 'for you to judge: no check reads this' : `not checked: ${o.evidence ?? 'nothing to check it against'}`];
+  if (e.reason === 'OBSERVER_UNQUALIFIED') return [`${e.dimension === 'STANDARD' ? 'checked, and not enforced' : 'read, and not to be relied on'}: ${o.evidence ?? ''}`];
+  // A rule no check reads is one line: a method of twelve judgement steps is not twelve explanations.
+  if (e.reason === 'NOT_MACHINE_CHECKABLE') return o.proposition === null ? [] : [`not checked: ${o.evidence ?? 'nothing to check it against'}`];
   if (e.result === 'PASS' && e.dimension !== 'STANDARD') return o.evidence ? [o.evidence] : [];
   return o.evidence && /\d/.test(o.evidence) ? [o.evidence] : [];
 }
@@ -86,6 +87,8 @@ export function renderRunCard(c: RunCard, width = 100): string[] {
   const layer = (name: string, es: readonly Entry[]): void => { if (es.length) out.push('', `  ${name}`, ...es.flatMap((e) => rows(e, w))); };
   const of = (d: Entry['dimension']): Entry[] => c.record.entries.filter((e) => e.dimension === d);
   layer('Your rules', of('STANDARD'));
+  const judged = of('STANDARD').filter((e) => e.reason === 'NOT_MACHINE_CHECKABLE' && e.observation.proposition === null).length;
+  if (judged) out.push(`       (no check reads ${judged === 1 ? 'the rule' : `the ${judged} rules`} marked ? with nothing under ${judged === 1 ? 'it: it is' : 'them: they are'} yours to judge)`);
   layer('This request', of('REQUEST'));
   layer('Evidence', of('EVIDENCE'));
   const habits = of('HABIT').filter((e) => e.result === 'PASS' || e.result === 'FAIL'); const missed = habits.filter((e) => e.result === 'FAIL');

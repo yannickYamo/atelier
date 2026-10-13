@@ -6,13 +6,13 @@
 //
 // What the owner sees is their own steps, each marked with what it is: something the output must contain (checked
 // by code on every output), something the work must be made from (checked against the material), or a judgement
-// (shown to the writer and left to them). A step their own example does not do stays required as they wrote it,
-// and the disagreement is shown once, here: the owner keeps the rule or changes the method. Beside each check is how
+// (shown to the writer and left to them). A step their own example does not do stays theirs, is checked and shown on
+// every run, and blocks nothing until they confirm it or change the method. Beside each check is how
 // much of the step it reads (core/eval/observes.ts): a step read in part is said to be read in part.
 // What the example shows that no step said is proposed, and is shown, never required, until they say so.
 //
-// Nothing here calls a model (core/method/standard.ts). The build is one call; `--yes` is asked for only where a
-// stated step disagrees with the owner's examples, and keeps the step as written.
+// Nothing here calls a model (core/method/standard.ts). The build is one call and never stops for a disagreement
+// between the method and the examples; `--yes` confirms the steps the examples dispute, so that they block.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { DATA, argv, die, flag, positional, loadSession, saveSession, archiveSession, authoredIdAllocator, runFile, sha } from '../runtime.js';
@@ -41,7 +41,7 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   const of = (k: MethodProposal['obligation']): MethodProposal[] => stated.filter((p) => p.obligation === k);
   // How much of the step the check reads, and what their own work did: both said beside it.
   const beside = (p: MethodProposal): string => { const o = observesOf(p.statement, p.measurement, false);
-    return `${o?.coverage === 'PARTIAL' ? `\n      not checked, yours to read: ${o.unchecked}` : ''}${p.conflict ? `\n      ! ${p.conflict}. Required as you wrote it: change the method if that is not what you meant.` : ''}`; };
+    return `${o?.coverage === 'PARTIAL' ? `\n      not checked, yours to read: ${o.unchecked}` : ''}${p.conflict ? `\n      ! ${p.conflict}. Checked and shown on every run; it blocks nothing until you confirm it (--yes).` : ''}`; };
   const block = (title: string, items: readonly MethodProposal[], note: (p: MethodProposal) => string): void => {
     if (!items.length) return;
     out.push('', `${title} (${items.length})`);
@@ -86,7 +86,7 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
     return sections?.length ? sections.map((x) => `a "${x}" section`).join(', ') : p.measurement ? propositionOf(p.measurement) : '';
   };
   // A STATED RULE THE OWNER'S OWN WORK DOES NOT DO IS STILL THEIR RULE. Said once, here, with the piece and what it did.
-  const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Yours to settle: keep it as written (required on every run), or change the method.` : '');
+  const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Checked and shown on every run; it blocks nothing until you confirm it.` : '');
   const out: string[] = [`${stated.length} step(s) in your method.`];
   if (whole.length) out.push('', `Checked on every run (${whole.length}):`, ...whole.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}${disagrees(p)}`));
   if (part.length) out.push('', `Checked in part: the rest is yours to read (${part.length}):`,
@@ -106,7 +106,8 @@ export function kindOfWork(note: string, name: string, declared: string | undefi
   // Read, not declared, so never by a short name: a note titled "X" or a skill called "blog" is not thereby a post
   // on X with its 280 characters. Only `--class` takes the short names (../../core/observers/doc-class.ts).
   const slug = (t: string): string => t.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
-  const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+  // (A comment is no title: a template that opens with <!-- QUICK_MODE --> is not work of the kind "quick-mode".)
+  const body = note.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/<!--[\s\S]*?-->/g, '');
   const first = body.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
   const title = /^(?:[-*+]|\d+[.)])\s/.test(first) ? '' : first.replace(/^#+\s*/, '').split(/\s[—–-]\s|[:,]/)[0].trim();
   const words = title.split(/\s+/).filter(Boolean);
@@ -157,7 +158,7 @@ export function nameFor(notePath: string, goldenPath: string, viaNew: boolean): 
  * sentence: authored by them, and required where code can hold an output to it. One read off the example is the
  * machine's reading that they approved: a preference until they say otherwise.
  */
-export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string): { decided: Requirement[]; ledger: RatificationLedger } {
+export function decideSteps(proposals: readonly MethodProposal[], nextId: () => string, confirmed = false): { decided: Requirement[]; ledger: RatificationLedger } {
   const bases: Requirement[] = proposals.map((p) => ({
     requirementId: nextId(), statement: p.statement, appliesWhen: 'GENERAL',
     // A prohibition opens with one. "Then a Suggestions section: improvements that do not block the merge" asks for
@@ -173,13 +174,16 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     ...(p.counted && p.measurement?.observer !== 'LENGTH' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
     // What was read off the examples is worded from its check; a step is the owner's sentence.
     ...(p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement ? { wordedFromCheck: true as const } : {}),
+    // A stated step the owner's own work does not do: theirs, checked, and not enforced until they confirm it.
+    ...(p.origin === 'STATED' && p.conflict && !confirmed ? { contested: p.conflict } : {}),
   }));
   let ledger: RatificationLedger = { standardDraftHash: draftHash(bases), records: [] };
   const decided = bases.map((base, i) => {
     // A stated step with a check is required: it is the owner's, and code can hold an output to it. One read off the
     // example is a preference until the owner says otherwise.
     const p = proposals[i];
-    const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(p.measurement ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: 'PREFERRED' });
+    const enforce = p.measurement && !base.contested;
+    const outcome = decide(base, p.origin === 'STATED' ? { verb: 'STATED', ...(enforce ? { materiality: 'REQUIRED' } : {}) } : { verb: 'APPROVE', materiality: 'PREFERRED' });
     ledger = appendDecision(ledger, base, outcome.ledgerDecision, { decidedAt: new Date().toISOString() });
     return outcome.requirement;
   });
@@ -230,21 +234,14 @@ export async function method(): Promise<void> {
   // `--review` looks and builds nothing. Otherwise the skill is built from exactly what the screen showed: a reading
   // the owner did not mean is corrected by changing the method and building again, which is one command.
   if (looking) { console.log(`\nNothing has been built. To build exactly this: atelier ${typedWithout(['--review'])} --name ${name}`); return; }
-  // A RULE THE OWNER STATED AND THEIR OWN WORK DOES NOT FOLLOW IS THEIRS TO KEEP OR CHANGE, ONCE, HERE. It is never
-  // dropped and never quietly enforced: the step may mean what it says (and the examples are older than the rule), or
-  // it may have been read as something the owner did not mean. Nothing else stops a build.
-  const disputed = proposals.filter((p) => p.conflict);
-  if (disputed.length && !argv.includes('--yes')) {
-    console.log(`\nNothing has been built: ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above).`);
-    console.log(`  Keep ${disputed.length === 1 ? 'it' : 'them'} as written, required on every run: atelier ${typedWithout(['--yes'])} --name ${name} --yes`);
-    console.log('  Or change the method, and build again.');
-    process.exitCode = 1;
-    return;
-  }
+  // A RULE THE OWNER STATED AND THEIR OWN WORK DOES NOT FOLLOW NEVER STOPS A BUILD AND IS NEVER DROPPED. The skill is
+  // built with it: checked and shown on every run, blocking nothing until they confirm it (--yes) or change the
+  // method. A mismatch between a method and its examples is the ordinary state of someone's working notes.
+  const disputed = proposals.filter((p) => p.origin === 'STATED' && p.conflict); const confirmed = argv.includes('--yes');
   if (again) { archiveSession(); s = loadSession(); }
 
   // ── THE OWNER'S STEPS AS THEIR OWN, WHAT THE EXAMPLE SHOWS AS APPROVED AND SHOWN ──────
-  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s));
+  const { decided, ledger } = decideSteps(proposals, authoredIdAllocator(s), confirmed);
   s = { ...s, decided: [...s.decided, ...decided], ledger, ...(folder ? { source: folder } : {}) };
   saveSession(s);
 
@@ -272,5 +269,6 @@ export async function method(): Promise<void> {
   // The screen above already said what is checked and what is theirs: all that is left to say is that it is ready.
   const against = decided.some((r) => r.obligation === 'EXECUTION' && r.measurement && r.materiality === 'REQUIRED');
   console.log(`\nYour skill "${name}" is ready.`);
+  if (disputed.length && !confirmed) console.log(`  ${disputed.length} of your steps ${disputed.length === 1 ? 'is' : 'are'} not what your own examples do (marked ! above). ${disputed.length === 1 ? 'It is' : 'They are'} checked and shown on every run, and block${disputed.length === 1 ? 's' : ''} nothing until you say so:\n    keep ${disputed.length === 1 ? 'it' : 'them'} as written: atelier ${typedWithout(['--yes'])} --name ${name} --yes   ·   or change the method and build again`);
   console.log(`  Use it: atelier run "<the task>"${against ? ' --with <file>' : ''}   (or /${name} in Claude Code)`);
 }

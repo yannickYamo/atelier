@@ -55,12 +55,23 @@ describe('1 · automation never mutates owner authority', () => {
     const after = acrossExamples(methodProposals(NOTE, lead), [{ id: 'b.md', task: 't', material: [], reference: '## Other\nfour words in all.\n' }], 'a.md').filter((p) => p.origin === 'STATED');
     expect(after.map((p) => [p.statement, p.measurement])).toEqual(before.map((p) => [p.statement, p.measurement]));
   });
-  it('a stated step its examples break is built required, with its check: the build never weakens it', async () => {
+  it('a stated step its examples break is built with its check, is the owner\'s in every record, and blocks once they confirm it', async () => {
     const { decideSteps } = await import('../cli/commands/method.js');
     const cases = [300, 320].map((n, i) => ({ id: `e${i + 1}.md`, task: 'Explain it.', material: [], reference: piece(n) }));
-    let n = 0;
-    const { decided } = decideSteps(proposalsAcross(NOTE, cases).proposals, () => `x${(n += 1)}`);
-    expect(decided.find((r) => r.statement.startsWith('Keep the whole piece'))).toMatchObject({ materiality: 'REQUIRED', authority: 'EXPERT_AUTHORED', measurement: { observer: 'LENGTH', params: { min: 150, max: 230 } } });
+    const built = (confirmed: boolean): Requirement => { let n = 0; return decideSteps(proposalsAcross(NOTE, cases).proposals, () => `x${(n += 1)}`, confirmed).decided.find((r) => r.statement.startsWith('Keep the whole piece'))!; };
+    // never dropped, never without its check, never a habit: before the owner confirms it, and after
+    for (const r of [built(false), built(true)]) {
+      expect(r).toMatchObject({ authority: 'EXPERT_AUTHORED', measurement: { observer: 'LENGTH', params: { min: 150, max: 230 } } });
+      const e = buildRecord(facts({ requirements: [r], checked: [{ ...line(r.requirementId, 'VIOLATED', '300 words'), required: r.materiality === 'REQUIRED' }] })).entries[0];
+      expect(e).toMatchObject({ dimension: 'STANDARD', source: 'METHOD', required: true });
+    }
+    // a reading the owner's own work contradicts blocks nothing until they confirm it; confirmed, it blocks
+    const state = (r: Requirement): string => buildRecord(facts({ requirements: [r], checked: [{ ...line(r.requirementId, 'VIOLATED', '300 words'), required: r.materiality === 'REQUIRED' }] })).state;
+    expect(built(false).contested).toMatch(/of your examples do not do this/);
+    expect(state(built(false))).toBe('NEEDS_REVIEW');
+    expect(built(true)).toMatchObject({ materiality: 'REQUIRED' });
+    expect(built(true).contested).toBeUndefined();
+    expect(state(built(true))).toBe('BLOCKED');
   });
   it('whether a rule is required is the same going into the record and coming out, whatever was observed of it', () => {
     for (const required of [true, false]) for (const o of EVERY) {
@@ -169,6 +180,22 @@ describe('4 · an unqualified reader never blocks', () => {
     const shared = { longest: 16, limit: 12 };
     expect(buildRecord(facts({ requirements: [], copying: { ...shared, tellable: true } })).state).toBe('BLOCKED');
     expect(buildRecord(facts({ requirements: [], copying: { ...shared, tellable: false } })).state).toBe('NEEDS_REVIEW');
+  });
+  it('the most a piece may share with one example is what the author\'s own examples share with one another', async () => {
+    const { sharedAmong } = await import('../core/observers/overlap.js'); const { copyLimit, COPY_LIMIT } = await import('../cli/eval-run.js');
+    const clause = 'the receiving party shall hold the confidential information in strict confidence and shall not disclose it to any third party without consent';
+    const ESSAYS = ['Rivers bend where the ground gives way, and maps are drawn after the fact by people who walked it.', 'A kitchen runs on timing: salt early, heat late, rest longer than feels reasonable before anyone cuts.', 'Tide tables lie a little in every harbour because wind moves water that no almanac was told about.',
+      'Old bridges fail at their bearings first, quietly, years before a crack shows anywhere a driver looks.', 'Most budgets die in March when the forecast meets an invoice nobody remembered to schedule properly.'];
+    const essay = (i: number): string => ESSAYS[i - 1];
+    // pieces that share a clause two at a time, as drafted work does: the limit follows them
+    const drafted = [`First. ${clause}. Alpha ends here.`, `Second, differently. ${clause}. Beta ends there.`, essay(3), essay(4)];
+    expect(sharedAmong(drafted)).toBeGreaterThanOrEqual(20);
+    expect(copyLimit({ sharedAmong: sharedAmong(drafted)! })).toBe(sharedAmong(drafted)! + 1);
+    // pieces that share nothing: the limit is the floor, and never below it
+    expect(copyLimit({ sharedAmong: sharedAmong([essay(1), essay(2), essay(5)])! })).toBe(COPY_LIMIT);
+    expect(copyLimit(null)).toBe(COPY_LIMIT);
+    // too few pieces to tell: nothing is read
+    expect(sharedAmong(drafted.slice(0, 2))).toBeNull();
   });
   it('a check that did not run, or was turned off, is never a pass and never a failure', () => {
     for (const state of ['off', 'not-checked'] as const) {

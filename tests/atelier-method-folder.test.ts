@@ -42,14 +42,15 @@ describe('atelier method <note> --golden <folder>', () => {
 
   it('a step one example does not do stays required and is named with the piece; the skill is built in the one call', () => {
     const { proj, run } = seed(['Approve', 'Looks fine to me', 'Comment']);
-    // asked once: nothing is built until the owner keeps the rule or changes the method
-    const asked = run('method', 'method.md', '--golden', 'examples', '--name', 'review');
-    expect(asked.code).toBe(1);
-    expect(asked.out).toMatch(/Nothing has been built: 1 of your steps is not what your own examples do \(marked ! above\)\.\n {2}Keep it as written, required on every run: atelier method method\.md --golden examples .*--name review --yes/);
-    expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(false);
+    // a disagreement between the method and the examples never stops a build: the skill is built, and says so
+    const first = run('method', 'method.md', '--golden', 'examples', '--name', 'review');
+    expect(first.code, first.out).toBe(0);
+    expect(first.out).toContain('Your skill "review" is ready.');
+    expect(first.out).toMatch(/1 of your steps is not what your own examples do \(marked ! above\)\. It is checked and shown on every run, and blocks nothing until you say so:\n {4}keep it as written: atelier method method\.md --golden examples .*--name review --yes/);
     const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--yes');
     expect(r.code, r.out).toBe(0);
-    expect(r.out).toMatch(/Checked on every run \(3\):[\s\S]*- End with a Verdict section[^\n]*\n {6}! 1 of your examples does not do this: e2\.md \([^\n]*\)\.\n {8}Yours to settle: keep it as written \(required on every run\), or change the method\./);
+    expect(r.out).not.toMatch(/blocks nothing until you say so/);
+    expect(r.out).toMatch(/Checked on every run \(3\):[\s\S]*- End with a Verdict section[^\n]*\n {6}! 1 of your examples does not do this: e2\.md \([^\n]*\)\.\n {8}Checked and shown on every run; it blocks nothing until you confirm it\./);
     expect(r.out).not.toMatch(/Left for you to judge/);
     expect(r.out).toContain('Your skill "review" is ready.');
     expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(true);

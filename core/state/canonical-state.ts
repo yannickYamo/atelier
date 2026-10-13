@@ -213,6 +213,14 @@ export interface Requirement {
    */
   readonly wordedFromCheck?: true;
   /**
+   * THE OWNER STATED THIS RULE, AND THEIR OWN FINISHED WORK DOES NOT DO WHAT ITS CHECK READS: here is what was found.
+   * Either the rule is newer than the work, or the step was read as something they did not mean, and only they know.
+   * Until they confirm it the rule stays theirs and required, is checked and shown on every run, and its check
+   * blocks nothing (core/eval/record-build.ts): a reading the owner's own work contradicts has not earned belief.
+   * Absent once they confirm it.
+   */
+  readonly contested?: string;
+  /**
    * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
    *
    * Orthogonal to carrier and to materiality. The carrier says how the behaviour is caused; this says

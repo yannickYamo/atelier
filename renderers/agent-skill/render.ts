@@ -711,7 +711,7 @@ mintedAt:        ${v.mintedAt}
   // actually cut: asked of pieces too short to cut, `excerpts` serves the very files `whole` does. Every other field is written as it always was, in the order it came.
   const travelling = voice ? (() => {
     // Which moves a reading covered is the build's own bookkeeping, like the budget: it shaped no file.
-    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, pieceForm, ...rest } = voice;
+    const { pieceBudget: _budget, holdsBackOf: _covered, standardWording: _standard, lengthSpan: _span, lengthPieces: _pieces, sharedAmong: _shared, pieceForm, ...rest } = voice;
     void _budget; void _covered; void _standard; void _span; void _pieces;
     return { ...rest, ...(pieceForm === 'excerpts' && cutPieces.some(Boolean) ? { pieceForm } : {}) };
   })() : null;

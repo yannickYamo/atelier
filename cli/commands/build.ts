@@ -9,7 +9,7 @@ import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSp
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
-import { standardWordingOf } from '../../core/observers/overlap.js';
+import { standardWordingOf, sharedAmong } from '../../core/observers/overlap.js';
 import { targetOf } from '../../core/observers/obligations.js';
 
 /** Set by a command that builds from what the owner wrote and promised no model call (cli/commands/method.ts). */
@@ -492,8 +492,10 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // request names no length (core/intake/length.ts, `ownLengthBand`). Stored the same way.
   const span = everyPiece.length ? lengthSpan(everyPiece) : voice?.lengthSpan ?? null;
   const lengthPieces = everyPiece.length > 0 ? everyPiece.length : voice?.lengthPieces ?? 0;
-  const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n;
-  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}) } : voice;
+  // And how much those pieces share with one another: the most a new piece may share with one of them.
+  const among = everyPiece.length ? sharedAmong(everyPiece, standardWording) : voice?.sharedAmong ?? null;
+  const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, sharedAmong: _among, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n; void _among;
+  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));

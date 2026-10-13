@@ -23,6 +23,11 @@ import type { RequestCoverage } from '../core/loop/context-judge.js';
 
 /** A run of this many words repeated from a served piece of the author's is copying (cli/commands/invoke.ts). */
 export const COPY_LIMIT = 12;
+/**
+ * The run that is a lifted passage FOR THIS AUTHOR: twelve words, or one more than their own pieces share with one
+ * another where that is longer (core/observers/overlap.ts, `sharedAmong`). Read from the corpus, never set by kind.
+ */
+export const copyLimit = (voice: { readonly sharedAmong?: number } | null | undefined): number => Math.max(COPY_LIMIT, (voice?.sharedAmong ?? 0) + 1);
 
 export interface RunEvalInput {
   readonly L: store.StoreLayout;
@@ -97,7 +102,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   if (state === 'not-checked') reasons.push(std ? 'invented claims not checked: the claim reader could not run' : 'no standard to check against');
   if (state === 'checked' && counts.delivered) reasons.push(`${counts.delivered} invented claim(s) delivered`);
   if (state === 'checked' && counts.unconfirmed) reasons.push(`${counts.unconfirmed} specific(s) unconfirmed: confirm them or bind your material`);
-  if (longest !== null && longest >= COPY_LIMIT) reasons.push(`a ${longest}-word run copied from your pieces`);
+  if (longest !== null && longest >= copyLimit(voice)) reasons.push(`a ${longest}-word run copied from your pieces`);
   if (x.request?.met === false) reasons.push(`the length the request asks for was not met (${x.request.detail})`);
   // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
   const record = x.contract || !std ? undefined : recordForText({ L: x.L, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
@@ -155,7 +160,7 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
       required: { held: req.length - broken.length, applicable: req.length, broken, ...(x.contract ? { contract: true } : {}) },
       claims: { state, ...counts, agreement, instrument: x.sensor?.instrument ?? null, answers: x.answers, ...(x.unmeasured ? { unmeasured: x.unmeasured } : {}),
         measured: q?.measured ? { caught: q.measured.caught, planted: q.measured.planted, leftAlone: q.measured.leftAlone, clean: q.measured.clean, on: q.measured.on } : null },
-      copying: longest === null ? null : { longest, limit: COPY_LIMIT },
+      copying: longest === null ? null : { longest, limit: copyLimit(voice) },
       format: { kind: x.format.shape === 'SHAPE' ? 'shape' : x.format.shape === 'BARE' ? 'bare' : 'none', words: x.format.words, withheld: x.format.withheld,
         held: formatLine ? formatLine.result.verdict !== 'VIOLATED' : null },
       applicability: {
@@ -206,7 +211,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
     claims: { state, bound: x.unmeasured !== NO_MATERIAL || spans('UNSOURCED') > 0, qualified: deciding, why: x.unmeasured,
       delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0 },
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
-    copying: shared ? { longest: shared.longestShared, limit: COPY_LIMIT, tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
+    copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
   });
 }
