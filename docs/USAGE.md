@@ -122,7 +122,7 @@ is built and tested offline; it has not yet looked after a live skill for weeks.
 
 ```bash
 atelier new ./reviews --method review.md     # build: your finished work, and a note of how you do it
-atelier run "review this change" --with diff=change.diff     # run: the work, and one line that says where it stands
+atelier run "review this change" --with change.diff     # run: the work, then a line that says where it stands
 atelier fix "it missed the migration cost"   # react: what was wrong, in your own words
 ```
 
@@ -143,8 +143,8 @@ scripts and other tools call.
 When you can say how the work is done, say it, and hand over the pieces where it was done:
 
 ```bash
-atelier new ./reviews --method review.md          # your finished examples (a file or a folder), and a note of steps
-atelier new ./reviews --method review.md --yes    # build exactly what the screen showed
+atelier new ./reviews --method review.md             # your finished examples (a file or a folder), and a note of steps
+atelier new ./reviews --method review.md --review    # look at what it would check, and build nothing
 ```
 
 Every step of the note is your rule, in your words. It calls no model. The screen sorts the steps into three
@@ -158,8 +158,9 @@ kinds and says, for each check, what it looks for and how your examples fare on 
   citation is looked up, and the material is shown to the writer with its line numbers so that none is counted.
 - **Judgement.** Everything else: shown to the writer, reported as not measured, never called checked.
 
-A check is kept only when every example holds it. One that a piece of yours breaks is named with the piece and is
-yours to settle: change the note or the example, or build with the step kept as a judgement. With three or more
+A check is kept only when every example holds it. A step that a piece of yours does not do is named with the piece
+and left for you to judge; change the note or the example and build again to have it checked. Building again in
+the same folder makes a new version of the same skill. With three or more
 examples, the pieces are served with the skill and their lengths recorded, so a draft is chosen by how near it runs
 to them when a request names no length. Three short pieces and a few lines of rules are enough to build from.
 
@@ -369,7 +370,7 @@ The sentence you give `new` sets how rules are weighed: writing new work, holdin
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always
 deliver everything the CLI does; `atelier carriers --skill posts --host codex` says what it drops.
-`atelier --help` lists everything.
+`atelier --help` shows the three commands; `atelier lab` lists every other.
 
 | setting | what it does |
 |---|---|

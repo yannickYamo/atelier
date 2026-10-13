@@ -275,25 +275,25 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(r.out).toMatch(/Checked on every output: what the work must contain \(3\)/);
     expect(r.out).toMatch(/Checked against the material: what the work must be made from \(1\)\n {2}- Every figure must be sourced from the material you were given\.\n {6}your example: 3 of 3 figure\(s\) are in the request or the material \(acme\.material\/prices\.md\)/);
     expect(r.out).toMatch(/Judgement: shown to the writer, reported as not measured \(1\)\n {2}- Weigh switching cost before recommending anything\./);
-    expect(r.out).toMatch(/Nothing has been built\. To build exactly this:/);
+    expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method method\.md --golden acme\.md .*--name analysis/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
     expect(await count()).toBe(before);
   });
 
-  it('with a step the example does not hold, nothing is built in one call: that question is the owner\'s', () => {
+  it('a step the example does not do is said by the piece\'s name and left for the owner to judge', () => {
     writeFileSync(join(proj, 'asks.md'), '- Open with a Verdict section.\n- End with a Appendix section.\n');
-    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', ...BACKEND());
+    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Nothing has been built: 1 step\(s\) above are yours to settle first\./);
+    expect(r.out).toMatch(/Left for you to judge, because your own work does not do it \(1\):\n {2}- End with a Appendix section\.\n {6}your example does not do this\. Change the method or the example to have it checked\./);
+    expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method asks\.md --golden acme\.md .*--name asks/);
     expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });
 
-  it('a check read from the example\'s own section names is shown and waits for the owner\'s yes', () => {
+  it('a check read from the example\'s own section names says what it will look for, in a few words', () => {
     writeFileSync(join(proj, 'reads.md'), '- Put who wins under a Verdict heading.\n');
-    const r = atelier('method', 'reads.md', '--golden', 'acme.md', '--name', 'reads', ...BACKEND());
+    const r = atelier('method', 'reads.md', '--golden', 'acme.md', '--name', 'reads', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Checked on every run \(1\):\n {2}- Put who wins under a Verdict heading\.\n {6}read as: sections "Verdict", in that order; each with something in it/);
-    expect(r.out).toMatch(/Nothing has been built: 1 step\(s\) above were read as a check by a section name in your examples\. Look that each "read as" is what you meant\. To build exactly this:\n\n {2}atelier method reads\.md --golden acme\.md .*--name reads --yes/);
+    expect(r.out).toMatch(/Checked on every run \(1\):\n {2}- Put who wins under a Verdict heading\.\n {6}checked as: a "Verdict" section/);
     expect(existsSync(join(data, 'skills', 'reads'))).toBe(false);
   });
 
@@ -301,11 +301,11 @@ describe('through the binary: atelier method, then a run held to the method', ()
     const before = await count();
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes', ...BACKEND());
     expect(r.code, `${r.err}${r.out}`).toBe(0);
-    expect(r.out).toMatch(/Your skill "analysis" is ready\.\n {2}Checked on every run: 4 of your rules \(1 against the material you give it\)\. Yours to judge: 1\./);
+    expect(r.out).toMatch(/Your skill "analysis" is ready\./);
     // the short screen: the owner's steps in three groups, and none of the build's own account
     expect(r.out).toMatch(/5 step\(s\) in your method\.\n\nChecked on every run \(4\):/);
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
-    expect(r.out).toContain('Use it: atelier run "<the task>" --with <name>=<material file>');
+    expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
     expect(await count()).toBe(before);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
@@ -379,7 +379,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
   it('a second method in the same folder is refused before anything is written: one project, one standard', () => {
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'again', '--yes', ...BACKEND());
     expect(r.code).not.toBe(0);
-    expect(`${r.err}${r.out}`).toMatch(/this folder already holds a standard \(the skill "analysis"\): a method's steps would be added to its rules/);
+    expect(`${r.err}${r.out}`).toMatch(/this folder already holds another standard \(the skill "analysis"\)\. Build this one from a folder of its own\./);
     expect(existsSync(join(data, 'skills', 'again'))).toBe(false);
   });
 });

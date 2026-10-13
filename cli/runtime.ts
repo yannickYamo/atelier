@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util';
 import type { SkillMode } from '../core/ratification/suggest.js';
 import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync, copyFileSync, statSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
-import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
+import { join, dirname, resolve, relative, isAbsolute, basename } from 'node:path';
 import { homedir } from 'node:os';
 import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
@@ -478,13 +478,16 @@ export const numericFlag = (name: string, fallback: number): number => {
  * prerequisite is matched against, so the author's vocabulary and the runtime's agree by string
  * rather than by a taxonomy neither has needed yet.
  */
+/** The name a file is bound under when none is given: its own, without the folder or the extension. Null when it is no file. */
+const fileStem = (spec: string): string | null => (existsSync(spec) && statSync(spec).isFile() ? basename(spec).replace(/\.[^.]+$/, '') || basename(spec) : null);
+
 export const boundResources = (): ReadonlySet<string> => {
   const names = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
     const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : argv[i + 1];
     if (!spec) die('--with needs <name>=<path>, for example --with support-ticket-history=./tickets.csv');
-    const name = spec.includes('=') ? spec.slice(0, spec.indexOf('=')) : spec;
+    const name = spec.includes('=') ? spec.slice(0, spec.indexOf('=')) : fileStem(spec) ?? spec;
     if (!name) die(`--with "${spec}" has no name before the "=".`);
     names.add(name);
   }
@@ -504,10 +507,13 @@ export const boundMaterial = (): { name: string; path: string; text: string }[] 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
     const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : (argv[i + 1] ?? '');
-    // A bare name binds a resource the caller holds elsewhere. A bare PATH is a mistake that binds nothing, and
-    // the draft is then written with no material: refused, with the form that works.
+    // A FILE IS BOUND BY GIVING IT: `--with change.diff` binds it under its own name (`change`). The name matters only
+    // where a rule asks for material by name, and then it is given: `--with figures=q3.csv`. A bare word that is no
+    // file declares a resource held elsewhere and reads nothing; one that looks like a path and is not there is said.
     if (!spec.includes('=')) {
-      if (/[\\/]|\.(?:md|markdown|txt|json)$/i.test(spec) || existsSync(spec)) die(`--with ${spec}: a file is bound with a name, --with notes=${spec}. A bare name declares a resource held elsewhere and reads no file.`);
+      const stem = fileStem(spec);
+      if (stem) { out.push({ name: stem, path: spec, text: readFileSync(spec, 'utf8') }); continue; }
+      if (/[\\/]|\.[A-Za-z0-9]{1,8}$/.test(spec)) die(`--with ${spec}: there is no file at ${spec}.`);
       continue;
     }
     const name = spec.slice(0, spec.indexOf('='));

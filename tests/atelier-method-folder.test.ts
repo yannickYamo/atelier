@@ -32,7 +32,7 @@ describe('atelier method <note> --golden <folder>', () => {
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('4 examples from examples; checks read from e1.md, then held against the rest');
     expect(r.out).toContain('starting with one of "Approve", "Request changes", "Comment" on a line of its own; your example: held in all 4 of your examples');
-    expect(r.out).toMatch(/Your skill "review" is ready\.\n {2}Checked on every run: 3 of your rules\. Yours to judge: 1\./);
+    expect(r.out).toMatch(/Your skill "review" is ready\./);
     expect(r.out).toMatch(/Voice: \d whole piece\(s\) of the author's own served with the skill/);
     expect(r.out).toContain('Your own pieces: 4 of 4 meet every required rule that is counted.');
     const voice = JSON.parse(readFileSync(join(data, 'skills', 'review', 'voice.json'), 'utf8')) as { lengthSpan?: [number, number] };
@@ -40,13 +40,33 @@ describe('atelier method <note> --golden <folder>', () => {
     expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(true);
   }, 120_000);
 
-  it('a step one example breaks stops the build and names the piece; nothing is installed', () => {
+  it('a step one example does not do is named with the piece and left to the owner; the skill is built in the one call', () => {
     const { proj, run } = seed(['Approve', 'Looks fine to me', 'Comment']);
     const r = run('method', 'method.md', '--golden', 'examples', '--name', 'review');
-    expect(r.out).toContain('Yours to settle');
-    expect(r.out).toContain('1 of your examples do not hold it as a check would read it: e2.md');
-    expect(r.out).toContain('Nothing has been built');
-    expect(existsSync(join(proj, '.claude', 'skills', 'review'))).toBe(false);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/Left for you to judge, because your own work does not do it \(1\):\n {2}- End with a Verdict section[^\n]*\n {6}1 of your examples do not do this\./);
+    expect(r.out).toContain('Your skill "review" is ready.');
+    expect(existsSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'))).toBe(true);
+    // the whole account names the piece and what the check found
+    expect(run('method', 'method.md', '--golden', 'examples', '--name', 'review', '--review', '--report').out).toContain('1 of your examples do not hold it as a check would read it: e2.md');
+  }, 120_000);
+  it('built again in the same folder after the method changes, it is a new version of the same skill', () => {
+    const { proj, run } = seed(['Approve', 'Request changes', 'Comment']);
+    expect(run('new', 'examples', '--method', 'method.md', '--name', 'review').code).toBe(0);
+    writeFileSync(join(proj, 'method.md'), `${NOTE}5. Never use the word "nit".\n`);
+    const again = run('new', 'examples', '--method', 'method.md', '--name', 'review');
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toContain('Never use the word "nit".');
+    expect(readFileSync(join(proj, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('nit');
+    // another skill in this folder is still refused
+    expect(run('new', 'examples', '--method', 'method.md', '--name', 'other').out).toContain('this folder already holds another standard (the skill "review")');
+  }, 120_000);
+  it('with no name given, the skill is named after the work, or the folder it is built in when the work is just "examples"', () => {
+    const { proj, run } = seed(['Approve', 'Request changes', 'Comment']);
+    const r = run('new', 'examples', '--method', 'method.md');
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/Your skill "atelier-mf-proj-[a-z0-9-]+" is ready\./i);
+    expect(existsSync(join(proj, '.claude', 'skills'))).toBe(true);
   }, 120_000);
 
   it('a name that reads as answers still calls no model, and a note, a hidden file and a piece\'s material are not examples', () => {
@@ -84,7 +104,7 @@ describe('three tweets and five lines of rules', () => {
     expect(out).toContain('checks for: at most 119 characters; your example: held in all 3 of your examples');
     expect(out).toContain('checks for: 2 to 3 sentences; your example: held in all 3 of your examples');
     expect(out).toContain('checks for: none of: excited, thrilled; your example: held in all 3 of your examples');
-    expect(out).toMatch(/Your skill "short-posts" is ready\.\n {2}Checked on every run: 3 of your rules\. Yours to judge: 2\./);
+    expect(out).toMatch(/Your skill "short-posts" is ready\./);
     expect(out).toContain('Your own pieces: 3 of 3 meet every required rule that is counted.');
     const skill = readFileSync(join(proj, '.claude', 'skills', 'short-posts', 'SKILL.md'), 'utf8');
     expect(skill).toContain('Under 120 characters');
@@ -135,7 +155,7 @@ describe('the front door: atelier new <your-work> --method <note>', () => {
     const r = run('new', 'examples', '--method', 'method.md', '--name', 'review', '--yes');
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/^Method: method\.md {2}· {2}4 examples from examples\n\n4 step\(s\) in your method\.\n\nChecked on every run \(3\):/);
-    expect(r.out).toMatch(/Yours to judge: said to the writer, never called checked \(1\):\n {2}- Weigh the risk of the change before the style of it\./);
+    expect(r.out).toMatch(/You judge these yourself \(1\):\n {2}- Weigh the risk of the change before the style of it\./);
     expect(r.out).toContain('Your skill "review" is ready.');
     expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|TASTE READER|SIZE {2}|Kind of work|checks for:/);
     expect(r.out.trim().split('\n').length).toBeLessThan(20);
@@ -145,6 +165,8 @@ describe('the front door: atelier new <your-work> --method <note>', () => {
     const { run } = seed(['Approve']);
     const help = run('--help').out;
     expect(help.trim().split('\n').length).toBeLessThanOrEqual(8);
+    expect(run('lab', 'verify', '--help').out).toMatch(/^usage: atelier verify/);
+    expect(run('lab', 'bogus').code).toBe(1);
     for (const c of ['atelier new <your-work> --method', 'atelier run "<task>"', 'atelier fix "<what was wrong>"', 'atelier lab']) expect(help).toContain(c);
     expect(help).not.toMatch(/taste|fidelity|tend|floor|ratify/);
     const lab = run('lab').out;

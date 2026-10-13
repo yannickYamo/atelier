@@ -30,12 +30,15 @@ const s = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 
 export function runState(f: RunFacts): { readonly state: RunState; readonly line: string } {
   if (f.broken.length) {
     const first = f.broken[0];
-    const what = first.label ? `"${first.label.length > 60 ? `${first.label.slice(0, 57)}...` : first.label}"` : first.id;
+    const what = first.label ? `"${first.label.length > 60 ? `${first.label.slice(0, 57)}...` : first.label}"` : first.id === 'verdict' ? '' : first.id;
     const more = f.broken.length > 1 ? `, and ${f.broken.length - 1} more` : '';
+    if (!what) return { state: 'BLOCKED', line: `BLOCKED · ${first.detail}${more}` };
     return { state: 'BLOCKED', line: `BLOCKED · ${s(f.broken.length, 'required rule')} not met: ${what} (${first.detail})${more}` };
   }
-  const held = f.applicable ? `${f.held} of ${s(f.applicable, 'required rule')} checked and met` : 'no required rule could be checked on this output';
-  const left = [f.judgement ? `${s(f.judgement, 'rule')} left to your judgement` : '', f.toCheck ? `${s(f.toCheck, 'specific')} to check` : ''].filter(Boolean);
-  if (!left.length && f.applicable) return { state: 'CERTIFIED', line: `CERTIFIED · all ${s(f.applicable, 'required rule')} checked and met` };
+  // No count of what was met: a run checks the owner's rules and a few of its own, and a number that differs from
+  // the one the build gave reads as a discrepancy where there is none.
+  const held = f.applicable ? 'every rule that can be checked was met' : 'no rule could be checked on this output';
+  const left = [f.judgement ? `${s(f.judgement, 'rule')} for you to judge` : '', f.toCheck ? `${s(f.toCheck, 'specific')} to check` : ''].filter(Boolean);
+  if (!left.length && f.applicable) return { state: 'CERTIFIED', line: 'CERTIFIED · every rule you require was checked and met' };
   return { state: 'CHECKED', line: `CHECKED · ${held}${left.length ? ` · ${left.join(' · ')}` : ''}` };
 }

@@ -170,6 +170,7 @@ function lab(): void {
     process.exitCode = r.status ?? 1;
     return;
   }
+  if (rest.length) die(`atelier lab: there is no command "${rest[0]}". The list: atelier lab`);
   console.log('atelier lab: everything beyond build, run and fix. Each is its own command: atelier <command> --help\n');
   const listed = new Set<string>();
   for (const [what, names] of LAB) { const here = names.filter((n) => COMMANDS.includes(n)); here.forEach((n) => listed.add(n)); console.log(`  ${what}:\n    ${here.join(' · ')}`); }
@@ -181,6 +182,8 @@ function lab(): void {
 const main = async (): Promise<void> => {
   // Answered BEFORE dispatch, so no command can run when asked about. `abort --help` used to abort.
   if (cmd === '--version' || cmd === '-v' || cmd === 'version') { console.log(version()); return; }
+  // `atelier lab <command> ...` is that command, its help included.
+  if (cmd === 'lab' && argv.length > 1) { lab(); return; }
   if (COMMANDS.includes(cmd) && wantsHelp(argv)) {
     console.log(`usage: ${USAGE[cmd] ?? `atelier ${cmd}`}`);
     return;
@@ -306,8 +309,7 @@ const main = async (): Promise<void> => {
       if (cmd !== undefined && cmd !== '' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h') {
         die(`unknown command "${cmd}". The three you need: new, run, fix. Every other: atelier lab`);
       }
-      // THE SIX VERBS A SKILL IS LIVED WITH, IN THE ORDER IT IS LIVED, THEN EVERY COMMAND ON ONE LINE:
-      // AGENTS.md promises --help lists every command, and a newcomer should not have to read forty.
+      // The three verbs a skill is lived with (FRONT_DOOR); every other command is one word away, under `atelier lab`.
       for (const line of FRONT_DOOR) console.log(line);
       return;
     }

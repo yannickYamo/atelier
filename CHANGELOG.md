@@ -26,6 +26,22 @@ results said they did not help. A person needs three things from it.
 - **`atelier --help`** is those three. Every other command is listed by `atelier lab`, by what it is for, with the
   ones whose studies did not show a gain named as experimental. Nothing was removed: each still answers to its name.
 
+A first-time walk through the three commands, by someone who had not seen them, found the first version of them
+harder than it said, and each point is fixed and tested:
+- three of four builds needed a second command. The build is one call: a step read as a check by a section name
+  says what it will look for ("checked as: a "Must fix" section"), a step the owner's own work does not do is left
+  for them to judge and named with the piece, and `--review` looks without building;
+- four skills built from four files called `method.md` were all named "method". The name is the work's folder, or
+  the note's, or the folder the person is in, whichever is not the name every such thing has;
+- changing the method meant a new folder. Built again in the same folder, it is a new version of the same skill;
+- a run that was not conformant for a reason that is no rule of the owner's (a passage copied from their pieces)
+  read CHECKED. The engine's verdict stands, in its words; a sentence removed from the work is said under it; a rule
+  set aside for the run keeps it from CERTIFIED;
+- a task that happened to equal another argument's value was taken for that argument. What is typed is sorted by
+  where it stands;
+- a skill that checks the work against material was run without any and blocked on every citation. It says so
+  before a draft is paid for, and a file is bound by giving it: `--with change.diff`.
+
 The package's description, the README's opening, the roadmap and the agent guide say this product. Decisions 0017
 (a skill from a method and finished work) and 0018 (a skill improves how it carries its method) are accepted, the
 second with what evolution may change and what it may never change.
