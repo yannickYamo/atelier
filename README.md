@@ -116,7 +116,7 @@ This is the layout, from the renderer, on an example run.
   thing is still missing
 
   Next: run it again. If the evaluation is wrong about your work: atelier fix "<what was wrong>"
-  --check
+  --evaluation
   Every check in full: add --report · Over all your runs: atelier lab eval
 ```
 

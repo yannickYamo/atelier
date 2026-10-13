@@ -98,7 +98,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'no-redraft', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];
 
 export const argv = process.argv.slice(2);
@@ -435,6 +435,9 @@ export const describeBinding = (b: RuntimeBinding): string =>
  * question that can be answered locally, which is whether there is a credential to try, and it asks
  * it before any state exists to be stuck in.
  */
+/** Is there a model to ask for this step at all? False only where the default provider has no key: nothing is sent to find out. */
+export const canReach = (role: Role): boolean => providerFor(role) !== 'anthropic' || Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
+
 export const assertReachable = (role: Role): void => {
   const provider = providerFor(role);
   if (provider === 'anthropic') {

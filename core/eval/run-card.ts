@@ -72,7 +72,7 @@ function next(c: RunCard, w: number): string[] {
   const failed = c.record.entries.filter(blocks);
   const again = failed.some((e) => e.dimension === 'REQUEST') ? 'run it again, or change what the request asks for'
     : failed.some((e) => e.id === 'specifics') ? 'give it the material those specifics come from (--with <file>), or run it again' : 'run it again';
-  const first = c.record.state === 'BLOCKED' ? `Next: ${again}. If the evaluation is wrong about your work: atelier fix "<what was wrong>" --check`
+  const first = c.record.state === 'BLOCKED' ? `Next: ${again}. If the evaluation is wrong about your work: atelier fix "<what was wrong>" --evaluation`
     : c.record.state === 'NEEDS_REVIEW' ? `Next: read what is marked ~ and ?. You would use it: atelier rate ${c.invocationId} yes`
       : `You would use it as it is: atelier rate ${c.invocationId} yes`;
   return [...wrap(first, w, '  '), ...wrap(`${c.record.state === 'BLOCKED' ? '' : 'Not right: atelier fix "<what was wrong>" writes this piece again · '}Every check in full: add --report · Over all your runs: atelier lab eval`, w, '  ')];

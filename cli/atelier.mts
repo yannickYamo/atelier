@@ -191,7 +191,9 @@ const main = async (): Promise<void> => {
   switch (cmd) {
     // ONE WAY TO BUILD. With a method note, the owner's steps are the rules and the folder is their finished work
     // (./commands/method.ts); without one, the rules are read off the folder and offered for approval.
-    case 'new': return flag('--method') ? method() : newSkill();
+    // One compiler, three sources: the owner's method, what can be counted in their examples, and (where a model
+    // is asked) what it reads in them. With no model, by choice or because none is set up, the first two build.
+    case 'new': return flag('--method') || argv.includes('--no-model') ? method() : newSkill();
     case 'run': return run();
     case 'lab': { lab(); return; }
     case 'review': { await review(); return; }

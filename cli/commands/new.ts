@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { die, argv, flag, positional, loadSession, saveSession, assertReachable, sourceProvenance, runFile, DATA } from '../runtime.js';
+import { die, argv, flag, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
@@ -24,6 +24,7 @@ import { floorDimensions, proposeMargins, buildContract } from '../../core/disti
 import { extract } from '../../core/intake/extract.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
+import { method } from './method.js';
 import { review } from './review.js';
 import { ratifyClose } from './ratify.js';
 import { build, pieceFlags } from './build.js';
@@ -94,6 +95,13 @@ export async function newSkill(): Promise<void> {
   const shownBefore = s.run.state === 'PROPOSED';
   // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
   if (s.run.state === 'EMPTY' || !s.evidence) {
+    // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
+    // adds the rules only a reading finds, and can be added later.
+    if (!canReach('discovery')) {
+      console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+      await method();
+      return;
+    }
     assertReachable('discovery');
     if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
     else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read.why}.\n`);

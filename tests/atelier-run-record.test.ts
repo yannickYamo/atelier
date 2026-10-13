@@ -26,7 +26,7 @@ describe('the card, layer by layer', () => {
     expect(out).toContain('    ✗  Between 220 and 420 words.\n         found: 439 words (220 to 420): long by 19');
     expect(out).toContain('    ~  Open with a Parties section that names both parties exactly as the term sheet does.\n         checked, and held: a "Parties" section, with something in it, opening the work\n         not checked, yours to read: names both parties exactly as the term sheet does');
     expect(out).toContain('    ?  Take every name from the term sheet.\n       (no check reads the rule marked ? with nothing under it: it is yours to judge)');
-    expect(out.replace(/\s+/g, ' ')).toContain('Next: run it again. If the evaluation is wrong about your work: atelier fix "<what was wrong>" --check');
+    expect(out.replace(/\s+/g, ' ')).toContain('Next: run it again. If the evaluation is wrong about your work: atelier fix "<what was wrong>" --evaluation');
     expect(out).not.toMatch(/atelier rate/);
   });
   it('what the request set is its own layer, and a miss of it says to run again or ask for something else', () => {

@@ -158,13 +158,17 @@ confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
   one complaint about one piece is not a rule. It is also recorded as a piece you would not have used, with why.
 - **Every run** (`--always`). Where your rules already cover it, Atelier tries another way to carry them and shows
   you both results. Where they do not, it asks whether this should be a rule; nothing becomes one without your yes.
-- **The evaluation** (`--check`). It blocked what was right, or passed what was not. It is recorded with what the
+- **The evaluation** (`--evaluation`). It blocked what was right, or passed what was not. It is recorded with what the
   evaluation said, and nothing is changed: a check reads one of your rules, and is put right through the rule.
 
 `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
 would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every
 other command is under `atelier lab`. `atelier invoke` is `atelier run` with that account always on, and is what
 scripts and other tools call.
+
+With no method note, `atelier new ./posts --no-model` builds from the examples alone (as does `atelier new ./posts`
+when no model key is set): the pieces are served to the writer with what can be counted in them, and whether new
+work reads like them is yours to judge. Three short posts are enough; so is one.
 
 ## From your method and your finished work
 

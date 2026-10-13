@@ -182,3 +182,30 @@ describe('the front door: atelier new <your-work> --method <note>', () => {
     expect(run('nonsense').out).toContain('The three you need: new, run, fix');
   }, 120_000);
 });
+
+describe('atelier new <your-work>, with no method note and no model', () => {
+  const POSTS = ['Shipped the cache fix. Four days to find, one hour to fix. The docs were right; we just did not read them.',
+    'Rolled back the flag at 2am. Nobody noticed, which is the point. Boring deploys are a feature.', 'Deleted 4,000 lines today. The tests still pass. Best commit of the month, and it adds nothing.'];
+  const seedPosts = () => { const x = seed([]); mkdirSync(join(x.proj, 'posts')); POSTS.forEach((p, i) => { writeFileSync(join(x.proj, 'posts', `p${i + 1}.md`), `${p}\n`); }); return x; };
+  it('no key is not a reason to build nothing: the skill is the examples, and says what it is', () => {
+    const { proj, run } = seedPosts();
+    const r = run('new', 'posts');
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples');
+    expect(r.out).toContain('No method was given: the skill is your examples, served to the writer');
+    expect(r.out).toContain('Your skill "posts" is ready.');
+    // the pieces themselves are what the writer is given, and the one rule is the owner's to judge
+    const dir = join(proj, '.claude', 'skills', 'posts');
+    expect(readFileSync(join(dir, 'SKILL.md'), 'utf8')).toContain('New work reads like the 3 examples given');
+    expect(['voice-1.md', 'voice-2.md', 'voice-3.md'].map((f) => readFileSync(join(dir, 'examples', f), 'utf8')).join('\n')).toContain('Boring deploys are a feature.');
+  }, 120_000);
+  it('--no-model chooses the same build on purpose, and one example is enough', () => {
+    const { proj, run } = seedPosts();
+    const r = run('new', join('posts', 'p1.md'), '--no-model', '--name', 'one-post');
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).not.toContain('No model is set up');
+    expect(r.out).toContain('Your skill "one-post" is ready.');
+    expect(existsSync(join(proj, '.claude', 'skills', 'one-post', 'SKILL.md'))).toBe(true);
+  }, 120_000);
+});
+

@@ -17,8 +17,8 @@ describe('the four ways, and the default', () => {
     expect(routeOf(['fix', 'x', '--add=required'], ran)).toBe('EVERY_RUN');
   });
   it('a complaint about the evaluation changes neither the piece nor the skill', () => {
-    expect(routeOf(['fix', 'it blocked a clause I always use', '--check'], ran)).toBe('EVALUATION');
-    expect(routeOf(['fix', 'x', '--check', '--always'], ran)).toBe('EVALUATION');
+    expect(routeOf(['fix', 'it blocked a clause I always use', '--evaluation'], ran)).toBe('EVALUATION');
+    expect(routeOf(['fix', 'x', '--evaluation', '--always'], ran)).toBe('EVALUATION');
   });
   it('a run that cannot be written again from here (made in a host, or before runs kept what was asked) goes to the skill', () => {
     expect(routeOf(['fix', 'x'], {})).toBe('EVERY_RUN');

@@ -88,6 +88,10 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
   };
   // A STATED RULE THE OWNER'S OWN WORK DOES NOT DO IS STILL THEIR RULE. Said once, here, with the piece and what it did.
   const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Checked and shown on every run; it blocks nothing until you confirm it.` : '');
+  // With no method there is nothing of the owner's to list: what the examples show is all the skill is, so it is shown.
+  if (!stated.length) return ['No method was given: the skill is your examples, served to the writer, and what can be counted in them. Whether new work reads like them is yours to judge.',
+    ...(shown.length ? ['', `Seen in your examples: shown to the writer, and required only if you say so (${shown.length}):`, ...shown.map((p) => `  - ${p.statement}`)] : ['', 'Nothing that can be counted is common to all of them: the writer is given the pieces themselves.']),
+    '', 'A method note makes rules of your own: atelier new <your-work> --method <how-you-do-it.md>'];
   const out: string[] = [`${stated.length} step(s) in your method.`];
   if (whole.length) out.push('', `Checked on every run (${whole.length}):`, ...whole.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}${disagrees(p)}`));
   if (part.length) out.push('', `Checked in part: the rest is yours to read (${part.length}):`,
@@ -192,16 +196,18 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
 }
 
 export async function method(): Promise<void> {
-  // `atelier new <your-work> --method <note>` and `atelier method <note> --golden <your-work>` are one command.
-  const asNew = flag('--method');
-  const notePath = asNew ?? positional([]) ?? die('usage: atelier method <method note> --golden <finished example, or a folder of them> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). An example is one piece of work where it was done.');
-  const goldenPath = flag('--golden') ?? (asNew ? positional([asNew]) : undefined) ?? die('--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
-  for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (!existsSync(p)) die(`${what}: there is nothing at ${p}.`);
-  const note = readFileSync(notePath, 'utf8');
-  if (!stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
+  // `atelier new <your-work> --method <note>` and `atelier method <note> --golden <your-work>` are one command; and
+  // `atelier new <your-work>` with no note (--no-model, or no model set up) is the same one with no stated step:
+  // the skill is what the examples show, counted, and the pieces themselves.
+  const asNew = flag('--method'); const examplesOnly = !asNew && process.argv[2] === 'new';
+  const notePath = asNew ?? (examplesOnly ? null : positional([])) ?? (examplesOnly ? null : die('usage: atelier method <method note> --golden <finished example, or a folder of them> [--name <name>] [--yes]\n  The note says what is done (steps, a template, both). An example is one piece of work where it was done.'));
+  const goldenPath = flag('--golden') ?? (asNew ? positional([asNew]) : examplesOnly ? positional([]) : undefined) ?? die(examplesOnly ? 'usage: atelier new <your finished work: a file, or a folder of pieces> [--method <how-you-do-it.md>]' : '--golden <file or folder> required: one finished example of the method carried out, or a folder of them.');
+  for (const [what, p] of [['the method note', notePath], ['the example', goldenPath]] as const) if (p !== null && !existsSync(p)) die(`${what}: there is nothing at ${p}.`);
+  const note = notePath === null ? '' : readFileSync(notePath, 'utf8');
+  if (notePath !== null && !stepsOf(note).length) die(`${notePath} holds no step that can be read: a list item, or a sentence of three words or more, is a step.`);
   // The name as the skill will carry it, and whether it can be built here: settled before a screen is shown, so that a
   // refusal is the first thing said and not the last.
-  const name = nameFor(notePath, goldenPath, Boolean(asNew));
+  const name = nameFor(notePath ?? goldenPath, goldenPath, Boolean(asNew) || examplesOnly);
   let s = loadSession();
   // A SKILL OF THAT NAME BUILT SOMEWHERE ELSE IS SOMEBODY'S STANDARD. Built again here it would be replaced without a
   // word: two people whose method file is called method.md would each overwrite the other's skill.
@@ -215,14 +221,18 @@ export async function method(): Promise<void> {
   const holds = s.decided.length > 0 || s.proposals.length > 0 || Boolean(s.run.standardVersionHash);
   const again = holds && s.skillName === name && s.proposals.length === 0;
   if (!looking && holds && !again) die(`this folder already holds another standard${s.skillName ? ` (the skill "${s.skillName}")` : ''}. Build this one from a folder of its own.`);
-  const { folder, cases } = readExamples(goldenPath, notePath);
+  const { folder, cases } = readExamples(goldenPath, notePath ?? '');
   const read = proposalsAcross(note, cases);
   const lead = read.lead;
   // What the pieces show about how they are written, counted: offered beside the method, with no model.
-  const proposals = [...read.proposals, ...countedOffers(read.proposals, cases)];
+  // WITH NO METHOD, THE ONE THING ASKED IS "LIKE THESE". It is said as the skill's one rule, which no count reads and
+  // the owner judges: a skill of examples alone still has a standard, and says honestly what it is.
+  const likeThese: MethodProposal[] = notePath === null ? [{ statement: `New work reads like the ${cases.length === 1 ? 'example' : `${cases.length} examples`} given: the same kind of piece, at their length, in their manner.`,
+    origin: 'SHOWN_BY_EXAMPLE', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }] : [];
+  const proposals = [...likeThese, ...read.proposals, ...countedOffers(read.proposals, cases)];
   const example = cases[lead];
   const whole = argv.includes('--report');
-  console.log(`Method: ${basename(notePath)}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
+  console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
 
   // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on

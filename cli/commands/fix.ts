@@ -67,12 +67,12 @@ const ALWAYS = ['--always', '--add', '--pick', '--skip', '--invocation', '--carr
 const said = (args: readonly string[], flags: readonly string[]): boolean => args.some((a) => flags.some((f) => a === f || a.startsWith(`${f}=`)));
 
 /**
- * WHERE A COMPLAINT GOES. This output only, unless the person says otherwise: `--check` (the evaluation was wrong
+ * WHERE A COMPLAINT GOES. This output only, unless the person says otherwise: `--evaluation` (the evaluation was wrong
  * about the work) or `--always` (the skill should do this on every run). A run that cannot be written again from
  * here (made in a host, or before runs kept what was asked) goes to the skill, since that is all there is to change.
  */
 export function routeOf(args: readonly string[], last: Pick<LastRun, 'asked'> | null): FixRoute {
-  if (said(args, ['--check'])) return 'EVALUATION';
+  if (said(args, ['--evaluation'])) return 'EVALUATION';
   if (said(args, ALWAYS) || last?.asked === undefined) return 'EVERY_RUN';
   return 'THIS_OUTPUT';
 }
@@ -109,7 +109,7 @@ function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationReco
   const args = ['run', last.asked ?? '', '--skill', name, '--correcting', complaint, ...(last.with ?? []).filter((w) => existsSync(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...settingsTyped(complaint)];
   const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args], { stdio: 'inherit' });
   console.log(`\nOnly this piece was written again. If every run should do this: atelier fix ${JSON.stringify(complaint)} --always`);
-  console.log(`If the evaluation was wrong about your work (it blocked what was right, or passed what was not): atelier fix ${JSON.stringify(complaint)} --check`);
+  console.log(`If the evaluation was wrong about your work (it blocked what was right, or passed what was not): atelier fix ${JSON.stringify(complaint)} --evaluation`);
   process.exitCode = r.status ?? 1;
 }
 
@@ -179,7 +179,7 @@ export async function fix(): Promise<void> {
   // Most complaints are about one piece of work. Changing the skill on one of them fits the skill to that piece, so
   // by default only the piece is written again. The skill changes when the person says it should, for every run
   // (--always: then a diagnosis says whether it is how the skill carries a rule, or a rule their standard lacks, and
-  // only they can add one). A complaint that the evaluation was wrong changes neither (--check).
+  // only they can add one). A complaint that the evaluation was wrong changes neither (--evaluation).
   const route = routeOf(argv, lastRun);
   if (route === 'THIS_OUTPUT' && lastRun) { thisOutputAgain(L, name, inv, lastRun, complaint); return; }
   if (route === 'EVALUATION') { aboutTheEvaluation(L, name, inv, complaint); return; }
