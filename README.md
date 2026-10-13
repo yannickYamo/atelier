@@ -115,7 +115,8 @@ This is the layout, from the renderer, on an example run.
   What was done: 2 drafts written, the better one kept · written again once for what was missing; 1
   thing is still missing
 
-  Next: run it again. If a rule is wrong about your work: atelier fix "<what was wrong>"
+  Next: run it again. If the evaluation is wrong about your work: atelier fix "<what was wrong>"
+  --check
   Every check in full: add --report · Over all your runs: atelier lab eval
 ```
 

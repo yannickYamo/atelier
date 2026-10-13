@@ -98,9 +98,9 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
     const s1 = store.getStandard(L, store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash)!;
 
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
-    const first = run(data, proj, 'fix', 'the answer buried the recommendation');
+    const first = run(data, proj, 'fix', '--always', 'the answer buried the recommendation');
     expect(first).toContain('About your last run of /focus');
-    expect(first).toContain('IMPLEMENTATION_MISS');
+    expect(first).toContain('Your rules already say this, and the skill did not carry it.');
     expect(first).toContain('──── A ────');
     expect(first).toContain('the original answer');
     expect(first).toContain('the improved answer');
@@ -112,7 +112,7 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
 
     // phase two resumes the pending candidate: no new generation, only the re-diagnosis
     const before = await requestCount();
-    const second = run(data, proj, 'fix', 'the answer buried the recommendation', '--pick', candidateLetter);
+    const second = run(data, proj, 'fix', '--always', 'the answer buried the recommendation', '--pick', candidateLetter);
     expect(await requestCount(), 'the resume re-generated instead of resuming').toBe(before + 1);
     expect(second).toContain('Kept.');
     expect(second).toContain('unchanged, which is the point');
@@ -138,7 +138,7 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
     const organicBefore = store.listInvocations(L).filter((r) => r.provenance === 'ORGANIC_USE').length;
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
-    expect(run(data, proj, 'fix', 'the answer buried the recommendation')).toContain('--pick a|b|same');
+    expect(run(data, proj, 'fix', '--always', 'the answer buried the recommendation')).toContain('--pick a|b|same');
     const proposed = store.readEvents(L).filter((e) => e.kind === 'REPAIR_PROPOSED');
     const cand = (proposed[proposed.length - 1] as { candidateSkillVersionHash: string }).candidateSkillVersionHash;
     const candRuns = store.listInvocations(L).filter((r) => r.skillVersionHash === cand);
@@ -156,9 +156,9 @@ describe('IMPLEMENTATION_MISS: candidate → rerun → blinded pick → winner a
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
     const activeBefore = store.getActive(L)!;
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } });
-    const first = run(data, proj, 'fix', 'too abstract');
+    const first = run(data, proj, 'fix', '--always', 'too abstract');
     const champLetter = first.indexOf('the original answer') < first.indexOf('the improved answer') ? 'a' : 'b';
-    const second = run(data, proj, 'fix', 'too abstract', '--pick', champLetter);
+    const second = run(data, proj, 'fix', '--always', 'too abstract', '--pick', champLetter);
     expect(second).toContain('The current version stays');
     expect(store.getActive(L)).toBe(activeBefore);
     expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_SETTLED' && e.outcome === 'REJECTED')).toBe(true);
@@ -184,7 +184,7 @@ describe('a counted decision goes through the promotion gate: it may reject on i
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
     const activeBefore = store.getActive(L)!;
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the plain answer' } });
-    const out = run(data, proj, 'fix', 'it said synergy');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
     expect(out).toContain('its count favours one of these two; which one is shown after you pick');
     expect(out, 'the count named a letter before the blind pick').not.toMatch(/favours [AB]\b/);
     expect(out).toContain('not installed on its own');
@@ -200,7 +200,7 @@ describe('a counted decision goes through the promotion gate: it may reject on i
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
     const activeBefore = store.getActive(L)!;
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the synergy answer' } });
-    const out = run(data, proj, 'fix', 'it was vague');
+    const out = run(data, proj, 'fix', '--always', 'it was vague');
     expect(out).toContain('decided by its count');
     expect(store.getActive(L)).toBe(activeBefore);
     const gate = store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined;
@@ -217,7 +217,7 @@ describe('a counted decision goes through the promotion gate: it may reject on i
       const L: store.StoreLayout = { root: data, skillName: 'focus' };
       const activeBefore = store.getActive(L)!;
       await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the synergy answer' } });
-      const out = run(data, proj, 'fix', 'it was vague', '--pick', 'a');
+      const out = run(data, proj, 'fix', '--always', 'it was vague', '--pick', 'a');
       expect((store.readEvents(L).find((e) => e.kind === 'PROMOTION_GATE') as { authority?: string } | undefined)?.authority,
         'a --pick skipped the gate').toBe('AUTO_REJECT');
       expect(store.getActive(L)).toBe(activeBefore);
@@ -253,7 +253,7 @@ describe('in fix, a deterministic regression means a REQUIRED rule got worse', (
   it('a PREFERRED rule getting worse does not auto-reject: a person decides', async () => {
     const { data, proj } = await seedTwo('PREFERRED');
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
-    const out = run(data, proj, 'fix', 'it said synergy');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
     expect(gateOf(data)).toBe('HUMAN_GATED');
     expect(out).toContain('--pick a|b|same');
     expect(out).not.toContain('decided by its count');
@@ -262,7 +262,7 @@ describe('in fix, a deterministic regression means a REQUIRED rule got worse', (
   it('POLARITY — the same change breaking a REQUIRED rule is rejected by the count', async () => {
     const { data, proj } = await seedTwo('REQUIRED');
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'the leverage answer' } });
-    const out = run(data, proj, 'fix', 'it said synergy');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
     expect(gateOf(data)).toBe('AUTO_REJECT');
     expect(out).toContain('decided by its count');
   }, 120_000);
@@ -274,7 +274,7 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     const L: store.StoreLayout = { root: data, skillName: 'focus' };
     const s1hash = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     await setByTool({ emit_coverage: ABSENT('Lead with the recommendation before the framework.') });
-    const out = run(data, proj, 'fix', 'I always want the recommendation first', '--add', 'required');
+    const out = run(data, proj, 'fix', '--always', 'I always want the recommendation first', '--add', 'required');
     expect(out).toContain('Added as REQUIRED');
     expect(out).toContain('supersedes');
 
@@ -301,13 +301,13 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
     const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
 
     await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
-    expect(run(data, proj, 'fix', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
     const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     expect(s2).not.toBe(s1);
 
     // no new invocation in between: the second complaint is about the same run as the first
     await setByTool({ emit_coverage: ABSENT('Every sentence must parse as correct English.') });
-    const out = run(data, proj, 'fix', 'it has ungrammatical sentences', '--add', 'required');
+    const out = run(data, proj, 'fix', '--always', 'it has ungrammatical sentences', '--add', 'required');
     expect(out).toContain('Added as REQUIRED');
     expect(out).toContain('has moved since that run');
 
@@ -324,10 +324,10 @@ describe('STANDARD_GAP: one approval mints, compiles and installs — or one ref
   it('--skip records the refusal, mints nothing, and is not re-asked on the same proposal', async () => {
     const { data, proj } = await seeded();
     await setByTool({ emit_coverage: ABSENT('Always name the deadline.') });
-    const out = run(data, proj, 'fix', 'no deadline mentioned', '--skip');
+    const out = run(data, proj, 'fix', '--always', 'no deadline mentioned', '--skip');
     expect(out).toContain('Not added');
     expect(readdirSync(join(data, 'skills', 'focus', 'standards'))).toHaveLength(1);
-    const again = run(data, proj, 'fix', 'no deadline mentioned');
+    const again = run(data, proj, 'fix', '--always', 'no deadline mentioned');
     expect(again).toContain('declined exactly this addition before');
   }, 120_000);
 });
@@ -342,18 +342,18 @@ describe('a repair follows a moved standard instead of dying on it', () => {
     const s1 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
 
     await setByTool({ emit_coverage: ABSENT('Never use an em dash.') });
-    expect(run(data, proj, 'fix', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
+    expect(run(data, proj, 'fix', '--always', 'it uses em dashes', '--add', 'required')).toContain('Added as REQUIRED');
     const s2 = store.getSkillVersion(L, store.getActive(L)!)!.standardVersionHash;
     expect(s2).not.toBe(s1);
 
     // the last recorded invocation is still the S1 run; complain about x1, which S2 also carries
     await setByTool({ emit_coverage: COVERED, emit_piece: { piece: 'a fresh answer on the current standard' } });
-    const out = run(data, proj, 'fix', 'the answer buried the recommendation');
+    const out = run(data, proj, 'fix', '--always', 'the answer buried the recommendation');
     expect(out).toContain('has moved since that run');
     // the re-run on the current version is fix's replay too, not organic use
     expect(store.listInvocations(L).filter((r) => r.request.source === 'FIX').every((r) => r.provenance === 'FIX_EVALUATION')).toBe(true);
     expect(store.listInvocations(L).filter((r) => r.provenance === 'FIX_EVALUATION').length).toBeGreaterThanOrEqual(2);
-    expect(out).toContain('IMPLEMENTATION_MISS');
+    expect(out).toContain('Your rules already say this, and the skill did not carry it.');
     expect(out).not.toContain('REPAIR INVARIANT');
     expect(out).toContain('--pick a|b|same');
 

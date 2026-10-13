@@ -190,7 +190,7 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     const before = store.getActive(L);
     await setByTool({ emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
       emit_piece: { piece: 'the plain answer' } });
-    const out = run(data, proj, 'fix', 'it said synergy', '--floor-cap', '10');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy', '--floor-cap', '10');
     expect(out).toContain('Your regression floor is earned');
     expect(out).toContain('gate: AUTO_PROMOTE');
     expect(out).toContain('Kept, by the gate');
@@ -208,7 +208,7 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     qualify(data, proj);
     await setByTool({ emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
       emit_piece: { piece: 'the plain answer' } });
-    const out = run(data, proj, 'fix', 'it said synergy', '--floor-cap', '0.0000001');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy', '--floor-cap', '0.0000001');
     expect(out).toContain('The floor could not finish');
     expect(out).toContain('--pick a|b|same');
   }, 300_000);
@@ -225,7 +225,7 @@ describe('through the binary: propose, freeze, qualify, and a repair that instal
     const before = store.getActive(L);
     await setByTool({ emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
       emit_piece: { piece: 'the plain answer' } });
-    const out = run(data, proj, 'fix', 'it said synergy', '--floor-cap', '10');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy', '--floor-cap', '10');
     expect(out).toContain('gate: HUMAN_GATED');
     expect(out).toContain('nothing guards what the change did not aim at');
     expect(store.getActive(L)).toBe(before);

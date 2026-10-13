@@ -123,7 +123,7 @@ is built and tested offline; it has not yet looked after a live skill for weeks.
 ```bash
 atelier new ./reviews --method review.md     # build: your finished work, and a note of how you do it
 atelier run "review this change" --with change.diff     # run: the work, then its evaluation, rule by rule
-atelier fix "it missed the migration cost"   # react: what was wrong, in your own words
+atelier fix "it missed the migration cost"   # react: what was wrong, in your own words; that piece is written again
 ```
 
 Under the work a run prints its evaluation, in three layers that are kept apart because they are different
@@ -151,6 +151,15 @@ a machine: it is yours to finish reading. A rule you stated stays required when 
 it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
 confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
 `--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.
+
+`atelier fix "<what was wrong>"` goes one of three ways, and you choose by saying so:
+
+- **This piece** (the default). It is written again with what you said put right, and your skill is not changed:
+  one complaint about one piece is not a rule. It is also recorded as a piece you would not have used, with why.
+- **Every run** (`--always`). Where your rules already cover it, Atelier tries another way to carry them and shows
+  you both results. Where they do not, it asks whether this should be a rule; nothing becomes one without your yes.
+- **The evaluation** (`--check`). It blocked what was right, or passed what was not. It is recorded with what the
+  evaluation said, and nothing is changed: a check reads one of your rules, and is put right through the rule.
 
 `--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
 would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every

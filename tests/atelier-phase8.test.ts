@@ -210,7 +210,7 @@ describe('through the binary: one round of optimize', () => {
     const opt = run(data, proj, 'optimize', '--skill', 'focus', '--cap', '50');
     expect(opt).toContain('to adopt it yourself');
     expect(foldRepairs(store.readEvents(L)).some((r) => r.outcome === 'PENDING')).toBe(true);
-    const out = run(data, proj, 'fix', 'it said synergy');
+    const out = run(data, proj, 'fix', '--always', 'it said synergy');
     expect(out).not.toMatch(/^EXIT:/);
     expect(out).toContain('already waiting for your decision');
   }, 300_000);
@@ -225,7 +225,7 @@ describe('through the binary: one round of optimize', () => {
     run(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation');
     await post({ byTool: { emit_coverage: { coverage: 'COVERED', requirementIds: ['x1'], proposedRequirement: null, question: null, reasoning: 'x1' },
       emit_piece: { piece: 'the improved answer' }, emit_proposals: { proposals: [{ change: 1, why: 'it is skimmed while drafting' }] } } });
-    const out = run(data, proj, 'fix', 'the answer buried the recommendation', '--reflect');
+    const out = run(data, proj, 'fix', '--always', 'the answer buried the recommendation', '--reflect');
     expect(out).toContain('Reflection chose');
     expect(store.readEvents(L).some((e) => e.kind === 'REPAIR_PROPOSED' && (e as { proposer?: string }).proposer === 'REFLECTIVE')).toBe(true);
   }, 300_000);

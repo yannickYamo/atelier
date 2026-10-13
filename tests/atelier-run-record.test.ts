@@ -26,7 +26,7 @@ describe('the card, layer by layer', () => {
     expect(out).toContain('    ✗  Between 220 and 420 words.\n         found: 439 words (220 to 420): long by 19');
     expect(out).toContain('    ~  Open with a Parties section that names both parties exactly as the term sheet does.\n         checked, and held: a "Parties" section, with something in it, opening the work\n         not checked, yours to read: names both parties exactly as the term sheet does');
     expect(out).toContain('    ?  Take every name from the term sheet.\n       (no check reads the rule marked ? with nothing under it: it is yours to judge)');
-    expect(out).toContain('  Next: run it again. If a rule is wrong about your work: atelier fix "<what was wrong>"');
+    expect(out.replace(/\s+/g, ' ')).toContain('Next: run it again. If the evaluation is wrong about your work: atelier fix "<what was wrong>" --check');
     expect(out).not.toMatch(/atelier rate/);
   });
   it('what the request set is its own layer, and a miss of it says to run again or ask for something else', () => {
@@ -40,7 +40,8 @@ describe('the card, layer by layer', () => {
     expect(out).toContain('Nothing was seen to fail. 1 of 3 verified; 2 left for you to read.');
     expect(out).toContain('    ✓  Between 220 and 420 words.\n         400 words');
     expect(out).toContain('What was done: written again once, and it now holds what was missing');
-    expect(out).toContain('Next: read what is marked ~ and ?, then say whether you would use it: atelier rate i9 yes|no "why"');
+    expect(out).toContain('Next: read what is marked ~ and ?. You would use it: atelier rate i9 yes');
+    expect(out).toContain('Not right: atelier fix "<what was wrong>" writes this piece again');
   });
   it('a rule set aside for the run is shown as not checked, with why, and is the owner\'s to look at', () => {
     const r = buildRecord({ requirements: [reqs[1]], checked: [], waived: new Map([['x7', 'the request states its own length (600 words)']]), request: null, claims: null, copying: null });

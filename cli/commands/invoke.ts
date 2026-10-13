@@ -68,6 +68,7 @@ import { runOnce, draftMaxTokens } from './improve.js';
 import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
+import { resolve as resolvePath } from 'node:path';
 import { sha, DATA, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor } from '../runtime.js';
 
 /**
@@ -187,6 +188,13 @@ export function ownLengthLine(output: string, band: readonly [number, number], s
   const written = proseWords(output); const how = againstBand(written, band);
   return `Length: ${written.toLocaleString('en-US')} words. The request names none; your pieces run ${span[0]} to ${span[1]}, shortest to longest${how === 'met' ? '' : `, and this is ${how} of what they span (${band[0]} to ${band[1]})`}.`;
 }
+
+/**
+ * WHAT THE PERSON SAID WAS WRONG WITH THE LAST VERSION OF THIS PIECE (`atelier fix`), told to the writer beside the
+ * task. It is no part of what was asked: a number in a complaint is not a length, and the complaint is not material.
+ */
+export const correctionFor = (said: string | undefined): string => (said?.trim()
+  ? `\n\n(An earlier version of this piece was not right. The person who asked for it said, in their words: "${said.trim().replace(/"/g, "'")}". Write the piece so that this is put right, and change nothing else about what was asked.)` : '');
 
 /** The length a request states in words, against what was written: the request's own constraint on this one output. */
 export function requestLength(output: string, asked: StatedLength): { asked: string; met: boolean | null; detail: string } {
@@ -541,7 +549,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
   const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
-    : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : task;
+    : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : `${task}${correctionFor(flag('--correcting'))}`;
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
   // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
   // A REQUEST THAT STATES ITS OWN LENGTH OR SHAPE GETS NO SKELETON: the request sets the shape then.
@@ -623,7 +631,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     report.say(`Length asked: ${stated.raw}. Written: ${written.toLocaleString('en-US')} words${how === 'met' ? '' : ` (${how} of what was asked)`}.`);
   }
   reportRestyle(report, rec.output, material);
-  const spent = finish(report, { rec, sv, name, task, budget, spentBefore });
+  const spent = finish(report, { rec, sv, name, task, asked, budget, spentBefore });
   // Taken where the total is, so the lines by purpose sum to it: what the evaluation below reads is not this run's writing.
   const spentBy = spendBetween(ledgerBefore, processSpendByPurpose());
   // THE EVALUATION OF THIS RUN (core/eval/summary.ts): stored beside the record, carried by --json, and drawn as
@@ -1487,11 +1495,13 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
  * THE WHOLE COST, and the record. The writer's budget and the claim reader's are separate meters; what
  * this run spent on either is the process total since generation began.
  */
-function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name: string; task: string; budget: Budget; spentBefore: number }): number {
+function finish(report: RunReport, r: { rec: Invocation; sv: SkillVersion; name: string; task: string; asked?: string; budget: Budget; spentBefore: number }): number {
   const spent = Math.max(r.budget.spentUsd, processSpentUsd() - r.spentBefore);
   const reader = spent - r.budget.spentUsd;
   report.detail(`invocation ${r.rec.invocationId}  ·  SkillVersion ${r.sv.skillVersionHash}${flag('--candidate') ? ' (CANDIDATE, not active)' : ''}  ·  $${spent.toFixed(4)}${reader > 0 ? ` (claim reader $${reader.toFixed(4)})` : ''}`);
-  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: r.rec.invocationId, skillName: r.name, input: r.task, at: r.rec.at }, null, 1));
+  // What was asked, as typed, and the files given with it: what `atelier fix` needs to write this one piece again.
+  writeAtomic(runFile('last-invocation.json'), JSON.stringify({ invocationId: r.rec.invocationId, skillName: r.name, input: r.task, at: r.rec.at,
+    ...(r.asked !== undefined ? { asked: r.asked, with: boundMaterial().filter((m) => m.path).map((m) => ({ name: m.name, path: resolvePath(m.path) })) } : {}) }, null, 1));
   const details = runFile('last-invocation.txt');
   report.write(details);
   console.log(`$${spent.toFixed(2)} · everything this run checked: ${details} · not right? atelier fix "<what was wrong>"`);

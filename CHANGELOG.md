@@ -93,7 +93,11 @@ results said they did not help. A person needs three things from it.
   to what you supplied, no passage lifted from one of your examples). Under them, the habits seen in your examples,
   counted and blocking nothing; what was done to the draft; and one next step. A failure is shown whole: the rule,
   and everything the check found.
-- **`atelier fix "<what was wrong>"`** is unchanged.
+- **`atelier fix "<what was wrong>"`** writes that one piece again, with what you said put right, and leaves the
+  skill alone: one complaint about one piece is not a rule. It also records that you would not have used the piece,
+  with why. `--always` says every run should do this, and is the earlier behaviour (another way to carry a rule you
+  have, or a new rule on your yes), now said in plain words. `--check` says the evaluation was wrong about the
+  work: it is recorded with what the evaluation said, and nothing is changed.
 - **`atelier --help`** is those three. Every other command is listed by `atelier lab`, by what it is for, with the
   ones whose studies did not show a gain named as experimental. Nothing was removed: each still answers to its name.
 
