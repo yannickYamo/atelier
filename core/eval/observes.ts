@@ -112,6 +112,9 @@ function partNobodyRead(statement: string, left: readonly { at: number; end: num
   return statement.slice(start, end).replace(/\s+/g, ' ').trim();
 }
 
+/** Is a requirement's statement the owner's own sentence (stated, added or rewritten by them)? */
+export const inOwnerWords = (r: Pick<Requirement, 'provenance'>): boolean => r.provenance === 'EXPERT_STATED' || r.provenance === 'EXPERT_ADDED' || r.provenance === 'SUBSTANTIVELY_REWRITTEN';
+
 /**
  * What the check of a requirement reads. The check is the whole of the statement only where the machine worded the
  * statement from it (`wordedFromCheck`); a sentence a person or a model wrote is read for what it says beyond the check.

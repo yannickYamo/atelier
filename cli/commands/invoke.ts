@@ -548,8 +548,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
   const deliveryForRun = withheld.length ? { ...delivery, withheldRules: withheld } : delivery;
-  const taskForRun = shape === 'SHAPE' ? `${task}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
-    : shape === 'BARE' ? `${task}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : `${task}${correctionFor(flag('--correcting'))}`;
+  // What the person said was wrong with an earlier version (`atelier fix`) goes to the writer whatever shape was asked for.
+  const corrected = `${task}${correctionFor(flag('--correcting'))}`;
+  const taskForRun = shape === 'SHAPE' ? `${corrected}\n\n(The request's own format instruction overrides any presentation rule in the skill: follow the request exactly.)`
+    : shape === 'BARE' ? `${corrected}\n\n(Deliver only the piece itself: no preamble, no note about it, no commentary after it.)` : corrected;
   // LONG FORM BY SECTION (core/fidelity/sections.ts), behind --sections: planned once, each section written with
   // the whole standard served, joined, then checked and steered as one piece. Not for a structured output.
   // A REQUEST THAT STATES ITS OWN LENGTH OR SHAPE GETS NO SKELETON: the request sets the shape then.
@@ -1032,7 +1034,8 @@ export const STRICT_EXIT = 3;
  */
 export interface Unmet { readonly id: string; readonly statement: string; readonly detail: string; /** how far off, where that is a number: the less the better */ readonly off?: number;
   /** a miss of length, in words: what the writer is told to aim for, since told only the limit it lands just past it again */ readonly aim?: string;
-  /** whose length was missed, where it is the request's and not the span of the author's pieces */ readonly of?: 'request' }
+  /** whose length was missed, where it is the request's and not the span of the author's pieces */ readonly of?: 'request';
+  /** the miss is of the length of the whole piece (not of one section of it): what a trim can put right */ readonly whole?: true }
 export const LENGTH_ID = 'length';
 /** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
 export const LENGTH_REDRAFT_PIECES = 9;
@@ -1061,13 +1064,13 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   if (!must.size && !own && !asked) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
-    ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null }] as const] : [])));
+    ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null, whole: !r.measurement.params.in }] as const] : [])));
   const ruleMiss = (x: VerifyReport['checked'][number]): Unmet => {
     const base = { id: x.requirementId, statement: must.get(x.requirementId) ?? x.requirementId, detail: x.result.detail };
     const lim = limits.get(x.requirementId); const n = x.result.value;
     if (!lim || typeof n !== 'number') return base;
     const aim = lengthAim(n, lim.lo, lim.hi);
-    return { ...base, off: lim.hi !== null && n > lim.hi ? n - lim.hi : lim.lo !== null && n < lim.lo ? lim.lo - n : 0, ...(aim ? { aim } : {}) };
+    return { ...base, off: lim.hi !== null && n > lim.hi ? n - lim.hi : lim.lo !== null && n < lim.lo ? lim.lo - n : 0, ...(aim ? { aim } : {}), ...(lim.whole ? { whole: true as const } : {}) };
   };
   return (d) => {
     const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss);
@@ -1075,12 +1078,12 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
       const written = countWords(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
       const aim = lengthAim(written, lo, hi); const off = Math.round(hi !== null && written > hi ? written - hi : (lo ?? 0) - written);
-      return [...rules, { id: LENGTH_ID, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${hi !== null && written > hi ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}) }];
+      return [...rules, { id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${hi !== null && written > hi ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}) }];
     }
     const n = own ? proseWords(d.output) : 0;
     if (!own || againstBand(n, own.band) === 'met') return rules;
     const aim = lengthAim(n, own.band[0], own.band[1]);
-    return [...rules, { id: LENGTH_ID, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`,
+    return [...rules, { id: LENGTH_ID, whole: true as const, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`,
       detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}) }];
   };
 }
@@ -1094,7 +1097,7 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
 }
 
 /** Is everything a draft still misses that it runs too long? Then it is trimmed, not written again. */
-const onlyTooLong = (unmet: readonly Unmet[]): boolean => unmet.length > 0 && unmet.every((u) => u.aim?.endsWith('or fewer'));
+const onlyTooLong = (unmet: readonly Unmet[]): boolean => unmet.length > 0 && unmet.every((u) => u.whole && u.aim?.endsWith('or fewer'));
 
 /**
  * A DRAFT THAT HOLDS EVERYTHING AND RUNS LONG IS CUT, NOT REWRITTEN. Asked to write the piece again at the right
@@ -1103,7 +1106,8 @@ const onlyTooLong = (unmet: readonly Unmet[]): boolean => unmet.length > 0 && un
  * alone, it has one thing to do. The number is the miss plus the margin `lengthAim` sets inside the limit.
  */
 export function trimNote(unmet: readonly Unmet[], draft: string): string {
-  const over = Math.max(...unmet.map((u) => u.off ?? 0)); const to = /aim for (\d[\d,]*) words or fewer/.exec(unmet.find((u) => u.aim)?.aim ?? '')?.[1];
+  // Where two limits are both passed, the one missed by most decides: inside it, the piece is inside the other.
+  const worst = [...unmet].sort((a, b) => (b.off ?? 0) - (a.off ?? 0))[0]; const over = worst.off ?? 0; const to = /aim for (\d[\d,]*) words or fewer/.exec(worst.aim ?? '')?.[1];
   return `The draft below holds what this work requires and runs too long: ${unmet.map((u) => u.detail).join('; ')}.\n`
     + `Return the same piece with words removed${to ? ` until it runs ${to} words or fewer (at least ${over} fewer than now)` : ` (at least ${over})`}. `
     + 'Cut what adds least: a restated point, a qualifier, a clause that repeats its sentence. Keep every heading, section, table, list item, name, figure and citation exactly as it is, in the same order. '
@@ -1154,9 +1158,12 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     // as one it was reported as a rule held "once the draft was corrected" and read as a recurrence.
     const ids = missing.filter((u) => u.id !== LENGTH_ID).map((u) => u.id);
     const say = (x: Delivered, note: string): Delivered => { c.notes.push(note); return noted(x, note, ids); };
-    // Once; and once more where everything still unmet is a length, which a writer nears by halves.
-    // And where all that is left is that it runs long, the piece is cut, up to three times, not written again.
-    for (let round = 0; missing.length && (onlyTooLong(missing) ? round < TRIMS : round < REDRAFTS && (round === 0 || missing.every((u) => u.aim))); round += 1) {
+    // Written again once, and once more where everything still unmet is a length, which a writer nears by halves.
+    // And where all that is left is that the whole piece runs long, it is cut, up to three times, counted apart.
+    let redrafts = 0; let trims = 0;
+    const another = (): boolean => (onlyTooLong(missing) ? trims < TRIMS : redrafts < REDRAFTS && (redrafts === 0 || missing.every((u) => u.aim)));
+    while (missing.length && another()) {
+      if (onlyTooLong(missing)) trims += 1; else redrafts += 1;
       try {
         const piece = await c.redraft(onlyTooLong(missing) ? trimNote(missing, d.output) : redraftNote(missing, d.output));
         const d2 = await refine(piece);

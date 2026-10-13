@@ -39,7 +39,9 @@ describe('the plan of a standard', () => {
   });
   it('knows whether the skill reads material, and whether the owner rules the length', () => {
     expect(plan).toMatchObject({ readsMaterial: true, rulesLength: true });
-    expect(planFor({ requirements: [SECTION, { ...LENGTH, contested: 'your examples run longer', materiality: null }] })).toMatchObject({ readsMaterial: false, rulesLength: false });
+    // a length the owner stated is the length even while their examples dispute it: the examples add no second one
+    expect(planFor({ requirements: [SECTION, { ...LENGTH, contested: 'your examples run longer', materiality: null }] })).toMatchObject({ readsMaterial: false, rulesLength: true });
+    expect(planFor({ requirements: [SECTION, HABIT] }).rulesLength).toBe(false);
   });
   it('is said in plain words for a build\'s whole account', () => {
     const lines = describePlan(plan).join('\n');
@@ -47,6 +49,26 @@ describe('the plan of a standard', () => {
     expect(lines).toContain('x3    rule       checked in part against your material · blocks when it fails · on a miss: written again');
     expect(lines).toContain('x6    rule       checked · does not block: your examples dispute it · on a miss: shown, nothing done');
     expect(lines).toContain('x5    judgement  no check · does not block · on a miss: yours to judge');
+  });
+});
+
+describe('enforced means one thing', () => {
+  const state = (r: Requirement, required: boolean): string => buildRecord({ requirements: [r], checked: [{ id: r.requirementId, required, verdict: 'VIOLATED', detail: 'found' }], waived: new Map(), request: null, claims: null, copying: null }).state;
+  it('a check on the owner\'s rule that they never made required is shown and blocks nothing, in the plan and in the record', () => {
+    const judgedWithCheck = stated('j2', 'Sound calm and never breathless.', { observer: 'SENTENCE_LENGTH', params: { medianMax: 5, p90Max: 6 } }, { obligation: 'JUDGEMENT', materiality: null });
+    expect(planFor({ requirements: [judgedWithCheck] }).rules[0]).toMatchObject({ role: 'RULE', enforced: false, notEnforced: 'NOT_REQUIRED', onMiss: 'SHOW' });
+    expect(state(judgedWithCheck, false)).toBe('NEEDS_REVIEW');
+  });
+  it('a disputed rule the owner then makes required is enforced: making it required settles the dispute', () => {
+    const settled = { ...DISPUTED, materiality: 'REQUIRED' as const };
+    expect(planFor({ requirements: [settled] }).rules[0]).toMatchObject({ enforced: true, notEnforced: null });
+    expect(state(settled, true)).toBe('BLOCKED');
+    expect(state(DISPUTED, false)).toBe('NEEDS_REVIEW');
+  });
+  it('what was read off examples is said to be from the examples, whatever it is', () => {
+    const likeThese = aRequirement({ requirementId: 'e1', statement: 'New work reads like the 3 examples given.', obligation: 'JUDGEMENT', materiality: 'PREFERRED', provenance: 'MACHINE_DISCOVERED' });
+    const r = buildRecord({ requirements: [likeThese, JUDGED], checked: [], waived: new Map(), request: null, claims: null, copying: null });
+    expect(r.entries.map((e) => [e.id, e.source, e.required])).toEqual([['e1', 'EXAMPLE', true], ['x5', 'METHOD', true]]);
   });
 });
 

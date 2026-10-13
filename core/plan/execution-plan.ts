@@ -15,7 +15,7 @@
 
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { targetOf } from '../observers/obligations.js';
-import { observes, type Observes } from '../eval/observes.js';
+import { observes, inOwnerWords, type Observes } from '../eval/observes.js';
 
 /** RULE: the owner requires it. JUDGEMENT: they require it and no check reads it. HABIT: seen in their examples, not required. */
 export type Role = 'RULE' | 'JUDGEMENT' | 'HABIT';
@@ -27,11 +27,14 @@ export type Role = 'RULE' | 'JUDGEMENT' | 'HABIT';
 export type OnMiss = 'REDRAFT' | 'REWRITE' | 'SHOW' | 'NONE';
 /** Why a rule with a check does not block when the check fails; null where it does. */
 export type NotEnforced = 'NOT_REQUIRED' | 'DISPUTED_BY_EXAMPLES' | null;
+// (DISPUTED only until the owner settles it: confirming the rule at a build, or making it required themselves, ends the dispute.)
 
 export interface PlannedRule {
   readonly id: string;
   readonly statement: string;
   readonly role: Role;
+  /** the statement is the owner's own sentence; otherwise it was read off their examples */
+  readonly stated: boolean;
   /** what the check reads and how much of the rule that is; null where the rule has no check */
   readonly check: (Observes & { readonly observer: string; readonly reads: 'OUTPUT' | 'BOUND_MATERIAL' }) | null;
   /** may a failed check block the work */
@@ -56,20 +59,22 @@ function planned(r: Requirement): PlannedRule {
   const required = r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested);
   const role: Role = !required ? 'HABIT' : m ? 'RULE' : 'JUDGEMENT';
   const check = m && o ? { ...o, observer: m.observer, reads: targetOf(m.observer) } : null;
-  const notEnforced: NotEnforced = !check ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : r.materiality !== 'REQUIRED' ? 'NOT_REQUIRED' : null;
+  const notEnforced: NotEnforced = !check || r.materiality === 'REQUIRED' ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : 'NOT_REQUIRED';
   const enforced = Boolean(check) && notEnforced === null;
   // What no sentence rewrite fixes is written again: a part the work must contain, a citation that is no line of
   // the material. Everything else that is enforced is a sentence's to fix.
   const onMiss: OnMiss = !check ? 'NONE' : !enforced ? 'SHOW' : r.obligation === 'DELIVERABLE' || m?.observer === 'LINES' ? 'REDRAFT' : 'REWRITE';
-  return { id: r.requirementId, statement: r.statement, role, check, enforced, notEnforced, onMiss };
+  return { id: r.requirementId, statement: r.statement, role, stated: inOwnerWords(r), check, enforced, notEnforced, onMiss };
 }
 
 /** The plan of a standard: every rule the owner did not reject, in their order. */
 export function planFor(std: Pick<StandardVersion, 'requirements'>): ExecutionPlan {
   const live = std.requirements.filter((r) => r.authority !== 'EXPERT_REJECTED');
-  const rules = live.map(planned); const enforcedIds = new Set(rules.filter((p) => p.enforced).map((p) => p.id));
+  const rules = live.map(planned); const owned = new Set(rules.filter((p) => p.role === 'RULE').map((p) => p.id));
+  // A length the owner stated is the length whether or not its check may block yet: their examples never add a
+  // second one to write toward, least of all while the two disagree.
   return { rules, readsMaterial: rules.some((p) => p.enforced && p.check?.reads === 'BOUND_MATERIAL'),
-    rulesLength: live.some((r) => enforcedIds.has(r.requirementId) && wholeLengthInWords(r)) };
+    rulesLength: live.some((r) => owned.has(r.requirementId) && wholeLengthInWords(r)) };
 }
 
 const WORDS: Record<OnMiss, string> = { REDRAFT: 'written again', REWRITE: 'the sentence rewritten', SHOW: 'shown, nothing done', NONE: 'yours to judge' };

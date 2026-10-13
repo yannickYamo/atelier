@@ -26,6 +26,20 @@ describe('the four ways, and the default', () => {
   });
 });
 
+describe('what is passed on when a piece is written again', () => {
+  it('the settings typed for the writing, and nothing that names the run, the route or a machine\'s format', async () => {
+    const { settingsTyped } = await import('../cli/commands/fix.js');
+    expect(settingsTyped('too long', ['too long', '--model', 'm', '--skill', 'other', '--json', '--cap', '2', '--complaint=x', '--always', '--evaluation', '--invocation', 'i1']))
+      .toEqual(['--model', 'm', '--cap', '2']);
+    // the complaint is taken out once, where it stands, even when another argument says the same
+    expect(settingsTyped('m', ['m', '--model', 'm'])).toEqual(['--model', 'm']);
+  });
+  it('an empty request cannot be written again: the complaint goes to the skill', () => {
+    expect(routeOf(['fix', 'x'], { asked: '' })).toBe('EVERY_RUN');
+    expect(routeOf(['fix', 'x'], { asked: '   ' })).toBe('EVERY_RUN');
+  });
+});
+
 describe('what the writer is told when a piece is written again', () => {
   it('the person\'s words, beside the task and no part of it', () => {
     const note = correctionFor('it missed the "migration" cost');

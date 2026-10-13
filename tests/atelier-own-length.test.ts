@@ -97,7 +97,7 @@ describe('what a draft left unmet, and what the one more draft is told', () => {
     expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
     expect(read?.({ output: words(248), report: report(['x1']) })).toEqual([
       { id: 'x1', statement: 'x1 must hold.', detail: 'x1 detail' },
-      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words, 16 too many', off: 16, aim: 'aim for 216 words or fewer' }]);
+      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words, 16 too many', off: 16, aim: 'aim for 216 words or fewer', whole: true }]);
   });
   it('a skill with nothing of the kind to read has no such step', async () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
@@ -208,7 +208,7 @@ describe('after a miss of length the writer is given something to aim for, and o
 describe('a draft that only runs long is cut, not written again', () => {
   it('the writer is told how many words to remove from the piece it is shown, and what to leave alone', async () => {
     const { trimNote } = await import('../cli/commands/invoke.js');
-    const note = trimNote([{ id: 'x7', statement: 'Between 220 and 420 words.', detail: '439 words (220 to 420): long by 19', off: 19, aim: 'aim for 401 words or fewer' }], 'the draft');
+    const note = trimNote([{ id: 'x7', statement: 'Between 220 and 420 words.', detail: '439 words (220 to 420): long by 19', off: 19, aim: 'aim for 401 words or fewer', whole: true }], 'the draft');
     expect(note).toContain('runs too long: 439 words (220 to 420): long by 19.');
     expect(note).toContain('until it runs 401 words or fewer (at least 19 fewer than now)');
     expect(note).toContain('Keep every heading, section, table, list item, name, figure and citation exactly as it is');
@@ -219,7 +219,7 @@ describe('a draft that only runs long is cut, not written again', () => {
     const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
     const words = (n: number): string => Array.from({ length: n }, () => 'w').join(' ');
     const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
-    const unmet = (x: { output: string }) => { const n = x.output.split(/\s+/).length; return n > 420 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 420, aim: 'aim for 400 words or fewer' }] : []; };
+    const unmet = (x: { output: string }) => { const n = x.output.split(/\s+/).length; return n > 420 ? [{ id: LENGTH_ID, statement: 'length', detail: `${n} words`, off: n - 420, aim: 'aim for 400 words or fewer', whole: true as const }] : []; };
     const sizes = [450, 430, 418, 300]; const notes: string[] = [];
     const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return words(sizes.shift()!); } })(words(469));
     expect(out.output.split(/\s+/).length).toBe(418);
@@ -235,3 +235,24 @@ describe('a draft that only runs long is cut, not written again', () => {
     expect(notes[0]).toMatch(/^An earlier draft did not hold what this work requires/);
   });
 });
+
+describe('a trim is for the length of the whole piece', () => {
+  it('a section that runs long is written again for, never trimmed as if it were the piece', async () => {
+    const { unmetReader, redraftNote, trimNote } = await import('../cli/commands/invoke.js');
+    const section = { requirementId: 's1', statement: 'Keep the Summary section under 30 words.', materiality: 'REQUIRED', obligation: 'DELIVERABLE', authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_STATED',
+      measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['Summary'], need: 1, max: 29 } } };
+    const report = { failed: true, unchecked: [], checked: [{ requirementId: 's1', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', detail: '41 words (at most 29): long by 12', spans: [], value: 41 } }] } as never;
+    const [miss] = unmetReader({ requirements: [section] } as never, null)?.({ output: 'x', report }) ?? [];
+    expect(miss).toMatchObject({ id: 's1', off: 12 });
+    expect(miss.whole).toBeUndefined();
+    // so the writer is told to write the piece again with the section named, not to cut the piece to 26 words
+    expect(redraftNote([miss], 'd')).toContain('Keep the Summary section under 30 words.');
+    expect(trimNote([{ ...miss, whole: true }], 'd')).toContain('words or fewer');
+  });
+  it('where two limits are both passed, the one missed by most sets how much to cut and to what', async () => {
+    const { trimNote } = await import('../cli/commands/invoke.js');
+    const note = trimNote([{ id: 'a', statement: 'a', detail: '430 words', off: 10, aim: 'aim for 410 words or fewer', whole: true }, { id: 'b', statement: 'b', detail: '430 words', off: 80, aim: 'aim for 330 words or fewer', whole: true }], 'd');
+    expect(note).toContain('until it runs 330 words or fewer (at least 80 fewer than now)');
+  });
+});
+

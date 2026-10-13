@@ -137,6 +137,26 @@ now also reports what a passing output costs.
   `--no-redraft` turns that off.
 - A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
 
+### Studies: twelve examples against three (development evidence)
+
+The same method, tasks and runtime, with the skill built from all twelve examples, from the first three, and from
+three drawn at random (seed 20261012), on two of the frozen domains. Ten tasks an arm, one output a task, scored by
+each domain's own checklist with no model. `bench/standing/run.mjs`, arm `invoke`.
+
+| domain | 12 examples | first 3 | random 3 |
+|---|---|---|---|
+| explainer: outputs failing the checklist | 0 of 10 | 0 of 10 | 0 of 10 |
+| explainer: cost an output | $0.070 | $0.051 | $0.052 |
+| contract: outputs failing the checklist | 1 of 10 | 6 of 10 | 2 of 10 |
+| contract: cost an output | $0.21 | $0.20 | $0.20 |
+
+Every contract failure is the same rule, the stated limit of 220 to 420 words. What this supports: on explainers
+three examples did as well as twelve and cost a quarter less; on contracts the two sets of three differ from each
+other by as much as either differs from twelve, so which three matters more than how many. What it does not
+support: any claim about a rate. Ten outputs an arm cannot tell 1 in 10 from 2 in 10, and the checklists are the
+project's own. The runs were made before the trim step was limited to the length of the whole piece. Cost of the
+study: about $8.
+
 ### Studies: the standing comparison on its four domains
 
 One run a task for the runtime, two for the prompt arms; the Atelier skill is the one built by

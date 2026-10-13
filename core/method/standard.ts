@@ -96,8 +96,12 @@ export function stepsOf(note: string): MethodStep[] {
   const seen = new Set<string>();
   // A TEMPLATE'S BLANKS ARE NOT STEPS. "> One-line: [What this competitor is, who they serve] > Evidence ceiling:
   // [Decision-grade / Usable]" is a form to fill in: where the bracketed blanks are most of a line, it instructs nobody.
-  const blanks = (t: string): boolean => (t.match(/\[[^\]]{3,}\]/g) ?? []).join('').length * 2 > t.length;
-  return steps.map(clean).filter((s) => s.text.length >= 8 && !blanks(s.text) && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
+  // Told by what is left when the blanks are taken out: only labels ("One-line:", "Evidence ceiling:"). A step that
+  // names a blank to fill ("Open with [the client] and [the date].", "Tag it [URGENT] or [ROUTINE]") still instructs,
+  // and a link is not a blank.
+  const BLANK = /\[[^\]]{2,}\](?!\()|\{[^}]{2,}\}|<[^<>]{2,}>|_{3,}(?:\s*\([^)]*\))?/g;
+  const blanks = (t: string): boolean => { const left = t.replace(BLANK, ' '); return left !== t && /^(?:\s*>?\s*[\p{L}\p{N}' /-]{1,48}:\s*>?\s*)+$/u.test(left); };
+  return steps.filter((s) => !blanks(s.text)).map(clean).filter((s) => s.text.length >= 8 && !seen.has(s.text.toLowerCase()) && Boolean(seen.add(s.text.toLowerCase())));
 }
 
 /** A section's name as a rule can carry it: the heading without what is particular to one piece (a bracket, a subtitle). */
@@ -272,8 +276,11 @@ export function methodProposals(note: string, example: Pick<GoldenCase, 'task' |
     // never written small. An example handed over without its task still names the company it is about.
     const small = new Set(example.reference.match(/\b[a-z][a-zA-Z]{3,}\b/g) ?? []); const mid = new Map<string, number>();
     for (const m of example.reference.matchAll(/(?<=[a-z,;] )([A-Z][a-zA-Z]{3,})\b/g)) mid.set(m[1], (mid.get(m[1]) ?? 0) + 1);
-    const named = new Set([...mid].filter(([w, k]) => k >= 3 && !small.has(w.toLowerCase())).map(([w]) => w.toLowerCase()));
-    if (columns.some((c) => norm(c).split(' ').some((w) => named.has(w)))) continue;
+    // Not a word that is itself a column's whole name anywhere in the piece ("Severity", "March"): that is a label the
+    // piece uses, capitalised because it is one. A name sits inside a longer heading ("Significance to Payloom").
+    const labels = new Set(outline.tables.flatMap((x) => x.header.map((h) => norm(h))));
+    const named = new Set([...mid].filter(([w, k]) => k >= 3 && !small.has(w.toLowerCase()) && !labels.has(w.toLowerCase())).map(([w]) => w.toLowerCase()));
+    if (columns.some((c) => norm(c).split(' ').length > 1 && norm(c).split(' ').some((w) => named.has(w)))) continue;
     if (columns.some((c) => norm(c).split(' ').some((w) => proper.has(w) && given.includes(` ${w} `)))) continue;
     const m: Measurement = { observer: 'TABLE', params: { columns, minRows: 1 } };
     out.push({ statement: `The work includes a table with the columns ${columns.join(', ')}.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: m, onExample: read(m).detail, conflict: null });

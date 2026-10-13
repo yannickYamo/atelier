@@ -48,7 +48,7 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
     out.push('', `${title} (${items.length})`);
     items.forEach((p) => { out.push(`  - ${p.statement}`); const n = note(p); if (n) out.push(`      ${n}`); });
   };
-  out.push(`${stated.length} step(s) from your method.`);
+  out.push(stated.length ? `${stated.length} step(s) from your method.` : 'No method was given: the skill is your examples, and what can be counted in them.');
   // What will be looked for, in the check's own terms, beside how the example fares on it: the owner approves the
   // check, and "everything it must contain is there" does not say which section a step was tied to.
   const looksFor = (p: MethodProposal): string => {
@@ -218,6 +218,9 @@ export async function method(): Promise<void> {
   }
   // ONE PROJECT, ONE STANDARD. A folder that holds another skill's rules would have these added to them. The same
   // skill built again from a method is a new version of it: the earlier run is set aside, kept, and this one starts.
+  // A FOLDER PART-WAY THROUGH A RUN THAT READS THE EXAMPLES WITH A MODEL is that run's: building over it here left
+  // its state half one thing and half another. Said before anything is written.
+  if (!looking && s.evidence && s.run.state !== 'BUILT') die(`this folder is part-way through reading your examples with a model (state ${s.run.state}). Finish that: atelier new ${goldenPath} "<what the skill is for>"; or start over: atelier lab abort. Or build this one from a folder of its own.`);
   const holds = s.decided.length > 0 || s.proposals.length > 0 || Boolean(s.run.standardVersionHash);
   const again = holds && s.skillName === name && s.proposals.length === 0;
   if (!looking && holds && !again) die(`this folder already holds another standard${s.skillName ? ` (the skill "${s.skillName}")` : ''}. Build this one from a folder of its own.`);
@@ -239,7 +242,7 @@ export async function method(): Promise<void> {
   // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
   // That is the engine's business: said to whoever asks for the whole account, and kept off the screen a person builds from.
   const kind = kindOfWork(note, name);
-  if (whole) console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
+  if (whole && (notePath !== null || flag('--class'))) console.log(`\nKind of work: ${kind}${flag('--class') ? '' : ' (read from your method; --class <kind> to change it)'}. `
     + (unmeasuredKind(kind) ? 'Sentences not found in your material are listed for you to check, never cut: the claim check is measured on essays and posts, not on this.'
       : 'With your material bound (atelier material), sentences not found in it are cut, as the claim check is measured to do on this kind of writing; with none bound they are listed.'));
   // `--review` looks and builds nothing. Otherwise the skill is built from exactly what the screen showed: a reading
@@ -269,7 +272,9 @@ export async function method(): Promise<void> {
   // fewer there is no telling a usual piece from an odd one, and the one worked example stands alone.
   if (!argv.includes('--voice') && !(folder && cases.length >= 3)) argv.push('--voice', 'none');
   if (!argv.includes('--persona')) argv.push('--persona', 'none');
-  if (!argv.includes('--class')) store.setDocClass({ root: DATA, skillName: name }, kind);
+  // (With no method note nothing names the kind of work: a folder called "posts" or "contract" is not thereby held
+  // as a post or a contract. --class says it.)
+  if (!argv.includes('--class') && notePath !== null) store.setDocClass({ root: DATA, skillName: name }, kind);
   // THE BUILD SAYS A GREAT DEAL (the standard's hash, the size of the export, what no instrument measures): all of it
   // true, none of it what a person needs to start. It is kept for --report, and shown whole if the build fails.
   const said: string[] = []; const log = console.log;

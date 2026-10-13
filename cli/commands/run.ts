@@ -51,11 +51,13 @@ export function sortArgs(tokens: readonly string[]): { skill: string | null; tas
  * worked, what was removed.
  */
 export function doneOf(run: Pick<EngineRun, 'report' | 'cut'>): string[] {
-  // The engine's sentence names rules by their ids and quotes each: here, only what happened.
-  const said = run.report.find((l) => /^(?:Written again|The draft (?:runs|leaves out))/.test(l)) ?? '';
-  const still = Number(/it now leaves out (\d+)/.exec(said)?.[1] ?? 0);
-  const again = !said ? '' : /did not do better|could not be written/.test(said) ? 'one more draft was tried and was no better, so the first was kept'
-    : said.includes('nearer and still outside') || still ? `written again once for what was missing${still ? `; ${still} thing${still === 1 ? ' is' : 's are'} still missing` : '; the length is nearer and still off'}` : 'written again once, and it now holds what was missing';
+  // The engine's sentences name rules by their ids and quote each: here, only what happened, as it ended.
+  const all = run.report.filter((l) => /^(?:Written again|The draft (?:runs|leaves out))/.test(l)); const last = all.at(-1) ?? '';
+  const still = Number(/it now leaves out (\d+)/.exec(last)?.[1] ?? 0); const kept = all.filter((l) => l.startsWith('Written again')).length;
+  const times = kept > 1 ? `${kept} times` : 'once';
+  const again = !all.length ? '' : !kept ? 'one more draft was tried and was no better, so the first was kept'
+    : last.includes('nearer and still outside') || still || !last.startsWith('Written again') ? `written again ${times} for what was missing${still ? `; ${still} thing${still === 1 ? ' is' : 's are'} still missing` : '; the length is nearer and still off'}`
+      : `written again ${times}, and it now holds what was missing`;
   const cut = run.cut?.length ?? 0;
   return [again, cut ? `${cut} sentence${cut === 1 ? '' : 's'} removed (not found in your material)` : ''].filter(Boolean);
 }

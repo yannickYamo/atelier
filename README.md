@@ -72,7 +72,7 @@ The model writes; code checks and decides. You own what good means, and the mach
 
 **Run.** Two drafts are written and the closer one to your range is kept. Counted rules get measured. A small model lists every specific claim and code checks each one against what you supplied. Only what broke is rewritten, and the run is recorded with its verdict. The loop is bounded: at most two repair passes, and with `--strict` a fixed number of fresh drafts, then a refusal with its reasons. Only what you required goes into the prompt as an instruction; what you merely tolerate, or what was only observed, never does.
 
-**Improve.** `atelier fix` turns your complaint into a candidate you compare blind. `atelier tend --auto` runs a round of search, tests each candidate against a regression floor, and undoes its own install when a rule starts breaking more often.
+**Improve.** `atelier fix` writes the piece again with what you said put right. With `--always` it turns your complaint into a candidate for the skill that you compare blind. `atelier tend --auto` runs a round of search, tests each candidate against a regression floor, and undoes its own install when a rule starts breaking more often.
 
 The claim check treats writing and answers differently on purpose. Deleting an invented anecdote from an essay costs you nothing. Deleting a correct detail from a technical answer costs you the answer.
 

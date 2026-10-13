@@ -35,7 +35,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 
 | the user wants | run |
 |---|---|
-| a skill from their writing | `atelier new <folder-of-their-work> "<what it is for>"`, show them the rules it proposes, then `atelier new <folder> --accept` once **they** approve (or `--set p3=reject` for their changes) |
+| a skill from their writing | `atelier new <folder-of-their-work> "<what it is for>"` (with no model key set this builds at once from the examples alone, with nothing to approve: tell them so), show them the rules it proposes, then `atelier new <folder> --accept` once **they** approve (or `--set p3=reject` for their changes) |
 | a skill from rules they state | `atelier skill "<their rules, in their words>"` |
 | a skill from their method and finished examples (start here) | `atelier new <example file or folder> --method <method note>`: each step they wrote is a rule, checked where code can hold it; calls no model. `--review` shows what it would check and builds nothing: show them that, and build once **they** agree. Where a step of theirs is not what their own examples do, the skill is still built and the step blocks nothing until confirmed: pass `--yes` only when **they** say to keep the step as written |
 | new work to that standard | `atelier run "<the task>"` (written, checked, repaired, recorded). Under the work is its evaluation, rule by rule, opening with where it stands: BLOCKED (something required was seen to fail; exit 1), NEEDS REVIEW (nothing seen to fail; part of what they require was not read in full by a check, and is named for them to read) or VERIFIED (everything required was read in full and held). A `~` marks a rule a check read only part of: never report such a rule as met. `atelier invoke --skill <name> "<the task>" --json` is the same run with its whole record |
@@ -56,7 +56,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
   change them. Don't pass `--accept` on their behalf without asking.
 - **Don't edit files under `.claude/skills/<name>/` by hand.** They are compiled output: a change there
   isn't recorded and the next build overwrites it. To change what "good" means, use `atelier confirm` or
-  `atelier amend`; to change how it's carried, `atelier fix`.
+  `atelier amend`; to change how it's carried, `atelier fix "<what was wrong>" --always`.
 - **Don't invent material to satisfy a rule.** If a rule needs the person's own stories, figures or sources,
   ask them for it and bind it with `atelier material`.
 - Discovery costs a few dollars (it prints an estimate and stops if it's over `--cap`). Tell the person

@@ -46,16 +46,18 @@ const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualificatio
 /** One rule of the standard as it fared: what it is and whether its check may block come from the plan, never from here. */
 function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   const required = p.role !== 'HABIT';
-  const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: required ? 'METHOD' as const : 'EXAMPLE' as const, required };
+  const base = { id: p.id, statement: p.statement, dimension: required ? 'STANDARD' as const : 'HABIT' as const, source: p.stated ? 'METHOD' as const : 'EXAMPLE' as const, required };
   const o = p.check;
   if (!o) return entry({ ...base, observation: NOTHING, verdict: null });
   const line = f.checked?.find((c) => c.id === p.id);
   const why = f.waived.get(p.id);
-  // A reading of the rule that the owner's own finished work contradicts has not earned belief: it is shown, and
-  // blocks nothing, until they confirm it.
-  const disputed = p.notEnforced === 'DISPUTED_BY_EXAMPLES';
-  const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: disputed ? 'UNQUALIFIED' : 'DETERMINISTIC',
-    evidence: disputed && evidence ? `${evidence}. Your own examples do not do this, so the rule blocks nothing until you confirm it` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
+  // WHETHER A CHECK MAY BLOCK IS THE PLAN'S TO SAY, and the record says the same: a check of the owner's rule that
+  // is not enforced (their own work disputes the reading, or they never made the check required) is shown with what
+  // it found and blocks nothing. A habit's check is believed as a count; it is not required, so it blocks nothing either.
+  const held = required && !p.enforced;
+  const whyNot = p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'Your own examples do not do this, so the rule blocks nothing until you confirm it' : 'You have not made this check required, so it blocks nothing';
+  const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : 'DETERMINISTIC',
+    evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
   if (why) return entry({ ...base, observation: seen(why), applies: f.replaced?.has(p.id) ? { replacedBy: why } : { setAside: why }, verdict: null });
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
   if (!line || (line.verdict === 'NOT_APPLICABLE' && o.reads === 'BOUND_MATERIAL')) {

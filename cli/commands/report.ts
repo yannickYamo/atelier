@@ -126,5 +126,5 @@ export function rate(): void {
   const ship = /^(y|yes|ship|1|true)$/i.test(answer) ? true : /^(n|no|0|false)$/i.test(answer) ? false : die(`answer yes or no: would you ship this as is? (got "${answer}")`);
   const { L, rec } = locate(id);
   putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null });
-  console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To correct the skill: atelier fix "<what was wrong>"'}`);
+  console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
 }

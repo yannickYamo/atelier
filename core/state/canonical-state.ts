@@ -663,6 +663,8 @@ export interface FeedbackRecord {
    *  Evidence strength for a rule counts only records that NAME it — complaints about other rules
    *  used to inflate the dominance check the repair memory exists to enforce. */
   readonly requirementId?: string;
+  /** the complaint is that the evaluation was wrong about the work, not that the work was wrong: never read as a miss of a rule */
+  readonly about?: 'EVALUATION';
   readonly at: string;
 }
 

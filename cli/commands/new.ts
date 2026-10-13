@@ -71,6 +71,15 @@ export async function newSkill(): Promise<void> {
   if (s.intent && typed && typed !== s.intent.text) {
     console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
   }
+  // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
+  // adds the rules only a reading finds, and can be added later. Decided before anything is written for the other
+  // path, and what the person said the skill is for is kept as what it is for.
+  if ((s.run.state === 'EMPTY' || !s.evidence) && !canReach('discovery')) {
+    console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+    if (intent && !argv.includes('--for')) argv.push('--for', intent);
+    await method();
+    return;
+  }
   const name = flag('--name') ?? s.skillName ?? basename(path);
   // The kind of document this work is, kept for the skill from the first call: the build that uses it
   // may be a later continuation that does not repeat the flag.
@@ -95,13 +104,6 @@ export async function newSkill(): Promise<void> {
   const shownBefore = s.run.state === 'PROPOSED';
   // ── START, OR CONTINUE ──────────────────────────────────────────────────────────────────────
   if (s.run.state === 'EMPTY' || !s.evidence) {
-    // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
-    // adds the rules only a reading finds, and can be added later.
-    if (!canReach('discovery')) {
-      console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
-      await method();
-      return;
-    }
     assertReachable('discovery');
     if (!intent) console.log('No purpose given, so rules are weighed for producing new work. Say what it is for as a second argument.\n');
     else console.log(`For: "${intent}" — ${declared ? `${mode.toLowerCase()}, as you declared` : read.why}.\n`);

@@ -602,7 +602,7 @@ function reportNothingInstructs(kept: readonly Requirement[]): void {
   console.log('\n  NOTHING HERE INSTRUCTS THE MODEL YET. A skill built now would show these rules and instruct none.');
   if (kept.every((r) => r.provenance === 'PUBLIC_BEHAVIOUR_INFERRED')) {
     console.log('  Read from someone else\'s public work, these are shown and never instructed — the ceiling that');
-    console.log('  source can carry. Judge the output, and make a rule bind in your own words:  atelier fix "<what was wrong>"');
+    console.log('  source can carry. Judge the output, and make a rule bind in your own words:  atelier fix "<what was wrong>" --always');
   } else if (undecided) console.log(`  ${undecided} of them have no decision from you. Rule on them first:  atelier pending`);
   else console.log('  You marked none of them REQUIRED, and a rule instructs only when it is. After building, make one REQUIRED with:\n    atelier amend --skill <name> --rule <id> --materiality REQUIRED --reason "<why>"');
 }

@@ -547,3 +547,19 @@ describe('what a real template taught the readers', () => {
     expect(notHeldBecause(r, statedLength(r)!)).toMatch(/names more than one count \(72 characters, 50 words\)/);
   });
 });
+
+describe('blanks and names, read more carefully', () => {
+  it('a step that names a blank to fill still instructs; only a line of labels and blanks is a form', async () => {
+    const { stepsOf } = await import('../core/method/standard.js');
+    const keep = ['Open with [the name of the client] and [the date of the call].', 'Write the verdict as one of [Decision-grade], [Usable], [Directional].', 'Cite sources as [Author, Year] [page number].', 'Tag it [URGENT] or [ROUTINE]',
+      '[Follow the house style guide](https://x.co/s)'];
+    const drop = ['Summary: {one line on what it is} {who it serves}', 'Summary: <one line on what it is> <who it serves>', 'Evidence ceiling: ___________ (Decision-grade / Usable)', 'One-line: [What this competitor is] > Evidence ceiling: [Decision-grade / Usable]'];
+    expect(stepsOf([...keep, ...drop].map((x) => `- ${x}`).join('\n')).map((x) => x.text)).toEqual(keep);
+  });
+  it('a word that is itself a column\'s name is a label, however often the prose capitalises it', () => {
+    const reference = `## Findings\n\nWe set the Severity first, then check the Severity again, and the Severity decides the order.\n\n| Finding | Severity | Fix |\n|---|---|---|\n| A leak | High | Patch |\n\n## Plan\n\n| Task | March | April |\n|---|---|---|\n| Ship | x | |\n`;
+    const shown = methodProposals('- Weigh the findings.\n', { task: null, material: [], reference }).filter((p) => p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
+    expect(shown).toEqual([['finding', 'severity', 'fix'], ['task', 'march', 'april']]);
+  });
+});
+
