@@ -7,6 +7,19 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added, for 2.0: a method build also counts how the examples are written
+
+`atelier method <note> --golden <folder>` held the owner's steps and served their pieces, and read nothing of how
+the pieces are written. The measurable part of a voice is counted by code (a sentence length, a paragraph cap, a
+word never used), and was only ever counted in a build that calls a model.
+
+- **Counted off the examples with no model,** and offered beside the method, never as part of it: "I keep
+  paragraphs to 6 sentences at most", held in all twelve explanations.
+- **Only a count every piece meets, from three pieces or more,** and from enough text to count from: three tweets
+  give none.
+- **Shown, not required.** They are served to the writer and choose between drafts. The owner makes one required
+  with `atelier amend`; it is then a rule of style, repaired by rewriting the sentence that breaks it.
+
 ### Changed, for 2.0: one more draft is told everything the first did not hold
 
 A draft that lacked a section the method requires was written once more with the section named. A draft that ran

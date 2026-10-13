@@ -426,3 +426,28 @@ describe('a count or quoted words are read narrowly', () => {
     expect(observerFor('LENGTH').validate({ unit: ['sentence'], min: 3 })).toBe('the longest sentence needs max');
   });
 });
+
+// How the examples are written, counted with no model and offered beside the method.
+describe('what the examples show about how they are written', () => {
+  const sentence = (k: number): string => `The pump moves warmth from part ${k} of the loop to the room you sit in.`;
+  const piece = (id: number, paras = 4) => ({ id: `e${id}.md`, reference: Array.from({ length: paras }, (_, p) => Array.from({ length: 5 }, (_x, k) => sentence(p * 5 + k + id)).join(' ')).join('\n\n') });
+  it('from enough text, counts every piece meets are offered as shown, each a rule of style', async () => {
+    const { countedFromExamples } = await import('../core/method/standard.js');
+    const offered = countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1)));
+    expect(offered.length).toBeGreaterThan(0);
+    for (const p of offered) expect(p).toMatchObject({ origin: 'SHOWN_BY_EXAMPLE', counted: true, demoted: null, onExample: 'held in all 6 of your examples' });
+    expect(offered.map((p) => p.measurement?.observer)).toContain('PARAGRAPH_LENGTH');
+  });
+  it('nothing from two pieces, or from too little text to count', async () => {
+    const { countedFromExamples } = await import('../core/method/standard.js');
+    expect(countedFromExamples([piece(1), piece(2)])).toEqual([]);
+    expect(countedFromExamples([1, 2, 3].map((i) => ({ id: `t${i}.md`, reference: 'Shipped the fix at 2am. Nobody noticed. That is the job.' })))).toEqual([]);
+  });
+  it('the screen says them apart from the method, and the build keeps them as shown', async () => {
+    const { describeMethod } = await import('../cli/commands/method.js');
+    const { countedFromExamples } = await import('../core/method/standard.js');
+    const lines = describeMethod(countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1))), 'FULL_REPRO_CASE').join('\n');
+    expect(lines).toContain('Counted from your examples, and not in your method: how they are written.');
+    expect(lines).not.toContain('Shown by your example, and not in your method');
+  });
+});

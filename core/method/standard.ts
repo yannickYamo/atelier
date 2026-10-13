@@ -28,6 +28,7 @@ import { measure, type CheckContext } from '../observers/registry.js';
 import { headingsOf, sectionHeadsOf } from '../observers/structure.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
+import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
 import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
@@ -129,6 +130,12 @@ export interface MethodProposal {
    * constraints in a Regulation section"). A reading of what the owner meant: shown, and built only on their yes.
    */
   readonly byName?: true;
+  /**
+   * Counted off the examples and said by no step: how the pieces are written (a sentence length, a paragraph cap, a
+   * word never used). A rule of style, not a part of the work: shown, used to choose between drafts, and repaired
+   * by rewriting a sentence where the owner makes it required.
+   */
+  readonly counted?: true;
 }
 
 const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
@@ -310,4 +317,19 @@ export function proposalsAcross(note: string, cases: readonly (Pick<GoldenCase, 
     if (held > best.held) best = { lead: i, proposals, held };
   });
   return { lead: best.lead, proposals: best.proposals };
+}
+
+/**
+ * HOW THE EXAMPLES ARE WRITTEN, COUNTED: the measurable part of a voice (../observers/derive.ts), read off the
+ * finished pieces with no model. Offered beside the method, never as part of it: the owner wrote steps about what
+ * the work holds, and these are what their pieces show about how it is written. Only a count every one of the
+ * pieces meets is offered, and none on fewer than three pieces or on too little text to count from.
+ */
+export function countedFromExamples(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
+  if (cases.length < 3) return [];
+  const texts = cases.map((c) => c.reference);
+  return deriveMeasuredRules(cases.map((c) => ({ id: c.id, text: c.reference })), [], 'MACHINE_DISCOVERED')
+    .filter((m) => m.requirement.measurement && !m.conformance.weak && piecesBreaking(texts, m.requirement.measurement).length === 0)
+    .map((m) => ({ statement: m.requirement.statement, origin: 'SHOWN_BY_EXAMPLE' as const, obligation: 'DELIVERABLE' as const, measurement: m.requirement.measurement ?? null,
+      onExample: `held in all ${cases.length} of your examples`, demoted: null, counted: true as const }));
 }
