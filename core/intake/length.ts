@@ -157,6 +157,17 @@ function reportsBesideAnAsk(text: string, at: number): boolean {
   return bounds.slice(0, -1).some((b, k) => k > i && ASKS.test(text.slice(b, bounds[k + 1])));
 }
 
+// A LABEL CAN NAME THE MATERIAL, NOT THE PIECE: "Original: 12 pages.", "Attachments: two pages.", "Paper length: eight
+// pages." each give the length of something already there, and held as the length to write they set a target of
+// thousands of words. A label that names a source never introduces a length; one that names a kind of piece does not
+// either where the count is in pages, which is how documents that exist are measured ("Letter: three pages").
+const SOURCE = /\b(?:original|source|attach(?:ed|ments?)|input|material|existing|current|paper|transcript|file|pdf|deck|appendix|exhibit|enclosed)\b/i;
+function labelNamesMaterial(before: string, unit: LengthUnit): boolean {
+  const label = /([^.!?\n(]*):\s*$/.exec(before)?.[1];
+  if (label === undefined) return false;
+  return SOURCE.test(label) || (unit === 'pages' && new RegExp(String.raw`\b${PIECE}s?\b`, 'i').test(label));
+}
+
 function located(request: string): { start: number; stated: StatedLength }[] {
   const { text, from, spelled } = inDigits(unquoted(request));
   const best = new Map<LengthUnit, { at: number; start: number; rank: number; stated: StatedLength }>();
@@ -166,6 +177,7 @@ function located(request: string): { start: number; stated: StatedLength }[] {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
       if (POINTS_AT.test(before) || REPORTS.test(before) || EDITS.test(before)) continue;
       if (reportsBesideAnAsk(text, m.index)) continue;
+      if (labelNamesMaterial(before, f.read(m).unit)) continue;
       if (f === PIECE_FORM && !ASKS_FOR.test(before)) continue;
       if (f === HYPHEN_FORM && THERE_ALREADY.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
@@ -221,8 +233,12 @@ export function statedLength(request: string): StatedLength | null {
 export function notHeldBecause(request: string, s: StatedLength): string | null {
   if (s.unit !== 'words' && s.unit !== 'pages') return `a length in ${s.unit} is not counted`;
   // (A count of characters beside it is a second limit too: "72 characters and under 50 words" is about something else;
-  // so is a count of words beside pages: "a two-page brief, each section under 200 words".)
-  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*(?:words?|pages?|characters?|chars?)\b/gi) ?? [];
+  // so is a count of words beside a length in pages: "a two-page brief, each section under 200 words". A page count
+  // beside a length in words counts only where the request states it as a length too: "a 200-word summary of this
+  // ten-page report" is held at 200 words; "a two-page brief, each section under 200 words" is yours to say.)
+  const pagesToo = s.unit === 'pages' || statedLengths(request).some((x) => x.unit === 'pages');
+  const units = pagesToo ? 'pages?|words?|characters?|chars?' : 'words?|characters?|chars?';
+  const counts = inDigits(unquoted(request)).text.match(new RegExp(String.raw`\d[\d,.]*k?[\s-]*(?:${units})\b`, 'gi')) ?? [];
   if (counts.length > 1) return `the request names more than one count${counts.every((c) => /words?$/i.test(c.trim())) ? ' of words' : ''} (${counts.map((c) => c.trim()).join(', ')}), and which is the length of the piece is yours to say`;
   const after = request.slice(request.indexOf(s.raw) + s.raw.length);
   if (request.includes(s.raw) && /^\s+(?:that|which|who|every|each)\b/i.test(after)) return 'the count may be what the piece is about, not how long it is';

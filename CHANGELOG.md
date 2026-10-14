@@ -44,16 +44,20 @@ only partly observed, or the owner's word was moved by a measurement.
 - **A length asked in pages is held, and counted in words a reader would count.** "Quick mode: one to two pages."
   was not read (a count spelled out after a label was skipped), and a length in pages, where it was read, was never
   held: drafts asked for two pages came back at three and four, and nothing said so. A length in pages is now told
-  to the writer, held at 500 words a page, which the run says beside it, and written again for when it is missed.
-  The length a request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a
-  table counted as words, and a draft of four tables ran 1,135 for 1,006 written.
-- **A draft that only runs long is cut by what the writer names and code removes.** Asked to return the whole piece
-  shorter, the writer kept nearly every word: three passes took a draft from 1,169 to 1,149 words against an ask of
-  269. It is now asked to name the sentences that can go, copied from the draft, and code removes exactly those, in
-  order, until the draft is inside: never a figure, a heading, a table row or a whole list item, and the cut draft
-  goes through every check again before it is kept. Where nothing it names can be removed, the next pass writes the
-  piece shorter as before. On eight drafts asked for one to two pages, all eight ended inside, at about a tenth of
-  the cost of a rewrite pass.
+  to the writer, held at 500 words a page, which the run says beside it, and written again for when it is missed. A
+  label that names the material is not a length: "Original: 12 pages." and "Attachments: two pages." are the
+  length of what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
+  request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
+  words, and a draft of four tables ran 1,135 for 1,006 written.
+- **The writer aims inside the length, and a cut is the last resort.** Told "about 500 to 1,000 words", writers
+  aimed at the top and ran past it, and every draft was cut. A held length is now told with an aim inside it (three
+  fifths of the way up a range, about 85% of a ceiling, a target as said); on eight such requests seven drafts came
+  in on the first try. A draft that still runs long is cut by sentences the writer names and code removes, never
+  rewritten whole (asked to return the piece shorter, a writer removed 5 to 21 words of 50 to 170 asked). Only a
+  whole sentence that stands once in the draft goes, and never one with a figure (in digits or words), in a heading,
+  table row or list, a paragraph's first sentence, a sentence the next one leans on ("That test…", "But…"), or one
+  that would leave emphasis, code, a link or a bracket unclosed. The run keeps the draft from before the cut. Where
+  nothing named can be removed, the next pass writes the piece shorter as before, and says so.
 - **Where the owner requires a length, their examples add no second one.** A draft was being written again toward
   both the stated limit and the span of the examples.
 - **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your
@@ -175,6 +179,22 @@ now also reports what a passing output costs.
 - A skill rebuilt from nine pieces or more may write one or two more drafts when a draft misses its length;
   `--no-redraft` turns that off.
 - A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
+
+### Studies: a draft cut by the sentences its writer names, on the standing comparison (development evidence)
+
+The `invoke` arm of `bench/standing`, run again after the cut step changed, against the recorded run of 2026-10-13,
+same domains, tasks and model (`runs/2026-10-14/`; `node bench/standing/score.mjs --domain contract --out
+bench/standing/runs/2026-10-14/contract` scores it again at no cost).
+
+| domain | outputs failing, 2026-10-13 | outputs failing, now | cost an output | seconds an output |
+|---|---|---|---|---|
+| contract | 10 of 10, all the 220-to-420-word limit | 0 of 10 | $0.203 → $0.165 | 55 → 28 |
+| explainer | 0 of 20 | 0 of 10 | $0.083 → $0.069 | 19 → 13 |
+
+The contract limit is the method's own, so the change is the cut, not the request's length: a draft asked to come
+back shorter came back nearly as long, and one cut by the sentences the writer names comes back inside. Both runs
+cut nothing from the text the claim check reads. Ten outputs a domain cannot give a rate; it is the contrast that is
+read, on one model and the builder's own checklists.
 
 ### Studies: how much of a rule its check reads, on 160 steps the reader had not seen (development evidence, $0)
 

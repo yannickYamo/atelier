@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t7",
+ "run": 0,
+ "seconds": 12.115,
+ "output": "Your phone does not send anything to find your location. It only listens. High above you, a fleet of satellites circles the Earth, each carrying an extremely accurate clock. Every satellite broadcasts the same simple message, over and over: who it is, where it is, and the exact time it spoke.\n\nThose signals travel at the speed of light, but they still take time to arrive. A satellite directly overhead is about 20,000 kilometres away. Your phone compares the time stamped in the message with the time it was received. That tiny gap tells it how far away the satellite is.\n\nOne distance places you somewhere on a huge sphere. Two distances narrow that to a circle. Three narrow it to a point, and a fourth corrects the clock inside your phone.\n\nThink of standing in fog and hearing three church bells chime at noon. By timing how late each one reaches you, you could work out exactly where you stand.\n\nThis is why buildings and dense trees upset your position. The signals are faint, and they bounce off surfaces, arriving slightly late and lying about distance.\n\nIn short, GPS measures how long signals took to reach you, and turns those delays into a place on the map.",
+ "costUsd": 0.0426,
+ "cut": []
+}

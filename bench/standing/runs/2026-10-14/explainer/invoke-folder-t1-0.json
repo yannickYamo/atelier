@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 0,
+ "seconds": 13.984,
+ "output": "The news says \"the market rose today.\" But there is no single thing called the market. There are thousands of companies, each with its own share price, moving in different directions. A stock index is the tool that turns all that noise into one number.\n\nAn index tracks a chosen group of companies. The FTSE 100 follows the hundred largest firms listed in London. The S&P 500 follows five hundred big American ones. Add up their values according to an agreed formula, and you get a single figure you can watch over time.\n\nThink of a school reporting one average exam mark instead of every pupil's paper. You lose the individual detail, but you can see at a glance whether this year went better than last.\n\nThe number itself means very little on its own. What matters is the change. If the index is up two percent, the companies in it are collectively worth two percent more than yesterday.\n\nIndexes also give you something to buy. Funds exist that simply hold every company in an index, in the right proportions. That is what people mean by index investing.\n\nIn short, a stock index is one number standing in for the fortunes of many companies at once.",
+ "costUsd": 0.1279,
+ "cut": []
+}

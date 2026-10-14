@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 0,
+ "seconds": 11.763,
+ "output": "You feel rotten, so you want something that fights back. Antibiotics seem like the obvious weapon. They are not, and the reason comes down to what is actually making you ill.\n\nA cold is caused by a virus. Bacteria and viruses are both tiny, but they are built completely differently. A bacterium is a living cell. It has walls, it feeds, and it divides on its own. A virus is barely alive at all. It is a scrap of genetic instructions in a coat, and it hijacks your own cells to copy itself.\n\nAntibiotics attack the machinery that only bacteria have. They punch holes in cell walls, or jam the parts that build bacterial proteins. A virus has none of that equipment, so there is nothing for the drug to grab.\n\nThink of a key cut for one lock. You can push it into a different lock all day, and the door will not move. The key is not faulty; it simply belongs elsewhere.\n\nTaking them anyway has a cost. The harmless bacteria living in your gut get hit, and the tougher survivors learn to shrug off the drug. That is how resistance spreads.\n\nIn short, antibiotics work on bacteria, and your cold is not one.",
+ "costUsd": 0.0439,
+ "cut": []
+}

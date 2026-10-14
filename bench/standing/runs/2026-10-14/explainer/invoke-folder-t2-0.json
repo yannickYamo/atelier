@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 0,
+ "seconds": 12.53,
+ "output": "Sound is just air being pushed. A loudspeaker shoves air outwards and inwards in a rapid pattern, and your eardrum follows that pattern. Noise-cancelling headphones use a clever trick: they push air in exactly the opposite pattern.\n\nTiny microphones on the outside of each earcup listen to the world around you. A small processor inside reads the incoming hum and builds a mirror image of it. Where the noise pushes, the headphone pulls. Where the noise pulls, the headphone pushes. The two patterns meet near your ear and mostly cancel each other out.\n\nThink of two people pushing a swing from opposite sides at the same moment. Neither effort is wasted exactly, but the swing barely moves. Sound waves behave the same way when they arrive out of step.\n\nThis works best on steady, low rumbles. Aircraft engines, train carriages and air conditioning are predictable, so the processor can keep up. Sudden sounds are harder. A voice, a slamming door or a baby crying changes too fast to mirror cleanly, which is why you still hear them.\n\nMany headphones also block noise the dull way, by sealing against your head. That physical barrier handles the higher frequencies the electronics miss.\n\nIn short, these headphones generate anti-noise that collides with the real noise and quietens it.",
+ "costUsd": 0.1296,
+ "cut": []
+}

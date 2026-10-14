@@ -170,12 +170,13 @@ export const wordsOutside = (n: number, band: readonly [number, number]): number
  * and these are the method's rules it then sets aside. "A detailed answer" names no number and moves no cap; a
  * request for 600 words says nothing about a limit in characters.
  */
-export function lengthRulesTheRequestSets(std: Standard | null, stated: StatedLength | null): Requirement[] {
+export function lengthRulesTheRequestSets(std: Standard | null, stated: StatedLength | null, held = true): Requirement[] {
   if (!std || !stated) return [];
   // The length of the whole work only: a request for 600 words says nothing about how long one section runs.
   return std.requirements.filter((q) => q.measurement?.observer === 'LENGTH' && !q.measurement.params.in
-    // A request in pages is held in words (core/intake/length.ts, `inWords`), so it sets aside the method's words too.
-    && [stated.unit, inWords(stated)?.unit].includes(((q.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() as StatedLength['unit']));
+    // A request in pages is held in words (core/intake/length.ts, `inWords`), so it sets aside the method's words too,
+    // where it is held: a length shown as not counted replaces nothing.
+    && [stated.unit, held ? inWords(stated)?.unit : undefined].includes(((q.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() as StatedLength['unit']));
 }
 
 /** What a run says of the places its output cites, for a skill that cites lines (core/loop/locators.ts). */
@@ -204,6 +205,25 @@ export function pagesInWords(s: StatedLength | null): string {
   if (!w) return '';
   const [lo, hi] = statedBounds(w); const n = (x: number): string => Math.round(x).toLocaleString('en-US');
   return ` (about ${lo !== null && hi !== null && lo !== hi ? `${n(lo)} to ${n(hi)}` : n(hi ?? lo ?? 0)} words)`;
+}
+
+/**
+ * WHERE INSIDE THE LENGTH ASKED THE WRITER AIMS. Told "about 500 to 1,000 words", eight writers aimed at the top and
+ * ran 1,006 to 1,104; six then had sentences cut, and four of those read broken. A writer who plans the piece to a
+ * length keeps it whole; a cut after the fact does not. So a range is aimed at three fifths of the way up, a ceiling
+ * at about 85% of it, a target at itself: drafts run past what they aim for, and the aim leaves that room.
+ */
+function writingAim(w: StatedLength): number | null {
+  const [lo, hi] = statedBounds(w); const tens = (x: number): number => Math.max(10, Math.round(x / 10) * 10);
+  if (w.kind === 'target' || w.kind === 'exact') return w.target;
+  if (hi !== null) return tens(lo !== null ? lo + 0.6 * (hi - lo) : 0.85 * hi);
+  return lo;
+}
+
+/** What the writer is told of the length the request states: as it was said, in words where it was said in pages, and, where it is held, where to aim. */
+export function lengthToWriteTo(asked: string, stated: StatedLength): string {
+  const held = notHeldBecause(asked, stated) === null ? inWords(stated) : null; const aim = held ? writingAim(held) : null;
+  return `\n\nThe request states its length: ${statedLengths(asked).map((x) => x.raw).join(', ')}${pagesInWords(stated)}. Write to that length${aim ? `: aim for about ${aim.toLocaleString('en-US')} words, since drafts run past what they aim for` : ''}. The length my own pieces run does not apply to this request.`;
 }
 
 /** The length a request states in words, against what was written: the request's own constraint on this one output. */
@@ -491,7 +511,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // like "detailed" were, so the usual length stayed in the prompt and the chapter came back short.
   const stated = statedLength(asked);
   const lengthAsked = intent?.length ?? requestedLength(asked);
-  for (const q of lengthRulesTheRequestSets(std, stated)) {
+  for (const q of lengthRulesTheRequestSets(std, stated, stated !== null && contractFile === null && !notHeldBecause(asked, stated))) {
     waived.set(q.requirementId, `the request states its own length (${stated?.raw})`);
     withheld.push(q.statement);
     report.say(`The request states its own length (${stated?.raw}): "${q.statement}" is withheld for this run.`);
@@ -553,7 +573,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ledger = factLedger(materialText);
   // Said to the writer in so many words, after the pieces it is shown: they run at the author's length, and without
   // this line they set the length whatever the request says.
-  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${statedLengths(asked).map((x) => x.raw).join(', ')}${pagesInWords(stated)}. Write to that length. The length my own pieces run does not apply to this request.` : '';
+  const lengthNote = stated && contractFile === null ? lengthToWriteTo(asked, stated) : '';
   // Served under its own heading, as what it is: what earlier runs showed, not a rule of the standard.
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
@@ -1150,7 +1170,7 @@ export function cutNote(unmet: readonly Unmet[], draft: string): string {
   const n = wordsWritten(draft); const cut = to ? Math.max(over, n - Number(to.replace(/,/g, ''))) : over;
   return `The draft below holds what this work requires and runs too long: ${unmet.map((u) => u.detail).join('; ')}.\n`
     + `Choose what to delete so that at least ${cut} words go. Pick whole sentences, or clauses that can go without the sentence around them breaking: a restated point, a qualifier, an aside, a sentence that repeats its paragraph. `
-    + 'Never pick a heading, a table row, a whole list item, a name, a figure or a citation. '
+    + 'Never pick a heading, a table row, anything in a list, a name, a figure or a citation; never the first sentence of a paragraph; never a sentence that another sentence points to, counts or continues ("the test above", "the second reason", a list it introduces). '
     + 'Answer with one deletion per line, each copied exactly from the draft, character for character, and nothing else.\n\n'
     + `The draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
 }
@@ -1158,30 +1178,60 @@ export function cutNote(unmet: readonly Unmet[], draft: string): string {
 /** The longest deletion taken from what the writer names: a sentence, never a passage. */
 const CUT_MAX_WORDS = 80;
 const LIST_MARK = /^\s*(?:[-*+•]|\d+[.)])\s+/;
+/** What may stand before a sentence on its line: nothing, a quotation mark, a list marker, or the end of the sentence before. */
+const SENTENCE_OPENS = /(?:^\s*(?:>\s*)?(?:(?:[-*+•]|\d+[.)])\s+)?|[.!?]["”’')]?\s+)$/;
+const SENTENCE_ENDS = /[.!?]["”’')]?$/;
+/** A figure spelled out is still a figure ("twelve times the price"): "one" alone is how prose counts nothing. */
+const NUMBER_WORD = /\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen|half|quarter|percent)\b/i;
+/** A sentence that opens this way leans on the one before it. */
+const LEANS_BACK = /^[>*_"“(\s]*(?:this|that|these|those|such|both|neither|either|but|so|yet|and|or|it|its|they|their|them|here|hence|thus|therefore|which|pair|then|instead|still)\b/i;
+/** Does the sentence at `start` + `before` open its paragraph: first on its line, after a blank line, a heading or the start? */
+function opensParagraph(text: string, start: number, before: string): boolean {
+  if (!/^\s*(?:>\s*)?$/.test(before)) return false;
+  const prev = text.slice(0, Math.max(0, start - 1)).split('\n').pop() ?? '';
+  return start === 0 || /^\s*(?:>\s*)?\r?$/.test(prev) || /^\s*#/.test(prev);
+}
+/** Is every emphasis, code span, bracket and quotation that opens in `t` also closed in it? */
+const balanced = (t: string): boolean => {
+  const n = (re: RegExp, x: string): number => (x.match(re) ?? []).length;
+  const single = t.replace(/\*\*/g, '');
+  return n(/\*\*/g, t) % 2 === 0 && n(/\*/g, single) % 2 === 0 && n(/`/g, t) % 2 === 0 && n(/"/g, t) % 2 === 0
+    && n(/\[/g, t) === n(/\]/g, t) && n(/\(/g, t) === n(/\)/g, t) && n(/“/g, t) === n(/”/g, t);
+};
 
 /**
- * The draft with what the writer named removed, in the order named, until it is at `target` words or fewer. A
- * deletion is taken only where it is in the draft as written, on one line, holds no digit (a figure is never cut),
- * is no part of a heading or a table row, and is not a whole list item. Everything else is left as it was.
+ * The draft with what the writer named removed, in the order named, until it is at `target` words or fewer. Only a
+ * whole sentence is taken, and only where it stands once in the draft as written, on one line, holds no figure (in
+ * digits or in words), sits in no heading or table row, is not a whole list item, and leaves every emphasis, code
+ * span, link, bracket and quotation around it as balanced as it found them. Everything else is left as it was.
  */
 export function applyCuts(draft: string, picks: readonly string[], target: number): { text: string; applied: string[] } {
   let text = draft; const applied: string[] = [];
   for (const raw of picks) {
     if (wordsWritten(text) <= target) break;
     const p = raw.trim().replace(LIST_MARK, '').replace(/^["“'‘](.*)["”'’]$/s, '$1').trim();
-    if (p.length < 12 || p.includes('\n') || /\d/.test(p) || wordsWritten(p) > CUT_MAX_WORDS) continue;
-    const at = text.indexOf(p); if (at < 0) continue;
-    const start = text.lastIndexOf('\n', at) + 1; const endAt = text.indexOf('\n', at); const line = text.slice(start, endAt === -1 ? text.length : endAt);
-    if (/^\s*(?:#|\|)/.test(line) || (LIST_MARK.test(line) && line.replace(LIST_MARK, '').trim() === p)) continue;
+    if (p.length < 12 || /[\r\n]/.test(p) || /\d/.test(p) || NUMBER_WORD.test(p) || wordsWritten(p) > CUT_MAX_WORDS || !SENTENCE_ENDS.test(p) || !balanced(p)) continue;
+    const at = text.indexOf(p); if (at < 0 || text.lastIndexOf(p) !== at) continue;
+    const start = text.lastIndexOf('\n', at) + 1; const nl = text.indexOf('\n', at); const end = nl === -1 ? text.length : nl;
+    const line = text.slice(start, end); const before = text.slice(start, at); const after = text.slice(at + p.length, end);
+    if (/^\s*(?:#|\|)/.test(line) || (line.match(/\|/g) ?? []).length >= 2) continue;
+    if (LIST_MARK.test(line) && line.replace(LIST_MARK, '').trim() === p) continue;
+    if (!SENTENCE_OPENS.test(before) || !/^(?:\s|$)/.test(after) || !balanced(before)) continue;
+    // What carries the text is kept: a list's items, a paragraph's first sentence, and a sentence the next one leans on
+    // ("That test is the experiment.", "But the buyer stands elsewhere."). Cut, each left the text pointing at nothing.
+    if (LIST_MARK.test(line) || opensParagraph(text, start, before)) continue;
+    const nextLine = nl === -1 ? '' : text.slice(nl + 1, (text.indexOf('\n', nl + 1) + 1 || text.length + 1) - 1);
+    const next = after.trim() || (nextLine.trim() && !/^\s*(?:#|\||[-*+•]\s|\d+[.)]\s)/.test(nextLine) ? nextLine.trim() : '');
+    if (LEANS_BACK.test(next)) continue;
     let from = at; let to = at + p.length;
-    // the space the deletion leaves: one before it goes when a space or a stop follows
-    if (text[from - 1] === ' ' && (text[to] === ' ' || /[.,;:!?)]/.test(text[to] ?? '') || to === text.length || text[to] === '\n')) from -= 1;
-    else if (text[to] === ' ' && (from === start)) to += 1;
+    if (text[to] === ' ') to += 1; else if (text[from - 1] === ' ') from -= 1;
     text = text.slice(0, from) + text.slice(to);
+    // a line the cut emptied (nothing left but a quotation or list marker) goes, with its line break
+    const s2 = text.lastIndexOf('\n', from - 1) + 1; const n2 = text.indexOf('\n', from); const left = text.slice(s2, n2 === -1 ? text.length : n2);
+    if (/^\s*(?:>\s*)?(?:(?:[-*+•]|\d+[.)])\s*)?\r?$/.test(left)) text = text.slice(0, s2) + (n2 === -1 ? '' : text.slice(n2 + 1));
     applied.push(p);
   }
-  // a line the deletions emptied goes, and so does the blank line it leaves
-  return { text: applied.length ? text.replace(/^[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n') : draft, applied };
+  return { text: applied.length ? text.replace(/\n{3,}/g, '\n\n') : draft, applied };
 }
 
 /**
@@ -1232,7 +1282,7 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     let redrafts = 0; let trims = 0;
     // A cut is first named by the writer and removed by code (`cutNote`, `applyCuts`); where nothing it names can be
     // removed, that pass changes nothing and the passes after it write the piece shorter (`trimNote`).
-    let picking = true;
+    let picking = true; let precut: string | null = null;
     const another = (): boolean => (onlyTooLong(missing) ? trims < TRIMS : redrafts < REDRAFTS && (redrafts === 0 || missing.every((u) => u.aim)));
     while (missing.length && another()) {
       const trimming = onlyTooLong(missing);
@@ -1242,15 +1292,17 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         if (trimming && picking) {
           const named = await c.redraft(cutNote(missing, d.output));
           const cut = applyCuts(d.output, named.split('\n'), cutTarget(missing, wordsWritten(d.output)));
-          if (!cut.applied.length) { picking = false; continue; }
-          piece = cut.text;
+          if (!cut.applied.length) { picking = false; c.notes.push('The draft runs long; the writer named nothing that could be removed as written, so the next pass writes it shorter.'); continue; }
+          precut ??= d.output; piece = cut.text;
         } else piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(missing, d.output));
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
         const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);
         const outcome = redraftOutcome(missing, missing2, better, named, whose);
         if (!better) return say(d, outcome);
-        d = say(d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the work requires named' } }, outcome);
+        const kept: Delivered = d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the work requires named' } };
+        // A cut keeps the draft from before it, so what was taken out can be read (the record holds the draft cut from).
+        d = say(precut !== null && kept.repair ? { ...kept, repair: { ...kept.repair, draft: precut } } : kept, outcome);
         missing = missing2;
       } catch (err) {
         return say(d, `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); the draft to add them could not be written (${(err as Error).message.split('\n')[0]}).`);

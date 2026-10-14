@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t9",
+ "run": 0,
+ "seconds": 11.573,
+ "output": "Sunlight looks white, but it is a mixture of every colour. Each colour travels as a wave, and the waves are not the same size. Red light has long, lazy waves. Blue light has short, tight ones.\n\nThe air above you is not empty. It is packed with molecules of nitrogen and oxygen, far too small to see. When sunlight meets them, something uneven happens. The short blue waves get knocked sideways far more easily than the long red ones. They bounce off in all directions, scattering across the whole dome of the sky.\n\nSo when you look up, away from the Sun, you are seeing that scattered blue light arriving from everywhere at once. The red and yellow light mostly carries on straight past you.\n\nThink of pebbles thrown into a pond full of reeds. Big ripples roll through the gaps untroubled, while small ripples catch on every stem and spread out messily.\n\nSunsets work the same way in reverse. Low sunlight crosses much more air to reach you, so the blue is scattered away long before it arrives. What survives the journey is red and orange.\n\nIn short, the sky is blue because air scatters short blue waves across it.",
+ "costUsd": 0.0422,
+ "cut": []
+}

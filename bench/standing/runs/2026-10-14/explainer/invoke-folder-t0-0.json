@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t0",
+ "run": 0,
+ "seconds": 11.091,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds a chemical arrangement that is desperate to change.\n\nInside every battery sit two different materials, kept apart. One of them wants to give away electrons. The other wants to accept them. Between the two lies a paste or liquid called the electrolyte, which lets charged particles drift across but blocks electrons entirely.\n\nThat block is the whole trick. The electrons cannot take the short route, so they wait. The moment you connect a torch or a phone, you hand them a long way round, through the wire and through your device. Their rush along that path is the current doing work for you.\n\nThink of water held behind a dam. Nothing moves while the wall stands, yet the pressure is there the whole time. Open a channel, and the flow will turn a wheel on its way down.\n\nThe battery goes flat when the two materials have finished reacting and the imbalance is gone. In a rechargeable cell, feeding current backwards forces the reaction into reverse. The materials return to their eager starting state, ready to run downhill again.\n\nIn short, a battery stores energy as chemistry, and your wire is the path that releases it.",
+ "costUsd": 0.1267,
+ "cut": []
+}

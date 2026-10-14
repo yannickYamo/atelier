@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 0,
+ "seconds": 16.028,
+ "output": "Insurance does not cover every penny of every claim. Before the insurer pays anything, you pay a fixed amount yourself. That amount is the deductible, sometimes called the excess.\n\nSay your policy carries a \u00a3500 deductible and a storm causes \u00a33,000 of damage. You cover the first \u00a3500, and the insurer covers the remaining \u00a32,500. If the damage only came to \u00a3400, you pay all of it and claim nothing.\n\nThink of a shared restaurant bill where you always cover the first course. The other person picks up whatever follows, however expensive the meal turns out. Small meals, you pay alone. Large ones, their share dwarfs yours.\n\nInsurers use deductibles for two reasons. They discourage tiny claims that cost more to process than to pay. They also keep you careful, since you have money at stake too.\n\nYou usually get to choose the level. A higher deductible means lower monthly premiums, because the insurer expects to pay out less. A lower one means higher premiums but less pain when something goes wrong.\n\nSo pick a figure you could actually find at short notice. A tempting premium helps nobody if the deductible is beyond your savings.\n\nIn short, the deductible is your share of a claim, paid before any cover begins.",
+ "costUsd": 0.0489,
+ "cut": []
+}

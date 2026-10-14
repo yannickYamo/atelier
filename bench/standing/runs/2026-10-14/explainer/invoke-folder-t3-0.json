@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t3",
+ "run": 0,
+ "seconds": 11.495,
+ "output": "Most software follows instructions a person wrote out in advance. If this happens, do that. Machine learning works differently. Instead of rules, you give the computer examples, and it works out the rules itself.\n\nSay you want to spot spam email. Writing rules by hand gets hopeless fast, because spammers keep changing their wording. So you hand the system thousands of messages already labelled spam or not spam. It hunts for patterns that separate the two piles. Then it applies those patterns to mail it has never seen.\n\nThink of a child learning to recognise dogs. Nobody recites a definition involving fur, four legs and a tail. They simply see many dogs, get corrected a few times, and start getting it right.\n\nThe learning happens through adjustment. The system makes a guess, checks it against the correct answer, and nudges its internal settings. Repeat that millions of times and the guesses improve.\n\nThis explains both the strengths and the weaknesses. Such systems are good at messy tasks that resist tidy rules. They are only as good as their examples, though. Feed them biased or thin data and they learn the flaws along with everything else.\n\nIn short, machine learning means teaching by example rather than by instruction.",
+ "costUsd": 0.042,
+ "cut": []
+}
