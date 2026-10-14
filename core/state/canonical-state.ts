@@ -543,7 +543,9 @@ export interface InvocationSettings {
     /** a run made as a test (`invoke --test-run`): recorded like any run, and never a source of what the skill learns from its runs */
     readonly testRun?: boolean;
     /** the note from earlier runs that was served beside the skill (`atelier evolve`), by its hash: two runs of one skill version differ by it */
-    readonly carryNoteHash?: string };
+    readonly carryNoteHash?: string;
+    /** the judgement-step repair pass ran (`invoke --judgement-pass`, core/loop/judgement-pass.ts): a study arm */
+    readonly judgementPass?: boolean };
 }
 
 export interface InvocationRecord {
@@ -596,6 +598,12 @@ export interface InvocationRecord {
    */
   readonly repair?: RepairRecord;
   /**
+   * The judgement-step repair pass (core/loop/judgement-pass.ts), when `invoke --judgement-pass` ran it: how many
+   * of the model's FIND/REPLACE pairs code applied, how many it refused and why, and what the call cost. A repair,
+   * never an observation: nothing here moves the evaluation record. Absent when the pass was not asked for.
+   */
+  readonly judgementPass?: JudgementPassRecord;
+  /**
    * When several drafts were written and one delivered: how many, and why that one. `drafts` is how
    * many were asked for; when some calls failed, `written` is how many came back and `chosen` indexes
    * those, and `failed` says why each missing one is missing. `unchosen` is the text of every draft not
@@ -623,6 +631,16 @@ export interface RepairPair {
   readonly check?: string;
   readonly before: string;
   readonly after: string;
+}
+
+export interface JudgementPassRecord {
+  readonly applied: number;
+  readonly refused: number;
+  /** one line per refused pair: the find, and the guard that refused it */
+  readonly reasons: readonly string[];
+  readonly costUsd: number;
+  /** why the pass did not run, when it did not (no judgement step stated; the call failed) */
+  readonly skipped?: string;
 }
 
 export interface RepairRecord {

@@ -334,6 +334,7 @@ export type SpendPurpose =
   | 'voice pass'       // the in-context voice rewrite and its gate's second read
   | 'nearness'         // which of the author's pieces are on the request's subject
   | 'structure'        // reading a text's paragraph moves
+  | 'judgement pass'   // reading the draft against the judgement steps and proposing edits (core/loop/judgement-pass.ts)
   | 'other';
 
 /** What the provider reported for one call. Absent where a call site does not pass it on. */

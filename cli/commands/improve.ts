@@ -33,7 +33,7 @@ import { discover } from './discover.js';
 import { ratifyClose } from './ratify.js';
 import { build } from './build.js';
 import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, skillArg, sourceProvenance, loadSession, saveSession, diagnoserModel, carriedFrom } from '../runtime.js';
-import type { RepairRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
+import type { RepairRecord, JudgementPassRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
 
@@ -355,7 +355,7 @@ export async function runOnce(
    * Check the draft and rewrite what broke a rule, before anything is recorded — `invoke` passes it,
    * measurement arms never do: a study's arm must be what the model wrote, not what a loop fixed.
    */
-  refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null }>) | null = null,
+  refine: ((draft: string) => Promise<{ output: string; repair: RepairRecord | null; judgementPass?: JudgementPassRecord }>) | null = null,
   /** write several drafts side by side and deliver the one `choose` picks — `invoke --drafts N` */
   select: { readonly n: number; readonly choose: (drafts: readonly string[], written?: readonly { readonly index: number; readonly temperatureSent: number | null }[]) => { index: number; why: string } | Promise<{ index: number; why: string }>;
     /** draft i's own variation, when drafts are made to differ (core/fidelity/types.ts, `diversity`) */
@@ -447,6 +447,7 @@ export async function runOnce(
     outputHash: sha(output),
     at, delivery: { ...delivery, outputContract: contractEvidence }, input: task, output,
     ...(refined.repair ? { repair: refined.repair } : {}),
+    ...(refined.judgementPass ? { judgementPass: refined.judgementPass } : {}),
     ...(n > 1 ? { selection: { drafts: n, chosen: picked.index, why: picked.why,
       ...(failures.length ? { written: written.length, failed: failures } : {}),
       ...unchosenFields(written.map((w) => w.piece), picked.index) } } : {}),

@@ -17,7 +17,8 @@ import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
-import type { RepairRecord, Requirement } from '../../core/state/canonical-state.js';
+import type { RepairRecord, JudgementPassRecord, Requirement } from '../../core/state/canonical-state.js';
+import { judgementPass } from '../../core/loop/judgement-pass.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -421,17 +422,21 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // THE TASTE READER IS A MODEL'S OPINION OF THE OWNER'S RULES, and has not earned a say (docs/TASTE.md): it runs
   // only when asked for (--taste). A run is held to what code can read and what the owner judges.
   const taste = std && argv.includes('--taste') && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
+  // THE JUDGEMENT-STEP REPAIR PASS (core/loop/judgement-pass.ts), a study arm behind --judgement-pass: one call per delivered
+  // draft, after the checks and before any cut for length. It runs inside the repair chain, so --no-repair leaves it nothing to run on.
+  if (argv.includes('--judgement-pass') && argv.includes('--no-repair')) die('--judgement-pass reads the draft after the checks, and --no-repair turns the checks off: drop one of them.');
+  const judgementPassOn = argv.includes('--judgement-pass') && std !== null && contractFile === null && !argv.includes('--no-repair');
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0)),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0) + (judgementPassOn ? 0.15 * (1 + shapeRounds) : 0)),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     // A skill built from a method may write once more with what is missing named, and check that draft like the first.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0) + (std?.requirements.some((r) => r.obligation === 'DELIVERABLE' && r.measurement) ? 6 : 0)
       + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)
-      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0)) };
+      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0) + (judgementPassOn ? 1 + shapeRounds : 0)) };
   // FROM HERE ON, EVERYTHING SPENT IS THIS RUN'S. Taken where the budget is made, before the first call that can
   // draw on it: the reading of the request and the grading of its subject are paid for before any draft, and a
   // snapshot taken at the first draft left them out of the lines by purpose, and out of the total whenever the claim
@@ -620,7 +625,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineDraft({ client, budget, name, std, checks, taste }), unmet ? { unmet, notes: completions, redraft: async (note) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {})).piece } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(withJudgementPass(refineDraft({ client, budget, name, std, checks, taste }), judgementPassOn ? { client, budget, name, std, checks } : null), unmet ? { unmet, notes: completions, redraft: async (note) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {})).piece } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
       shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
@@ -655,6 +660,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (adoptedCarry && !methodCarry) report.say(store.CARRY_RETIRED);
   for (const c of completions) report.say(c);
   reportChecks(report, rec, std, checks);
+  if (rec.judgementPass) {
+    const j = rec.judgementPass;
+    report.say(j.skipped ? `Judgement pass: did not run (${j.skipped}).` : `Judgement pass: ${j.applied} edit(s) applied toward the steps no check reads, ${j.refused} refused; the steps stay yours to judge.`);
+    for (const why of j.reasons) report.detail(`    judgement pass: ${why}`);
+  }
   if (lineCiting && material.length) report.say(lineCitationsLine(rec.output, material));
   const tasteMonitor = taste ? await taste.report(report, rec, name) : null;
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
@@ -723,7 +733,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),
-      withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
+      withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation, ...(rec.judgementPass ? { judgementPass: rec.judgementPass } : {}),
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
         outside: rec.fidelity.reading?.outside.map((o) => o.id) ?? [], detector: rec.fidelity.reading?.detector?.p ?? null,
         edits: rec.fidelity.edits ?? [], applicability: rec.fidelity.applicability ?? [] } } : {}),
@@ -955,7 +965,33 @@ interface FidelityTrace { structure?: NonNullable<FidelityRecord['structure']>; 
  * describe a text that is no longer the output, and a redraft could undo what its own repair fixed).
  */
 /** What a refine step delivers: the text, its repair record, and the report counted on that very text. */
-interface Delivered { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
+interface Delivered { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport;
+  /** the judgement-step repair pass, when it ran on this text or on the text this one descends from (`withJudgementPass`) */
+  readonly judgementPass?: JudgementPassRecord }
+
+/**
+ * THE JUDGEMENT-STEP REPAIR PASS (core/loop/judgement-pass.ts), behind --judgement-pass. Runs on what the repair
+ * delivers, after every check and the claim check, and inside `withRedraft`, so the words it adds are counted before
+ * any cut for length. ONCE PER DRAFT: a text cut or trimmed for its length descends from the text the pass read (most
+ * of its lines are that text's) and is not read again, or the cut and the pass would fight over the same words; a
+ * fresh draft (another round, a reply completed) is read. The record is carried on every text that descends from the
+ * one the pass read, so it reaches the run's record whichever of them is delivered. The pass is a repair, never an
+ * observation: the evaluation record is built from the check report, which the pass never writes a line of.
+ */
+function withJudgementPass(refine: (draft: string) => Promise<Delivered>, c: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks } | null) {
+  if (!c) return refine;
+  let last: { readonly lines: Set<string>; readonly record: JudgementPassRecord } | null = null;
+  const linesOf = (t: string): string[] => t.split('\n').map((l) => l.trim()).filter(Boolean);
+  const descends = (t: string): boolean => { const ls = linesOf(t); return last !== null && ls.length > 0 && ls.filter((l) => last?.lines.has(l)).length / ls.length >= 0.5; };
+  return async (draft: string): Promise<Delivered> => {
+    const d = await refine(draft);
+    if (last && descends(draft)) return { ...d, judgementPass: last.record };
+    const r = await judgementPass(c.client, c.budget, { plan: planFor(c.std), draft: d.output, material: c.checks.material ?? '', before: d.report,
+      check: (t) => checkDraftAsync(c.name, c.std, t, c.checks) });
+    last = { lines: new Set(linesOf(r.text)), record: r.record };
+    return { ...d, output: r.text, report: r.report, judgementPass: r.record };
+  };
+}
 
 function withEdits(refine: (draft: string) => Promise<Delivered>,
   e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace; taste: TasteSession | null } | null) {
@@ -1640,7 +1676,7 @@ function settingsFor(checks: Checks, taste: TasteSession | null, nDrafts: number
     contextJudge: checks.judge ? `${process.env.ATELIER_CLAIMS_MODEL ?? CLAIMS_MODEL_DEFAULT} (context judge, report-only)` : null,
     maxTokens: draftMaxTokens(),
     ...(temperature === undefined ? {} : { temperature }),
-    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}) },
+    flags: { drafts: nDrafts, noTaste: !argv.includes('--taste') || argv.includes('--no-taste'), allowUnsourced: argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(argv.includes('--test-run') ? { testRun: true } : {}), ...(carryNote ? { carryNoteHash: sha(carryNote) } : {}), ...(argv.includes('--judgement-pass') ? { judgementPass: true } : {}) },
   };
 }
 

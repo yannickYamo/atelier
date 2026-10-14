@@ -113,6 +113,10 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
     out.push(['repair', [`before: ${r.violatedBefore.join(', ') || 'nothing broken'} · after: ${r.violatedAfter.join(', ') || 'nothing broken'} · ${r.passes} pass(es)`, r.why,
       ...(r.integrityReverted?.length ? [`${r.integrityReverted.length} rewrite(s) refused for changing what the text claims`] : [])]]);
   }
+  if (rec.judgementPass) {
+    const j = rec.judgementPass;
+    out.push(['judgement pass', [j.skipped ? `did not run: ${j.skipped}` : `${j.applied} edit(s) applied · ${j.refused} refused · $${j.costUsd.toFixed(4)}`, ...j.reasons.slice(0, 8)]]);
+  }
   if (f?.edits?.length) out.push(['steering', f.edits.map((e) => `${e.actuator ?? 'edit'} on ${featureOf(e.target)?.label.split(' (')[0] ?? e.target}${e.before !== undefined ? ` (${e.before ?? '-'} to ${e.after ?? '-'})` : ''}: ${e.kept ? 'kept' : 'not kept'}, ${e.why}`)]);
   if (f?.reading) out.push(['delivered', [`${f.reading.inBand} of ${f.reading.measured} features in range${f.coverage ? ` · used ${f.coverage.used} of ${f.coverage.supplied} supplied facts` : ''}`]]);
   const notApplied = (f?.applicability ?? []).filter((a) => a.status !== 'APPLIED');
