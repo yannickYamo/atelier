@@ -424,12 +424,14 @@ export function sectionLengthsFromExamples(cases: readonly (Pick<GoldenCase, 're
  */
 export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], note = ''): MethodProposal[] {
   const pieces = cases.map((c) => c.reference).filter((t) => t.trim());
-  // The method note is the owner's own writing too: a move it makes, or asks for ("use em dashes for asides"), is theirs.
-  const asked = /\b(?:use|keep|allow|write)\b[^.\n]{0,40}\bem[- ]?dash/i.test(note) ? ' — ' : '';
+  // THE NOTE ALLOWS A MOVE ONLY IN SO MANY WORDS, never by its own style: a note is written as instructions, and pooled
+  // with the examples a terse one read as a habit of short sentences. "Use em dashes for asides" allows the dash;
+  // "Never use em dashes" does not (a sentence that negates it is no allowance).
+  const allowsDash = note.split(/(?<=[.!?\n])\s*/).some((s) => /\b(?:use|keep|allow|write)\b[^.\n]{0,40}\bem[- ]?dash/i.test(s) && !/\b(?:never|no|not|don'?t|do not|avoid|without)\b/i.test(s));
   if (!pieces.length) return [];
   // A move any example makes is the author's (a handful of examples cannot show "most of their pieces"); and the
   // examples must meet the rule they gave (decision 0015), or it is not offered.
-  const t = machineTellRule(note.trim() ? [...pieces, `${note}${asked}`] : pieces, { anyUse: true });
+  const t = machineTellRule(pieces, { anyUse: true, allow: allowsDash ? ['EM_DASH'] : [] });
   const held = (m: Measurement): boolean => pieces.every((p) => measure(p, m).verdict !== 'VIOLATED');
   const of = (m: Measurement): string => `${pieces.filter((p) => measure(p, m).verdict !== 'VIOLATED').length} of ${pieces.length} example(s) hold it`;
   const tell: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: t.cap, never: t.never, role: ['machine-tell'] } };

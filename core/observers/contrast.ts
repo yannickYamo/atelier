@@ -94,7 +94,7 @@ function proposeFeatureRules(authorTexts: readonly string[], heldTexts: readonly
  * fewer than half their pieces is never allowed; an em dash is never allowed only where no piece holds one, and is
  * otherwise held to the author's own rate (decision 0016). Needs no model: the catalogue is the model's own habits.
  */
-export function machineTellRule(all: readonly string[], opts: { anyUse?: boolean } = {}): { never: string[]; cap: number; dashCap: number | null; usedIn: (family: string) => number; statement: string } {
+export function machineTellRule(all: readonly string[], opts: { anyUse?: boolean; allow?: readonly string[] } = {}): { never: string[]; cap: number; dashCap: number | null; usedIn: (family: string) => number; statement: string } {
   // The pooled rate leaves out the ban-only families (./tells.ts BAN_ONLY_FAMILIES): an author's own em dashes would
   // otherwise raise the cap on every other move.
   const pooledRate = (t: string): number => {
@@ -107,7 +107,8 @@ export function machineTellRule(all: readonly string[], opts: { anyUse?: boolean
   const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.family === f)).length;
   const dashIsTheirs = usedIn('EM_DASH') > 0;
   // With a handful of examples (a method build), "half their pieces" is one or two: a move any example makes is theirs.
-  const never = TELL_FAMILIES.filter((f) => (f.id === 'EM_DASH' || opts.anyUse ? usedIn(f.id) === 0 : usedIn(f.id) * 2 < all.length)).map((f) => f.id);
+  // A family the owner allows in so many words is never banned, whatever the pieces show.
+  const never = TELL_FAMILIES.filter((f) => !opts.allow?.includes(f.id) && (f.id === 'EM_DASH' || opts.anyUse ? usedIn(f.id) === 0 : usedIn(f.id) * 2 < all.length)).map((f) => f.id);
   const dashCap = dashIsTheirs ? r1(Math.max(perPieceP(all, (t) => patternRate(t, 'EM_DASH'), 0.9) * 1.25, r1(all.reduce((n, t) => n + patternRate(t, 'EM_DASH'), 0) / Math.max(1, all.length)) * 1.5, 0.3)) : null;
   const statement = `Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line${never.includes('EM_DASH') ? ', an em dash' : ''}, a run of three or more very short sentences)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${cap} per 1,000 words` : ''}.`;
   return { never, cap, dashCap, usedIn, statement };

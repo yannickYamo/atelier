@@ -82,3 +82,15 @@ describe('review: the owner\'s own words count as the author\'s writing', () => 
     expect((offers[0].measurement!.params.never as string[])).not.toContain('EM_DASH');
   });
 });
+
+describe('review: the note allows a move only in so many words, and never by its own style', () => {
+  it('"Never use em dashes" keeps the ban; a terse note is not a habit of short sentences', () => {
+    for (const note of ['Never use em dashes.', "Don't use em dashes anywhere.", 'Avoid the em dash.']) {
+      const [rule] = tellOffers([{ id: 'a', reference: plain }], note);
+      expect((rule.measurement!.params.never as string[]), note).toContain('EM_DASH');
+      expect(tellOffers([{ id: 'a', reference: plain }], note).some((o) => (o.measurement?.params.pattern as string[]).join() === 'EM_DASH'), note).toBe(false);
+    }
+    const [terse] = tellOffers([{ id: 'a', reference: plain }], 'Open with the result. Name the figure. Cite it. Keep it short.');
+    expect((terse.measurement!.params.never as string[])).toContain('STACCATO_RUN');
+  });
+});

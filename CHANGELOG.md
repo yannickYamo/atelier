@@ -62,8 +62,9 @@ only partly observed, or the owner's word was moved by a measurement.
   examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now
   worked out in one place (`machineTellRule`) and both paths carry it, required. From a handful of examples a move any
   example makes is the author's, and the examples must meet the rule they gave, or it is not offered (one of three
-  example tweets was itself a run of short sentences), and the owner's method note counts as their own writing: a note
-  that writes em dashes, or asks for them, is not overruled by examples that hold none). The em dash fix that needs no model was also being thrown
+  example tweets was itself a run of short sentences), and a method note that allows the em dash in so many words ("use em dashes for
+  asides") is not overruled by examples that hold none; a note's own style counts for nothing, and "never use em
+  dashes" is no allowance). The em dash fix that needs no model was also being thrown
   away when the claim reader, read again, listed one more sentence: a change that adds no word cannot add an invented
   specific, so that reading no longer counts against it. On eight one-to-two-page teardowns: em dashes 9 to 17 a
   document → 0 in all eight, none blocked, all inside the length, $0.16 an output. The standing comparison
