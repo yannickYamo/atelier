@@ -653,6 +653,12 @@ export interface RepairRecord {
   readonly pairs?: readonly RepairPair[];
   /** the taste pass (core/taste/repair.ts): rules the reader, holding VETO, read as missed, and which it no longer does */
   readonly taste?: { readonly targeted: readonly string[]; readonly fixed: readonly string[]; readonly why: string };
+  /**
+   * GRADED FEATURES (`--graded`, a study arm): the counted features whose rules were repair targets without being
+   * failures, how many of them a rewrite was pointed at, and how many a kept rewrite moved toward the band. Present
+   * only on a run that asked for it; the evaluation never reads it.
+   */
+  readonly graded?: { readonly features: readonly string[]; readonly targeted: number; readonly repaired: number };
   readonly why: string;
 }
 

@@ -56,6 +56,13 @@ export interface Refined { readonly output: string; readonly repair: RepairRecor
 export interface CheckOptions {
   /** the request and the named material this output was written from, for the rules that are about them (../observers/registry.ts, `CheckContext`) */
   readonly context?: CheckContext;
+  /**
+   * GRADED FEATURES (`--graded`, a study arm): the counted features whose FEATURE rules a miss of is a REPAIR TARGET
+   * without being a failure. A PREFERRED rule naming one of them is planned and accepted as an enforced rule is, on
+   * copies of the report; the report that is recorded, and the evaluation, never see it as enforced. 'all' grades
+   * every FEATURE rule of the standard. Absent, nothing changes.
+   */
+  readonly graded?: readonly string[] | 'all';
   /** what the person supplied: their notes, anecdotes, figures. Claims found here are theirs to make. */
   readonly material?: string;
   /** false turns off the invented-story and invented-figure check (`--allow-unsourced`) */
@@ -527,6 +534,42 @@ export function heavyCut(draft: string, cut: readonly string[]): string | null {
     + '--allow-unsourced; if they are yours, bind them with --with or atelier material';
 }
 
+/** At most this many graded features are targeted in one pass: the ones furthest outside their band first. */
+export const GRADED_PER_PASS = 3;
+
+/** The FEATURE rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. Empty without the option. */
+export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded']): Map<string, string> {
+  const out = new Map<string, string>();
+  if (graded === undefined) return out;
+  for (const r of v.requirements) {
+    if (r.authority === 'EXPERT_REJECTED' || r.measurement?.observer !== 'FEATURE') continue;
+    const f = (r.measurement.params.feature as readonly string[] | undefined)?.[0];
+    if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
+  }
+  return out;
+}
+
+/**
+ * The graded checks one pass is pointed at: the broken ones, the largest |error| first (../observers/registry.ts,
+ * `ObserverResult.error`), at most GRADED_PER_PASS features. Two rules on one feature count as one feature.
+ */
+export function gradedTargets(report: VerifyReport, rules: ReadonlyMap<string, string>): RuleCheck[] {
+  const broken = report.checked.filter((c) => rules.has(c.requirementId) && c.result.verdict === 'VIOLATED')
+    .sort((a, b) => Math.abs(b.result.error ?? 0) - Math.abs(a.result.error ?? 0) || a.requirementId.localeCompare(b.requirementId));
+  const features = new Set<string>(); const out: RuleCheck[] = [];
+  for (const c of broken) {
+    const f = rules.get(c.requirementId) ?? c.requirementId;
+    if (!features.has(f) && features.size >= GRADED_PER_PASS) continue;
+    features.add(f); out.push(c);
+  }
+  return out;
+}
+
+/** A copy of the report with the named checks read as enforced: what the planner and the acceptance read, never the record. */
+export function withGraded(report: VerifyReport, ids: ReadonlySet<string>): VerifyReport {
+  return ids.size ? { ...report, checked: report.checked.map((c) => (ids.has(c.requirementId) ? { ...c, enforced: true } : c)) } : report;
+}
+
 /** The report with the invented-claim line left out: what a model rewrite may be pointed at. */
 const withoutClaims = (r: VerifyReport): VerifyReport => ({ ...r, checked: r.checked.filter((c) => c.requirementId !== 'UNSOURCED' && c.requirementId !== INCONCLUSIVE && c.requirementId !== UNREAD) });
 
@@ -537,10 +580,18 @@ export async function refineToStandard(
   const memory = claimMemory();
   const check = async (t: string): Promise<VerifyReport> => memory.apply(t, await checkDraftAsync(skill, v, t, opts));
   let first = await check(draft);
-  if (!first.failed) {
+  // GRADED FEATURES (`opts.graded`): repair targets that are never failures. Which rules, which checks a pass is
+  // pointed at, and what the run did about them; `pending` is what keeps the loop going where `failed` would not.
+  const graded = gradedRules(v, opts.graded);
+  const gradedMiss = (r: VerifyReport): RuleCheck[] => gradedTargets(r, graded);
+  const pending = (r: VerifyReport): boolean => r.failed || gradedMiss(r).length > 0;
+  const gradedTargeted = new Set<string>(); const gradedRepaired = new Set<string>();
+  const gradedRecord = (): { graded: NonNullable<RepairRecord['graded']> } | Record<string, never> => (opts.graded === undefined ? {}
+    : { graded: { features: [...new Set(graded.values())].sort(), targeted: gradedTargeted.size, repaired: gradedRepaired.size } });
+  if (!pending(first)) {
     const toCheck = listedClaims(first);
-    return { output: draft, report: first, repair: toCheck.length ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
-      claimsToCheck: toCheck, why: 'every REQUIRED measured rule holds' } : null };
+    return { output: draft, report: first, repair: toCheck.length || opts.graded !== undefined ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
+      ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(), why: 'every REQUIRED measured rule holds' } : null };
   }
   const cut: string[] = [];
   // Whether the claim reader had already failed before this run: read before the first cut, which may be
@@ -652,8 +703,10 @@ export async function refineToStandard(
   const keys = keysOf(v.requirements);
   const keyOf = new Map(v.requirements.map((r, i) => [r.requirementId, keys[i]]));
   const checkOf = new Map(v.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, measurementId(r.measurement)] as const] : [])));
-  while (report.failed && stylePasses < maxPasses) {
-    const plannable = withoutClaims(report);
+  while (pending(report) && stylePasses < maxPasses) {
+    // The graded checks this pass targets are read as enforced by the planner and by the acceptance, on copies.
+    const gradedIds = new Set(gradedMiss(report).map((c) => c.requirementId));
+    const plannable = withGraded(withoutClaims(report), gradedIds);
     const accuracy = accuracyTried ? [] : planRepair(text, plannable, { phase: 'ACCURACY' });
     const accuracyPass = accuracy.length > 0 && planRepair(text, plannable, { phase: 'STYLE' }).length > 0;
     const targets = accuracyPass ? accuracy : planRepair(text, plannable);
@@ -677,6 +730,7 @@ export async function refineToStandard(
     }
     passes += 1;
     if (!accuracyPass) stylePasses += 1;
+    for (const t of targets) for (const id of t.requirementIds) { const f = graded.get(id); if (f) gradedTargeted.add(f); }
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const reverted: Reverted[] = []; const applied: Applied[] = [];
     const next = applyRepair(text, targets, reps, reverted, applied, opts.placeholders ?? false);
@@ -690,18 +744,23 @@ export async function refineToStandard(
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(report, after);
+      : acceptRepair(withGraded(report, gradedIds), withGraded(after, gradedIds));
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
       continue;
     }
+    // A graded feature is repaired when a kept rewrite moved its value toward the band.
+    const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
+    for (const id of gradedIds) if (errorOf(after, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
+    // A rule graded but not enforced by the standard is no source of the standard's examples: its rewrites make no pair.
+    const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
     text = next; report = after;
     // An accepted pass's style rewrites are examples of this standard in action. One rule per pair.
     for (const a of applied) {
       const t = targets.find((x) => x.id === a.id);
       const rid = t?.requirementIds.length === 1 ? t.requirementIds[0] : undefined;
       const key = rid ? keyOf.get(rid) : undefined;
-      if (rid && key && a.before !== a.after) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
+      if (rid && key && a.before !== a.after && !soft.has(rid)) pairs.push({ key, check: checkOf.get(rid), before: a.before, after: a.after });
     }
     why = report.failed ? verdict.why : 'every REQUIRED measured rule now holds';
   }
@@ -729,5 +788,5 @@ export async function refineToStandard(
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
       ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
-      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), why } };
+      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(), why } };
 }

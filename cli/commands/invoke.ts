@@ -9,9 +9,9 @@ import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT } from '../checks.js';
 import { regressions } from '../../core/loop/repair.js';
-import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
+import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
-import { featureOf, featureMove } from '../../core/observers/features.js';
+import { featureOf, featureMove, FEATURES } from '../../core/observers/features.js';
 import { acts, verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
@@ -163,6 +163,21 @@ export const ownLengthApplies = (c: { stated: boolean; asked: boolean; shape: bo
   !c.stated && !c.asked && !c.shape && !c.contract && !c.answers && !c.outOfRegister && !c.sections && !c.ruled;
 /** Does the owner require a length of the whole work, in words? Then that is the length, and their pieces' span adds no second one. */
 export const lengthIsRuled = (std: Standard | null): boolean => (std ? planFor(std).rulesLength : false);
+
+/**
+ * `--graded <ids>|all` (experimental, a study arm): the counted features whose FEATURE rules a miss of is a repair
+ * target and never a failure (core/loop/run-repair.ts, `CheckOptions.graded`). Undefined without the flag; an
+ * unknown feature id is refused before anything is spent.
+ */
+export function gradedFeatures(spec: string | undefined): CheckOptions['graded'] | undefined {
+  if (spec === undefined) return undefined;
+  if (spec.trim() === 'all') return 'all';
+  const ids = spec.split(',').map((x) => x.trim()).filter(Boolean);
+  if (!ids.length) die('--graded takes a comma-separated list of feature ids, or all.');
+  const unknown = ids.filter((id) => !featureOf(id));
+  if (unknown.length) die(`--graded: unknown feature(s) ${unknown.join(', ')}. Features: ${FEATURES.map((f) => f.id).join(', ')}.`);
+  return ids;
+}
 /** How many words a count is outside a band; 0 inside it. */
 export const wordsOutside = (n: number, band: readonly [number, number]): number => (n < band[0] ? band[0] - n : n > band[1] ? n - band[1] : 0);
 
@@ -536,8 +551,11 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     withheld.push(...p.prose.map((q) => q.statement));
     report.say(`The request states its own format ("${formatAsked}"): ${p.measured.length + p.prose.length} presentation rule(s) withheld for this run.`);
   }
+  // GRADED FEATURES (a study arm, experimental): FEATURE rules on these features are repair targets, never failures.
+  const graded = gradedFeatures(flag('--graded'));
+  if (graded !== undefined && argv.includes('--no-repair')) die('--graded makes feature rules repair targets, and --no-repair turns the repair off: drop one of them.');
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
-    ...(waived.size ? { waived } : {}) };
+    ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
   // the author's closest passages, so the shared block carries only the notes.
   const diverse = Boolean(runSettings?.diversity) && nDrafts > 1 && fid !== null;
@@ -614,7 +632,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
   // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
   const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords) : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords, graded) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
@@ -623,7 +641,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineDraft({ client, budget, name, std, checks, taste }), unmet ? { unmet, notes: completions, redraft: async (note) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {})).piece } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
-      shapeRounds > 0 ? { client, budget, std, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
+      shapeRounds > 0 ? { client, budget, std, graded, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
       planState ? { budget, trace, state: planState } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
@@ -721,6 +739,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       // `answer` is what --answer-only prints: the output with its list of specifics not found in the material.
       output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
+      ...(rec.repair?.graded ? { graded: rec.repair.graded } : {}),
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),
       withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
@@ -1099,12 +1118,17 @@ export function lengthAim(n: number, lo: number | null, hi: number | null): stri
 const lengthMove = (off: number, long: boolean): string | undefined => (off > 0 ? `about ${off} words ${long ? 'shorter' : 'longer'}` : undefined);
 
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
-export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
+export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null,
+  /** the graded features (`--graded`): a miss of a FEATURE rule on one of them is written again for, PREFERRED or not */ graded?: CheckOptions['graded']): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
   // citation that is no line of the material, since the right number is on the page the writer was given.
   // Which rules those are is the plan's to say (core/plan/execution-plan.ts): the ones a miss of is written again for.
   const must = new Map(planFor(std).rules.filter((p) => p.onMiss === 'REDRAFT').map((p) => [p.id, p.statement]));
-  if (!must.size && !own && !asked) return null;
+  // A graded feature's rule: told with which way and how far (`featureMove`), and how far off in widths of its band.
+  const gradedOf = gradedRules(std, graded);
+  const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
+  const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
+  if (!must.size && !own && !asked && !gradedOf.size) return null;
   // A length the method states in words is a miss of length too: how far, and what to aim for.
   const limits = new Map(std.requirements.flatMap((r) => (r.measurement?.observer === 'LENGTH' && ((r.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === 'words'
     ? [[r.requirementId, { lo: typeof r.measurement.params.min === 'number' ? r.measurement.params.min : null, hi: typeof r.measurement.params.max === 'number' ? r.measurement.params.max : null, whole: !r.measurement.params.in }] as const] : [])));
@@ -1117,8 +1141,14 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
     const move = lengthMove(off, long);
     return { ...base, off, ...(aim ? { aim } : {}), ...(lim.whole ? { whole: true as const } : {}), ...(move ? { move } : {}) };
   };
+  const gradedMiss = (x: VerifyReport['checked'][number]): Unmet => {
+    const m = params.get(x.requirementId); const e = x.result.error ?? 0;
+    const move = m && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
+    return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail, off: Math.abs(e), ...(move ? { move } : {}) };
+  };
   return (d) => {
-    const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss);
+    const rules = [...d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss),
+      ...d.report.checked.filter((x) => gradedOf.has(x.requirementId) && !must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(gradedMiss)];
     if (asked) {
       const written = wordsWritten(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
@@ -1149,10 +1179,11 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
  * EVERYTHING A DELIVERED ROUND LEFT UNMET, for the round after it: what `unmetReader` reads (a part the work must
  * contain, a length), and every other REQUIRED rule the report finds broken, each with its check's detail and, where the
  * rule holds a value to a band, which way and how far (`ObserverResult.error`, `featureMove`). A shape round used to
- * start from nothing; told this, it starts from what the last round missed.
+ * start from nothing; told this, it starts from what the last round missed. A graded feature's rule (`--graded`) is
+ * in it whatever its materiality: a repair target is a miss to be told of.
  */
-export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }): Unmet[] {
-  const named = unmetReader(std, null)?.(d) ?? [];
+export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }, graded?: CheckOptions['graded']): Unmet[] {
+  const named = unmetReader(std, null, null, graded)?.(d) ?? [];
   const have = new Set(named.map((u) => u.id));
   const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
   const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
@@ -1399,7 +1430,7 @@ function withCoverage(refine: (draft: string) => Promise<Delivered>,
 }
 
 function withShape(refine: (draft: string) => Promise<Delivered>,
-  s: { client: InferenceClient; budget: Budget; std: Standard; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
+  s: { client: InferenceClient; budget: Budget; std: Standard; graded?: CheckOptions['graded']; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
     rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null;
     /** how a later round's draft is written, when drafts are written against a plan; null for a plain draft */
     fresh?: ((round: number) => Promise<string>) | null } | null) {
@@ -1429,7 +1460,7 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
         // THE NEXT ROUND LEARNS WHAT THE LAST ONES MISSED. Started from nothing, a round missed the same rule the round
         // before it did; it is told the best round's misses, each with which way and how far (`roundMisses`).
         const bestSoFar = tried.reduce((a, b) => (better(a, b) ? b : a));
-        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, shapeNote(roundMisses(s.std, bestSoFar.d)), {})).piece;
+        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, shapeNote(roundMisses(s.std, bestSoFar.d, s.graded)), {})).piece;
         tried.push(await run(piece));
       } catch (err) {
         note = `round ${round} could not run (${(err as Error).message.split('\n')[0]}); the best output so far was delivered`;
@@ -1810,6 +1841,7 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   if (r) {
     report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
+    if (r.graded) report.detail(`graded features (a study arm, never a failure): ${r.graded.features.join(', ') || 'none in this standard'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range.`);
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
     const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
