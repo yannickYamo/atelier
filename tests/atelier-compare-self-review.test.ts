@@ -6,6 +6,7 @@
 // whether the answers fit the token limit: a study once lost a third of its cells to truncation it found afterwards.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { createServer, type Server } from 'node:http';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -199,5 +200,73 @@ describe('Phase F: a filtered or declined task is a row, and the arm goes on', (
       { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
     expect(r.status, r.stderr).toBe(0);
     expect(JSON.parse(readFileSync(out, 'utf8').trim())).toMatchObject({ response: null, filtered: 'CONTENT_FILTER', cost_estimated: true });
+  });
+});
+
+describe('review: a filter reported as an HTTP 400, and the cost of a filtered call', () => {
+  // The Anthropic API reports its own output filter as a 400 ("Output blocked by content filtering policy"), not as a
+  // stop reason, so it reached the runner as a plain failure: retried three times, then the arm stopped.
+  let server: Server; let base = ''; let calls = 0;
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      let body = ''; req.on('data', (c: Buffer) => { body += c.toString(); });
+      req.on('end', () => {
+        calls += 1; res.setHeader('content-type', 'application/json'); res.setHeader('connection', 'close');
+        if (body.includes('B-ID')) { res.statusCode = 400; res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'Output blocked by content filtering policy' } })); return; }
+        res.end(JSON.stringify({ id: 'm', type: 'message', role: 'assistant', model: 'claude-opus-5', stop_reason: 'tool_use', stop_sequence: null,
+          content: [{ type: 'tool_use', id: 't', name: 'emit_answer', input: { answer: 'A review.' } }], usage: { input_tokens: 10, output_tokens: 10 } }));
+      });
+    });
+    await new Promise<void>((ok) => { server.listen(0, '127.0.0.1', () => { ok(); }); });
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+  afterAll(() => { server.closeAllConnections(); server.close(); });
+  it('is a FILTERED row, sent once, and the arm goes on', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-400-filter-'));
+    writeFileSync(join(dir, 'tasks.jsonl'), ['a', 'b', 'c'].map((id) => JSON.stringify({ id, prompt: `Review change ${id.toUpperCase()}-ID.` })).join('\n') + '\n');
+    writeFileSync(join(dir, 'skill.md'), 'Method.');
+    const out = join(dir, 'o.jsonl'); calls = 0;
+    // spawned without blocking: the fake API above answers on this process's event loop
+    const r = await new Promise<{ status: number | null; stderr: string }>((ok) => {
+      const p = spawn(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', `skill:${join(dir, 'skill.md')}`, '--out', out, '--model', 'claude-opus-5', '--per-call', '0.3'],
+        { env: { ...process.env, ANTHROPIC_API_KEY: 'sk-test', ANTHROPIC_BASE_URL: base } });
+      let stderr = ''; p.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      p.on('close', (status) => { ok({ status, stderr }); });
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(calls).toBe(3);
+    const rows = readFileSync(out, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as Record<string, unknown>);
+    // charged one call's allowance, marked an estimate
+    expect(rows[1]).toMatchObject({ response: null, filtered: 'CONTENT_FILTER', cost_estimated: true, cost_usd: 0.3 });
+    expect(rows[2].response).toBe('A review.');
+  });
+  it('a filtered second self-review call is charged one call plus the first call\'s real cost, not a whole cell more', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-filter-cost-'));
+    writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'b', prompt: 'Review change B-ID2.' })}\n`);
+    writeFileSync(join(dir, 'skill.md'), 'Method.');
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_answer: { answer: 'Draft.' }, emit_review: { review: 'ok', answer: 'R.' } },
+      when: [{ containsAll: ['B-ID2', 'Your draft:'], finish: 'content_filter' }] }) });
+    const out = join(dir, 'o.jsonl');
+    const r = run(['--tasks', join(dir, 'tasks.jsonl'), '--arm', `self-review:${join(dir, 'skill.md')}`, '--out', out, '--per-call', '0.4']);
+    expect(r.status, r.stderr).toBe(0);
+    const row = JSON.parse(readFileSync(out, 'utf8').trim()) as { cost_usd: number; filtered_call: number; usage: { output_tokens?: number } };
+    expect(row.filtered_call).toBe(2);
+    expect(row.cost_usd).toBeGreaterThanOrEqual(0.4);
+    expect(row.cost_usd).toBeLessThan(0.41);
+    expect(row.usage.output_tokens).toBeGreaterThan(0);
+  });
+  it('a runtime run stopped by a 400 filter, or refused by an OpenAI-compatible backend, is a FILTERED row', () => {
+    for (const [msg, kind] of [['atelier: 400 {"type":"error","error":{"message":"Output blocked by content filtering policy"}}', 'CONTENT_FILTER'],
+      ['atelier: openai-compatible refused the request: I cannot help with that. No candidates were produced.', 'REFUSAL']] as const) {
+      const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-400-'));
+      writeFileSync(join(dir, 'cli.mjs'), `process.stderr.write(${JSON.stringify(msg + '\n')}); process.exitCode = 1;\n`);
+      writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.' })}\n`);
+      writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
+      const out = join(dir, 'o.jsonl');
+      const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--model', 'scripted'],
+        { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
+      expect(r.status, r.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(out, 'utf8').trim())).toMatchObject({ response: null, filtered: kind });
+    }
   });
 });

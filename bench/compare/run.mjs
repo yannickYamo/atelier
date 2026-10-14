@@ -162,7 +162,7 @@ async function selfReviewArm(c, t) {
   try {
     r = await c.complete({ stableBlock: placement === 'system' ? skillText : '', variableBlock: '', userMessage: placement === 'harness' ? harnessPrompt(ask, skillText) : ask,
       toolName: 'emit_review', toolDescription: 'Deliver the check and the answer written again.', schema: REVIEW_SCHEMA, maxTokens });
-  } catch (e) { if (filteredOf(e)) { e.filteredCall = 2; e.firstCost = first.cost; } throw e; }
+  } catch (e) { if (filteredOf(e)) { e.filteredCall = 2; e.firstCost = first.cost; e.firstUsage = first.usage; e.thinking = first.thinking; } throw e; }
   const answer = r.json && typeof r.json === 'object' ? r.json.answer : undefined;
   if (typeof answer !== 'string') throw new Error(`the model returned no reviewed answer for ${t.id}`);
   const cost = typeof first.cost === 'number' && typeof r.costUsd === 'number' ? first.cost + r.costUsd : null;
@@ -204,15 +204,20 @@ function signalsOf(rec) {
 // blocked again, and every retry is paid for. So it is a row (FILTERED), and the arm goes on to the next task.
 // An unmapped stop reason counts only when it reads like a filter; anything else still retries.
 const FILTER_WORDS = /filter|blocked|safety/i;
+// A filter reported as an error rather than a stop reason: the Anthropic API's own ("Output blocked by content
+// filtering policy", HTTP 400), and a gateway's worded the same way.
+const FILTER_TEXT = /content filtering|content[_ ]filter|blocked by (?:the )?(?:content |safety )?(?:filter|policy)/i;
 function filteredOf(e) {
   const k = e?.termination?.kind;
   if (k === 'CONTENT_FILTER' || k === 'REFUSAL') return k;
   if (k === 'OTHER' && FILTER_WORDS.test(e.termination.providerValue ?? '')) return 'CONTENT_FILTER';
+  if (e?.status === 400 && FILTER_TEXT.test(`${e.message ?? ''} ${JSON.stringify(e.error ?? null)}`)) return 'CONTENT_FILTER';
   return null;
 }
 // The same, from `atelier invoke`'s stderr: the provider's own wording of a filtered or declined call.
 function filteredIn(stderr) {
-  if (/filtered the response \(finish_reason: content_filter\)/.test(stderr)) return 'CONTENT_FILTER';
+  if (/filtered the response \(finish_reason: content_filter\)/.test(stderr) || FILTER_TEXT.test(stderr)) return 'CONTENT_FILTER';
+  if (/ refused the request: /.test(stderr)) return 'REFUSAL';
   const m = /stopped for "([^"]+)" before completing the object/.exec(stderr);
   if (!m) return null;
   return m[1] === 'REFUSAL' ? 'REFUSAL' : m[1] === 'CONTENT_FILTER' || FILTER_WORDS.test(m[1]) ? 'CONTENT_FILTER' : null;
@@ -260,7 +265,7 @@ const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u
 const prior = existsSync(out) ? readJsonl(out).filter((r) => r.condition === condition) : [];
 let spent = prior.reduce((n, r) => n + (r.cost_usd ?? 0), 0);
 // a two-call arm's cell costs two calls
-let perCall = Math.max(Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1), ...prior.map((r) => r.cost_usd ?? 0));
+let perCall = Math.max(Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1), ...prior.filter((r) => !r.cost_estimated).map((r) => r.cost_usd ?? 0));
 mkdirSync(dirname(resolve(out)), { recursive: true });
 const c = kind === 'atelier-runtime' ? null : await client();
 const answerOf = (t) => (kind === 'atelier-runtime' ? runtimeArm(t) : kind === 'self-review' ? selfReviewArm(c, t) : modelArm(c, t));
@@ -272,7 +277,12 @@ if (args.includes('--preflight')) {
   const per = Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1);
   if (per > cap) die(`--preflight: one call (about $${per.toFixed(4)}) would pass the --cap of $${cap}. Nothing was spent.`);
   const t = tasks[0]; let r;
-  try { r = await answerOf(t); } catch (e) { console.error(`preflight: the call failed (${e.message.split('\n')[0]}). Nothing was recorded.`); process.exit(1); }
+  try { r = await answerOf(t); } catch (e) {
+    const f = filteredOf(e);
+    console.error(f ? `preflight: the call was ${f === 'REFUSAL' ? 'declined by the model' : 'filtered by the provider'}. Nothing was recorded; choose another first task or report it.` : `preflight: the call failed (${e.message.split('\n')[0]}). Nothing was recorded.`);
+    process.exit(f ? 2 : 1);
+  }
+  if (r.filtered) { console.log(`preflight: the run was ${r.filtered === 'REFUSAL' ? 'declined by the model' : 'filtered by the provider'}. Nothing was recorded; choose another first task or report it.`); process.exit(2); }
   const used = kind === 'atelier-runtime' ? null : r.longestCall ?? r.usage?.output_tokens ?? null; let stop = false;
   if (kind === 'atelier-runtime') console.log('preflight: an Atelier call cut off at the token limit fails its run rather than giving a shorter answer, so the limit is checked by the run itself');
   console.log(`preflight: task ${t.id}, ${used ?? 'an unknown number of'} output token(s) of a limit of ${maxTokens}${r.calls > 1 ? ' in its longest call' : ''}; ${typeof r.cost === 'number' ? `$${r.cost.toFixed(4)}` : 'an unknown cost'} for the call${r.calls > 1 ? ` (${r.calls} calls)` : ''}`);
@@ -293,8 +303,11 @@ for (let trial = 1; trial <= trials; trial++) {
         const f = filteredOf(e);
         if (f) {
           // charged as a call that answered: the dearest seen so far (plus a first call that did answer), marked an estimate
-          r = { response: null, filtered: f, ...(e.filteredCall ? { filteredCall: e.filteredCall } : {}), usage: e.outputTokens == null ? {} : { output_tokens: e.outputTokens },
-            calls: e.filteredCall ?? 1, cost: perCall + (e.firstCost ?? 0), costEstimated: true, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+          // the blocked call is charged as one call of this arm (the allowance is a whole cell: two calls on self-review),
+          // plus a first call that did answer at what it cost
+          const oneCall = perCall / (kind === 'self-review' ? 2 : 1);
+          r = { response: null, filtered: f, ...(e.filteredCall ? { filteredCall: e.filteredCall } : {}), usage: e.firstUsage ?? (e.outputTokens == null ? {} : { output_tokens: e.outputTokens }),
+            calls: e.filteredCall ?? 1, cost: oneCall + (e.firstCost ?? 0), costEstimated: true, ...(e.thinking !== undefined ? { thinking: e.thinking } : {}), seconds: Math.round((Date.now() - t0) / 100) / 10 };
           console.error(`${t.id}: ${f === 'REFUSAL' ? 'declined by the model' : 'filtered by the provider'}${e.filteredCall ? ` (call ${e.filteredCall})` : ''}: recorded, not retried`);
           break;
         }
@@ -311,7 +324,8 @@ for (let trial = 1; trial <= trials; trial++) {
       appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
-    spent += r.cost; perCall = Math.max(perCall, r.cost);
+    // an estimate is never evidence of what a call costs: it does not raise the allowance kept for the next one
+    spent += r.cost; if (!r.costEstimated) perCall = Math.max(perCall, r.cost);
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}),
       ...(r.filtered ? { delivered: false, filtered: r.filtered, ...(r.filteredCall ? { filtered_call: r.filteredCall } : {}) } : {}),
       usage: r.usage, cost_usd: r.cost, ...(r.costEstimated ? { cost_estimated: true } : {}), model,

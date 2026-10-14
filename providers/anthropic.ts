@@ -73,10 +73,15 @@ const noTemperature = new Set<string>();
  */
 const noThinkingField = new Set<string>();
 
-/** Whether an error is the API refusing the `thinking` setting (a 400 that names it). */
+/**
+ * Whether an error is the endpoint refusing the `thinking` FIELD itself (a 400 that names it as an extra, unknown or
+ * unsupported input). A 400 that mentions thinking for another reason ("thinking may not be enabled when tool_choice
+ * forces tool use", from an endpoint that turned thinking on anyway) is not that, and dropping the field would not cure it.
+ */
 export const refusesThinking = (e: unknown): boolean => {
   const f = statusAndBody(e);
-  return f?.status === 400 && /thinking/i.test(f.body);
+  return f?.status === 400 && /thinking/i.test(f.body) && !/tool_choice/i.test(f.body)
+    && /extra inputs|not permitted|unknown (?:field|parameter)|unrecognized|unsupported (?:field|parameter)|not supported/i.test(f.body);
 };
 
 /** Whether an error is the API refusing a temperature setting for this model (a 400 that names it). */
@@ -162,7 +167,8 @@ export class AnthropicInferenceClient implements InferenceClient {
       noForcedChoice.add(this.modelId);
       return this.complete(req);
     }
-    return this.read(req, res);
+    // what THIS call was sent with, not what the shared set says on return
+    return { ...this.read(req, res), thinkingSent: withThinking ? 'disabled' : null };
   }
 
   /** One request. `forced`: the tool call is required; otherwise it is asked for in words. */
@@ -232,7 +238,6 @@ export class AnthropicInferenceClient implements InferenceClient {
     // per-token logprobs, so an instrument that reads a distribution cannot run on this adapter. It
     // must say which backend it needs instead of quietly producing a weaker reading here.
     const temperatureSent = noTemperature.has(this.modelId) ? null : req.temperature ?? this.defaultTemperature ?? null;
-    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination, temperatureSent,
-      thinkingSent: noThinkingField.has(this.modelId) ? null : 'disabled' };
+    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination, temperatureSent };
   }
 }
