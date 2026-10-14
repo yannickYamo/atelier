@@ -88,6 +88,31 @@ function proposeFeatureRules(authorTexts: readonly string[], heldTexts: readonly
   }
 }
 
+/**
+ * THE MACHINE-TELL RULE, WORKED OUT IN ONE PLACE from the author's own pieces: discovery and the method build both ask
+ * here, so a skill built from a method and one built from a folder hold the same rule. A family the author makes in
+ * fewer than half their pieces is never allowed; an em dash is never allowed only where no piece holds one, and is
+ * otherwise held to the author's own rate (decision 0016). Needs no model: the catalogue is the model's own habits.
+ */
+export function machineTellRule(all: readonly string[], opts: { anyUse?: boolean } = {}): { never: string[]; cap: number; dashCap: number | null; usedIn: (family: string) => number; statement: string } {
+  // The pooled rate leaves out the ban-only families (./tells.ts BAN_ONLY_FAMILIES): an author's own em dashes would
+  // otherwise raise the cap on every other move.
+  const pooledRate = (t: string): number => {
+    const words = proseWords(t);
+    return words ? (findPattern(t, 'MACHINE_TELL').filter((s) => !(s.family && BAN_ONLY_FAMILIES.has(s.family))).length / words) * 1000 : 0;
+  };
+  const cap = r1(Math.max(perPieceP(all, pooledRate, 0.9) * 1.5, 0.25));
+  // HELD TO THE AUTHOR'S TYPICAL PIECE, NOT THEIR AVERAGE: a family is the author's to use only if at least half their
+  // pieces use it. AN EM DASH THE AUTHOR WRITES IS THEIRS, HOWEVER FEW OF THEIR PIECES HOLD ONE (decision 0016).
+  const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.family === f)).length;
+  const dashIsTheirs = usedIn('EM_DASH') > 0;
+  // With a handful of examples (a method build), "half their pieces" is one or two: a move any example makes is theirs.
+  const never = TELL_FAMILIES.filter((f) => (f.id === 'EM_DASH' || opts.anyUse ? usedIn(f.id) === 0 : usedIn(f.id) * 2 < all.length)).map((f) => f.id);
+  const dashCap = dashIsTheirs ? r1(Math.max(perPieceP(all, (t) => patternRate(t, 'EM_DASH'), 0.9) * 1.25, r1(all.reduce((n, t) => n + patternRate(t, 'EM_DASH'), 0) / Math.max(1, all.length)) * 1.5, 0.3)) : null;
+  const statement = `Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line${never.includes('EM_DASH') ? ', an em dash' : ''}, a run of three or more very short sentences)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${cap} per 1,000 words` : ''}.`;
+  return { never, cap, dashCap, usedIn, statement };
+}
+
 export function deriveContrastRules(
   read: readonly Piece[], held: readonly Piece[], drafts: readonly string[], provenance: Requirement['provenance'],
 ): MeasuredProposal[] {
@@ -528,29 +553,13 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   // rate. Pooled, the cap let a long piece spend the author's small budget on moves they never make.
   // The pooled rate leaves out the ban-only families (./tells.ts BAN_ONLY_FAMILIES): an author's own em
   // dashes would otherwise raise the cap on every other move.
-  const pooledRate = (t: string): number => {
-    const words = proseWords(t);
-    return words ? (findPattern(t, 'MACHINE_TELL').filter((s) => !(s.family && BAN_ONLY_FAMILIES.has(s.family))).length / words) * 1000 : 0;
-  };
-  const tellCap = r1(Math.max(perPieceP([...authorTexts, ...heldTexts], pooledRate, 0.9) * 1.5, 0.25));
-  // HELD TO THE AUTHOR'S TYPICAL PIECE, NOT THEIR AVERAGE. A family is the author's to use only if at
-  // least half their pieces use it; otherwise one of ours may not either. Held to an average, a move the
-  // author made once in twenty pieces was allowed once in every piece (round 7: one per piece, each from a
-  // family the author used in at most four of twenty). The unread pieces count too, and may only loosen
-  // this: a family they show in half the pieces is allowed, never one they lack.
   const all = [...authorTexts, ...heldTexts];
-  const usedIn = (f: string): number => all.filter((t) => findPattern(t, 'MACHINE_TELL').some((x) => x.family === f)).length;
-  // AN EM DASH THE AUTHOR WRITES IS THEIRS, HOWEVER FEW OF THEIR PIECES HOLD ONE. Under the half rule an author at two
-  // dashes per 1,000 words, in a minority of pieces, was read as never using one: the family was banned and every
-  // dash in an output was replaced. The dash is banned only for an author with none anywhere; otherwise it is held to
-  // the author's own rate by a cap of its own, below.
-  const dashIsTheirs = usedIn('EM_DASH') > 0;
-  const never = TELL_FAMILIES.filter((f) => (f.id === 'EM_DASH' ? !dashIsTheirs : usedIn(f.id) * 2 < all.length)).map((f) => f.id);
+  const { never, cap: tellCap, dashCap, usedIn, statement: tellStatement } = machineTellRule(all);
+  const dashIsTheirs = dashCap !== null;
   if (dashIsTheirs && !dashCapped()) {
     const rate = (t: string): number => patternRate(t, 'EM_DASH');
-    const cap = r1(Math.max(perPieceP(all, rate, 0.9) * 1.25, meanRate(all, 'EM_DASH') * 1.5, 0.3));
     propose((f) => `Keep ${PATTERN_LABEL.EM_DASH} to at most ${lim(f, 'maxPer1000')} per 1,000 words, as I do.`, 'BOUNDARY',
-      { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: cap } },
+      { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: dashCap } },
       `you: ${meanRate(all, 'EM_DASH')} per 1,000 words, in ${usedIn('EM_DASH')} of ${all.length} pieces`);
     // Still held by nothing (the pieces held out break even their own cap): the author's heaviest piece is the limit.
     if (!dashCapped()) {
@@ -569,7 +578,7 @@ function proposeVoice(authorTexts: readonly string[], heldTexts: readonly string
   const ownCounts = all.map((t) => findPattern(t, 'MACHINE_TELL').length).sort((a, b) => a - b);
   const ownTolerance = Math.max(1, ownCounts[Math.min(ownCounts.length - 1, Math.ceil(ownCounts.length * 0.9) - 1)] ?? 1);
   const occasional = (t: string): boolean => findPattern(t, 'MACHINE_TELL').length <= ownTolerance;
-  propose(`Write none of the moves that mark text as machine-written (announcing an insight others "miss", grading your own list, "the single most", announcing candour, "that's the whole game", reading the reader's mind, one thing "wearing another's clothes", a contrastive verdict as the opening line${never.includes('EM_DASH') ? ', an em dash' : ''}, a run of three or more very short sentences)${never.length < TELL_FAMILIES.length ? `; the ones I make in most of my pieces at most ${tellCap} per 1,000 words` : ''}.`,
+  propose(tellStatement,
     'BOUNDARY', { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: tellCap, never, role: ['machine-tell'] } },
     `you: ${meanRate(authorTexts, 'MACHINE_TELL')} per 1,000 words, in ${all.filter((t) => findPattern(t, 'MACHINE_TELL').length).length} of ${all.length} pieces; the model's plain drafts: ${meanRate(drafts, 'MACHINE_TELL')}, and more under a skill's instructions`,
     false, false, occasional);

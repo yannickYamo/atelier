@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 0,
+ "seconds": 14.476,
+ "output": "Sound is just air being pushed back and forth. A drone from an engine is a pattern of pressure, rising and falling hundreds of times a second. Your eardrum feels that pattern, and your brain calls it noise.\n\nNoise-cancelling headphones attack the pattern itself. A tiny microphone on the outside listens to the sound arriving at your ear. A small chip works out the shape of that wave, then produces a second wave that is its exact opposite. Where the incoming wave pushes, the new one pulls. The two meet in the space beside your eardrum and largely flatten each other out.\n\nPicture two people rocking a hammock from opposite ends, each pushing exactly when the other pulls. The hammock barely moves at all.\n\nThis works best on steady, low rumbles: aircraft cabins, trains, air conditioning. Those waves are slow and predictable, so the chip has time to match them. Sudden sounds are harder. A door slamming or a voice beside you changes too quickly to cancel, which is why speech often still gets through.\n\nThe earcups help too, simply by blocking higher frequencies the old-fashioned way, with padding and a tight seal.\n\nIn short, the headphones generate an opposite sound wave that cancels the one heading for your ear.",
+ "costUsd": 0.0449,
+ "cut": []
+}

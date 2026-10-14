@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 0,
+ "seconds": 14.276,
+ "output": "You hear that \"the market rose today.\" But the market is thousands of separate companies, each share moving at its own pace. Somebody has to boil all that into a single number. That number is a stock index.\n\nAn index tracks a chosen group of companies and reports how their share prices are doing overall. One famous list might hold the hundred largest firms on a particular exchange. Another might hold five hundred. The index rises when those shares, taken together, are worth more than they were yesterday.\n\nThink of a school reporting an average exam mark. No single pupil scored exactly that figure, yet the average still tells you whether the year went well. An index does the same job for a basket of companies.\n\nBigger companies usually count for more. If a giant firm loses five percent, it drags the index down further than a small firm would. So the number reflects weight, not just headcount.\n\nTwo uses follow. An index gives you a quick read on how an economy or a sector is faring. It also gives investors a benchmark, something to measure their own results against. Many funds simply buy the whole list and follow it.\n\nIn short, a stock index is an average that stands in for a whole market.",
+ "costUsd": 0.0436,
+ "cut": []
+}

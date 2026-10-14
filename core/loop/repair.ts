@@ -297,9 +297,21 @@ export function regressions(before: VerifyReport, after: VerifyReport): string[]
   }).map((c) => c.requirementId);
 }
 
-/** Keep a repair only if nothing got worse, and at least one REQUIRED rule that was broken now holds. */
-export function acceptRepair(before: VerifyReport, after: VerifyReport): RegressionVerdict {
-  const worse = regressions(before, after);
+/** Does `after` hold no word that `before` does not (as many times)? Punctuation and layout may change; words may only go. */
+export function addsNoWords(before: string, after: string): boolean {
+  const words = (t: string): string[] => t.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'’.,-]*[\p{L}\p{N}]|[\p{L}\p{N}]/gu)?.map((w) => w.replace(/[.,]+$/, '')) ?? [];
+  const had = new Map<string, number>(); for (const w of words(before)) had.set(w, (had.get(w) ?? 0) + 1);
+  for (const w of words(after)) { const n = had.get(w) ?? 0; if (!n) return false; had.set(w, n - 1); }
+  return true;
+}
+
+/**
+ * Keep a repair only if nothing got worse, and at least one REQUIRED rule that was broken now holds. A change that adds
+ * no word (`wordsAdded: false`: an em dash made a comma) cannot add an invented specific, so the reading of specifics
+ * read again is no evidence against it: an em dash fix was thrown away because that reading listed one sentence more.
+ */
+export function acceptRepair(before: VerifyReport, after: VerifyReport, opts: { wordsAdded?: boolean } = {}): RegressionVerdict {
+  const worse = regressions(before, after).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
   const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
   const req = (r: VerifyReport): number => broken(r).length;

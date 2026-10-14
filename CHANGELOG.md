@@ -51,6 +51,17 @@ only partly observed, or the owner's word was moved by a measurement.
   what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
   request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
   words, and a draft of four tables ran 1,135 for 1,006 written.
+- **No added machine tells on a skill built from a method.** Discovery from a folder held the owner's rule (a tell the
+  author never writes never appears; one they write is held to their rate); a skill built from a method and its
+  examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now
+  worked out in one place (`machineTellRule`) and both paths carry it, required. From a handful of examples a move any
+  example makes is the author's, and the examples must meet the rule they gave, or it is not offered (one of three
+  example tweets was itself a run of short sentences). The em dash fix that needs no model was also being thrown
+  away when the claim reader, read again, listed one more sentence: a change that adds no word cannot add an invented
+  specific, so that reading no longer counts against it. On eight one-to-two-page teardowns: em dashes 9 to 17 a
+  document → 0 in all eight, none blocked, all inside the length, $0.16 an output. The standing comparison
+  (`runs/2026-10-14b/`): contract 0 of 10 failing, explainer 1 of 10 then 0 of 10 (a missing analogy, which is no
+  tell), 0 em dashes in any output.
 - **The length reader is held to a labelled corpus, and stops holding part limits as the piece's length.** Each fix
   to the reading of a length was tested on the request that showed the fault, and the next outside run found the
   next: five rounds. 371 requests (every one the project's history discusses, and 160 fresh) labelled by someone who

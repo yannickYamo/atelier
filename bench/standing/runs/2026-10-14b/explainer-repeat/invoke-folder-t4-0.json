@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 0,
+ "seconds": 13.882,
+ "output": "A cold and a chest infection can feel much the same from the inside. Both leave you coughing, aching and miserable. But the culprits behind them are not remotely alike, and that is why the same pill cannot handle both.\n\nBacteria are living cells. They eat, they grow, they build walls around themselves, and they divide. Antibiotics work by sabotaging those activities. One kind wrecks the wall as the bacterium tries to construct it. Another jams the machinery it uses to make proteins. Either way, the drug needs living processes to interfere with.\n\nA cold is caused by a virus, and a virus does almost nothing on its own. It is a scrap of genetic instructions in a protein shell. It has no wall to break, no machinery to jam. It hijacks your own cells and makes them do the work instead.\n\nThink of a weedkiller sprayed on a plastic garden ornament. The spray is perfectly effective against living weeds, but the ornament simply sits there, unbothered.\n\nTaking antibiotics anyway is not harmless either. They kill useful bacteria in your gut, and they help the harmful ones learn to survive future treatment.\n\nIn short, antibiotics attack living cells, and a cold virus is not one.",
+ "costUsd": 0.0433,
+ "cut": []
+}

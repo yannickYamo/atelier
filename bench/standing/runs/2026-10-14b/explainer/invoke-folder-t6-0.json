@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t6",
+ "run": 0,
+ "seconds": 15.712,
+ "output": "Most records you rely on sit with one trusted keeper. Your bank holds the list of who owns what, and you take its word for the balance. A blockchain does the same job without the keeper.\n\nInstead, the record is copied onto thousands of computers at once. Each one holds the full history of every transaction ever made. When someone sends a payment, the network checks it against that shared history, and the computers must agree before it counts.\n\nEntries are bundled into blocks, and each new block carries a mathematical fingerprint of the one before it. That links them in a chain. Change an old entry and every fingerprint after it breaks, so tampering shows up immediately.\n\nThink of a village ledger read aloud in the square each evening, with everyone writing their own copy. One person scribbling a false line later convinces nobody, because hundreds of matching copies disagree.\n\nThis is why people call blockchains trustless. You are not trusting a company to be honest; you are trusting that most of the network will not conspire against you.\n\nIt is slower and clumsier than a central database. The trade is openness and resistance to quiet edits.\n\nIn short, a blockchain is a shared record that many strangers keep together, where the past is very hard to rewrite.",
+ "costUsd": 0.0453,
+ "cut": []
+}

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 0,
+ "seconds": 13.287,
+ "output": "Sound is nothing more than air being pushed back and forth in waves. Your eardrum feels those pushes and your brain interprets them as noise. The hum of a plane engine is a very regular wave, repeating steadily, over and over.\n\nThat regularity is what noise-cancelling headphones exploit. A tiny microphone on the outside of each earcup listens to the sound arriving at your head. A small processor measures the shape of that wave in a fraction of a millisecond. Then the speaker inside plays a second wave that is the exact opposite: a push where the original had a pull.\n\nThe two waves meet in the space beside your ear and flatten each other out. Imagine a ripple spreading across a pond meeting an identical ripple coming the other way. Where the crest of one lands on the trough of the other, the water goes still.\n\nThis works best on low, droning sounds, because they are predictable enough to mirror. Sudden sounds, like a voice or a slammed door, change too fast to be matched. That is why a crying baby still reaches you while the engine rumble fades away.\n\nIn short, your headphones listen to the noise and play its mirror image, so the two cancel before you hear them.",
+ "costUsd": 0.1317,
+ "cut": []
+}
