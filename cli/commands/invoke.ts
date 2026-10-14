@@ -718,7 +718,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
-      output: refused ? null : rec.output, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
+      // `answer` is what --answer-only prints: the output with its list of specifics not found in the material.
+      output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),

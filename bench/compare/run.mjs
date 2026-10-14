@@ -44,7 +44,8 @@
 //
 // OUTPUT. One line per (task, trial), in the format scripts/run_evals.py writes and scripts/judge.py and
 // `run_evals.py measure` read: {case_id, trial, condition, runner, response, usage, cost_usd, model}, plus
-// arm, max_tokens, placement, skill_sha256, tasks_sha256 and split. Completed lines are skipped on a rerun,
+// arm, max_tokens, placement, skill_sha256, tasks_sha256 and split; a runtime arm adds atelier_state, Atelier's own
+// verdict on the answer (VERIFIED, NEEDS_REVIEW or BLOCKED). Completed lines are skipped on a rerun,
 // so a stopped run continues where it stopped. Run `npm run build` first: this imports ../../dist.
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -179,21 +180,22 @@ function runtimeArm(t) {
   try {
     const withArgs = t.material ? (writeFileSync(join(tmp, 'material.md'), t.material), ['--with', `material=${join(tmp, 'material.md')}`]) : [];
     // A benchmark's runs are tests: marked so a later rebuild never learns its "write this, not that" pairs from them.
-    const cmd = [resolve(runtimeSpec.cli), 'invoke', '--skill', runtimeSpec.skill, '--answer-only', '--test-run', '--target-model', model,
+    // --json, so the row keeps Atelier's own verdict on its work (VERIFIED, NEEDS_REVIEW, BLOCKED) beside the answer:
+    // a study compares that verdict with the judge's. `answer` is what --answer-only would print.
+    const cmd = [resolve(runtimeSpec.cli), 'invoke', '--skill', runtimeSpec.skill, '--json', '--test-run', '--target-model', model,
       '--max-tokens', String(maxTokens), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
     const done = spawnSync(process.execPath, cmd, { cwd: runtimeSpec.proj, env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj },
       encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
+    let rec = null; try { rec = JSON.parse(done.stdout); } catch { /* no record: the run failed before its end */ }
     // A STRICT REFUSAL IS AN ANSWER TO THE QUESTION "what did the person get", NOT AN ERROR. Exit 3 with "not
     // delivered (strict delivery)" used to be thrown, retried twice and then end the whole run, so a refusal cost
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
-      const spentOn = [...(done.stderr ?? '').matchAll(/\$(\d+\.\d+) · everything this run checked/g)].map((m) => Number(m[1])).pop();
-      return { response: null, refused: why.split('; '), usage: {}, cost: spentOn ?? null };
+      return { response: null, refused: why.split('; '), usage: {}, cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
-    if (done.status !== 0) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
-    const cost = [...(done.stderr ?? '').matchAll(/\$(\d+\.\d+) · everything this run checked/g)].map((m) => Number(m[1])).pop();
-    return { response: done.stdout.trim(), usage: {}, cost: cost ?? null };
+    if (done.status !== 0 || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
+    return { response: String(rec.answer ?? rec.output ?? '').trim(), usage: {}, cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
@@ -236,13 +238,13 @@ for (let trial = 1; trial <= trials; trial++) {
     if (r.refused && typeof r.cost !== 'number') r.cost = perCall;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}) })}\n`);
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}) })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     spent += r.cost; perCall = Math.max(perCall, r.cost);
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}), usage: r.usage, cost_usd: r.cost, model,
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
-      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}) };
+      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}) };
     appendFileSync(out, `${JSON.stringify(row)}\n`);
     console.error(`${condition} trial ${trial}: ${t.id}${r.cost === null ? '' : `  $${r.cost.toFixed(4)}`}`);
   }

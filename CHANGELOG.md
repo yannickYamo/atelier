@@ -57,6 +57,9 @@ only partly observed, or the owner's word was moved by a measurement.
   both calls as its cost and the check kept in the row. `--preflight` makes one call on the first task and says what
   it cost and how much of the token limit the answer used, before a paid run: a study once lost a third of its cells
   to answers cut off at the limit, found afterwards. Nothing is recorded.
+  A runtime arm's row now keeps Atelier's own verdict on the answer (`atelier_state`: VERIFIED, NEEDS_REVIEW or
+  BLOCKED), so a study can set it against the judge's; `atelier invoke --json` carries `answer`, the text
+  `--answer-only` prints.
 - **No added machine tells on a skill built from a method.** Discovery from a folder held the owner's rule (a tell the
   author never writes never appears; one they write is held to their rate); a skill built from a method and its
   examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now

@@ -61,3 +61,27 @@ describe('review: the preflight judges each call, holds the cap, and says stop i
     expect(ok.stdout).toMatch(/in its longest call; \$\d+\.\d+ for the call \(2 calls\)/);
   });
 });
+
+describe('the runtime arm keeps Atelier\'s own verdict beside the answer', () => {
+  it('a row of an atelier-runtime arm carries atelier_state, and the answer --answer-only would print', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-')); const data = join(dir, 'data'); const proj = join(dir, 'proj');
+    for (const d of [data, proj]) spawnSync('mkdir', ['-p', d]);
+    writeFileSync(join(proj, 'example.md'), '# Review\n\nThe change is correct. One risk: the retry loop has no limit.\n');
+    writeFileSync(join(proj, 'method.md'), '1. Name the one risk that matters most.\n2. Say whether the change is correct.\n');
+    const env = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
+    const built = spawnSync(process.execPath, [resolve('dist/cli/atelier.mjs'), 'new', join(proj, 'example.md'), '--method', join(proj, 'method.md'), '--name', 'rev', '--yes'], { cwd: proj, env, encoding: 'utf8' });
+    expect(built.status, built.stdout + built.stderr).toBe(0);
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'The change is correct. One risk: the cache is never cleared.' }, emit_observation: { applicable: true, present: true, why: 'seen' } } }) });
+    writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.', material: 'diff --git a/x b/x\n+cache.set(k, v)\n' })}\n`);
+    writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ rev: { cli: resolve('dist/cli/atelier.mjs'), data, proj, skill: 'rev',
+      args: ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--claims', 'pattern'] } }));
+    const out = join(dir, 'rt.jsonl');
+    const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:rev', '--runtimes', join(dir, 'runtimes.json'), '--out', out, '--condition', 'atelier', '--model', 'scripted'],
+      { encoding: 'utf8', env: { ...env, ANTHROPIC_API_KEY: '' } });
+    expect(r.status, r.stderr).toBe(0);
+    const row = JSON.parse(readFileSync(out, 'utf8').trim()) as { response: string; atelier_state?: string; cost_usd: number };
+    expect(row.response).toMatch(/The change is correct/);
+    expect(['VERIFIED', 'NEEDS_REVIEW', 'BLOCKED']).toContain(row.atelier_state);
+    expect(typeof row.cost_usd).toBe('number');
+  });
+});
