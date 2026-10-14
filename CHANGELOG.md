@@ -51,6 +51,11 @@ only partly observed, or the owner's word was moved by a measurement.
   what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
   request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
   words, and a draft of four tables ran 1,135 for 1,006 written.
+- **A run is never refused for material it was not given.** A REQUIRED rule that needs material the person did not
+  bind stopped the run before any draft. The run now goes on: the rule is not attempted (asked for evidence it does
+  not have, a model invents it), the message names the `--with` that lets it fire, and the evaluation shows the rule
+  as not checked, so the work needs review and is not delivered under strict delivery. It is never set aside as if it
+  did not apply.
 - **The writer aims inside the length, and a cut is the last resort.** Told "about 500 to 1,000 words", writers
   aimed at the top and ran past it, and every draft was cut. A held length is now told with an aim inside it (three
   fifths of the way up a range, about 85% of a ceiling, a target as said); on eight such requests seven drafts came

@@ -44,6 +44,8 @@ export interface RecordFacts {
 }
 
 const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: null };
+/** Why a rule was held back because the material it needs was not given: the one reason a REQUIRED rule is held back and still counted. */
+export const MATERIAL_NOT_BOUND = 'the material it needs is not bound';
 
 /** One rule of the standard as it fared: what it is and whether its check may block come from the plan, never from here. */
 function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
@@ -61,6 +63,9 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
     : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing' : 'You have not made this check required, so it blocks nothing';
   const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : 'DETERMINISTIC',
     evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
+  // A REQUIRED rule held back for want of material is not set aside: it was not checked, and the work cannot read as
+  // VERIFIED on its account (a run is never refused for material it was not given; neither is it excused).
+  if (why === MATERIAL_NOT_BOUND && required && p.enforced) return entry({ ...base, observation: { ...seen(why), coverage: 'NONE', incomplete: `not checked: ${p.id} needs material this run was not given` }, verdict: null });
   if (why) return entry({ ...base, observation: seen(why), applies: f.replaced?.has(p.id) ? { replacedBy: why } : { setAside: why }, verdict: null });
   // The check could not run, or had nothing to read the rule against (no material bound): nothing was observed.
   // Only a check of the text that did not run at all is an evaluation that did not finish. A check that ran and has

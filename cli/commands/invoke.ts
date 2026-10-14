@@ -51,6 +51,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
+import { MATERIAL_NOT_BOUND } from '../../core/eval/record-build.js';
 import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
@@ -313,9 +314,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const std = store.getStandard(L, sv.standardVersionHash);
   const satisfiable = checkSatisfiable(std?.requirements ?? [], boundResources());
   const shortfall = describeSatisfiability(satisfiable);
-  if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall ?? 'a REQUIRED rule needs material this invocation does not bind');
+  // A run is never refused for material it was not given (core/state/prerequisite.ts): said where it is seen.
   const report = new RunReport();
-  if (shortfall) report.detail(shortfall);
+  if (shortfall) { if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') report.say(shortfall.trim()); else report.detail(shortfall); }
   // Rules that cannot fire without material the person has not bound: said once, near the top, and read
   // by the taste reader as waiting rather than missed.
   const waiting = waitingForMaterial(satisfiable);
@@ -489,7 +490,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // general one refused the run above), so it is also not counted against this output.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
   const waived = new Map<string, string>();
-  for (const q of std?.requirements ?? []) if (waiting.has(q.requirementId)) waived.set(q.requirementId, 'the material it needs is not bound');
+  for (const q of std?.requirements ?? []) if (waiting.has(q.requirementId)) waived.set(q.requirementId, MATERIAL_NOT_BOUND);
   // OUT OF REGISTER, ONLY WHAT THE OWNER'S POLICY CARRIES (core/voice/transfer.ts). A rule learned from blog
   // posts is evidence about blog posts: asked for a contract, a rule whose transfer is unknown is withheld from
   // the prompt and from the count for this run, and named. Nothing is waived in register.
@@ -1703,7 +1704,7 @@ class RunReport {
 
 /** The rules that cannot fire on this invocation because material they need is not bound. */
 export function waitingForMaterial(v: SatisfiabilityVerdict): ReadonlySet<string> {
-  return new Set(v.kind === 'DEGRADED' ? v.missing.map((m) => m.requirementId) : []);
+  return new Set(v.kind === 'SATISFIABLE' ? [] : v.missing.map((m) => m.requirementId));
 }
 
 /** The taste reader's VETO, less the rules waiting for material: those have nothing to be repaired toward. */

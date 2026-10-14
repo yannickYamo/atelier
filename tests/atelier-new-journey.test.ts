@@ -30,6 +30,7 @@ beforeAll(async () => {
     emit_factors: { factors: [factor('Lead with the decision, then the reasoning.'), factor('Quantify with the real figure.', 'the actual figures for the period')] },
     emit_matches: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }, { leftIndex: 1, matchedRightIndex: 1 }] },
     emit_observation: { applicable: true, present: true, why: 'seen' },
+    emit_piece: { piece: 'We decided to ship the change this quarter. The reasoning follows from what we saw in the field.' },
   } }) });
 });
 afterAll(() => { backend.kill(); });
@@ -110,10 +111,14 @@ describe('atelier new: a folder and a sentence', () => {
     expect(existsSync(join(p2, '.claude', 'skills', 'once', 'SKILL.md'))).toBe(true);
   });
 
-  it('invoke refuses a REQUIRED rule whose material is not bound, before any call', () => {
+  it('invoke goes on when a REQUIRED rule\'s material is not bound: the rule is not checked, and the --with is named', () => {
     const out = run(data, proj, 'invoke', '--skill', 'voice', 'write about the quarter');
-    expect(out).toMatch(/MISSING_REQUIRED_EVIDENCE/);
+    expect(out).not.toMatch(/nothing was generated/);
     expect(out).toMatch(/--with actual-figures-period=<file>/);
+    expect(out).toMatch(/not checked/);
+    // and the work does not read as VERIFIED on that rule's account
+    const json = run(data, proj, 'invoke', '--skill', 'voice', 'write about the quarter', '--json');
+    expect(JSON.parse(json.slice(json.indexOf('{'))).eval.record.state).not.toBe('VERIFIED');
   });
 });
 

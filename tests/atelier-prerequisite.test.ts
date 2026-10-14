@@ -40,12 +40,12 @@ describe('a REQUIRED rule whose evidence is not bound', () => {
   it('names the rule, the source and the way forward', () => {
     const v = checkSatisfiable([rule('g2', 'REQUIRED', [RECORDS])], new Set());
     const msg = describeSatisfiability(v)!;
-    expect(msg).toMatch(/MISSING_REQUIRED_EVIDENCE/);
+    expect(msg).toMatch(/Not every REQUIRED rule can be met on this run/);
     expect(msg).toMatch(/g2/);
     expect(msg).toMatch(/support-ticket-history/);
     expect(msg).toMatch(/--with/);
-    // and it says WHY, because "missing evidence" without the mechanism reads as a config error
-    expect(msg).toMatch(/will produce a plausible one/);
+    // and it says WHY the rule is not attempted, because "missing evidence" without the mechanism reads as a config error
+    expect(msg).toMatch(/asked for evidence it does not have, a model invents/);
   });
 
   it('POLARITY: binding the source makes the same standard satisfiable', () => {

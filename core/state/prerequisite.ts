@@ -43,7 +43,7 @@ export type BoundResources = ReadonlySet<string>;
 export type SatisfiabilityVerdict =
   /** every prerequisite of every REQUIRED rule is bound */
   | { readonly kind: 'SATISFIABLE' }
-  /** a REQUIRED rule needs something this invocation does not have. Refuse before the call. */
+  /** a REQUIRED rule needs something this invocation does not have: it is not attempted, and is shown as not checked */
   | { readonly kind: 'MISSING_REQUIRED_EVIDENCE'; readonly missing: readonly MissingPrerequisite[] }
   /** only non-obligatory rules are short. The run proceeds and the behaviour is not attempted. */
   | { readonly kind: 'DEGRADED'; readonly missing: readonly MissingPrerequisite[] };
@@ -110,10 +110,11 @@ export function describeSatisfiability(v: SatisfiabilityVerdict): string | null 
       + (held.length ? `${held.join(', ')} ${held.length === 1 ? 'is' : 'are'} REQUIRED only under a condition, so withheld from this run rather than refusing it.\n` : '')
       + 'The run proceeds and those behaviours are not attempted. Bind the source to get them.\n';
   }
-  return `MISSING_REQUIRED_EVIDENCE — nothing was generated.\n\n${rows}\n\n`
-    + 'A REQUIRED rule depends on a source this invocation does not have. Running anyway would ask the\n'
-    + 'model to satisfy it without the evidence, and a model asked for a counted observation it cannot\n'
-    + 'make will produce a plausible one. That is not a risk to be warned about; it is the outcome.\n\n'
-    + `  Bind the source:   ${v.missing.filter((m) => m.materiality === 'REQUIRED').map((m) => `--with ${m.prerequisite.name}=<file>`).join(' ')}\n`
-    + '  Or run a version of the standard that does not require it.\n';
+  // MATERIAL NOT GIVEN IS NO REASON TO REFUSE THE WORK. A model asked for a counted observation it cannot make produces
+  // a plausible one, so the rule is not attempted: it is held back from the draft, and the evaluation shows it as not
+  // checked, which keeps the run from reading as VERIFIED on its account.
+  return `Not every REQUIRED rule can be met on this run: the material it needs was not given.\n\n${rows}\n\n`
+    + 'The run goes on without them. They are not attempted (asked for evidence it does not have, a model invents\n'
+    + 'it), and the evaluation shows them as not checked, so this work needs your review.\n\n'
+    + `  Bind the source:   ${v.missing.filter((m) => m.materiality === 'REQUIRED').map((m) => `--with ${m.prerequisite.name}=<file>`).join(' ')}\n`;
 }
