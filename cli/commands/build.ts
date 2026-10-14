@@ -5,7 +5,7 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
@@ -89,8 +89,14 @@ export function revert(): void {
  * HOW MUCH OF THE AUTHOR'S WRITING IS SERVED IS THE OWNER'S TO SET. `--piece-budget <words>` chooses the pieces
  * again within that many words (0 serves none and keeps the persona and the length), and `--pieces excerpts` shows
  * each chosen piece by its opening and a passage from its middle, so the same words reach more pieces. Both are
- * kept through later rebuilds, like the rest of the voice; neither changes a rule, and without them a build
- * chooses exactly as it did before they existed.
+ * kept through later rebuilds, like the rest of the voice; neither changes a rule.
+ *
+ * THE COMPACT DEFAULT (core/compiler/voice.ts, `COMPACT_PIECE_BUDGET_WORDS`). A skill that writes, built from the
+ * author's pieces for the first time and told nothing about them, serves passages within 3,000 words, and that
+ * choice is stored as an explicit one is: a later rebuild chooses the same whatever the default becomes. A skill
+ * that already holds a voice keeps what it holds, so a rebuild of a skill built before is the same bytes. A skill
+ * that answers, one built from a method (`atelier method`, no model), and `--voice none` are as they were:
+ * `--pieces whole --piece-budget default` is the whole serving, for a first build too.
  */
 /**
  * `--piece-budget` and `--pieces`, read and checked in one place, before anything is written. `atelier new` calls it
@@ -133,8 +139,11 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // THE OWNER'S BUDGET AND FORM ARE KEPT UNTIL THE OWNER GIVES OTHERS: what was asked now, or what the skill holds,
   // `--voice auto` included (it chooses the pieces again, it does not forget what it was told about them).
   // `--piece-budget default` is how the budget is given up.
-  const wordBudget = asked.budget === undefined ? stored?.pieceBudget : asked.budget ?? undefined;
-  const form: PieceForm = asked.form ?? stored?.pieceForm ?? 'whole';
+  // The compact default applies to a first build alone, of a skill that writes, with no flag given about the pieces
+  // (a build from a method calls no model and keeps the whole serving); what it chooses is stored as a flag would be.
+  const compact = !stored && !answers && !reselect && !NO_MODEL();
+  const wordBudget = asked.budget === undefined ? (compact ? COMPACT_PIECE_BUDGET_WORDS : stored?.pieceBudget) : asked.budget ?? undefined;
+  const form: PieceForm = asked.form ?? (compact ? COMPACT_PIECE_FORM : stored?.pieceForm ?? 'whole');
   // A persona is derived (one model call) only for a voice chosen in this run, or when asked for: choosing the
   // pieces again must never spend, nor bring back a persona the owner turned off.
   const derivesPersona = !voice || personaFlag === 'auto';
@@ -163,6 +172,7 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     voice = { passages: [], lengthWords: usualLength(readable), pieces, ...(prefs.pieceForm ? { pieceForm: prefs.pieceForm } : {}), ...(wordBudget === undefined ? {} : { pieceBudget: wordBudget }) };
     if (pieces.length) console.log(`Voice: ${said(pieces)}. Turn off with --voice none.`);
     else if (wordBudget !== undefined && !answers) console.log(`Voice: ${none()}.`);
+    if (compact) console.log(`(pieces served compact by default: ${COMPACT_PIECE_BUDGET_WORDS.toLocaleString('en-US')} words of excerpts, kept by later builds; --pieces whole --piece-budget default serves them whole.)`);
   } else if (voice && reselect) {
     // A skill built before keeps its pieces until the owner asks for others, and then they are chosen again from
     // the pieces it was built from: a budget cannot be met by cutting the ones already stored.

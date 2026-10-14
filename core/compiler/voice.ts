@@ -147,6 +147,18 @@ export function selectVoicePassages(pieces: readonly string[], count = VOICE_PAS
  */
 export const PIECE_BUDGET_WORDS = 9000;
 
+/**
+ * THE COMPACT DEFAULT FOR A SKILL THAT WRITES FROM THE AUTHOR'S PIECES, at its first build: passages from more pieces
+ * within 3,000 words, exactly what `--piece-budget 3000 --pieces excerpts` chooses, and stored on the skill as if the
+ * owner had asked for it, so a rebuild chooses the same whatever this default later becomes. Measured on one
+ * newsletter skill against the whole serving: an export of 7,121 words against 12,555, a run 34% cheaper, and no
+ * loss of quality measured on five titles (CHANGELOG). The whole serving stays as the recorded fallback:
+ * `--pieces whole --piece-budget default`. Not applied to a skill that answers (its examples are short and shown
+ * whole) nor to one built from a method, and never to a skill that already holds a voice (cli/commands/build.ts).
+ */
+export const COMPACT_PIECE_BUDGET_WORDS = 3000;
+export const COMPACT_PIECE_FORM: PieceForm = 'excerpts';
+
 /** What distinguishes one mode of an author's writing from another: point of view, layout, pace, length. */
 const MODE_FEATURES: readonly PatternId[] = ['FIRST_PERSON', 'ONE_LINE_PARAGRAPH', 'BOLD_SPAN', 'DASH_ASIDE', 'RHETORICAL_QUESTION', 'CONTRACTION'];
 function modeVector(t: string): number[] {

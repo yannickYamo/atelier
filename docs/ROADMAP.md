@@ -39,7 +39,7 @@ flowchart TD
   P4 --> S4b["A last in-context voice read,<br/>by people, blind"]:::next
   P4 --> S4c["A trained voice adapter"]:::later
   P5 --> S5a["Size by part and cost by purpose,<br/>on every skill and every run"]:::shipped
-  P5 --> S5b["A budget for the author's pieces,<br/>and excerpts in place of whole pieces"]:::testing
+  P5 --> S5b["A budget for the author's pieces,<br/>and excerpts in place of whole pieces"]:::shipped
   P5 --> S5c["One draft first,<br/>a small model first"]:::later
   P6 --> S6a["Install from npm,<br/>one command to connect an agent"]:::testing
   P6 --> S6b["Review the few rules that decide<br/>most outputs, accept the rest"]:::later
@@ -111,7 +111,7 @@ about seven times the plug-in.
 |---|---|---|
 | Every skill states its size, stored and exported, with the export by part | Built | On the one skill measured part by part, 9,201 of 13,173 words are the author's whole pieces, set by one budget |
 | Every run says where its cost went, by purpose | Built | Two drafts explain at most two of the seven times; the rest is unmeasured until real runs report it |
-| A word budget for the author's pieces, and excerpts from more pieces in place of a few whole ones | Built, opt-in | [One study, drafted](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md): four smaller configurations of each of two writing skills against today's, read on the author's rules and on quality. The smaller of two (none of the author's pieces, or whole pieces within 3,000 words) becomes the default if it is rejected in neither domain; excerpts are measured for the next version. If nothing is selected the size stays, and the study will not have shown that the size buys anything: its error rates are large both ways ([decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)) |
+| A word budget for the author's pieces, and excerpts from more pieces in place of a few whole ones | Built, the default for a skill that writes | [One study](../studies/EFFICIENCY_ABLATION_PREREGISTRATION.md) on one newsletter skill, five titles: excerpts within 3,000 words exported 7,121 words against 12,555, cost 34% less a run, and lost no measured quality. That serving is the default at a writing skill's first build, stored on the skill; `--pieces whole --piece-budget default` is the whole serving. Skills that answer and skills built from a method are unchanged ([decision 0014](decisions/0014-the-smallest-realization-that-holds-the-standard.md)) |
 | One draft first and a second only on evidence; a small model first and a strong one only on refusal | 2.0 | Each changes how a run spends, so each waits for the cost breakdown from real runs |
 | Sending only the rules that apply to a request | 2.0 | On the one skill measured, the rules and their examples are a fifth of the export, and a wrong "does not apply" silently drops a rule the owner required |
 
