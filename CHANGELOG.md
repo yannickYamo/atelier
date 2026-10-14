@@ -47,6 +47,13 @@ only partly observed, or the owner's word was moved by a measurement.
   to the writer, held at 500 words a page, which the run says beside it, and written again for when it is missed.
   The length a request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a
   table counted as words, and a draft of four tables ran 1,135 for 1,006 written.
+- **A draft that only runs long is cut by what the writer names and code removes.** Asked to return the whole piece
+  shorter, the writer kept nearly every word: three passes took a draft from 1,169 to 1,149 words against an ask of
+  269. It is now asked to name the sentences that can go, copied from the draft, and code removes exactly those, in
+  order, until the draft is inside: never a figure, a heading, a table row or a whole list item, and the cut draft
+  goes through every check again before it is kept. Where nothing it names can be removed, the next pass writes the
+  piece shorter as before. On eight drafts asked for one to two pages, all eight ended inside, at about a tenth of
+  the cost of a rewrite pass.
 - **Where the owner requires a length, their examples add no second one.** A draft was being written again toward
   both the stated limit and the span of the examples.
 - **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your

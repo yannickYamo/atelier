@@ -1131,6 +1131,59 @@ export function trimNote(unmet: readonly Unmet[], draft: string): string {
     + `The draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
 }
 
+/** Where a cut is to stop: the word count a too-long miss aims for, or the limit itself. */
+const cutTarget = (unmet: readonly Unmet[], now: number): number => {
+  const worst = [...unmet].sort((a, b) => (b.off ?? 0) - (a.off ?? 0))[0];
+  const to = /aim for (\d[\d,]*) words or fewer/.exec(worst.aim ?? '')?.[1];
+  return to ? Number(to.replace(/,/g, '')) : now - (worst.off ?? 0);
+};
+
+/**
+ * WHAT TO DELETE, NAMED BY THE WRITER AND REMOVED BY CODE. Asked to return the whole piece shorter, a writer kept
+ * nearly every word: three passes took a teardown from 1,169 to 1,149 words against an ask of 269. Asked instead to
+ * name the sentences that can go, copied from the draft, it named enough every time, at a tenth of the cost, and
+ * code removes exactly those, so nothing else in the piece can change.
+ */
+export function cutNote(unmet: readonly Unmet[], draft: string): string {
+  const worst = [...unmet].sort((a, b) => (b.off ?? 0) - (a.off ?? 0))[0]; const over = worst.off ?? 0;
+  const to = /aim for (\d[\d,]*) words or fewer/.exec(worst.aim ?? '')?.[1];
+  const n = wordsWritten(draft); const cut = to ? Math.max(over, n - Number(to.replace(/,/g, ''))) : over;
+  return `The draft below holds what this work requires and runs too long: ${unmet.map((u) => u.detail).join('; ')}.\n`
+    + `Choose what to delete so that at least ${cut} words go. Pick whole sentences, or clauses that can go without the sentence around them breaking: a restated point, a qualifier, an aside, a sentence that repeats its paragraph. `
+    + 'Never pick a heading, a table row, a whole list item, a name, a figure or a citation. '
+    + 'Answer with one deletion per line, each copied exactly from the draft, character for character, and nothing else.\n\n'
+    + `The draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
+}
+
+/** The longest deletion taken from what the writer names: a sentence, never a passage. */
+const CUT_MAX_WORDS = 80;
+const LIST_MARK = /^\s*(?:[-*+•]|\d+[.)])\s+/;
+
+/**
+ * The draft with what the writer named removed, in the order named, until it is at `target` words or fewer. A
+ * deletion is taken only where it is in the draft as written, on one line, holds no digit (a figure is never cut),
+ * is no part of a heading or a table row, and is not a whole list item. Everything else is left as it was.
+ */
+export function applyCuts(draft: string, picks: readonly string[], target: number): { text: string; applied: string[] } {
+  let text = draft; const applied: string[] = [];
+  for (const raw of picks) {
+    if (wordsWritten(text) <= target) break;
+    const p = raw.trim().replace(LIST_MARK, '').replace(/^["“'‘](.*)["”'’]$/s, '$1').trim();
+    if (p.length < 12 || p.includes('\n') || /\d/.test(p) || wordsWritten(p) > CUT_MAX_WORDS) continue;
+    const at = text.indexOf(p); if (at < 0) continue;
+    const start = text.lastIndexOf('\n', at) + 1; const endAt = text.indexOf('\n', at); const line = text.slice(start, endAt === -1 ? text.length : endAt);
+    if (/^\s*(?:#|\|)/.test(line) || (LIST_MARK.test(line) && line.replace(LIST_MARK, '').trim() === p)) continue;
+    let from = at; let to = at + p.length;
+    // the space the deletion leaves: one before it goes when a space or a stop follows
+    if (text[from - 1] === ' ' && (text[to] === ' ' || /[.,;:!?)]/.test(text[to] ?? '') || to === text.length || text[to] === '\n')) from -= 1;
+    else if (text[to] === ' ' && (from === start)) to += 1;
+    text = text.slice(0, from) + text.slice(to);
+    applied.push(p);
+  }
+  // a line the deletions emptied goes, and so does the blank line it leaves
+  return { text: applied.length ? text.replace(/^[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n') : draft, applied };
+}
+
 /**
  * Is `after` nearer to holding everything than `before`? Rules first: fewer of them unmet, never more. A length is
  * the tie-break between drafts that leave the same number of rules unmet: a draft at the right length that drops a
@@ -1177,11 +1230,21 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     // Written again once, and once more where everything still unmet is a length, which a writer nears by halves.
     // And where all that is left is that the whole piece runs long, it is cut, up to three times, counted apart.
     let redrafts = 0; let trims = 0;
+    // A cut is first named by the writer and removed by code (`cutNote`, `applyCuts`); where nothing it names can be
+    // removed, that pass changes nothing and the passes after it write the piece shorter (`trimNote`).
+    let picking = true;
     const another = (): boolean => (onlyTooLong(missing) ? trims < TRIMS : redrafts < REDRAFTS && (redrafts === 0 || missing.every((u) => u.aim)));
     while (missing.length && another()) {
-      if (onlyTooLong(missing)) trims += 1; else redrafts += 1;
+      const trimming = onlyTooLong(missing);
+      if (trimming) trims += 1; else redrafts += 1;
       try {
-        const piece = await c.redraft(onlyTooLong(missing) ? trimNote(missing, d.output) : redraftNote(missing, d.output));
+        let piece: string;
+        if (trimming && picking) {
+          const named = await c.redraft(cutNote(missing, d.output));
+          const cut = applyCuts(d.output, named.split('\n'), cutTarget(missing, wordsWritten(d.output)));
+          if (!cut.applied.length) { picking = false; continue; }
+          piece = cut.text;
+        } else piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(missing, d.output));
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
         const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);

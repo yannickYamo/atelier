@@ -74,3 +74,63 @@ describe('the length asked is counted in words, never in the marks that draw a t
     expect(unmetReader({ requirements: [] } as never, null, asked)?.({ output: table, report: { checked: [], unchecked: [], failed: false } as never })).toEqual([]);
   });
 });
+
+describe('a draft that only runs long is cut by what the writer picks and code removes', () => {
+  // Asked to return the whole piece shorter, a writer removed 5 to 21 words of the 50 to 170 asked, three times over.
+  // Asked to name what to delete, copied from the draft, it named enough, and code removes exactly that.
+  const draft = [
+    '## Read', '',
+    'The one-line read is plain. It is also worth saying again here, in other words, for emphasis.', '',
+    '| Moat | Present |', '|---|---|', '| Scale is the moat in this market | Yes |', '',
+    '- A list item that stays whole.',
+    '- It costs $0.17 for 120 claims, which is the price.', '',
+    'A closing point. Which repeats the closing point at some length so that it can go.',
+  ].join('\n');
+  it('removes the sentences picked, stops once inside, and refuses figures, headings, table rows and whole list items', async () => {
+    const { applyCuts } = await import('../cli/commands/invoke.js');
+    const picks = [
+      '"It is also worth saying again here, in other words, for emphasis."',
+      'It costs $0.17 for 120 claims, which is the price.',
+      'Scale is the moat in this market',
+      '## Read',
+      '- A list item that stays whole.',
+      'a sentence that is not in the draft at all',
+      'Which repeats the closing point at some length so that it can go.',
+    ];
+    const all = applyCuts(draft, picks, 0);
+    expect(all.applied).toEqual(['It is also worth saying again here, in other words, for emphasis.', 'Which repeats the closing point at some length so that it can go.']);
+    expect(all.text).toContain('The one-line read is plain.\n');
+    expect(all.text).toContain('A closing point.');
+    expect(all.text).toContain('| Scale is the moat in this market | Yes |');
+    expect(all.text).toContain('$0.17');
+    // stops at the first cut that brings it inside
+    const one = applyCuts(draft, picks, wordsWrittenOf(draft) - 5);
+    expect(one.applied).toHaveLength(1);
+  });
+  it('the writer is asked to name deletions copied from the draft, never to write it again', async () => {
+    const { cutNote, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const note = cutNote([{ id: LENGTH_ID, whole: true, statement: 'length', detail: '1,169 words, 169 too many', off: 169, aim: 'aim for 900 words or fewer' }], 'the draft');
+    expect(note).toMatch(/^The draft below holds what this work requires and runs too long/);
+    expect(note).toContain('at least 169');
+    expect(note).toContain('copied exactly from the draft');
+    expect(note).toContain('<earlier-draft>\nthe draft\n</earlier-draft>');
+  });
+  it('in the run: the cut text is what is kept; where nothing picked can be removed, the next pass writes it shorter as before', async () => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
+    const unmet = (x: { output: string }) => { const n = wordsWrittenOf(x.output); return n > 20 ? [{ id: LENGTH_ID, whole: true as const, statement: 'length', detail: `${n} words`, off: n - 20, aim: 'aim for 18 words or fewer' }] : []; };
+    const long = 'Keep this opening sentence here, as it is. Drop this whole sentence because it only repeats the opening one again. Keep the end of it.';
+    const notes: string[] = [];
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { notes.push(note); return 'Drop this whole sentence because it only repeats the opening one again.'; } })(long) as unknown as { output: string };
+    expect(out.output).toBe('Keep this opening sentence here, as it is. Keep the end of it.');
+    expect(notes).toHaveLength(1);
+    // nothing it picks is in the draft: that pass changes nothing, and the next is the rewrite
+    const asked: string[] = [];
+    const out2 = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { asked.push(note); return asked.length === 1 ? 'not in the draft at all, this line' : 'Short now.'; } })(long) as unknown as { output: string };
+    expect(asked[0]).toContain('copied exactly from the draft');
+    expect(asked[1]).toContain('Return the same piece with words removed');
+    expect(out2.output).toBe('Short now.');
+  });
+});
+
+function wordsWrittenOf(s: string): number { return s.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length; }
