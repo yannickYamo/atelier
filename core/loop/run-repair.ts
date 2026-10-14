@@ -742,9 +742,12 @@ export async function refineToStandard(
     const after = next === text ? report : await check(next);
     sameInstrument();
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
+    // A rule graded but not enforced by the standard: its progress may be a fall in |error| (repair.ts, `acceptRepair`),
+    // and its rewrites make no contrast pair below. An enforced rule that is also graded keeps the enforced rule's terms.
+    const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(withGraded(report, gradedIds), withGraded(after, gradedIds));
+      : acceptRepair(withGraded(report, gradedIds), withGraded(after, gradedIds), { graded: soft });
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
       continue;
@@ -752,8 +755,6 @@ export async function refineToStandard(
     // A graded feature is repaired when a kept rewrite moved its value toward the band.
     const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
     for (const id of gradedIds) if (errorOf(after, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
-    // A rule graded but not enforced by the standard is no source of the standard's examples: its rewrites make no pair.
-    const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
     text = next; report = after;
     // An accepted pass's style rewrites are examples of this standard in action. One rule per pair.
     for (const a of applied) {
