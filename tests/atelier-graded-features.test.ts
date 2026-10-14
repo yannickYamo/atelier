@@ -10,6 +10,7 @@ import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { gradedRules, gradedTargets, withGraded, GRADED_PER_PASS } from '../core/loop/run-repair.js';
+import { acceptRepair } from '../core/loop/repair.js';
 import { FEATURE } from '../core/observers/features.js';
 import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
 import * as store from '../core/state/store.js';
@@ -44,6 +45,28 @@ describe('which rules are graded, and which checks a pass is pointed at', () => 
     expect(marked.checked.map((c) => c.enforced)).toEqual([false, true]);
     expect(report.checked.map((c) => c.enforced)).toEqual([false, false]);
     expect(withGraded(report, new Set())).toBe(report);
+  });
+});
+
+describe('acceptance: a graded feature nearer its band is progress; an enforced rule keeps its own terms', () => {
+  const graded = (id: string, error: number, spans = 3): RuleCheck => ({ ...check(id, error), enforced: true, result: { verdict: 'VIOLATED', value: 2, detail: '', error, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) } });
+  const enforced = (id: string, verdict: 'MET' | 'VIOLATED', spans = 1): RuleCheck => ({ requirementId: id, statement: id, materiality: 'REQUIRED', enforced: true, observer: 'LEXICON',
+    result: { verdict, value: null, detail: '', spans: verdict === 'VIOLATED' ? Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) : [] } });
+  it('|error| 2.0 → 1.2 with the same count of places is accepted, for a graded check', () => {
+    const v = acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.2)]), { graded: new Set(['g']) });
+    expect(v).toMatchObject({ ok: true }); expect(v.why).toMatch(/graded feature\(s\) nearer the band: g 2.0 → 1.2/);
+    // under the step, or not named as graded, it is no progress
+    expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.95)]), { graded: new Set(['g']) }).ok).toBe(false);
+    expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.2)])).ok).toBe(false);
+  });
+  it('the same move with an enforced rule newly broken is refused', () => {
+    const v = acceptRepair(reportOf([graded('g', 2), enforced('e', 'MET')]), reportOf([graded('g', 1.2), enforced('e', 'VIOLATED')]), { graded: new Set(['g']) });
+    expect(v.ok).toBe(false); expect(v.why).toMatch(/made e worse/);
+  });
+  it('an enforced rule still broken in as many places is still no progress, graded set or not', () => {
+    expect(acceptRepair(reportOf([enforced('e', 'VIOLATED', 2)]), reportOf([enforced('e', 'VIOLATED', 2)])).ok).toBe(false);
+    expect(acceptRepair(reportOf([enforced('e', 'VIOLATED', 2)]), reportOf([enforced('e', 'VIOLATED', 2)]), { graded: new Set(['other']) }).ok).toBe(false);
+    expect(acceptRepair(reportOf([enforced('e', 'VIOLATED', 2)]), reportOf([enforced('e', 'VIOLATED', 1)])).ok).toBe(true);
   });
 });
 
@@ -135,6 +158,18 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     expect(graded?.repair?.violatedAfter).toEqual([]);
     // a graded rule the standard does not enforce is no source of its examples
     expect(graded?.repair?.pairs ?? []).toEqual([]);
+  });
+  it('a miss too far for one pass: the rewrite that lands closer but outside the band is kept, and counts as repaired', async () => {
+    // eight aside sentences: about 34 per 1,000 against a cap of 5; three carriers rewritten leave about 21, still out
+    const far = Array.from({ length: 8 }, (_, i) => Array.from({ length: 3 }, (_, k) => ((i * 3 + k) % 3 === 0 ? aside : plain)).join(' ')).join('\n\n');
+    await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: far }, emit_replacements: { replacements: replacements(3) } } }) });
+    const out = invoke('--graded', 'all');
+    const parens = (t: string): number => (t.match(/\(/g) ?? []).length;
+    expect(parens(out.output)).toBeLessThan(parens(far));
+    expect(parens(out.output)).toBeGreaterThan(0);
+    expect(out.graded).toEqual({ features: ['parenthesis'], targeted: 1, repaired: 1 });
+    expect(out.eval.record?.state).not.toBe('BLOCKED');
+    expect(out.eval.record?.entries.find((e) => e.id === 'x1')?.required).toBe(false);
   });
   it('an unknown feature id is refused before anything is spent', () => {
     expect(() => invoke('--graded', 'nope')).toThrow(/unknown feature/);

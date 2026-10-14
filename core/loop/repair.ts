@@ -315,7 +315,13 @@ export function addsNoWords(before: string, after: string): boolean {
  * no word (`wordsAdded: false`: an em dash made a comma) cannot add an invented specific, so the reading of specifics
  * read again is no evidence against it: an em dash fix was thrown away because that reading listed one sentence more.
  */
-export function acceptRepair(before: VerifyReport, after: VerifyReport, opts: { wordsAdded?: boolean } = {}): RegressionVerdict {
+/** The least a graded feature's |error| (in widths of its band) must fall for a pass to count as progress on it. */
+export const GRADED_STEP = 0.1;
+
+export function acceptRepair(before: VerifyReport, after: VerifyReport,
+  opts: { wordsAdded?: boolean;
+    /** GRADED checks (run-repair.ts, `CheckOptions.graded`), never enforced rules: for these alone, progress is also a fall in |error| of GRADED_STEP or more */
+    graded?: ReadonlySet<string> } = {}): RegressionVerdict {
   const worse = regressions(before, after).filter((id) => opts.wordsAdded !== false || !id.startsWith('UNSOURCED'));
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
   const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
@@ -325,5 +331,13 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport, opts: { 
   const spans = (r: VerifyReport): number => broken(r).reduce((n, c) => n + Math.max(1, c.result.spans.length), 0);
   if (req(after) < req(before)) return { ok: true, why: `REQUIRED rules broken: ${req(before)} → ${req(after)}` };
   if (spans(after) < spans(before)) return { ok: true, why: `places breaking a REQUIRED rule: ${spans(before)} → ${spans(after)}` };
+  // A GRADED feature's spans are capped, so a rewrite that moves it a good way toward the band and not into it shows
+  // the same count of places. For graded checks only, a fall in |error| of GRADED_STEP (in band widths) is progress;
+  // what is newly broken was refused above, as for any rewrite. An enforced rule's progress is the two counts above.
+  if (opts.graded?.size) {
+    const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
+    const moved = [...opts.graded].map((id) => ({ id, from: errorOf(before, id), to: errorOf(after, id) })).filter((x) => x.from - x.to >= GRADED_STEP);
+    if (moved.length) return { ok: true, why: `graded feature(s) nearer the band: ${moved.map((x) => `${x.id} ${x.from.toFixed(1)} → ${x.to.toFixed(1)}`).join(', ')}` };
+  }
   return { ok: false, why: 'the rewrite fixed no REQUIRED rule' };
 }
