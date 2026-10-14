@@ -98,7 +98,9 @@ export function suggest(p: Requirement, e: ProposalEvidence | undefined, mode: S
     const { applicable, present } = e.inSample;
     const independent = e.inSample.independent === true;
     const r = present / applicable;
-    const where = independent ? 'held-out pieces' : 'pieces it was counted from (nothing held out to check it on)';
+    // A FITTED LIMIT SAYS SO: the held-out count is against the limit before it moved, never a check of the moved one.
+    const where = independent ? (e.inSample.fitted === true ? 'held-out pieces, against the limit before it was moved to where your pieces are' : 'held-out pieces')
+      : 'pieces it was counted from (nothing held out to check it on)';
     const seen = `${present} of ${applicable} ${where} meet it; checked on every output`;
     // A FITTED LIMIT IS JUDGED ON THE CORPUS, NOT ON THE HELD-OUT PIECES. Its limit was moved to where the author's
     // own pieces are (../observers/derive.ts, `fitToCorpus`), using the held-out pieces too, so they are no
@@ -236,11 +238,11 @@ export const CORPUS_RULE_SHARE = 0.95;
 export const CORPUS_SET_SHARE = 0.9;
 
 /**
- * How many of `pieces` may fall short of a share: the share's own count, and never fewer than one, from three pieces
- * up. With one piece or two, one allowed is the whole test given away (a rule the only piece breaks stayed required),
- * so none is.
+ * How many of `pieces` may fall short of a share: the share's own count, and never fewer than one, from five pieces
+ * up. Under five, one allowed is the test given away: at three pieces it is a third of the author's work, and a rule
+ * one of three pieces breaks stayed required. So none is, until there are five.
  */
-export const allowed = (pieces: number, share: number): number => (pieces < 3 ? 0 : Math.max(1, Math.floor((1 - share) * pieces + 1e-9)));
+export const allowed = (pieces: number, share: number): number => (pieces < 5 ? 0 : Math.max(1, Math.floor((1 - share) * pieces + 1e-9)));
 
 /** Sets of rules tried before the search for the fewest to move gives way to one rule at a time. */
 const TRIES = 50_000;

@@ -21,6 +21,7 @@
 import type { SpendLine } from '../inference/client.js';
 import type { RunSent } from './size.js';
 import { blocks, needsReview, type EvaluationRecord } from './record.js';
+import { falseFlagPct } from './false-flags.js';
 
 /** The evaluation of one run. `schema` moves when a field's meaning does. */
 export interface EvalSummary {
@@ -181,7 +182,7 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   else out.push(`  ${tag(req.broken.length === 0 ? (partly(e) ? null : true) : false)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held by their checks${partly(e) ? ` · ${partly(e)} of those checks read only part of the rule` : ''}${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id}${b.label ? ` "${b.label}"` : ''} (${b.detail})`).join(', ')}` : ''}`);
   const cl = g.claims;
   const reader = cl.unmeasured ? ` · ${cl.unmeasured}: what the check finds is listed, never cut`
-    : cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone, on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
+    : cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone (false flags at most ${falseFlagPct(cl.measured)} in 100), on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
   if (cl.state === 'off') out.push(`  ${tag(null)}  ${pad('invented claims', 17)}not checked: turned off for this run (--allow-unsourced)`);
   else if (cl.state === 'not-checked') out.push(`  ${tag(false)}  ${pad('invented claims', 17)}not checked: the claim reader could not run, so this is not a pass`);
   else out.push(`  ${tag(cl.delivered === 0 && cl.unconfirmed === 0)}  ${pad('invented claims', 17)}${cl.delivered} delivered · ${cl.cut} cut${cl.unconfirmed ? ` · ${cl.unconfirmed} unconfirmed` : ''}${cl.disputed ? ` · ${cl.disputed} disputed (one of two reads flagged it: check before you publish)` : ''}${cl.listed ? ` · ${cl.listed} listed to check` : ''}${cl.agreement ? ` · ${agreementOf(cl.agreement)}` : ''}${cl.answers ? ' · answers: work and results by pattern' : ''}${reader}`);

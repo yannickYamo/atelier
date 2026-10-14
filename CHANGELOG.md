@@ -7,6 +7,20 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: authority is read before materiality, and a figure carries its bound
+
+- **An unratified rule never blocks.** The execution plan read `materiality` alone; a requirement nobody confirmed
+  (`DERIVED_UNRATIFIED`) that carried REQUIRED in its fields would have been enforced. The plan now reads authority
+  first: such a rule is a habit that blocks nothing, and the record says why (`UNRATIFIED`).
+- **A fitted limit says what its held-out count is.** When a limit was moved to where the author's own pieces are, the
+  held-out pieces helped set it, so their count is named as "against the limit before it was moved", never as an
+  independent check. A fitted limit the author's pieces meet is held to the corpus count, as before.
+- **No exception under five pieces.** A suggested rule allowed one of the author's pieces to break it from three
+  pieces up: a third of the work at three. Under five pieces none is allowed.
+- **The claim reader's qualification shows its bound.** "Left 39 of 48 clean alone" now carries its one-sided 95%
+  upper bound beside it (false flags at most 30 in 100) on the panel and the skill card; the count is never cited alone.
+- The typicality score's one use (`--until-typical`, a stop rule for drafting) is named at its head.
+
 ### Changed: a comparison run records what each arm delivered, and survives a filtered call
 
 - **Calls go out with thinking disabled.** Every call forces one tool call, which extended thinking does not take;

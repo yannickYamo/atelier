@@ -163,3 +163,22 @@ describe('a check tied to a step by its subject, and not by what the step asks, 
     expect(planFor({ requirements: [{ ...related, materiality: 'REQUIRED' as const }] }).rules[0]).toMatchObject({ enforced: true, notEnforced: null });
   });
 });
+
+describe('authority is read before materiality', () => {
+  // A requirement nobody ratified can carry REQUIRED in its fields (a proposal keeps the materiality it was offered
+  // with). The field is not the owner's word: the plan never enforces it, and says why.
+  const unratified = aRequirement({ requirementId: 'u1', statement: 'Keep paragraphs to 3 sentences.', authority: 'DERIVED_UNRATIFIED', materiality: 'REQUIRED',
+    measurement: { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 3 } } });
+  const judged = aRequirement({ requirementId: 'u2', statement: 'Weigh the risk first.', authority: 'DERIVED_UNRATIFIED', materiality: 'REQUIRED', obligation: 'JUDGEMENT' });
+  const p = planFor({ requirements: [unratified, judged] });
+  it('an unratified rule with a check is a habit that blocks nothing, and the reason is UNRATIFIED', () => {
+    expect(p.rules.find((r) => r.id === 'u1')).toMatchObject({ role: 'HABIT', enforced: false, notEnforced: 'UNRATIFIED', onMiss: 'SHOW' });
+  });
+  it('an unratified judgement step is not a required judgement either', () => {
+    expect(p.rules.find((r) => r.id === 'u2')).toMatchObject({ role: 'HABIT', enforced: false, onMiss: 'NONE' });
+  });
+  it('the same rule once ratified is enforced', () => {
+    const q = planFor({ requirements: [{ ...unratified, authority: 'EXPERT_RATIFIED' }] } as unknown as StandardVersion);
+    expect(q.rules[0]).toMatchObject({ role: 'RULE', enforced: true, notEnforced: null });
+  });
+});

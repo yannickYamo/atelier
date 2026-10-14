@@ -28,12 +28,12 @@ describe('a reply with no text in it is a failed draft call, never an empty draf
   });
 });
 
-describe('one piece is allowed to fall short from three pieces up, and none below', () => {
-  it('with one piece or two, allowing one would allow them all', () => {
-    expect([1, 2].map((n) => allowed(n, CORPUS_RULE_SHARE))).toEqual([0, 0]);
-    expect([1, 2].map((n) => allowed(n, CORPUS_SET_SHARE))).toEqual([0, 0]);
-    expect([3, 8, 19, 20, 40].map((n) => allowed(n, CORPUS_RULE_SHARE))).toEqual([1, 1, 1, 1, 2]);
-    expect([3, 8, 19, 20].map((n) => allowed(n, CORPUS_SET_SHARE))).toEqual([1, 1, 1, 2]);
+describe('one piece is allowed to fall short from five pieces up, and none below', () => {
+  it('under five pieces, allowing one would allow a third or more of the author\'s work', () => {
+    expect([1, 2, 3, 4].map((n) => allowed(n, CORPUS_RULE_SHARE))).toEqual([0, 0, 0, 0]);
+    expect([1, 2, 3, 4].map((n) => allowed(n, CORPUS_SET_SHARE))).toEqual([0, 0, 0, 0]);
+    expect([5, 8, 19, 20, 40].map((n) => allowed(n, CORPUS_RULE_SHARE))).toEqual([1, 1, 1, 1, 2]);
+    expect([5, 8, 19, 20].map((n) => allowed(n, CORPUS_SET_SHARE))).toEqual([1, 1, 1, 2]);
   });
 });
 

@@ -26,7 +26,7 @@ export type Role = 'RULE' | 'JUDGEMENT' | 'HABIT';
  */
 export type OnMiss = 'REDRAFT' | 'REWRITE' | 'SHOW' | 'NONE';
 /** Why a rule with a check does not block when the check fails; null where it does. */
-export type NotEnforced = 'NOT_REQUIRED' | 'DISPUTED_BY_EXAMPLES' | 'RELATED_CHECK' | null;
+export type NotEnforced = 'NOT_REQUIRED' | 'DISPUTED_BY_EXAMPLES' | 'RELATED_CHECK' | 'UNRATIFIED' | null;
 // (RELATED_CHECK: the check reads something near the owner's rule, not the rule; its failing is not the rule broken.)
 // (DISPUTED only until the owner settles it: confirming the rule at a build, or making it required themselves, ends the dispute.)
 
@@ -57,10 +57,14 @@ const wholeLengthInWords = (r: Requirement): boolean => r.measurement?.observer 
 
 function planned(r: Requirement): PlannedRule {
   const m = r.measurement; const o = observes(r);
-  const required = r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested) || Boolean(r.related);
+  // NOBODY CONFIRMED IT, SO IT SHAPES NOTHING. A requirement nobody ratified (DERIVED_UNRATIFIED) can carry a materiality
+  // in its fields; the field is not the owner's word. The plan reads authority before it reads materiality, so no
+  // path that writes REQUIRED onto an unratified requirement can make it block.
+  const unratified = r.authority === 'DERIVED_UNRATIFIED';
+  const required = !unratified && (r.materiality === 'REQUIRED' || r.obligation === 'JUDGEMENT' || Boolean(r.contested) || Boolean(r.related));
   const role: Role = !required ? 'HABIT' : m ? 'RULE' : 'JUDGEMENT';
   const check = m && o ? { ...o, observer: m.observer, reads: targetOf(m.observer) } : null;
-  const notEnforced: NotEnforced = !check || r.materiality === 'REQUIRED' ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : r.related ? 'RELATED_CHECK' : 'NOT_REQUIRED';
+  const notEnforced: NotEnforced = !check ? null : unratified ? 'UNRATIFIED' : r.materiality === 'REQUIRED' ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : r.related ? 'RELATED_CHECK' : 'NOT_REQUIRED';
   const enforced = Boolean(check) && notEnforced === null;
   // What no sentence rewrite fixes is written again: a part the work must contain, a citation that is no line of
   // the material. Everything else that is enforced is a sentence's to fix.
