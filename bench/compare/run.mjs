@@ -151,13 +151,18 @@ const REVIEW_ASK = 'Check your draft before it goes out. Go through the method s
   + 'Then write the answer again in full with everything you found put right, keeping to the length asked. Put the check in review and the answer again in answer.';
 async function selfReviewArm(c, t) {
   const first = await modelArm(c, t);
-  const r = await c.complete({ stableBlock: skillText, variableBlock: '', userMessage: `${withMaterial(t)}\n\nYour draft:\n<draft>\n${first.response}\n</draft>\n\n${REVIEW_ASK}`,
+  const ask = `${withMaterial(t)}\n\nYour draft:\n<draft>\n${first.response}\n</draft>\n\n${REVIEW_ASK}`;
+  const r = await c.complete({ stableBlock: placement === 'system' ? skillText : '', variableBlock: '', userMessage: placement === 'harness' ? harnessPrompt(ask, skillText) : ask,
     toolName: 'emit_review', toolDescription: 'Deliver the check and the answer written again.', schema: REVIEW_SCHEMA, maxTokens });
   const answer = r.json && typeof r.json === 'object' ? r.json.answer : undefined;
   if (typeof answer !== 'string') throw new Error(`the model returned no reviewed answer for ${t.id}`);
   const cost = typeof first.cost === 'number' && typeof r.costUsd === 'number' ? first.cost + r.costUsd : null;
+  const sum = (a, b) => (a ?? 0) + (b ?? 0);
   return { response: answer.trim(), review: typeof r.json.review === 'string' ? r.json.review : null, calls: 2, cost,
-    usage: { input_tokens: (first.usage.input_tokens ?? 0) + (r.inputTokens ?? 0), output_tokens: (first.usage.output_tokens ?? 0) + (r.outputTokens ?? 0) } };
+    // the longest single call, which is what the token limit binds
+    longestCall: Math.max(first.usage.output_tokens ?? 0, r.outputTokens ?? 0),
+    usage: { input_tokens: sum(first.usage.input_tokens, r.inputTokens), cache_read_input_tokens: sum(first.usage.cache_read_input_tokens, r.cacheReadTokens),
+      cache_creation_input_tokens: sum(first.usage.cache_creation_input_tokens, r.cacheWriteTokens), output_tokens: sum(first.usage.output_tokens, r.outputTokens) } };
 }
 
 let runtimeSpec = null;
@@ -195,19 +200,25 @@ function runtimeArm(t) {
 const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`) : []);
 const prior = existsSync(out) ? readJsonl(out).filter((r) => r.condition === condition) : [];
 let spent = prior.reduce((n, r) => n + (r.cost_usd ?? 0), 0);
-let perCall = Math.max(Number(opt(args, 'per-call', '0.25')), ...prior.map((r) => r.cost_usd ?? 0));
+// a two-call arm's cell costs two calls
+let perCall = Math.max(Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1), ...prior.map((r) => r.cost_usd ?? 0));
 mkdirSync(dirname(resolve(out)), { recursive: true });
 const c = kind === 'atelier-runtime' ? null : await client();
 const answerOf = (t) => (kind === 'atelier-runtime' ? runtimeArm(t) : kind === 'self-review' ? selfReviewArm(c, t) : modelArm(c, t));
 
 // --preflight: ONE CALL ON THE FIRST TASK, BEFORE A PAID RUN, recording nothing. It says what one answer costs and how
 // many of the token limit it used: a study once lost 162 of 468 cells to answers cut off at the limit, found afterwards.
+// It exits 2 when it finds a reason not to run (answers near the limit, a cost not known), so `--preflight && run` holds.
 if (args.includes('--preflight')) {
-  const t = tasks[0]; const r = await answerOf(t); const used = r.usage?.output_tokens ?? null;
-  console.log(`preflight: task ${t.id}, ${used ?? 'an unknown number of'} output token(s) of a limit of ${maxTokens}; ${typeof r.cost === 'number' ? `$${r.cost.toFixed(4)}` : 'an unknown cost'} for the call${r.calls ? ` (${r.calls} calls)` : ''}`);
-  if (used !== null && used >= maxTokens * 0.8) console.log(`preflight: the answer used ${Math.round((used / maxTokens) * 100)}% of the limit, so answers may be cut off: raise --max-tokens before the run.`);
-  if (typeof r.cost !== 'number') console.log('preflight: the call reported no cost, so --cap could not hold: fix the price before the run.');
-  process.exit(0);
+  const per = Number(opt(args, 'per-call', '0.25')) * (kind === 'self-review' ? 2 : 1);
+  if (per > cap) die(`--preflight: one call (about $${per.toFixed(4)}) would pass the --cap of $${cap}. Nothing was spent.`);
+  const t = tasks[0]; let r;
+  try { r = await answerOf(t); } catch (e) { console.error(`preflight: the call failed (${e.message.split('\n')[0]}). Nothing was recorded.`); process.exit(1); }
+  const used = r.longestCall ?? r.usage?.output_tokens ?? null; let stop = false;
+  console.log(`preflight: task ${t.id}, ${used ?? 'an unknown number of'} output token(s) of a limit of ${maxTokens}${r.calls > 1 ? ' in its longest call' : ''}; ${typeof r.cost === 'number' ? `$${r.cost.toFixed(4)}` : 'an unknown cost'} for the call${r.calls > 1 ? ` (${r.calls} calls)` : ''}`);
+  if (used !== null && used >= maxTokens * 0.8) { stop = true; console.log(`preflight: the answer used ${Math.round((used / maxTokens) * 100)}% of the limit, so answers may be cut off: raise --max-tokens before the run.`); }
+  if (typeof r.cost !== 'number') { stop = true; console.log('preflight: the call reported no cost, so --cap could not hold: fix the price before the run.'); }
+  process.exit(stop ? 2 : 0);
 }
 
 for (let trial = 1; trial <= trials; trial++) {
@@ -225,7 +236,7 @@ for (let trial = 1; trial <= trials; trial++) {
     if (r.refused && typeof r.cost !== 'number') r.cost = perCall;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split })}\n`);
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}) })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     spent += r.cost; perCall = Math.max(perCall, r.cost);

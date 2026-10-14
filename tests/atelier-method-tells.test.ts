@@ -75,3 +75,10 @@ describe('a fix that adds no word is not judged by the reading of specifics', ()
     expect(addsNoWords('The dashboard is late.', 'The dashboard is late by 3 weeks.')).toBe(false);
   });
 });
+
+describe('review: the owner\'s own words count as the author\'s writing', () => {
+  it('a method note that writes em dashes, or asks for them, is not overruled by examples that hold none', () => {
+    const offers = tellOffers([{ id: 'a', reference: plain }], 'Use em dashes for asides \u2014 like this \u2014 when a thought interrupts.');
+    expect((offers[0].measurement!.params.never as string[])).not.toContain('EM_DASH');
+  });
+});

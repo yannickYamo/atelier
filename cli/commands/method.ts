@@ -243,7 +243,7 @@ export async function method(): Promise<void> {
   // the owner judges: a skill of examples alone still has a standard, and says honestly what it is.
   const likeThese: MethodProposal[] = notePath === null ? [{ statement: `New work reads like the ${cases.length === 1 ? 'example' : `${cases.length} examples`} given: the same kind of piece, at their length, in their manner.`,
     origin: 'SHOWN_BY_EXAMPLE', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }] : [];
-  const proposals = [...likeThese, ...read.proposals, ...countedOffers(read.proposals, cases), ...tellOffers(cases)];
+  const proposals = [...likeThese, ...read.proposals, ...countedOffers(read.proposals, cases), ...tellOffers(cases, note)];
   const example = cases[lead];
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);

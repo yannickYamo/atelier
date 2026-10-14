@@ -55,6 +55,8 @@ export interface MissingPrerequisite {
   readonly prerequisite: Prerequisite;
   /** REQUIRED, but only under a condition: withheld from this run rather than refusing it */
   readonly conditional?: boolean;
+  /** REQUIRED of every output: held back, the run is not finished on its account (recorded as not checked) */
+  readonly unfinished?: true;
 }
 
 interface RequirementLike {
@@ -87,7 +89,7 @@ export function checkSatisfiable(
     for (const p of r.prerequisites ?? []) {
       if (bound.has(p.name)) continue;
       missing.push({ requirementId: r.requirementId, statement: r.statement, materiality: r.materiality, prerequisite: p,
-        ...(conditional && r.materiality === 'REQUIRED' ? { conditional: true } : {}) });
+        ...(conditional && r.materiality === 'REQUIRED' ? { conditional: true } : {}), ...(!conditional && r.materiality === 'REQUIRED' ? { unfinished: true as const } : {}) });
     }
   }
   if (!missing.length) return { kind: 'SATISFIABLE' };

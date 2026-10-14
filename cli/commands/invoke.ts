@@ -51,7 +51,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
-import { MATERIAL_NOT_BOUND } from '../../core/eval/record-build.js';
+import { MATERIAL_NOT_BOUND, CONDITIONAL_NOT_BOUND } from '../../core/eval/record-build.js';
 import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
@@ -490,7 +490,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // general one refused the run above), so it is also not counted against this output.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
   const waived = new Map<string, string>();
-  for (const q of std?.requirements ?? []) if (waiting.has(q.requirementId)) waived.set(q.requirementId, MATERIAL_NOT_BOUND);
+  for (const [id, why] of heldBackReasons(satisfiable)) waived.set(id, why);
   // OUT OF REGISTER, ONLY WHAT THE OWNER'S POLICY CARRIES (core/voice/transfer.ts). A rule learned from blog
   // posts is evidence about blog posts: asked for a contract, a rule whose transfer is unknown is withheld from
   // the prompt and from the count for this run, and named. Nothing is waived in register.
@@ -1703,6 +1703,14 @@ class RunReport {
 }
 
 /** The rules that cannot fire on this invocation because material they need is not bound. */
+/**
+ * Why each rule short of material is held back: a REQUIRED rule that applies to every output was not checked (the run is
+ * not finished on its account); one that applies under a condition, or is not required, is set aside as it always was.
+ */
+export function heldBackReasons(v: SatisfiabilityVerdict): ReadonlyMap<string, string> {
+  return new Map(v.kind === 'SATISFIABLE' ? [] : v.missing.map((m) => [m.requirementId, m.unfinished ? MATERIAL_NOT_BOUND : CONDITIONAL_NOT_BOUND] as const));
+}
+
 export function waitingForMaterial(v: SatisfiabilityVerdict): ReadonlySet<string> {
   return new Set(v.kind === 'SATISFIABLE' ? [] : v.missing.map((m) => m.requirementId));
 }

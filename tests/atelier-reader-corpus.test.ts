@@ -42,6 +42,10 @@ describe('the length reader against the labelled corpus', () => {
     const fresh = items.filter((x) => now[x.id] === 'falseHold' && baseline[x.id] !== 'falseHold').map((x) => `${x.id}: ${x.request}`);
     expect(fresh).toEqual([]);
   });
+  it('no length is held wrong that was not held wrong before (a miss turned into a wrong length is a false one)', () => {
+    const fresh = items.filter((x) => now[x.id] === 'wrongHold' && baseline[x.id] !== 'wrongHold').map((x) => `${x.id}: ${x.request}`);
+    expect(fresh).toEqual([]);
+  });
   it('where it stands, said in numbers', () => {
     const count = (f: Fate): number => Object.values(now).filter((v) => v === f).length;
     // a request moved to agree is a gain: record it in baseline.json so it is held from then on

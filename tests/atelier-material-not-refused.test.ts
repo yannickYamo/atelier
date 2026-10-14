@@ -45,3 +45,24 @@ describe('the evaluation: a REQUIRED rule waiting for material is not checked, n
     expect(r.entries.find((x) => x.id === 'p9')!.result).toBe('NOT_APPLICABLE');
   });
 });
+
+describe('review: a rule held back under a condition is not an unfinished evaluation', () => {
+  it('a conditional REQUIRED rule withheld for material keeps its old reading: set aside, the work deliverable', async () => {
+    const { buildRecord, CONDITIONAL_NOT_BOUND } = await import('../core/eval/record-build.js');
+    const rule = { requirementId: 'r1', statement: 'Name the exact file and line, when pointing at a change.', materiality: 'REQUIRED', authority: 'EXPERT_AUTHORED', provenance: 'EXPERT_STATED',
+      obligation: 'DELIVERABLE', appliesWhen: 'when pointing at a change', measurement: { observer: 'PRESENCE', params: { sections: ['Evidence'], body: 1 } } } as never;
+    const r = buildRecord({ requirements: [rule], checked: [], waived: new Map([['r1', CONDITIONAL_NOT_BOUND]]), request: null, claims: null, copying: null });
+    expect(r.entries.find((x) => x.id === 'r1')!.result).toBe('NOT_APPLICABLE');
+    const { standingOf } = await import('../core/eval/record.js');
+    expect(standingOf(r).deliverable).toBe(true);
+  });
+  it('the run gives each held-back rule the reason that fits it', async () => {
+    const { heldBackReasons } = await import('../cli/commands/invoke.js');
+    const { MATERIAL_NOT_BOUND, CONDITIONAL_NOT_BOUND } = await import('../core/eval/record-build.js');
+    const v = { kind: 'DEGRADED', missing: [{ requirementId: 'a', materiality: 'REQUIRED', conditional: true }, { requirementId: 'b', materiality: 'PREFERRED' }] } as never;
+    expect([...heldBackReasons(v)]).toEqual([['a', CONDITIONAL_NOT_BOUND], ['b', CONDITIONAL_NOT_BOUND]]);
+    const w = { kind: 'MISSING_REQUIRED_EVIDENCE', missing: [{ requirementId: 'c', materiality: 'REQUIRED', unfinished: true }, { requirementId: 'a', materiality: 'REQUIRED', conditional: true }] } as never;
+    expect(heldBackReasons(w).get('c')).toBe(MATERIAL_NOT_BOUND);
+    expect(heldBackReasons(w).get('a')).toBe(CONDITIONAL_NOT_BOUND);
+  });
+});

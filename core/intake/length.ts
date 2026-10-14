@@ -86,8 +86,10 @@ const ALL_FORMS: readonly Form[] = [...FORMS.slice(0, 7), PIECE_FORM, A_PAGE, ..
 // length, "a blog post with a headline under 10 words" was a post of ten words. A part is said by "each", "every" or
 // "per", by "no sentence over", or by a part's name in the same clause ("a subject line of no more than 6 words", "the
 // How it works section under 80 words"), unless that part is itself what is asked for ("Write an intro of 200 words").
-const PART = String.raw`(?:headlines?|titles?|subject(?:\s+lines?)?|hooks?|opening(?:\s+lines?)?|openings|intros?|introductions?|ledes?|sections?|slides?|paragraphs?|sentences?|items?|bullets?|lines?|captions?|taglines?|tweets?|clauses?|steps?|chapters?|answers?|questions?|bios?)`;
-const PART_BEFORE = new RegExp(String.raw`(?:\b(?:each|every|per)\s+(?:[\w-]+\s+){0,2}|\bno\s+(?:single\s+)?${PART}\s+(?:[\w-]+\s+){0,3}|\b${PART}\s+(?:[\w-]+\s+){0,4})$`, 'i');
+const PART = String.raw`(?:headlines?|titles?|subject(?:\s+lines?)?|hooks?|opening(?:\s+lines?)?|openings|intros?|introductions?|ledes?|sections?|slides?|paragraphs?|sentences?|items?|bullets?|lines?|captions?|taglines?|tweets?|clauses?|steps?|chapters?|bios?)`;
+// A part named on its own ("a paragraph of 100 words", "an introduction in 400 words") is usually the piece asked for; a part
+// is the piece's part only where it is said as one: "with a headline", "the How it works section", "its opening".
+const PART_BEFORE = new RegExp(String.raw`(?:\b(?:each|every|per)\s+(?:[\w-]+\s+){0,2}|\bno\s+(?:single\s+)?${PART}\s+(?:[\w-]+\s+){0,3}|\b(?:with|the|its|their|your|our|his|her)\s+(?:an?\s+)?(?:(?!(?:in|into|as|to|for|on)\b)[\w-]+\s+){0,3}${PART}\s+(?:[\w-]+\s+){0,4})$`, 'i');
 const PART_ASKED = new RegExp(String.raw`\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make)\s+(?:me\s+|us\s+)?(?:an?|the|one|\d+)\s+(?:[\w-]+\s+)?${PART}\s+(?:[\w-]+\s+){0,3}$`, 'i');
 function partBound(before: string, after: string): boolean {
   if (/^\s+(?:each|per\s+[a-z]+)\b/i.test(after) && !/^\s+per\s+(?:minute|hour|day|week|month|year|second)\b/i.test(after)) return true;
@@ -202,7 +204,8 @@ function located(request: string): { start: number; stated: StatedLength }[] {
     for (let m = f.re.exec(text); m; m = f.re.exec(text)) {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
       const stated = LENGTH_SUBJECT.test(before) && !SOURCE.test(before.slice(Math.max(...['.', ';', '\n'].map((c) => before.lastIndexOf(c))) + 1));
-      if (POINTS_AT.test(before) || (REPORTS.test(before) && !stated) || EDITS.test(before)) continue;
+      // (a form that opens on its own words, "fits within 50 words", is not a count pointing at text: "a bio that fits within")
+      if ((POINTS_AT.test(before) && /^[\d(]/.test(m[0])) || (REPORTS.test(before) && !stated) || EDITS.test(before)) continue;
       if (partBound(before, after) || TOPIC_COUNT.test(before)) continue;
       // "Hemingway's six-word story": a piece of someone else's, not the one to write
       if (f === HYPHEN_FORM && /(?:'s|’s)\s+$/.test(before)) continue;
@@ -222,7 +225,9 @@ function located(request: string): { start: number; stated: StatedLength }[] {
       if (/^\s+(?:per|a|an|every)\s+(?:minute|hour|day|week|month|year|second)\b/i.test(after)) continue;
       const said = f.read(m);
       // "the limit is 2 pages" is a ceiling
-      const read = stated && said.kind === 'target' && /\b(?:limit|cap|maximum)\s+(?:is|was|of)\s+$/i.test(before) ? { ...said, kind: 'max' as const, max: said.target, target: null } : said;
+      const read = !stated || said.kind !== 'target' ? said
+        : /\b(?:limit|cap|maximum|budget|word limit)\s+(?:is|was|of)\s+$/i.test(before) ? { ...said, kind: 'max' as const, max: said.target, target: null }
+        : /\bminimum\s+(?:is|was|of)\s+$/i.test(before) ? { ...said, kind: 'min' as const, min: said.target, target: null } : said;
       const numbers = [read.min, read.max, read.target].filter((x): x is number => x !== null);
       if (!numbers.length || numbers.some((x) => !Number.isFinite(x) || x <= 0)) continue;
       if (read.kind === 'range' && (read.min ?? 0) > (read.max ?? 0)) continue;

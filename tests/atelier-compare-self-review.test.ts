@@ -47,3 +47,17 @@ describe('--preflight', () => {
     expect(existsSync(out)).toBe(false);
   });
 });
+
+describe('review: the preflight judges each call, holds the cap, and says stop in its exit code', () => {
+  it('a cap under one call is refused before anything is spent; a clean preflight exits 0', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'atelier-pf2-'));
+    writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Write it.' })}\n`);
+    writeFileSync(join(dir, 'skill.md'), 'Method.');
+    const capped = run(['--tasks', join(dir, 'tasks.jsonl'), '--arm', `self-review:${join(dir, 'skill.md')}`, '--out', join(dir, 'o.jsonl'), '--preflight', '--cap', '0.3']);
+    expect(capped.status).toBe(2);
+    expect(capped.stderr).toMatch(/would pass the --cap of \$0\.3\. Nothing was spent/);
+    const ok = run(['--tasks', join(dir, 'tasks.jsonl'), '--arm', `self-review:${join(dir, 'skill.md')}`, '--out', join(dir, 'o.jsonl'), '--preflight']);
+    expect(ok.status, ok.stdout + ok.stderr).toBe(0);
+    expect(ok.stdout).toMatch(/in its longest call; \$\d+\.\d+ for the call \(2 calls\)/);
+  });
+});

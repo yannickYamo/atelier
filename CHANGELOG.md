@@ -62,7 +62,8 @@ only partly observed, or the owner's word was moved by a measurement.
   examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now
   worked out in one place (`machineTellRule`) and both paths carry it, required. From a handful of examples a move any
   example makes is the author's, and the examples must meet the rule they gave, or it is not offered (one of three
-  example tweets was itself a run of short sentences). The em dash fix that needs no model was also being thrown
+  example tweets was itself a run of short sentences), and the owner's method note counts as their own writing: a note
+  that writes em dashes, or asks for them, is not overruled by examples that hold none). The em dash fix that needs no model was also being thrown
   away when the claim reader, read again, listed one more sentence: a change that adds no word cannot add an invented
   specific, so that reading no longer counts against it. On eight one-to-two-page teardowns: em dashes 9 to 17 a
   document → 0 in all eight, none blocked, all inside the length, $0.16 an output. The standing comparison
@@ -77,14 +78,16 @@ only partly observed, or the owner's word was moved by a measurement.
   "each section under 200 words", "80 words per slide") or a topic ("why we cap PR descriptions at 300 words",
   "Hemingway's six-word story"). It now reads a count bound to a part, or to what the piece is about, as no length of
   the whole, and reads "no longer than", "must not exceed", "cap it at" and "fit in" as ceilings, not targets.
-  21 requests moved to agree, none moved away; one false hold and 50 misses remain, most of them counts of
+  A part named on its own is usually the piece asked for ("a paragraph of 100 words", "an introduction in 400 words"):
+  it is a part only where it is said as one ("with a headline", "the How it works section"). 32 requests moved to
+  agree, none moved away, and the gate now also refuses a miss turned into a wrong length; one false hold and 50 misses remain, most of them counts of
   paragraphs and sentences, which are told to the writer and not held. The 160 blind-labelled method steps gate the
   method reader the same way (`tests/atelier-step-corpus.test.ts`): no check called fully read where it is not.
 - **A run is never refused for material it was not given.** A REQUIRED rule that needs material the person did not
   bind stopped the run before any draft. The run now goes on: the rule is not attempted (asked for evidence it does
   not have, a model invents it), the message names the `--with` that lets it fire, and the evaluation shows the rule
   as not checked, so the work needs review and is not delivered under strict delivery. It is never set aside as if it
-  did not apply.
+  did not apply. A rule that applies only under a condition, or is not required, is set aside as it always was.
 - **The writer aims inside the length, and a cut is the last resort.** Told "about 500 to 1,000 words", writers
   aimed at the top and ran past it, and every draft was cut. A held length is now told with an aim inside it (three
   fifths of the way up a range, about 85% of a ceiling, a target as said); on eight such requests seven drafts came

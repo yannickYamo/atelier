@@ -46,6 +46,8 @@ export interface RecordFacts {
 const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: null };
 /** Why a rule was held back because the material it needs was not given: the one reason a REQUIRED rule is held back and still counted. */
 export const MATERIAL_NOT_BOUND = 'the material it needs is not bound';
+/** Why a rule that applies only under a condition, or is not required, was held back for want of material: set aside, as before. */
+export const CONDITIONAL_NOT_BOUND = 'the material it needs is not bound, and it applies only under a condition or is not required';
 
 /** One rule of the standard as it fared: what it is and whether its check may block come from the plan, never from here. */
 function standardEntry(p: PlannedRule, f: RecordFacts): Entry {

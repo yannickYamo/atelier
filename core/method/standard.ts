@@ -422,12 +422,14 @@ export function sectionLengthsFromExamples(cases: readonly (Pick<GoldenCase, 're
  * (../observers/contrast.ts, `machineTellRule`), worked out from the examples, and required: the moves the author never
  * makes are banned, an em dash only where no example holds one, and one they do write is held to their own rate.
  */
-export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
+export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], note = ''): MethodProposal[] {
   const pieces = cases.map((c) => c.reference).filter((t) => t.trim());
+  // The method note is the owner's own writing too: a move it makes, or asks for ("use em dashes for asides"), is theirs.
+  const asked = /\b(?:use|keep|allow|write)\b[^.\n]{0,40}\bem[- ]?dash/i.test(note) ? ' — ' : '';
   if (!pieces.length) return [];
   // A move any example makes is the author's (a handful of examples cannot show "most of their pieces"); and the
   // examples must meet the rule they gave (decision 0015), or it is not offered.
-  const t = machineTellRule(pieces, { anyUse: true });
+  const t = machineTellRule(note.trim() ? [...pieces, `${note}${asked}`] : pieces, { anyUse: true });
   const held = (m: Measurement): boolean => pieces.every((p) => measure(p, m).verdict !== 'VIOLATED');
   const of = (m: Measurement): string => `${pieces.filter((p) => measure(p, m).verdict !== 'VIOLATED').length} of ${pieces.length} example(s) hold it`;
   const tell: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: t.cap, never: t.never, role: ['machine-tell'] } };
