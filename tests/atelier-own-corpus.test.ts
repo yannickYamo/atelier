@@ -126,3 +126,23 @@ describe('the fewest rules to move, as the screen and the build both ask it', ()
   });
 });
 
+
+describe('what a small corpus may be allowed, and what a fitted limit says of its evidence', () => {
+  it('under five pieces no piece may break a suggested rule: one of three is a third of the author\'s work', () => {
+    expect([1, 2, 3, 4, 5, 6].map((n) => allowed(n, CORPUS_RULE_SHARE))).toEqual([0, 0, 0, 0, 1, 1]);
+    expect([3, 4, 5].map((n) => allowed(n, CORPUS_SET_SHARE))).toEqual([0, 0, 1]);
+  });
+  it('a fitted limit never reports its held-out count as a check of the moved limit', () => {
+    const p = aRequirement({ requirementId: 'f1', statement: 'Sentences under 20 words.', measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 20, p90Max: 30 } } });
+    const fitted: ProposalEvidence = { framings: [], heldOut: null, needs: null, inSample: { applicable: 4, present: 4, independent: true, fitted: true }, corpus: { pieces: 24, breaking: [] } };
+    const plain: ProposalEvidence = { ...fitted, inSample: { applicable: 4, present: 4, independent: true } };
+    // a fitted limit the author's pieces meet is held to the corpus count, never to the held-out count
+    expect(suggest(p, fitted, 'GENERATE').why).toMatch(/^set where 24 of your 24 pieces meet it/);
+    expect(suggest(p, fitted, 'GENERATE').why).not.toMatch(/held-out/);
+    // a fitted limit too many of the author's pieces break falls back to the held-out count, and says what that count is
+    const broken: ProposalEvidence = { ...fitted, corpus: { pieces: 24, breaking: [0, 1, 2, 3, 4, 5] } };
+    expect(suggest(p, broken, 'GENERATE').why).toMatch(/held-out pieces, against the limit before it was moved/);
+    expect(suggest(p, plain, 'GENERATE').why).not.toMatch(/before it was moved/);
+    expect(suggest(p, plain, 'GENERATE').why).toMatch(/held-out pieces/);
+  });
+});

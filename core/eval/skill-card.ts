@@ -10,6 +10,7 @@
 // writing prompt is a target to write toward, and a measure written toward stops measuring.
 
 import { describeParts, describeSize, type SkillSize } from './size.js';
+import { falseFlagPct } from './false-flags.js';
 
 export interface SkillCard {
   readonly schema: 1;
@@ -66,7 +67,7 @@ export function renderSkillCard(c: SkillCard, width = 110, opts: { next?: boolea
   const r = c.rules;
   out.push(`    ${pad('your rules', 18)}${r.total} approved by you: ${r.required} required · ${r.counted} counted on every output · ${r.read} read by the taste reader${r.conditional ? ` · ${r.conditional} apply only under a condition` : ''}${r.needsMaterial ? ` · ${r.needsMaterial} wait for your material` : ''}`);
   const m = c.claims.measured;
-  out.push(`    ${pad('invented claims', 18)}${c.claims.instrument}${c.claims.unmeasured ? `: ${c.claims.unmeasured}; what it finds is listed, never cut` : m ? `: caught ${m.caught}/${m.planted} planted, left ${m.leftAlone}/${m.clean} clean alone, on ${m.on}` : c.claims.qualified ? '' : ': not qualified, so the pattern check decides what is cut'}${c.claims.answers ? ' · answers: work and results by pattern, other specifics listed' : ''}`);
+  out.push(`    ${pad('invented claims', 18)}${c.claims.instrument}${c.claims.unmeasured ? `: ${c.claims.unmeasured}; what it finds is listed, never cut` : m ? `: caught ${m.caught}/${m.planted} planted, left ${m.leftAlone}/${m.clean} clean alone (false flags at most ${falseFlagPct(m)} in 100), on ${m.on}` : c.claims.qualified ? '' : ': not qualified, so the pattern check decides what is cut'}${c.claims.answers ? ' · answers: work and results by pattern, other specifics listed' : ''}`);
   if (c.copying) out.push(`    ${pad('copying', 18)}a run of 12 or more words shared with your pieces fails`);
   if (c.fidelity) {
     const f = c.fidelity;
