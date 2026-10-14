@@ -16,8 +16,9 @@
 //   p = (1 + #{ i : d_i ≥ d(x) }) / (n + 1)
 //
 // "As typical as p of your own pieces." It needs no assumption about the shape of the distribution and is
-// valid for the n pieces it was calibrated on. It describes; it never steers or gates
-// (docs/decisions/0010-closeness-is-a-two-sample-test.md).
+// valid for the n pieces it was calibrated on. It describes; it never steers a rewrite or gates an output
+// (docs/decisions/0010-closeness-is-a-two-sample-test.md). One use reads it: `--until-typical <p>` asks for one more
+// draft while the output's p is under the threshold (cli/commands/invoke.ts), a stop rule for drafting, not a repair.
 
 import { createHash } from 'node:crypto';
 import { colMeans, invert, mahalanobis, shrunkCovariance } from '../stats/multivariate.js';
