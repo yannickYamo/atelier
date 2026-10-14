@@ -51,6 +51,12 @@ only partly observed, or the owner's word was moved by a measurement.
   what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
   request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
   words, and a draft of four tables ran 1,135 for 1,006 written.
+- **The comparison runner has a self-review arm and a preflight.** `bench/compare/run.mjs --arm self-review:<skill>`
+  writes with the skill as a prompt, then makes one call that checks the draft against the method and the material
+  and writes it again: the strongest baseline a pilot met, now on the transport and the cap every arm shares, with
+  both calls as its cost and the check kept in the row. `--preflight` makes one call on the first task and says what
+  it cost and how much of the token limit the answer used, before a paid run: a study once lost a third of its cells
+  to answers cut off at the limit, found afterwards. Nothing is recorded.
 - **No added machine tells on a skill built from a method.** Discovery from a folder held the owner's rule (a tell the
   author never writes never appears; one they write is held to their rate); a skill built from a method and its
   examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now
