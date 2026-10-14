@@ -66,6 +66,18 @@ export function accountRefusal(status: number | undefined, body: string, request
 const noForcedChoice = new Set<string>();
 /** Models that rejected a `temperature` setting: asked once, then called without one. */
 const noTemperature = new Set<string>();
+/**
+ * Endpoints that rejected `thinking: disabled`: asked once, then called without it. Every call forces a tool call,
+ * which extended thinking does not take; a gateway that turns thinking on unless told otherwise answered with
+ * empty or refused calls, so arms meant to be the same writer were not. Disabled is sent, and learned off on a 400.
+ */
+const noThinkingField = new Set<string>();
+
+/** Whether an error is the API refusing the `thinking` setting (a 400 that names it). */
+export const refusesThinking = (e: unknown): boolean => {
+  const f = statusAndBody(e);
+  return f?.status === 400 && /thinking/i.test(f.body);
+};
 
 /** Whether an error is the API refusing a temperature setting for this model (a 400 that names it). */
 export const refusesTemperature = (e: unknown): boolean => {
@@ -130,12 +142,17 @@ export class AnthropicInferenceClient implements InferenceClient {
     // and a reader was reported as "could not run" on a model that only takes no temperature.
     const withTemperature = !noTemperature.has(this.modelId) && (req.temperature ?? this.defaultTemperature) !== undefined;
     const forced = !noForcedChoice.has(this.modelId);
+    const withThinking = !noThinkingField.has(this.modelId);
     try {
       res = await this.create(req, forced);
     } catch (e) {
       // A model that takes no temperature: remembered, and the same call sent again without one.
       if (refusesTemperature(e) && withTemperature) {
         noTemperature.add(this.modelId);
+        return this.complete(req);
+      }
+      if (refusesThinking(e) && withThinking) {
+        noThinkingField.add(this.modelId);
         return this.complete(req);
       }
       // Once only: a call already sent without forced choice that is still refused for it is an error, not a loop of paid calls.
@@ -155,6 +172,7 @@ export class AnthropicInferenceClient implements InferenceClient {
       model: this.modelId,
       max_tokens: req.maxTokens,
       ...(temperature === undefined ? {} : { temperature }),
+      ...(noThinkingField.has(this.modelId) ? {} : { thinking: { type: 'disabled' as const } }),
       // STABLE first and cached; VARIABLE second and not. Reversing these still works and costs ~9x.
       //
       // AN EMPTY STABLE BLOCK IS OMITTED, NOT SENT EMPTY. The API rejects `cache_control` on an empty
@@ -214,6 +232,7 @@ export class AnthropicInferenceClient implements InferenceClient {
     // per-token logprobs, so an instrument that reads a distribution cannot run on this adapter. It
     // must say which backend it needs instead of quietly producing a weaker reading here.
     const temperatureSent = noTemperature.has(this.modelId) ? null : req.temperature ?? this.defaultTemperature ?? null;
-    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination, temperatureSent };
+    return { json: block.input, modelId: res.model, ...usage, cost, costUsd: budgetUsd(cost), logprobs: null, termination, temperatureSent,
+      thinkingSent: noThinkingField.has(this.modelId) ? null : 'disabled' };
   }
 }

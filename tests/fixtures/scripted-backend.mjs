@@ -59,6 +59,9 @@ const server = createServer((req, res) => {
     }
     { const tool = JSON.parse(body || '{}')?.tools?.[0]?.function?.name; if (tool && emptyNext[tool] > 0) { emptyNext[tool] -= 1; answer = {}; } }
     const hit = when.find((w) => (w.contains === undefined || body.includes(w.contains)) && (w.containsAll ?? []).every((x) => body.includes(x)));
+    // `{ contains, finish: 'content_filter' }` in `when`: that call ends with this finish_reason and no answer, as a
+    // provider's filter does.
+    if (hit && hit.finish) { res.end(JSON.stringify({ choices: [{ finish_reason: hit.finish, message: {} }], usage: { prompt_tokens: 10, completion_tokens: 0 } })); return; }
     if (hit) answer = hit.answer;
     // A STRUCTURE READING (core/structure/moves.ts) must label every numbered paragraph once: `{ labelAll: [moves] }`
     // answers with one label per "[n]" the request carries, cycling through the moves given.

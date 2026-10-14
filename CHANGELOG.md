@@ -7,6 +7,23 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: a comparison run records what each arm delivered, and survives a filtered call
+
+- **Calls go out with thinking disabled.** Every call forces one tool call, which extended thinking does not take;
+  an endpoint that turns thinking on unless told otherwise returned empty or refused calls, so arms meant to be the
+  same writer were not. The Anthropic provider sends `thinking: disabled`, learns it off on a 400 that names it (as
+  it does for temperature), and records `thinkingSent` on each result; model-arm rows carry it as `thinking`.
+- **A runtime row is the review as delivered.** `bench/compare/run.mjs` recorded `answer`, which ends with a footer of
+  specifics not found in the material ("check before you use this"). Only Atelier writes it, so a judge could tell
+  the arm, and no one posts a review that ends that way. The row's response is now `output`; the footer's sentences
+  are kept as `to_check`, beside `unverified` (with its reasons), `failed` and `claims_instrument`, so a study can ask
+  whether anything Atelier listed predicts a judge's "would not use".
+- **A filtered or declined call is a row, not the end of the run.** A provider's content filter or a model's refusal
+  was retried three times, paid for each time, and then stopped the whole arm with no row written. It is now written
+  once as `filtered` (`CONTENT_FILTER` or `REFUSAL`, and on the self-review arm which call), charged as an estimate
+  (`cost_estimated`), and the arm goes on; a run inside `atelier invoke` that was filtered is read from its message.
+  A transport failure still retries and stops after three.
+
 ### Changed, for 2.0: one evaluation record, and a mark never says more than was observed
 
 A tick beside "Open with a Parties section that names both parties exactly as the term sheet does" said the whole
