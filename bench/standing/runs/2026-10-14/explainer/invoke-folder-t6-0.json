@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t6",
+ "run": 0,
+ "seconds": 13.179,
+ "output": "Most records you rely on sit with one trusted keeper. Your bank holds the ledger of your account, and you trust it to be honest. A blockchain asks a different question. What if nobody owned the ledger, and everybody held a copy?\n\nThat is roughly what it is. A blockchain is a list of transactions, copied across thousands of computers at once. New transactions are bundled into a block, and each block is added to the end of the chain.\n\nThe clever part is how the past gets locked in. Every block carries a mathematical fingerprint of the block before it. Change an old entry and that fingerprint breaks, and so does every fingerprint after it. The tampering becomes obvious to everyone holding a copy.\n\nThink of a shared notebook in a room full of people, where each new line references the last. One person scribbling over an old line fools nobody, because everyone else can see the original.\n\nAdding a block takes real effort or a real stake, so dishonesty costs money. That is why no central authority is needed.\n\nIt is slow and expensive compared with a bank. It is also very hard to quietly rewrite.\n\nIn short, a blockchain is a shared record that everyone can check and nobody can secretly edit.",
+ "costUsd": 0.043,
+ "cut": []
+}

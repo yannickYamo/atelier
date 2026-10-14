@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t5",
+ "run": 0,
+ "seconds": 13.094,
+ "output": "A heat pump does not burn anything. It collects warmth that already exists outside and carries it indoors. That sounds odd on a cold morning, but even chilly air holds plenty of heat.\n\nInside the unit runs a sealed loop of fluid that boils at a startlingly low temperature. Outdoors, air blows across a coil and the fluid soaks up warmth, turning into gas. A compressor then squeezes that gas, which makes it much hotter. The hot gas passes through a second coil indoors and releases its heat into your radiators or into the air. Cooled back into liquid, it heads outside to collect more.\n\nThink of squeezing a wet sponge over a bucket. The water was spread thin and unnoticed across the sponge; the squeeze gathers it somewhere useful. A heat pump does that with warmth rather than water.\n\nThis is why the efficiency figures look strange. For every unit of electricity you pay for, you may get three or four units of heat indoors. You are not creating that heat. You are moving it, and moving costs less than making.\n\nPerformance drops in very cold weather, because there is less warmth to gather. It still works, just harder.\n\nIn short, a heat pump pumps heat inward rather than burning fuel to make it.",
+ "costUsd": 0.0455,
+ "cut": []
+}

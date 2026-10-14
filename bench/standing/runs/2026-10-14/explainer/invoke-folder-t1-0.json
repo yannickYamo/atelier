@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 0,
+ "seconds": 13.919,
+ "output": "The news says the market rose today. But there are thousands of companies trading, and they did not all rise. So what exactly went up?\n\nA stock index answers that question. It picks a group of companies and tracks their share prices together as one number. The FTSE 100 follows the hundred largest firms listed in London. The S&P 500 follows five hundred big American ones.\n\nThink of a school reporting an average exam mark. No single pupil scored exactly that, yet the figure still tells you how the year group did. An index works the same way for shares.\n\nMost indexes weight their members by size. A giant company moves the number far more than a small one does. That is why a bad day for a few huge firms can drag the whole index down.\n\nThe level itself barely matters. What matters is the change: up two percent, down half a percent. Those shifts tell you how investors feel about an economy or an industry.\n\nYou can also buy an index, in effect. Tracker funds hold the same companies in the same proportions, so your money follows the average rather than betting on one firm.\n\nIn short, a stock index is one number summarising how a chosen group of companies is doing.",
+ "costUsd": 0.1277,
+ "cut": []
+}

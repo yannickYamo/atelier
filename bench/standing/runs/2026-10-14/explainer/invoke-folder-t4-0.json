@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 0,
+ "seconds": 18.489,
+ "output": "You feel rotten, so you want something that fights the thing making you ill. Antibiotics feel like the obvious answer. They are not, and the reason comes down to what is actually inside you.\n\nColds are caused by viruses. Antibiotics only kill bacteria. Those are two very different kinds of invader.\n\nA bacterium is a tiny living cell. It feeds, it builds a protective outer wall, and it copies itself. Antibiotics attack those exact features, puncturing the wall or jamming the machinery inside. A virus has none of that. It is barely more than a scrap of genetic instructions in a protein shell. It hijacks your own cells and makes them produce copies for it.\n\nThink of a key cut for a particular lock. Present it to a door with no lock at all, and nothing happens. The key is not weak; it simply has nothing to turn.\n\nTaking antibiotics anyway is not harmless either. They kill useful bacteria in your gut, and they give surviving bacteria practice at resisting treatment. That resistance builds up across whole populations over years.\n\nYour own immune system clears a cold in a week or so. Rest, fluids and patience are what actually help.\n\nIn short, antibiotics miss a cold because a virus offers them nothing to attack.",
+ "costUsd": 0.0494,
+ "cut": []
+}

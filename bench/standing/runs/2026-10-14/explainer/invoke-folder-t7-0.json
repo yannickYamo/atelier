@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t7",
+ "run": 0,
+ "seconds": 20.974,
+ "output": "Your phone does not send anything to space. It only listens. High above you, a fleet of satellites circles the Earth. Each one broadcasts the same simple thing: a signal saying who it is and the exact moment it left.\n\nThose signals travel at the speed of light, which is fast but not instant. By comparing the time stamped on a signal with the time it arrives, your phone works out how long the journey took. Multiply that by the speed of light and you have a distance. You are somewhere on a huge sphere around that satellite.\n\nOne sphere is useless on its own. Two narrow you down, three pin you to a point, and a fourth corrects your phone's slightly imperfect clock.\n\nThink of hearing thunder after lightning. The gap tells you how far away the storm is, though not which direction it sits in. Hear the same storm from three known places, and you could mark it on a map.\n\nThis is why GPS struggles indoors or between tall buildings. The signals are faint, and walls block them. Reflections off glass can also add fake delay, which nudges your dot off the pavement.\n\nIn short, GPS measures travel time from several satellites and works backwards to where you must be.",
+ "costUsd": 0.0672,
+ "cut": []
+}

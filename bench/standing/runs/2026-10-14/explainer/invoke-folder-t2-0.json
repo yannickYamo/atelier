@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 0,
+ "seconds": 11.809,
+ "output": "Sound is nothing more than air being squeezed and stretched. Those ripples reach your ear and you hear them as the rumble of an engine or the hum of a plane. Noise-cancelling headphones work by fighting those ripples with ripples of their own.\n\nA tiny microphone on the outside of each earcup listens to the noise around you. A small processor measures the shape of that wave in a fraction of a millisecond. It then builds the exact opposite wave and plays it through your speaker. Where the original pushes the air, the new one pulls.\n\nThink of two people pushing a swing from opposite sides with equal force. The swing barely moves, because each push cancels the other. The sound waves meet in the same way, and much of the noise simply disappears before you hear it.\n\nThis trick works best on steady, low rumbles like engines, traffic or air conditioning. Sudden, high sounds change too quickly for the processor to keep up. That is why voices and clattering cutlery still reach you.\n\nThe earcups themselves also help by physically blocking higher frequencies. The electronics handle what the padding cannot.\n\nIn short, your headphones listen to the noise and produce its mirror image, so the two largely cancel out.",
+ "costUsd": 0.128,
+ "cut": []
+}
