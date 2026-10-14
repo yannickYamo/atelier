@@ -34,6 +34,8 @@ describe('atelier method <note> --golden <folder>', () => {
     expect(r.out).toContain('starting with one of "Approve", "Request changes", "Comment" on a line of its own; your example: held in all 4 of your examples');
     expect(r.out).toMatch(/Your skill "review" is ready\./);
     expect(r.out).toMatch(/Voice: \d whole piece\(s\) of the author's own served with the skill/);
+    // a method build keeps the whole serving: the compact default is for a skill that writes from pieces a model read
+    expect(r.out).not.toMatch(/pieces served compact|within 3000 words/);
     expect(r.out).toContain('Your own pieces: 4 of 4 meet every required rule that is counted.');
     const voice = JSON.parse(readFileSync(join(data, 'skills', 'review', 'voice.json'), 'utf8')) as { lengthSpan?: [number, number] };
     expect(voice.lengthSpan?.[0]).toBeLessThan(voice.lengthSpan?.[1] ?? 0);

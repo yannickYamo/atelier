@@ -250,22 +250,29 @@ SIZE  stored 13,400 words in 31 files · exported 13,173 words (79,300 bytes)
                 how I sound 471 · moves 396 · reference index 282 · framing 187
 ```
 
-Most of a skill built from writing is your own pieces, served whole so the model hears you. How much of them is
-served is yours to set, and neither option changes a rule:
+Most of a skill built from writing is your own pieces, served so the model hears you. A skill that writes serves
+passages from them by default, within 3,000 words: on the one newsletter skill measured, that export ran 7,121 words
+against 12,555 for whole pieces, each run cost 34% less, and no loss of quality was measured on five titles. How much
+of them is served is yours to set, and neither option changes a rule:
 
 ```bash
 atelier build --name posts --piece-budget 3000                    # choose the pieces again, within 3,000 words
 atelier build --name posts --piece-budget 3000 --pieces excerpts  # an opening and a middle passage of each, from more pieces
 atelier build --name posts --piece-budget 0                       # none of your pieces; the persona and your usual length stay
-atelier build --name posts --piece-budget default --pieces whole  # back to the default choice
+atelier build --name posts --piece-budget default --pieces whole  # whole pieces within 9,000 words: how every skill was served before
 atelier export --skill posts --out skill.md --no-index            # leave out the list naming files the export has inlined
 ```
 
 - **A budget you set is a ceiling** on what the export counts for your pieces: each piece with the line that opens
   its file, in any script, code and tables included. One piece may use the whole budget. A budget smaller than your
   shortest piece serves none, and says so.
-- **The default is not a ceiling of that kind.** With no budget set, a build chooses as it always has: whole pieces
-  within 9,000 words of English prose, none longer than half of that.
+- **The compact default is stored on the skill.** A skill that writes, built for the first time with neither option,
+  takes `--piece-budget 3000 --pieces excerpts` and stores them as if you had given them; the build says
+  `pieces served compact by default`, and a rebuild reads the skill, not the default. A skill that already holds a
+  voice keeps what it holds, so nothing built before changes. A skill that answers, and one built from a method
+  (`atelier method`, or `atelier new` with no model), are served whole.
+- **The whole serving is not a ceiling of that kind.** `--pieces whole --piece-budget default` chooses as every skill
+  was built before: whole pieces within 9,000 words of English prose, none longer than half of that.
 - **An excerpt is your text, exactly.** Each passage is one unbroken stretch of the piece, about 250 words, with
   `[…]` where text is left out. A paragraph longer than a passage is taken apart at its line breaks, then at its
   sentence ends; a fenced block of code is never cut. A piece too short to cut is served whole and its file says so.
