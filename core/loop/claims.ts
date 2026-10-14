@@ -26,6 +26,7 @@
 import { sentencesOf, wordsOf, type Sentence } from '../observers/text.js';
 import type { Span } from '../observers/registry.js';
 import { visible } from '../observers/visible.js';
+import { numbersIn, spelledCounts } from './numbers.js';
 
 /**
  * WHAT THE CLAIM CHECK READS: every sentence of prose, AND every heading and table row. `sentencesOf`
@@ -129,7 +130,6 @@ const STOP = new Set(['the', 'and', 'that', 'with', 'this', 'from', 'were', 'was
 export interface Claim extends Span { readonly kind: 'EXPERIENCE' | 'FIGURE' | 'SOURCE' }
 
 const contentWords = (s: string): string[] => wordsOf(s).map((w) => w.toLowerCase()).filter((w) => w.length >= 4 && !STOP.has(w));
-const numbersIn = (s: string): string[] => (s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, ''));
 
 /** What the person is told about each kind of claim: it is cut (the default), or a slot is left. */
 const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot: string }>> = {
@@ -147,7 +147,7 @@ const WHY: Readonly<Record<Claim['kind'], { readonly cut: string; readonly slot:
  */
 export function unsourcedClaims(text: string, material: string, placeholders = false): Claim[] {
   const why = (k: Claim['kind']): string => (placeholders ? WHY[k].slot : WHY[k].cut);
-  // Whole numbers only: "40" is not supported by "400", nor "4%" by "2024".
+  // Whole numbers only, as their value: "40" is not supported by "400", nor "4%" by "2024"; "three" is by "3" (./numbers.ts).
   const matNumbers = new Set(numbersIn(material));
   // A story is supported by ONE passage that tells it, not by topic words scattered across the notes.
   const passages = material.split(/\n\s*\n|(?<=[.!?])\s+/).map((p) => new Set(contentWords(p))).filter((p) => p.size);
@@ -180,7 +180,14 @@ export function unsourcedClaims(text: string, material: string, placeholders = f
       const numbers = numbersIn(s.text).filter((n) => !/^(?:19|20)\d\d$/.test(n));
       if (numbers.length && !numbers.every((n) => matNumbers.has(n))) {
         out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
+        continue;
       }
+    }
+    // A count written in words ("three of your prospects", "twelve-plus optimizers") is a figure whether or not
+    // it is presented as a finding, and is supported by the same value in the material, in words or in digits.
+    const counts = spelledCounts(s.text);
+    if (counts.length && !linkedByPerson && !counts.every((n) => matNumbers.has(n))) {
+      out.push({ ...s, kind: 'FIGURE', why: why('FIGURE') });
     }
   }
   return out;
