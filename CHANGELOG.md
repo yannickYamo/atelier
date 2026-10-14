@@ -219,6 +219,19 @@ now also reports what a passing output costs.
   `--no-redraft` turns that off.
 - A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
 
+### Studies: putting right the sentences the claim check lists (negative, not shipped)
+
+Every teardown a strict reviewer rejected carried confident specifics the material does not hold, and the claim check
+only listed them. A step was built that gave each listed sentence back to the writer for a replacement (said from the
+material, or marked as inferred), applied by code under guards (no new number, most of the sentence kept), and kept
+only where fewer sentences were listed after. Eight one-to-two-page teardowns, two samples each with the step against
+one sample without, read blind by one reviewer with the material: problems of evidence per document 3.81 with the
+step against 3.88 without; inferred weaknesses kept out of fact in 4 of 16 against 0 of 8; four of the sixteen carried
+fragments where a replacement had matched only part of a sentence; cost an output $0.28 against $0.16. Not shipped.
+What it shows: most of what the reviewer rejected is not a specific the claim check can see (an invented motive, a
+duration, "copyable in a sprint", an absence on a page read as a fact); it is a judgement about inference, and a
+listing of figures and names cannot put it right.
+
 ### Studies: a draft cut by the sentences its writer names, on the standing comparison (development evidence)
 
 The `invoke` arm of `bench/standing`, run again after the cut step changed, against the recorded run of 2026-10-13,
