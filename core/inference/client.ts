@@ -196,6 +196,8 @@ export interface InferenceResult {
    * provider did not receive. Absent from a provider that does not say.
    */
   readonly temperatureSent?: number | null;
+  /** the thinking setting this call was sent with: 'disabled', or null when the endpoint refused the field */
+  readonly thinkingSent?: 'disabled' | null;
   /**
    * The model the PROVIDER says answered, not the one we asked for. An alias resolves server-side,
    * and a binding that recorded the request would be recording our intent rather than what ran.
