@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 0,
+ "seconds": 19.9,
+ "output": "You buy insurance so someone else pays when things go wrong. But the insurer rarely pays from the first penny. You cover an agreed amount yourself first. That amount is the deductible, sometimes called the excess.\n\nSay your car policy carries a £500 deductible. A repair bill of £3,000 arrives. You hand over £500, and the insurer covers the remaining £2,500. If the damage only costs £400, you pay all of it and claim nothing.\n\nThink of a ticket that gets you into a concert, where the first few songs still cost extra. You pay to be there, and you pay a bit more before the benefit starts.\n\nWhy does this exist? It keeps small claims out of the system, which is expensive to process. It also gives you a reason to be careful, since every claim costs you something.\n\nThere is a trade-off you control. A higher deductible means cheaper monthly premiums, because the insurer expects to pay less. A lower deductible costs more each month but hurts less when you claim. Choose based on what you could comfortably find at short notice.\n\nIn short, a deductible is the slice of any loss you agree to swallow before your cover kicks in.",
+ "costUsd": 0.073,
+ "cut": []
+}

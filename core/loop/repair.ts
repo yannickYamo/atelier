@@ -17,7 +17,7 @@
 //      ratified measurement; the loop has no authority to relax a target to make a draft pass.
 
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
-import type { VerifyReport } from '../observers/verify.js';
+import { acts, type VerifyReport } from '../observers/verify.js';
 import { displacedFamilies } from '../observers/style.js';
 import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
 
@@ -85,15 +85,17 @@ export function planRepair(text: string, report: VerifyReport,
   const raw: { start: number; end: number; reason: string; rid: string; drop: string | null; swap: string | null; specifics: boolean; whole: boolean; claim: string | null; recase: boolean; cuttable: boolean }[] = [];
   for (const c of report.checked) {
     if (c.result.verdict !== 'VIOLATED') continue;
-    if (requiredOnly && c.materiality !== 'REQUIRED') continue;
+    if (requiredOnly && !acts(c)) continue;
     if (opts.phase && (c.phase ?? 'STYLE') !== opts.phase) continue;
     // WHAT A METHOD REQUIRES IS NEVER REPAIRED BY REWRITING A SENTENCE. A missing section or table is not a sentence
     // that went wrong: rewritten into the last paragraph it becomes prose that mentions the section, which reads as
     // done and is not. It is answered by writing the piece again with what is missing named (cli/commands/invoke.ts,
-    // `withMethod`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
+    // `withRedraft`). A figure the material does not hold is the other kind: the sentence is rewritten without it,
     // which takes the figure out and claims nothing in its place. Held to keep every figure, the rewrite that cut it
     // was refused and the figure delivered; so that figure, and only it, is what the rewrite may lose.
-    if (c.obligation === 'DELIVERABLE') continue;
+    // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
+    // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another.
+    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
       // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not
@@ -299,7 +301,7 @@ export function regressions(before: VerifyReport, after: VerifyReport): string[]
 export function acceptRepair(before: VerifyReport, after: VerifyReport): RegressionVerdict {
   const worse = regressions(before, after);
   if (worse.length) return { ok: false, why: `the rewrite made ${worse.join(', ')} worse` };
-  const broken = (r: VerifyReport) => r.checked.filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
+  const broken = (r: VerifyReport) => r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
   const req = (r: VerifyReport): number => broken(r).length;
   // Progress is fewer broken REQUIRED rules, or the same rules broken in fewer places: fixing one of two
   // invented figures is a step, and discarding it threw away a good placeholder and ended the loop.

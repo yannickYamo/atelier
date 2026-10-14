@@ -5,11 +5,16 @@
 // command file reads as one job rather than as a slice of everything.
 
 import type { StoredSignal } from '../../core/observers/selection.js';
-import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, isExcerpt, usualLength, lengthSpan, PIECE_BUDGET_WORDS, type PieceForm, type Voice } from '../../core/compiler/voice.js';
 import { derivePersona, reconcilePersona, standardForbids } from '../../core/compiler/persona.js';
 import type { Budget } from '../../core/inference/client.js';
 import { sessionCorpus, sessionPairs, unsplitPairs } from '../corpus.js';
-import { standardWordingOf } from '../../core/observers/overlap.js';
+import { standardWordingOf, sharedAmong } from '../../core/observers/overlap.js';
+import { targetOf } from '../../core/observers/obligations.js';
+
+/** Set by a command that builds from what the owner wrote and promised no model call (cli/commands/method.ts). */
+const NO_MODEL = (): boolean => process.env.ATELIER_BUILD_NO_MODEL === '1';
+const QUIET = 'no model was asked';
 import { deriveScope, groundScope, spreadByKind, type ScopeProfile } from '../../core/compiler/scope.js';
 
 /** The words of example answers a skill that answers shows by default: enough for one of each kind of request and a few more. */
@@ -184,13 +189,15 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
       const scopeBudget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.5), maxCalls: 1 };
       let scope: ScopeProfile;
       try {
+        // A build that promised to call no model (`atelier method`) states the counts alone, and says nothing.
+        if (NO_MODEL()) throw new Error(QUIET);
         scope = await onCorpusReader((c) => deriveScope(c, scopeBudget, pairs, proposerModel()));
         console.log(`Scope: what ${scope.examples} example(s) add beyond what was asked, ${scope.paired} of them read with the request they answer`
           + (scope.dropped ? ` (${scope.dropped} finding(s) dropped: not quoted from the answer)` : '')
           + `${scope.unread ? ` (${scope.unread} example(s) not read${scope.beyond.length ? '' : ': too many to state a habit from the rest'})` : ''}; $${scopeBudget.spentUsd.toFixed(3)}. No usual length is stated: the request sets it.`);
       } catch (e) {
         scope = groundScope(pairs, null, null);
-        console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
+        if ((e as Error).message !== QUIET) console.log(`(the examples could not be read for scope: ${(e as Error).message.split('\n')[0]}; the skill states that the request sets the length, and no habit.)`);
       }
       voice = { ...voice, scope };
       if (voiceFlag === undefined) voice = spreadExamples(voice, pairs);
@@ -214,8 +221,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
     // is taken to have had all of its moves read.
     const covered = new Set(voice.holdsBackOf ?? (voice.holdsBack ? moves.map((r) => r.requirementId) : []));
     const reuse = voice.holdsBack !== undefined && personaFlag !== 'auto' && moves.every((r) => covered.has(r.requirementId));
-    const read = reuse ? voice.holdsBack ?? [] : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
-    if (!reuse && read === null) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
+    const read = reuse ? voice.holdsBack ?? [] : NO_MODEL() ? null : await onCorpusReader((c) => readHoldsBack(c, moveBudget, moves.map((r) => ({ id: r.requirementId, statement: r.statement })))).catch(() => null);
+    if (!reuse && read === null && !NO_MODEL()) console.log('(which moves hold back what was asked could not be read by a model: the word pattern decided, and the next build will read again.)');
     const holdsBack = moves.filter((r) => (read ? read.includes(r.requirementId) : false) || (!reuse && HOLDS_BACK.test(r.statement))).map((r) => r.requirementId);
     // A reading that could not be made is not recorded as one: the pattern's answer is used for this build only.
     voice = { ...voice, ...(pieces ? { corpusPieces: pieces } : {}), holdsBack, holdsBackOf: reuse || read !== null ? moves.map((r) => r.requirementId) : [] };
@@ -396,7 +403,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
       }
       // The exemplar is what the model imitates, so it should meet the standard it illustrates.
       const report = verifyText(name, v, text);
-      const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED');
+      // (Less the rules read against its material, which is not part of the exemplar.)
+      const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED' && targetOf(c.observer ?? '') !== 'BOUND_MATERIAL');
       if (broken.length) {
         console.log(`Note: the exemplar breaks ${broken.map((c) => `${c.requirementId} (${c.result.detail})`).join(', ')}. `
           + 'The model will imitate it as it is.');
@@ -480,8 +488,14 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   // written into a package. Where the pieces cannot be read, what an earlier build found is kept.
   const everyPiece = sessionCorpus(null, { includeReserved: true });
   const standardWording = everyPiece.length ? standardWordingOf(everyPiece) : voice?.standardWording ?? [];
-  const { standardWording: _was, ...voiceWithout } = voice ?? {}; void _was;
-  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}) } : voice;
+  // And how long their pieces run, shortest to longest, over the same pieces: what an output is held to when the
+  // request names no length (core/intake/length.ts, `ownLengthBand`). Stored the same way.
+  const span = everyPiece.length ? lengthSpan(everyPiece) : voice?.lengthSpan ?? null;
+  const lengthPieces = everyPiece.length > 0 ? everyPiece.length : voice?.lengthPieces ?? 0;
+  // And how much those pieces share with one another: the most a new piece may share with one of them.
+  const among = everyPiece.length ? sharedAmong(everyPiece, standardWording) : voice?.sharedAmong ?? null;
+  const { standardWording: _was, lengthSpan: _span, lengthPieces: _n, sharedAmong: _among, ...voiceWithout } = voice ?? {}; void _was; void _span; void _n; void _among;
+  const storedVoice = voice ? { ...(voiceWithout as typeof voice), ...(standardWording.length ? { standardWording } : {}), ...(span ? { lengthSpan: span, lengthPieces } : {}), ...(among !== null ? { sharedAmong: among } : {}) } : voice;
   store.setExemplar(L, exemplar?.text ?? null); store.setVoice(L, storedVoice); store.setDocClass(L, docClass); store.setContrast(L, { off: contrastOff, pairs: chosenPairs });
   // The author's signals, read off their pieces against the model's drafts at discovery (never a rule).
   if (existsSync(runFile('signals.json'))) store.setSignals(L, readJson<StoredSignal[]>(runFile('signals.json'), { what: 'the discovered signals', kind: 'array' }));
@@ -530,7 +544,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
       console.log(`  atelier revert    puts every one of those files back exactly as it was\n`);
     }
 
-    saveSession({ ...s, skillName: name });
+    saveSession({ ...s, skillName: name, claim: undefined });
     console.log(`StandardVersion ${v.standardVersionHash} · architecture ${arch.architectureHash}`);
 
   // ── WHICH PARTS THIS SYSTEM CAN KEEP HONEST, AND WHICH STAY YOURS ────────────────────────
@@ -559,7 +573,8 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
   { const moved = describeBackup(inst); if (moved) console.log(moved); }
   if (!inst.ok) return void die(`install failed: ${inst.reason}`);
 
-  saveSession({ ...s, skillName: name });
+  // The build is finished: the name is this folder's outright, and no longer a claim made before it was (cli/commands/method.ts).
+  saveSession({ ...s, skillName: name, claim: undefined });
   reportInstalled(host, inst.installedAt, name, v, arch, pkg.packageHash);
   reportObservedBoundaries(arch, v, name);
   showSkillCard(L, skill.skillVersionHash, s.reservation?.reserved.length ?? 0, opts.closing !== false);
@@ -583,7 +598,9 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
  * the check it had. A rule that applies only under a condition is not counted: no piece is held to it without the condition.
  */
 function reportOwnPieces(v: StandardVersion, name: string, s: ReturnType<typeof loadSession>): void {
-  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && isGeneralScope(r.appliesWhen));
+  // A rule read against what a piece was made from (a figure given, a line cited) cannot be read on the piece alone:
+  // each piece's own material is not here, and without it every citation reads as invented.
+  const rules = v.requirements.filter((r) => r.measurement && r.materiality === 'REQUIRED' && r.authority !== 'EXPERT_REJECTED' && isGeneralScope(r.appliesWhen) && targetOf(r.measurement.observer) !== 'BOUND_MATERIAL');
   if (!rules.length) return;
   const recorded = rules.map((r) => s.proposalMeta?.[r.requirementId]?.corpus ?? null);
   let pieces: number; let breaking: { id: string; pieces: readonly number[] }[];

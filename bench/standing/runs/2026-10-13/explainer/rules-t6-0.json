@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t6",
+ "run": 0,
+ "seconds": 7.2,
+ "output": "Most records you rely on sit with one trusted organisation. Your bank keeps your balance. A government office keeps your property deed. If that single record is lost, altered or disputed, you have a problem.\n\nA blockchain takes a different approach. Instead of one master copy, thousands of computers each hold an identical copy of the same record. Every new transaction is broadcast to all of them. The computers check it against the rules and against the history they already hold. If enough agree, the transaction is accepted.\n\nAccepted transactions are bundled into a block. Each block carries a mathematical fingerprint of the block before it. That links them into a chain, which is where the name comes from.\n\nThis linking is what makes tampering obvious. Change an old entry and its fingerprint changes too. Every later block then stops matching, and the other copies immediately disagree with yours.\n\nThink of a shared notebook where everyone in a village writes in pen, and everyone owns a photocopy. You cannot quietly rewrite a page, because hundreds of other pages contradict you.\n\nBlockchains are slower and more expensive than ordinary databases. The trade-off buys you a record no single party controls.\n\nIn short, a blockchain is a shared, tamper-evident ledger kept by many people at once."
+}

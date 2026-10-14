@@ -22,10 +22,11 @@ const run = (...a: string[]): { code: number; out: string } => {
 const text = resolve('tests/fixtures/v1-store/texts/pass.md');
 
 describe('--with', () => {
-  it('a bare file path is refused, naming the form that binds it', () => {
-    const r = run('verify', '--skill', 'locked', '--claims', 'pattern', '--with', notes, text);
+  it('a file is bound by giving it, under its own name; a path that is not there is said', () => {
+    expect(run('verify', '--skill', 'locked', '--claims', 'pattern', '--with', notes, text).code).toBe(0);
+    const r = run('verify', '--skill', 'locked', '--claims', 'pattern', '--with', './no-such-notes.md', text);
     expect(r.code).toBe(1);
-    expect(r.out).toMatch(/a file is bound with a name, --with notes=/);
+    expect(r.out).toMatch(/--with \.\/no-such-notes\.md: there is no file at/);
   });
   it('name=<file> binds it, and a bare name still declares a resource', () => {
     expect(run('verify', '--skill', 'locked', '--claims', 'pattern', '--with', `notes=${notes}`, text).code).toBe(0);

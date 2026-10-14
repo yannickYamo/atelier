@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 1,
+ "seconds": 19.3,
+ "output": "The news says the market \"rose today\". But there are thousands of companies listed, and they never all move together. So someone has to decide what \"the market\" means. That decision produces a stock index.\n\nAn index is a single number tracking a chosen group of shares. The FTSE 100 follows the hundred largest companies on the London exchange. The S&P 500 follows five hundred big American firms. Each index has rules about which companies qualify and when the list changes.\n\nThe number itself is calculated from the share prices of those companies, blended together. Bigger companies usually count for more, since their size reflects their weight in the real economy.\n\nThink of a school reporting its average exam result. One pupil's bad morning barely shifts the figure, but a poor year for everybody shows up clearly. An index works the same way across companies.\n\nThis matters to you for two reasons. It gives a quick summary of how a whole market is doing. And you can buy funds that simply copy an index, spreading your money across every company in it at low cost.\n\nIn short, a stock index is an average score for a selected basket of companies.",
+ "costUsd": 0.068,
+ "cut": []
+}

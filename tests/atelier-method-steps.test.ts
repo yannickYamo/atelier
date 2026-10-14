@@ -20,7 +20,7 @@ function read(name: string): { steps: Record<string, string>; sections: string[]
   for (const p of methodProposals(readFileSync(`${DIR}${name}.method.md`, 'utf8'), { task: m[1], material, reference: m[2] })) {
     if (p.origin !== 'STATED') continue;
     const x = p.measurement;
-    steps[p.statement.split(/\s+/).slice(0, 5).join(' ')] = !x ? (p.demoted ? 'to settle' : 'judgement')
+    steps[p.statement.split(/\s+/).slice(0, 5).join(' ')] = p.conflict ? 'to settle' : !x ? 'judgement'
       : x.observer === 'PRESENCE' ? `section ${(x.params.sections as string[]).join('+').toLowerCase()}${x.params.opens ? ', opens' : ''}${x.params.closes ? ', closes' : ''}`
         : x.observer === 'TABLE' ? `table ${(x.params.columns as string[]).length}` : x.observer.toLowerCase();
   }
@@ -164,8 +164,9 @@ describe('what a review of the first version found', () => {
   it('a step that names two sections, one the example lacks, is not checked on the other alone', () => {
     for (const step of ['Open with a Glossary section and include a Summary section.', 'Include a Summary section, then end with a Sources section.']) {
       const p = methodProposals(`- ${step}\n`, example)[0];
-      expect(p.measurement, step).toBeNull();
-      expect(p.demoted, step).toMatch(/your example does not hold it/);
+      // the owner named both: both are checked, and the example that lacks one is said to
+      expect((p.measurement?.params.sections as string[]).length, step).toBe(2);
+      expect(p.conflict, step).toMatch(/your example does not do this/);
     }
   });
   it('a first line that is a rule or an instruction is a step, whatever its punctuation; a note called Inputs still has steps', () => {
@@ -202,7 +203,7 @@ describe('what a second review found', () => {
     expect(names('STATUS: amber.\n\nBLOCKERS: none.\n\nCONTACTS: Sam.\n\nAnna Lindqvist\n\nHead of Platform\n')).toEqual(['STATUS', 'BLOCKERS', 'CONTACTS']);
   });
   const example = { task: 'x', material: [], reference: '## Summary\nIt works.\n\n## Background\nWe met.\n\n## Risks\nFew.\n\n## Next steps\nShip.\n' };
-  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.measurement ? (p.measurement.params.sections as string[]).join('+') : p.demoted ? 'to settle' : null; };
+  const check = (step: string): string | null => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? (p.measurement.params.sections as string[]).join('+') : null; };
   it('"and" joins two sections of a list, not two clauses', () => {
     expect(check('Include a Summary section, then a Risks section.')).toBe('Summary+Risks');
     expect(check('Include a Summary section and a Risks section.')).toBe('Summary+Risks');
@@ -256,5 +257,341 @@ describe('on an output, the sections asked for are looked for by name', () => {
     const example = { task: 'x', material: [], reference: 'STATUS: amber, and why.\n\nOPEN ISSUES:\nThe lag.\n\nNEXT STEPS:\nWatch it.\n' };
     expect(methodProposals('- Report the state in a Status section.\n', example)[0]).toMatchObject({ byName: true });
     expect(methodProposals('- Include an Open issues section.\n', example)[0]).toMatchObject({ byName: true });
+  });
+});
+
+// A fourth round: the code-review method of the standing comparison had two of its six steps checked.
+describe('a step that gives its place in the order, a closed set, or the form of a citation', () => {
+  const example = { task: 'Review this change.', material: [{ name: 'diff', text: '--- a/src/a.js\n+++ b/src/a.js\n@@ -1,0 +1,2 @@\n+const a = 1;\n+run(a);\n' }],
+    reference: '## Summary\nIt adds a runner. It is small.\n\n## Must fix\n- src/a.js:2 runs before the check.\n\n## Suggestions\nNone.\n\n## Glossary\nRunner: the thing that runs.\n\n## Verdict\nRequest changes\n' };
+  const first = (step: string) => methodProposals(`- ${step}\n`, example)[0];
+  const sections = (step: string): string | null => { const m = first(step).measurement; return m?.observer === 'PRESENCE' ? (m.params.sections as string[]).join('+') : null; };
+  it('"Then a Must fix section: ..." asks for the section, and what follows the colon says what goes in it', () => {
+    expect(sections('Then a Must fix section: each item is a defect that blocks the merge, most serious first.')).toBe('Must fix');
+    expect(sections('Then a Suggestions section: improvements that do not block the merge. Write "None." when there are none.')).toBe('Suggestions');
+    expect(sections('Next, a Suggestions section.')).toBe('Suggestions');
+    expect(sections('Write a Summary section. Never more than three sentences.')).toBe('Summary');
+  });
+  it('a sentence that only begins like one asks for nothing', () => {
+    for (const step of ['Then a Summary section helps the reader.', 'Then a Summary section would be redundant.', 'First a Glossary section is tempting; resist it.',
+      'Last a Glossary section was the old way; we link inline now.', 'Second, a Glossary section slows readers down.']) expect(sections(step), step).toBeNull();
+  });
+  it('a condition in a later clause still makes the step a judgement about when', () => {
+    for (const step of ['Add a Glossary section. Only for billing changes.', 'Add a Glossary section. Billing changes only.', 'Include a Glossary section. Optional for small changes.',
+      'Include a Glossary section. For new readers only.', 'End with a Verdict section; omit when nothing was reviewed.', 'Then a Glossary section, unless the change is a doc fix.',
+      'Include a Glossary section if the reader is new: define each term.', 'Include a Glossary section. Skip it for internal notes.']) expect(sections(step), step).toBeNull();
+  });
+  it('"holds one of: A, B, C" is read in the clause that names the section, and nowhere else', () => {
+    const options = (step: string): unknown => first(step).measurement?.params.options ?? null;
+    expect(options('End with a Verdict section that holds one of: Approve, Request changes, Comment.')).toEqual(['Approve', 'Request changes', 'Comment']);
+    expect(options('End with a Verdict section that holds one of: **Approve**, Request changes, or Comment only.')).toEqual(['Approve', 'Request changes', 'Comment']);
+    expect(options('End with a Verdict section that is one of Approve, Request changes or Comment (with a reason).')).toEqual(['Approve', 'Request changes', 'Comment']);
+    expect(options('End with a Verdict section. In the Summary, name one of the authors, the reviewer or the owner.')).toBeNull();
+    expect(options('End with a Verdict section written by one of the leads or their deputy.')).toBeNull();
+    expect(first('End with a Verdict section that holds one of: Approve, Request changes, Comment.')).toMatchObject({ obligation: 'DELIVERABLE', conflict: null });
+  });
+  it('an example whose verdict is none of them: the rule stands as the owner wrote it, and the example is said to disagree', () => {
+    expect(first('End with a Verdict section that holds one of: Approve, Reject, Comment.')).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' }, conflict: expect.stringContaining('does not start with one of') as string });
+  });
+  it('"cite each item as path:line" is held by looking each citation up, and asks for none where there is none', () => {
+    expect(first('Cite each Must fix item as path:line, the line number in the new file, and cite only lines the diff adds.')).toMatchObject({ obligation: 'EXECUTION', measurement: { observer: 'LINES', params: { min: 0 } } });
+  });
+  it('a step that forbids the form, or asks for it only sometimes, is a judgement', () => {
+    for (const step of ['Do not cite as path:line; link to the file instead.', 'If a finding is about code, cite it as file:line.', 'Cite each item as path:line where there is one.'])
+      expect(first(step).measurement, step).toBeNull();
+  });
+});
+
+// One method, a folder of examples: a check read off the first is held against all of them.
+describe('a method held against every example', () => {
+  const piece = (verdict: string, extra = ''): string => `## Summary\nIt adds a runner. It is small.\n\n## Must fix\nNone.\n\n${extra}## Verdict\n${verdict}\n`;
+  const cases = (refs: readonly string[]) => refs.map((reference, i) => ({ id: `e${i + 1}.md`, task: 'Review this change.', material: [], reference }));
+  const NOTE = '- Open with a Summary section.\n- Then a Must fix section.\n- End with a Verdict section that holds one of: Approve, Request changes, Comment.\n';
+  it('a step every example holds keeps its check, and says how many it was held in', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const all = cases([piece('Approve'), piece('Request changes'), piece('Comment')]);
+    const ps = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1));
+    expect(ps.filter((p) => p.measurement).map((p) => p.onExample)).toEqual(['held in all 3 of your examples', 'held in all 3 of your examples', 'held in all 3 of your examples']);
+  });
+  it('a step one example breaks stays the owner\'s rule, checked, with the count and the piece named', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const all = cases([piece('Approve'), piece('Looks fine to me'), piece('Comment')]);
+    const verdict = acrossExamples(methodProposals(NOTE, all[0]), all.slice(1)).find((p) => p.statement.startsWith('End with'));
+    expect(verdict).toMatchObject({ obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' }, onExample: 'held in 2 of your 3 examples' });
+    expect(verdict?.conflict).toContain('1 of your examples does not do this: e2.md');
+  });
+  it('what only the first example shows is that piece\'s own, and is dropped', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const all = cases([piece('Approve', '## Risks\nNone seen.\n\n## Rollback\nRevert the commit.\n\n'), piece('Approve'), piece('Comment')]);
+    const lead = methodProposals(NOTE, all[0]);
+    expect(lead.some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(true);
+    expect(acrossExamples(lead, all.slice(1)).some((p) => p.origin === 'SHOWN_BY_EXAMPLE')).toBe(false);
+  });
+  it('with one example nothing changes', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const lead = methodProposals(NOTE, cases([piece('Approve')])[0]);
+    expect(acrossExamples(lead, [])).toEqual(lead);
+  });
+});
+
+describe('which example the checks are read from, and which examples a check can be read on', () => {
+  const piece = (sections: readonly string[]): string => sections.map((x) => `## ${x}\nSomething is said here about it.\n`).join('\n');
+  const NOTE = '- Open with a Summary section.\n- Then a Must fix section.\n- End with a Verdict section.\n';
+  it('the odd one out, first by name, is not what the checks are read from', async () => {
+    const { proposalsAcross } = await import('../core/method/standard.js');
+    const cases = [['Summary', 'Verdict'], ['Summary', 'Must fix', 'Verdict'], ['Summary', 'Must fix', 'Verdict'], ['Summary', 'Must fix', 'Verdict']]
+      .map((x, i) => ({ id: `e${i + 1}.md`, task: 'Review this.', material: [], reference: piece(x) }));
+    const { lead, proposals } = proposalsAcross(NOTE, cases);
+    expect(lead).toBe(1);
+    // the step is a check the first piece fails: it stays required, and the piece is named. Never a silent judgement
+    expect(proposals.find((p) => p.statement.startsWith('Then a Must fix'))).toMatchObject({ obligation: 'DELIVERABLE', conflict: expect.stringContaining('e1.md') as string });
+    expect(proposals.filter((p) => p.measurement).length).toBe(3);
+  });
+  it('a check against the material is read only on the examples that carry theirs', async () => {
+    const { acrossExamples } = await import('../core/method/standard.js');
+    const diff = '--- a/a.js\n+++ b/a.js\n@@ -1,0 +1,2 @@\n+const a = 1;\n+run(a);\n';
+    const review = '## Must fix\n- a.js:2 runs too early.\n';
+    const withIt = { id: 'e1.md', task: 'Review this.', material: [{ name: 'diff', text: diff }], reference: review };
+    const without = { id: 'e2.md', task: 'Review this.', material: [], reference: review };
+    const lines = acrossExamples(methodProposals('- Cite each item as path:line.\n', withIt), [without, { ...withIt, id: 'e3.md' }])[0];
+    expect(lines).toMatchObject({ obligation: 'EXECUTION', onExample: 'held in all 2 of your 3 examples it can be read on (those that carry their material)' });
+  });
+});
+
+// What the owner states as a count, or as exact words, is held as they said it.
+describe('a rule stated as a count or as quoted words', () => {
+  const sentence = 'You plug it in and the current pushes the charge across to the far side.';
+  const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
+  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
+  it('a length, in the unit it was stated in', () => {
+    expect(check('Between 100 and 230 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 230 }]);
+    expect(check('Keep it under 2,000 characters.')).toEqual(['LENGTH', { unit: ['characters'], max: 1999 }]);
+    expect(check('Write at least 5 sentences.')).toEqual(['LENGTH', { unit: ['sentences'], min: 5 }]);
+    expect(check('No sentence is longer than 25 words.')).toEqual(['LENGTH', { unit: ['sentence'], max: 25 }]);
+  });
+  it('the words a paragraph starts with, and a word never to use', () => {
+    expect(check('The last paragraph is one short paragraph that starts with "In short,".')).toEqual(['PRESENCE', { in: ['last'], starts: ['In short,'] }]);
+    expect(check('Never use the word "leverage" or "synergy".')).toEqual(['LEXICON', { terms: ['leverage', 'synergy'] }]);
+  });
+  it('a count the example itself breaks is the owner\'s to settle, not a rule', () => {
+    expect(check('Between 300 and 400 words.')).toBe('to settle');
+    expect(check('No sentence is longer than 8 words.')).toBe('to settle');
+  });
+  it('no number and no quoted words, or a rule about when: a judgement', () => {
+    for (const step of ['Keep it short.', 'End on a takeaway the reader can use.', 'About 200 words unless the request asks for more.', 'Use at most 3 sentences when the topic is simple.', 'Speak to the reader as "you".'])
+      expect(check(step), step).toBeNull();
+  });
+  it('the checks read as a person would count', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    expect(measure('One two three. Four five.', { observer: 'LENGTH', params: { unit: ['sentences'], min: 2, max: 3 } })).toMatchObject({ verdict: 'MET', detail: '2 sentences (2 to 3)' });
+    expect(measure('A tweet of thirty-one characters', { observer: 'LENGTH', params: { unit: ['characters'], max: 30 } })).toMatchObject({ verdict: 'VIOLATED', detail: '32 characters (at most 30): long by 2' });
+    const long = measure(`Short one. The ${Array.from({ length: 29 }, (_, i) => `w${i}`).join(' ')}.`, { observer: 'LENGTH', params: { unit: ['sentence'], max: 25 } });
+    expect(long).toMatchObject({ verdict: 'VIOLATED', detail: '1 sentence(s) over 25 words (the longest: 30)' });
+    expect(long.spans).toHaveLength(1);
+  });
+});
+
+// An independent review of the first version: every one of these was read as a rule the owner did not write.
+describe('a count or quoted words are read narrowly', () => {
+  const sentence = 'You plug it in and the current pushes the charge across to the far side.';
+  const example = { task: 'Explain a battery.', material: [], reference: `${Array.from({ length: 9 }, () => sentence).join(' ')}\n\nImagine a dam holding water uphill.\n\nIn short, a battery stores energy as a chemical gap.\n` };
+  const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, example)[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
+  it('a negation is never read by its comparator alone', () => {
+    for (const step of ['Never go over 100 words.', 'Do not write more than 100 words.', 'Never under 100 words.', 'Don\'t write less than 50 words.',
+      'The last line never starts with "In conclusion".', 'The first sentence does not begin with "I".', 'The last paragraph cannot begin with "In short,".']) expect(check(step), step).toBeNull();
+  });
+  it('the plain forms are read, both ends where both are given', () => {
+    expect(check('No more than 300 words.')).toEqual(['LENGTH', { unit: ['words'], max: 300 }]);
+    expect(check('No fewer than 3 sentences and no more than 20 sentences.')).toEqual(['LENGTH', { unit: ['sentences'], min: 3, max: 20 }]);
+    expect(check('At least 100 words and at most 200 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 200 }]);
+    expect(check('100–230 words.')).toEqual(['LENGTH', { unit: ['words'], min: 100, max: 230 }]);
+  });
+  it('the length of a part is not the length of the work', () => {
+    for (const step of ['Each bullet is at most 12 words.', 'The summary section is under 50 words.', 'Give at most 3 examples of up to 20 words each.', 'The title has no more than 8 words.',
+      'Open with a hook of under 15 words.', 'Include between 2 and 4 sentences of context before the ask.', 'Paragraphs of 3-5 sentences.', '200-300 words per section.',
+      'No more than 2 sentences per paragraph.', 'Under 100 words for replies, under 300 words for posts.', 'Cap the intro at 100 words and the whole piece at 800 words.']) expect(check(step), step).toBeNull();
+  });
+  it('a soft or a conditional wording is a judgement', () => {
+    for (const step of ['Ideally under 200 words.', 'Aim for at most 200 words.', 'Try to stay under 200 words.', 'Typically between 150 and 230 words.', 'Generally no more than 200 words.',
+      'Prefer at most 200 words.', 'At most 200 words, excluding code.', '~150 words, at most 200 words.']) expect(check(step), step).toBeNull();
+  });
+  it('quoted words keep their apostrophe, every alternative is kept, and a ban ends its sentence', () => {
+    expect(check('Never use the phrase "in today\'s world".')).toEqual(['LEXICON', { terms: ['in today\'s world'] }]);
+    expect(check('The last paragraph starts with "In short," or "So,".')).toEqual(['PRESENCE', { in: ['last'], starts: ['In short,', 'So,'] }]);
+    for (const step of ['Never use "very" in headings.', 'Don\'t use "very" twice.', 'Avoid using "we" in the first sentence.', 'Never say "sorry" without a reason.',
+      'The first sentence of the last paragraph starts with "So".']) expect(check(step), step).toBeNull();
+  });
+  it('a length counts characters less front matter, and the longest sentence needs a limit', async () => {
+    const { measure, observerFor } = await import('../core/observers/registry.js');
+    expect(measure('---\ntitle: x\n---\nHello', { observer: 'LENGTH', params: { unit: ['characters'], max: 5 } })).toMatchObject({ verdict: 'MET', detail: '5 characters (at most 5)' });
+    expect(observerFor('LENGTH').validate({ unit: ['sentence'], min: 3 })).toBe('the longest sentence needs max');
+  });
+});
+
+// How the examples are written, counted with no model and offered beside the method.
+describe('what the examples show about how they are written', () => {
+  const sentence = (k: number): string => `The pump moves warmth from part ${k} of the loop to the room you sit in.`;
+  const piece = (id: number, paras = 4) => ({ id: `e${id}.md`, reference: Array.from({ length: paras }, (_, p) => Array.from({ length: 5 }, (_x, k) => sentence(p * 5 + k + id)).join(' ')).join('\n\n') });
+  it('from enough text, counts every piece meets are offered as shown, each a rule of style', async () => {
+    const { countedFromExamples } = await import('../core/method/standard.js');
+    const offered = countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1)));
+    expect(offered.length).toBeGreaterThan(0);
+    for (const p of offered) expect(p).toMatchObject({ origin: 'SHOWN_BY_EXAMPLE', counted: true, conflict: null, onExample: 'set where all 6 of your examples meet it' });
+    // never the length of a sentence: a count is not a rhythm
+    expect(offered.map((p) => p.measurement?.observer)).not.toContain('SENTENCE_LENGTH');
+    expect(offered.map((p) => p.measurement?.observer)).toContain('PARAGRAPH_LENGTH');
+  });
+  it('nothing from two pieces, or from too little text to count', async () => {
+    const { countedFromExamples } = await import('../core/method/standard.js');
+    expect(countedFromExamples([piece(1), piece(2)])).toEqual([]);
+    expect(countedFromExamples([1, 2, 3].map((i) => ({ id: `t${i}.md`, reference: 'Shipped the fix at 2am. Nobody noticed. That is the job.' })))).toEqual([]);
+  });
+  it('the screen says them apart from the method, and the build keeps them as shown', async () => {
+    const { describeMethod } = await import('../cli/commands/method.js');
+    const { countedFromExamples } = await import('../core/method/standard.js');
+    const lines = describeMethod(countedFromExamples(Array.from({ length: 6 }, (_, i) => piece(i + 1))), 'FULL_REPRO_CASE').join('\n');
+    expect(lines).toContain('Counted from your examples, and not in your method: how they are written.');
+    expect(lines).not.toContain('Shown by your example, and not in your method');
+  });
+});
+
+// The length of one section: stated by the owner, or kept by every example. The study behind it: twelve HTML
+// explainers whose "How it works" section ran 61 to 76 words, and outputs of 98 to 122 that nothing measured.
+describe('how long one section runs', () => {
+  const filler = (n: number): string => Array.from({ length: n }, (_, i) => `word${i % 9}`).join(' ') + '.';
+  const page = (how: number, id: number) => ({ id: `e${id}.md`, task: 'Explain it.', material: [],
+    reference: `<!doctype html>\n<html><head><style>p { margin: 0; color: #333; }</style></head><body>\n<h1>Topic ${id}</h1>\n<h2>What it is</h2>\n<p>${filler(30 + id)}</p>\n<h2>How it works</h2>\n<p>${filler(how)}</p>\n<h2>Why it matters</h2>\n<p>${filler(20 + id * 9)}</p>\n</body></html>\n` });
+  const examples = [61, 68, 76, 64, 70].map((how, i) => page(how, i + 1));
+  it('what every example keeps is offered as shown: the span holds the examples and not an output of 109 words', async () => {
+    const { sectionLengthsFromExamples } = await import('../core/method/standard.js');
+    const { measure } = await import('../core/observers/registry.js');
+    const offered = sectionLengthsFromExamples(examples);
+    const how = offered.find((p) => p.statement.startsWith('The How it works section'));
+    expect(how).toMatchObject({ statement: 'The How it works section runs 61 to 76 words in my pieces.', counted: true, origin: 'SHOWN_BY_EXAMPLE',
+      measurement: { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], min: 46, max: 91 } } });
+    for (const e of examples) expect(measure(e.reference, how!.measurement!).verdict, e.id).toBe('MET');
+    expect(measure(page(109, 9).reference, how!.measurement!)).toMatchObject({ verdict: 'VIOLATED', detail: '"How it works": 109 words (46 to 91): long by 18' });
+  });
+  it('a section that doubles from one piece to the next has no usual length, and two pieces show none', async () => {
+    const { sectionLengthsFromExamples } = await import('../core/method/standard.js');
+    expect(sectionLengthsFromExamples(examples).some((p) => p.statement.startsWith('The Why it matters section'))).toBe(false);
+    expect(sectionLengthsFromExamples(examples.slice(0, 2))).toEqual([]);
+  });
+  it('a stated length of a section is held of that section, and only in the plain forms', () => {
+    const check = (step: string): unknown => { const p = methodProposals(`- ${step}\n`, examples[0])[0]; return p.conflict ? 'to settle' : p.measurement ? [p.measurement.observer, p.measurement.params] : null; };
+    expect(check('Keep the How it works section under 80 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['How it works'], need: 1, max: 79 }]);
+    expect(check('The What it is section is between 20 and 60 words.')).toEqual(['LENGTH', { unit: ['words'], in: ['What it is'], need: 1, min: 20, max: 60 }]);
+    expect(check('Keep the How it works section under 40 words.')).toBe('to settle');
+    for (const step of ['Ideally the How it works section is under 80 words.', 'The How it works section is never over 80 words.', 'Each section is under 80 words.', 'The Mechanics section is under 80 words.'])
+      expect(check(step), step).toBeNull();
+  });
+  it('a text without the section is another rule\'s to fail', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    expect(measure('## Other\nSome words here.\n', { observer: 'LENGTH', params: { unit: ['words'], in: ['How it works'], max: 80 } })).toMatchObject({ verdict: 'NOT_APPLICABLE', detail: 'no "How it works" section to measure' });
+  });
+});
+
+// An independent review of the section lengths and of the counted rules.
+describe('what a review of the section lengths found', () => {
+  const body = (n: number): string => Array.from({ length: n }, (_, i) => `word${i % 9}`).join(' ') + '.';
+  it('a step about something else that mentions a section states no length of it', () => {
+    const example = { task: 'Review.', material: [], reference: `## Summary\n${body(12)}\n\n## Verdict\n${body(8)}\n` };
+    for (const step of ['Unlike the Summary section, keep the whole piece under 200 words.', 'After the Summary section write at least 300 words.', 'The Summary section has at most 3 bullets and the piece is under 500 words.',
+      'Each sentence in the Summary section is under 20 words.', 'The Summary section links to a page of at most 500 words.']) expect(methodProposals(`- ${step}\n`, example)[0].measurement, step).toBeNull();
+  });
+  it('sections written as bare names are measured one at a time, not to the end of the work', async () => {
+    const { sectionBodyOf } = await import('../core/observers/structure.js');
+    const { proseWords } = await import('../core/observers/style.js');
+    const note = `Summary\n\n${body(10)}\n\nVerdict\n\n${body(20)}\n\nRisks\n\n${body(30)}\n`;
+    expect(proseWords(sectionBodyOf(note, 'Summary', true, ['Summary', 'Verdict', 'Risks']) ?? '')).toBe(10);
+    expect(proseWords(sectionBodyOf(note, 'Verdict', true, ['Summary', 'Verdict', 'Risks']) ?? '')).toBe(20);
+  });
+  it('the section of that name is measured, before one whose name only holds it', async () => {
+    const { sectionBodyOf } = await import('../core/observers/structure.js');
+    const { proseWords } = await import('../core/observers/style.js');
+    const text = `## Executive summary\n${body(40)}\n\n## Summary\n${body(7)}\n`;
+    expect(proseWords(sectionBodyOf(text, 'Summary') ?? '')).toBe(7);
+  });
+  it('a stated length is not met by leaving the section out; one only shown does not apply', async () => {
+    const { measure } = await import('../core/observers/registry.js');
+    const text = `## Other\n${body(5)}\n`;
+    expect(measure(text, { observer: 'LENGTH', params: { unit: ['words'], in: ['Summary'], need: 1, max: 80 } }).verdict).toBe('VIOLATED');
+    expect(measure(text, { observer: 'LENGTH', params: { unit: ['words'], in: ['Summary'], max: 80 } }).verdict).toBe('NOT_APPLICABLE');
+  });
+  it('a section every piece writes word for word alike has no length to offer, a stated one is not offered again, and no more than six are', async () => {
+    const { sectionLengthsFromExamples, countedOffers } = await import('../core/method/standard.js');
+    const piece = (id: number, n: number) => ({ id: `e${id}.md`, reference: `## Summary\n${body(n)}\n\n## Verdict\nRequest changes\n` });
+    const cases = [piece(1, 20), piece(2, 24), piece(3, 28)];
+    expect(sectionLengthsFromExamples(cases).map((p) => p.statement)).toEqual(['The Summary section runs 20 to 28 words in my pieces.']);
+    const stated = methodProposals('- Keep the Summary section under 40 words.\n', { task: 'x', material: [], reference: cases[0].reference });
+    expect(countedOffers(stated, cases).some((p) => p.statement.startsWith('The Summary section'))).toBe(false);
+    const many = (id: number) => ({ id: `m${id}.md`, reference: Array.from({ length: 9 }, (_, k) => `## Part ${'ABCDEFGHI'[k]}\n${body(20 + id + k)}\n`).join('\n') });
+    expect(countedOffers([], [many(1), many(2), many(3)]).length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('what a real template taught the readers', () => {
+  it('a form to fill in is not a step: a line that is mostly bracketed blanks instructs nobody', async () => {
+    const { stepsOf } = await import('../core/method/standard.js');
+    const note = '1. Classify the competitor type.\n\n> One-line: [What this competitor is, who they serve, primary moat] > Evidence ceiling: [Decision-grade / Usable / Background only]\n\n- [ ] All claims tagged with mode and quality\n- Name the buyer [the person who signs] in the first line.\n';
+    expect(stepsOf(note).map((x) => x.text)).toEqual(['Classify the competitor type.', 'All claims tagged with mode and quality', 'Name the buyer [the person who signs] in the first line.']);
+  });
+  it('a table column named after the company the example is about is that piece\'s own, with or without its task', () => {
+    const reference = `## Moats\n\nWe looked at how Payloom sells, and what Payloom charges, because Payloom is the buyer here.\n\n| Moat | Significance to Payloom |\n|---|---|\n| Scale | High |\n\n## Next\n\n| Signal | Action |\n|---|---|\n| A loss | Call |\n`;
+    const shown = methodProposals('- Weigh the moats.\n', { task: null, material: [], reference }).filter((p) => p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
+    expect(shown).toEqual([['signal', 'action']]);
+  });
+  it('a count of characters beside a count of words is a second limit: neither is held as the length of the piece', async () => {
+    const { statedLength, notHeldBecause } = await import('../core/intake/length.js');
+    const r = 'Write a post explaining why we cap commit messages at 72 characters and under 50 words.';
+    expect(notHeldBecause(r, statedLength(r)!)).toMatch(/names more than one count \(72 characters, 50 words\)/);
+  });
+});
+
+describe('blanks and names, read more carefully', () => {
+  it('a step that names a blank to fill still instructs; only a line of labels and blanks is a form', async () => {
+    const { stepsOf } = await import('../core/method/standard.js');
+    const keep = ['Open with [the name of the client] and [the date of the call].', 'Write the verdict as one of [Decision-grade], [Usable], [Directional].', 'Cite sources as [Author, Year] [page number].', 'Tag it [URGENT] or [ROUTINE]',
+      '[Follow the house style guide](https://x.co/s)'];
+    const drop = ['Summary: {one line on what it is} {who it serves}', 'Summary: <one line on what it is> <who it serves>', 'Evidence ceiling: ___________ (Decision-grade / Usable)', 'One-line: [What this competitor is] > Evidence ceiling: [Decision-grade / Usable]'];
+    expect(stepsOf([...keep, ...drop].map((x) => `- ${x}`).join('\n')).map((x) => x.text)).toEqual(keep);
+  });
+  it('a word that is itself a column\'s name is a label, however often the prose capitalises it', () => {
+    const reference = `## Findings\n\nWe set the Severity first, then check the Severity again, and the Severity decides the order.\n\n| Finding | Severity | Fix |\n|---|---|---|\n| A leak | High | Patch |\n\n## Plan\n\n| Task | March | April |\n|---|---|---|\n| Ship | x | |\n`;
+    const shown = methodProposals('- Weigh the findings.\n', { task: null, material: [], reference }).filter((p) => p.measurement?.observer === 'TABLE').map((p) => p.measurement?.params.columns);
+    expect(shown).toEqual([['finding', 'severity', 'fix'], ['task', 'march', 'april']]);
+  });
+});
+
+
+describe('what a blind set of method notes showed: a check tied to a step that asks for something else', () => {
+  // 160 steps written by someone who had not seen the reader (studies/coverage-labels). Two classes of wrong check.
+  const EXAMPLE = '## Bottom Line\n\nShip it.\n\n## Who They Sell To\n\nMid-market finance teams of ten to fifty people.\n\n## 6. Term and Termination\n\nStarts 1 May. Two years.\n\n## Numbers\n\n| Metric | Before | After | Change |\n|---|---|---|---|\n| p95 | 900 ms | 300 ms | -67% |\n';
+  const of = (step: string) => methodProposals(`1. ${step}\n`, { task: 't', material: [], reference: EXAMPLE }).find((p) => p.origin === 'STATED')?.measurement ?? null;
+  it('a length said of a section the example has is that section\'s, with or without the word "section": never the whole work\'s', () => {
+    expect(of('Keep Who They Sell To under 70 words.')).toEqual({ observer: 'LENGTH', params: { unit: ['words'], in: ['Who They Sell To'], need: 1, max: 69 } });
+    expect(of('Keep the Who They Sell To section under 70 words.')).toEqual({ observer: 'LENGTH', params: { unit: ['words'], in: ['Who They Sell To'], need: 1, max: 69 } });
+    expect(of('Bottom Line is at most 40 words.')).toMatchObject({ observer: 'LENGTH', params: { in: ['Bottom Line'], max: 40 } });
+  });
+  it('and where the step says more of that section than its length, it is the owner\'s to judge: still never the whole work\'s', () => {
+    // "in at most 3 sentences" read as the whole document being 3 sentences long
+    expect(of('Term and Termination gives the start date, the duration, the survival period and the notice period, in that order, in at most 3 sentences.')).toBeNull();
+    expect(of('Who They Sell To names the buyer and the user, each in under 20 words.')).toBeNull();
+  });
+  it('a length of the whole work is still read, whatever sections the example has', () => {
+    expect(of('Hold the whole teardown to 400 to 600 words.')).toMatchObject({ observer: 'LENGTH', params: { min: 400, max: 600 } });
+    expect(of('Keep it under 500 words.')?.params.in).toBeUndefined();
+    expect(of('Keep it under 500 words.')).toMatchObject({ observer: 'LENGTH', params: { max: 499 } });
+  });
+  it('a step that speaks of a table already there asks for no table: its check would read what the step does not ask', () => {
+    expect(of('Three to five rows in that table, and every figure carries its unit.')).toBeNull();
+    expect(of('State how the measurements were taken in one sentence right below the table.')).toBeNull();
+    expect(of('Every number in the prose must match the table to the digit.')).toBeNull();
+    expect(of('Copy prices exactly, and note the date I captured them beneath the table.')).toBeNull();
+  });
+  it('a step that asks for a table is still held to the example\'s', () => {
+    expect((of('Include a table of the numbers.')?.params.columns as string[]).map((c) => c.toLowerCase())).toEqual(['metric', 'before', 'after', 'change']);
+    expect(of('Numbers holds one table, with Before and After side by side.')).toMatchObject({ observer: 'TABLE' });
+    expect(of('Add a table with the columns Metric, Before, After and Change.')).toEqual({ observer: 'TABLE', params: { columns: ['metric', 'before', 'after', 'change'], minRows: 1 } });
   });
 });

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 0,
+ "seconds": 61.6,
+ "output": "## Verdict\n\nDorado costs least for a team of 18, at $162 per month. Its 10-seat minimum sits below the team size, so all 18 seats bill at the list rate of $9. Inkwell and Borealis both carry minimums above 18, forcing payment for seats the team will not use.\n\n## Vendor pricing\n\n| Vendor | Price per seat | Minimum seats |\n|---|---|---|\n| Dorado | $9 | 10 |\n| Inkwell | $14 | 25 |\n| Borealis | $19 | 50 |\n\n## Cost at this size\n\nSeats paid for is the team size (18) or the vendor minimum, whichever is larger.\n\n- **Dorado:** minimum 10 is below 18, so 18 seats paid. 18 × $9 = **$162 per month**.\n- **Inkwell:** minimum 25 exceeds 18, so 25 seats paid. 25 × $14 = **$350 per month**. Seven unused seats, worth $98.\n- **Borealis:** minimum 50 exceeds 18, so 50 seats paid. 50 × $19 = **$950 per month**. Thirty-two unused seats, worth $608.\n\nDorado is $188 per month cheaper than Inkwell and $788 cheaper than Borealis — $2,256 and $9,456 across twelve months.\n\n## Risks\n\nSeat minimums do most of the work in this ranking, so it is specific to 18 people. Inkwell's effective rate here is $19.44 per person ($350 ÷ 18) and falls to its list $14 at 25 seats; at that point Dorado costs $225 against Inkwell's $350, so the order does not change. Borealis stays at $950 until 50 seats, where Dorado costs $450, so it never leads on list price in this range.\n\nThis is a price comparison only. The price list says nothing about features, support tiers, usage caps or contract terms, so the cheapest seat may not be a comparable product.\n\nAll figures assume monthly billing at list, as stated. Annual commitments, negotiated discounts and migration costs are not in the source and could reorder these totals. Worth confirming whether minimums bite at signup or only at renewal.",
+ "costUsd": 0.2971,
+ "cut": []
+}

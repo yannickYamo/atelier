@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t9",
+ "run": 1,
+ "seconds": 29,
+ "output": "Sunlight looks white, but it is a mixture of every colour. Red, orange, yellow, green, blue and violet all travel together until something separates them.\n\nThe air above you does the separating. It is full of tiny gas molecules, far smaller than any speck of dust. When light meets them, some of it bounces off in random directions. That scattering is not fair to all colours.\n\nLight travels in waves, and each colour has its own wavelength. Red waves are long and lazy; blue waves are short and quick. Those short waves get knocked sideways far more easily. Blue is scattered roughly ten times more strongly than red.\n\nSo blue light ricochets around the sky and reaches your eyes from every direction at once. You look up, and the whole dome glows with it.\n\nThink of throwing tennis balls and marbles at a forest of thin poles. The marbles clip the poles and fly off everywhere. The tennis balls mostly sail straight through.\n\nAt sunset the light arrives at a low angle and crosses much more air. By then the blue has been scattered away, and the reds and oranges survive the trip.\n\nIn short, the sky is blue because air scatters short blue waves across it.",
+ "costUsd": 0.0777,
+ "cut": []
+}

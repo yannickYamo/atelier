@@ -16,6 +16,7 @@ import { execFile, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { planFor } from '../../core/plan/execution-plan.js';
 import * as store from '../../core/state/store.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
@@ -23,7 +24,7 @@ import { readCase } from '../corpus.js';
 import { releaseFor } from '../fidelity.js';
 import { DATA, argv, die, flag, numericFlag, skillArg, runFile } from '../runtime.js';
 import { MIN_BRIEFS, NOTE_HEAD, allowance, carryKey, leak, noiseBand, priorSearches, readRun, steadyBriefs, proposals, renderEvolve, rule, scoreOf, splitBriefs,
-  type Brief, type BriefResult, type Carry, type EvolveRecord, type Scored, type Trial } from '../../core/evolve/loop.js';
+  heldOf, type Brief, type BriefResult, type Carry, type EvolveRecord, type Scored, type Trial } from '../../core/evolve/loop.js';
 
 const HANDED_ON = ['--provider', '--base-url', '--model', '--target-model', '--target-provider', '--target-base-url', '--price-in', '--price-out', '--claims', '--max-tokens'] as const;
 const handedOn = (): string[] => HANDED_ON.flatMap((f) => { const v = flag(f); return v === undefined ? [] : [`${f}=${v}`]; });
@@ -146,7 +147,7 @@ export async function evolve(): Promise<void> {
     const results: BriefResult[] = [];
     for (const b of bs) { const r = state.stopped ? null : await runOne(b, carry); if (!r) break; results.push(r); }
     const s = scoreOf(results);
-    say(`  ${what}: ${s.ok} of ${s.n} conformant · $${s.costUsd.toFixed(2)}${results.length < bs.length ? ` (stopped after ${results.length} of ${bs.length})` : ''}`);
+    say(`  ${what}: ${heldOf(s)} · $${s.costUsd.toFixed(2)}${results.length < bs.length ? ` (stopped after ${results.length} of ${bs.length})` : ''}`);
     return s;
   };
 
@@ -213,6 +214,7 @@ export async function evolve(): Promise<void> {
           : `better on the briefs it worked on, and worse on the ones set aside (${held?.end.ok} of ${held?.end.n} against ${held?.start.ok}): the gain did not carry, and the skill is left as it was.`;
     // `end` is what the search arrived at. After a stop that is where it had got to, with no reading on the briefs set aside.
     record = { schema: 1, skill: name, skillVersion: active, standardVersion: sv.standardVersionHash, at: new Date().toISOString(),
+      scored: { on: scoredOn.length, of: planFor(std).rules.filter((p) => p.role !== 'HABIT').length },
       briefs: { dev: dev.map((b) => b.id), heldBack: heldBack.map((b) => b.id) }, start, baseline: { first, second, band }, trials, end: incumbent, heldBack: held, verdict, why,
       costUsd: Math.round(spent * 1e6) / 1e6, earlier: { heldBackReads: earlier.heldBackReads, notTriedAgain } };
   } finally {

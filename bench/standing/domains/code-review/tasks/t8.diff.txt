@@ -1,0 +1,87 @@
+diff --git a/src/queue/worker.js b/src/queue/worker.js
+--- a/src/queue/worker.js
++++ b/src/queue/worker.js
+@@ -68,0 +68,83 @@
++'use strict';
++
++const EventEmitter = require('events');
++
++// Simple in-memory job queue worker.
++// Jobs are plain objects: { id, type, payload, attempts }
++
++const MAX_ATTEMPTS = 3;
++const POLL_INTERVAL_MS = 250;
++
++class Worker extends EventEmitter {
++  constructor(store, handlers) {
++    super();
++    this.store = store;
++    this.handlers = handlers || {};
++    this.running = false;
++    this.timer = null;
++  }
++
++  start() {
++    if (this.running) return;
++    this.running = true;
++    this.emit('started');
++    this.loop();
++  }
++
++  stop() {
++    this.running = false;
++    if (this.timer) clearTimeout(this.timer);
++    this.emit('stopped');
++  }
++
++  async loop() {
++    while (this.running) {
++      const job = await this.store.reserve();
++
++      if (!job) {
++        await delay(POLL_INTERVAL_MS);
++        continue;
++      }
++
++      await this.process(job);
++    }
++  }
++
++  async process(job) {
++    const handler = this.handlers[job.type];
++
++    if (!handler) {
++      await this.store.fail(job.id, 'no handler registered');
++      return;
++    }
++
++    try {
++      const result = await handler(job.payload);
++      await this.store.complete(job.id, result);
++      this.emit('completed', job.id);
++    } catch (err) {
++      await this.retry(job, err);
++    }
++  }
++
++  async retry(job, err) {
++    const attempts = (job.attempts || 0) + 1;
++
++    if (attempts >= MAX_ATTEMPTS) {
++      await this.store.fail(job.id, err.message);
++      this.emit('failed', job.id, err);
++      return;
++    }
++
++    try {
++      await this.store.release(job.id, attempts);
++    } catch (e) {
++    }
++  }
++}
++
++function delay(ms) {
++  return new Promise((resolve) => setTimeout(resolve, ms));
++}
++
++module.exports = { Worker, MAX_ATTEMPTS };

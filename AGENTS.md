@@ -35,19 +35,20 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
 
 | the user wants | run |
 |---|---|
-| a skill from their writing | `atelier new <folder-of-their-work> "<what it is for>"`, show them the rules it proposes, then `atelier new <folder> --accept` once **they** approve (or `--set p3=reject` for their changes) |
+| a skill from their writing | `atelier new <folder-of-their-work> "<what it is for>"` (with no model key set this builds at once from the examples alone, with nothing to approve: tell them so), show them the rules it proposes, then `atelier new <folder> --accept` once **they** approve (or `--set p3=reject` for their changes) |
 | a skill from rules they state | `atelier skill "<their rules, in their words>"` |
-| new work in that voice | `atelier invoke --skill <name> "<the task>"` (written, checked, repaired, recorded) |
+| a skill from their method and finished examples (start here) | `atelier new <example file or folder> --method <method note>`: each step they wrote is a rule, checked where code can hold it; calls no model. `--review` shows what it would check and builds nothing: show them that, and build once **they** agree. Where a step of theirs is not what their own examples do, the skill is still built and the step blocks nothing until confirmed: pass `--yes` only when **they** say to keep the step as written |
+| new work to that standard | `atelier run "<the task>"` (written, checked, repaired, recorded). Under the work is its evaluation, rule by rule, opening with where it stands: BLOCKED (something required was seen to fail; exit 1), NEEDS REVIEW (nothing seen to fail; part of what they require was not read in full by a check, and is named for them to read) or VERIFIED (everything required was read in full and held). A `~` marks a rule a check read only part of: never report such a rule as met. `atelier invoke --skill <name> "<the task>" --json` is the same run with its whole record |
 | to check or fix a text | `atelier verify --skill <name> <file>` (exit 1 = a required rule broken); add `--repair` to fix only what broke |
-| their real stories and figures used | `atelier material --skill <name> <notes.md>`: anything invented is otherwise cut |
-| to correct the skill | `atelier fix "<what was wrong, in their words>"` |
+| their real stories and figures used | `atelier material --skill <name> <notes.md>`: with it bound, on a skill built with `--class essay` (or a post), anything invented is cut; otherwise specifics are only listed |
+| to correct a piece, or the skill | `atelier fix "<what was wrong, in their words>"` writes that piece again and leaves the skill alone; add `--always` only when **they** say every run should do this (it may then ask them to approve a new rule); `--evaluation` when they say the evaluation was wrong about the work |
 | to see where a skill stands | `atelier status --skill <name>` |
 | an agent to check its own output | `atelier setup` adds the MCP server (`atelier mcp`: `atelier_verify`, `atelier_rules`, `atelier_list_skills`, `atelier_skill_report`) to the agents in the project; `--dry-run` shows what it would write |
 | whether a run can ship, and why | `atelier report <run>` (the evaluation and the trace); ask the person, then `atelier rate <run> yes "why"` (or `no`); `atelier eval --skill <name>` over runs |
 | where outputs sit against the author's range, and the releases that steer them | `atelier fidelity --skill <name>` (`--read <file>` for one text, `--rollback` to undo a release) |
 | whether the skill's detector and steering features hold on texts they never saw | `atelier qualify --skill <name>` (topic labels in each piece's front matter, or `--topics <file>`) |
 
-`atelier --help` lists everything; `atelier <command> --help` explains one command.
+`atelier --help` shows the three commands a person needs (new, run, fix); `atelier lab` lists every other; `atelier <command> --help` explains one.
 
 ## Rules for agents
 
@@ -55,7 +56,7 @@ relative to the current directory, and state lives in `~/.atelier` (or `ATELIER_
   change them. Don't pass `--accept` on their behalf without asking.
 - **Don't edit files under `.claude/skills/<name>/` by hand.** They are compiled output: a change there
   isn't recorded and the next build overwrites it. To change what "good" means, use `atelier confirm` or
-  `atelier amend`; to change how it's carried, `atelier fix`.
+  `atelier amend`; to change how it's carried, `atelier fix "<what was wrong>" --always`.
 - **Don't invent material to satisfy a rule.** If a rule needs the person's own stories, figures or sources,
   ask them for it and bind it with `atelier material`.
 - Discovery costs a few dollars (it prints an estimate and stops if it's over `--cap`). Tell the person

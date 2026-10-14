@@ -394,7 +394,9 @@ describe('through the binary: discovery builds the profile, invoke steers and re
   it('every run is evaluated: the panel with --panel, an eval object in --json, and report, rate and eval read it back', () => {
     const shown = run('invoke', '--skill', 'posts', '--no-taste', '--panel', 'write a short note about the rollback');
     expect(shown).toMatch(/── Atelier · posts · release [0-9a-f]{8}/);
-    expect(shown).toMatch(/ {2}RESULT {2}(CONFORMANT|NOT CONFORMANT)/);
+    expect(shown).toMatch(/ {2}RESULT {2}(VERIFIED|NEEDS REVIEW|BLOCKED)/);
+    // the strict bar is said beside it, as what it is
+    expect(shown).toMatch(/ {2}strict delivery: would (deliver|refuse)/);
     expect(shown).toMatch(/GATES {2}binary, every run/);
     expect(shown).toMatch(/not measured: /);
     const j = JSON.parse(run('invoke', '--skill', 'posts', '--no-taste', '--json', 'write a short note about the flag')) as { invocationId: string; eval: { schema: number; result: { conformant: boolean } } };

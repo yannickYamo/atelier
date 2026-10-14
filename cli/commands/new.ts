@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { die, argv, flag, positional, loadSession, saveSession, assertReachable, sourceProvenance, runFile, DATA } from '../runtime.js';
+import { die, argv, flag, positional, loadSession, saveSession, assertReachable, canReach, sourceProvenance, runFile, DATA } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
 import { modeFromIntent, type SkillMode } from '../../core/ratification/suggest.js';
 import * as store from '../../core/state/store.js';
@@ -24,6 +24,7 @@ import { floorDimensions, proposeMargins, buildContract } from '../../core/disti
 import { extract } from '../../core/intake/extract.js';
 import { intake } from './intake.js';
 import { discover } from './discover.js';
+import { method } from './method.js';
 import { review } from './review.js';
 import { ratifyClose } from './ratify.js';
 import { build, pieceFlags } from './build.js';
@@ -70,6 +71,15 @@ export async function newSkill(): Promise<void> {
   if (s.intent && typed && typed !== s.intent.text) {
     console.log(`(this run is for "${s.intent.text}"; the new wording is ignored — start over with atelier abort to change it)`);
   }
+  // NO MODEL IS NOT A REASON TO BUILD NOTHING. What can be counted in the examples is read without one; a model
+  // adds the rules only a reading finds, and can be added later. Decided before anything is written for the other
+  // path, and what the person said the skill is for is kept as what it is for.
+  if ((s.run.state === 'EMPTY' || !s.evidence) && !canReach('discovery')) {
+    console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+    if (intent && !argv.includes('--for')) argv.push('--for', intent);
+    await method();
+    return;
+  }
   const name = flag('--name') ?? s.skillName ?? basename(path);
   // The kind of document this work is, kept for the skill from the first call: the build that uses it
   // may be a later continuation that does not repeat the flag.
@@ -81,7 +91,7 @@ export async function newSkill(): Promise<void> {
   // the reader to check, never cut (core/observers/formats.ts).
   else if (mode === 'RESPOND' && !store.getDocClass({ root: DATA, skillName: skillNameFrom(name) })) {
     store.setDocClass({ root: DATA, skillName: skillNameFrom(name) }, 'assistant-reply');
-    console.log('Checked as answers (assistant-reply): specifics not in your material are listed for you to check, not cut. (--class none to cut them.)');
+    console.log('Checked as answers (assistant-reply): specifics not in your material are listed for you to check, not cut.');
   }
 
   process.env.ATELIER_ORCHESTRATED = '1';

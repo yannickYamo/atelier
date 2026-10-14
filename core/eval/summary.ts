@@ -20,6 +20,7 @@
 
 import type { SpendLine } from '../inference/client.js';
 import type { RunSent } from './size.js';
+import { blocks, needsReview, type EvaluationRecord } from './record.js';
 
 /** The evaluation of one run. `schema` moves when a field's meaning does. */
 export interface EvalSummary {
@@ -44,7 +45,17 @@ export interface EvalSummary {
   /** what this run sent the writer, in words: the served skill, the passages and notes added for the request, the request */
   readonly sent?: RunSent;
   readonly durationMs: number;
+  /**
+   * STRICT DELIVERY'S BAR, and nothing else: no required rule seen to fail, and nothing the claim check left unread.
+   * What a person is told about the run is `record.state`; this is narrower (it refuses an output with anything open).
+   */
   readonly result: { readonly conformant: boolean; readonly reasons: readonly string[] };
+  /**
+   * THE EVALUATION, ONCE (./record.ts): every required rule, what this request set, what was traced, and the habits,
+   * each with what was observed of it and how much of it that covers. Every surface that shows a run reads this.
+   * Absent on a run recorded before it existed, and on a structured output held by its contract.
+   */
+  readonly record?: EvaluationRecord;
   readonly gates: {
     /** `contract`: a structured output, held by its output contract rather than by prose rules */
     readonly required: { readonly held: number; readonly applicable: number; readonly broken: readonly { readonly id: string; readonly detail: string; /** the rule, in short: what c9 is */ readonly label?: string }[]; readonly contract?: boolean };
@@ -142,6 +153,9 @@ const pad = (s: string, n: number): string => (s.length >= n ? s : s + ' '.repea
 const fmt = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 const secs = (ms: number): string => (ms >= 10000 ? `${Math.round(ms / 1000)} s` : `${(ms / 1000).toFixed(1)} s`);
 
+/** How many required rules a check read only part of: a "held" there is not a pass (./record.ts). */
+const partly = (e: EvalSummary): number => e.record?.entries.filter((x) => x.required && x.reason === 'PARTLY_CHECKED').length ?? 0;
+
 /** The panel: about twenty lines, plain text, cut to `width` columns. PASS/FAIL tags, so it reads without colour. */
 export function renderPanel(e: EvalSummary, opts: { width?: number; color?: boolean } = {}): string {
   const width = Math.max(60, Math.min(opts.width ?? 110, 140));
@@ -151,16 +165,22 @@ export function renderPanel(e: EvalSummary, opts: { width?: number; color?: bool
   const head = `── Atelier · ${e.skill}${e.release ? ` · release ${e.release.slice(0, 8)}` : ''}${e.model ? ` · ${e.model}` : ''} · ${e.drafts} draft${e.drafts === 1 ? '' : 's'} `;
   const tail = ` $${e.costUsd.toFixed(2)} · ${secs(e.durationMs)} ──`;
   out.push(head + '─'.repeat(Math.max(2, width - head.length - tail.length)) + tail);
-  out.push(`  RESULT  ${e.result.conformant ? c('32', 'CONFORMANT') : c('31', 'NOT CONFORMANT')}${e.result.reasons.length ? `: ${e.result.reasons.join('; ')}` : ''}`);
+  // WHERE THE RUN STANDS IS THE RECORD'S TO SAY (./record.ts), here as everywhere. The strict bar is said beside it,
+  // as what it is: whether strict delivery would have let the text out.
+  if (e.record) {
+    const st = e.record.state; const open = e.record.entries.filter(needsReview).length; const failed = e.record.entries.filter(blocks);
+    out.push(`  RESULT  ${st === 'VERIFIED' ? c('32', 'VERIFIED') : st === 'BLOCKED' ? c('31', 'BLOCKED') : c('33', 'NEEDS REVIEW')}${failed.length ? `: seen to fail: ${failed.map((x) => x.id).join(', ')}` : open ? `: ${open} required, not read in full by a check` : ''}`);
+    out.push(`  ${c('2', `strict delivery: ${e.result.conformant ? 'would deliver' : `would refuse (${e.result.reasons.join('; ')})`}`)}`);
+  } else out.push(`  RESULT  ${e.result.conformant ? c('32', 'CONFORMANT') : c('31', 'NOT CONFORMANT')}${e.result.reasons.length ? `: ${e.result.reasons.join('; ')}` : ''}`);
   if (e.delivery && !e.result.conformant) out.push(`  ${e.delivery.delivered ? 'DELIVERED ANYWAY (--allow-nonconformant), with a failing exit' : 'NOT DELIVERED (strict delivery): the text is kept with the record'}`);
   out.push('');
   out.push('  GATES  binary, every run');
   const g = e.gates;
   const req = g.required;
   if (req.contract) out.push(`  ${tag(null)}  ${pad('required rules', 17)}a structured output: held by its output contract, not by prose rules`);
-  else out.push(`  ${tag(req.broken.length === 0)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id}${b.label ? ` "${b.label}"` : ''} (${b.detail})`).join(', ')}` : ''}`);
+  else out.push(`  ${tag(req.broken.length === 0 ? (partly(e) ? null : true) : false)}  ${pad('required rules', 17)}${req.held}/${req.applicable} held by their checks${partly(e) ? ` · ${partly(e)} of those checks read only part of the rule` : ''}${req.broken.length ? `: broken ${req.broken.map((b) => `${b.id}${b.label ? ` "${b.label}"` : ''} (${b.detail})`).join(', ')}` : ''}`);
   const cl = g.claims;
-  const reader = cl.unmeasured ? ` · not measured on ${cl.unmeasured}: what the check finds is listed, never cut`
+  const reader = cl.unmeasured ? ` · ${cl.unmeasured}: what the check finds is listed, never cut`
     : cl.measured ? ` · ${cl.instrument ?? 'reader'}: caught ${cl.measured.caught}/${cl.measured.planted} planted, left ${cl.measured.leftAlone}/${cl.measured.clean} clean alone, on ${cl.measured.on}` : cl.instrument ? ` · ${cl.instrument}` : '';
   if (cl.state === 'off') out.push(`  ${tag(null)}  ${pad('invented claims', 17)}not checked: turned off for this run (--allow-unsourced)`);
   else if (cl.state === 'not-checked') out.push(`  ${tag(false)}  ${pad('invented claims', 17)}not checked: the claim reader could not run, so this is not a pass`);

@@ -1,10 +1,13 @@
-// cli/commands/fix.ts — ONE CORRECTION PATH. "That was wrong" goes in; what comes out is either a
-// better implementation of the same standard, or one question only its owner may answer.
+// cli/commands/fix.ts — "THAT WAS WRONG", AND WHERE IT GOES.
 //
-// The pieces all existed and none of them met: `feedback` wrote an event nothing read, `improve`
-// demanded an invocation id nobody had, a STANDARD_GAP printed a sentence and stopped, `compare`
-// was suggested only inside a refusal, and a promoted candidate was not installed. `fix` is those
-// pieces in one motion:
+// A complaint goes one of three ways, and the person chooses (`routeOf`): this output is written again and the skill
+// is left alone (the default: one complaint about one piece is not a rule); the skill is changed for every run
+// (--always, the flow below); or the evaluation was wrong about the work (--evaluation: recorded, nothing changed).
+//
+// THE SKILL ROUTE is one correction path: what comes out is either a better implementation of the same standard, or
+// one question only its owner may answer. The pieces all existed and none of them met: `feedback` wrote an event
+// nothing read, `improve` demanded an invocation id nobody had, a STANDARD_GAP printed a sentence and stopped,
+// `compare` was suggested only inside a refusal, and a promoted candidate was not installed. It is those in one motion:
 //
 //   /atelier:fix "the answer buried the recommendation"
 //     → resolves this project's latest recorded invocation, and SAYS which — misbinding must be
@@ -21,11 +24,13 @@
 // equals the hash after, asserted where the candidate is minted and again before promotion —
 // `assertStandardUnchanged` throws; it does not log.
 
-import { verifyText } from '../../core/observers/verify.js';
+import { acts, verifyText } from '../../core/observers/verify.js';
 import { regressions } from '../../core/loop/repair.js';
 import { resolvePromotion, shipsAutonomously, type PromotionDecision } from '../../core/convergence/promotion.js';
 import { describeBackup } from '../../adapters/install-tree.js';
 import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { getEval, putRating } from '../../core/state/eval-store.js';
 import { createInterface } from 'node:readline/promises';
 import * as store from '../../core/state/store.js';
 import { readJson } from '../../core/state/read-json.js';
@@ -50,6 +55,7 @@ import type { Mutation } from '../../core/optimizer/genome.js';
 import type { Provenance } from '../../core/fidelity/provenance.js';
 import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientAndBinding,
   projectDir, pickHost, runFile, assertSkillName, loadSession, diagnoserModel, carriedFrom } from '../runtime.js';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 
 /**
  * Every run `fix` makes is a replay of the complained-about task, made to evaluate a repair: recorded as
@@ -57,6 +63,126 @@ import { sha, DATA, die, argv, flag, positional, numericFlag, clientFor, clientA
  * is not the optimizer grading itself either (a person reads the pair), so `promote` still accepts it.
  */
 const FIX_RUN: Provenance = 'FIX_EVALUATION';
+
+interface LastRun { readonly invocationId: string; readonly skillName: string; readonly asked?: string; readonly with?: readonly { readonly name: string; readonly path: string }[];
+  /** the settings the run was written under, as typed, and the skill version that wrote it; absent from a run made before these were kept */
+  readonly settings?: readonly string[]; readonly skillVersion?: string;
+  /** set when the last run was itself a piece written again: the run first complained about, and everything said of it so far */
+  readonly correcting?: { readonly of: string; readonly complaints: readonly string[] } }
+export type FixRoute = 'THIS_OUTPUT' | 'EVERY_RUN' | 'EVALUATION';
+/** The words that say the skill itself should change: said outright, or by answering a question an earlier `fix` asked. */
+const ALWAYS = ['--always', '--add', '--pick', '--skip', '--invocation', '--carrier'];
+const said = (args: readonly string[], flags: readonly string[]): boolean => args.some((a) => flags.some((f) => a === f || a.startsWith(`${f}=`)));
+
+/**
+ * WHERE A COMPLAINT GOES. This output only, unless the person says otherwise: `--evaluation` (the evaluation was wrong
+ * about the work) or `--always` (the skill should do this on every run). A run that cannot be written again from
+ * here (made in a host, or before runs kept what was asked) goes to the skill, since that is all there is to change.
+ */
+export function routeOf(args: readonly string[], last: Pick<LastRun, 'asked'> | null): FixRoute {
+  if (said(args, ['--evaluation'])) return 'EVALUATION';
+  if (said(args, ALWAYS) || !last?.asked?.trim()) return 'EVERY_RUN';
+  return 'THIS_OUTPUT';
+}
+
+/** What the diagnosis found, in the words a person uses. */
+const PLAIN: Record<string, string> = {
+  IMPLEMENTATION_MISS: 'Your rules already say this, and the skill did not carry it.',
+  STANDARD_GAP: 'Your rules do not say this.',
+  DELIVERY_FAILURE: 'The skill that ran was not the one you approved.',
+  UNCERTAIN: 'It is not clear what should change.',
+};
+
+/**
+ * What was typed beside the complaint that is a setting for the writing (which model, which backend, a cap): the
+ * piece is written again under the same. Not what names the run or the route, and not a machine's format: the piece
+ * is shown to a person.
+ */
+export function settingsTyped(complaint: string, typed: readonly string[] = argv.slice(1)): string[] {
+  const DROP = ['--skill', '--complaint', '--invocation', '--correcting', '--provenance']; const BARE = ['--json', '--answer-only', '--always', '--evaluation'];
+  const rest = typed; const at = rest.indexOf(complaint); const out: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const a = rest[i];
+    if (i === at || BARE.includes(a) || DROP.some((d) => a.startsWith(`${d}=`))) continue;
+    if (DROP.includes(a)) { i += 1; continue; }
+    out.push(a);
+  }
+  return out;
+}
+
+/**
+ * HOW A PIECE IS WRITTEN AGAIN: what was asked, the files given with it that are still there, the settings of the
+ * first run and then what is typed now (the person's word now is the last). Whatever of the first run cannot be
+ * had again is said, in `notes`: a piece written under other settings or by a changed skill is never passed off as
+ * the same run.
+ */
+export function replayOf(name: string, last: LastRun, complaints: readonly string[], typed: readonly string[], activeVersion: string | null, there: (path: string) => boolean = existsSync): { args: string[]; notes: string[] } {
+  const files = last.with ?? [];
+  const notes = files.filter((w) => !there(w.path)).map((w) => `${w.path} is no longer there, so the piece is written again without it.`);
+  if (last.settings === undefined) notes.push('The settings of the first run were not kept (it was made by an earlier version), so the piece is written again under the defaults: if you chose a model or a number of drafts then, type them beside the complaint.');
+  if (last.skillVersion && activeVersion && last.skillVersion !== activeVersion) notes.push(`Your skill has changed since this piece was written (it was ${last.skillVersion.slice(0, 8)}, it is now ${activeVersion.slice(0, 8)}): the piece is written again by the skill as it is now.`);
+  // An option typed now replaces the first run's: given twice, the run refuses it.
+  const nameOf = (t: string): string | null => (t.startsWith('--') ? t.slice(2).split('=')[0] : null);
+  const now = new Set(typed.map(nameOf).filter((n): n is string => n !== null));
+  const kept: string[] = []; const first = last.settings ?? [];
+  for (let i = 0; i < first.length; i += 1) {
+    const n = nameOf(first[i]); const valued = n !== null && !first[i].includes('=') && first[i + 1] !== undefined && nameOf(first[i + 1]) === null;
+    if (n === null || !now.has(n)) kept.push(first[i], ...(valued ? [first[i + 1]] : []));
+    if (valued) i += 1;
+  }
+  return { notes, args: ['run', last.asked ?? '', '--skill', name, '--correcting', complaints.join(' Also: '), '--provenance', FIX_RUN,
+    ...files.filter((w) => there(w.path)).flatMap((w) => ['--with', `${w.name}=${w.path}`]), ...kept, ...typed] };
+}
+
+/** The complaint, kept once, against the run it is about. About the work: also a "no" to "would you use it as it is", with the reason. */
+function keep(L: store.StoreLayout, inv: InvocationRecord, complaint: string, about: 'WORK' | 'EVALUATION'): void {
+  store.putFeedbackOnce(L, { feedbackId: `f${sha(`${inv.invocationId}|${complaint}`).slice(0, 10)}`, invocationId: inv.invocationId, complaint, at: new Date().toISOString(), ...(about === 'EVALUATION' ? { about } : {}) });
+  if (about === 'WORK') putRating(L, { invocationId: inv.invocationId, ship: false, why: complaint, at: new Date().toISOString(), release: inv.fidelity?.release ?? null });
+}
+
+/**
+ * THIS OUTPUT ONLY. The piece is written again from what was asked and the files given with it, with everything the
+ * person has said of it so far told to the writer. The skill is not touched: one complaint about one piece is not a
+ * rule. The new piece is a replay made to answer a complaint, and is recorded as one (never as use of the skill).
+ */
+function thisOutputAgain(L: store.StoreLayout, name: string, inv: InvocationRecord, last: LastRun, complaint: string): void {
+  keep(L, inv, complaint, 'WORK');
+  const complaints = [...(last.correcting?.complaints ?? []).filter((c) => c !== complaint), complaint];
+  const { args, notes } = replayOf(name, last, complaints, settingsTyped(complaint), store.getActive(L));
+  for (const n of notes) console.log(`(${n})`);
+  console.log(`Writing this piece again with ${complaints.length > 1 ? `everything you have said of it (${complaints.length} things)` : 'that'} put right. Your skill is not changed.\n`);
+  const r = spawnSync(process.execPath, [...process.execArgv, process.argv[1], ...args], { stdio: 'inherit' });
+  // The run just made left its own pointer: it is marked as a correction of the first, so that what is said next
+  // (again, --always, --evaluation) is about the piece complained of and carries what was already said.
+  const pointer = runFile('last-invocation.json');
+  if (existsSync(pointer)) {
+    const now = readJson<LastRun>(pointer, { what: 'the last invocation', requireKeys: ['invocationId', 'skillName'] });
+    if (now.invocationId !== last.invocationId) writeAtomic(pointer, JSON.stringify({ ...now, asked: last.asked, with: last.with ?? [], correcting: { of: inv.invocationId, complaints } }, null, 1));
+  }
+  console.log(`\nOnly this piece was written again. If every run should do this: atelier fix ${JSON.stringify(complaint)} --always`);
+  console.log(`If the evaluation was wrong about your work (it blocked what was right, or passed what was not): atelier fix ${JSON.stringify(complaint)} --evaluation`);
+  process.exitCode = r.status ?? 1;
+}
+
+/**
+ * THE EVALUATION WAS WRONG ABOUT THE WORK. Recorded against the run, with what the evaluation said of it, and nothing
+ * is changed: a check reads a rule, and is put right by putting the rule right, which is the owner's to do.
+ */
+function aboutTheEvaluation(L: store.StoreLayout, name: string, inv: InvocationRecord, complaint: string): void {
+  // Not a complaint about the work: no "would not use it" is recorded, and nothing learns from it as one.
+  keep(L, inv, complaint, 'EVALUATION');
+  const record = getEval(L, inv.invocationId)?.record;
+  console.log('Recorded as a complaint about the evaluation, not about the work. Nothing was changed.');
+  if (!record) { console.log('This run carries no evaluation to look at.'); return; }
+  const open = record.entries.filter((e) => e.required && e.result !== 'PASS' && e.result !== 'NOT_APPLICABLE');
+  console.log(`\nWhat the evaluation said of that run (${record.state.replace('_', ' ')}):`);
+  for (const e of open) console.log(`  ${e.result === 'FAIL' ? 'failed      ' : 'not verified'}  ${e.statement.replace(/\s+/g, ' ').slice(0, 90)}${e.observation.evidence ? `\n                ${e.observation.evidence.slice(0, 160)}` : ''}`);
+  if (!open.length) console.log('  everything required was read in full and held.');
+  console.log('\nA check reads one of your rules, so it is put right through the rule:');
+  console.log('  a rule of yours was read as something you did not mean: change its wording in your method note and build again (atelier new ... --method ...)');
+  console.log(`  a rule read from your examples is not yours: atelier lab amend --skill ${name} --rule <id> ...`);
+  console.log(`  the work was right and nothing above is wrong either: atelier rate ${inv.invocationId} yes "why"`);
+}
 
 const ask = async (question: string, allowed: readonly string[]): Promise<string | null> => {
   if (!process.stdin.isTTY) return null;
@@ -78,7 +204,7 @@ export async function fix(): Promise<void> {
   // `--skill`/`--invocation` remain as the advanced spelling.
   loadSession();                                   // adopts legacy run files; keys runFile() to this project
   const explicitInv = flag('--invocation');
-  let name: string; let invId: string;
+  let name: string; let invId: string; let lastRun: LastRun | null = null;
   if (explicitInv) {
     name = assertSkillName(flag('--skill') ?? die('--invocation needs --skill <name> beside it.'));
     invId = explicitInv;
@@ -89,8 +215,9 @@ export async function fix(): Promise<void> {
         + '  Use the skill first (in your host as /<name>, or: atelier invoke --skill <name> "<task>"),\n'
         + '  then say what was wrong:  atelier fix "<what was wrong>"');
     }
-    const last = readJson<{ invocationId: string; skillName: string }>(lastPath, { what: 'the last invocation', requireKeys: ['invocationId', 'skillName'] });
-    name = assertSkillName(last.skillName); invId = last.invocationId;
+    const last = readJson<LastRun>(lastPath, { what: 'the last invocation', requireKeys: ['invocationId', 'skillName'] });
+    // A piece written again is still the piece first complained about: what is said of it next is said of that run.
+    name = assertSkillName(last.skillName); invId = last.correcting?.of ?? last.invocationId; lastRun = last;
   }
   const complaint = flag('--complaint') ?? positional([]) ?? die('say what was wrong:  atelier fix "<what was wrong>"');
   const L: store.StoreLayout = { root: DATA, skillName: name };
@@ -101,16 +228,28 @@ export async function fix(): Promise<void> {
   console.log(`About your last run of /${name}: "${inv.input.slice(0, 70)}${inv.input.length > 70 ? '…' : ''}"`);
   console.log(`You said: "${complaint}"\n`);
 
+  // ── WHERE THE COMPLAINT GOES (three ways, and the first is the default) ──────────────────────
+  // Most complaints are about one piece of work. Changing the skill on one of them fits the skill to that piece, so
+  // by default only the piece is written again. The skill changes when the person says it should, for every run
+  // (--always: then a diagnosis says whether it is how the skill carries a rule, or a rule their standard lacks, and
+  // only they can add one). A complaint that the evaluation was wrong changes neither (--evaluation).
+  const route = routeOf(argv, lastRun);
+  if (route === 'THIS_OUTPUT' && lastRun) { thisOutputAgain(L, name, inv, lastRun, complaint); return; }
+  if (route === 'EVALUATION') { aboutTheEvaluation(L, name, inv, complaint); return; }
+  if (route === 'EVERY_RUN' && !said(argv, ALWAYS)) console.log('(This run was not made with `atelier run`, so the piece cannot be written again from here: looking at the skill instead.)\n');
+
   const fb = { feedbackId: `f${sha(`${invId}|${complaint}`).slice(0, 10)}`, invocationId: invId, complaint, at: new Date().toISOString() };
 
   let ranStandard = store.getStandard(L, inv.standardVersionHash) ?? die(`standard ${inv.standardVersionHash} missing.`);
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1.0), maxCalls: numericFlag('--max-calls', 12) };
   const d = await diagnose(clientFor(diagnoserModel()), budget, ranStandard, inv, fb);
-  console.log(`diagnosis  ${d.route}   ($${budget.spentUsd.toFixed(4)})`);
+  console.log(`${PLAIN[d.route] ?? d.route}   ($${budget.spentUsd.toFixed(4)})`);
   console.log(`  ${d.reason}\n`);
   // Written ONCE, after diagnosis, so the record can name the rule the miss was attributed to.
   // The id is content-derived: re-entering the same complaint keeps the first record, and says so.
   const kept = store.putFeedbackOnce(L, d.route === 'IMPLEMENTATION_MISS' ? { ...fb, requirementId: d.requirementId ?? undefined } : fb);
+  // A complaint first recorded when only the piece was written again carries no rule: the diagnosis adds it.
+  if (!kept.written && !kept.record.requirementId && d.route === 'IMPLEMENTATION_MISS' && d.requirementId) store.putFeedback(L, { ...kept.record, requirementId: d.requirementId });
   if (!kept.written) console.log(`  (this complaint about this output was already recorded at ${kept.record.at}; that record stands and is not counted twice)`);
 
   // ── DELIVERY: the standard is not involved; put the approved bytes back ─────────────────────
@@ -386,7 +525,7 @@ async function settleBlindPick(
     // its own. A PREFERRED rule getting worse still withholds the "count favours it" reading below; it
     // just cannot reject without a person.
     const worseRules = new Set(regressions(champReport, candReport));
-    const breaks = candReport.checked.some((c) => worseRules.has(c.requirementId) && c.materiality === 'REQUIRED');
+    const breaks = candReport.checked.some((c) => worseRules.has(c.requirementId) && acts(c));
     const breaksAny = worseRules.size > 0;
     const worse = champ.get(move.requirementId) === 'MET' && cand.get(move.requirementId) === 'VIOLATED';
     const champLetter = championFirst ? 'a' : 'b';

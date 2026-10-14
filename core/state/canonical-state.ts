@@ -105,7 +105,7 @@ export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'H
   | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
   | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
   // what a method requires of the work itself (core/observers/obligations.ts)
-  | 'TABLE' | 'CITED';
+  | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;
@@ -205,6 +205,28 @@ export interface Requirement {
    * it would convert judgment into form-filling. Null is the ordinary case and must stay cheap.
    */
   readonly outputShape: Readonly<Record<string, unknown>> | null;
+  /**
+   * The statement was written BY THE MACHINE FROM ITS CHECK (a count read off the examples, a section order shown by
+   * them), so the check reads all the statement says. Absent on anything a person or a model worded: there, how much
+   * of the sentence the check reads is worked out from the sentence (core/eval/observes.ts). Dropped whenever the
+   * check or the wording is changed afterwards.
+   */
+  readonly wordedFromCheck?: true;
+  /**
+   * THE OWNER STATED THIS RULE, AND THEIR OWN FINISHED WORK DOES NOT DO WHAT ITS CHECK READS: here is what was found.
+   * Either the rule is newer than the work, or the step was read as something they did not mean, and only they know.
+   * Until they confirm it the rule stays theirs and required, is checked and shown on every run, and its check
+   * blocks nothing (core/eval/record-build.ts): a reading the owner's own work contradicts has not earned belief.
+   * Absent once they confirm it.
+   */
+  readonly contested?: string;
+  /**
+   * THE CHECK READS SOMETHING NEAR THE RULE, NOT THE RULE: it was tied to the owner's step by the step's subject
+   * (it speaks of sources and of figures) and not by what the step asks. Its failing is not the rule broken, so it
+   * is run and shown and blocks nothing (core/plan/execution-plan.ts), unless the owner makes the rule required
+   * with this check, which is them saying the check is what they meant.
+   */
+  readonly related?: true;
   /**
    * WHAT MUST BE BOUND FOR THIS RULE TO BE EXECUTED TRUTHFULLY.
    *
@@ -648,6 +670,8 @@ export interface FeedbackRecord {
    *  Evidence strength for a rule counts only records that NAME it — complaints about other rules
    *  used to inflate the dominance check the repair memory exists to enforce. */
   readonly requirementId?: string;
+  /** the complaint is that the evaluation was wrong about the work, not that the work was wrong: never read as a miss of a rule */
+  readonly about?: 'EVALUATION';
   readonly at: string;
 }
 

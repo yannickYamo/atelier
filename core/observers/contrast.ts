@@ -151,7 +151,7 @@ export function deriveContrastRules(
     n += 1;
     out.push({
       requirement: { requirementId: `c${n}`, statement: typeof said === 'function' ? said(measurement) : said, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance,
-        evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, measurement },
+        evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true, measurement },
       conformance: { applicable, present, independent, ...(weak ? { weak: true } : {}), ...(fitted ? { fitted: true } : {}) },
     });
   };

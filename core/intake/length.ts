@@ -184,14 +184,55 @@ function located(request: string): { start: number; stated: StatedLength }[] {
 }
 export const statedLengths = (request: string): StatedLength[] => located(request).map((l) => l.stated);
 
+/**
+ * THE LENGTH DRAFTS ARE CHOSEN BY WHEN THE REQUEST NAMES NONE: the span of the author's own pieces, widened on
+ * each side by that span's width. Twelve explanations of 199 to 217 words give 181 to 235; pieces of 300 to 3,000
+ * give a band that holds nothing, which is right: an author who writes at every length has no usual one. No
+ * number here is chosen: the band comes from the pieces, and every one of them is inside it.
+ *
+ * It applies in one context only, and the caller decides that (cli/commands/invoke.ts, `ownLengthApplies`).
+ */
+export function ownLengthBand(span: readonly [number, number] | null | undefined): readonly [number, number] | null {
+  if (!span) return null;
+  const [lo, hi] = span; const width = Math.max(1, hi - lo);
+  return [Math.max(1, lo - width), hi + width];
+}
+
+/** How a count sits against a band of words. */
+export const againstBand = (count: number, band: readonly [number, number]): 'met' | 'short' | 'long' => (count < band[0] ? 'short' : count > band[1] ? 'long' : 'met');
+
 /** The length a draft is held to, or null: of the lengths the request states, the last one said, where it was said. */
 export function statedLength(request: string): StatedLength | null {
   return located(request).at(-1)?.stated ?? null;
 }
 
-/** How a count sits against a stated length: inside it, or short or long of it. A target is met within a tenth. */
-export function againstStated(count: number, s: StatedLength): 'met' | 'short' | 'long' {
+/**
+ * IS THE LENGTH THE REQUEST STATES ONE A RUN CAN BE HELD TO? Reading a length to tell the writer about it is cheap to
+ * get wrong; blocking the work and paying for another draft on it is not. So it is held only where there is no
+ * second reading: a count of words, the only count of words in the request, and not the subject of what follows
+ * ("10 words that changed our roadmap"). "A 400-word post, each paragraph under 60 words" names two, and which is
+ * the length of the piece is the person's to say: it is shown as not counted, never guessed.
+ * Returns null where it can be held, or why it cannot.
+ */
+export function notHeldBecause(request: string, s: StatedLength): string | null {
+  if (s.unit !== 'words') return `a length in ${s.unit} is not counted`;
+  // (A count of characters beside it is a second limit too: "72 characters and under 50 words" is about something else.)
+  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*(?:words?|characters?|chars?)\b/gi) ?? [];
+  if (counts.length > 1) return `the request names more than one count${counts.every((c) => /words?$/i.test(c.trim())) ? ' of words' : ''} (${counts.map((c) => c.trim()).join(', ')}), and which is the length of the piece is yours to say`;
+  const after = request.slice(request.indexOf(s.raw) + s.raw.length);
+  if (request.includes(s.raw) && /^\s+(?:that|which|who|every|each)\b/i.test(after)) return 'the count may be what the piece is about, not how long it is';
+  return null;
+}
+
+/** The fewest and the most a stated length allows; null where it sets no such end. A target is met within a tenth. */
+export function statedBounds(s: StatedLength): readonly [number | null, number | null] {
   const lo = s.kind === 'range' || s.kind === 'min' ? s.min : s.kind === 'max' ? null : s.kind === 'exact' ? s.target : (s.target ?? 0) * 0.9;
   const hi = s.kind === 'range' || s.kind === 'max' ? s.max : s.kind === 'min' ? null : s.kind === 'exact' ? s.target : (s.target ?? 0) * 1.1;
+  return [lo, hi];
+}
+
+/** How a count sits against a stated length: inside it, or short or long of it. */
+export function againstStated(count: number, s: StatedLength): 'met' | 'short' | 'long' {
+  const [lo, hi] = statedBounds(s);
   return lo !== null && count < lo ? 'short' : hi !== null && count > hi ? 'long' : 'met';
 }

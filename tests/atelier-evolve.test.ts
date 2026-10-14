@@ -209,12 +209,12 @@ describe('the record says what was tried, what was kept and why, and whether it 
         { round: 1, gene: 'MORE_DRAFTS', key: 'DRAFTS:2', hypothesis: 'h', carry: { drafts: 2, note: '' }, scored: scored(2, 6), kept: false, why: '2 of 6 against 2: a gain of 0 is inside the noise band of 1 case(s)' }],
       end: { drafts: 1, note: 'n' }, heldBack: { start: scored(0, 2), end: scored(2, 2) }, verdict: 'ADOPTED', why: 'the change held on the briefs set aside.', costUsd: 3 };
     const text = renderEvolve(r);
-    expect(text).toMatch(/^SELF-IMPROVEMENT · analysis · 6 working brief\(s\), 2 held back\n {2}as it started {3}1 draft\(s\): 1 and 2 of 6 conformant on two runs\. Noise band: 1 case\(s\)\./);
+    expect(text).toMatch(/^SELF-IMPROVEMENT · analysis · 6 working brief\(s\), 2 held back\n {2}as it started {3}1 draft\(s\): 1 and 2 of 6 with nothing seen to fail on two runs\. Noise band: 1 case\(s\)\./);
     expect(text).toMatch(/round 1 {2}kept {6}name what drafts leave out: 6 of 6 against 2/);
     expect(text).toMatch(/round 1 {2}not kept {2}2 drafts: 2 of 6 against 2: a gain of 0 is inside the noise band/);
     expect(text).toMatch(/held back {7}as it started 0 of 2; as the search left it 2 of 2\./);
     expect(text).toMatch(/A judgement step is scored by nothing here\./);
-    expect(renderEvolve({ ...r, baseline: { first: scored(1, 3), second: null, band: 1 }, trials: [], heldBack: null, verdict: 'STOPPED', why: 'w' })).toMatch(/as it started {3}1 draft\(s\): 1 of 3 conformant on the one run that was made\./);
+    expect(renderEvolve({ ...r, baseline: { first: scored(1, 3), second: null, band: 1 }, trials: [], heldBack: null, verdict: 'STOPPED', why: 'w' })).toMatch(/as it started {3}1 draft\(s\): 1 of 3 with nothing seen to fail on the one run that was made\./);
     expect(scoreOf([{ id: 'a', ok: true, missing: [], costUsd: 0.1 }, { id: 'b', ok: false, missing: ['x1'], costUsd: 0.2 }])).toEqual({ ok: 1, n: 2, costUsd: 0.3, missing: { x1: 1 }, passed: ['a'] });
   });
 });

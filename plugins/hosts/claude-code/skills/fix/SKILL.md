@@ -13,13 +13,17 @@ The user says what was wrong, in their words. Run exactly:
 atelier fix "<their complaint, verbatim>"
 ```
 
+This is for a skill used here, in the host. Where the last run was made on the command line with `atelier run`,
+the same command writes that one piece again and leaves the skill alone; to change the skill for every run, add
+`--always`, and only when the user says every run should do this.
+
 No invocation id, no skill name: Atelier resolves the latest recorded use in this project and its
 first line says which run it is about — **relay that line**, so a misbinding is caught before
 anything is diagnosed against it.
 
 ## What comes back, and what you relay
 
-**`diagnosis IMPLEMENTATION_MISS`** — the standard covers the complaint and the output missed it.
+**`Your rules already say this, and the skill did not carry it.`** — the standard covers the complaint and the output missed it.
 Atelier builds one alternative implementation, re-runs the same task on it, and prints two outputs
 labelled A and B, blinded. Show the user both **without saying which is which**, ask *"Which is
 better — A, B, or the same?"*, and answer with:
@@ -31,7 +35,7 @@ atelier fix "<same complaint>" --pick a|b|same
 The winner is active and installed in the same motion. The StandardVersion hash does not change —
 if the user asks, that is the whole point.
 
-**`diagnosis STANDARD_GAP`** — nothing the user has ratified covers this. Atelier proposes the
+**`Your rules do not say this.`** — nothing the user has ratified covers this. Atelier proposes the
 missing rule and asks the one question that is theirs alone. Put it to them in their terms:
 
 > Your standard doesn't say this. Proposed: "<the sentence>".
@@ -45,8 +49,8 @@ atelier fix "<same complaint>" --skip                       # not their rule
 An approval mints the superseding StandardVersion, compiles and installs it — no further commands.
 **Never answer this question for them.** A machine may propose; only the person makes it theirs.
 
-**`DELIVERY_FAILURE`** — the installed file was not what they approved; Atelier has already put the
-approved bytes back. **`UNCERTAIN`** — relay Atelier's one clarifying question and re-run `fix` with
+**`The skill that ran was not the one you approved.`** — the installed file was not what they approved; Atelier has already put the
+approved bytes back. **`It is not clear what should change.`** — relay Atelier's one clarifying question and re-run `fix` with
 a sharper complaint.
 
 ## For a one-word reaction with no repair wanted

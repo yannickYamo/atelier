@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t6",
+ "run": 0,
+ "seconds": 54.7,
+ "output": "## Verdict\n\nEstuary costs least for a team of 60, at $660 per month. All three minimums fall below the team size, so every vendor bills for exactly 60 seats and the ranking follows the per-seat rate alone. Estuary's $11 is the lowest on the list.\n\n## Vendor pricing\n\n| Vendor | Price per seat | Minimum seats |\n|---|---|---|\n| Gable | $17 | 50 |\n| Lumen Path | $24 | 5 |\n| Estuary | $11 | 20 |\n\n## Cost at this size\n\nSeats paid for is the team size (60) or the vendor minimum, whichever is larger. At 60 people the minimums of 50, 5 and 20 are all irrelevant.\n\n- **Estuary:** 60 × $11 = **$660 per month**.\n- **Gable:** 60 × $17 = **$1,020 per month**.\n- **Lumen Path:** 60 × $24 = **$1,440 per month**.\n\nEstuary is $360 per month cheaper than Gable and $780 cheaper than Lumen Path — $4,320 and $9,360 over twelve months.\n\n## Risks\n\nBecause no minimum binds at this size, the comparison rests entirely on list rates, and it is stable: Estuary stays cheapest at every headcount above 50. Below 50 the picture shifts. Gable's floor fixes its bill at $850 down to 50 seats, and Estuary's floor fixes its bill at $220 down to 20 seats, so a team shrinking toward 20 would find Lumen Path's 5-seat minimum the only one that tracks actual headcount.\n\nThis is a price comparison and nothing more. The list carries no detail on features, support tiers, usage caps, security posture or contract terms, so the cheapest seat may not be a comparable product — Lumen Path costs more than twice Estuary per seat, and the list gives no way to judge whether that buys anything.\n\nAll figures assume monthly billing at list price. Annual commitments, volume discounts at 60 seats, onboarding fees and migration costs are not on the price list and could reorder these totals.",
+ "costUsd": 0.1355,
+ "cut": []
+}

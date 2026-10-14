@@ -45,7 +45,7 @@ flowchart TD
   P6 --> S6b["Review the few rules that decide<br/>most outputs, accept the rest"]:::later
   P6 --> S6c["Ready-made standards,<br/>a check on pull requests"]:::later
   P7 --> S7a["Rules stated by the owner,<br/>examples read for the rest"]:::shipped
-  P7 --> S7b["A skill from a methodology and<br/>examples of good output"]:::later
+  P7 --> S7b["A skill from a method and<br/>examples of good output"]:::shipped
 
   classDef shipped fill:#d7f0dd,stroke:#2f7d45,color:#12351d;
   classDef testing fill:#fdf1c7,stroke:#a67c00,color:#3d2e00;
@@ -135,7 +135,7 @@ method, to their idea of a finished one. That is a standard too, and it is not a
 | Solution | State | The evidence, or the test that decides |
 |---|---|---|
 | Rules the owner states (`atelier skill`, `atelier add`) beside rules read from examples | Shipped | Both paths are tested; they have not been measured together on a method |
-| A skill from a methodology and examples of good output | Exploration, after the closing test | First an experiment with no code on one real method; see [Exploration](#exploration-after-the-closing-test) |
+| A skill from a method and examples of good output (`atelier new <your-work> --method <note>`) | Shipped for 2.0; development evidence only | The standing comparison on four domains (bench/standing): against the examples pasted and against the method with the examples as a plain prompt. Not yet read by anyone but the builder |
 
 ## The order from here
 

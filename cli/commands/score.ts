@@ -26,13 +26,14 @@
 //
 // A score, not a gate: it exits 0 whatever the number, and 2 when it could not score.
 
+import { basename } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import * as fstore from '../../core/state/fidelity-store.js';
 import { checkDraftAsync } from '../../core/loop/run-repair.js';
 import { readFidelity, inBandShare } from '../../core/fidelity/profile.js';
 import { checkClass } from '../../core/observers/doc-class.js';
-import type { VerifyReport } from '../../core/observers/verify.js';
+import { acts, type VerifyReport } from '../../core/observers/verify.js';
 import type { FidelityReading } from '../../core/fidelity/types.js';
 import { checksFor } from '../checks.js';
 import { DATA, argv, flag, positional, assertSkillName } from '../runtime.js';
@@ -77,7 +78,7 @@ export function scoreOf(report: VerifyReport, reading: FidelityReading | null): 
   for (const c of report.checked) {
     const floor = FLOOR.test(c.requirementId);
     let counts: ScoreComponent | null = null;
-    if (!floor && c.materiality === 'REQUIRED' && (c.result.verdict === 'MET' || c.result.verdict === 'VIOLATED')) {
+    if (!floor && acts(c) && (c.result.verdict === 'MET' || c.result.verdict === 'VIOLATED')) {
       counts = 'required'; applicable += 1; if (c.result.verdict === 'MET') met += 1;
     }
     if (c.requirementId === 'UNSOURCED') {
@@ -132,7 +133,8 @@ export async function score(): Promise<void> {
   const materialFile = flag('--material');
   if (materialFile && !existsSync(materialFile)) fail(`there is no material file at ${materialFile}.`);
   const material = [task, materialFile ? readFileSync(materialFile, 'utf8') : '', ...store.getMaterial(L).map((m) => m.text)].filter(Boolean).join('\n\n');
-  const checks = checksFor(L, { material, task, guardClaims: true, offline: true });
+  const named = [...(materialFile ? [{ name: basename(materialFile), text: readFileSync(materialFile, 'utf8') }] : []), ...store.getMaterial(L).map((m) => ({ name: m.name, text: m.text }))];
+  const checks = checksFor(L, { material, task, context: { ...(task ? { request: task } : {}), material: named }, guardClaims: true, offline: true, bound: Boolean(materialFile) || store.getMaterial(L).length > 0 });
   const report = await checkDraftAsync(name, v, text, checks);
   const activeRelease = fstore.getActiveRelease(L);
   const profile = (activeRelease?.release.profileHash ? fstore.getProfile(L, activeRelease.release.profileHash) : null) ?? fstore.getProfile(L);

@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t7",
+ "run": 1,
+ "seconds": 6.7,
+ "output": "Right now, above your head, a fleet of satellites is circling the Earth. Each one carries an extremely accurate clock and does one simple job. It broadcasts a radio signal saying who it is and exactly what time it sent that message.\n\nYour phone listens. When the signal arrives, your phone compares the time stamped on it with the current time. The gap is tiny, a fraction of a second, but radio waves travel at a known speed. Multiply that speed by the delay, and you have your distance from that satellite.\n\nOne distance alone is not enough. It only tells you that you sit somewhere on a huge sphere around that satellite. Catch a second satellite and the possibilities shrink. A third narrows it further, and a fourth pins down your position and corrects your phone's clock.\n\nThink of being lost in a city and hearing three church bells. If you know how far away each one is, only one spot fits all three. Your phone does the same thing with maths instead of ears.\n\nAccuracy drops when buildings or trees block the view. Your phone needs a clear line to several satellites at once.\n\nIn short, GPS measures how long signals take to reach you, then works backwards to find where you must be."
+}

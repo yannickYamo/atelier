@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t7",
+ "run": 0,
+ "seconds": 8.2,
+ "output": "Your phone shows a blue dot on a map, accurate to a few metres. It works that out by listening to clocks in space.\n\nAround twenty-four satellites orbit roughly 12,000 miles above you. Each carries an atomic clock, accurate to a billionth of a second. Each one broadcasts the same simple message, over and over: here is who I am, and here is the exact time I am sending this.\n\nYour phone receives that message slightly late, because radio waves need time to cross the distance. They travel at the speed of light, so the delay is tiny, a fraction of a second. But your phone can measure it. Multiply that delay by the speed of light, and you have your distance from that satellite.\n\nOne distance alone is not much use. Knowing you are 12,000 miles from a satellite places you somewhere on an enormous sphere around it. Add a second satellite and the two spheres overlap in a circle. Add a third and you are down to a couple of points, one of which is absurd, out in space. Add a fourth and your position is pinned down, along with the exact time.\n\nImagine three friends shouting your name across a field. By how faint each voice sounds, you could work out roughly where you stand between them.\n\nYour phone does no shouting back. It only listens, which is why GPS keeps working with no signal bars.\n\nIn short, GPS measures how long radio messages take to arrive, then triangulates you from several satellites at once."
+}

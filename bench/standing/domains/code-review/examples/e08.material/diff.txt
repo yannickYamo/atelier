@@ -1,0 +1,65 @@
+diff --git a/src/sync/retry.py b/src/sync/retry.py
+--- a/src/sync/retry.py
++++ b/src/sync/retry.py
+@@ -86,0 +86,61 @@
++"""Retry helpers for the sync subsystem.
++
++These utilities wrap calls to the remote inventory service so that transient
++network failures do not abort a whole sync run.
++"""
++
++import logging
++import random
++import time
++
++logger = logging.getLogger(__name__)
++
++DEFAULT_ATTEMPTS = 5
++DEFAULT_BACKOFF = 0.5
++MAX_BACKOFF = 30.0
++
++
++class TransientError(Exception):
++    """Raised when an operation failed but may succeed if repeated."""
++
++
++def compute_backoff(attempt, base=DEFAULT_BACKOFF, jitter=True):
++    """Return the number of seconds to sleep before the next attempt."""
++    delay = min(base * (2 ** attempt), MAX_BACKOFF)
++    if jitter:
++        delay += random.uniform(0, base)
++    return delay
++
++
++def call_with_retry(func, *args, attempts=DEFAULT_ATTEMPTS, **kwargs):
++    """Invoke *func*, retrying on TransientError with exponential backoff."""
++    last_error = None
++    for attempt in range(attempts):
++        try:
++            return func(*args, **kwargs)
++        except TransientError as exc:
++            last_error = exc
++            logger.warning("attempt %d/%d failed: %s", attempt + 1, attempts, exc)
++            if attempt + 1 < attempts:
++                time.sleep(compute_backoff(attempt))
++    raise last_error
++
++
++def drain_queue(queue, handler):
++    """Pop and process every pending item, retrying each one as needed."""
++    processed = 0
++    while queue:
++        item = queue.pop(0)
++        call_with_retry(handler, item)
++        processed += 1
++    return processed
++
++
++def wait_until_ready(probe, deadline=None):
++    """Block until *probe* reports the remote endpoint is accepting writes."""
++    started = time.monotonic()
++    while not probe():
++        if deadline is not None and time.monotonic() - started > deadline:
++            raise TimeoutError("endpoint did not become ready in time")
++    logger.info("endpoint ready after %.2fs", time.monotonic() - started)
++    return True

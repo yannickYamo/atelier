@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t6",
+ "run": 1,
+ "seconds": 7.1,
+ "output": "Picture a shared notebook that records who paid whom. Normally one organisation, say a bank, keeps that notebook and everyone trusts them to keep it honest. A blockchain removes the bank. Instead, thousands of computers each hold an identical copy of the same notebook.\n\nNew transactions get bundled into a page, and each page is called a block. Before a page is added, the network has to agree it is valid. Once agreed, the page is stapled onto the end of the existing stack. That growing stack is the chain.\n\nThe clever part is how the pages are stapled. Every block carries a digital fingerprint of the block before it, calculated from its exact contents. Change one old entry and the fingerprint changes, so every page after it no longer matches. The tampering announces itself immediately.\n\nImagine a village where hundreds of people each keep the same ledger and read every entry aloud at the end of the day. Forging a line in your own copy achieves nothing, because everyone else's copy disagrees with you.\n\nThis is why blockchains are described as tamper-evident rather than tamper-proof. Nothing stops you editing your copy. It simply gets ignored.\n\nIn short, a blockchain is a shared record that many strangers maintain together, where history is hard to rewrite without everyone noticing."
+}

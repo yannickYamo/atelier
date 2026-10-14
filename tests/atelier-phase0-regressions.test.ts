@@ -51,16 +51,17 @@ describe('--help never runs the command', () => {
     expect(dispatched.filter((c) => !(c in USAGE))).toEqual([]);
   });
 
-  it('bare --help leads with the six verbs, in order, then still lists every command', () => {
+  it('bare --help is the three verbs a skill is lived with, and atelier lab lists every other command', () => {
     const { data, proj } = fresh();
     const out = run(data, proj, '--help');
     expect(out).not.toMatch(/^EXIT:/);
     const lines = out.split('\n');
     expect(lines[0]).toMatch(/^atelier: /);
-    expect(lines.slice(2, 8).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'invoke', 'verify', 'material', 'fix', 'status']);
-    // AGENTS.md: "`atelier --help` lists everything". `study` is the one eval-only command left out.
-    const every = /every command: (.+)/.exec(out)?.[1].split(' · ') ?? [];
-    expect(Object.keys(USAGE).filter((c) => c !== 'study' && !every.includes(c))).toEqual([]);
+    expect(lines.slice(2, 5).map((l) => /atelier ([a-z]+)/.exec(l)?.[1])).toEqual(['new', 'run', 'fix']);
+    // AGENTS.md: "`atelier lab` lists everything else". `study` is the one eval-only command left out.
+    const lab = run(data, proj, 'lab');
+    const every = new Set([...lab.matchAll(/[a-z][a-z-]+/g)].map((m) => m[0]));
+    expect(Object.keys(USAGE).filter((c) => !['study', 'new', 'run', 'fix', 'lab'].includes(c) && !every.has(c))).toEqual([]);
   });
 
   it('--version answers', () => {
@@ -451,7 +452,7 @@ describe('a resumed fix pairs the candidate with a run of the same task, or not 
     await script({ byTool: { emit_piece: { piece: 'the original answer' } } });
     expect(runM(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the recommendation', ...MODEL())).not.toMatch(/^EXIT:/);
     await script({ byTool: { emit_coverage: COVERED, emit_piece: { piece: 'the improved answer' } } });
-    expect(runM(data, proj, 'fix', 'the answer buried the recommendation', ...MODEL())).toContain('--pick a|b|same');
+    expect(runM(data, proj, 'fix', '--always', 'the answer buried the recommendation', ...MODEL())).toContain('--pick a|b|same');
     return { data, proj };
   };
 
@@ -460,7 +461,7 @@ describe('a resumed fix pairs the candidate with a run of the same task, or not 
     await script({ byTool: { emit_piece: { piece: 'the summary answer' } } });
     expect(runM(data, proj, 'invoke', '--skill', 'focus', '--task', 'write the summary', ...MODEL())).not.toMatch(/^EXIT:/);
     await script({ byTool: { emit_coverage: COVERED, emit_piece: { piece: 'unused' } } });
-    const out = runM(data, proj, 'fix', 'the summary buried the point', ...MODEL());
+    const out = runM(data, proj, 'fix', '--always', 'the summary buried the point', ...MODEL());
     expect(out, 'a run of another task was paired with this one').not.toContain('──── A ────');
     expect(out).not.toContain('the improved answer');
     expect(out).toMatch(/already waiting for your decision/);
@@ -472,7 +473,7 @@ describe('a resumed fix pairs the candidate with a run of the same task, or not 
   it('the same task resumes the pair as before (the polarity)', async () => {
     const { data, proj } = await seeded();
     await script({ byTool: { emit_coverage: COVERED, emit_piece: { piece: 'unused' } } });
-    const out = runM(data, proj, 'fix', 'the answer buried the recommendation', ...MODEL());
+    const out = runM(data, proj, 'fix', '--always', 'the answer buried the recommendation', ...MODEL());
     expect(out).toContain('──── A ────');
     expect(out).toContain('the improved answer');
     expect(out).toContain('the original answer');

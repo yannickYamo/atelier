@@ -68,7 +68,7 @@ describe('the record counts the shape, and says it', () => {
     const r = record([one({ shape: { sections: { of: 3, held: 3, missing: [] } } }), one({ id: 'fm.md', conformant: false, shape: { sections: { of: 4, held: 1, missing: ['a', 'b', 'c'] } }, why: 'it lacks 3 section(s) your held-back piece has: a, b, c' })]);
     expect(countsOf(r).shape).toEqual({ held: 4, of: 7 });
     expect(renderReproduction(r)).toMatch(/ {2}4 of 7 {3}sections of your held-back pieces are in the outputs, each with something in it/);
-    expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: the run's own verdict was "conformant", and the output has two thirds or more of the sections of the piece held back/);
+    expect(renderReproduction(r)).toMatch(/1 of 2 {3}reproduced: nothing required was seen to fail on the run, and the output has two thirds or more of the sections of the piece held back/);
   });
 });
 

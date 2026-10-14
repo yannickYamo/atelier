@@ -237,7 +237,7 @@ describe('steps, as the review found them misread', () => {
   it('a step that forbids a section, or asks for it only sometimes, is not a requirement that it be there', () => {
     for (const step of ['Do not end with a Sources section unless asked.', 'Add a Risks section only when the change touches billing.', 'Give the Risks section a second read before sending.',
       'With the Verdict section done, check the tone.', 'Put the answer under a heading that fits the reader best.']) {
-      expect(of(`- ${step}\n`, new RegExp(`^${step.slice(0, 12)}`)), step).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, demoted: null });
+      expect(of(`- ${step}\n`, new RegExp(`^${step.slice(0, 12)}`)), step).toMatchObject({ obligation: 'JUDGEMENT', measurement: null, conflict: null });
     }
   });
 });
@@ -284,7 +284,7 @@ describe('a step is a step when it tells the writer what to do, however its sent
     const note = '- Open with a Background section.\n- End with an Assessment section.\n- Open with a Security section.\n';
     expect(of(note, /^Open with a Background/)).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Background'], opens: 1, body: 1 } } });
     expect(of(note, /^End with an Assessment/)).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Assessment'], closes: 1, body: 1 } } });
-    expect(of(note, /^Open with a Security/)).toMatchObject({ obligation: 'JUDGEMENT', demoted: expect.stringMatching(/your example does not hold it .*opens with "Background"/) as unknown });
+    expect(of(note, /^Open with a Security/)).toMatchObject({ obligation: 'DELIVERABLE', conflict: expect.stringMatching(/your example does not do this .*opens with "Background"/) as unknown });
   });
   it('a section only mentioned in passing is still no requirement on the shape of the work', () => {
     const note = '- Never give the Assessment before reading the whole diff.\n- Keep the Background short.\n';
@@ -324,12 +324,12 @@ describe('through the binary: a skill is its owner\'s, and another folder does n
     const asBuilt = stored();
     const clash = run(second, 'method', 'method.md', '--golden', 'example.md', '--yes');
     expect(clash.code).not.toBe(0);
-    expect(clash.err).toMatch(/a skill called "method" already exists, and this folder has no record of building it\. Building here would replace its standard\. Give this one a name of its own: --name <name>\./);
+    expect(clash.err).toMatch(/a skill called "method" already exists, and this folder did not build it\. Give this one a name of its own: --name <name>\./);
     // the first skill is as it was built, standard and version, and the second builds under its own name
     expect(stored()).toBe(asBuilt);
     // a name longer than a skill's name can be is the name it is cut to, and is refused as that
     const long = 'a-name-that-runs-well-past-the-forty-characters-a-skill-may-carry';
-    expect(run(first, 'method', 'method.md', '--golden', 'example.md', '--name', long, '--review').out).toMatch(/--name a-name-that-runs-well-past-the-forty-char(?:a)? --yes|--name [a-z-]{1,40} --yes/);
+    expect(run(first, 'method', 'method.md', '--golden', 'example.md', '--name', long, '--review').out).toMatch(/--name a-name-that-runs-well-past-the-forty-char(?:a)?$|--name [a-z-]{1,40}$/m);
     expect(run(second, 'method', 'method.md', '--golden', 'example.md', '--name', 'Second Review', '--yes').out).toMatch(/second-review/);
   }, 180_000);
   it('a method whose every step the example holds is built in one call, with nothing to confirm', () => {

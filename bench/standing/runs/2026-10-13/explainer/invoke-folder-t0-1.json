@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t0",
+ "run": 1,
+ "seconds": 17.5,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds chemicals that are desperate to react with each other, and it keeps them apart.\n\nInside are two different materials, one at each end. One of them readily gives up electrons, the tiny particles that make up electric current. The other readily accepts them. Between the two sits a paste or liquid called the electrolyte, which blocks electrons from taking a shortcut.\n\nSo the electrons have only one route: the wire you connect to the outside. On their way through, they power your torch or your phone. That flow is the energy being released.\n\nThink of a boulder resting at the top of a hill. Nothing is moving, yet the position itself holds potential. Open a path downhill and that potential becomes motion. A battery is chemically perched in the same way.\n\nA flat battery means the reaction has largely finished. The materials have settled into a stabler, lower-energy arrangement. In a rechargeable cell, plugging it in forces that reaction backwards, pushing the boulder uphill again. Ordinary batteries cannot be shoved back, which is why you throw them away.\n\nIn short, a battery stores energy as chemistry held in tension, waiting for you to open the circuit.",
+ "costUsd": 0.1635,
+ "cut": []
+}

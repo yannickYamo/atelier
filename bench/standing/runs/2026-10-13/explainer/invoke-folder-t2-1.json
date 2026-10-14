@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t2",
+ "run": 1,
+ "seconds": 17.6,
+ "output": "Sound is movement. A rumbling engine pushes the air into waves, and those waves press against your eardrum. Noise-cancelling headphones work by sending out a second set of waves to cancel the first.\n\nTiny microphones sit on the outside of each earcup. They listen to the noise heading towards you, moment by moment. A small processor inside reads that pattern and builds its mirror image. Where the incoming wave pushes, the new wave pulls. The two meet near your ear and largely flatten each other out.\n\nThink of two people pushing a swing from opposite sides with equal force. The swing barely moves, even though both are shoving hard. Silence here is not the absence of sound. It is sound arranged to undo itself.\n\nThis trick works best on steady, low drones. Aircraft engines, train carriages and air conditioning all fall in that range. Sudden, high sounds change too fast for the processor to match, which is why a nearby voice still cuts through.\n\nThe earcups help too. Soft padding physically blocks some noise before any electronics get involved. Most headphones use both methods together.\n\nIn short, your headphones listen to the noise around you, then play its opposite so the two largely cancel.",
+ "costUsd": 0.0671,
+ "cut": []
+}

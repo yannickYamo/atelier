@@ -1,0 +1,697 @@
+[
+ {
+  "id": "blog-post-01",
+  "label": "PART",
+  "what": "title under 12 words"
+ },
+ {
+  "id": "blog-post-02",
+  "label": "PART",
+  "what": "single italic line directly under the title"
+ },
+ {
+  "id": "blog-post-03",
+  "label": "PART",
+  "what": "first paragraph contains a number"
+ },
+ {
+  "id": "blog-post-04",
+  "label": "PART",
+  "what": "phrase \"In this post I will\" absent"
+ },
+ {
+  "id": "blog-post-05",
+  "label": "WHOLE",
+  "what": "unheaded text before first heading; first heading is The Problem"
+ },
+ {
+  "id": "blog-post-06",
+  "label": "WHOLE",
+  "what": "heading order; Takeaways last"
+ },
+ {
+  "id": "blog-post-08",
+  "label": "PART",
+  "what": "2-4 sentences per paragraph; at most one one-sentence paragraph"
+ },
+ {
+  "id": "blog-post-09",
+  "label": "PART",
+  "what": "numbered list of at least two items under What We Tried"
+ },
+ {
+  "id": "blog-post-10",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-11",
+  "label": "PART",
+  "what": "exactly one code block, under What Worked, at most 15 lines"
+ },
+ {
+  "id": "blog-post-12",
+  "label": "WHOLE",
+  "what": "fence has language tag; preceding line ends with a colon"
+ },
+ {
+  "id": "blog-post-17",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-19",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-20",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-21",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-22",
+  "label": "PART",
+  "what": "one paragraph, at most 80 words"
+ },
+ {
+  "id": "blog-post-23",
+  "label": "WHOLE",
+  "what": "exactly three bullets, each under 20 words"
+ },
+ {
+  "id": "blog-post-24",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-25",
+  "label": "WHOLE",
+  "what": "no exclamation marks"
+ },
+ {
+  "id": "blog-post-26",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-28",
+  "label": "WHOLE",
+  "what": "Title Case, at most five words, no question mark"
+ },
+ {
+  "id": "blog-post-29",
+  "label": "PART",
+  "what": "a number appears in the first 100 words"
+ },
+ {
+  "id": "blog-post-30",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-31",
+  "label": "WHOLE",
+  "what": "every sentence under 28 words"
+ },
+ {
+  "id": "blog-post-32",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-33",
+  "label": "PART",
+  "what": "\"might possibly\" and \"somewhat\" absent"
+ },
+ {
+  "id": "blog-post-34",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-35",
+  "label": "WHOLE",
+  "what": "last non-blank line is the final Takeaways bullet"
+ },
+ {
+  "id": "blog-post-36",
+  "label": "PART",
+  "what": "\"recently\" and \"for a while\" absent"
+ },
+ {
+  "id": "blog-post-37",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-38",
+  "label": "WHOLE",
+  "what": "no bold markup outside headings"
+ },
+ {
+  "id": "blog-post-39",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "blog-post-40",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-01",
+  "label": "WHOLE",
+  "what": "first line has PR number and title matching the supplied PR"
+ },
+ {
+  "id": "code-review-02",
+  "label": "WHOLE",
+  "what": "Verdict is the first section"
+ },
+ {
+  "id": "code-review-03",
+  "label": "WHOLE",
+  "what": "bold word in Verdict is one of the three"
+ },
+ {
+  "id": "code-review-04",
+  "label": "PART",
+  "what": "one sentence after the verdict word, under 30 words"
+ },
+ {
+  "id": "code-review-05",
+  "label": "PART",
+  "what": "second section is Summary; not a verbatim copy of the PR description"
+ },
+ {
+  "id": "code-review-06",
+  "label": "PART",
+  "what": "one paragraph, at most 4 sentences"
+ },
+ {
+  "id": "code-review-07",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-08",
+  "label": "WHOLE",
+  "what": "section order; Next Steps last"
+ },
+ {
+  "id": "code-review-09",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-10",
+  "label": "PART",
+  "what": "blocking issues numbered, at most five"
+ },
+ {
+  "id": "code-review-12",
+  "label": "PART",
+  "what": "quoted code appears verbatim in the supplied diff"
+ },
+ {
+  "id": "code-review-13",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-14",
+  "label": "PART",
+  "what": "each blocking item has a sentence starting \"Suggest:\""
+ },
+ {
+  "id": "code-review-15",
+  "label": "WHOLE",
+  "what": "bulleted list, at most 6 bullets, one sentence each"
+ },
+ {
+  "id": "code-review-16",
+  "label": "WHOLE",
+  "what": "each bullet starts \"Nit:\" or \"Consider:\""
+ },
+ {
+  "id": "code-review-17",
+  "label": "WHOLE",
+  "what": "four listed words absent"
+ },
+ {
+  "id": "code-review-18",
+  "label": "PART",
+  "what": "\"you\" absent from the issue sections"
+ },
+ {
+  "id": "code-review-19",
+  "label": "PART",
+  "what": "each item ends with a question mark; at most 3"
+ },
+ {
+  "id": "code-review-20",
+  "label": "WHOLE",
+  "what": "both headings present; \"None.\" when no items"
+ },
+ {
+  "id": "code-review-22",
+  "label": "WHOLE",
+  "what": "Covered cells are Yes, No or Partial"
+ },
+ {
+  "id": "code-review-24",
+  "label": "PART",
+  "what": "Where is \"n/a\" when Covered is No; named file and function exist in supplied material"
+ },
+ {
+  "id": "code-review-25",
+  "label": "PART",
+  "what": "2 or 3 bullets"
+ },
+ {
+  "id": "code-review-26",
+  "label": "PART",
+  "what": "@handles appear only in What Works or Next Steps and match the supplied PR"
+ },
+ {
+  "id": "code-review-27",
+  "label": "PART",
+  "what": "numbered list of at most 4 items"
+ },
+ {
+  "id": "code-review-28",
+  "label": "WHOLE",
+  "what": "final line is one of the two fixed strings"
+ },
+ {
+  "id": "code-review-29",
+  "label": "WHOLE",
+  "what": "under 500 words"
+ },
+ {
+  "id": "code-review-30",
+  "label": "WHOLE",
+  "what": "every figure appears in the supplied diff or PR description"
+ },
+ {
+  "id": "code-review-31",
+  "label": "PART",
+  "what": "ticket ID from the supplied material appears in Summary"
+ },
+ {
+  "id": "code-review-32",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-33",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-34",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-35",
+  "label": "WHOLE",
+  "what": "each blocking item starts with bold text of at most 6 words"
+ },
+ {
+  "id": "code-review-36",
+  "label": "WHOLE",
+  "what": "no headings deeper than ##"
+ },
+ {
+  "id": "code-review-37",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-38",
+  "label": "WHOLE",
+  "what": "every sentence under 30 words"
+ },
+ {
+  "id": "code-review-39",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "code-review-40",
+  "label": "WHOLE",
+  "what": "verdict word consistent with whether Blocking Issues has items"
+ },
+ {
+  "id": "contract-01",
+  "label": "PART",
+  "what": "title starts \"Term Summary:\""
+ },
+ {
+  "id": "contract-02",
+  "label": "WHOLE",
+  "what": "italic line between title and section 1 with Draft, For Review or Agreed"
+ },
+ {
+  "id": "contract-04",
+  "label": "PART",
+  "what": "a bold, quoted short name is introduced for each of two parties"
+ },
+ {
+  "id": "contract-05",
+  "label": "WHOLE",
+  "what": "\"the Company\" absent"
+ },
+ {
+  "id": "contract-06",
+  "label": "WHOLE",
+  "what": "section order"
+ },
+ {
+  "id": "contract-07",
+  "label": "WHOLE",
+  "what": "headings numbered 1 to 9"
+ },
+ {
+  "id": "contract-08",
+  "label": "PART",
+  "what": "one sentence, at most 40 words"
+ },
+ {
+  "id": "contract-10",
+  "label": "WHOLE",
+  "what": "every Term Sheet Ref cell matches \"TS cl. N.N\""
+ },
+ {
+  "id": "contract-11",
+  "label": "PART",
+  "what": "figures with units in the document appear verbatim in the term sheet"
+ },
+ {
+  "id": "contract-12",
+  "label": "WHOLE",
+  "what": "money as code then figure, no currency symbols; periods as numeral plus unit"
+ },
+ {
+  "id": "contract-13",
+  "label": "PART",
+  "what": "6 to 9 rows in Key Terms"
+ },
+ {
+  "id": "contract-14",
+  "label": "PART",
+  "what": "numbered list, at most 6 items, one sentence each"
+ },
+ {
+  "id": "contract-15",
+  "label": "PART",
+  "what": "\"will\", \"must\", \"should\" absent from Obligations"
+ },
+ {
+  "id": "contract-16",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-17",
+  "label": "PART",
+  "what": "lettered sub-items (a), (b)..., at most four"
+ },
+ {
+  "id": "contract-18",
+  "label": "PART",
+  "what": "each bold quoted term appears in that form exactly once"
+ },
+ {
+  "id": "contract-19",
+  "label": "WHOLE",
+  "what": "phrases absent unless in the term sheet; then quoted with a clause cite"
+ },
+ {
+  "id": "contract-20",
+  "label": "WHOLE",
+  "what": "four listed phrases absent"
+ },
+ {
+  "id": "contract-22",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-23",
+  "label": "PART",
+  "what": "one sentence; contains \"exclusive\" or \"non-exclusive\""
+ },
+ {
+  "id": "contract-25",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-26",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-27",
+  "label": "WHOLE",
+  "what": "at most 5 rows, or \"None identified\" under a retained heading"
+ },
+ {
+  "id": "contract-28",
+  "label": "WHOLE",
+  "what": "each cell is \"Silent\" or a quote found in the term sheet plus a clause"
+ },
+ {
+  "id": "contract-29",
+  "label": "WHOLE",
+  "what": "three lines with the three fixed labels"
+ },
+ {
+  "id": "contract-30",
+  "label": "PART",
+  "what": "version and date string in Sign-Off appears verbatim in the term sheet"
+ },
+ {
+  "id": "contract-31",
+  "label": "WHOLE",
+  "what": "350 to 500 words including tables"
+ },
+ {
+  "id": "contract-32",
+  "label": "WHOLE",
+  "what": "every sentence under 35 words"
+ },
+ {
+  "id": "contract-33",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-34",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-35",
+  "label": "WHOLE",
+  "what": "dates match \"D Month YYYY\"; no numeric date forms"
+ },
+ {
+  "id": "contract-36",
+  "label": "WHOLE",
+  "what": "no capitalised Party/Parties outside headings and sentence starts"
+ },
+ {
+  "id": "contract-37",
+  "label": "WHOLE",
+  "what": "five listed words absent"
+ },
+ {
+  "id": "contract-38",
+  "label": "PART",
+  "what": "words-versus-figures mismatches in the term sheet detected; neither value used"
+ },
+ {
+  "id": "contract-39",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "contract-40",
+  "label": "WHOLE",
+  "what": "last line is the fixed sentence, after Sign-Off"
+ },
+ {
+  "id": "teardown-01",
+  "label": "PART",
+  "what": "title starts \"Teardown:\""
+ },
+ {
+  "id": "teardown-02",
+  "label": "PART",
+  "what": "line directly under the title starts \"Examined:\""
+ },
+ {
+  "id": "teardown-04",
+  "label": "WHOLE",
+  "what": "bold Low, Moderate, High or Critical in Bottom Line"
+ },
+ {
+  "id": "teardown-05",
+  "label": "WHOLE",
+  "what": "section order; What We Should Do last"
+ },
+ {
+  "id": "teardown-06",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-08",
+  "label": "WHOLE",
+  "what": "exactly three bullets"
+ },
+ {
+  "id": "teardown-09",
+  "label": "PART",
+  "what": "bold label of two to four words, then one sentence"
+ },
+ {
+  "id": "teardown-10",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-11",
+  "label": "PART",
+  "what": "three bullets with bold label plus one sentence"
+ },
+ {
+  "id": "teardown-12",
+  "label": "PART",
+  "what": "five listed words absent"
+ },
+ {
+  "id": "teardown-13",
+  "label": "PART",
+  "what": "\"the competition\" and \"the enemy\" absent"
+ },
+ {
+  "id": "teardown-16",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-18",
+  "label": "WHOLE",
+  "what": "Edge cells are Them, Us or Even"
+ },
+ {
+  "id": "teardown-19",
+  "label": "PART",
+  "what": "six to eight rows"
+ },
+ {
+  "id": "teardown-20",
+  "label": "WHOLE",
+  "what": "Them and Us cells at most 8 words, no tick or cross characters"
+ },
+ {
+  "id": "teardown-21",
+  "label": "PART",
+  "what": "count of rows with Edge = Them is at least two"
+ },
+ {
+  "id": "teardown-22",
+  "label": "PART",
+  "what": "numbered list of 4 to 7 items, each with a date"
+ },
+ {
+  "id": "teardown-23",
+  "label": "PART",
+  "what": "quoted text appears verbatim in the supplied material"
+ },
+ {
+  "id": "teardown-25",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-26",
+  "label": "WHOLE",
+  "what": "at most two \"My read:\" occurrences"
+ },
+ {
+  "id": "teardown-27",
+  "label": "PART",
+  "what": "numbered list of exactly three items"
+ },
+ {
+  "id": "teardown-28",
+  "label": "PART",
+  "what": "each item ends with a bracketed \"(Team, time frame)\""
+ },
+ {
+  "id": "teardown-29",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-30",
+  "label": "WHOLE",
+  "what": "400 to 600 words"
+ },
+ {
+  "id": "teardown-31",
+  "label": "WHOLE",
+  "what": "no paragraph over three sentences"
+ },
+ {
+  "id": "teardown-33",
+  "label": "WHOLE",
+  "what": "Evidence ends with one sentence starting \"Not verified:\""
+ },
+ {
+  "id": "teardown-34",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-35",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-36",
+  "label": "PART",
+  "what": "\"our solution\" and \"our platform\" absent"
+ },
+ {
+  "id": "teardown-37",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-38",
+  "label": "WHOLE",
+  "what": "## headings only, Title Case, matching the fixed heading list"
+ },
+ {
+  "id": "teardown-39",
+  "label": "NO",
+  "what": ""
+ },
+ {
+  "id": "teardown-40",
+  "label": "WHOLE",
+  "what": "last non-blank line is the third recommendation"
+ }
+]

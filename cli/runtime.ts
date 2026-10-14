@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util';
 import type { SkillMode } from '../core/ratification/suggest.js';
 import { mkdirSync, existsSync, renameSync, readdirSync, readFileSync, copyFileSync, statSync, rmSync } from 'node:fs';
 import { writeAtomic } from '../core/state/fs-atomic.js';
-import { join, dirname, resolve, relative, isAbsolute } from 'node:path';
+import { join, dirname, resolve, relative, isAbsolute, basename } from 'node:path';
 import { homedir } from 'node:os';
 import * as store from '../core/state/store.js';
 import { readJson } from '../core/state/read-json.js';
@@ -66,9 +66,9 @@ export const orchestrated = (): boolean => process.env.ATELIER_ORCHESTRATED === 
 // `node:util.parseArgs` is given this table, so the parser knows an option takes a value because we
 // said so. A census test proves every option the codebase reads is declared, which is what stops the
 // table going stale one flag at a time.
-export const VALUED_OPTIONS: readonly string[] = [
+export const VALUED_OPTIONS: readonly string[] = ['correcting', 
   // `atelier method`: the one finished example, and what the skill is for
-  'golden', 'for',
+  'golden', 'for', 'method',
   // `atelier evolve`: the briefs to work on, how many rounds, and (to a run) what earlier drafts left out
   'briefs', 'rounds', 'carry-note',
   'with',
@@ -98,7 +98,7 @@ export const BOOLEAN_OPTIONS: readonly string[] = [
   'ai-assisted', 'blind-expert', 'delivery-proven', 'no-ai-assist', 'per-passage',
   'regenerate',
   'review', 'score', 'skip', 'skip-methods', 'yes', 'baseline', 'qualify', 'promote',
-  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
+  'reflect', 'no-reflect', 'report', 'phrase', 'calibrate', 'placeholders', 'no-unsourced-note', 'no-redraft', 'no-model', 'always', 'evaluation', 'learn', 'include-reserved', 'taste', 'no-taste', 'setup', 'auto', 'no-fidelity', 'fidelity', 'rollback', 'distill', 'next', 'sections', 'panel', 'quiet', 'label', 'typicality', 'read-subjects', 'strict', 'allow-nonconformant', 'full', 'no-index', 'test-run',
 ];
 
 export const argv = process.argv.slice(2);
@@ -435,6 +435,9 @@ export const describeBinding = (b: RuntimeBinding): string =>
  * question that can be answered locally, which is whether there is a credential to try, and it asks
  * it before any state exists to be stuck in.
  */
+/** Is there a model to ask for this step at all? False only where the default provider has no key: nothing is sent to find out. */
+export const canReach = (role: Role): boolean => providerFor(role) !== 'anthropic' || Boolean(process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN);
+
 export const assertReachable = (role: Role): void => {
   const provider = providerFor(role);
   if (provider === 'anthropic') {
@@ -478,13 +481,16 @@ export const numericFlag = (name: string, fallback: number): number => {
  * prerequisite is matched against, so the author's vocabulary and the runtime's agree by string
  * rather than by a taxonomy neither has needed yet.
  */
+/** The name a file is bound under when none is given: its own, without the folder or the extension. Null when it is no file. */
+const fileStem = (spec: string): string | null => (existsSync(spec) && statSync(spec).isFile() ? basename(spec).replace(/\.[^.]+$/, '') || basename(spec) : null);
+
 export const boundResources = (): ReadonlySet<string> => {
   const names = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
     const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : argv[i + 1];
     if (!spec) die('--with needs <name>=<path>, for example --with support-ticket-history=./tickets.csv');
-    const name = spec.includes('=') ? spec.slice(0, spec.indexOf('=')) : spec;
+    const name = spec.includes('=') ? spec.slice(0, spec.indexOf('=')) : fileStem(spec) ?? spec;
     if (!name) die(`--with "${spec}" has no name before the "=".`);
     names.add(name);
   }
@@ -504,10 +510,13 @@ export const boundMaterial = (): { name: string; path: string; text: string }[] 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== '--with' && !argv[i].startsWith('--with=')) continue;
     const spec = argv[i].startsWith('--with=') ? argv[i].slice('--with='.length) : (argv[i + 1] ?? '');
-    // A bare name binds a resource the caller holds elsewhere. A bare PATH is a mistake that binds nothing, and
-    // the draft is then written with no material: refused, with the form that works.
+    // A FILE IS BOUND BY GIVING IT: `--with change.diff` binds it under its own name (`change`). The name matters only
+    // where a rule asks for material by name, and then it is given: `--with figures=q3.csv`. A bare word that is no
+    // file declares a resource held elsewhere and reads nothing; one that looks like a path and is not there is said.
     if (!spec.includes('=')) {
-      if (/[\\/]|\.(?:md|markdown|txt|json)$/i.test(spec) || existsSync(spec)) die(`--with ${spec}: a file is bound with a name, --with notes=${spec}. A bare name declares a resource held elsewhere and reads no file.`);
+      const stem = fileStem(spec);
+      if (stem) { out.push({ name: stem, path: spec, text: readFileSync(spec, 'utf8') }); continue; }
+      if (/[\\/]|\.[A-Za-z0-9]{1,8}$/.test(spec)) die(`--with ${spec}: there is no file at ${spec}.`);
       continue;
     }
     const name = spec.slice(0, spec.indexOf('='));
@@ -586,6 +595,12 @@ export interface ProposalSet {
 // ── session (one active run per PROJECT; a run is a study, not a session) ─────────────────────
 export interface Session {
   run: Run; skillName: string | null; evidence: ExpertEvidence | null;
+  /**
+   * How this folder came to carry `skillName` before its build finished (cli/commands/method.ts). `owned`: a skill
+   * of that name was already this folder's. Not owned: the name was free when the build began, and is this
+   * folder's only if the skill now stored under it is the one this build was storing. Absent: set by a finished build.
+   */
+  claim?: { owned: boolean };
   /**
    * The project this run belongs to, recorded so an orphan can be identified.
    *

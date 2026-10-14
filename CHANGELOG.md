@@ -7,6 +7,509 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: one evaluation record, and a mark never says more than was observed
+
+A tick beside "Open with a Parties section that names both parties exactly as the term sheet does" said the whole
+rule held, and the check had read that a Parties section opens the work. A length the owner stated was set aside
+when their examples ran longer. A request for 400 words answered with 187 read as checked. Four screens each
+decided again what a result meant. These were one mistake made four times: something was shown as known that was
+only partly observed, or the owner's word was moved by a measurement.
+
+- **One record, judged in one place** (`core/eval/record.ts`). Every requirement on an output is an entry with two
+  things kept apart: whether it is required (the owner's, and nothing measured changes it) and what was observed of
+  it (the proposition a check read, whether that covers the whole rule, part of it or none, and whether the
+  observer can be believed). A requirement passes only when a deterministic or qualified observer read the whole of
+  it and it held. A part that fails still fails the rule. Everything else is unverified, and unverified never
+  blocks. `atelier run`, `--json` (`eval.record`), `atelier report`, `atelier verify` (`record`), the MCP check
+  (`state`, `notVerified`) and `atelier lab eval` read this record and decide nothing themselves.
+- **How much of a rule its check reads is said** (`core/eval/observes.ts`). A rule in your words is covered in full
+  only when every word of it that carries meaning is one the check accounts for; what is left is named, at the
+  build ("checked in part: the rest is yours to read") and on every run (`~`, with "not checked, yours to read").
+  A word the reading does not know costs a tick and never grants one, and a word of place, order, count or choice
+  is the check's only where the check holds it: "Include a Sources section at the end" over a check that reads only
+  that the section exists is read in part. A check against the material (figures given, lines cited) never reads
+  whether the citation is the right one, and says so. A rule the machine worded from its own check (a count read
+  off your examples) is that check; a sentence a person or a model wrote is never taken for one.
+- **What you state is required, whatever your examples do.** A stated step keeps its check when your own finished
+  work does not follow it, and the build never stops for the disagreement: the skill is built, the rule is yours,
+  checked and shown on every run with what was found, and it blocks nothing until you confirm it (`--yes`) or
+  change the method. A reading of your rule that your own work contradicts has not earned the right to block.
+  Agreement between examples decides only what was read off the examples. Steps about a part of the work ("keep sentences under 25 words", "the lede under 40
+  words", "open each section with…") are no longer read as a rule on the whole of it: they are yours to judge.
+- **The request's own length is held as the request's.** "In about 300 words" is an entry of its own, counted on
+  the delivered text, shown with what was written and what it allows; a draft that misses it is written again, and
+  a miss blocks. The method's default length is shown as replaced for that run, not as unchecked. A length is held
+  only where the request reads one way: "a 400-word post, each paragraph under 60 words" names two counts, and a
+  length in sentences is not counted, so each is shown as not counted and left to you, never guessed.
+- **Where the owner requires a length, their examples add no second one.** A draft was being written again toward
+  both the stated limit and the span of the examples.
+- **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your
+  standard wording and is not counted. A run shared with one piece, with that left out, is a lifted passage: it is
+  shown with the words themselves, and blocks only where there were pieces enough to tell the two apart. How long
+  a run may be is read from your own work: twelve words, or one more than the longest run any of your pieces
+  shares with another where that is longer. An essayist's pieces share a few words and a contract drafter's share
+  whole clauses, and new work that shares no more with one example than the examples share among themselves is
+  written the way you write. A
+  held-back reference appearing in an output is leakage, and is `atelier reproduce`'s to find.
+- **The taste reader is off unless asked for** (`--taste`). It is a model's reading of your rules and has not
+  earned a say in whether work can be used.
+- **A run is never refused for what is missing.** A skill that reads the work against material, run without any,
+  writes the work and shows those rules as not checked, with how to have them checked.
+- **One exit code.** `atelier run`, with `--json` or `--answer-only` too, and `atelier verify` exit 1 where
+  something required was seen to fail, and only there; `verify --json` and the MCP check report `failed` the same
+  way, and under a check that held say where it reads only part of its rule.
+
+- **The yes/no kept with a run is the record's** (`standingOf`, `core/eval/record.ts`). `eval.result.conformant`,
+  which `--strict` delivers by and `atelier lab eval`, `atelier reproduce` and `atelier evolve` count, was worked
+  out beside the record from its own list of reasons. It is now read from the record: nothing required was seen
+  to fail, and every check that exists finished. It does not mean verified. A run delivered under `--strict` with
+  part of a rule unread says so; `reproduce` and `evolve` print how many of the runs they count were verified in
+  full beside how many had nothing seen to fail. An evaluation that did not finish (the claim reader could not
+  run, the claim check was turned off, specifics the reader could not decide) is never a pass under `--strict`.
+- **Whether a failed check may act is the plan's, carried on the check line** (`RuleCheck.enforced`, `acts`).
+  Blocking, the sentence rewrite, the mechanical fixes and every count of broken rules read it there; a test lists
+  the files that may still read a rule's own `materiality`, and none of them writes, checks or repairs a run.
+- **A piece written again by `atelier fix` is written under the first run's settings** (model, drafts, cap, what
+  was turned off), with what is typed beside the complaint taking precedence. Where the first run kept no
+  settings, a file given with it is gone, or the skill has changed since, the fix says so before it writes.
+- **A length said of a section is that section's, with or without the word "section"**, and a step that only
+  refers to a table ("three to five rows in that table") is no longer given the table's column check.
+- **A check near a rule is not a check of it.** A step that speaks of sources and of figures was given the lookup
+  of figures in the material, whatever it asked. Where the figures are not what the step is about ("every claim
+  cites a numbered Evidence item", "name the source the first time I cite a figure"), the check is still run and
+  shown, and blocks nothing: its failing is not your rule broken. "Every figure must be sourced from the material"
+  is enforced as before.
+- **`atelier lab evolve` says how much of your standard its score reads** ("scored on 3 of your 17 rules"), and
+  where that is under half, an adoption says it is no evidence the work is better by your standard.
+- **A build that stopped half-way is finished by running it again.** Stopped between storing the standard and
+  installing the skill, the same command was refused with "a skill called … already exists, and this folder did
+  not build it".
+
+`tests/atelier-invariants.test.ts` states eight properties these changes rest on, over every combination of what
+can be observed of a requirement: automation never changes what the owner requires; nothing read off examples
+blocks before the owner adopts it; a partial observation never passes; an unqualified reader never blocks; what a
+request asks is not replaced by what the examples tend to do; a repair cannot break a required rule the draft was
+meeting; a test run or a held-back case is never learned from; and every surface says the same thing about the
+same run. The file is frozen: a new bug becomes a test of the reader or the check it was in.
+
+**If you are upgrading:** a skill built from a method whose examples break a stated rule now checks that rule on
+every run and shows the result, where it was left as a judgement, and enforces it once you confirm it; `eval.result.conformant` is now read from the record: it no longer refuses for a shared run of words where there were too few examples to tell your standard wording from a lifted passage, and is otherwise what it was;
+scripts that read where a run stands should read `eval.record.state`; `--no-taste` is now the default;
+`atelier verify` now exits 1 for a passage lifted from one of your examples, and exits 0 (NEEDS REVIEW) where the
+claim reader could not run or left specifics unconfirmed, which it failed before.
+
+### Changed, for 2.0: three commands, and the evaluation under the work
+
+The tool answered to fifty-nine commands and a run read thirty-eight flags, many of them for studies whose own
+results said they did not help. A person needs three things from it.
+
+- **`atelier new <your-work> --method <note>`** builds the skill: your finished work, and how you do it. It is
+  `atelier method` under the name people look for; without a method note, `atelier new` reads the rules off the
+  examples as before. The screen is your own steps in three groups (checked on every run, yours to judge, seen in
+  your examples) and three lines to say the skill is ready. How each check is made, and the build's own account, is
+  `--report`.
+- **`atelier run "<task>"`** does new work and prints it with its evaluation under it, opening with where the work
+  stands: **BLOCKED** (something required was seen to fail: shown, not usable as it stands, exit 1), **NEEDS REVIEW**
+  (nothing was seen to fail, and part of what you require was not read in full by a check) or **VERIFIED**
+  (everything required was read in full and held). A rule you require is required whether or not a check can read
+  it, so work with judgement in it is never VERIFIED by a machine. In a folder that built one skill, the skill need
+  not be named. `atelier invoke` is the same run with its whole report.
+- **The evaluation is part of what a run returns**, in three layers that are different promises and are never
+  merged: your rules, in your words; what this request set (a length it asked for); and evidence (specifics traced
+  to what you supplied, no passage lifted from one of your examples). Under them, the habits seen in your examples,
+  counted and blocking nothing; what was done to the draft; and one next step. A failure is shown whole: the rule,
+  and everything the check found.
+- **`atelier new <your-work>` builds without a method note and without a model** (`--no-model`, or when no key is
+  set, where it used to stop): the skill is the examples themselves, served to the writer, with what can be counted
+  in them and one rule that is yours to judge, that new work reads like them. One example is enough.
+- **`atelier fix "<what was wrong>"`** writes that one piece again, with what you said put right, and leaves the
+  skill alone: one complaint about one piece is not a rule. It also records that you would not have used the piece,
+  with why. `--always` says every run should do this, and is the earlier behaviour (another way to carry a rule you
+  have, or a new rule on your yes), now said in plain words. `--evaluation` says the evaluation was wrong about the
+  work: it is recorded with what the evaluation said, and nothing is changed.
+- **`atelier --help`** is those three. Every other command is listed by `atelier lab`, by what it is for, with the
+  ones whose studies did not show a gain named as experimental. Nothing was removed: each still answers to its name.
+
+A first-time walk through the three commands, by someone who had not seen them, found the first version of them
+harder than it said, and each point is fixed and tested:
+- three of four builds needed a second command. The build is one call: a step read as a check by a section name
+  says what it will look for ("checked as: a "Must fix" section"), a step the owner's own work does not do stays
+  required as they wrote it and is named with the piece, and `--review` looks without building;
+- four skills built from four files called `method.md` were all named "method". The name is the work's folder, or
+  the note's, or the folder the person is in, whichever is not the name every such thing has;
+- changing the method meant a new folder. Built again in the same folder, it is a new version of the same skill;
+- a run blocked for a reason that is no rule of the owner's (a passage lifted from one of their pieces) read as
+  usable. It is an entry of the evaluation like any other, with the shared words shown; a sentence removed from the
+  work is said under it; a rule set aside for the run is shown as not checked, with why;
+- a task that happened to equal another argument's value was taken for that argument. What is typed is sorted by
+  where it stands;
+- a skill that checks the work against material was run without any and blocked on every citation. It says so
+  before a draft is paid for, and a file is bound by giving it: `--with change.diff`.
+
+The package's description, the README's opening, the roadmap and the agent guide say this product. Decisions 0017
+(a skill from a method and finished work) and 0018 (a skill improves how it carries its method) are accepted, the
+second with what evolution may change and what it may never change.
+
+The standing comparison can be made again from a clone: `bench/standing/runs/2026-10-13/` holds every output behind
+its tables, `score.mjs` reads them with no model, `build.sh` builds the Atelier skill for a domain, and each arm
+now also reports what a passing output costs.
+
+**If you are upgrading.** On this line of work, compared with 1.x:
+- `atelier verify` and the MCP tool pass an unsourced figure as a listed finding when no material is bound, where
+  they failed it before. A check in CI that relied on that exit code needs material bound (`atelier material`,
+  `--with`).
+- Nothing is deleted from a draft unless material is bound and the skill is an essay or a post (`--class`).
+- A skill rebuilt from nine pieces or more may write one or two more drafts when a draft misses its length;
+  `--no-redraft` turns that off.
+- A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
+
+### Studies: how much of a rule its check reads, on 160 steps the reader had not seen (development evidence, $0)
+
+Four method notes of 40 steps each, written from a brief that said nothing of how Atelier reads a step, compiled by
+the method reader and labelled without sight of its answers (`studies/coverage-labels`; notes and labels by a model,
+one labeller). The reader compiled 21 of the 160 to a check and called 1 fully read; the labels found no false
+FULL (0 of 1, which bounds nothing) and found 8 checks that read something the step does not ask: a step that
+mentions a table given the table's column check, a step about how to cite given the lookup in the material. One
+section's 70-word limit was compiled as the whole document's. Two narrow fixes followed (a count in a step that
+opens on a section is that section's or nobody's; a step is held to a table only where it asks for one), each with
+a test in the reader, and the set was scored again: 15 compiled, 12 agreeing, the 3 left being the citation class,
+shown as read in part. The larger finding is what is not compiled: of the 139 steps left with no check, a script
+could verify the whole of 53 and part of 49 by the labeller's judgement. The method reader turns about one step in
+ten of an expert's notes into a check; the rest is the owner's to read on every run.
+
+### Studies: twelve examples against three (development evidence)
+
+The same method, tasks and runtime, with the skill built from all twelve examples, from the first three, and from
+three drawn at random (seed 20261012), on two of the frozen domains. Ten tasks an arm, one output a task, scored by
+each domain's own checklist with no model. `bench/standing/run.mjs`, arm `invoke`.
+
+| domain | 12 examples | first 3 | random 3 |
+|---|---|---|---|
+| explainer: outputs failing the checklist | 0 of 10 | 0 of 10 | 0 of 10 |
+| explainer: cost an output | $0.070 | $0.051 | $0.052 |
+| contract: outputs failing the checklist | 1 of 10 | 6 of 10 | 2 of 10 |
+| contract: cost an output | $0.21 | $0.20 | $0.20 |
+
+Every contract failure is the same rule, the stated limit of 220 to 420 words. What this supports: on explainers
+three examples did as well as twelve and cost a quarter less; on contracts the two sets of three differ from each
+other by as much as either differs from twelve, so which three matters more than how many. What it does not
+support: any claim about a rate. Ten outputs an arm cannot tell 1 in 10 from 2 in 10, and the checklists are the
+project's own. The runs were made before the trim step was limited to the length of the whole piece. Cost of the
+study: about $8.
+
+### Studies: the standing comparison on its four domains
+
+One run a task for the runtime, two for the prompt arms; the Atelier skill is the one built by
+`atelier method <note> --golden <folder>` from the domain's method and its twelve examples. Outputs failing each
+domain's checklist:
+
+| arm | explainer | code review | contract | analysis |
+|---|---|---|---|---|
+| the examples pasted | 12 of 20 | 20 of 20 | 8 of 8 (12 refused by the model) | 16 of 20 |
+| the method and the examples | 1 of 20 | 20 of 20 | 20 of 20 | 5 of 20 |
+| the Atelier skill as a plain prompt | not run | not run | 20 of 20 | 2 of 20 |
+| the Atelier skill, `atelier invoke` | 0 of 20 | 2 of 10 (1 of 10 on the run before) | 10 of 10 | 1 of 10 |
+
+- **Contract is a miss for every arm, on one rule:** the method's "between 220 and 420 words". The twelve examples
+  run 405 to 419; the prompt arms wrote 437 to 500 and the runtime 425 to 436. Every other rule of the agreement
+  (the parties, the term, the governing law, no added figure, no "best efforts") held in every output of every arm.
+  The runtime came nearest and still failed all ten: told its count and given a length to aim for, the writer cut
+  about half of what it was over, twice (476, 453, 434 on one task). The run says so: "Still broken after repair".
+- **Analysis:** the verdict must name the vendor that costs least and each monthly cost must be worked right. The
+  runtime's one failure is a cost worked wrong. The method's step "every figure must be sourced from the price list
+  or worked from it" was left a judgement at build: the figure check read 19 of an example's 33 figures as given.
+- **Code review** is not like for like (the runtime numbers the lines of the diff); **explainer** is as below.
+- The pasted arm's twelve refusals on contracts are the model's, and are not scored.
+
+What changed from it: a miss of length is now said as a number ("long by 51"), the writer is given a length to aim
+for inside the limit, and a draft whose only miss is length is written once more. That moved the contracts from
+427-469 words to 425-436, and did not bring one under 420. Synthetic cases, the builder's checklists, ten tasks a
+domain: development evidence.
+
+### Added, for 2.0: the length of one section, stated or kept by every example
+
+In the closing study every one of twelve explainers held its "How it works" section to 61 to 76 words. Nothing
+measured the length of a section, so that habit was never a candidate rule, and the skill wrote 98 to 122.
+
+- **Kept by every example:** in a build from a folder, for a section every piece has, the span of its lengths is
+  offered as how the pieces are written ("The How it works section runs 61 to 76 words in my pieces"), widened as
+  the length of a whole piece is (46 to 91), shown and not required. Not for a section whose longest is twice its
+  shortest or more, nor from fewer than three pieces.
+- **Stated by the owner:** "Keep the How it works section under 80 words" is held of that section, where the step
+  names exactly one section the example has and gives the count in a plain form. An example that breaks it is the
+  owner's to settle.
+- The check (`LENGTH` with `in`) counts what the section holds; a text without the section is the presence
+  rule's to fail. A request that states the length of the whole work does not set a section's aside.
+
+- **Narrowly, again.** A review of the first version found a step about something else read as a section's
+  length ("unlike the Summary section, keep the whole piece under 200 words"), a section written as a bare name
+  measured to the end of the work, and a stated length met by leaving the section out. Each is a test. A stated
+  length now fails a work without the section; a section every piece writes word for word alike is offered no
+  length; one the owner already stated is not offered again; and no more than six counted rules are offered.
+- The counted rules of style never include the length of a sentence: a count is not a rhythm.
+
+The test that holds it reads HTML examples: the offered span holds every example and fails an output of 109 words.
+
+The standing comparison has its two missing domains: `contract` and `analysis` (bench/standing/README.md).
+
+### Added, for 2.0: a method build also counts how the examples are written
+
+`atelier method <note> --golden <folder>` held the owner's steps and served their pieces, and read nothing of how
+the pieces are written. The measurable part of a voice is counted by code (a sentence length, a paragraph cap, a
+word never used), and was only ever counted in a build that calls a model.
+
+- **Counted off the examples with no model,** and offered beside the method, never as part of it: "I keep
+  paragraphs to 6 sentences at most", held in all twelve explanations.
+- **Only a count every piece meets, from three pieces or more,** and from enough text to count from: three tweets
+  give none.
+- **Shown, not required.** They are served to the writer and choose between drafts. The owner makes one required
+  with `atelier amend`; it is then a rule of style, repaired by rewriting the sentence that breaks it.
+
+### Changed, for 2.0: one more draft is told everything the first did not hold
+
+A draft that lacked a section the method requires was written once more with the section named. A draft that ran
+long, or cited a line that is not in the material, had no such step, or had one of its own. They are one step now.
+
+- **What it reads** (`unmetReader`): what no sentence rewrite fixes. A section, a table or a stated length the
+  method requires; a citation that is no line of the material; and, when the request names no length, a draft
+  outside what the author's own pieces span.
+- **What the writer is told** (`redraftNote`): each of them in the owner's words with what the check found, and the
+  earlier draft itself, to keep what it says wherever it can stay. The step before this one sent the instruction
+  without the draft it spoke of.
+- **What is kept:** the second draft only when it is nearer to holding them (fewer unmet, or as many and less far
+  off in length) and breaks no more of any other required rule. One draft, never a loop.
+- **Rules before length.** A draft at the right length that drops a section the method requires is not nearer,
+  and one that adds the section and runs a few words long is. The length is no rule of the standard and is never
+  recorded as one.
+- **For its length, only on evidence:** a skill built from nine pieces or more. With n pieces the next one falls
+  between the shortest and the longest (n - 1) times in (n + 1), four in five at nine; on fewer the drafts are
+  still chosen by length, which costs nothing. `--no-redraft` turns the step off.
+- A skill with nothing of the kind to read has no such step, and costs what it did.
+
+One run a task, before the last three points were added: on ten explanations the step fired once (272 words to
+inside the span), and on ten code reviews three times (306, 311 and 316 words to inside it, one of them with a bad
+citation named in the same note). Outputs failing the checklists: 2 of 10 and 2 of 10, where the runs before had
+2 of 10 and 1 of 10: no difference ten outputs can show. A redraft is one more draft and one more pass of checks,
+so a run that needs it costs about half as much again.
+
+### Fixed, for 2.0: a page of markup is measured as what its reader sees
+
+A closing study built a skill from twelve explainers written as single HTML pages. Discovery measured the markup:
+the semicolons of the CSS became "use semicolons within my range: 15.7 to 54.2 per 1,000 words", the `!` of
+`<!doctype html>` a rule about exclamation marks, and four `<h2>` headings a page became "write without section
+headings", because only `#` was read as a heading. The skill failed all ten of its test tasks.
+
+- **A document that is markup is reduced to its visible text before anything measures it,** underneath every
+  reader of text: words, sentences, paragraphs, headings, sections, and the counted features of style. Scripts,
+  styles, comments, the head and the doctype are not read; `<h1>` to `<h6>` are headings; the end of a block is the
+  end of a paragraph; an entity is the character it stands for.
+- **The reduction keeps the page's length and the place of every visible character,** so a check still points
+  into the page as written, and a repair rewrites the page. The page is never converted: an author who writes
+  HTML is served HTML and writes HTML.
+- **Decided from the content:** a declared HTML page, with or without front matter, or a document that opens with
+  a tag and is built of block tags. An essay with a stray `<br>`, or one that writes about tags, is read as before.
+
+- **One pass over the page, linear in its length.** A first version ran a chain of patterns; a review found it
+  took half a minute on a long page of unclosed tags, read a heading whose words sat on the next line as no
+  heading, counted a link's address among a paragraph's words, and classed a README that opens with a centred
+  block as markup. Each is a test now. Tables, code blocks and anything never closed are not prose. Every heading
+  below the title is a section. The claim check and the copying check read the same visible text, and a long
+  paragraph in a page is not "split" by a blank line a browser would not show.
+
+Known and left: an entity in the middle of a word ("It&#8217;s") keeps its room and the word reads as two; a
+length stated in characters counts the markup; a rewrite of a sentence that ends inside a link can leave the
+link's closing tag behind.
+
+The test that holds it: a page and the same text in markdown give the same reading on every one of the counted
+features, the same headings, and the same count of words, sentences and paragraphs. Not run on a model: whether a
+skill built from HTML pages now passes that study's tasks is for the study to say.
+
+### Fixed, for 2.0: what a pass over the new commands found
+
+Every command the changes below touch was run end to end against a scripted model, and the code they added was
+read for shape. What was wrong:
+
+- `atelier score --material` and the MCP tool's `material` never reached the rules read against material, so a
+  correct line citation failed there and passed under `atelier verify`. All three now read the same material.
+- A step with "do not" anywhere in it ("a Suggestions section: improvements that do not block the merge") was
+  listed in the skill under what not to do. A prohibition is a step that opens with one.
+- A finding that was only listed was still explained as "the sentence is cut", and with `--placeholders` a slot
+  was reported as a cut.
+- A line citation checked with nothing bound said "no such file in the material"; it says nothing is bound.
+- In a folder build, a step the piece read from broke was reported without the piece's name.
+- `atelier reproduce` told the owner of a method-built skill to add tasks and material that were already there.
+- The usage guide and the README did not mention `atelier method`; they do now, with its two limits: one step
+  gets one check, and a method build holds no piece back to test on.
+
+The step reader had grown to one function of ninety-seven lines. It is ten small readers in
+`core/method/step-readers.ts`, each answering one question about a step, with the same tests.
+
+Left as it is: a method-built skill cannot be rebuilt in the same folder after `--yes` (build it in a fresh one).
+
+### Added, for 2.0: a rule stated as a count, or as quoted words, is held as stated
+
+Three tweets and five lines of rules now build a skill with three of the five rules held by code, with no model
+and no minimum corpus: until now a corpus that small switched off nearly every counted check (style features need
+150 words a piece, counted rules 1,000 words in all).
+
+- **A length in the unit it was stated in** (the `LENGTH` check): "between 150 and 230 words", "under 280
+  characters", "at least 5 sentences", "no sentence longer than 25 words".
+- **The words a paragraph starts with:** 'the last paragraph starts with "In short,"'.
+- **A word never to use:** 'never use the word "excited" or "thrilled"'.
+- **Read narrowly.** Only where the step gives the number or quotes the words. Never from a step that says when or
+  says it softly ("unless", "ideally", "aim for", "usually"), from the length of a part ("each bullet", "the
+  title", "per section"), or from a negation other than the plain forms ("no more than", "no fewer than"): "never
+  go over 100 words", read by its comparator alone, is the opposite of what was written. A ban holds only where the
+  quoted words end the sentence. A first version read all of these as rules; a review found them, and each is a
+  test now.
+- **Each is held against every example before it is a rule.** A count the owner's own pieces break is put to them
+  with the piece named, and is not built.
+- **A request that states its own length in the same unit sets it for that run:** the method's is withheld and
+  said. A request for "detail" moves no stated limit.
+
+On the explanations' rule page this holds three of its six rules in code (length, the closing words, the longest
+sentence); "exactly one analogy", "plain paragraphs only" and "speak to the reader as you" stay judgements.
+Built that way from the rule page and the twelve examples, the skill failed 0 of 20 explanations on the standing
+comparison (two runs a task) at $0.08 and 20 seconds an output; the same rule page and examples as a plain prompt
+failed 1 of 20, and the skill discovered from the examples alone 2 of 10 at $0.23. Development evidence: one
+synthetic standard, the builder's checklist, and 0 of 20 cannot be told from 1 of 20.
+
+### Added, for 2.0: one method and a folder of examples, built in one call
+
+`atelier method <note> --golden <folder>`. A person who has a page of rules and a dozen finished pieces had two
+commands that each took half: `atelier new` read the pieces and never heard the rules, and `atelier method` took
+the rules and one piece. In the standing comparison the plain prompt that got both (a rule page and the examples)
+failed 1 of 20 explanations, fewer than anything Atelier built from the examples alone.
+
+- **Every step is the owner's rule, in their words,** as before. A check read off the first example is now held
+  against every example: one that an example breaks is theirs to settle, with the count and the piece named, and
+  nothing is built until they have seen it. What only the first example shows is dropped.
+- **Three or more examples are served with the skill** as the author's own pieces, and the span of their lengths is
+  recorded, so drafts are chosen by it when a request names no length.
+- **It calls no model.** One file still builds exactly as it did.
+- A rule read against what a piece was made from (a figure given, a line cited) is no longer counted against the
+  author's pieces at build, where each piece's own material is not at hand: read that way, all twelve golden
+  reviews broke the citation rule their own diffs satisfy.
+
+- **Which example the checks are read from is chosen, not assumed.** Read off the first piece by name, a piece
+  that happened to lack a section left that step a judgement and nobody was asked. Each example is tried, and the
+  one under which the most steps become checks is used; a piece that then breaks one is named to the owner.
+- **A check against the material is held only on the examples that carry theirs,** and the count says so.
+- The folder is read as the build reads it: no file about the work, no piece's material, no hidden file, not the
+  note itself.
+
+On the standing comparison, one run per task, the skill built this way failed 1 of 10 explanations (the rule page
+and the examples as a plain prompt: 1 of 20; the skill discovered from the examples alone: 2 of 10) at $0.10 and 22
+seconds an output against $0.23 and 38, and 1 of 10 code reviews (the review within one line of the defect in the
+tenth). Ten outputs each: development evidence, and too few to rank the Atelier arms against each other.
+
+### Added, for 2.0: three more kinds of method step are held by code
+
+A six-step review method (Summary, Must fix, Suggestions, Verdict, "cite each item as path:line", "name the missing
+test") had two steps checked: the sections it opens and ends with. Now five are.
+
+- **"Then a Must fix section: ..."** A step whose first words give its place in the order (then, next, after that,
+  finally) asks for the section, as "open with" and "end with" do.
+- **A condition counts where it is about the section.** "Then a Suggestions section: improvements that do not
+  block the merge. Write None when there are none." asks for the section; before, its "not" and "when" made the
+  whole step a judgement. "Add a Risks section only when billing is touched" and "skip it for internal notes" are
+  still judgements about when.
+- **"...that holds one of: Approve, Request changes, Comment."** The section's first line is one of them and
+  nothing else, in any case or emphasis; a reason may follow on later lines.
+- **"Cite each item as path:line."** Each citation is looked up in the bound material (the `LINES` check) and one
+  that is no line of it, a line the change did not add, a blank line or a lone bracket fails, by name. A draft that
+  fails it is written again with the failure named, as a draft missing a section is. A change pasted into the
+  request is looked up too, and a review with nothing to fix cites nothing and holds the step. A step that forbids
+  the form, or asks for it only sometimes, stays a judgement.
+
+"Name the missing test" stays a judgement, shown to the writer and reported as not measured. Not measured on a
+model in this round: the two rules above were built after the code-review comparison below was run.
+
+### Added, for 2.0: a skill that cites lines is shown the line numbers
+
+A second domain for the standing comparison: code review to a six-step method (Summary, Must fix, Suggestions,
+Verdict; cite each must-fix item as path:line; one of three verdict words), twelve golden reviews, ten changes
+with one planted defect each. Reviews failing the checklist, whose strictest rule is that the first must-fix item
+cites the defect's exact line:
+
+| arm | failing |
+|---|---|
+| the examples pasted | 20 of 20 |
+| the method and the examples | 20 of 20 |
+| the exported skill as a plain prompt (from twelve examples; from the method and one) | 20 of 20; 20 of 20 |
+| `atelier invoke`, before this change (both skills) | 10 of 10; 10 of 10 |
+| `atelier invoke`, after (from twelve examples; from the method and one) | 1 of 10; 0 of 10 |
+
+Every arm found the defect and miscounted its line: a model does not count lines in a diff. No instruction changes
+that, the method's own included.
+
+- **Material is served with its line numbers when the skill cites lines.** Read from the skill as served: a rule
+  that names the form ("path:line", "the line number"), or examples that cite three or more places. A diff is
+  numbered by its hunks, each added or context line with its number in the new file; any other material from 1.
+  A skill that does not cite lines is served exactly as before. What the checks read is the material as given.
+- **Every citation is looked up** and the run says how many point at a line of the material with something on it
+  (for a diff, a line the change adds), naming those that do not and why. Reported, not enforced.
+
+The comparison is not like for like on this point, and that is the finding: the prompt arms were given the diff as
+a person has it. A person who numbered the lines by hand would close most of the gap. Synthetic changes, one
+checker, one run per change for the runtime arms: development evidence.
+
+### Added, for 2.0: drafts are chosen by the length your pieces run, when the request names none
+
+After the change below, the same ten requests failed on length: the skill told the model "about 200 words", nothing
+checked it, and three outputs ran 238 to 248 words where the twelve examples run 199 to 217.
+
+- **The span of your pieces is recorded at build** (shortest to longest, in prose words), with the stored voice and
+  never in the package, so a rebuild writes the same package bytes.
+- **It applies in one context:** the request states no length, asks for no detail or brevity and no shape of its
+  own; the skill writes pieces, not answers; the request is in the register of your pieces; the run is not a
+  contract check or a piece planned by section. A request that names a length still sets it.
+- **The band is the span widened by its own width on each side** (199 to 217 gives 181 to 235). No number is chosen:
+  an author whose pieces run 300 to 3,000 words gets a band that holds nothing.
+- **Where it applies, the drafts a run already writes are chosen by it,** after every rule and before the finer
+  features of style. No extra draft is written, and the run prints the length it delivered beside your span.
+
+A first version wrote the piece again when it ran outside the band. A review found it re-ran the whole repair chain,
+never showed the model the draft it was told to keep, and would fire on nearly every run of a small, even corpus;
+on the ten requests it fired once (282 words to 242, still outside). It was removed. A redraft for length belongs
+in one step that names everything a draft failed, which is not built.
+
+### Changed, for 2.0: the claim check deletes only with material bound, and never what the standard rests on
+
+A small study on real model runs: twelve plain-language explanations that all keep six habits (one of them a
+single analogy), a skill built from them with every default accepted, ten new requests, no material bound and no
+kind of work named. Outputs failing the examples' own checklist:
+
+| arm | failing |
+|---|---|
+| a six-line rule list and the examples | 1 of 20 |
+| the exported skill, as a plain prompt | 3 of 20 |
+| the examples pasted | 12 of 20 |
+| `atelier invoke` | 5 of 10 |
+
+Four of the five `invoke` failures were deletions: the model wrote the analogy in all ten drafts, and the claim
+check cut it from three as not found in the material, and cut a required closing line from a fourth. Nothing
+reported the loss. With no material there is nothing to check a sentence against, so every specific the writer
+chose read as invented. One standard, written by a model, one run per request: development evidence.
+
+- **A deletion needs material bound and a kind of work the check was measured on.** With no material bound
+  (`atelier material`, `--with`), on a skill that names no kind of work, or on a kind nobody measured, every finding
+  is listed and nothing is cut or failed. The reason is said on the check's line, in the run's verdict and on the
+  skill's card. This reverses the earlier default, under which a skill that named no kind cut as it always had.
+  `--placeholders` still leaves its slots without material: the person asked for them, and a slot hides nothing.
+- **No cut breaks a rule the draft was meeting.** Each deletion is tried against the standard's counted rules
+  first; one that would turn a met rule into a broken one is not made, and the sentence stays, flagged.
+- **The list closes the delivered text only when material is bound.** With none, it is every specific in the
+  text and stays in the report.
+- **Strict delivery** still stops before spending on a named kind the check was not measured on. With no kind
+  named or no material bound it delivers on the rest of the standard, and the verdict says the specifics were
+  listed.
+- **`atelier verify` and the MCP tool** follow the same rule: with nothing bound, an unsourced figure is listed
+  and the check passes; bind material and it fails as before.
+
+Not changed by this: a rule that only a reading can check (the closing line above was one) is not protected by
+the second guard, which reads counted rules only. The reader that flags an analogy as a claim is unchanged.
+
 ### Fixed, for 2.0: the claim check deletes only where its deletions were measured
 
 A test round on real model runs (27 competitive analyses written by one model and read by one claim reader,

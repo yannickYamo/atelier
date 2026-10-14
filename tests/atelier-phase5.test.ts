@@ -202,6 +202,12 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
   it('verify fails an invented figure as UNSOURCED, and passes it once it is in the material', () => {
     const { proj, run } = seed();
     const f = join(proj, 'd.md'); writeFileSync(f, 'According to a 2023 survey, 73% of teams drink coffee.');
+    // with nothing bound there is nothing to check a figure against: it is listed, and nothing fails
+    const unbound = run('verify', '--skill', 'nodrink', f);
+    expect(unbound.code).toBe(0);
+    expect(unbound.out).toContain('no material was bound to check against');
+    const other = join(proj, 'other.md'); writeFileSync(other, 'We like coffee in the morning.');
+    run('material', '--skill', 'nodrink', other);
     const bad = run('verify', '--skill', 'nodrink', f);
     expect(bad.code).toBe(1);
     expect(bad.out).toContain('UNSOURCED');
@@ -233,11 +239,15 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'We had coffee.', class: 'tweet' } } },
       { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'According to a 2023 survey, 73% of teams drink coffee.' } } },
       { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'According to a 2023 survey, 73% of teams drink coffee.', material: 'survey 2023: 73%' } } },
+      { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'atelier_verify', arguments: { skill: 'nodrink', text: 'According to a 2023 survey, 73% of teams drink coffee.', material: 'We like coffee in the morning.' } } },
     ].map((m) => JSON.stringify(m)).join('\n');
     const out = execFileSync('node', [CLI, 'mcp'], { encoding: 'utf8', cwd: proj, env, input }).trim().split('\n')
       .map((l) => JSON.parse(l) as { result: { content: { text: string }[]; isError?: boolean } });
     expect(out[0].result.isError).toBe(true);
-    expect(out[1].result.content[0].text).toMatch(/"rule":"UNSOURCED"/);
+    // nothing bound: listed, not failed; material that does not hold the figure: UNSOURCED
+    expect(out[1].result.content[0].text).toMatch(/"failed":false/);
+    expect(out[1].result.content[0].text).toContain('no material was bound to check against');
     expect(out[2].result.content[0].text).toMatch(/"failed":false/);
+    expect(out[3].result.content[0].text).toMatch(/"rule":"UNSOURCED"/);
   });
 });

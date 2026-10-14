@@ -1,7 +1,8 @@
 # 0017. A skill from one method and one finished example
 
-**Status.** Proposed. Built on the branch `method`, for 2.0; the owner has set the goal and has not yet ruled on
-this record. It adds a second way in and changes nothing about the first.
+**Status.** Accepted by the owner on 13 October 2026. It is the product: a skill is built from the owner's method
+and their finished work (`atelier new <your-work> --method <note>`), from one example or a folder of them, and
+discovery from examples alone is the way in for an owner with no written method.
 
 **Context.** Atelier reads a body of work and finds the taste in it: rules about how an author writes, each held
 against work the rule was not read from. That needs several pieces. The owner's goal for 2.0 is the other case, and

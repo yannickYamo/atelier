@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t1",
+ "run": 1,
+ "seconds": 8.1,
+ "output": "Switch on the news and someone announces that the FTSE 100 closed up forty points. The sentence sounds like a fact about something solid. It isn't. A stock index is a measurement, not a thing you can buy or hold.\n\nHere is the problem it solves. Thousands of companies have shares traded every day, and their prices move in different directions at once. Nobody can watch all of them. So an index picks a group of companies and tracks their combined value as a single number.\n\nThe FTSE 100 follows the hundred largest companies listed in London. The S&P 500 follows five hundred large American ones. Each has rules about which firms qualify, and the membership changes as companies grow or shrink.\n\nThink of it as a school taking the average height of one class and using that figure to describe the year group. No individual pupil is that height. The average still tells you something real about the whole.\n\nMost indexes are weighted, meaning bigger companies count for more. A shift in a giant firm moves the number noticeably. A small member barely registers.\n\nThe number itself has no units. What matters is the change from yesterday, or last year.\n\nIn short, a stock index is a running average that summarises how a chosen slice of the market is doing."
+}

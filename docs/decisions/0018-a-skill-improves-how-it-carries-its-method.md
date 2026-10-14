@@ -1,8 +1,11 @@
 # 0018. A skill improves how it carries its method, unattended, and never its standard
 
-**Status.** Proposed. Built on the branch `evolve`, on top of [0017](0017-a-skill-from-one-method-and-one-example.md),
-for 2.0. The owner asked for it; the owner has not yet ruled on this record. No run of it against a real model has
-been made.
+**Status.** Accepted by the owner on 13 October 2026. No run of it against a real model has been made.
+
+What evolution may change, now and as the implementation grows: how a requirement is carried, which examples are
+served, how a draft is repaired, the budgets, the control structure of a run, the policy for tools, and in time
+the arrangement of agents. What it may never change: the owner's requirements, what they mean, and who has the
+authority over them.
 
 **Context.** The owner's aim is that a person defines the ground truth and what they want, and guides nothing else.
 After 0017 a person gives a method and one finished example, and the skill is held to them. What they still had to

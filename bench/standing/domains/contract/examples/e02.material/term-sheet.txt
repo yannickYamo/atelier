@@ -1,0 +1,7 @@
+TERM SHEET
+First party: Harbour Lane Robotics GmbH
+Second party: Driftwood Semiconductors Inc
+Purpose: a licence of a data set
+Effective date: 8 June 2026
+Term: 48 months
+Governing law: the State of Delaware

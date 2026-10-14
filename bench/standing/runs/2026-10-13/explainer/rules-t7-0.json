@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t7",
+ "run": 0,
+ "seconds": 7.2,
+ "output": "Right now, more than thirty satellites are circling the Earth, each carrying an extremely accurate clock. Every one of them broadcasts a steady radio signal saying two things: who it is, and the exact moment the message left.\n\nYour phone listens for those messages. When one arrives, it compares the time stamped inside with the time right now. The gap might be a fraction of a tenth of a second. Because radio waves travel at a known speed, that tiny delay reveals your distance from that satellite.\n\nOne distance alone is not much help. It only tells you that you sit somewhere on a huge sphere around that satellite. A second satellite narrows this down, and a third narrows it further still. With four, your phone can pin down latitude, longitude, altitude and the precise time.\n\nThink of standing in a field, hearing three church bells you know the locations of. Timing how long each chime takes to reach you would let you work out where you stand.\n\nBuildings and dense trees block or bounce these faint signals, which is why accuracy drops in cities. Your phone often borrows Wi-Fi and phone masts to help.\n\nIn short, GPS measures how long signals take to arrive, then turns those delays into your location."
+}

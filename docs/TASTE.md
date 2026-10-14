@@ -134,13 +134,13 @@ Without VETO it does none of these. Its readings are shown after every `invoke`,
 
 | Surface | What happens |
 |---|---|
-| `atelier invoke` | every output is read; the reading is printed (unless held back) and recorded as an event |
+| `atelier invoke --taste` | the output is read; the reading is printed (unless held back) and recorded as an event |
 | `atelier verify --taste`, MCP `atelier_verify` with `taste: true` | the reading is returned (unless held back); a quoted miss on a VETO rule fails `verify` and sets `failed` in the MCP reply. If the reader cannot run, the counted report still comes back. |
 | `atelier taste --skill <name>` | where each rule stands, the coverage map, and labelling (`--calibrate`, `--list`, `--label`) |
 | `atelier optimize`, `atelier fix`, `atelier floor --check --promote` | a candidate that misses VETO rules on at least two more of four tasks than the current version is rejected instead of installed; if the reader cannot run, the choice goes back to you |
 | `atelier improve` | readings of the skill's own output (an invocation) on rules where the reader holds VETO become behavioural observations for the convergence loop. An OBSERVE-only verdict is a report, not evidence, and a reading of someone else's text (verify, `--read`, MCP) is never evidence about what this skill does. |
 
-`--no-taste` turns the reader off for one `invoke`. `--reader-model` or `ATELIER_READER_MODEL` chooses
+The reader is off unless asked for: `--taste` turns it on for one `invoke`. It is a model's reading of your rules and has not earned a say in whether work can be used, so a run is held to what code reads and what you judge. `--reader-model` or `ATELIER_READER_MODEL` chooses
 the reader model, and permissions are scoped to it.
 
 ## The coverage map

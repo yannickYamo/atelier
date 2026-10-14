@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t2",
+ "run": 1,
+ "seconds": 6.4,
+ "output": "Sound travels as waves of pressure in the air. Those waves have peaks and troughs, rather like ripples on water. Noise-cancelling headphones exploit a simple fact about waves: two of them can cancel each other out.\n\nTiny microphones sit on the outside of the earcups. They listen constantly to the noise around you, perhaps an aeroplane engine or a rumbling train. A small chip analyses that sound within a fraction of a millisecond. It then generates a new wave that is the exact opposite shape.\n\nWhere the incoming wave pushes, the new wave pulls. Where the original has a peak, the copy has a trough. Played through the speaker in your ear, the two waves meet and flatten each other. Your eardrum receives far less movement, so you hear near silence.\n\nThink of two people pushing a swing from opposite sides with equal force. The swing simply stays still, because the efforts erase one another.\n\nThis trick works best on steady, droning sounds. Engine hum, air conditioning and road noise are predictable, so the chip can match them easily. Sudden sounds like a voice or a slamming door are much harder to predict. That is why chatter often still reaches you.\n\nIn short, the headphones listen to noise and play its mirror image, so the two cancel before you hear them."
+}

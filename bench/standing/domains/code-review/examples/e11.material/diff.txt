@@ -1,0 +1,81 @@
+diff --git a/src/notify/webhook.js b/src/notify/webhook.js
+--- a/src/notify/webhook.js
++++ b/src/notify/webhook.js
+@@ -119,0 +119,77 @@
++'use strict';
++
++const crypto = require('crypto');
++const https = require('https');
++const { URL } = require('url');
++
++const logger = require('../util/logger');
++
++const DEFAULT_TIMEOUT_MS = 5000;
++const MAX_ATTEMPTS = 3;
++
++/**
++ * Build the HMAC-SHA256 signature header value for an outgoing payload.
++ */
++function signPayload(body, secret) {
++  const mac = crypto.createHmac('sha256', secret);
++  mac.update(body, 'utf8');
++  return 'sha256=' + mac.digest('hex');
++}
++
++/**
++ * Normalize a subscriber record into request options.
++ */
++function buildRequestOptions(endpoint, body, signature) {
++  const parsed = new URL(endpoint);
++
++  return {
++    protocol: parsed.protocol,
++    hostname: parsed.hostname,
++    port: parsed.port || 443,
++    path: parsed.pathname + parsed.search,
++    method: 'POST',
++    timeout: DEFAULT_TIMEOUT_MS,
++    headers: {
++      'content-type': 'application/json',
++      'content-length': Buffer.byteLength(body),
++      'x-hub-signature-256': signature
++    }
++  };
++}
++
++function postOnce(options, body) {
++  return new Promise((resolve, reject) => {
++    const req = https.request(options, (res) => {
++      res.resume();
++      res.on('end', () => resolve(res.statusCode));
++    });
++
++    req.on('error', reject);
++    req.on('timeout', () => req.destroy(new Error('webhook timeout')));
++    req.end(body);
++  });
++}
++
++async function deliver(subscriber, event) {
++  const body = JSON.stringify({ type: event.type, data: event.data });
++  const signature = signPayload(body, subscriber.secret);
++
++  logger.debug('signing webhook for %s with %s', subscriber.endpoint, subscriber.secret);
++
++  const options = buildRequestOptions(subscriber.endpoint, body, signature);
++
++  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
++    try {
++      const status = await postOnce(options, body);
++      if (status < 500) {
++        return status;
++      }
++    } catch (err) {
++      logger.warn('attempt %d failed: %s', attempt, err.message);
++    }
++  }
++
++  throw new Error('webhook delivery failed after ' + MAX_ATTEMPTS + ' attempts');
++}
++
++module.exports = { signPayload, buildRequestOptions, deliver };

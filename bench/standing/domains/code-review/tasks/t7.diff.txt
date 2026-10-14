@@ -1,0 +1,70 @@
+diff --git a/src/files/paths.py b/src/files/paths.py
+--- a/src/files/paths.py
++++ b/src/files/paths.py
+@@ -61,0 +61,66 @@
++"""Helpers for locating and reading files inside a managed root directory.
++
++The root directory is configured once at import time and every public helper
++in this module resolves names relative to it.
++"""
++
++import os
++import json
++
++DEFAULT_ROOT = os.environ.get("APP_DATA_ROOT", "/var/lib/app/data")
++
++
++def get_root():
++    """Return the absolute root directory used for all lookups."""
++    return os.path.abspath(DEFAULT_ROOT)
++
++
++def normalize_name(name):
++    """Strip surrounding whitespace and collapse redundant separators."""
++    cleaned = name.strip()
++    while "//" in cleaned:
++        cleaned = cleaned.replace("//", "/")
++    return cleaned
++
++
++def build_path(name):
++    """Build the on-disk path for a stored file."""
++    root = get_root()
++    cleaned = normalize_name(name)
++    return os.path.join(root, cleaned)
++
++
++def exists(name):
++    """Return True when the named file is present on disk."""
++    return os.path.isfile(build_path(name))
++
++
++def read_text(name, encoding="utf-8"):
++    """Read a stored file and return its contents as text."""
++    path = build_path(name)
++    with open(path, "r", encoding=encoding) as handle:
++        return handle.read()
++
++
++def read_json(name):
++    """Read a stored file and decode it as JSON."""
++    return json.loads(read_text(name))
++
++
++def write_text(name, data, encoding="utf-8"):
++    """Write text to a stored file, creating parent directories as needed."""
++    path = build_path(name)
++    parent = os.path.dirname(path)
++    if parent and not os.path.isdir(parent):
++        os.makedirs(parent)
++    with open(path, "w", encoding=encoding) as handle:
++        handle.write(data)
++    return path
++
++
++def list_names(subdir=""):
++    """List the file names stored directly under the given subdirectory."""
++    base = build_path(subdir) if subdir else get_root()
++    if not os.path.isdir(base):
++        return []
++    return sorted(e for e in os.listdir(base) if os.path.isfile(os.path.join(base, e)))

@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t4",
+ "run": 1,
+ "seconds": 7.1,
+ "output": "When you catch a cold, you want something that fixes it fast. Antibiotics feel like the obvious answer. They are not, and the reason comes down to what causes the illness.\n\nColds are caused by viruses. Antibiotics only kill bacteria. These are two completely different kinds of thing, despite both being tiny and both making you ill.\n\nBacteria are living cells. They have their own outer walls, their own machinery for making energy, and they reproduce by splitting in two. Antibiotics attack exactly those features. Some burst the cell wall. Others jam the internal machinery so the bacterium cannot build what it needs.\n\nViruses have almost none of that equipment. A virus is little more than genetic instructions in a protein shell. It cannot reproduce alone, so it hijacks your own cells and makes them build copies instead. There is no bacterial wall to break and no bacterial machinery to jam.\n\nThink of a key cut for a front door lock. Present it to a bicycle padlock and nothing happens. The key is not faulty; it simply meets nothing it was shaped to fit.\n\nTaking antibiotics anyway does carry a cost. It disturbs the helpful bacteria in your gut and encourages harmful ones to grow resistant.\n\nIn short, antibiotics target bacteria, and your cold is not made of bacteria."
+}

@@ -1,0 +1,69 @@
+diff --git a/src/upload/limits.py b/src/upload/limits.py
+--- a/src/upload/limits.py
++++ b/src/upload/limits.py
+@@ -19,0 +19,65 @@
++"""Upload size and quota helpers.
++
++These utilities are shared by the HTTP upload handler and the background
++import worker. All sizes are expressed in bytes unless noted otherwise.
++"""
++
++from dataclasses import dataclass
++
++KILOBYTE = 1024
++MEGABYTE = 1024 * KILOBYTE
++
++# Hard ceiling enforced for every single uploaded part.
++MAX_PART_SIZE = 8 * MEGABYTE
++
++# Default per-account storage allowance for the free tier.
++DEFAULT_QUOTA = 512 * MEGABYTE
++
++
++@dataclass
++class Account:
++    account_id: str
++    used_bytes: int
++    quota_bytes: int = DEFAULT_QUOTA
++
++
++class UploadRejected(Exception):
++    """Raised when an upload cannot be accepted."""
++
++
++def remaining_quota(account):
++    """Return how many bytes the account may still store."""
++    left = account.quota_bytes - account.used_bytes
++    return left if left > 0 else 0
++
++
++def part_is_acceptable(part_size):
++    # A part is acceptable when its size is at most MAX_PART_SIZE.
++    return part_size < MAX_PART_SIZE
++
++
++def fits_in_quota(account, incoming_bytes):
++    """True when the upload still leaves the account within its quota."""
++    return account.used_bytes + incoming_bytes <= account.quota_bytes
++
++
++def validate_part(account, part_size):
++    """Validate a single multipart chunk before buffering it."""
++    if part_size <= 0:
++        raise UploadRejected("empty part")
++    if not part_is_acceptable(part_size):
++        raise UploadRejected("part exceeds the maximum allowed size")
++    if not fits_in_quota(account, part_size):
++        raise UploadRejected("account quota exhausted")
++    return True
++
++
++def split_plan(total_size):
++    """Return the part sizes used to upload an object of ``total_size``."""
++    parts = []
++    remaining = total_size
++    while remaining > 0:
++        chunk = min(remaining, MAX_PART_SIZE)
++        parts.append(chunk)
++        remaining -= chunk
++    return parts

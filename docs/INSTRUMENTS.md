@@ -42,8 +42,11 @@ model lists the claims; code decides whether each is in the material.
 
   Sensitivity 1.0 (95% CI 0.923–1); specificity 0.81 (0.674–0.911). A pattern check on the same drafts caught 11 of
   46.
-- **Role:** the only instrument that may delete text. In published writing an invented claim is cut; in answers,
-  general knowledge is listed and only work the agent never did is cut.
+- **Role:** the only instrument that may delete text. In published writing, with your material bound, an invented
+  claim is cut; in answers, general knowledge is listed and only work the agent never did is cut. In published writing with no
+  material bound, on a skill that names no kind of work, or on a kind it was not measured on, it lists and deletes
+  nothing (in answers the request is the material). No deletion is made that would
+  break a rule the draft was meeting.
 - **Known failures:** it flags about one clean draft in five, which is listed for you to check, not cut. One
   population (product essays), and every plant was one sentence long.
 - **Records:** [studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md),

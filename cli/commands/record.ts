@@ -19,6 +19,7 @@
 
 import { checksFor } from '../checks.js';
 import { checkDraftAsync } from '../../core/loop/run-repair.js';
+import { acts } from '../../core/observers/verify.js';
 import { planRepair, regressions } from '../../core/loop/repair.js';
 import { spanIntegrity } from '../../core/loop/integrity.js';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -138,7 +139,7 @@ export async function record(): Promise<void> {
   const std = store.getStandard(L, pending.standardVersionHash);
   const checks = checksFor(L, { material: [pending.input, ...store.getMaterial(L).map((m) => m.text)].join('\n\n'), task: pending.input });
   const report = std ? await checkDraftAsync(pending.skillName, std, output, checks) : null;
-  const brokenNow = (report?.checked ?? []).filter((c) => c.materiality === 'REQUIRED' && c.result.verdict === 'VIOLATED');
+  const brokenNow = (report?.checked ?? []).filter((c) => acts(c) && c.result.verdict === 'VIOLATED');
   const targets = report?.failed ? planRepair(output, report) : [];
   if (report?.failed && targets.length && !payload.stop_hook_active && !pending.repairOf) {
     writeAtomic(pendingPath, JSON.stringify({ ...pending, repairOf: { outputHash: sha(output), violated: brokenNow.map((c) => c.requirementId),

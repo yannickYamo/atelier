@@ -1,0 +1,105 @@
+diff --git a/src/audit/log.js b/src/audit/log.js
+--- a/src/audit/log.js
++++ b/src/audit/log.js
+@@ -26,0 +26,101 @@
++'use strict';
++
++const fs = require('fs/promises');
++const path = require('path');
++
++const LEVELS = ['debug', 'info', 'warn', 'error'];
++
++/**
++ * Build the on-disk path for a given day's audit file.
++ */
++function resolveLogPath(dir, date) {
++  const stamp = date.toISOString().slice(0, 10);
++  return path.join(dir, `audit-${stamp}.log`);
++}
++
++/**
++ * Normalize an incoming record so every line has the same shape.
++ */
++function normalize(record) {
++  const level = LEVELS.includes(record.level) ? record.level : 'info';
++  return {
++    ts: record.ts || new Date().toISOString(),
++    level,
++    actor: record.actor || 'system',
++    action: record.action,
++    target: record.target || null,
++    meta: record.meta || {},
++  };
++}
++
++function serialize(entry) {
++  return JSON.stringify(entry) + '\n';
++}
++
++class AuditLog {
++  constructor(dir, options = {}) {
++    this.dir = dir;
++    this.minLevel = options.minLevel || 'info';
++    this.ready = false;
++  }
++
++  async init() {
++    await fs.mkdir(this.dir, { recursive: true });
++    this.ready = true;
++  }
++
++  shouldRecord(level) {
++    return LEVELS.indexOf(level) >= LEVELS.indexOf(this.minLevel);
++  }
++
++  /**
++   * Append a single record and return the entry that was written.
++   */
++  async write(record) {
++    if (!this.ready) {
++      await this.init();
++    }
++
++    const entry = normalize(record);
++    if (!this.shouldRecord(entry.level)) {
++      return null;
++    }
++
++    const file = resolveLogPath(this.dir, new Date(entry.ts));
++    fs.appendFile(file, serialize(entry), 'utf8');
++    return entry;
++  }
++
++  /**
++   * Write several records in order.
++   */
++  async writeAll(records) {
++    const written = [];
++    for (const record of records) {
++      const entry = await this.write(record);
++      if (entry) {
++        written.push(entry);
++      }
++    }
++    return written;
++  }
++
++  async rotate(olderThanDays) {
++    const cutoff = Date.now() - olderThanDays * 86400000;
++    const files = await fs.readdir(this.dir);
++    const removed = [];
++
++    for (const name of files) {
++      const full = path.join(this.dir, name);
++      const stat = await fs.stat(full);
++      if (stat.mtimeMs < cutoff) {
++        await fs.unlink(full);
++        removed.push(name);
++      }
++    }
++
++    return removed;
++  }
++}
++
++module.exports = { AuditLog, normalize, resolveLogPath, LEVELS };

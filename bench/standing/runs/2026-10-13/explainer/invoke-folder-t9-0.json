@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t9",
+ "run": 0,
+ "seconds": 19.7,
+ "output": "Sunlight looks white, but it is a mixture of every colour. Red, orange, yellow, green, blue, violet — all of it arrives together from the Sun.\n\nThat light has to cross the air above you before it reaches your eyes. Air is not empty. It is packed with molecules of nitrogen and oxygen, far too small to see. When light meets them, some of it gets knocked sideways and scattered across the sky.\n\nHere is the key part. The molecules do not treat all colours equally. Blue light travels in short, tight waves, and short waves bounce off tiny particles far more easily. Red light has long, lazy waves that mostly sail straight through.\n\nSo blue gets flung around the sky again and again. Wherever you look, some of that scattered blue is coming down at you. The colour you see is not the Sun itself, but light that took a detour.\n\nThink of a beam of white light hitting a pinball table. The small balls get knocked everywhere, while the heavy ones roll on undisturbed.\n\nSunsets work the opposite way. The light crosses much more air, the blue is scattered away entirely, and the reds survive the journey.\n\nIn short, the sky is blue because air scatters blue light best.",
+ "costUsd": 0.072,
+ "cut": []
+}

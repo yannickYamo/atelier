@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t1",
+ "run": 1,
+ "seconds": 16.5,
+ "output": "Every day you hear that \"the market went up\" or \"the market fell\". Nobody means every single company moved together. They mean a stock index moved.\n\nA stock index is a single number that tracks a chosen group of companies. The S&P 500 follows 500 large American firms. The FTSE 100 follows the hundred biggest companies listed in London. Each index has rules about which companies qualify and when the list is updated.\n\nThe number itself comes from combining the share prices of those companies. Most indexes weight them by size, so a huge firm moves the figure more than a small one. If the big names rise today, the index rises, even if dozens of smaller members slip.\n\nIt works like a school reporting one average exam score instead of every pupil's mark. The average tells you how the year group did overall, while hiding who excelled and who struggled.\n\nThat trade-off is the point. You get a quick summary of market direction without tracking thousands of individual prices. Journalists use indexes as shorthand, and investors use them as a benchmark for their own performance.\n\nYou can also invest in one directly, through a fund that simply buys everything on the list.\n\nIn short, a stock index is one number summarising how a selected group of companies is doing."
+}

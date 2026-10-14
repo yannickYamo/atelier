@@ -48,7 +48,9 @@ Your stories, figures and sources are yours to supply. A small model reads every
 figures, dates, quotations, attributions, links, and stories told as lived. It says where each one came
 from, and code checks the claim against what you actually gave it: the passage it quotes must be in your
 material, the numbers must be there, and the specific must really be where the reader said it was. Anything
-that doesn't trace is cut and listed, so you can add the real one.
+that doesn't trace is cut and listed, so you can add the real one. That needs your material bound
+(`atelier material`, or `--with`) and a skill whose kind of work is an essay or a post: with no material, or on
+any other kind of work, what doesn't trace is listed and nothing is deleted.
 
 - A figure credited to a study, a quote from a named person, or a link offered as a source is yours to
   supply. It never passes as "general knowledge".
@@ -61,8 +63,9 @@ that doesn't trace is cut and listed, so you can add the real one.
   left 41 of 48 clean drafts alone ([result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)). Most of
   its false flags were the author's own true stories, so bind yours with `atelier material`.
 - Headings and tables are read. A claim the reader flagged is still cut if the reader fails partway through.
-- Expect it to cut a true detail now and then. `atelier material --skill <name> <notes>` binds your notes,
-  so a cut story comes back.
+- It deletes only in an essay or a post with your material bound (`atelier material --skill <name> <notes>`, or
+  `--with`). Anywhere else it lists what it could not find and deletes nothing. Where it does delete, expect it
+  to cut a true detail now and then: add the detail to your material and it stays.
 
 ## What it builds: the whole harness
 
@@ -115,6 +118,88 @@ your work ──► proposed rules ──► YOU APPROVE (once) ──► Standa
 Everything else runs without you, from `atelier invoke` to `atelier tend --auto` on a schedule. (The loop
 is built and tested offline; it has not yet looked after a live skill for weeks. See below.)
 
+## The three commands
+
+```bash
+atelier new ./reviews --method review.md     # build: your finished work, and a note of how you do it
+atelier run "review this change" --with change.diff     # run: the work, then its evaluation, rule by rule
+atelier fix "it missed the migration cost"   # react: what was wrong, in your own words; that piece is written again
+```
+
+Under the work a run prints its evaluation, in three layers that are kept apart because they are different
+promises: **your rules**, in your words; **this request** (a length it asked for); and **evidence** (every specific
+traced to what you supplied, no passage lifted from one of your examples). Below them, the habits seen in your
+examples, which are counted and block nothing, and what was done to the draft. Each line carries one of four marks,
+and a mark never says more than was observed:
+
+| mark | means |
+|---|---|
+| `✓` | a check read the whole of the rule, and it held |
+| `✗` | a check saw it fail; everything it found is shown |
+| `~` | a check read part of the rule and that part held; the part it did not read is named, and is yours |
+| `?` | no check reads it: yours to judge |
+
+The evaluation opens with where the work stands:
+
+- **BLOCKED**: something required was seen to fail. The work is shown and is not usable as it stands. Exit 1.
+- **NEEDS REVIEW**: nothing was seen to fail, and part of what you require was not read in full by a check. The
+  line counts what was verified and what is left for you.
+- **VERIFIED**: everything required was read in full, and held.
+
+A rule you wrote is required whether or not a check can read it, so work with judgement in it is never VERIFIED by
+a machine: it is yours to finish reading. A rule you stated stays required when your own examples do not follow
+it. The build never stops for that: the rule is checked and shown on every run, and blocks nothing until you
+confirm it (`--yes`) or change the method. `atelier verify`, `atelier report`,
+`--json` and the MCP check carry the same record (`record`), so they cannot disagree with the card.
+
+`atelier fix "<what was wrong>"` goes one of three ways, and you choose by saying so:
+
+- **This piece** (the default). It is written again with what you said put right, and your skill is not changed:
+  one complaint about one piece is not a rule. It is also recorded as a piece you would not have used, with why.
+- **Every run** (`--always`). Where your rules already cover it, Atelier tries another way to carry them and shows
+  you both results. Where they do not, it asks whether this should be a rule; nothing becomes one without your yes.
+- **The evaluation** (`--evaluation`). It blocked what was right, or passed what was not. It is recorded with what the
+  evaluation said, and nothing is changed: a check reads one of your rules, and is put right through the rule.
+
+`--report` on either command adds the engine's whole account. `atelier rate <run> yes|no "why"` records whether you
+would use the work as it is, and `atelier lab eval` shows that and every check over all your runs. Every
+other command is under `atelier lab`. `atelier invoke` is `atelier run` with that account always on, and is what
+scripts and other tools call.
+
+With no method note, `atelier new ./posts --no-model` builds from the examples alone (as does `atelier new ./posts`
+when no model key is set): the pieces are served to the writer with what can be counted in them, and whether new
+work reads like them is yours to judge. Three short posts are enough; so is one.
+
+## From your method and your finished work
+
+When you can say how the work is done, say it, and hand over the pieces where it was done:
+
+```bash
+atelier new ./reviews --method review.md             # your finished examples (a file or a folder), and a note of steps
+atelier new ./reviews --method review.md --review    # look at what it would check, and build nothing
+```
+
+Every step of the note is your rule, in your words. It calls no model. The screen sorts the steps into three
+kinds and says, for each check, what it looks for and how your examples fare on it:
+
+- **Checked on every output.** A section the work must have ("Open with a Summary section", "Then a Must fix
+  section"), one of a closed set ("a Verdict section that holds one of: Approve, Request changes, Comment"), a
+  table's columns, a length you stated ("between 150 and 230 words", "under 280 characters", "no sentence longer
+  than 25 words"), the words a paragraph starts with, a word never to use.
+- **Checked against the material.** Figures that must be ones you gave, and places cited as `path:line`: each
+  citation is looked up, and the material is shown to the writer with its line numbers so that none is counted.
+- **Judgement.** Everything else: shown to the writer, reported as not measured, never called checked.
+
+A check is kept only when every example holds it. A step that a piece of yours does not do is named with the piece
+and left for you to judge; change the note or the example and build again to have it checked. Building again in
+the same folder makes a new version of the same skill. With three or more
+examples, the pieces are served with the skill and their lengths recorded, so a draft is chosen by how near it runs
+to them when a request names no length. Three short pieces and a few lines of rules are enough to build from.
+
+Two limits. One step gets one check: "Then a Must fix section: cite each item as path:line" is read for its
+section, so put the citation rule in a step of its own. And the build reads every example, so none is left to test
+the skill on blind: `atelier reproduce` needs a skill built with `atelier new`.
+
 ## Using it
 
 ```bash
@@ -142,7 +227,8 @@ LinkedIn posts, with `--class linkedin-post`, and it also holds each post to wha
 For answers rather than published writing (a coding assistant, support replies, review comments), use
 `--class assistant-reply`; `atelier skill` picks it when its rules are about replies. Its answers name
 versions, costs and estimates you never supplied, so specifics the claim check cannot trace are listed for
-you to check, not cut. Everywhere else an invented story, claim of evidence or quotation is cut.
+you to check, not cut. In essays and posts with your material bound, an invented story, claim of evidence or quotation is cut; anywhere
+else it is listed.
 
 A standard can also say what a piece must contain: `atelier amend --skill <name> --rule <rule> --measure
 "PRESENCE:in=last,starts=next"` makes "end on the next step" a counted rule, and `PRESENCE:sections=…`
@@ -265,8 +351,12 @@ part of what the request asks is written once more; a draft that breaks a REQUIR
 (`--redraws <n>`, default 2); what still does not conform is refused with its reasons and exit code 3, and
 `atelier report <run>` shows the text. `--allow-nonconformant` delivers it anyway, marked. To make it the skill's
 way of running: `atelier fidelity --skill <name> --set delivery=strict`. It holds the REQUIRED rules that have a
-measurement and the claim check; a REQUIRED rule in prose with no measurement is read by the taste reader and is
-outside the guarantee.
+measurement and the claim check; a REQUIRED rule in prose with no measurement is outside the guarantee.
+
+Delivered under `--strict` means nothing required was seen to fail and every check finished. It does not mean
+verified: where a check read only part of a rule, or a rule is yours to judge, the run says how many such rules
+there are, and `eval.record.state` is `NEEDS_REVIEW`. A check that could not finish (the claim reader could not
+run, or left specifics undecided) is refused, never passed.
 
 ### What your request was read as
 
@@ -316,7 +406,7 @@ The sentence you give `new` sets how rules are weighed: writing new work, holdin
 ("ensure all our copy follows these"), or answering people ("support always answers this way"). Prefer to
 state your rules yourself? `atelier skill "lead with the action, number the steps"`. A host doesn't always
 deliver everything the CLI does; `atelier carriers --skill posts --host codex` says what it drops.
-`atelier --help` lists everything.
+`atelier --help` shows the three commands; `atelier lab` lists every other.
 
 | setting | what it does |
 |---|---|

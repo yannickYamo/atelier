@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t9",
+ "run": 0,
+ "seconds": 7,
+ "output": "Sunlight looks white, but it is not. It is a mixture of every colour, from red through to violet, travelling together. A prism splits them apart, and so does a rainbow.\n\nEach colour travels as a wave, and the waves are not the same size. Red light has long, lazy waves. Blue and violet light have short, tight ones. That difference in size decides what happens when sunlight meets our atmosphere.\n\nAir is not empty. It is packed with molecules of nitrogen and oxygen, far too small to see. When sunlight hits them, the light gets knocked sideways in all directions. This bouncing is called scattering, and it does not treat every colour equally. Short waves get scattered far more strongly than long ones.\n\nSo blue light ricochets around the sky, bouncing from molecule to molecule until it reaches your eyes from every direction at once. Red light mostly sails straight through. Look up anywhere, and you are seeing scattered blue arriving from all over.\n\nSunsets work by the same rule in reverse. Low sunlight travels through far more air, and the blue is scattered away entirely before it reaches you. What survives the long journey is red and orange.\n\nIn short, the sky is blue because small air molecules scatter short blue waves much more than long red ones."
+}

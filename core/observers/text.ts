@@ -1,6 +1,7 @@
 // atelier/core/observers/text.ts — TEXT, READ THE WAY A READER COUNTS IT. Shared by every observer.
 
 import type { Span } from './registry.js';
+import { visible } from './visible.js';
 
 // ── Text, read the way a reader counts it ──────────────────────────────────────────────────────
 //
@@ -18,8 +19,9 @@ interface Block { readonly kind: 'PARA' | 'ITEM'; readonly segs: readonly Seg[] 
 /** A block joined into one line of prose, with each character's offset in the original text. */
 interface Joined { readonly text: string; readonly at: readonly number[] }
 
-function blocksOf(text: string): Block[] {
-  const lines = text.split('\n');
+function blocksOf(raw: string): Block[] {
+  // A page of markup is read as what its reader sees, at the same offsets (./visible.ts).
+  const lines = visible(raw).split('\n');
   const out: Block[] = [];
   let offset = 0; let fence: string | null = null; let front = false; let cur: { kind: Block['kind']; segs: Seg[] } | null = null;
   const flush = (): void => { if (cur?.segs.length) out.push(cur); cur = null; };
@@ -121,7 +123,9 @@ export function proseSentencesOf(text: string): Sentence[] {
 }
 
 /** Paragraphs of prose — not list items — with their extent in the original text. */
-export function paragraphsOf(text: string): { start: number; end: number; text: string; sentences: number }[] {
+export function paragraphsOf(raw: string): { start: number; end: number; text: string; sentences: number }[] {
+  // What a paragraph says is its visible text: counted from the page as written, a link's address was its words.
+  const text = visible(raw);
   return blocksOf(text).filter((b) => b.kind === 'PARA').map((b) => {
     const last = b.segs[b.segs.length - 1];
     const start = b.segs[0].start; const end = last.start + last.text.length;

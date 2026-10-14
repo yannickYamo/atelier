@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
 import { getEval, putRating } from '../../core/state/eval-store.js';
 import { renderPanel } from '../../core/eval/summary.js';
+import { renderRunCard } from '../../core/eval/run-card.js';
 import { renderSkillCard } from '../../core/eval/skill-card.js';
 import { skillCardFor } from '../skill-card.js';
 import { reproductionFile } from './reproduce.js';
@@ -59,6 +60,8 @@ export function report(): void {
   const { L, rec } = locate(id);
   const e = getEval(L, rec.invocationId);
   if (argv.includes('--json')) { console.log(JSON.stringify({ eval: e, trace: [...traceOf(rec), ...costOf(e)] }, null, 1)); return; }
+  // The evaluation as the run showed it (core/eval/run-card.ts), then the engine's own account of the same run.
+  if (e?.record) console.log(`${renderRunCard({ record: e.record, costUsd: e.costUsd, seconds: e.durationMs / 1000, drafts: e.drafts, done: [], invocationId: e.invocationId }, process.stdout.columns || 110).join('\n')}\n`);
   console.log(e ? renderPanel(e, { width: process.stdout.columns || 110, color: process.stdout.isTTY && !process.env.NO_COLOR })
     : '(no evaluation was recorded with this run: it ran before Atelier 1.0)');
   console.log('\nTRACE');
@@ -123,5 +126,5 @@ export function rate(): void {
   const ship = /^(y|yes|ship|1|true)$/i.test(answer) ? true : /^(n|no|0|false)$/i.test(answer) ? false : die(`answer yes or no: would you ship this as is? (got "${answer}")`);
   const { L, rec } = locate(id);
   putRating(L, { invocationId: rec.invocationId, ship, why: why.join(' ').trim() || null, at: new Date().toISOString(), release: rec.fidelity?.release ?? null });
-  console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To correct the skill: atelier fix "<what was wrong>"'}`);
+  console.log(`Recorded: ${ship ? 'yes, you would ship' : 'no, you would not ship'} ${rec.invocationId} as is.${ship ? '' : ' To have it written again: atelier fix "<what was wrong>" (add --always to change the skill for every run)'}`);
 }

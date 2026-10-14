@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t3",
+ "run": 0,
+ "seconds": 7.8,
+ "output": "Most computer programs follow instructions a person wrote down. Someone decided, in advance, exactly what the program should do in every situation. Machine learning works differently. Nobody writes the rules. The computer works them out from examples.\n\nSuppose you want software that spots spam email. Writing rules by hand gets messy fast. Instead, you hand the computer a hundred thousand emails, each one already labelled spam or not spam. The program hunts for patterns that separate the two piles. Certain words, certain senders, certain formatting. Out of that comes a set of rules nobody explicitly wrote.\n\nThink of a child learning to recognise dogs. You never recite a definition involving fur length and ear shape. You point at dogs, repeatedly, and eventually the child gets it, including breeds never seen before. The learning happens through exposure, not instruction.\n\nThis is why the examples matter so much. A system trained on photographs taken in daylight will struggle at night. A system trained mostly on one group of people will work less well for everyone else. The machine learns whatever the data contains, including its gaps and its biases.\n\nIt also explains why these systems make strange mistakes. They have found statistical patterns, not understanding. A model can label a picture confidently and be completely wrong, with no sense that anything is off.\n\nIn short, machine learning means teaching a computer through examples rather than instructions."
+}

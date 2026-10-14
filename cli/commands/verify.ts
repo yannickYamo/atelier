@@ -25,6 +25,9 @@ import { checkClass } from '../../core/observers/doc-class.js';
 import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding } from '../runtime.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste } from './taste.js';
+import { recordForText } from '../eval-run.js';
+import { stateLine } from '../../core/eval/run-card.js';
+import { partlyChecked } from '../../core/eval/record.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
 
@@ -97,11 +100,14 @@ export async function verify(): Promise<void> {
     return [{ id: ((m.params.feature as readonly string[] | undefined) ?? [])[0] ?? '', band: [lo, hi] as const }];
   }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band }))];
   const profile = argv.includes('--profile') ? profileOf(text, bands) : null;
+  // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
+  const record = recordForText({ L, std: v, text, report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
   if (argv.includes('--json')) {
-    console.log(JSON.stringify({ ...report, ...(profile ? { profile } : {}), failed: report.failed || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
+    console.log(JSON.stringify({ ...report, record, ...(profile ? { profile } : {}), failed: record.state === 'BLOCKED' || (taste?.failed ?? false), ...(classNote ? { note: classNote } : {}),
       ...(taste ? { taste: { failed: taste.failed, verdicts: taste.verdicts } } : {}) }, null, 1));
   } else {
-    console.log(describeVerify(report));
+    console.log(describeVerify(report, partlyChecked(record)));
+    console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
     if (report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
       console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
     }
@@ -117,7 +123,8 @@ export async function verify(): Promise<void> {
     if (taste) console.log(`\n${taste.text}`);
   }
   if (taste?.failed) process.exitCode = 1;
-  if (report.failed) process.exitCode = 1;
+  // THE EXIT CODE IS THE RECORD'S: 1 where something required was seen to fail, and only there.
+  if (record.state === 'BLOCKED') process.exitCode = 1;
 }
 
 /**

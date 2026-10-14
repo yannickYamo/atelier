@@ -26,6 +26,7 @@
 
 import { createHash } from 'node:crypto';
 import type { EvalSummary } from '../eval/summary.js';
+import { standingOf } from '../eval/record.js';
 
 /** How the method is carried on a run: the only things the search may change. Never a rule. */
 export interface Carry {
@@ -40,21 +41,27 @@ export interface Brief { readonly id: string; readonly task: string; readonly ma
 /** One run of one brief under one way of carrying the method, as the run's own verdict read it. */
 export interface BriefResult {
   readonly id: string;
-  /** the run's verdict was "conformant". A run that ended with no verdict is not a result at all: it stops the search */
+  /**
+   * Nothing required was seen to fail on this run, and every check finished (core/eval/record.ts, `standingOf`).
+   * This is not "verified". A run that ended with no verdict is not a result at all: it stops the search
+   */
   readonly ok: boolean;
+  /** every required thing was read in full and held; absent for a run recorded before runs kept a record */
+  readonly verified?: boolean;
   /** the required method things this run left out, by requirement id */
   readonly missing: readonly string[];
   readonly costUsd: number;
 }
 
-export interface Scored { readonly ok: number; readonly n: number; readonly costUsd: number; readonly missing: Readonly<Record<string, number>>;
+export interface Scored { readonly ok: number; readonly n: number; /** of `ok`, the runs verified in full; absent when no run said */ readonly verified?: number; readonly costUsd: number; readonly missing: Readonly<Record<string, number>>;
   /** the briefs that held, by id: which ones, not only how many, so a gain paid for with a brief that held can be seen */
   readonly passed?: readonly string[] }
 
 export function scoreOf(results: readonly BriefResult[]): Scored {
   const missing: Record<string, number> = {};
   for (const r of results) for (const id of r.missing) missing[id] = (missing[id] ?? 0) + 1;
-  return { ok: results.filter((r) => r.ok).length, n: results.length, costUsd: Math.round(results.reduce((s, r) => s + r.costUsd, 0) * 1e6) / 1e6, missing, passed: results.filter((r) => r.ok).map((r) => r.id) };
+  const said = results.filter((r) => r.verified !== undefined);
+  return { ok: results.filter((r) => r.ok).length, n: results.length, ...(said.length ? { verified: said.filter((r) => r.verified).length } : {}), costUsd: Math.round(results.reduce((s, r) => s + r.costUsd, 0) * 1e6) / 1e6, missing, passed: results.filter((r) => r.ok).map((r) => r.id) };
 }
 
 /** Less than this left of the cap, and no further run is started. */
@@ -87,7 +94,7 @@ export function readRun(id: string, out: string, err: string, timedOut: boolean,
   const j = parse();
   const paid = j?.costUsd ?? Number(/had spent (?:under )?\$([\d.]+) when it stopped/.exec(err)?.[1] ?? 0);
   const ev = j?.eval ?? null;
-  if (ev) return { result: { id, ok: ev.result.conformant, missing: ev.gates.required.broken.map((x) => x.id).filter((x) => tracked.has(x)), costUsd: paid }, paid, invocationId: j?.invocationId ?? null, stopped: null };
+  if (ev) return { result: { id, ok: ev.record ? standingOf(ev.record).deliverable : ev.result.conformant, ...(ev.record ? { verified: ev.record.state === 'VERIFIED' } : {}), missing: ev.gates.required.broken.map((x) => x.id).filter((x) => tracked.has(x)), costUsd: paid }, paid, invocationId: j?.invocationId ?? null, stopped: null };
   // The error is the last thing a run says, before the line on what it had spent; what comes earlier is its own notes.
   const said = err.split('\n').map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith("This run had spent ")).at(-1) ?? 'it gave no reason';
   return { result: null, paid, invocationId: j?.invocationId ?? null,
@@ -275,6 +282,8 @@ export interface EvolveRecord {
   readonly schema: 1;
   readonly skill: string; readonly skillVersion: string; readonly standardVersion: string; readonly at: string;
   readonly briefs: { readonly dev: readonly string[]; readonly heldBack: readonly string[] };
+  /** how many of the owner's rules the score reads, of how many they have; absent from a search recorded before this was kept */
+  readonly scored?: { readonly on: number; readonly of: number };
   readonly start: Carry;
   /** the unchanged skill, twice, on the working briefs, and the band read from the two. `second` is null when the search stopped before the second run was whole; `first` may then be a part of the briefs */
   readonly baseline: { readonly first: Scored; readonly second: Scored | null; readonly band: number };
@@ -291,13 +300,18 @@ export interface EvolveRecord {
   readonly earlier?: { readonly heldBackReads: number; readonly notTriedAgain: readonly string[] };
 }
 
+/** How many of a score's runs were verified in full, said only where the runs said: "held" is never "verified". */
+const verifiedOf = (...ss: readonly Scored[]): string => (ss.every((s) => s.verified !== undefined) ? ` (${ss.map((s) => s.verified).join(' and ')} verified in full)` : '');
+/** A score in a line: the runs with nothing seen to fail, and of those the ones verified in full. */
+export const heldOf = (s: Scored): string => `${s.ok} of ${s.n} with nothing seen to fail${verifiedOf(s)}`;
+
 /** The record as a person reads it: what was tried, what was kept and why, and whether it carried. */
 export function renderEvolve(r: EvolveRecord): string {
   const out: string[] = [];
   const say = (c: Carry): string => `${c.drafts} draft(s)${c.note ? ', with a note on what drafts leave out' : ''}`;
   out.push(`SELF-IMPROVEMENT · ${r.skill} · ${r.briefs.dev.length} working brief(s), ${r.briefs.heldBack.length} held back`);
-  out.push(r.baseline.second ? `  as it started   ${say(r.start)}: ${r.baseline.first.ok} and ${r.baseline.second.ok} of ${r.baseline.first.n} conformant on two runs. Noise band: ${r.baseline.band} case(s).`
-    : `  as it started   ${say(r.start)}: ${r.baseline.first.ok} of ${r.baseline.first.n} conformant on the one run that was made.`);
+  out.push(r.baseline.second ? `  as it started   ${say(r.start)}: ${r.baseline.first.ok} and ${r.baseline.second.ok} of ${r.baseline.first.n} with nothing seen to fail on two runs${verifiedOf(r.baseline.first, r.baseline.second)}. Noise band: ${r.baseline.band} case(s).`
+    : `  as it started   ${say(r.start)}: ${r.baseline.first.ok} of ${r.baseline.first.n} with nothing seen to fail on the one run that was made${verifiedOf(r.baseline.first)}.`);
   if (!r.trials.length && r.verdict !== 'STOPPED') out.push('  nothing was tried: no change the checks can score was left to try.');
   for (const t of r.trials) {
     out.push(`  round ${t.round}  ${t.kept ? 'kept    ' : 'not kept'}  ${t.gene === 'NOTE' ? 'name what drafts leave out' : t.gene === 'MORE_DRAFTS' ? `${t.carry.drafts} drafts` : `${t.carry.drafts} draft(s), one fewer`}: ${t.why}`);
@@ -306,6 +320,8 @@ export function renderEvolve(r: EvolveRecord): string {
   if (r.heldBack) out.push(`  held back       as it started ${r.heldBack.start.ok} of ${r.heldBack.start.n}; as the search left it ${r.heldBack.end.ok} of ${r.heldBack.end.n}.${r.earlier?.heldBackReads ? ` These briefs were read by ${r.earlier.heldBackReads} earlier search(es): each reading makes them less of a test.` : ''}`);
   out.push(`  ${r.verdict === 'ADOPTED' ? 'ADOPTED' : r.verdict === 'NOT_CARRIED' ? 'NOT ADOPTED' : r.verdict === 'STOPPED' ? 'STOPPED' : 'UNCHANGED'}: ${r.why}`);
   if (r.verdict === 'ADOPTED') out.push(`  What ${r.briefs.heldBack.length} briefs set aside can show is that a change breaks what worked. They cannot show that a gain carries.`);
-  out.push('  Scored on what the checks read: what the work must contain and be made from, and nothing unsupported delivered. A judgement step is scored by nothing here.');
+  out.push(`  ${r.scored ? `Scored on ${r.scored.on} of your ${r.scored.of} rules: the ones a check reads.` : 'Scored on what the checks read: what the work must contain and be made from, and nothing unsupported delivered.'} A judgement step is scored by nothing here.`);
+  // A SCORE THAT READS A SMALL PART OF THE STANDARD CAN RISE WHILE THE WORK GETS NO BETTER. Said where it matters.
+  if (r.scored && r.scored.on * 2 < r.scored.of && r.verdict === 'ADOPTED') out.push(`  Most of your rules are scored by nothing here. This adoption says the ${r.scored.on} that are did not get worse; it is no evidence that the work is better by your standard.`);
   return out.join('\n');
 }

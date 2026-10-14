@@ -1,0 +1,7 @@
+{
+ "arm": "rules",
+ "task": "t4",
+ "run": 0,
+ "seconds": 9.4,
+ "output": "When you have a cold, you feel genuinely unwell, so reaching for antibiotics seems sensible. The problem is that they are aimed at the wrong enemy.\n\nColds are caused by viruses. Viruses are tiny packages of genetic instructions wrapped in protein. They are not really alive in the usual sense. They cannot eat, grow or reproduce on their own. Instead they slip inside your cells and hijack the machinery already there.\n\nBacteria are completely different. They are living single-celled organisms with their own walls, their own fuel supply and their own way of multiplying. Antibiotics attack exactly those features. Some break down the bacterial wall, others jam the internal processes that let bacteria copy themselves.\n\nImagine a weedkiller sprayed across your lawn. It works because weeds are plants with roots and leaves to poison. Spraying it at a passing wasp achieves nothing, because a wasp has none of those parts.\n\nA virus offers antibiotics nothing to grip. It has no bacterial wall to break, no bacterial machinery to disrupt. So the drug drifts through your system while the cold runs its usual course.\n\nTaking them anyway carries a cost. Useful bacteria in your gut get killed, and surviving harmful ones learn to resist future treatment.\n\nIn short, antibiotics target bacteria, and a cold is not bacterial."
+}

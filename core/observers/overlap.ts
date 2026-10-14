@@ -13,6 +13,7 @@
 // words by the platform's own segmenter.
 
 import { sentencesOf } from './text.js';
+import { visible } from './visible.js';
 
 /** A stretch of a script that puts no space between its words. */
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
@@ -27,7 +28,8 @@ const N = 6;
  * How much of one text is lifted from the corpus: six-word runs it shares, and its longest shared run in words.
  * `standard` counts the shared six-word runs left out of both as the author's standard wording (see below).
  */
-export interface CorpusOverlap { readonly shared6: number; readonly longestShared: number; readonly standard?: number }
+export interface CorpusOverlap { readonly shared6: number; readonly longestShared: number; readonly standard?: number;
+  /** the words of the longest shared run, as the text has them: what a person is shown when the run is too long */ readonly longestWords?: string }
 
 /** A six-word run found in at least this many separate pieces of the author's is their standard wording. */
 export const STANDARD_WORDING_PIECES = 3;
@@ -42,7 +44,7 @@ export const STANDARD_WORDING_PIECES = 3;
  * count and reported apart. Words lifted from one or two pieces are still copying, at any length. Without it,
  * nothing is left out and the reading is what it always was.
  */
-export function overlapIndex(corpus: readonly string[], standardWording: readonly string[] = []): (text: string) => CorpusOverlap {
+export function overlapIndex(corpus: readonly string[], standardWording: readonly string[] = [], opts: { /** also return the words of the longest shared run */ words?: boolean } = {}): (text: string) => CorpusOverlap {
   // EVERY SIX-WORD RUN OF EVERY PIECE, WITH WHERE IT STARTS: built once. A text is then read in one pass, and a run
   // it shares with a piece is followed along that piece a word at a time, never searched for again. The check exists
   // for the output that copies a long stretch, and read the earlier way that was the output it was slowest on.
@@ -56,7 +58,8 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
   });
   const standard = new Set(standardWording);
   return (text) => {
-    const w = wordsOf(text);
+    // The words a reader sees: the tags two pages share are not a passage copied from one to the other.
+    const w = wordsOf(visible(text));
     const grams = w.slice(0, Math.max(0, w.length - N + 1)).map((_, i) => w.slice(i, i + N).join(' '));
     // run[i]: how many words from word i on the text shares with one piece, taking the piece that goes furthest.
     // Read from the end: along one piece, the run from i is one word longer than the run from i + 1.
@@ -74,11 +77,11 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
       }
       after = here;
     }
-    let shared6 = 0; let longestShared = 0; let left = 0;
+    let shared6 = 0; let longestShared = 0; let left = 0; let from = 0;
     for (let i = 0; i < grams.length; i++) {
       if (!run[i]) continue;
       if (standard.has(grams[i])) left += 1; else shared6 += 1;
-      if (!standard.size) { longestShared = Math.max(longestShared, run[i]); continue; }
+      if (!standard.size) { if (run[i] > longestShared) { longestShared = run[i]; from = i; } continue; }
       // A run that lies inside the one read just before it holds nothing that one did not.
       if (i > 0 && run[i - 1] > run[i]) continue;
       // WHAT COUNTS OF THE RUN is the longest stretch of its words that some six-word run outside the standard wording
@@ -89,10 +92,11 @@ export function overlapIndex(corpus: readonly string[], standardWording: readonl
       for (let k = i; k < j; k++) {
         if (k + N <= j && !standard.has(grams[k])) reach = k + N - 1;
         stretch = k <= reach ? stretch + 1 : 0;
-        longestShared = Math.max(longestShared, stretch);
+        if (stretch > longestShared) { longestShared = stretch; from = k - stretch + 1; }
       }
     }
-    return standard.size ? { shared6, longestShared, standard: left } : { shared6, longestShared };
+    const longestWords = opts.words && longestShared ? { longestWords: w.slice(from, from + longestShared).join(' ') } : {};
+    return standard.size ? { shared6, longestShared, standard: left, ...longestWords } : { shared6, longestShared, ...longestWords };
   };
 }
 
@@ -111,6 +115,23 @@ export function standardWordingOf(pieces: readonly string[]): string[] {
   const seenIn = new Map<string, number>();
   for (const w of separate) for (const g of new Set(gramsOf(w))) seenIn.set(g, (seenIn.get(g) ?? 0) + 1);
   return [...seenIn].filter(([, n]) => n >= STANDARD_WORDING_PIECES).map(([g]) => g).sort();
+}
+
+/** Above this many pieces the reading below is made on the first of them, by text: it is a bound, not a census. */
+const SHARED_AMONG_MOST = 40;
+
+/**
+ * HOW MUCH THE AUTHOR'S OWN PIECES SHARE WITH ONE ANOTHER: the longest run of words any one of them shares with
+ * another, standard wording left out. An essayist's pieces share a few words; a contract drafter's share whole
+ * clauses, in two contracts out of twelve as often as in all of them. New work that shares no more with one example
+ * than the examples share among themselves is written the way this author writes, and is not a lifted passage; so
+ * this is the most a run may share before it is one (cli/eval-run.ts, `copyLimit`). Nothing is chosen here: the
+ * number is read off the pieces. Null on fewer pieces than can tell standard wording at all.
+ */
+export function sharedAmong(pieces: readonly string[], standardWording: readonly string[] = []): number | null {
+  const separate = [...new Set(pieces.map((p) => p.normalize('NFKC').trim()))].sort().slice(0, SHARED_AMONG_MOST);
+  if (separate.length < STANDARD_WORDING_PIECES) return null;
+  return Math.max(...separate.map((p, i) => overlapIndex(separate.filter((_, k) => k !== i), standardWording)(p).longestShared));
 }
 
 /**

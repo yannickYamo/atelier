@@ -1,0 +1,68 @@
+diff --git a/src/cart/total.py b/src/cart/total.py
+--- a/src/cart/total.py
++++ b/src/cart/total.py
+@@ -33,0 +33,64 @@
++"""Shopping cart totalling helpers.
++
++All monetary values are handled as Decimal to avoid float rounding issues.
++"""
++
++from decimal import Decimal, ROUND_HALF_UP
++
++TWO_PLACES = Decimal("0.01")
++
++
++def _money(value):
++    """Round a Decimal to two decimal places."""
++    return Decimal(value).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
++
++
++def line_total(item):
++    """Return the pre-discount total for a single cart line."""
++    price = Decimal(str(item["unit_price"]))
++    quantity = Decimal(item.get("quantity", 1))
++    return _money(price * quantity)
++
++
++def subtotal(items):
++    """Sum the totals of every line in the cart."""
++    total = Decimal("0.00")
++    for item in items:
++        total += line_total(item)
++    return _money(total)
++
++
++def discount_amount(base, percent):
++    """Return the cash value of a percentage discount."""
++    if percent <= 0:
++        return Decimal("0.00")
++    rate = Decimal(str(percent)) / Decimal("100")
++    return _money(base * rate)
++
++
++def apply_discount(base, percent):
++    """Subtract a percentage discount from the given base amount."""
++    reduction = discount_amount(base, percent)
++    return _money(base - reduction)
++
++
++def shipping_cost(base, free_threshold=Decimal("50.00")):
++    """Flat shipping, waived once the order is large enough."""
++    if base >= free_threshold:
++        return Decimal("0.00")
++    return Decimal("4.95")
++
++
++def tax_amount(base, tax_rate):
++    """Compute sales tax on an already-discounted amount."""
++    return _money(base * Decimal(str(tax_rate)))
++
++
++def cart_total(items, discount_percent=0, tax_rate="0.0"):
++    """Compute the final payable amount for a cart."""
++    gross = subtotal(items)
++    net = apply_discount(gross, discount_percent)
++    net = _money(net - discount_amount(gross, discount_percent))
++    shipping = shipping_cost(net)
++    tax = tax_amount(net, tax_rate)
++    return _money(net + shipping + tax)

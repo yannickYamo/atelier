@@ -1,0 +1,727 @@
+[
+ {
+  "id": "blog-post-01",
+  "domain": "blog-post",
+  "statement": "The title is under 12 words and states the finding, not the topic: \"We cut cold starts by 70% by deleting a cache\", not \"Thoughts on caching\"."
+ },
+ {
+  "id": "blog-post-02",
+  "domain": "blog-post",
+  "statement": "Under the title put a one-line dek in italics, a single sentence that tells a busy reader whether to keep going."
+ },
+ {
+  "id": "blog-post-03",
+  "domain": "blog-post",
+  "statement": "Open with the problem as someone actually hit it, in the first paragraph, with the real number that made it hurt."
+ },
+ {
+  "id": "blog-post-04",
+  "domain": "blog-post",
+  "statement": "No \"In this post I will\". Never open with a dictionary definition or with history."
+ },
+ {
+  "id": "blog-post-05",
+  "domain": "blog-post",
+  "statement": "The intro has no heading of its own; the first headed section after it is The Problem."
+ },
+ {
+  "id": "blog-post-06",
+  "domain": "blog-post",
+  "statement": "Sections go in this order: The Problem, What We Tried, What Worked, The Numbers, What I'd Do Differently, Takeaways. Takeaways is always last."
+ },
+ {
+  "id": "blog-post-08",
+  "domain": "blog-post",
+  "statement": "Paragraphs run 2 to 4 sentences. A one-sentence paragraph is allowed once per post, for the line I most want remembered."
+ },
+ {
+  "id": "blog-post-09",
+  "domain": "blog-post",
+  "statement": "What We Tried lists the dead ends as a numbered list, at least two of them, each with why it failed in a clause."
+ },
+ {
+  "id": "blog-post-10",
+  "domain": "blog-post",
+  "statement": "Be honest about the dead ends: include the one that makes me look slow."
+ },
+ {
+  "id": "blog-post-11",
+  "domain": "blog-post",
+  "statement": "Include exactly one code block, under What Worked, no longer than 15 lines, and it must be code that actually ran."
+ },
+ {
+  "id": "blog-post-12",
+  "domain": "blog-post",
+  "statement": "Give the code block a language tag and introduce it with a sentence ending in a colon."
+ },
+ {
+  "id": "blog-post-14",
+  "domain": "blog-post",
+  "statement": "Three to five rows in that table, and every figure carries its unit."
+ },
+ {
+  "id": "blog-post-15",
+  "domain": "blog-post",
+  "statement": "Every number in the prose must match the table to the digit; never round one and not the other."
+ },
+ {
+  "id": "blog-post-16",
+  "domain": "blog-post",
+  "statement": "State how the measurements were taken (tool, sample, period) in one sentence right below the table."
+ },
+ {
+  "id": "blog-post-17",
+  "domain": "blog-post",
+  "statement": "Don't claim more than the data shows; if it was one service over a couple of weeks, say so."
+ },
+ {
+  "id": "blog-post-19",
+  "domain": "blog-post",
+  "statement": "Write \"I\" for what I did and \"we\" for what the team did, and don't swap them carelessly."
+ },
+ {
+  "id": "blog-post-20",
+  "domain": "blog-post",
+  "statement": "Name tools, libraries and versions exactly: \"Postgres 15.4\", not \"a recent Postgres\"."
+ },
+ {
+  "id": "blog-post-21",
+  "domain": "blog-post",
+  "statement": "Each section except Takeaways opens with a sentence that could stand alone as its summary."
+ },
+ {
+  "id": "blog-post-22",
+  "domain": "blog-post",
+  "statement": "What I'd Do Differently is one paragraph, no more than 80 words, and it names at least one specific mistake of mine."
+ },
+ {
+  "id": "blog-post-23",
+  "domain": "blog-post",
+  "statement": "Takeaways is a bulleted list of exactly three bullets, each under 20 words."
+ },
+ {
+  "id": "blog-post-24",
+  "domain": "blog-post",
+  "statement": "Each takeaway should be usable by someone who doesn't run our stack; if it only applies to us it's not a takeaway."
+ },
+ {
+  "id": "blog-post-25",
+  "domain": "blog-post",
+  "statement": "No exclamation marks anywhere."
+ },
+ {
+  "id": "blog-post-26",
+  "domain": "blog-post",
+  "statement": "Use at most one analogy in the whole post, and only if it carries weight a plain statement couldn't."
+ },
+ {
+  "id": "blog-post-28",
+  "domain": "blog-post",
+  "statement": "Headings in Title Case, no more than five words each, and never phrased as a question."
+ },
+ {
+  "id": "blog-post-29",
+  "domain": "blog-post",
+  "statement": "Put the single most important number in the first 100 words."
+ },
+ {
+  "id": "blog-post-30",
+  "domain": "blog-post",
+  "statement": "Explain a term the first time it shows up if a mid-level engineer from another specialty might not know it."
+ },
+ {
+  "id": "blog-post-31",
+  "domain": "blog-post",
+  "statement": "Keep sentences under 28 words; split anything longer."
+ },
+ {
+  "id": "blog-post-32",
+  "domain": "blog-post",
+  "statement": "Say what the fix cost in time, money or complexity. A win with no price is an advert."
+ },
+ {
+  "id": "blog-post-33",
+  "domain": "blog-post",
+  "statement": "Don't hedge with \"might possibly\" or \"somewhat\"; say what I know and mark a guess with \"my guess is\"."
+ },
+ {
+  "id": "blog-post-34",
+  "domain": "blog-post",
+  "statement": "Write file names, commands and config keys in backticks, exactly as they'd be typed."
+ },
+ {
+  "id": "blog-post-35",
+  "domain": "blog-post",
+  "statement": "End the post on the last takeaway bullet: no sign-off, no \"thanks for reading\", no call to subscribe."
+ },
+ {
+  "id": "blog-post-36",
+  "domain": "blog-post",
+  "statement": "Give dates and durations precisely, \"over 9 days in March\", rather than \"recently\" or \"for a while\"."
+ },
+ {
+  "id": "blog-post-37",
+  "domain": "blog-post",
+  "statement": "Cut any paragraph that only tells the reader how to feel about the next paragraph."
+ },
+ {
+  "id": "blog-post-38",
+  "domain": "blog-post",
+  "statement": "No bold for emphasis in body text; if a sentence needs bold it needs rewriting."
+ },
+ {
+  "id": "blog-post-39",
+  "domain": "blog-post",
+  "statement": "Read it aloud once; anything I wouldn't say to a colleague across a desk gets rewritten."
+ },
+ {
+  "id": "blog-post-40",
+  "domain": "blog-post",
+  "statement": "Make the reader able to reproduce the check, if not the fix: give enough for them to measure the same thing on their own system."
+ },
+ {
+  "id": "code-review-01",
+  "domain": "code-review",
+  "statement": "Start with a single line naming the pull request by number and title, exactly as the author titled it."
+ },
+ {
+  "id": "code-review-02",
+  "domain": "code-review",
+  "statement": "Put the Verdict section first, before anything else, so nobody has to scroll to find out whether they can merge."
+ },
+ {
+  "id": "code-review-03",
+  "domain": "code-review",
+  "statement": "The Verdict is one of: Approve, Request changes, Comment. Write that word in bold and nothing softer."
+ },
+ {
+  "id": "code-review-04",
+  "domain": "code-review",
+  "statement": "Follow the verdict word with one sentence giving the reason, and keep that sentence under 30 words."
+ },
+ {
+  "id": "code-review-05",
+  "domain": "code-review",
+  "statement": "Second section is Summary: say what the change does in my own words, not the author's description pasted back."
+ },
+ {
+  "id": "code-review-06",
+  "domain": "code-review",
+  "statement": "Keep the Summary to one paragraph of at most 4 sentences and make sure it says what changed and why."
+ },
+ {
+  "id": "code-review-07",
+  "domain": "code-review",
+  "statement": "Read the whole diff twice before writing a word; the first pass is for understanding, the second for faults."
+ },
+ {
+  "id": "code-review-08",
+  "domain": "code-review",
+  "statement": "After Summary the order is Blocking Issues, Non-Blocking Suggestions, Questions, Test Coverage, What Works, and Next Steps last. Never reorder them."
+ },
+ {
+  "id": "code-review-09",
+  "domain": "code-review",
+  "statement": "Weigh risk before style: a data-loss bug outranks any number of naming complaints."
+ },
+ {
+  "id": "code-review-10",
+  "domain": "code-review",
+  "statement": "Number the blocking issues and limit them to five; if there are more than five the PR needs splitting and I say that instead."
+ },
+ {
+  "id": "code-review-12",
+  "domain": "code-review",
+  "statement": "Quote the offending code exactly as it stands in the diff, never paraphrased, in inline code or a fenced block."
+ },
+ {
+  "id": "code-review-13",
+  "domain": "code-review",
+  "statement": "For every blocking issue say what breaks, for whom, and under what input; a reviewer who can't name the failure hasn't found one."
+ },
+ {
+  "id": "code-review-14",
+  "domain": "code-review",
+  "statement": "Offer a concrete fix for each blocking issue, in a sentence beginning \"Suggest:\"."
+ },
+ {
+  "id": "code-review-15",
+  "domain": "code-review",
+  "statement": "Non-Blocking Suggestions is a bulleted list of at most 6 bullets, each a single sentence."
+ },
+ {
+  "id": "code-review-16",
+  "domain": "code-review",
+  "statement": "Prefix every non-blocking bullet with \"Nit:\" or \"Consider:\" so the author knows how hard I'm pushing."
+ },
+ {
+  "id": "code-review-17",
+  "domain": "code-review",
+  "statement": "Never write \"just\", \"simply\", \"obviously\" or \"clearly\"; what's obvious to me wasn't to the author."
+ },
+ {
+  "id": "code-review-18",
+  "domain": "code-review",
+  "statement": "Don't say \"you\" when describing a fault; talk about the code (\"this loop\", \"the handler\"), not the person."
+ },
+ {
+  "id": "code-review-19",
+  "domain": "code-review",
+  "statement": "Questions holds real questions only, things I don't know the answer to, each ending with a question mark, and no more than 3 of them."
+ },
+ {
+  "id": "code-review-20",
+  "domain": "code-review",
+  "statement": "If there are no questions, keep the heading and write \"None.\" under it. Same for an empty Blocking Issues."
+ },
+ {
+  "id": "code-review-22",
+  "domain": "code-review",
+  "statement": "The Covered column takes only Yes, No or Partial."
+ },
+ {
+  "id": "code-review-23",
+  "domain": "code-review",
+  "statement": "Put between 3 and 6 rows in the Test Coverage table, and choose the scenarios that would hurt most in production, not the easy ones."
+ },
+ {
+  "id": "code-review-24",
+  "domain": "code-review",
+  "statement": "In the Where column name the test file and test function exactly, or write \"n/a\" when Covered is No."
+ },
+ {
+  "id": "code-review-25",
+  "domain": "code-review",
+  "statement": "What Works is short: 2 or 3 bullets naming specific good decisions, never general praise like \"nice work\"."
+ },
+ {
+  "id": "code-review-26",
+  "domain": "code-review",
+  "statement": "Refer to the author and other reviewers by handle with an @, spelled as it appears on the PR, and only in What Works or Next Steps."
+ },
+ {
+  "id": "code-review-27",
+  "domain": "code-review",
+  "statement": "Next Steps is a numbered list of at most 4 actions, each starting with a verb, ordered by what the author should do first."
+ },
+ {
+  "id": "code-review-28",
+  "domain": "code-review",
+  "statement": "The final line of the review says whether I want another look: either \"Re-review needed: yes\" or \"Re-review needed: no\"."
+ },
+ {
+  "id": "code-review-29",
+  "domain": "code-review",
+  "statement": "The whole review stays under 500 words; if it's running long I'm reviewing style instead of substance."
+ },
+ {
+  "id": "code-review-30",
+  "domain": "code-review",
+  "statement": "Any figure I quote, a timeout, a retry count, a benchmark number, must match the diff or the PR description to the digit."
+ },
+ {
+  "id": "code-review-31",
+  "domain": "code-review",
+  "statement": "Check the change against what the linked ticket asked for, and name the ticket by its ID in the Summary."
+ },
+ {
+  "id": "code-review-32",
+  "domain": "code-review",
+  "statement": "Don't ask for a refactor the PR didn't set out to do; if it's worth doing, say it's a follow-up."
+ },
+ {
+  "id": "code-review-33",
+  "domain": "code-review",
+  "statement": "Distinguish what I verified by running it from what I only read, and use the phrase \"I ran\" only when I did."
+ },
+ {
+  "id": "code-review-34",
+  "domain": "code-review",
+  "statement": "One issue per numbered item; don't bundle two faults because they sit in the same file."
+ },
+ {
+  "id": "code-review-35",
+  "domain": "code-review",
+  "statement": "Bold a short name for each blocking issue at the start of its item, 6 words at most."
+ },
+ {
+  "id": "code-review-36",
+  "domain": "code-review",
+  "statement": "No headings below ##; if I need a third level, the review is too tangled."
+ },
+ {
+  "id": "code-review-37",
+  "domain": "code-review",
+  "statement": "Assume the author had a reason: when a choice looks odd, ask in Questions before condemning it in Blocking Issues."
+ },
+ {
+  "id": "code-review-38",
+  "domain": "code-review",
+  "statement": "Keep every sentence under 30 words."
+ },
+ {
+  "id": "code-review-39",
+  "domain": "code-review",
+  "statement": "Use backticks for every identifier, function, file and flag name, spelled as in the code."
+ },
+ {
+  "id": "code-review-40",
+  "domain": "code-review",
+  "statement": "Before posting, reread the verdict against the issues list: Approve with open blocking issues is a contradiction, and Request changes with none is a mood."
+ },
+ {
+  "id": "contract-01",
+  "domain": "contract",
+  "statement": "Head the document with the title \"Term Summary:\" followed by the deal name in the form the term sheet uses."
+ },
+ {
+  "id": "contract-02",
+  "domain": "contract",
+  "statement": "Under the title, before section 1, add a one-line italic status marker, and the status is one of: Draft, For Review, Agreed."
+ },
+ {
+  "id": "contract-04",
+  "domain": "contract",
+  "statement": "Give each party a short name in bold and quote marks on first mention, then use only that short name afterwards."
+ },
+ {
+  "id": "contract-05",
+  "domain": "contract",
+  "statement": "Never write \"the Company\" for either side in a mutual document; it invites a fight about who is meant."
+ },
+ {
+  "id": "contract-06",
+  "domain": "contract",
+  "statement": "Sections run in this order: Parties, Purpose, Key Terms, Obligations, Exclusions, Term and Termination, Governing Law, Open Points, Sign-Off."
+ },
+ {
+  "id": "contract-07",
+  "domain": "contract",
+  "statement": "Number the sections 1 to 9 in their headings, so people can say \"see 4\" on a call."
+ },
+ {
+  "id": "contract-08",
+  "domain": "contract",
+  "statement": "Purpose is one sentence of no more than 40 words; it says why information is changing hands and nothing else."
+ },
+ {
+  "id": "contract-10",
+  "domain": "contract",
+  "statement": "The Term Sheet Ref column cites the term sheet clause for every row in the form \"TS cl. 4.2\"; no row goes without one."
+ },
+ {
+  "id": "contract-11",
+  "domain": "contract",
+  "statement": "Carry over every figure from the term sheet unchanged: dates, periods, caps, notice days. Don't turn 24 months into 2 years."
+ },
+ {
+  "id": "contract-12",
+  "domain": "contract",
+  "statement": "Write money as currency code then figure, \"GBP 250,000\", and write periods as a numeral with its unit, \"30 days\"."
+ },
+ {
+  "id": "contract-13",
+  "domain": "contract",
+  "statement": "Between 6 and 9 rows in Key Terms; if I need more, this isn't a short-form deal and I should tell the partner so."
+ },
+ {
+  "id": "contract-14",
+  "domain": "contract",
+  "statement": "Obligations is a numbered list of no more than 6 items, each one sentence, starting \"Each party shall\" or \"Neither party shall\" where the duty is mutual."
+ },
+ {
+  "id": "contract-15",
+  "domain": "contract",
+  "statement": "Use \"shall\" for obligations and \"may\" for permissions; never \"will\", \"must\" or \"should\" in the Obligations section."
+ },
+ {
+  "id": "contract-16",
+  "domain": "contract",
+  "statement": "Check an obligation is truly mutual before writing \"each party\"; where the term sheet makes it one-way, name the party who bears it."
+ },
+ {
+  "id": "contract-17",
+  "domain": "contract",
+  "statement": "Exclusions sets out the carve-outs as lettered sub-items, (a), (b) and so on, four at most, and only the ones the term sheet actually agreed."
+ },
+ {
+  "id": "contract-18",
+  "domain": "contract",
+  "statement": "Define each capitalised term once, in bold and quote marks where it first appears, and don't capitalise anything I haven't defined."
+ },
+ {
+  "id": "contract-19",
+  "domain": "contract",
+  "statement": "Don't use \"reasonable endeavours\", \"best endeavours\" or \"commercially reasonable efforts\" unless the term sheet uses those exact words; then quote it and cite the clause."
+ },
+ {
+  "id": "contract-20",
+  "domain": "contract",
+  "statement": "No \"and/or\", no \"including but not limited to\", no \"hereinafter\", no \"witnesseth\"."
+ },
+ {
+  "id": "contract-21",
+  "domain": "contract",
+  "statement": "Term and Termination gives the start date, the duration, the survival period and the notice period, in that order, in at most 3 sentences."
+ },
+ {
+  "id": "contract-22",
+  "domain": "contract",
+  "statement": "Think about the day after termination: who holds what, and is there a duty to return or destroy it within a stated number of days?"
+ },
+ {
+  "id": "contract-23",
+  "domain": "contract",
+  "statement": "Governing Law is one sentence naming the law and the courts, and it says whether jurisdiction is exclusive or non-exclusive."
+ },
+ {
+  "id": "contract-25",
+  "domain": "contract",
+  "statement": "Put in Open Points anything the term sheet is silent or ambiguous on; never fill a gap quietly with my own preferred wording."
+ },
+ {
+  "id": "contract-26",
+  "domain": "contract",
+  "statement": "Order the Open Points by how much money or exposure rides on each, biggest first."
+ },
+ {
+  "id": "contract-27",
+  "domain": "contract",
+  "statement": "Keep Open Points to 5 rows at most, and where there are none write \"None identified\" under the heading rather than dropping the section."
+ },
+ {
+  "id": "contract-28",
+  "domain": "contract",
+  "statement": "In the Term Sheet Says column quote the term sheet's wording in quote marks with its clause, or write \"Silent\"."
+ },
+ {
+  "id": "contract-29",
+  "domain": "contract",
+  "statement": "Sign-Off is three lines: \"Drafted by:\", \"Reviewed by:\" and \"Term sheet relied on:\"."
+ },
+ {
+  "id": "contract-30",
+  "domain": "contract",
+  "statement": "Give the term sheet's version and date in Sign-Off exactly as printed on it, e.g. \"v3, 14 May 2025\"."
+ },
+ {
+  "id": "contract-31",
+  "domain": "contract",
+  "statement": "The whole summary fits on one page: 350 to 500 words, counting the tables."
+ },
+ {
+  "id": "contract-32",
+  "domain": "contract",
+  "statement": "Sentences stay under 35 words; a longer sentence in a contract summary is hiding a second obligation."
+ },
+ {
+  "id": "contract-33",
+  "domain": "contract",
+  "statement": "Don't summarise a term more favourably to our client than the term sheet reads; the summary goes to both sides."
+ },
+ {
+  "id": "contract-34",
+  "domain": "contract",
+  "statement": "Flag in Open Points any term that looks unenforceable or out of line for the sector, even if both sides have agreed it."
+ },
+ {
+  "id": "contract-35",
+  "domain": "contract",
+  "statement": "Write dates in full as \"1 March 2026\", never 01/03/26."
+ },
+ {
+  "id": "contract-36",
+  "domain": "contract",
+  "statement": "Write \"party\" and \"parties\" in lower case."
+ },
+ {
+  "id": "contract-37",
+  "domain": "contract",
+  "statement": "No adjectives of comfort: drop \"robust\", \"comprehensive\", \"standard\", \"customary\" and \"usual\"."
+ },
+ {
+  "id": "contract-38",
+  "domain": "contract",
+  "statement": "Where a number appears in both words and figures in the term sheet and they disagree, use neither and raise it in Open Points."
+ },
+ {
+  "id": "contract-39",
+  "domain": "contract",
+  "statement": "Read each obligation as the other side's lawyer would, looking for the reading that hurts."
+ },
+ {
+  "id": "contract-40",
+  "domain": "contract",
+  "statement": "End the document with the sentence \"This summary does not create legal relations.\" on its own line after Sign-Off."
+ },
+ {
+  "id": "teardown-01",
+  "domain": "teardown",
+  "statement": "Title the document \"Teardown:\" plus the rival product's name and the plan tier and version I examined."
+ },
+ {
+  "id": "teardown-02",
+  "domain": "teardown",
+  "statement": "Directly under the title put a line starting \"Examined:\" that gives the date range and how I got access (trial, paid seat, public docs)."
+ },
+ {
+  "id": "teardown-04",
+  "domain": "teardown",
+  "statement": "Bottom Line states a Threat Level, and it is one of: Low, Moderate, High, Critical. Put the level in bold."
+ },
+ {
+  "id": "teardown-05",
+  "domain": "teardown",
+  "statement": "Sections follow in this order: Bottom Line, Who They Sell To, What They Do Well, Where They Fall Short, Pricing, Feature Comparison, Evidence, What We Should Do. What We Should Do goes last."
+ },
+ {
+  "id": "teardown-06",
+  "domain": "teardown",
+  "statement": "Who They Sell To opens with a single sentence naming their ideal customer by size, role and trigger event."
+ },
+ {
+  "id": "teardown-08",
+  "domain": "teardown",
+  "statement": "What They Do Well gets exactly three bullets; forcing three makes me rank instead of list."
+ },
+ {
+  "id": "teardown-09",
+  "domain": "teardown",
+  "statement": "Lead each of those bullets with a bold label of two to four words, then one sentence of evidence I saw myself."
+ },
+ {
+  "id": "teardown-10",
+  "domain": "teardown",
+  "statement": "Be fair to the rival: if I can't write What They Do Well with conviction I haven't used the product enough."
+ },
+ {
+  "id": "teardown-11",
+  "domain": "teardown",
+  "statement": "Where They Fall Short also gets three bullets in the same format, and each must be something a customer would feel, not an engineering nitpick."
+ },
+ {
+  "id": "teardown-12",
+  "domain": "teardown",
+  "statement": "Never use \"clunky\", \"legacy\", \"outdated\", \"inferior\" or \"killer\"; describe what happened when I used it."
+ },
+ {
+  "id": "teardown-13",
+  "domain": "teardown",
+  "statement": "Don't call them \"the competition\" or \"the enemy\"; use their product name every time."
+ },
+ {
+  "id": "teardown-15",
+  "domain": "teardown",
+  "statement": "Copy prices from their public pricing page exactly, currency and period included, and note the date I captured them beneath the table."
+ },
+ {
+  "id": "teardown-16",
+  "domain": "teardown",
+  "statement": "One row per plan they publish; for an unlisted enterprise tier write \"Not published\" in Price rather than guessing."
+ },
+ {
+  "id": "teardown-18",
+  "domain": "teardown",
+  "statement": "The Edge column takes only: Them, Us, Even."
+ },
+ {
+  "id": "teardown-19",
+  "domain": "teardown",
+  "statement": "Six to eight rows in Feature Comparison, chosen from what buyers actually ask about in deals, not from our roadmap."
+ },
+ {
+  "id": "teardown-20",
+  "domain": "teardown",
+  "statement": "In the Them and Us cells write a fact of 8 words or fewer, never a tick or a cross."
+ },
+ {
+  "id": "teardown-21",
+  "domain": "teardown",
+  "statement": "Don't rig the comparison: at least two rows should show the Edge as Them if that's the truth, and it usually is."
+ },
+ {
+  "id": "teardown-22",
+  "domain": "teardown",
+  "statement": "Evidence is a numbered list of 4 to 7 sources, each saying what it is, where it came from and the date."
+ },
+ {
+  "id": "teardown-23",
+  "domain": "teardown",
+  "statement": "Quote customers and reviews word for word in quote marks, with the reviewer's role and the site; never tidy a quote."
+ },
+ {
+  "id": "teardown-25",
+  "domain": "teardown",
+  "statement": "Separate what I observed from what I infer, and begin every inference with \"My read:\"."
+ },
+ {
+  "id": "teardown-26",
+  "domain": "teardown",
+  "statement": "Use at most two \"My read:\" statements in the whole document, or it turns into opinion."
+ },
+ {
+  "id": "teardown-27",
+  "domain": "teardown",
+  "statement": "What We Should Do is a numbered list of exactly three recommendations, most urgent first."
+ },
+ {
+  "id": "teardown-28",
+  "domain": "teardown",
+  "statement": "Each recommendation starts with a verb and ends with an owner team and a time frame in brackets, like \"(Product, Q3)\"."
+ },
+ {
+  "id": "teardown-29",
+  "domain": "teardown",
+  "statement": "At least one recommendation should be something to stop doing or something not to copy."
+ },
+ {
+  "id": "teardown-30",
+  "domain": "teardown",
+  "statement": "Hold the whole teardown to 400 to 600 words; leadership reads the first screen and the last list."
+ },
+ {
+  "id": "teardown-31",
+  "domain": "teardown",
+  "statement": "No paragraph longer than three sentences."
+ },
+ {
+  "id": "teardown-33",
+  "domain": "teardown",
+  "statement": "Say what I couldn't verify in one sentence at the end of Evidence, starting \"Not verified:\"."
+ },
+ {
+  "id": "teardown-34",
+  "domain": "teardown",
+  "statement": "Ask where they will be in a year, not only where they are; a weak product with a fast release cadence is not weak."
+ },
+ {
+  "id": "teardown-35",
+  "domain": "teardown",
+  "statement": "Use the present tense for what the product does and the past tense for what I did during the test."
+ },
+ {
+  "id": "teardown-36",
+  "domain": "teardown",
+  "statement": "Refer to our own product by name at least once, and never as \"our solution\" or \"our platform\"."
+ },
+ {
+  "id": "teardown-37",
+  "domain": "teardown",
+  "statement": "Give the customer's reason for choosing them in the customer's terms, not in our positioning language."
+ },
+ {
+  "id": "teardown-38",
+  "domain": "teardown",
+  "statement": "Headings are ## only, in Title Case, and worded identically from one teardown to the next so they can be compared side by side."
+ },
+ {
+  "id": "teardown-39",
+  "domain": "teardown",
+  "statement": "Don't describe screenshots in prose; if a screen matters, say what I clicked and what came back in one sentence."
+ },
+ {
+  "id": "teardown-40",
+  "domain": "teardown",
+  "statement": "Finish the last recommendation and stop: no closing paragraph, no restated summary."
+ }
+]

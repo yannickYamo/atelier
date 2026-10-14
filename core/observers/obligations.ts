@@ -13,6 +13,10 @@
 import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, ObserverResult, Span, CheckContext } from './registry.js';
 import { workedFromMaterial } from '../loop/derived.js';
+import { citedLines } from '../loop/locators.js';
+import { proseWords } from './style.js';
+import { sentencesOf } from './text.js';
+import { sectionBodyOf } from './structure.js';
 
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
@@ -279,6 +283,81 @@ export const CITED: Observer = {
   },
 };
 
+/**
+ * EVERY PLACE THE WORK CITES IS A LINE OF WHAT IT WAS GIVEN (../loop/locators.ts). "Cite each item as path:line,
+ * and only lines the diff adds" is a step code can hold: each citation is looked up, and one that names no file of
+ * the material, no line of it, a line the change did not add, a blank line or a lone bracket fails, by name. `min`
+ * citations must be there at all. Whether the cited line is the right one is the writer's judgement, never read
+ * here. Looked up in the bound material and in the request.
+ */
+export const LINES: Observer = {
+  id: 'LINES',
+  describe: (p) => `every path:line cited is a line of the material with something on it${num(p, 'min') ? ` (at least ${num(p, 'min')} cited)` : ''}`,
+  validate: (p) => (num(p, 'min') === null || (num(p, 'min') ?? 0) >= 0 ? null : 'min is a count, zero or more'),
+  observe(text, p, context?: CheckContext): ObserverResult {
+    // The request is somewhere a change can be given too (a diff pasted into the task). With nothing bound and
+    // nothing pasted, a citation points at something nobody gave, and fails as one.
+    const material = [...(context?.request ? [{ name: 'request', text: context.request }] : []), ...(context?.material ?? [])];
+    const nothingBound = !(context?.material ?? []).length;
+    const cited = citedLines(text, material).map((c) => (nothingBound && c.why === 'no such file in the material' ? { ...c, why: 'no material is bound to look it up in' } : c));
+    const off = cited.filter((c) => c.why !== null); const min = num(p, 'min') ?? 0;
+    const detail = `${cited.length - off.length} of ${cited.length} citation(s) point at a line of the material with something on it`
+      + (off.length ? `; not: ${off.slice(0, 6).map((c) => `${c.path}:${c.line} (${c.why})`).join(', ')}` : '') + (cited.length < min ? `; ${min} needed` : '');
+    if (!off.length && cited.length >= min) return { verdict: 'MET', spans: [], value: 0, detail };
+    return { verdict: 'VIOLATED', value: off.length + Math.max(0, min - cited.length), detail,
+      spans: off.map((c) => ({ start: c.start, end: c.end, text: text.slice(c.start, c.end), why: `${c.path}:${c.line} is ${c.why}` })) };
+  },
+};
+
+/**
+ * A LENGTH THE OWNER STATED, IN THE UNIT THEY STATED IT: "between 150 and 230 words", "under 280 characters", "two or
+ * three sentences", "no sentence longer than 25 words". Counted the way a person counts: words of prose, characters
+ * of the text as delivered (less front matter), sentences (a list item counts as one); `sentence` is the longest
+ * sentence, in words. Words are words of prose: a heading, a table and a code block are not counted. A stated length is the
+ * method's; a request that names its own length sets it for that run (cli/commands/invoke.ts). With `in`, the
+ * length is that of one named section.
+ */
+export const LENGTH: Observer = {
+  id: 'LENGTH',
+  describe: (p) => {
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    const range = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+    const where = list(p, 'in')[0];
+    return unit === 'sentence' ? `no sentence over ${hi} words` : `${where ? `the "${where}" section: ` : ''}${range} ${unit}`;
+  },
+  validate: (p) => {
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    if (!['words', 'characters', 'sentences', 'sentence'].includes(unit)) return 'unit is words, characters, sentences or sentence';
+    if (lo === null && hi === null) return 'needs min or max';
+    if (unit === 'sentence' && hi === null) return 'the longest sentence needs max';
+    if (unit === 'sentence' && list(p, 'in').length) return 'the longest sentence is read over the whole work, not one section';
+    return lo !== null && hi !== null && lo > hi ? 'min cannot exceed max' : null;
+  },
+  observe(whole, p): ObserverResult {
+    if (!whole.trim()) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no text' };
+    const unit = (list(p, 'unit')[0] ?? 'words').toLowerCase(); const lo = num(p, 'min'); const hi = num(p, 'max');
+    // THE LENGTH OF ONE SECTION (`in`), where the owner stated it of a section or their pieces keep one: what the
+    // section holds is counted, and a text without the section is another rule's to fail.
+    const where = list(p, 'in')[0];
+    const text = where ? sectionBodyOf(whole, where, Boolean(num(p, 'labels')), list(p, 'sections')) : whole;
+    // A length the owner stated of a section (`need`) is not met by leaving the section out.
+    if (text === null) return { verdict: num(p, 'need') ? 'VIOLATED' : 'NOT_APPLICABLE', spans: [], value: null, detail: `no "${where}" section to measure` };
+    if (unit === 'sentence') {
+      const long = sentencesOf(text).filter((s) => hi !== null && s.words > hi);
+      return long.length ? { verdict: 'VIOLATED', value: long.length, detail: `${long.length} sentence(s) over ${hi} words (the longest: ${Math.max(...long.map((s) => s.words))})`,
+        spans: long.map((s) => ({ start: s.start, end: s.end, text: s.text, why: `${s.words} words, where no sentence runs over ${hi}` })) }
+        : { verdict: 'MET', spans: [], value: 0, detail: `no sentence over ${hi} words` };
+    }
+    // Characters of the text as a reader has it: front matter is not part of a post.
+    const n = unit === 'characters' ? text.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim().length : unit === 'sentences' ? sentencesOf(text).length : proseWords(text);
+    const off = lo !== null && n < lo ? 'short' : hi !== null && n > hi ? 'long' : null;
+    const asked = lo !== null && hi !== null ? `${lo} to ${hi}` : hi !== null ? `at most ${hi}` : `at least ${lo}`;
+    // How far off, said as a number: told only "long", a writer asked for at most 420 words came back at 469.
+    const by = off === 'long' ? n - (hi ?? n) : off === 'short' ? (lo ?? n) - n : 0;
+    return { verdict: off ? 'VIOLATED' : 'MET', spans: [], value: n, detail: `${where ? `"${where}": ` : ''}${n} ${unit} (${asked})${off ? `: ${off} by ${by}` : ''}` };
+  },
+};
+
 /** What each check reads: the output alone, or the output against what it was made from. */
 export type ObligationTarget = 'OUTPUT' | 'BOUND_MATERIAL';
-export const targetOf = (observer: string): ObligationTarget => (observer === 'CITED' ? 'BOUND_MATERIAL' : 'OUTPUT');
+export const targetOf = (observer: string): ObligationTarget => (observer === 'CITED' || observer === 'LINES' ? 'BOUND_MATERIAL' : 'OUTPUT');

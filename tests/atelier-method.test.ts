@@ -142,27 +142,27 @@ describe('a method and one example become requirements of three kinds', () => {
     expect(of(/^End with a Risks/)).toMatchObject({ obligation: 'DELIVERABLE' });
   });
   it('a step that names none of these is a judgement, with no check and no claim that it is measured', () => {
-    expect(of(/^Weigh switching cost/)).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, demoted: null });
+    expect(of(/^Weigh switching cost/)).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null, conflict: null });
   });
-  it('a step the owner\'s own example does not hold is kept as theirs, as a judgement, and asked about', () => {
+  it('a step the owner\'s own example does not do stays required as they wrote it, and the disagreement is shown', () => {
     const disagree = methodProposals(`${NOTE}6. Include a table with the columns Vendor and Contract length.\n`, { task: TASK, material: context.material, reference: EXAMPLE.replace('## Risks', '## Caveats') });
     const risks = disagree.find((p) => p.statement.startsWith("End with a Risks"));
-    expect(risks).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null });
-    expect(risks?.demoted).toBe('your example does not hold it as a check would read it (no "Risks" section)');
+    expect(risks).toMatchObject({ origin: 'STATED', obligation: 'DELIVERABLE', measurement: { observer: 'PRESENCE' } });
+    expect(risks?.conflict).toBe('your example does not do this (no "Risks" section)');
     // a table whose columns the step names is held against those columns, never against whatever table the example has
     const contract = disagree.find((p) => p.statement.includes('Contract length'));
-    expect(contract?.demoted).toBe('your example does not hold it as a check would read it (the table lacks the column(s) "contract length")');
+    expect(contract?.conflict).toBe('your example does not do this (the table lacks the column(s) "contract length")');
     const lines = describeMethod(disagree, 'FULL_REPRO_CASE').join('\n');
-    expect(lines).toMatch(/Checked on every output: what the work must contain \(2\)/);
+    expect(lines).toMatch(/Checked on every output: what the work must contain \(4\)/);
     expect(lines).toMatch(/Checked against the material: what the work must be made from \(1\)/);
-    expect(lines).toMatch(/Yours to settle: your method says it, and your example does not hold it \(2\)/);
+    expect(lines.match(/! your example does not do this .*Checked and shown on every run; it blocks nothing until you confirm it \(--yes\)\./g)).toHaveLength(2);
   });
-  it('a template table in the note that the example does not hold is a question, never a rule', () => {
+  it('a template table in the note that the example does not hold is the owner\'s rule, with the disagreement said', () => {
     const withTemplate = `${NOTE}\n## Template\n\n| Vendor | Contract length | Exit fee |\n|---|---|---|\n| [name] | [months] | [amount] |\n`;
     const p = methodProposals(withTemplate, { task: TASK, material: context.material, reference: EXAMPLE }).find((x) => x.statement.includes('contract length'));
-    expect(p).toMatchObject({ origin: 'STATED', obligation: 'JUDGEMENT', measurement: null });
-    expect(p?.demoted).toMatch(/^your example does not hold it as a check would read it \(the table lacks the column\(s\) "contract length", "exit fee"\)$/);
-    expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/Yours to settle: your method says it, and your example does not hold it \(1\)/);
+    expect(p).toMatchObject({ origin: 'STATED', obligation: 'DELIVERABLE', measurement: { observer: 'TABLE' } });
+    expect(p?.conflict).toMatch(/^your example does not do this \(the table lacks the column\(s\) "contract length", "exit fee"\)$/);
+    expect(describeMethod([p!], 'FULL_REPRO_CASE').join('\n')).toMatch(/! your example does not do this/);
   });
   it('a step that only mentions a section in passing is a judgement, never a check on the work\'s shape', () => {
     const ps2 = methodProposals('1. Move to the Next section only after the Verdict is settled.\n2. Never give a Verdict before the comparison is read.\n', { task: TASK, material: context.material, reference: EXAMPLE });
@@ -172,8 +172,8 @@ describe('a method and one example become requirements of three kinds', () => {
     const template = '## Risks\n\nWhat could go wrong.\n\n## Verdict\n\nWho wins.\n\n- Weigh switching cost.\n';
     const p = methodProposals(template, { task: TASK, material: context.material, reference: EXAMPLE }).find((x) => x.statement.includes('these sections') && x.origin === 'STATED');
     expect(p?.statement).toBe('The work has these sections, in this order: Risks, Verdict.');
-    expect(p).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
-    expect(p?.demoted).toMatch(/sections out of order/);
+    expect(p).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Risks', 'Verdict'] } } });
+    expect(p?.conflict).toMatch(/sections out of order/);
     // in the example's order it is held, and stated sections are not proposed again from the example
     const agree = methodProposals('## Verdict\n\nWho wins.\n\n## Risks\n\nWhat could go wrong.\n\n- Weigh switching cost.\n', { task: TASK, material: context.material, reference: EXAMPLE });
     expect(agree.find((x) => x.origin === 'STATED' && x.statement.includes('these sections'))).toMatchObject({ obligation: 'DELIVERABLE', measurement: { params: { sections: ['Verdict', 'Risks'] } } });
@@ -195,9 +195,10 @@ describe('a method and one example become requirements of three kinds', () => {
       'The work has these sections, in this order: Verdict, The comparison, Risks.', 'The work includes a table with the columns vendor, price per seat, minimum.',
       'Every figure in the work is one the request or the material gives.']);
   });
-  it('with no material, nothing about what the work is made from is checked, and the screen says so', () => {
+  it('with no material, the step about what the work is made from keeps its check, and the screen says it could not be read on the example', () => {
     const bare = methodProposals(NOTE, { task: TASK, material: [], reference: EXAMPLE });
-    expect(bare.find((p) => p.statement.startsWith("Every figure"))).toMatchObject({ obligation: 'JUDGEMENT', measurement: null });
+    // the owner stated it: it is checked on every run that is given material, whatever the example carried
+    expect(bare.find((p) => p.statement.startsWith("Every figure"))).toMatchObject({ obligation: 'EXECUTION', measurement: { observer: 'CITED' }, conflict: null });
     expect(describeMethod(bare, 'TASK_AND_REFERENCE').join('\n')).toMatch(/Your example carries its task and no material, so nothing about what the work is made from can be checked\./);
   });
 });
@@ -268,32 +269,33 @@ describe('through the binary: atelier method, then a run held to the method', ()
 
   it('--review shows the owner their steps by kind and builds nothing; it calls no model', async () => {
     const before = await count();
-    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--review', ...BACKEND());
+    const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--review', '--report', ...BACKEND());
     expect(r.code, r.err).toBe(0);
     expect(r.out).toMatch(/^Method: method\.md {2}· {2}example: acme\.md with 1 file\(s\) of material$/m);
     expect(r.out).toMatch(/5 step\(s\) from your method\./);
     expect(r.out).toMatch(/Checked on every output: what the work must contain \(3\)/);
     expect(r.out).toMatch(/Checked against the material: what the work must be made from \(1\)\n {2}- Every figure must be sourced from the material you were given\.\n {6}your example: 3 of 3 figure\(s\) are in the request or the material \(acme\.material\/prices\.md\)/);
     expect(r.out).toMatch(/Judgement: shown to the writer, reported as not measured \(1\)\n {2}- Weigh switching cost before recommending anything\./);
-    expect(r.out).toMatch(/Nothing has been built\. To accept exactly this:/);
+    expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method method\.md --golden acme\.md .*--name analysis/);
     expect(existsSync(join(data, 'skills', 'analysis'))).toBe(false);
     expect(await count()).toBe(before);
   });
 
-  it('with a step the example does not hold, nothing is built in one call: that question is the owner\'s', () => {
+  it('a step the example does not do stays required, and the disagreement is said once, on the build screen', () => {
     writeFileSync(join(proj, 'asks.md'), '- Open with a Verdict section.\n- End with a Appendix section.\n');
-    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', ...BACKEND());
+    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Nothing has been built: 1 step\(s\) above are yours to settle first\./);
+    expect(r.out).toMatch(/Checked on every run \(2\):\n {2}- Open with a Verdict section\.\n {2}- End with a Appendix section\.\n {6}! your example does not do this \(no "Appendix" section\)\.\n {8}Checked and shown on every run; it blocks nothing until you confirm it\./);
+    expect(r.out).toMatch(/Nothing has been built\. To build exactly this: atelier method asks\.md --golden acme\.md .*--name asks/);
     expect(existsSync(join(data, 'skills', 'asks'))).toBe(false);
   });
 
-  it('a check read from the example\'s own section names is shown and waits for the owner\'s yes', () => {
+  it('a step a check reads only part of is said to be read in part, with the part left to the owner', () => {
     writeFileSync(join(proj, 'reads.md'), '- Put who wins under a Verdict heading.\n');
-    const r = atelier('method', 'reads.md', '--golden', 'acme.md', '--name', 'reads', ...BACKEND());
+    const r = atelier('method', 'reads.md', '--golden', 'acme.md', '--name', 'reads', '--review', ...BACKEND());
     expect(r.code, r.err).toBe(0);
-    expect(r.out).toMatch(/Checked on every output: what the work must contain \(1\)\n {2}- Put who wins under a Verdict heading\./);
-    expect(r.out).toMatch(/Nothing has been built: 1 check\(s\) above were read from your example's section names \("Put who wins under a Verdict heading\."\)\. Look that each asks for what you meant\. To accept exactly this:/);
+    expect(r.out).toMatch(/Checked in part: the rest is yours to read \(1\):\n {2}- Put who wins under a Verdict heading\.\n {6}checked: a "Verdict" section\n {6}not checked: Put who wins\n/);
+    expect(r.out).not.toMatch(/Checked on every run/);
     expect(existsSync(join(data, 'skills', 'reads'))).toBe(false);
   });
 
@@ -301,7 +303,13 @@ describe('through the binary: atelier method, then a run held to the method', ()
     const before = await count();
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'analysis', '--yes', ...BACKEND());
     expect(r.code, `${r.err}${r.out}`).toBe(0);
-    expect(r.out).toMatch(/Held to your method on every run: 3 thing\(s\) the work must contain, 1 it must be made from; 1 judgement step\(s\) shown and reported as not measured\./);
+    expect(r.out).toMatch(/Your skill "analysis" is ready\./);
+    // the short screen: the owner's steps in three groups, and none of the build's own account
+    expect(r.out).toMatch(/5 step\(s\) in your method\.\n\nChecked on every run \(2\):/);
+    expect(r.out).toMatch(/Checked in part: the rest is yours to read \(2\):\n {2}- Open with a Verdict section that says who wins, and for whom\.\n {6}checked: a "Verdict" section\n {6}not checked: says who wins, and for whom\n/);
+    expect(r.out).toMatch(/You judge these yourself \(1\):/);
+    expect(r.out).not.toMatch(/Standard [0-9a-f]+ minted|EVERY OUTPUT IS CHECKED BY|Kind of work/);
+    expect(r.out).toContain('Use it: atelier run "<the task>" --with <file>');
     expect(await count()).toBe(before);
     const skill = readFileSync(join(proj, '.claude', 'skills', 'analysis', 'SKILL.md'), 'utf8');
     for (const step of stepsOf(NOTE)) expect(skill).toContain(step.text.replace(/\.$/, ''));
@@ -329,7 +337,7 @@ describe('through the binary: atelier method, then a run held to the method', ()
   }, 120_000);
 
   it('what a draft left out is written again with it named, and the piece that then holds it is the one delivered', async () => {
-    await script(BLAND, [{ contains: 'An earlier draft left out what this work must contain', answer: { piece: NEW_PIECE } }]);
+    await script(BLAND, [{ contains: 'An earlier draft did not hold what this work requires', answer: { piece: NEW_PIECE } }]);
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--json', ...BACKEND());
     const j = JSON.parse(r.out.slice(r.out.indexOf('{'))) as { output: string; report: string[]; eval: { result: { conformant: boolean } } };
     expect(j.report.join('\n')).toMatch(/Written again: the first draft left out 3 thing\(s\) the method requires \(x\d+: "[^"]+"; x\d+: "[^"]+"; x\d+: "[^"]+"\); it now leaves out 0\./);
@@ -346,10 +354,10 @@ describe('through the binary: atelier method, then a run held to the method', ()
     expect(j.report.join('\n')).toMatch(/made from what was given 0 of 1 \(not: x\d+\)/);
   }, 120_000);
 
-  it('the kind of work was said on the build screen and recorded with the skill, without a question', () => {
-    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', ...BACKEND());
+  it('the kind of work is recorded with the skill without a question, and said in the whole account', () => {
+    const r = atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--report', ...BACKEND());
     expect(r.out).toMatch(/Kind of work: asks \(read from your method; --class <kind> to change it\)\. Sentences not found in your material are listed for you to check, never cut/);
-    expect(atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--class', 'essay', ...BACKEND()).out).toMatch(/Kind of work: essay\. Sentences not found in your material are cut/);
+    expect(atelier('method', 'asks.md', '--golden', 'acme.md', '--name', 'asks', '--review', '--report', '--class', 'essay', ...BACKEND()).out).toMatch(/Kind of work: essay\. With your material bound \(atelier material\), sentences not found in it are cut/);
     expect(readFileSync(join(data, 'skills', 'analysis', 'class.txt'), 'utf8')).toBe('competitive-analysis');
   });
 
@@ -358,24 +366,24 @@ describe('through the binary: atelier method, then a run held to the method', ()
     await script(NEW_PIECE.replace('## Risks\n\n', `## Risks\n\n${story} `));
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', ...BACKEND());
     expect(r.out).toContain(story);
-    expect(r.out).toMatch(/\n---\nNot found in your material \(check before you use this\):\n- "Last week I interviewed 40 of our customers/);
+    expect(r.out).toMatch(/\n---\nNot found in what you supplied \(check before you use this\):\n- "Last week I interviewed 40 of our customers/);
     const quiet = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--answer-only', '--no-unsourced-note', ...BACKEND());
     expect(quiet.out).toContain(story);
-    expect(quiet.out).not.toContain('Not found in your material');
+    expect(quiet.out).not.toContain('Not found in what you supplied');
   }, 120_000);
 
   it('strict delivery on a kind of work the claim check is not measured on stops before anything is spent, and says why', async () => {
     const before = await count();
     const r = atelier('invoke', '--skill', 'analysis', '--task=Compare Cygnus and Dorado on price for a small team.', '--with', 'prices=new-prices.md', '--strict', ...BACKEND());
     expect(r.code).not.toBe(0);
-    expect(r.err).toContain('Strict delivery needs the claim check measured on competitive-analysis. It is not, so nothing was written. Run without --strict to get a draft with unsourced sentences listed.');
+    expect(r.err).toContain('Strict delivery needs a claim check that decides, and here the claim check is not measured on competitive-analysis. Nothing was written. Run without --strict to get a draft with unsourced sentences listed.');
     expect(await count()).toBe(before);
   });
 
   it('a second method in the same folder is refused before anything is written: one project, one standard', () => {
     const r = atelier('method', 'method.md', '--golden', 'acme.md', '--name', 'again', '--yes', ...BACKEND());
     expect(r.code).not.toBe(0);
-    expect(`${r.err}${r.out}`).toMatch(/this folder already holds a standard \(the skill "analysis"\): a method's steps would be added to its rules/);
+    expect(`${r.err}${r.out}`).toMatch(/this folder already holds another standard \(the skill "analysis"\)\. Build this one from a folder of its own\./);
     expect(existsSync(join(data, 'skills', 'again'))).toBe(false);
   });
 });

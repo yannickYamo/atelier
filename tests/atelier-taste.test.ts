@@ -252,7 +252,7 @@ describe('through the binary: every output is read, labels earn authority, and t
     await post({ byTool: { emit_piece: { piece: draft },
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) } });
     holdback = '0';
-    const first = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review');
+    const first = run(data, proj, 'invoke', '--taste', '--skill', 'voice', '--task', 'write about review');
     expect(first).toContain('Taste reader: 1 of 1 reading-based rule(s) read as missed (reporting only until you label it');
     expect(withDetails(first)).toContain('read against 1 reading-based rule(s): 0 followed, 1 missed');
     expect(store.readEvents(L).some((e) => e.kind === 'TASTE_READING')).toBe(true);
@@ -283,7 +283,7 @@ describe('through the binary: every output is read, labels earn authority, and t
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) },
     when: [{ contains: 'understanding it stayed dear', answer: readings([{ n: 1, verdict: 'FOLLOWED', quote: fixed }]) }] });
     holdback = '0';
-    const second = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review');
+    const second = run(data, proj, 'invoke', '--taste', '--skill', 'voice', '--task', 'write about review');
     expect(second).toContain(fixed);
     expect(second).toContain('taste repair: 1 of 1 rule(s) now read as followed');
     const inv = store.listInvocations(L).find((i) => i.output.includes(fixed));
@@ -295,7 +295,7 @@ describe('through the binary: every output is read, labels earn authority, and t
     await post({ byTool: { emit_piece: { piece: draft }, emit_replacements: { replacements: [{ id: 1, text: fixed }] },
       emit_readings: readings([{ n: 1, verdict: 'MISSED', kind: 'PRESENCE', quote: 'At the end, review matters.' }]) },
     when: [{ contains: 'understanding it stayed dear', answer: readings([{ n: 1, verdict: 'FOLLOWED', quote: fixed }]) }] });
-    const ranked = run(data, proj, 'invoke', '--skill', 'voice', '--task', 'write about review', '--drafts', '2');
+    const ranked = run(data, proj, 'invoke', '--taste', '--skill', 'voice', '--task', 'write about review', '--drafts', '2');
     expect(withDetails(ranked)).toMatch(/taste rule\(s\) read as missed/);
     expect(ranked).not.toMatch(/^EXIT/);
 
@@ -328,7 +328,7 @@ describe('through the binary: every output is read, labels earn authority, and t
     await post({ byTool: { emit_piece: { piece: 'At the end, review matters.' }, emit_readings: readings([{ n: 1, verdict: 'FOLLOWED', quote: 'review matters' }]) } });
     let targetOnly: string;
     try {
-      targetOnly = execFileSync('node', [CLI, 'invoke', '--skill', 'voice', '--task', 'write', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`,
+      targetOnly = execFileSync('node', [CLI, 'invoke', '--taste', '--skill', 'voice', '--task', 'write', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`,
         '--target-model', 'scripted', '--accept-new-binding'], { encoding: 'utf8', cwd: proj, env: { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_TASTE_HOLDBACK: '0' } });
     } catch (e) { targetOnly = `EXIT ${String((e as { stderr?: string }).stderr)}`; }
     expect(targetOnly).not.toMatch(/no model set/);

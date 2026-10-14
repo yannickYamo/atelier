@@ -109,7 +109,7 @@ export function findRecurrences(input: {
   const addressed = new Set(input.proposals.filter((p) => p.accepted === true).flatMap((p) => p.feedbackIds ?? []));
 
   // Complaints: grouped by what they say; each group either names a rule the standard has, or none.
-  for (const g of clusterComplaints(input.feedback.filter((f) => !addressed.has(f.feedbackId)))) {
+  for (const g of clusterComplaints(input.feedback.filter((f) => !addressed.has(f.feedbackId) && f.about !== 'EVALUATION'))) {
     if (g.length < MIN_RECURRENCE) continue;
     const named = g.map((r) => r.requirementId).filter((id): id is string => Boolean(id && byId.has(id)));
     const top = [...new Set(named)].map((id) => ({ id, n: named.filter((x) => x === id).length })).sort((a, b) => b.n - a.n)[0];

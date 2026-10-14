@@ -1,0 +1,7 @@
+{
+ "arm": "pasted",
+ "task": "t1",
+ "run": 0,
+ "seconds": 7.5,
+ "output": "Every day, someone on the news says the market went up or down. But there are thousands of companies listed on a stock exchange, and their shares move in different directions at once. Some rise, some fall. So how can anyone speak of the market as a single thing?\n\nA stock index is the answer. It takes a chosen group of companies and combines their share prices into one number. When that number rises, most of the group has gained value. When it falls, most has lost.\n\nThe FTSE 100 tracks the hundred largest companies listed in London. The S&P 500 follows five hundred large American firms. Each index has rules about which companies qualify and how much weight each one carries. Bigger companies usually count for more, so a stumble at a giant firm moves the index further than a stumble at a small one.\n\nThink of a school reporting its average exam result. No single pupil's mark tells you much, but the average shows whether the year group did well. Individual stories get lost, and that is the point.\n\nIndexes matter because they let people compare. Did your investments beat the market or trail behind it? Many funds now simply buy the whole index and track it.\n\nIn short, a stock index is a single number summarising how a chosen group of companies is doing."
+}

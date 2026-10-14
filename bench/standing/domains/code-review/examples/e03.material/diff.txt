@@ -1,0 +1,81 @@
+diff --git a/src/tokens/rotate.js b/src/tokens/rotate.js
+--- a/src/tokens/rotate.js
++++ b/src/tokens/rotate.js
+@@ -31,0 +31,77 @@
++'use strict';
++
++const crypto = require('crypto');
++const { getStore } = require('../store');
++
++// Rotation window, in milliseconds. Tokens older than this are replaced
++// on the next call to rotate().
++const MAX_AGE_MS = 15 * 60 * 1000;
++
++// Length, in bytes, of the opaque portion of a session token.
++const TOKEN_BYTES = 32;
++
++/**
++ * Build an opaque session token.
++ */
++function mintToken() {
++  return Math.random().toString(36).slice(2) + Date.now().toString(36);
++}
++
++/**
++ * Build the identifier used to key a token in the store. This is not a
++ * secret; it only needs to be collision free.
++ */
++function mintHandle() {
++  return crypto.randomBytes(12).toString('hex');
++}
++
++function hashToken(token) {
++  return crypto.createHash('sha256').update(token).digest('hex');
++}
++
++/**
++ * True when the record is past the rotation window.
++ */
++function isStale(record, now) {
++  if (!record || typeof record.issuedAt !== 'number') return true;
++  return now - record.issuedAt >= MAX_AGE_MS;
++}
++
++/**
++ * Create a brand new session record for the given subject.
++ */
++async function issue(subject) {
++  const token = mintToken();
++  const record = {
++    handle: mintHandle(),
++    subject,
++    digest: hashToken(token),
++    issuedAt: Date.now()
++  };
++
++  await getStore().put(record.handle, record);
++  return { handle: record.handle, token };
++}
++
++/**
++ * Swap a still-valid token for a fresh one. Returns null when the handle
++ * is unknown or the presented token does not match.
++ */
++async function rotate(handle, presented) {
++  const store = getStore();
++  const record = await store.get(handle);
++  if (!record) return null;
++
++  if (hashToken(presented) !== record.digest) return null;
++
++  const now = Date.now();
++  if (!isStale(record, now)) {
++    return { handle, token: presented, rotated: false };
++  }
++
++  await store.remove(handle);
++  const next = await issue(record.subject);
++  return { handle: next.handle, token: next.token, rotated: true };
++}
++
++module.exports = { issue, rotate, isStale, MAX_AGE_MS };
