@@ -14,18 +14,39 @@ import { paragraphSentences } from '../observers/text.js';
 /**
  * Em dashes, replaced by the punctuation a writer who never uses them would reach for. A pair inside one
  * sentence encloses an aside, so it becomes a pair of commas; a single dash before a short tail (four
- * words or fewer) becomes a comma, and before a longer one a colon. Code is left alone.
+ * words or fewer) becomes a comma, and before a longer one a colon. Where the text on either side of the
+ * dash begins or ends with a quotation mark or a colon, or there is no text on the left, the dash becomes
+ * a spaced hyphen instead: a comma or colon there read as ': "…" :'. In a table row a cell that is only a
+ * dash ("none") becomes a hyphen and a dash inside a cell a spaced hyphen, never a comma, so the row keeps
+ * its cells. Code is left alone.
  */
 export function replaceEmDashes(text: string): string {
   return mapProse(text, (line) => line.split(/(?<=[.!?]["”’)]?)\s+/).map((sentence) => {
     const parts = sentence.split(/\s*—\s*/);
     if (parts.length === 1) return sentence;
-    if (parts.length === 3) return `${parts[0]}, ${parts[1]}, ${parts[2]}`.replace(/,\s*([.!?])/g, '$1');
-    return parts.reduce((acc, part) => {
+    if (parts.length === 3 && !edged(parts[0], parts[1]) && !edged(parts[1], parts[2])) {
+      return `${parts[0]}, ${parts[1]}, ${parts[2]}`.replace(/,\s*([.!?])/g, '$1');
+    }
+    return parts.reduce((acc, part, i) => {
+      if (!acc.trim()) return `- ${part}`;
+      if (edged(parts[i - 1], part)) return `${acc} - ${part}`;
       const tail = part.trim().split(/\s+/).length;
       return `${acc}${tail <= 4 ? ', ' : ': '}${part}`;
     });
-  }).join(' '));
+  }).join(' '), replaceInTableRow);
+}
+
+/** Whether the text left of a dash is empty or ends, or the text right of it begins, with a quotation mark or a colon. */
+function edged(left: string, right: string): boolean {
+  return !left.trim() || /["“”'‘’:]$/.test(left.trim()) || /^["“”'‘’:]/.test(right.trim());
+}
+
+/** A table row: a cell that is only a dash becomes `-`, a dash inside a cell ` - `; no `|` is touched. */
+function replaceInTableRow(line: string): string {
+  return line.split('|').map((cell) => {
+    if (/^[—–]$/.test(cell.trim())) return cell.replace(/[—–]/, '-');
+    return cell.split(/(`[^`]*`)/).map((part, i) => (i % 2 ? part : part.replace(/\s*—\s*/g, ' - '))).join('');
+  }).join('|');
 }
 
 /**
@@ -91,12 +112,17 @@ export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: 
   return { text: out, fixed };
 }
 
-/** Apply `f` to each prose line outside code fences, leaving inline code as it is. */
-function mapProse(text: string, f: (line: string) => string): string {
+/**
+ * Apply `f` to each prose line outside code fences, leaving inline code as it is; a table row (a line that
+ * starts with `|`) goes to `row` instead, whole, so its cells can be kept.
+ */
+function mapProse(text: string, f: (line: string) => string, row: (line: string) => string): string {
   let fence = false;
   return text.split('\n').map((line) => {
     if (/^\s*(```|~~~)/.test(line)) { fence = !fence; return line; }
-    if (fence || !line.includes('—')) return line;
+    if (fence) return line;
+    if (/^\s*\|/.test(line)) return /[—–]/.test(line) ? row(line) : line;
+    if (!line.includes('—')) return line;
     // Inline code keeps its dashes: split around backticks and treat only the parts outside them.
     return line.split(/(`[^`]*`)/).map((part, i) => (i % 2 ? part : f(part))).join('');
   }).join('\n');
