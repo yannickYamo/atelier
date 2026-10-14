@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { skillSizeOf, countWords, describeParts, describeSize } from '../core/eval/size.js';
 import { spend, spendBetween, processSpendByPurpose, processSpentUsd, metered, type Budget, type SpendLine } from '../core/inference/client.js';
-import { selectVoicePieces, selectWithinBudget, excerptOf, isExcerpt, pieceLabel, EXCERPT_GAP, EXCERPT_WORDS, PIECE_BUDGET_WORDS } from '../core/compiler/voice.js';
+import { selectVoicePieces, selectWithinBudget, excerptOf, isExcerpt, pieceLabel, EXCERPT_GAP, EXCERPT_WORDS, PIECE_BUDGET_WORDS, COMPACT_PIECE_BUDGET_WORDS, COMPACT_PIECE_FORM } from '../core/compiler/voice.js';
 import { composeServed, withoutReferenceIndex } from '../cli/served.js';
 import { costOf } from '../cli/commands/report.js';
 import { renderSkillCard, type SkillCard } from '../core/eval/skill-card.js';
@@ -680,7 +680,11 @@ const runWith = (data: string, proj: string, args: readonly string[], last: read
   }
 };
 
-describe('through the binary: a skill built without asking is unchanged, and the owner can make it smaller', () => {
+/** The voice a skill holds in the store: what a rebuild reads its budget and form from. */
+const storedVoice = (data: string, skill: string): { pieceBudget?: number; pieceForm?: string; pieces?: string[] } =>
+  JSON.parse(readFileSync(join(data, 'skills', skill, 'voice.json'), 'utf8')) as { pieceBudget?: number; pieceForm?: string; pieces?: string[] };
+
+describe('through the binary: a writing skill is served compact by default, the whole serving is one flag away, and a skill built before is unchanged', () => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-eff-data-'));
   const proj = mkdtempSync(join(tmpdir(), 'atelier-eff-proj-'));
   const dir = join(proj, 'posts');
@@ -698,19 +702,25 @@ describe('through the binary: a skill built without asking is unchanged, and the
   const NEW = ['new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice'];
   // EVERY BUILD IS MADE ONCE, HERE, IN ORDER, and each test reads what its build said and exported: no test depends on
   // another having run, and one run alone (`-t`) sees the same state as the whole file.
-  const r = { earlyRefusal: '', screen: '', built: '', full: '', afterRun: '', afterRunRebuilt: '', exportSaid: '', noIndex: '', lean: { said: '', text: '', calls: 0 }, kept: { said: '', text: '' },
+  const r = { earlyRefusal: '', screen: '', built: '', full: '', afterRun: '', afterRunRebuilt: '', exportSaid: '', noIndex: '', lean: { said: '', text: '', calls: 0, stored: {} as ReturnType<typeof storedVoice> }, kept: { said: '', text: '' },
+    compact: { text: '', again: '', againText: '', stored: {} as ReturnType<typeof storedVoice> }, whole: { said: '', stored: {} as ReturnType<typeof storedVoice> },
     excerpts: { said: '', text: '', again: '', againText: '', auto: '' }, under: { said: '', text: '' }, none: { said: '', text: '' }, back: { said: '', text: '' },
     refusals: [] as string[], afterRefusals: '', moved: '', afterMoved: '' };
 
   beforeAll(async () => {
     r.earlyRefusal = run(data, proj, ...NEW, '--pieces', 'halves');
     r.screen = run(data, proj, ...NEW);
+    // THE FIRST BUILD, WITH NO FLAG ABOUT THE PIECES: the compact default, stored on the skill as a flag would be.
     r.built = run(data, proj, ...NEW, '--accept');
+    r.compact.stored = storedVoice(data, 'voice'); r.compact.text = exported('compact.md');
+    r.compact.again = build(); r.compact.againText = exported('compact-again.md');
+    // THE WHOLE SERVING, the default before the compact one and the fallback since: every later build here starts from it.
+    r.whole.said = build('--piece-budget', 'default', '--pieces', 'whole'); r.whole.stored = storedVoice(data, 'voice');
     r.exportSaid = run(data, proj, 'export', '--skill', 'voice', '--out', out('full.md'));
     r.full = readFileSync(out('full.md'), 'utf8');
     r.noIndex = exported('no-index.md', '--no-index');
     const before = await calls();
-    r.lean.said = build('--piece-budget', '1500'); r.lean.calls = (await calls()) - before; r.lean.text = exported('b1500.md');
+    r.lean.said = build('--piece-budget', '1500'); r.lean.calls = (await calls()) - before; r.lean.text = exported('b1500.md'); r.lean.stored = storedVoice(data, 'voice');
     r.kept.said = build(); r.kept.text = exported('kept.md');
     r.excerpts.said = build('--piece-budget', '1500', '--pieces', 'excerpts'); r.excerpts.text = exported('excerpts.md');
     r.excerpts.again = build('--voice', 'auto', '--piece-budget', '1500', '--pieces', 'excerpts'); r.excerpts.againText = exported('excerpts-again.md');
@@ -740,7 +750,38 @@ describe('through the binary: a skill built without asking is unchanged, and the
     // at least nine of the author's own pieces in ten meet every rule that will fail an output
     for (const m of [shown, built]) expect(Number(m?.[1]) / Number(m?.[2])).toBeGreaterThanOrEqual(0.9);
   });
+  it('a writing skill\'s first build serves passages within 3,000 words, says so beside the size, and stores the choice as a flag would', () => {
+    expect(r.built).not.toMatch(/EXIT:/);
+    expect(r.built).toMatch(/Voice: passages from \d+ piece\(s\)(?: and \d+ short one\(s\) whole)? of the author's own served with the skill, within 3000 words, chosen to span how they write/);
+    expect(r.built).toMatch(/\(pieces served compact by default: 3,000 words of excerpts, kept by later builds; --pieces whole --piece-budget default serves them whole\.\)/);
+    expect(r.built).toMatch(/SIZE {2}stored [\d,]+ words in \d+ files · exported [\d,]+ words/);
+    expect(r.built).toMatch(/the export\s+your pieces [\d,]+ \(\d+ files?\)/);
+    // stored exactly as `--piece-budget 3000 --pieces excerpts` would store it, so a rebuild reads the skill, not the default
+    expect(r.compact.stored.pieceBudget).toBe(COMPACT_PIECE_BUDGET_WORDS);
+    expect(r.compact.stored.pieceForm).toBe(COMPACT_PIECE_FORM);
+    expect(r.compact.text).toContain(EXCERPT_GAP);
+    expect(pieceWords(r.compact.text)).toBeGreaterThan(0);
+    expect(pieceWords(r.compact.text)).toBeLessThanOrEqual(3000);
+    // and a rebuild that asks for nothing is the same bytes
+    expect(r.compact.again).not.toMatch(/EXIT:|STORE:|pieces served compact/);
+    expect(r.compact.againText).toBe(r.compact.text);
+  });
+  it('--pieces whole --piece-budget default is the whole serving, as every skill was built before: smaller export under the default, and the override stored', () => {
+    expect(r.whole.said).toMatch(/Voice: \d+ whole piece\(s\) of the author's own served with the skill, chosen to span how they write/);
+    expect(r.whole.said).not.toMatch(/pieces served compact/);
+    // `default` and `whole` are stored as the absence of a budget and a form: the voice a skill built before holds
+    expect(r.whole.stored.pieceBudget).toBeUndefined();
+    expect(r.whole.stored.pieceForm).toBeUndefined();
+    expect(r.full).toMatch(/\[voice-1\] One whole piece of mine/);
+    expect(r.full).not.toContain(EXCERPT_GAP);
+    expect(pieceWords(r.compact.text)).toBeLessThan(pieceWords(r.full));
+    expect(countWords(r.compact.text)).toBeLessThan(countWords(r.full));
+    // an explicit budget is stored too
+    expect(r.lean.stored.pieceBudget).toBe(1500);
+    expect(r.lean.stored.pieceForm).toBeUndefined();
+  });
   it('a rebuild that asks for nothing changes nothing: the description is kept, and runs made since add nothing', () => {
+    // the skill holds the whole serving with no budget stored, as every skill built before the compact default does
     expect(r.back.text).toBe(r.full);
     expect(r.kept.text).toContain('description: Use when asked to: write me a blog post in the voice and style of these.');
     // an invoke ran in between (below, in `beforeAll`): a plain rebuild after it exports the same bytes
@@ -793,8 +834,8 @@ describe('through the binary: a skill built without asking is unchanged, and the
     expect(files(r.none.text)).toBe(0);
     expect(r.none.text).toContain('My pieces of this kind run about');
   });
-  it('--piece-budget default gives the default choice back: the first build, byte for byte', () => {
-    // The same files as the first build, so the same package: a rebuild that lands on a package already stored is not an error.
+  it('--piece-budget default --pieces whole gives the whole serving back, byte for byte', () => {
+    // The same files as the whole build, so the same package: a rebuild that lands on a package already stored is not an error.
     expect(r.back.said).not.toMatch(/EXIT:|STORE:/);
     expect(body(r.back.text)).toBe(body(r.full));
   });
@@ -973,6 +1014,30 @@ describe('through the binary: a skill built without asking is unchanged, and the
   }, 120_000);
 });
 
+describe('through the binary: a skill that answers is served whole, as before the compact default', () => {
+  const data = mkdtempSync(join(tmpdir(), 'atelier-answers-data-'));
+  const proj = mkdtempSync(join(tmpdir(), 'atelier-answers-proj-'));
+  const dir = join(proj, 'posts');
+  mkdirSync(dir, { recursive: true });
+  // Nine answers, each long enough to read as finished work in respond mode, under the file name the scripted rules cite.
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), `Run migration ${i}, then restart the worker. ${`Check the log for the first error of step ${i} and paste it here. `.repeat(6)}`);
+  let built = '';
+  beforeAll(() => {
+    const intent = 'answer a developer\'s requests in a coding assistant, the way these answers do';
+    run(data, proj, 'new', dir, intent, '--mode', 'respond', '--name', 'dev');
+    built = run(data, proj, 'new', dir, intent, '--mode', 'respond', '--name', 'dev', '--accept');
+  }, 300_000);
+  it('its examples are whole, no compact line is printed, and no budget or form is stored', () => {
+    expect(built).not.toMatch(/EXIT:/);
+    expect(built).not.toMatch(/pieces served compact|within 3000 words|passages from/);
+    expect(built).toMatch(/Voice: \d+ whole piece\(s\) of the author's own served with the skill/);
+    const stored = storedVoice(data, 'dev');
+    expect(stored.pieceBudget).toBeUndefined();
+    expect(stored.pieceForm).toBeUndefined();
+    expect(stored.pieces?.some((t) => t.includes(EXCERPT_GAP))).toBe(false);
+  });
+});
+
 describe('through the binary: a rebuild never undoes an amendment', () => {
   // Its own store and project: an amendment changes the skill's standard, which no other test here should see.
   const data = mkdtempSync(join(tmpdir(), 'atelier-amend-data-'));
@@ -1034,6 +1099,8 @@ describe('through the binary: a project that moved keeps its skill', () => {
     // the folder of pieces came with the project, so the pieces can be chosen again from the new place
     expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '1500')).toMatch(/within 1500 words/);
     expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', 'default', '--pieces', 'whole')).not.toMatch(/EXIT:/);
+    // the first build's compact default, given as the flags it stands for, is the first build again
+    expect(run(data, moved, 'build', '--name', 'voice', '--piece-budget', '3000', '--pieces', 'excerpts')).not.toMatch(/EXIT:|pieces served compact/);
     // MOVED, NOT COPIED: no second session is left behind, so a second rename is carried on like the first
     const again = join(root, 'renamed-again');
     renameSync(moved, again);

@@ -7,6 +7,25 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: a skill that writes serves passages from your pieces by default
+
+On the one skill measured part by part, seven words in ten of the export were the author's pieces served whole, under
+one budget of 9,000 words. One newsletter skill was then built both ways and run on five titles: with passages within
+3,000 words (`--piece-budget 3000 --pieces excerpts`) the export ran 7,121 words against 12,555, each run cost 34%
+less, and no loss of quality was measured. That serving is now the default for the class of skill it was measured on.
+
+- **A skill that writes from your pieces is served compact at its first build:** passages from more of your pieces,
+  each by its opening and a passage from its middle, within 3,000 words. The build says so beside its size
+  ("pieces served compact by default"), and stores the choice on the skill exactly as the flags would, so a rebuild
+  reads the skill and not the default, whatever the default becomes.
+- **The whole serving is one flag away, and kept:** `atelier build --name <name> --pieces whole --piece-budget default`
+  serves whole pieces within 9,000 words, as every skill was built before, and later rebuilds keep that choice.
+- **Nothing built before changes.** A skill that already holds a voice keeps its budget and form, stored or not, and
+  rebuilds to the same bytes. A skill that answers shows its examples whole, as before; a skill built from a method
+  (`atelier method`, or `atelier new` with no model) serves whole pieces; `--voice none` serves none. No flag was added.
+- The default was measured on one skill and five titles, and is recorded here with its figures so that the next
+  measurement can move it again.
+
 ### Changed: authority is read before materiality, and a figure carries its bound
 
 - **An unratified rule never blocks.** The execution plan read `materiality` alone; a requirement nobody confirmed
