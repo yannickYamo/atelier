@@ -7,6 +7,13 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: an em dash in a table cell
+
+- The repair that removes an em dash the author never uses joined the parts with a comma even when the dash was a
+  whole table cell ("| Switching costs | — | — |"), which left rows reading `|, |, |`. A dash-only cell now becomes
+  `-`, a dash inside a cell's text ` - `, and a table's cell count is never changed. In prose, a dash next to a
+  quotation mark or a colon becomes ` - ` rather than a comma.
+
 ### Changed: a skill that writes serves passages from your pieces by default
 
 On the one skill measured part by part, seven words in ten of the export were the author's pieces served whole, under
