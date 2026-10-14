@@ -41,6 +41,12 @@ only partly observed, or the owner's word was moved by a measurement.
   a miss blocks. The method's default length is shown as replaced for that run, not as unchecked. A length is held
   only where the request reads one way: "a 400-word post, each paragraph under 60 words" names two counts, and a
   length in sentences is not counted, so each is shown as not counted and left to you, never guessed.
+- **A length asked in pages is held, and counted in words a reader would count.** "Quick mode: one to two pages."
+  was not read (a count spelled out after a label was skipped), and a length in pages, where it was read, was never
+  held: drafts asked for two pages came back at three and four, and nothing said so. A length in pages is now told
+  to the writer, held at 500 words a page, which the run says beside it, and written again for when it is missed.
+  The length a request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a
+  table counted as words, and a draft of four tables ran 1,135 for 1,006 written.
 - **Where the owner requires a length, their examples add no second one.** A draft was being written again toward
   both the stated limit and the span of the examples.
 - **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your

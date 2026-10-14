@@ -16,6 +16,8 @@ export interface StatedLength {
   readonly kind: LengthKind;
   /** the number for target, exact, min or max; the two ends for a range */
   readonly min: number | null; readonly max: number | null; readonly target: number | null;
+  /** how a length said in another unit was read in words ("at 500 words a page"); absent when it was said in words */
+  readonly read?: string;
 }
 
 // A number is read as a length only where the request says so. "The 500 words I pasted", "chapter 12", "top 10
@@ -81,7 +83,9 @@ const EDITS = /\b(?:remove|delete|cut|drop|trim|add|insert|change|fix|rewrite|mo
  * "In three words", "it is two pages" and "look at two pages" are how people write prose, and a length read from
  * prose is the harmful error; a length said this way and missed costs nothing that was not already so.
  */
-const INTRODUCES = /(?:\b(?:write|draft|give me|give us|make it|keep it to|keep it under|about|around|roughly|approximately|exactly|between)|~)\s*(?:a\s+|an\s+)?$/i;
+// A label before it introduces it too: "Quick mode: one to two pages." went unread, and eight teardowns came back at
+// twice the length. "Note: two pages were missing" is still no length: what follows the unit there makes it a subject.
+const INTRODUCES = /(?:\b(?:write|draft|give me|give us|make it|keep it to|keep it under|about|around|roughly|approximately|exactly|between)|~|:)\s*(?:a\s+|an\s+)?$/i;
 
 // WHAT IS INSIDE QUOTATION MARKS IS A TITLE OR A QUOTATION, never the length to write to: a post titled "10 words
 // that changed our roadmap" was read as a post of ten words. Blanked, at the same length, so every place stays put.
@@ -215,13 +219,29 @@ export function statedLength(request: string): StatedLength | null {
  * Returns null where it can be held, or why it cannot.
  */
 export function notHeldBecause(request: string, s: StatedLength): string | null {
-  if (s.unit !== 'words') return `a length in ${s.unit} is not counted`;
-  // (A count of characters beside it is a second limit too: "72 characters and under 50 words" is about something else.)
-  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*(?:words?|characters?|chars?)\b/gi) ?? [];
+  if (s.unit !== 'words' && s.unit !== 'pages') return `a length in ${s.unit} is not counted`;
+  // (A count of characters beside it is a second limit too: "72 characters and under 50 words" is about something else;
+  // so is a count of words beside pages: "a two-page brief, each section under 200 words".)
+  const counts = inDigits(unquoted(request)).text.match(/\d[\d,.]*k?[\s-]*(?:words?|pages?|characters?|chars?)\b/gi) ?? [];
   if (counts.length > 1) return `the request names more than one count${counts.every((c) => /words?$/i.test(c.trim())) ? ' of words' : ''} (${counts.map((c) => c.trim()).join(', ')}), and which is the length of the piece is yours to say`;
   const after = request.slice(request.indexOf(s.raw) + s.raw.length);
   if (request.includes(s.raw) && /^\s+(?:that|which|who|every|each)\b/i.test(after)) return 'the count may be what the piece is about, not how long it is';
   return null;
+}
+
+/**
+ * HOW MANY WORDS A PAGE HOLDS, where a request asks for pages: a single-spaced page of prose. A page with a table on
+ * it holds fewer, so a draft held to this is never held shorter than the person asked. It is the one number here not
+ * read off the request or the author's pieces, and every place that holds a length by it says so.
+ */
+export const WORDS_PER_PAGE = 500;
+
+/** A stated length as a count of words, which is what a draft is counted in; null for a unit no count of words can stand for. */
+export function inWords(s: StatedLength): StatedLength | null {
+  if (s.unit === 'words') return s;
+  if (s.unit !== 'pages') return null;
+  const w = (n: number | null): number | null => (n === null ? null : Math.round(n * WORDS_PER_PAGE));
+  return { ...s, unit: 'words', min: w(s.min), max: w(s.max), target: w(s.target), read: `at ${WORDS_PER_PAGE} words a page` };
 }
 
 /** The fewest and the most a stated length allows; null where it sets no such end. A target is met within a tenth. */

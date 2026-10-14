@@ -43,6 +43,12 @@ export interface RunSent { readonly skill: number; readonly added: number; reado
 
 /** Words as `wc -w` counts them: runs of non-whitespace. The same count for every size Atelier states. */
 export const countWords = (text: string): number => { const t = text.trim(); return t ? t.split(/\s+/).length : 0; };
+/**
+ * THE WORDS A READER COUNTS: what holds a letter or a digit. The "|" and "---" that draw a table, a "#" before a
+ * heading and a dash between clauses are no words, and counted as words a teardown of four tables ran 1,135 for
+ * 1,006 written and was cut for the difference. The length a request asks for is counted this way.
+ */
+export const wordsWritten = (text: string): number => text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
 
 const bytesOf = (text: string): number => new TextEncoder().encode(text).length;
 

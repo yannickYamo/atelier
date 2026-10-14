@@ -50,8 +50,8 @@ import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
-import { countWords } from '../../core/eval/size.js';
-import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
+import { countWords, wordsWritten } from '../../core/eval/size.js';
+import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
 import { citesLines, numbered, citedLines } from '../../core/loop/locators.js';
@@ -174,7 +174,8 @@ export function lengthRulesTheRequestSets(std: Standard | null, stated: StatedLe
   if (!std || !stated) return [];
   // The length of the whole work only: a request for 600 words says nothing about how long one section runs.
   return std.requirements.filter((q) => q.measurement?.observer === 'LENGTH' && !q.measurement.params.in
-    && ((q.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() === stated.unit);
+    // A request in pages is held in words (core/intake/length.ts, `inWords`), so it sets aside the method's words too.
+    && [stated.unit, inWords(stated)?.unit].includes(((q.measurement.params.unit as readonly string[] | undefined)?.[0] ?? 'words').toLowerCase() as StatedLength['unit']));
 }
 
 /** What a run says of the places its output cites, for a skill that cites lines (core/loop/locators.ts). */
@@ -197,12 +198,20 @@ export function ownLengthLine(output: string, band: readonly [number, number], s
 export const correctionFor = (said: string | undefined): string => (said?.trim()
   ? `\n\n(An earlier version of this piece was not right. The person who asked for it said, in their words: "${said.trim().replace(/"/g, "'")}". Write the piece so that this is put right, and change nothing else about what was asked.)` : '');
 
+/** What a length asked in pages comes to in words, as the writer and the person are told it: " (about 500 to 1,000 words)". */
+export function pagesInWords(s: StatedLength | null): string {
+  const w = s?.unit === 'pages' ? inWords(s) : null;
+  if (!w) return '';
+  const [lo, hi] = statedBounds(w); const n = (x: number): string => Math.round(x).toLocaleString('en-US');
+  return ` (about ${lo !== null && hi !== null && lo !== hi ? `${n(lo)} to ${n(hi)}` : n(hi ?? lo ?? 0)} words)`;
+}
+
 /** The length a request states in words, against what was written: the request's own constraint on this one output. */
 export function requestLength(output: string, asked: StatedLength): { asked: string; met: boolean | null; detail: string } {
-  const written = countWords(output); const how = againstStated(written, asked);
+  const written = wordsWritten(output); const how = againstStated(written, asked);
   const [lo, hi] = statedBounds(asked); const n = (x: number): string => Math.round(x).toLocaleString('en-US');
   const allows = lo !== null && hi !== null ? (lo === hi ? `exactly ${n(lo)}` : `${n(lo)} to ${n(hi)}`) : lo !== null ? `${n(lo)} or more` : hi !== null ? `${n(hi)} or fewer` : '';
-  return { asked: asked.raw, met: how === 'met', detail: `${written.toLocaleString('en-US')} words written${how === 'met' ? '' : `: too ${how}, it allows ${allows}`}` };
+  return { asked: asked.raw, met: how === 'met', detail: `${written.toLocaleString('en-US')} words written${how === 'met' ? '' : `: too ${how}, it allows ${allows}${asked.read ? ` (${asked.read})` : ''}`}` };
 }
 
 /** Each rule as it fared on the delivered text, and the rules no check reads: the evaluation, rule by rule. */
@@ -544,7 +553,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const ledger = factLedger(materialText);
   // Said to the writer in so many words, after the pieces it is shown: they run at the author's length, and without
   // this line they set the length whatever the request says.
-  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${statedLengths(asked).map((x) => x.raw).join(', ')}. Write to that length. The length my own pieces run does not apply to this request.` : '';
+  const lengthNote = stated && contractFile === null ? `\n\nThe request states its length: ${statedLengths(asked).map((x) => x.raw).join(', ')}${pagesInWords(stated)}. Write to that length. The length my own pieces run does not apply to this request.` : '';
   // Served under its own heading, as what it is: what earlier runs showed, not a rule of the standard.
   const carryBlock = carryNote && contractFile === null ? `\n\n## From earlier runs of this skill (not a rule of the standard)\n\n${carryNote}` : '';
   const servedForRun = `${withheld.length ? withoutRules(servedText, withheld) : servedText}${impl.text}${carryBlock}${lengthNote}`;
@@ -582,7 +591,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // A length the request states in words is held as the request's own: a draft that misses it is written again.
   // Only where it can be read one way (core/intake/length.ts, `notHeldBecause`); otherwise it is shown as not counted.
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
-  const askedWords = stated && contractFile === null && !notHeld ? stated : null;
+  // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
+  const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
   const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
@@ -629,9 +639,10 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   reportIntegrity(report, rec, cls.ok ? cls.note : null, std, L);
   reportFidelity(report, rec);
   if (ownBand) report.say(ownLengthLine(rec.output, ownBand, store.getVoice(L)?.lengthSpan ?? ownBand));
-  if (stated?.unit === 'words' && contractFile === null) {
-    const written = countWords(rec.output); const how = againstStated(written, stated);
-    report.say(`Length asked: ${stated.raw}. Written: ${written.toLocaleString('en-US')} words${how === 'met' ? '' : ` (${how} of what was asked)`}.`);
+  const statedWords = stated && contractFile === null ? inWords(stated) : null;
+  if (statedWords) {
+    const written = wordsWritten(rec.output); const how = againstStated(written, statedWords);
+    report.say(`Length asked: ${statedWords.raw}${pagesInWords(stated)}. Written: ${written.toLocaleString('en-US')} words${how === 'met' ? '' : ` (${how} of what was asked)`}.`);
   }
   reportRestyle(report, rec.output, material);
   const spent = finish(report, { rec, sv, name, task, asked, budget, spentBefore });
@@ -1080,7 +1091,7 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   return (d) => {
     const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss);
     if (asked) {
-      const written = countWords(d.output); const [lo, hi] = statedBounds(asked);
+      const written = wordsWritten(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
       const aim = lengthAim(written, lo, hi); const off = Math.round(hi !== null && written > hi ? written - hi : (lo ?? 0) - written);
       return [...rules, { id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${hi !== null && written > hi ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}) }];
