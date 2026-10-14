@@ -61,7 +61,8 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   // is not enforced (their own work disputes the reading, or they never made the check required) is shown with what
   // it found and blocks nothing. A habit's check is believed as a count; it is not required, so it blocks nothing either.
   const held = required && !p.enforced;
-  const whyNot = p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'Your own examples do not do this, so the rule blocks nothing until you confirm it'
+  const whyNot = p.notEnforced === 'UNRATIFIED' ? 'Nobody has confirmed this rule yet, so it blocks nothing'
+    : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'Your own examples do not do this, so the rule blocks nothing until you confirm it'
     : p.notEnforced === 'RELATED_CHECK' ? 'This check reads something near your rule and not the rule itself, so it blocks nothing' : 'You have not made this check required, so it blocks nothing';
   const seen = (evidence: string | null): Observation => ({ proposition: o.proposition, coverage: o.coverage, qualification: held ? 'UNQUALIFIED' : 'DETERMINISTIC',
     evidence: held && evidence ? `${evidence}. ${whyNot}` : evidence, ...(o.unchecked ? { unchecked: o.unchecked } : {}) });
