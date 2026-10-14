@@ -44,8 +44,13 @@
 //
 // OUTPUT. One line per (task, trial), in the format scripts/run_evals.py writes and scripts/judge.py and
 // `run_evals.py measure` read: {case_id, trial, condition, runner, response, usage, cost_usd, model}, plus
-// arm, max_tokens, placement, skill_sha256, tasks_sha256 and split; seconds (the answer's wall time); a runtime arm adds
-// atelier_state, Atelier's own verdict on the answer (VERIFIED, NEEDS_REVIEW or BLOCKED), and its calls and tokens. Completed lines are skipped on a rerun,
+// arm, max_tokens, placement, skill_sha256, tasks_sha256 and split; seconds (the answer's wall time) and, for a model
+// arm, thinking (the setting its calls were sent with). A runtime arm's response is the review as delivered, without
+// the footer of specifics not found in the material that `--answer-only` prints (it names the arm to a judge); the
+// row adds atelier_state (VERIFIED, NEEDS_REVIEW or BLOCKED), to_check (that footer's sentences), unverified and
+// unverified_reasons, failed, claims_instrument, and its calls and tokens. A call a provider filtered or the model
+// declined is a row with response null, delivered false and filtered (CONTENT_FILTER or REFUSAL; filtered_call 1 or 2
+// on the self-review arm), charged as an estimate (cost_estimated), and never retried. Completed lines are skipped on a rerun,
 // so a stopped run continues where it stopped. Run `npm run build` first: this imports ../../dist.
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -141,7 +146,7 @@ async function modelArm(c, t) {
   const answer = r.json && typeof r.json === 'object' ? r.json.answer : undefined;
   if (typeof answer !== 'string') throw new Error(`the model returned no answer string for ${t.id}`);
   return { response: answer.trim(), usage: { input_tokens: r.inputTokens, cache_read_input_tokens: r.cacheReadTokens, cache_creation_input_tokens: r.cacheWriteTokens, output_tokens: r.outputTokens },
-    cost: typeof r.costUsd === 'number' ? r.costUsd : null };
+    cost: typeof r.costUsd === 'number' ? r.costUsd : null, thinking: r.thinkingSent ?? null };
 }
 
 // THE SELF-REVIEW ARM: the skill as a prompt, then one call that checks the draft against the method and the material
@@ -151,15 +156,18 @@ const REVIEW_ASK = 'Check your draft before it goes out. Go through the method s
   + 'Then check every specific in the draft against the material and name any that is not there. '
   + 'Then write the answer again in full with everything you found put right, keeping to the length asked. Put the check in review and the answer again in answer.';
 async function selfReviewArm(c, t) {
-  const first = await modelArm(c, t);
+  let first; try { first = await modelArm(c, t); } catch (e) { if (filteredOf(e)) e.filteredCall = 1; throw e; }
   const ask = `${withMaterial(t)}\n\nYour draft:\n<draft>\n${first.response}\n</draft>\n\n${REVIEW_ASK}`;
-  const r = await c.complete({ stableBlock: placement === 'system' ? skillText : '', variableBlock: '', userMessage: placement === 'harness' ? harnessPrompt(ask, skillText) : ask,
-    toolName: 'emit_review', toolDescription: 'Deliver the check and the answer written again.', schema: REVIEW_SCHEMA, maxTokens });
+  let r;
+  try {
+    r = await c.complete({ stableBlock: placement === 'system' ? skillText : '', variableBlock: '', userMessage: placement === 'harness' ? harnessPrompt(ask, skillText) : ask,
+      toolName: 'emit_review', toolDescription: 'Deliver the check and the answer written again.', schema: REVIEW_SCHEMA, maxTokens });
+  } catch (e) { if (filteredOf(e)) { e.filteredCall = 2; e.firstCost = first.cost; } throw e; }
   const answer = r.json && typeof r.json === 'object' ? r.json.answer : undefined;
   if (typeof answer !== 'string') throw new Error(`the model returned no reviewed answer for ${t.id}`);
   const cost = typeof first.cost === 'number' && typeof r.costUsd === 'number' ? first.cost + r.costUsd : null;
   const sum = (a, b) => (a ?? 0) + (b ?? 0);
-  return { response: answer.trim(), review: typeof r.json.review === 'string' ? r.json.review : null, calls: 2, cost,
+  return { response: answer.trim(), review: typeof r.json.review === 'string' ? r.json.review : null, calls: 2, cost, thinking: r.thinkingSent ?? first.thinking ?? null,
     // the longest single call, which is what the token limit binds
     longestCall: Math.max(first.usage.output_tokens ?? 0, r.outputTokens ?? 0),
     usage: { input_tokens: sum(first.usage.input_tokens, r.inputTokens), cache_read_input_tokens: sum(first.usage.cache_read_input_tokens, r.cacheReadTokens),
@@ -183,13 +191,40 @@ function ledgerOf(rec) {
   return { calls: sum('calls'), usage: { input_tokens: sum('inputTokens'), output_tokens: sum('outputTokens') }, longestCall: null };
 }
 
+// What the run's own checks said, for a study to set against a judge: the sentences it listed as not found in the
+// material, how many required rules were left unverified and why, how many failed, and which claim instrument read it.
+function signalsOf(rec) {
+  const entries = rec?.eval?.record?.entries ?? []; const unverified = entries.filter((e) => e.required && e.result === 'UNVERIFIED');
+  return { signals: { to_check: Array.isArray(rec?.toCheck) ? rec.toCheck : [], unverified: unverified.length,
+    unverified_reasons: [...new Set(unverified.map((e) => e.reason))].sort(), failed: entries.filter((e) => e.required && e.result === 'FAIL').length,
+    claims_instrument: rec?.eval?.gates?.claims?.instrument ?? null } };
+}
+
+// A provider that filtered the call, or a model that declined it, is not a transport failure: the same request is
+// blocked again, and every retry is paid for. So it is a row (FILTERED), and the arm goes on to the next task.
+// An unmapped stop reason counts only when it reads like a filter; anything else still retries.
+const FILTER_WORDS = /filter|blocked|safety/i;
+function filteredOf(e) {
+  const k = e?.termination?.kind;
+  if (k === 'CONTENT_FILTER' || k === 'REFUSAL') return k;
+  if (k === 'OTHER' && FILTER_WORDS.test(e.termination.providerValue ?? '')) return 'CONTENT_FILTER';
+  return null;
+}
+// The same, from `atelier invoke`'s stderr: the provider's own wording of a filtered or declined call.
+function filteredIn(stderr) {
+  if (/filtered the response \(finish_reason: content_filter\)/.test(stderr)) return 'CONTENT_FILTER';
+  const m = /stopped for "([^"]+)" before completing the object/.exec(stderr);
+  if (!m) return null;
+  return m[1] === 'REFUSAL' ? 'REFUSAL' : m[1] === 'CONTENT_FILTER' || FILTER_WORDS.test(m[1]) ? 'CONTENT_FILTER' : null;
+}
+
 function runtimeArm(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'compare-material-'));
   try {
     const withArgs = t.material ? (writeFileSync(join(tmp, 'material.md'), t.material), ['--with', `material=${join(tmp, 'material.md')}`]) : [];
     // A benchmark's runs are tests: marked so a later rebuild never learns its "write this, not that" pairs from them.
     // --json, so the row keeps Atelier's own verdict on its work (VERIFIED, NEEDS_REVIEW, BLOCKED) beside the answer:
-    // a study compares that verdict with the judge's. `answer` is what --answer-only would print.
+    // a study compares that verdict with the judge's.
     const cmd = [resolve(runtimeSpec.cli), 'invoke', '--skill', runtimeSpec.skill, '--json', '--test-run', '--target-model', model,
       '--max-tokens', String(maxTokens), ...withArgs, ...(runtimeSpec.args ?? []), t.prompt];
     const done = spawnSync(process.execPath, cmd, { cwd: runtimeSpec.proj, env: { ...process.env, ATELIER_DATA: runtimeSpec.data, ATELIER_PROJECT_DIR: runtimeSpec.proj },
@@ -200,14 +235,26 @@ function runtimeArm(t) {
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
-      return { response: null, refused: why.split('; '), ...ledgerOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
+      return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
+    // A model call inside the run that a provider filtered or the model declined: a FILTERED row, never retried.
+    const blocked = done.status !== 0 ? filteredIn(done.stderr ?? '') : null;
+    if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), cost: rec?.costUsd ?? null };
     if (done.status !== 0 || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
     // a setup error, not a failed call: retrying would pay for the same run again, so it stops here
-    if (rec.answer === undefined) die(`${runtimeSpec.cli} predates the "answer" field of invoke --json: build it from a commit that has it, or the row would lose what --answer-only prints`);
-    return { response: String(rec.answer ?? '').trim(), ...ledgerOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    if (rec.output === undefined || rec.toCheck === undefined) die(`${runtimeSpec.cli} gives no "output" and "toCheck" in invoke --json: build it from a commit that has them`);
+    // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
+    // material ("check before you use this"), which only this arm writes. Judged, it names the arm, and no one posts a
+    // review that ends that way. The list is kept beside the response as to_check, for the study and never the judge.
+    return { response: String(rec.output ?? '').trim(), ...ledgerOf(rec), ...signalsOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
+
+// The fields only some rows carry: the self-review's check, Atelier's verdict and its own check signals, the thinking
+// setting the call was sent with (model arms; the runtime arm's calls go through the same provider), and wall time.
+const extraOf = (r) => ({ ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), ...(r.signals ? r.signals : {}),
+  ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), seconds: r.seconds });
+let filtered = 0;
 
 const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`) : []);
 const prior = existsSync(out) ? readJsonl(out).filter((r) => r.condition === condition) : [];
@@ -242,23 +289,37 @@ for (let trial = 1; trial <= trials; trial++) {
     let r; let last;
     for (let attempt = 0; attempt < 3 && !r; attempt++) {
       const t0 = Date.now();
-      try { r = await answerOf(t); r.seconds = Math.round((Date.now() - t0) / 100) / 10; } catch (e) { last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`); }
+      try { r = await answerOf(t); r.seconds = Math.round((Date.now() - t0) / 100) / 10; } catch (e) {
+        const f = filteredOf(e);
+        if (f) {
+          // charged as a call that answered: the dearest seen so far (plus a first call that did answer), marked an estimate
+          r = { response: null, filtered: f, ...(e.filteredCall ? { filteredCall: e.filteredCall } : {}), usage: e.outputTokens == null ? {} : { output_tokens: e.outputTokens },
+            calls: e.filteredCall ?? 1, cost: perCall + (e.firstCost ?? 0), costEstimated: true, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+          console.error(`${t.id}: ${f === 'REFUSAL' ? 'declined by the model' : 'filtered by the provider'}${e.filteredCall ? ` (call ${e.filteredCall})` : ''}: recorded, not retried`);
+          break;
+        }
+        last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`);
+      }
     }
     if (!r) die(`${t.id} failed three times: ${last?.message}`);
-    if (!r.response && !r.refused) die(`${t.id}: the arm returned an empty answer, and an empty answer judged would read as a result`);
+    if (!r.response && !r.refused && !r.filtered) die(`${t.id}: the arm returned an empty answer, and an empty answer judged would read as a result`);
     // A refusal that printed no cost is charged the dearest call seen so far: never zero, and never a reason to stop.
-    if (r.refused && typeof r.cost !== 'number') r.cost = perCall;
+    if ((r.refused || r.filtered) && typeof r.cost !== 'number') { r.cost = perCall; r.costEstimated = true; }
+    if (r.filtered) filtered += 1;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds })}\n`);
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     spent += r.cost; perCall = Math.max(perCall, r.cost);
-    const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}), usage: r.usage, cost_usd: r.cost, model,
+    const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}),
+      ...(r.filtered ? { delivered: false, filtered: r.filtered, ...(r.filteredCall ? { filtered_call: r.filteredCall } : {}) } : {}),
+      usage: r.usage, cost_usd: r.cost, ...(r.costEstimated ? { cost_estimated: true } : {}), model,
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
-      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds };
+      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) };
     appendFileSync(out, `${JSON.stringify(row)}\n`);
     console.error(`${condition} trial ${trial}: ${t.id}${r.cost === null ? '' : `  $${r.cost.toFixed(4)}`}`);
   }
 }
 console.error(`done: ${out} ($${spent.toFixed(4)} reported for ${condition})`);
+console.error(`filtered: ${filtered} of ${tasks.length * trials} rows (${condition})`);
