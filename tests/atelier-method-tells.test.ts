@@ -73,6 +73,9 @@ describe('a fix that adds no word is not judged by the reading of specifics', ()
     expect(acceptRepair(rep([line('x21', 'VIOLATED', 3), line('UNSOURCED·check', 'VIOLATED', 2), line('x3', 'MET')]), worse, { wordsAdded: false }).ok).toBe(false);
     expect(addsNoWords('One more thing — the dashboard is late — and it matters.', 'One more thing, the dashboard is late, and it matters.')).toBe(true);
     expect(addsNoWords('The dashboard is late.', 'The dashboard is late by 3 weeks.')).toBe(false);
+    expect(addsNoWords('Churn fell 5 points.', 'Churn fell 5% points.')).toBe(false);
+    expect(addsNoWords('It costs 40 a seat.', 'It costs $40 a seat.')).toBe(false);
+    expect(addsNoWords('Revenue grew 40% — fast.', 'Revenue grew 40%, fast.')).toBe(true);
   });
 });
 
