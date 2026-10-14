@@ -6,8 +6,8 @@
 
 import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
-import { spend } from '../inference/client.js';
-import type { StandardVersion, RepairRecord } from '../state/canonical-state.js';
+import { spend, processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
+import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord } from '../state/canonical-state.js';
 import { acts, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
 import { unsourcedClaims, claimUnitsOf } from './claims.js';
@@ -586,12 +586,29 @@ export async function refineToStandard(
   const gradedMiss = (r: VerifyReport): RuleCheck[] => gradedTargets(r, graded);
   const pending = (r: VerifyReport): boolean => r.failed || gradedMiss(r).length > 0;
   const gradedTargeted = new Set<string>(); const gradedRepaired = new Set<string>();
-  const gradedRecord = (): { graded: NonNullable<RepairRecord['graded']> } | Record<string, never> => (opts.graded === undefined ? {}
-    : { graded: { features: [...new Set(graded.values())].sort(), targeted: gradedTargeted.size, repaired: gradedRepaired.size } });
+  // EVERY EDIT, COUNTED: span rewrites kept, and those refused by a guard or discarded with their pass, with the reasons.
+  // The passes the flag alone caused (every span of them for a graded rule the standard does not enforce) are counted
+  // apart, and charged to the ledger under their own purpose, so the record's calls and cost are the ledger's.
+  const edits = { accepted: 0, rejected: 0, reasons: [] as string[] }; const gradedEdits = { accepted: 0, rejected: 0, reasons: [] as string[] };
+  const ledgerBefore = processSpendByPurpose();
+  const editsRecord = (): { edits: RepairEdits } | Record<string, never> => (edits.accepted + edits.rejected ? { edits: { ...edits, reasons: [...new Set(edits.reasons)] } } : {});
+  const gradedRecord = (final: VerifyReport): { graded: GradedRecord } | Record<string, never> => {
+    if (opts.graded === undefined) return {};
+    const values: Record<string, { before: number | null; after: number | null; lo: number | null; hi: number | null }> = {};
+    const valueOf = (r: VerifyReport, id: string): number | null => { const x = r.checked.find((c) => c.requirementId === id)?.result.value; return typeof x === 'number' ? x : null; };
+    for (const [id, f] of graded) {
+      if (values[f]) continue;
+      const p = v.requirements.find((r) => r.requirementId === id)?.measurement?.params ?? {};
+      values[f] = { before: valueOf(first, id), after: valueOf(final, id), lo: typeof p.minValue === 'number' ? p.minValue : null, hi: typeof p.maxValue === 'number' ? p.maxValue : null };
+    }
+    const line = spendBetween(ledgerBefore, processSpendByPurpose()).find((l) => l.purpose === 'graded');
+    return { graded: { features: [...new Set(graded.values())].sort(), targeted: gradedTargeted.size, repaired: gradedRepaired.size, redrafts: 0, notes: [], values,
+      edits: { ...gradedEdits, reasons: [...new Set(gradedEdits.reasons)] }, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0 } };
+  };
   if (!pending(first)) {
     const toCheck = listedClaims(first);
     return { output: draft, report: first, repair: toCheck.length || opts.graded !== undefined ? { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: sha(draft), draft,
-      ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(), why: 'every REQUIRED measured rule holds' } : null };
+      ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(first), why: 'every REQUIRED measured rule holds' } : null };
   }
   const cut: string[] = [];
   // Whether the claim reader had already failed before this run: read before the first cut, which may be
@@ -712,6 +729,13 @@ export async function refineToStandard(
     const targets = accuracyPass ? accuracy : planRepair(text, plannable);
     accuracyTried = true;
     if (!targets.length) { why = cut.length ? `invented claims cut; ${flaggedClaims(report).length ? 'some could not be located to cut' : 'nothing else the rules pointed at could be rewritten'}` : 'nothing the rules pointed at could be rewritten'; break; }
+    // A rule graded but not enforced by the standard: its progress may be a fall in |error| (repair.ts, `acceptRepair`),
+    // and its rewrites make no contrast pair below. An enforced rule that is also graded keeps the enforced rule's terms.
+    const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
+    // A pass that only the flag asked for (every span of it for a rule the standard does not enforce) is the flag's
+    // spend, under its own purpose; a pass an enforced rule asked for is the repair's, whatever else it carries.
+    const gradedPass = targets.every((t) => t.requirementIds.every((id) => soft.has(id)));
+    const purpose: SpendPurpose = gradedPass ? 'graded' : 'repair';
     // A REPAIR THAT CANNOT RUN NEVER COSTS THE DRAFT. The draft is already paid for; a failed call (a
     // refusal, a 500, an exhausted budget) delivers it as it stands and says why.
     let res: Awaited<ReturnType<InferenceClient['complete']>>;
@@ -723,7 +747,7 @@ export async function refineToStandard(
           schema: REPAIR_SCHEMA, maxTokens: 4000,
         });
         return { value: x, cost: x.cost, usage: x };
-      }, 'repair');
+      }, purpose);
     } catch (e) {
       why = `the rewrite could not run (${(e as Error).message.split('\n')[0]}); the draft is delivered as it stands`;
       break;
@@ -734,24 +758,25 @@ export async function refineToStandard(
     const reps = ((res.json as { replacements?: { id: number; text: string }[] } | null)?.replacements ?? []);
     const reverted: Reverted[] = []; const applied: Applied[] = [];
     const next = applyRepair(text, targets, reps, reverted, applied, opts.placeholders ?? false);
+    const tally = gradedPass ? [edits, gradedEdits] : [edits];
     for (const r of reverted) {
       const t = targets.find((x) => x.id === r.id);
       kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed' : 'lost'} ${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
+      for (const e of tally) { e.rejected += 1; e.reasons.push(`refused (${r.kind ?? 'MEANING'}): ${r.lost.join(', ')}`); }
     }
     const after = next === text ? report : await check(next);
     sameInstrument();
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
-    // A rule graded but not enforced by the standard: its progress may be a fall in |error| (repair.ts, `acceptRepair`),
-    // and its rewrites make no contrast pair below. An enforced rule that is also graded keeps the enforced rule's terms.
-    const soft = new Set([...gradedIds].filter((id) => !report.checked.some((c) => c.requirementId === id && acts(c))));
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
       : acceptRepair(withGraded(report, gradedIds), withGraded(after, gradedIds), { graded: soft });
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
+      for (const e of tally) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${verdict.why}`); }
       continue;
     }
+    for (const e of tally) e.accepted += applied.length;
     // A graded feature is repaired when a kept rewrite moved its value toward the band.
     const errorOf = (r: VerifyReport, id: string): number => Math.abs(r.checked.find((c) => c.requirementId === id)?.result.error ?? 0);
     for (const id of gradedIds) if (errorOf(after, id) < errorOf(report, id)) gradedRepaired.add(graded.get(id) ?? id);
@@ -789,5 +814,5 @@ export async function refineToStandard(
   return { output: text, report,
     repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
       ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
-      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...gradedRecord(), why } };
+      ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...editsRecord(), ...gradedRecord(report), why } };
 }

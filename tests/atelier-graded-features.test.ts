@@ -10,10 +10,11 @@ import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { gradedRules, gradedTargets, withGraded, GRADED_PER_PASS } from '../core/loop/run-repair.js';
-import { acceptRepair } from '../core/loop/repair.js';
+import { acceptRepair, regressions, GRADED_STEP } from '../core/loop/repair.js';
 import { FEATURE } from '../core/observers/features.js';
 import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
 import * as store from '../core/state/store.js';
+import type { GradedRecord } from '../core/state/canonical-state.js';
 
 const rule = (id: string, feature: string, materiality = 'PREFERRED', extra: Record<string, unknown> = {}) => ({ requirementId: id, statement: `${feature} in range.`, materiality, authority: 'USER_ADOPTED', appliesWhen: 'GENERAL',
   measurement: { observer: 'FEATURE', params: { feature: [feature], minValue: 1, maxValue: 3 } }, ...extra });
@@ -70,6 +71,55 @@ describe('acceptance: a graded feature nearer its band is progress; an enforced 
   });
 });
 
+describe('never worse reads the distance too: a feature drifting further from its band is a regression', () => {
+  const graded = (id: string, error: number, spans = 3, enforced = true): RuleCheck => ({ ...check(id, error), enforced, result: { verdict: 'VIOLATED', value: 2, detail: '', error, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) } });
+  const lex = (id: string, verdict: 'MET' | 'VIOLATED', spans = 1): RuleCheck => ({ requirementId: id, statement: id, materiality: 'REQUIRED', enforced: true, observer: 'LEXICON',
+    result: { verdict, value: null, detail: '', spans: verdict === 'VIOLATED' ? Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) : [] } });
+  it('g1 2.0 → 1.8 beside g2 1.0 → 3.0, three carriers each, is refused: the places did not grow, the distance did', () => {
+    const before = reportOf([graded('g1', 2.0), graded('g2', 1.0)]); const after = reportOf([graded('g1', 1.8), graded('g2', 3.0)]);
+    expect(regressions(before, after)).toEqual(['g2']);
+    const v = acceptRepair(before, after, { graded: new Set(['g1', 'g2']) });
+    expect(v.ok).toBe(false); expect(v.why).toMatch(/made g2 worse/);
+  });
+  it('a drift under the step is no regression; exactly the step is', () => {
+    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.05)]))).toEqual([]);
+    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.0 + GRADED_STEP)]))).toEqual(['g2']);
+    // the sign is the side of the band; the distance is what is read
+    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', -1.3)]))).toEqual(['g2']);
+    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', 0.5)]))).toEqual([]);
+  });
+  it('read on every check that carries an error, enforced or not; a check with no error keeps the count of places as its only measure', () => {
+    expect(regressions(reportOf([graded('p', 1.0, 3, false)]), reportOf([graded('p', 2.0, 3, false)]))).toEqual(['p']);
+    expect(regressions(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 2)]))).toEqual([]);
+    expect(regressions(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 3)]))).toEqual(['e']);
+    expect(regressions(reportOf([lex('e', 'MET')]), reportOf([lex('e', 'VIOLATED')]))).toEqual(['e']);
+  });
+  it('an enforced rule behaves as it did: fewer places is progress, as many is none, a drift in distance is refused', () => {
+    expect(acceptRepair(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 1)])).ok).toBe(true);
+    expect(acceptRepair(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 2)])).ok).toBe(false);
+    const v = acceptRepair(reportOf([lex('e', 'VIOLATED', 2), graded('f', 1.0)]), reportOf([lex('e', 'VIOLATED', 1), graded('f', 1.5)]));
+    expect(v.ok).toBe(false); expect(v.why).toMatch(/made f worse/);
+  });
+});
+
+describe('FEATURE misses carry spans for every FEATURE rule, by design: what that changes for an enforced one', () => {
+  // A repair needs a target, so a FEATURE miss points at its carriers whatever the rule's materiality. For a REQUIRED
+  // FEATURE rule this is the one change from before the spans: its miss counts places, and fewer places is progress.
+  const feature = (error: number, spans: number): RuleCheck => ({ requirementId: 'f', statement: 'f', materiality: 'REQUIRED', enforced: true, observer: 'FEATURE',
+    result: { verdict: 'VIOLATED', value: 2, detail: '', error, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) } });
+  const met: RuleCheck = { requirementId: 'f', statement: 'f', materiality: 'REQUIRED', enforced: true, observer: 'FEATURE', result: { verdict: 'MET', value: 2, detail: '', error: 0, spans: [] } };
+  it('three carrier spans to two counts as progress for an enforced FEATURE rule, with no graded set', () => {
+    const v = acceptRepair(reportOf([feature(1.0, 3)]), reportOf([feature(0.6, 2)]));
+    expect(v.ok).toBe(true); expect(v.why).toBe('places breaking a REQUIRED rule: 3 → 2');
+  });
+  it('a FEATURE rule newly VIOLATED is still a regression, and the whole pass is refused', () => {
+    expect(regressions(reportOf([met]), reportOf([feature(0.3, 1)]))).toEqual(['f']);
+    const v = acceptRepair(reportOf([met, { ...met, requirementId: 'e', observer: 'LEXICON', result: { verdict: 'VIOLATED', value: null, detail: '', spans: [{ start: 0, end: 1, text: 'x', why: '' }, { start: 2, end: 3, text: 'x', why: '' }] } }]),
+      reportOf([feature(0.3, 1), { ...met, requirementId: 'e', observer: 'LEXICON', result: { verdict: 'VIOLATED', value: null, detail: '', spans: [{ start: 0, end: 1, text: 'x', why: '' }] } }]));
+    expect(v.ok).toBe(false); expect(v.why).toMatch(/made f worse/);
+  });
+});
+
 describe('a graded miss reaches the notes', () => {
   const plain = 'The rule holds in this case and it holds elsewhere as well today, whatever the reader brings to it.';
   const aside = 'The rule holds here (as it did last year) and it holds there too (most of the time, at least).';
@@ -94,6 +144,27 @@ describe('a graded miss reaches the notes', () => {
     expect(misses.map((u) => u.id)).toEqual(['p1']);
     expect(shapeNote(misses)).toContain('fewer parenthetical asides per 1,000 words');
   });
+  it('a graded miss is marked, and never told as something the method requires: its block says what your pieces usually do', async () => {
+    const { unmetReader, redraftNote, shapeNote, gradedLines } = await import('../cli/commands/invoke.js');
+    const [miss] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report }) ?? [];
+    expect(miss.graded).toBe(true);
+    for (const note of [redraftNote([miss], text), shapeNote([miss])]) {
+      expect(note).toContain('did not do what your pieces usually do (each line says which way and about how far):');
+      expect(note).not.toMatch(/requires|required\b/);
+      expect(note).toContain(`- ${miss.statement} (${miss.detail}; ${miss.move})`);
+    }
+    // beside an enforced miss, the two are in blocks of their own, and the graded line is distinguishable by its block
+    const enforced = { id: 'x7', statement: 'Between 220 and 420 words.', detail: '471 words', off: 51, move: 'about 51 words shorter' };
+    const mixed = redraftNote([enforced, miss], text);
+    expect(mixed.indexOf('did not hold what this work requires:\n- Between 220')).toBeGreaterThanOrEqual(0);
+    expect(mixed.indexOf('did not do what your pieces usually do')).toBeGreaterThan(mixed.indexOf('did not hold what this work requires'));
+    expect(gradedLines([enforced, miss])).toEqual([`- ${miss.statement} (${miss.detail}; ${miss.move})`]);
+    // an enforced FEATURE rule that is also graded is still the method's
+    const r0 = report as unknown as { checked: Record<string, unknown>[] };
+    const required = { ...r0, checked: [{ ...r0.checked[0], materiality: 'REQUIRED', enforced: true }] } as never;
+    const [hard] = unmetReader(std, null, null, ['parenthesis'])?.({ output: text, report: required }) ?? [];
+    expect(hard.graded).toBeUndefined();
+  });
   it('the flag is read as a list of feature ids, or all', async () => {
     const { gradedFeatures } = await import('../cli/commands/invoke.js');
     expect(gradedFeatures(undefined)).toBeUndefined();
@@ -115,7 +186,7 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
   let env: NodeJS.ProcessEnv; let data: string; let proj: string;
   const run = (...a: string[]): string => execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env });
   const invoke = (...extra: string[]) => JSON.parse(run('invoke', '--skill', 'asides', 'write a note', '--json', '--allow-unsourced', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', ...extra)) as
-    { output: string; graded?: { features: string[]; targeted: number; repaired: number }; eval: { record?: { state: string; entries: { id: string; required: boolean; result: string }[] } } };
+    { output: string; graded?: GradedRecord; report: string[]; eval: { spend?: { purpose: string; calls: number; usd: number }[]; record?: { state: string; entries: { id: string; required: boolean; result: string }[] } } };
   const rewritesSent = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies.filter((b) => b.includes('emit_replacements')).length;
   beforeAll(async () => {
     if (!existsSync(CLI)) throw new Error('build first');
@@ -146,18 +217,33 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     expect(await rewritesSent()).toBeGreaterThan(before);
     expect(out.output).not.toBe(draft);
     expect((out.output.match(/\(/g) ?? []).length).toBeLessThan((draft.match(/\(/g) ?? []).length);
-    expect(out.graded).toEqual({ features: ['parenthesis'], targeted: 1, repaired: 1 });
+    expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 1, repaired: 1 });
+    // THE RECORD OF WHAT THE FLAG DID: the band reached in one pass, so no draft was written again and no note sent;
+    // the rewrites kept; the calls and dollars are the ledger's line for the flag, not an estimate; the bounds raised.
+    const g = out.graded!;
+    expect(g.redrafts).toBe(0); expect(g.notes).toEqual([]);
+    expect(g.values.parenthesis.before).toBeGreaterThan(5); expect(g.values.parenthesis.after).toBeLessThanOrEqual(5);
+    expect(g.values.parenthesis).toMatchObject({ lo: null, hi: 5 });
+    expect(g.edits.accepted).toBeGreaterThanOrEqual(3); expect(g.edits.rejected).toBe(0);
+    const line = out.eval.spend?.find((l) => l.purpose === 'graded');
+    expect(line?.calls).toBe(g.calls); expect(line?.usd).toBe(g.costUsd);
+    // the scripted backend reports no token cost, so the dollars are checked against the ledger's line above, not against zero
+    expect(g.calls).toBeGreaterThanOrEqual(1);
+    expect(g.allowance).toEqual({ calls: 3, usd: 0.4 });
+    expect(out.report.join('\n')).toMatch(/graded features .*; 0 draft\(s\) written again for them; \d+ rewrite\(s\) kept, 0 not; \d+ call\(s\), \$[\d.]+, on their account/);
     // the rule stays PREFERRED: never a failure, and the record's state is the unflagged run's
     expect(out.eval.record?.state).toBe(plainRun.eval.record?.state);
     expect(out.eval.record?.state).not.toBe('BLOCKED');
     expect(out.eval.record?.entries.find((e) => e.id === 'x1')?.required).toBe(false);
     const recs = store.listInvocations({ root: data, skillName: 'asides' });
     const graded = recs.find((r) => r.repair?.graded);
-    expect(graded?.repair?.graded).toEqual({ features: ['parenthesis'], targeted: 1, repaired: 1 });
+    expect(graded?.repair?.graded).toEqual(g);
     expect(graded?.repair?.violatedBefore).toEqual([]);
     expect(graded?.repair?.violatedAfter).toEqual([]);
     // a graded rule the standard does not enforce is no source of its examples
     expect(graded?.repair?.pairs ?? []).toEqual([]);
+    // every repair's edits are counted on the record, flag or not
+    expect(graded?.repair?.edits).toMatchObject({ accepted: g.edits.accepted, rejected: 0 });
   });
   it('a miss too far for one pass: the rewrite that lands closer but outside the band is kept, and counts as repaired', async () => {
     // eight aside sentences: about 34 per 1,000 against a cap of 5; three carriers rewritten leave about 21, still out
@@ -167,7 +253,22 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     const parens = (t: string): number => (t.match(/\(/g) ?? []).length;
     expect(parens(out.output)).toBeLessThan(parens(far));
     expect(parens(out.output)).toBeGreaterThan(0);
-    expect(out.graded).toEqual({ features: ['parenthesis'], targeted: 1, repaired: 1 });
+    expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 1, repaired: 1 });
+    // Still outside after the rewrites, the piece was written once more for the graded miss alone: the redraft is the
+    // flag's (one draft, counted and charged to it), its directional line is recorded as sent, and it never said "requires".
+    const g = out.graded!;
+    expect(g.redrafts).toBe(1);
+    expect(g.notes).toHaveLength(1); expect(g.notes[0]).toMatch(/^- Few asides in parentheses\. \(parenthetical asides [\d.]+ per 1,000 words; .*about [\d.]+ fewer parenthetical asides per 1,000 words\)$/);
+    expect(g.values.parenthesis.after).toBeLessThan(g.values.parenthesis.before ?? 0);
+    expect(g.calls).toBeGreaterThanOrEqual(3);
+    expect(out.eval.spend?.find((l) => l.purpose === 'graded')?.calls).toBe(g.calls);
+    const said = out.report.join('\n');
+    expect(said).toContain('your pieces usually do');
+    expect(said).not.toContain('the method requires');
+    const rec = store.listInvocations({ root: data, skillName: 'asides' }).find((r) => r.repair?.graded?.redrafts === 1);
+    expect(rec?.repair?.notes?.join('\n')).toContain('your pieces usually do');
+    expect(rec?.repair?.notes?.join('\n')).not.toContain('the method requires');
+    expect(rec?.repair?.why).not.toContain('the method requires');
     expect(out.eval.record?.state).not.toBe('BLOCKED');
     expect(out.eval.record?.entries.find((e) => e.id === 'x1')?.required).toBe(false);
   });
