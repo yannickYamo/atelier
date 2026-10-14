@@ -302,8 +302,9 @@ export function addsNoWords(before: string, after: string): boolean {
   const words = (t: string): string[] => t.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'’.,-]*[\p{L}\p{N}]|[\p{L}\p{N}]/gu)?.map((w) => w.replace(/[.,]+$/, '')) ?? [];
   const had = new Map<string, number>(); for (const w of words(before)) had.set(w, (had.get(w) ?? 0) + 1);
   for (const w of words(after)) { const n = had.get(w) ?? 0; if (!n) return false; had.set(w, n - 1); }
-  // A sign that changes what a figure says ("5" made "5%", "$5", "5+") is an added specific, though no word is added.
-  const signs = (t: string): string[] => t.match(/[\p{S}%‰#@&*]/gu) ?? [];
+  // A sign that changes what a figure says ("5" made "5%", "$5", "+5", "-5") is an added specific, though no word is
+  // added. Markup is not such a sign: a quoted paragraph split in two gains a "> ".
+  const signs = (t: string): string[] => t.match(/[\p{Sc}%‰+±×°]|[-−](?=\d)/gu) ?? [];
   const kept = new Map<string, number>(); for (const c of signs(before)) kept.set(c, (kept.get(c) ?? 0) + 1);
   for (const c of signs(after)) { const n = kept.get(c) ?? 0; if (!n) return false; kept.set(c, n - 1); }
   return true;

@@ -58,8 +58,10 @@ only partly observed, or the owner's word was moved by a measurement.
   it cost and how much of the token limit the answer used, before a paid run: a study once lost a third of its cells
   to answers cut off at the limit, found afterwards. Nothing is recorded.
   A runtime arm's row now keeps Atelier's own verdict on the answer (`atelier_state`: VERIFIED, NEEDS_REVIEW or
-  BLOCKED), so a study can set it against the judge's; `atelier invoke --json` carries `answer`, the text
-  `--answer-only` prints.
+  BLOCKED), its calls and tokens from the run's spend ledger, and every row its seconds, so a study can set the
+  verdict against the judge's and compare cost per output; `atelier invoke --json` carries `answer`, the text
+  `--answer-only` prints. A runtime row's cost now comes from the record to four decimals (it was read off the
+  printed summary in cents).
 - **No added machine tells on a skill built from a method.** Discovery from a folder held the owner's rule (a tell the
   author never writes never appears; one they write is held to their rate); a skill built from a method and its
   examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now

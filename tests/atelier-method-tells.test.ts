@@ -76,6 +76,13 @@ describe('a fix that adds no word is not judged by the reading of specifics', ()
     expect(addsNoWords('Churn fell 5 points.', 'Churn fell 5% points.')).toBe(false);
     expect(addsNoWords('It costs 40 a seat.', 'It costs $40 a seat.')).toBe(false);
     expect(addsNoWords('Revenue grew 40% — fast.', 'Revenue grew 40%, fast.')).toBe(true);
+    expect(addsNoWords('Churn grew 5 points.', 'Churn grew -5 points.')).toBe(false);
+    // the mechanical paragraph split of a quote adds markup, not a specific
+    const { splitLongParagraphs } = await import('../core/loop/mechanical-repair.js');
+    const quote = `> ${['One.', 'Two.', 'Three.', 'Four.', 'Five.', 'Six.', 'Seven.', 'Eight.'].join(' ')}\n`;
+    const split = splitLongParagraphs(quote, 3);
+    expect(split).not.toBe(quote);
+    expect(addsNoWords(quote, split)).toBe(true);
   });
 });
 

@@ -44,8 +44,8 @@
 //
 // OUTPUT. One line per (task, trial), in the format scripts/run_evals.py writes and scripts/judge.py and
 // `run_evals.py measure` read: {case_id, trial, condition, runner, response, usage, cost_usd, model}, plus
-// arm, max_tokens, placement, skill_sha256, tasks_sha256 and split; a runtime arm adds atelier_state, Atelier's own
-// verdict on the answer (VERIFIED, NEEDS_REVIEW or BLOCKED). Completed lines are skipped on a rerun,
+// arm, max_tokens, placement, skill_sha256, tasks_sha256 and split; seconds (the answer's wall time); a runtime arm adds
+// atelier_state, Atelier's own verdict on the answer (VERIFIED, NEEDS_REVIEW or BLOCKED), and its calls and tokens. Completed lines are skipped on a rerun,
 // so a stopped run continues where it stopped. Run `npm run build` first: this imports ../../dist.
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -175,6 +175,14 @@ if (kind === 'atelier-runtime') {
   await checkRuntimePrice(runtimeSpec);
 }
 
+// Calls and tokens of a runtime answer, from the run's own spend ledger (every call it made, by purpose). Its longest
+// call is not recorded, and need not be: a call cut off at the limit fails the run, so it is never an answer.
+function ledgerOf(rec) {
+  const spend = rec?.eval?.spend; if (!Array.isArray(spend)) return { usage: {} };
+  const sum = (k) => spend.reduce((n, l) => n + (l[k] ?? 0), 0);
+  return { calls: sum('calls'), usage: { input_tokens: sum('inputTokens'), output_tokens: sum('outputTokens') }, longestCall: null };
+}
+
 function runtimeArm(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'compare-material-'));
   try {
@@ -192,10 +200,11 @@ function runtimeArm(t) {
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
-      return { response: null, refused: why.split('; '), usage: {}, cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
+      return { response: null, refused: why.split('; '), ...ledgerOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
     if (done.status !== 0 || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
-    return { response: String(rec.answer ?? rec.output ?? '').trim(), usage: {}, cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    if (rec.answer === undefined) throw new Error(`${runtimeSpec.cli} predates the "answer" field of invoke --json: build it from a commit that has it, or the row would lose what --answer-only prints`);
+    return { response: String(rec.answer ?? '').trim(), ...ledgerOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
@@ -216,7 +225,8 @@ if (args.includes('--preflight')) {
   if (per > cap) die(`--preflight: one call (about $${per.toFixed(4)}) would pass the --cap of $${cap}. Nothing was spent.`);
   const t = tasks[0]; let r;
   try { r = await answerOf(t); } catch (e) { console.error(`preflight: the call failed (${e.message.split('\n')[0]}). Nothing was recorded.`); process.exit(1); }
-  const used = r.longestCall ?? r.usage?.output_tokens ?? null; let stop = false;
+  const used = kind === 'atelier-runtime' ? null : r.longestCall ?? r.usage?.output_tokens ?? null; let stop = false;
+  if (kind === 'atelier-runtime') console.log('preflight: an Atelier call cut off at the token limit fails its run rather than giving a shorter answer, so the limit is checked by the run itself');
   console.log(`preflight: task ${t.id}, ${used ?? 'an unknown number of'} output token(s) of a limit of ${maxTokens}${r.calls > 1 ? ' in its longest call' : ''}; ${typeof r.cost === 'number' ? `$${r.cost.toFixed(4)}` : 'an unknown cost'} for the call${r.calls > 1 ? ` (${r.calls} calls)` : ''}`);
   if (used !== null && used >= maxTokens * 0.8) { stop = true; console.log(`preflight: the answer used ${Math.round((used / maxTokens) * 100)}% of the limit, so answers may be cut off: raise --max-tokens before the run.`); }
   if (typeof r.cost !== 'number') { stop = true; console.log('preflight: the call reported no cost, so --cap could not hold: fix the price before the run.'); }
@@ -230,7 +240,8 @@ for (let trial = 1; trial <= trials; trial++) {
     if (spent + perCall > cap) { console.error(`stopped: $${spent.toFixed(4)} spent, and one more call (about $${perCall.toFixed(4)}) would pass the --cap of $${cap}. Rerun with a higher --cap to continue (a --cap under --per-call, ${opt(args, 'per-call', '0.25')}, never starts: pass a smaller --per-call with it).`); process.exit(3); }
     let r; let last;
     for (let attempt = 0; attempt < 3 && !r; attempt++) {
-      try { r = await answerOf(t); } catch (e) { last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`); }
+      const t0 = Date.now();
+      try { r = await answerOf(t); r.seconds = Math.round((Date.now() - t0) / 100) / 10; } catch (e) { last = e; console.error(`${t.id}: attempt ${attempt + 1} failed: ${e.message.split('\n')[0]}`); }
     }
     if (!r) die(`${t.id} failed three times: ${last?.message}`);
     if (!r.response && !r.refused) die(`${t.id}: the arm returned an empty answer, and an empty answer judged would read as a result`);
@@ -238,13 +249,13 @@ for (let trial = 1; trial <= trials; trial++) {
     if (r.refused && typeof r.cost !== 'number') r.cost = perCall;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}) })}\n`);
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     spent += r.cost; perCall = Math.max(perCall, r.cost);
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}), usage: r.usage, cost_usd: r.cost, model,
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
-      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}) };
+      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds };
     appendFileSync(out, `${JSON.stringify(row)}\n`);
     console.error(`${condition} trial ${trial}: ${t.id}${r.cost === null ? '' : `  $${r.cost.toFixed(4)}`}`);
   }
