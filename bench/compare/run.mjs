@@ -178,7 +178,7 @@ if (kind === 'atelier-runtime') {
 // Calls and tokens of a runtime answer, from the run's own spend ledger (every call it made, by purpose). Its longest
 // call is not recorded, and need not be: a call cut off at the limit fails the run, so it is never an answer.
 function ledgerOf(rec) {
-  const spend = rec?.eval?.spend; if (!Array.isArray(spend)) return { usage: {} };
+  const spend = rec?.eval?.spend; if (!Array.isArray(spend)) return { usage: {}, calls: null };
   const sum = (k) => spend.reduce((n, l) => n + (l[k] ?? 0), 0);
   return { calls: sum('calls'), usage: { input_tokens: sum('inputTokens'), output_tokens: sum('outputTokens') }, longestCall: null };
 }
@@ -203,7 +203,8 @@ function runtimeArm(t) {
       return { response: null, refused: why.split('; '), ...ledgerOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
     if (done.status !== 0 || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
-    if (rec.answer === undefined) throw new Error(`${runtimeSpec.cli} predates the "answer" field of invoke --json: build it from a commit that has it, or the row would lose what --answer-only prints`);
+    // a setup error, not a failed call: retrying would pay for the same run again, so it stops here
+    if (rec.answer === undefined) die(`${runtimeSpec.cli} predates the "answer" field of invoke --json: build it from a commit that has it, or the row would lose what --answer-only prints`);
     return { response: String(rec.answer ?? '').trim(), ...ledgerOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -249,13 +250,13 @@ for (let trial = 1; trial <= trials; trial++) {
     if (r.refused && typeof r.cost !== 'number') r.cost = perCall;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds })}\n`);
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     spent += r.cost; perCall = Math.max(perCall, r.cost);
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}), usage: r.usage, cost_usd: r.cost, model,
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
-      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls ?? 1, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds };
+      skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), seconds: r.seconds };
     appendFileSync(out, `${JSON.stringify(row)}\n`);
     console.error(`${condition} trial ${trial}: ${t.id}${r.cost === null ? '' : `  $${r.cost.toFixed(4)}`}`);
   }

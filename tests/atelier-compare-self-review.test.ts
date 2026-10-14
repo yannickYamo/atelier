@@ -110,13 +110,16 @@ process.exitCode = 3;\n`);
   });
   it('a CLI from before the answer field is refused, not recorded without its list', () => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-old-'));
-    writeFileSync(join(dir, 'cli.mjs'), `process.stdout.write(${JSON.stringify(JSON.stringify({ output: 'Merge it.', costUsd: 0.01, eval: { record: { state: 'NEEDS_REVIEW' } } }))});\n`);
+    writeFileSync(join(dir, 'cli.mjs'), `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(join(dir, 'calls'))}, 'x');
+process.stdout.write(${JSON.stringify(JSON.stringify({ output: 'Merge it.', costUsd: 0.01, eval: { record: { state: 'NEEDS_REVIEW' } } }))});\n`);
     writeFileSync(join(dir, 'tasks.jsonl'), `${JSON.stringify({ id: 'a', prompt: 'Review this change.' })}\n`);
     writeFileSync(join(dir, 'runtimes.json'), JSON.stringify({ s: { cli: join(dir, 'cli.mjs'), data: dir, proj: dir, skill: 's', args: ['--provider', 'openai-compatible'] } }));
     const r = spawnSync(process.execPath, [resolve('bench/compare/run.mjs'), '--tasks', join(dir, 'tasks.jsonl'), '--arm', 'atelier-runtime:s', '--runtimes', join(dir, 'runtimes.json'), '--out', join(dir, 'o.jsonl'), '--model', 'scripted'],
       { encoding: 'utf8', env: { ...process.env, ANTHROPIC_API_KEY: '' } });
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/predates the "answer" field/);
+    // a setup error stops at once: retried, it would pay for the same run three times
+    expect(readFileSync(join(dir, 'calls'), 'utf8')).toBe('x');
     expect(existsSync(join(dir, 'o.jsonl'))).toBe(false);
   });
 });
