@@ -13,9 +13,10 @@
 // selection read off the author's pieces, both sides: a floor with no ceiling is how a model overshoots.
 
 import { wordsOf, proseRegions, proseSentencesOf, paragraphsOf, quantile } from './text.js';
+import { carriersOf } from './carrier.js';
 import { visible } from './visible.js';
 import { bagOf, paceSteps, callbackShare } from './pace.js';
-import type { Observer } from './registry.js';
+import type { Observer, Span } from './registry.js';
 
 /** The layers of a text a feature belongs to. Numbered as in docs/FORMATS.md. */
 export type Layer = 1 | 2 | 3 | 4 | 6 | 7 | 8 | 9 | 10;
@@ -351,7 +352,45 @@ export const featureOf = (id: string): Feature | null => BY_ID.get(id) ?? null;
 const num = (p: Readonly<Record<string, unknown>>, k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
 const fmt = (f: Feature, x: number): string => (f.unit === 'share' ? `${Math.round(x * 100)}%` : `${x}`);
 
-/** FEATURE: one registered feature held to a band, both sides. No spans: there is no single place a rate lives. */
+/** The band a FEATURE measurement states, and how far outside it `v` sits: positive above, negative below, 0 inside. */
+function missOf(p: Readonly<Record<string, unknown>>, v: number): { lo: number | null; hi: number | null; distance: number; above: boolean; error: number } {
+  const lo = num(p, 'minValue'); const hi = num(p, 'maxValue');
+  const above = hi !== null && v > hi; const below = lo !== null && v < lo;
+  const distance = above ? v - hi : below ? lo - v : 0;
+  // In widths of the band, so "0.5 out" means the same for colons and for paragraph length; a band with one edge or no
+  // width is read in the feature's own unit.
+  const width = lo !== null && hi !== null && hi > lo ? hi - lo : 1;
+  return { lo, hi, distance, above, error: distance === 0 ? 0 : r3((above ? distance : -distance) / width) };
+}
+const r1 = (x: number): number => Math.round(x * 10) / 10;
+/** A distance in the feature's own unit, rounded to one decimal; a share's in percentage points. */
+const amount = (f: Feature, d: number): string => (f.unit === 'share' ? `${r1(d * 100)} points` : `${r1(d)}`);
+const unitOf = (f: Feature): string => (f.unit === 'per1000' ? ' per 1,000 words' : '');
+const rangeOf = (f: Feature, lo: number | null, hi: number | null): string =>
+  (lo !== null && hi !== null ? `${fmt(f, lo)} to ${fmt(f, hi)}` : lo !== null ? `at least ${fmt(f, lo)}` : `at most ${fmt(f, hi ?? 0)}`) + unitOf(f);
+
+/**
+ * WHAT THE NEXT DRAFT IS TO DO ABOUT A FEATURE MISS, in plain words: "about 4.1 fewer parenthetical asides per 1,000
+ * words", "about 12 points more questions". Null inside the band, or when the measurement names no feature.
+ */
+export function featureMove(p: Readonly<Record<string, unknown>>, v: number): string | null {
+  const f = featureOf(((p.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+  if (!f) return null;
+  const m = missOf(p, v);
+  if (m.distance === 0) return null;
+  return f.unit === 'value' ? `${f.label}: about ${amount(f, m.distance)} ${m.above ? 'lower' : 'higher'}`
+    : `about ${amount(f, m.distance)} ${m.above ? 'fewer' : 'more'} ${f.label}${unitOf(f)}`;
+}
+
+/** How many carrier sentences a miss is pointed at, at most. */
+const MAX_CARRIERS = 3;
+
+/**
+ * FEATURE: one registered feature held to a band, both sides. A rate has no single place it lives, so a miss is pointed
+ * at its CARRIERS (./carrier.ts): the sentences whose removal moves the value most toward the band, as many of them
+ * as it takes to cover the distance (never more than three). The detail says which way and how far, in the feature's
+ * own unit, so a writer told only the band is told the move too.
+ */
 export const FEATURE: Observer = {
   id: 'FEATURE',
   describe: (p) => {
@@ -373,9 +412,20 @@ export const FEATURE: Observer = {
     if (!f) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'unknown feature' };
     const v = f.measure(text);
     if (v === null) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `too short to measure ${f.label}` };
-    const lo = num(p, 'minValue'); const hi = num(p, 'maxValue');
-    const out = (lo !== null && v < lo) || (hi !== null && v > hi);
-    return { verdict: out ? 'VIOLATED' : 'MET', spans: [], value: v,
-      detail: `${f.label}: ${fmt(f, v)}${out ? `, outside ${lo !== null ? fmt(f, lo) : '…'} to ${hi !== null ? fmt(f, hi) : '…'}` : ''}` };
+    const m = missOf(p, v);
+    if (m.distance === 0) return { verdict: 'MET', spans: [], value: v, error: 0, detail: `${f.label}: ${fmt(f, v)}` };
+    const verb = m.above ? 'remove' : 'add';
+    // As many carriers as cover the distance, so a draft nearer the band is pointed at fewer places, never more.
+    const carriers = carriersOf(text, (t) => f.measure(t), proseSentencesOf(text).map((s) => ({ s: s.text, at: s.start })), m.above ? 'lower' : 'higher', MAX_CARRIERS);
+    let covered = 0; const spans: Span[] = [];
+    for (const c of carriers) {
+      if (covered >= m.distance) break;
+      covered += c.moves;
+      spans.push({ start: c.at, end: c.at + c.s.length, text: c.s, why: m.above
+        ? `this sentence carries about ${amount(f, c.moves)} of the ${amount(f, m.distance)} to remove`
+        : `this sentence has room for one; about ${amount(f, m.distance)} to add` });
+    }
+    return { verdict: 'VIOLATED', spans, value: v, error: m.error,
+      detail: `${f.label} ${fmt(f, v)}${unitOf(f)}; your range is ${rangeOf(f, m.lo, m.hi)}; about ${amount(f, m.distance)} to ${verb}` };
   },
 };

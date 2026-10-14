@@ -97,7 +97,7 @@ describe('what a draft left unmet, and what the one more draft is told', () => {
     expect(read?.({ output: words(210), report: report([]) })).toEqual([]);
     expect(read?.({ output: words(248), report: report(['x1']) })).toEqual([
       { id: 'x1', statement: 'x1 must hold.', detail: 'x1 detail' },
-      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words, 16 too many', off: 16, aim: 'aim for 216 words or fewer', whole: true }]);
+      { id: LENGTH_ID, statement: 'Write it at the length my pieces run: 202 to 217 words', detail: '248 words, 16 too many', off: 16, aim: 'aim for 216 words or fewer', whole: true, move: 'about 16 words shorter' }]);
   });
   it('a skill with nothing of the kind to read has no such step', async () => {
     const { unmetReader } = await import('../cli/commands/invoke.js');
@@ -191,7 +191,8 @@ describe('after a miss of length the writer is given something to aim for, and o
     const report = { failed: true, checked: [{ requirementId: 'x7', materiality: 'REQUIRED', result: { verdict: 'VIOLATED', spans: [], value: 471, detail: '471 words (220 to 420): long by 51' } }] } as never;
     const [miss] = unmetReader(std, null)?.({ output: 'x', report }) ?? [];
     expect(miss).toMatchObject({ id: 'x7', off: 51, aim: 'aim for 378 words or fewer' });
-    expect(redraftNote([miss], 'd')).toContain('- Between 220 and 420 words. (471 words (220 to 420): long by 51; aim for 378 words or fewer)');
+    // and the note says which way and how far, after what to aim for
+    expect(redraftNote([miss], 'd')).toContain('- Between 220 and 420 words. (471 words (220 to 420): long by 51; aim for 378 words or fewer; about 51 words shorter)');
   });
   it('still long after one more draft, and only length unmet: once more, and no third', async () => {
     const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');

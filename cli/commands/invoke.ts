@@ -11,7 +11,7 @@ import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_M
 import { regressions } from '../../core/loop/repair.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, PUBLIC_FACTS, INCONCLUSIVE } from '../../core/loop/run-repair.js';
 import { signalDistance } from '../../core/observers/selection.js';
-import { featureOf } from '../../core/observers/features.js';
+import { featureOf, featureMove } from '../../core/observers/features.js';
 import { acts, verifyText, type VerifyReport } from '../../core/observers/verify.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
@@ -623,7 +623,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineDraft({ client, budget, name, std, checks, taste }), unmet ? { unmet, notes: completions, redraft: async (note) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {})).piece } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
-      shapeRounds > 0 ? { client, budget, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
+      shapeRounds > 0 ? { client, budget, std, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
       planState ? { budget, trace, state: planState } : null)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
@@ -1074,7 +1074,8 @@ export const STRICT_EXIT = 3;
 export interface Unmet { readonly id: string; readonly statement: string; readonly detail: string; /** how far off, where that is a number: the less the better */ readonly off?: number;
   /** a miss of length, in words: what the writer is told to aim for, since told only the limit it lands just past it again */ readonly aim?: string;
   /** whose length was missed, where it is the request's and not the span of the author's pieces */ readonly of?: 'request';
-  /** the miss is of the length of the whole piece (not of one section of it): what a trim can put right */ readonly whole?: true }
+  /** the miss is of the length of the whole piece (not of one section of it): what a trim can put right */ readonly whole?: true;
+  /** which way and how far, in plain words ("about 120 words shorter", "about 4 fewer parenthetical asides per 1,000 words"), where the miss is a number */ readonly move?: string }
 export const LENGTH_ID = 'length';
 /** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
 export const LENGTH_REDRAFT_PIECES = 9;
@@ -1094,6 +1095,9 @@ export function lengthAim(n: number, lo: number | null, hi: number | null): stri
   return undefined;
 }
 
+/** A miss of length, as the move that mends it: "about 51 words shorter". Undefined when nothing is off. */
+const lengthMove = (off: number, long: boolean): string | undefined => (off > 0 ? `about ${off} words ${long ? 'shorter' : 'longer'}` : undefined);
+
 /** The reader of what a draft left unmet for this skill and this run, or null when there is nothing of the kind to read. */
 export function unmetReader(std: Standard, own: { band: readonly [number, number]; span: readonly [number, number] } | null, asked: StatedLength | null = null): ((d: { output: string; report: VerifyReport }) => Unmet[]) | null {
   // A missing section or table is not a sentence to rewrite (core/loop/repair.ts leaves such a rule alone); nor is a
@@ -1109,30 +1113,68 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
     const lim = limits.get(x.requirementId); const n = x.result.value;
     if (!lim || typeof n !== 'number') return base;
     const aim = lengthAim(n, lim.lo, lim.hi);
-    return { ...base, off: lim.hi !== null && n > lim.hi ? n - lim.hi : lim.lo !== null && n < lim.lo ? lim.lo - n : 0, ...(aim ? { aim } : {}), ...(lim.whole ? { whole: true as const } : {}) };
+    const long = lim.hi !== null && n > lim.hi; const off = long ? n - lim.hi : lim.lo !== null && n < lim.lo ? lim.lo - n : 0;
+    const move = lengthMove(off, long);
+    return { ...base, off, ...(aim ? { aim } : {}), ...(lim.whole ? { whole: true as const } : {}), ...(move ? { move } : {}) };
   };
   return (d) => {
     const rules = d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss);
     if (asked) {
       const written = wordsWritten(d.output); const [lo, hi] = statedBounds(asked);
       if (againstStated(written, asked) === 'met') return rules;
-      const aim = lengthAim(written, lo, hi); const off = Math.round(hi !== null && written > hi ? written - hi : (lo ?? 0) - written);
-      return [...rules, { id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${hi !== null && written > hi ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}) }];
+      const aim = lengthAim(written, lo, hi); const long = hi !== null && written > hi; const off = Math.round(long ? written - hi : (lo ?? 0) - written);
+      const move = lengthMove(off, long);
+      return [...rules, { id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: `Write it at the length the request asks for: ${asked.raw}`, detail: `${written} words, ${off} ${long ? 'too many' : 'too few'}`, off, ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
     }
     const n = own ? proseWords(d.output) : 0;
     if (!own || againstBand(n, own.band) === 'met') return rules;
-    const aim = lengthAim(n, own.band[0], own.band[1]);
+    const aim = lengthAim(n, own.band[0], own.band[1]); const move = lengthMove(wordsOutside(n, own.band), n > own.band[1]);
     return [...rules, { id: LENGTH_ID, whole: true as const, statement: `Write it at the length my pieces run: ${own.span[0]} to ${own.span[1]} words`,
-      detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}) }];
+      detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
   };
 }
 
+/** Each miss on its own line: the rule in the owner's words, what the check found, what to aim for, and which way and how far. */
+const missLines = (unmet: readonly Unmet[]): string => unmet.map((u) => `- ${u.statement} (${u.detail}${u.aim ? `; ${u.aim}` : ''}${u.move ? `; ${u.move}` : ''})`).join('\n');
+
 /** What the writer is told before the one more draft: everything unmet, and the draft it is to keep what it can of. */
 export function redraftNote(unmet: readonly Unmet[], draft: string): string {
-  return `An earlier draft did not hold what this work requires:\n${unmet.map((u) => `- ${u.statement} (${u.detail}${u.aim ? `; ${u.aim}` : ''})`).join('\n')}\n`
+  return `An earlier draft did not hold what this work requires:\n${missLines(unmet)}\n`
     + 'Write the whole piece again so that each of them holds. Keep what the earlier draft says wherever it can stay. Where a length is given to aim for, cut or add until you are there, and count before you finish. '
     + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.\n\n'
     + `The earlier draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
+}
+
+/**
+ * EVERYTHING A DELIVERED ROUND LEFT UNMET, for the round after it: what `unmetReader` reads (a part the work must
+ * contain, a length), and every other REQUIRED rule the report finds broken, each with its check's detail and, where the
+ * rule holds a value to a band, which way and how far (`ObserverResult.error`, `featureMove`). A shape round used to
+ * start from nothing; told this, it starts from what the last round missed.
+ */
+export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }): Unmet[] {
+  const named = unmetReader(std, null)?.(d) ?? [];
+  const have = new Set(named.map((u) => u.id));
+  const stated = new Map(planFor(std).rules.map((p) => [p.id, p.statement]));
+  const params = new Map(std.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, r.measurement] as const] : [])));
+  const rest = d.report.checked.filter((x) => acts(x) && x.result.verdict === 'VIOLATED' && !have.has(x.requirementId)).map((x): Unmet => {
+    const base: Unmet = { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail };
+    const e = x.result.error; const m = params.get(x.requirementId);
+    if (e === undefined || e === 0) return base;
+    const move = m?.observer === 'FEATURE' && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
+    return { ...base, off: Math.abs(e), ...(move ? { move } : {}) };
+  });
+  return [...named, ...rest];
+}
+
+/**
+ * What a later shape round is told: the misses of the best round so far, each with which way and how far, and no
+ * earlier draft to keep to (a round is written for a different shape, not as a correction). Empty when nothing was missed.
+ */
+export function shapeNote(unmet: readonly Unmet[]): string {
+  if (!unmet.length) return '';
+  return `An earlier draft of this piece did not hold what this work requires:\n${missLines(unmet)}\n`
+    + 'Write the piece so that each of them holds. Where a direction and an amount are given, move by about that much. '
+    + 'Fill them only from the request and the material you were given; where you were not given what one needs, say so in its place. Never invent a figure, a source or a result.';
 }
 
 /** Is everything a draft still misses that it runs too long? Then it is trimmed, not written again. */
@@ -1357,7 +1399,7 @@ function withCoverage(refine: (draft: string) => Promise<Delivered>,
 }
 
 function withShape(refine: (draft: string) => Promise<Delivered>,
-  s: { client: InferenceClient; budget: Budget; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
+  s: { client: InferenceClient; budget: Budget; std: Standard; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
     rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null;
     /** how a later round's draft is written, when drafts are written against a plan; null for a plain draft */
     fresh?: ((round: number) => Promise<string>) | null } | null) {
@@ -1380,17 +1422,20 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
     };
     const tried: ShapeRound[] = [await run(draft)];
     let note: string | undefined;
+    const better = (a: ShapeRound, b: ShapeRound): boolean => b.broken < a.broken
+      || (b.broken === a.broken && ((b.author ?? 0) > (a.author ?? 0) || ((b.author ?? 0) === (a.author ?? 0) && b.p > a.p)));
     for (let round = 1; round <= s.rounds && !tried.some(met); round++) {
       try {
-        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, '', {})).piece;
+        // THE NEXT ROUND LEARNS WHAT THE LAST ONES MISSED. Started from nothing, a round missed the same rule the round
+        // before it did; it is told the best round's misses, each with which way and how far (`roundMisses`).
+        const bestSoFar = tried.reduce((a, b) => (better(a, b) ? b : a));
+        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, shapeNote(roundMisses(s.std, bestSoFar.d)), {})).piece;
         tried.push(await run(piece));
       } catch (err) {
         note = `round ${round} could not run (${(err as Error).message.split('\n')[0]}); the best output so far was delivered`;
         break;
       }
     }
-    const better = (a: ShapeRound, b: ShapeRound): boolean => b.broken < a.broken
-      || (b.broken === a.broken && ((b.author ?? 0) > (a.author ?? 0) || ((b.author ?? 0) === (a.author ?? 0) && b.p > a.p)));
     const best = tried.reduce((a, b) => (better(a, b) ? b : a));
     s.trace.edits.splice(editsBefore, s.trace.edits.length - editsBefore, ...best.edits);
     s.trace.voice = best.voice;
