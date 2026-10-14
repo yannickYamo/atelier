@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t7",
+ "run": 0,
+ "seconds": 12.635,
+ "output": "Your phone does not send a signal up to space to ask where it is. It only listens. High above you, around thirty satellites circle the Earth, each carrying an extremely accurate clock. Every satellite broadcasts the same simple announcement, over and over: this is who I am, and this is the time right now.\n\nThose radio signals travel at the speed of light, but they still take a moment to reach the ground. Your phone compares the time stamped in the message with the time it arrives. The gap tells it how far away that satellite is.\n\nOne distance is not enough. Knowing you are 12,000 miles from a particular satellite only places you somewhere on a huge sphere around it. A second satellite narrows that to a ring, and a third cuts the ring down to a point near the ground.\n\nThink of three friends in a field calling out to you, each one telling you how far away they stand. Combine the three answers and only one spot in the field fits.\n\nA fourth satellite usually joins in, correcting your phone's own modest clock. Buildings and trees block the signals, which is why cities confuse it.\n\nIn short, GPS works out where you are by timing how long several satellite announcements take to arrive.",
+ "costUsd": 0.0423,
+ "cut": []
+}

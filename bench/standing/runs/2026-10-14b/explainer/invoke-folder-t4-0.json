@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t4",
+ "run": 0,
+ "seconds": 16.35,
+ "output": "A cold and a chest infection can feel much the same from the inside. Both leave you blocked up, aching and miserable. The culprits, though, are two completely different kinds of thing.\n\nBacteria are living cells. They eat, they grow, they split in two, and they have walls and machinery of their own. Antibiotics attack exactly those features. One drug punctures the cell wall, another jams the part that builds proteins. The bacterium falls apart or stops multiplying.\n\nA cold is caused by a virus, and a virus is barely alive. It is a scrap of genetic instructions in a protein shell. It has no wall to puncture and no machinery to jam. Instead it slips inside your own cells and makes them do the copying for it.\n\nThink of a drug designed to disable cars. It works beautifully on anything with an engine and tyres. Point it at a letter posted through your door and nothing happens, because there is simply nothing there for it to grip.\n\nSo antibiotics drift past the virus untouched. Worse, they kill harmless bacteria you carry, and the survivors learn to resist the drug next time you genuinely need it.\n\nIn short, antibiotics target bacterial machinery, and a cold virus has none.",
+ "costUsd": 0.047,
+ "cut": []
+}

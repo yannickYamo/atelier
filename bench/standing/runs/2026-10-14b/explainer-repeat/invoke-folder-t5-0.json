@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t5",
+ "run": 0,
+ "seconds": 13.695,
+ "output": "A heat pump does not burn anything. There is no flame, no fuel, no chimney. It collects warmth that already exists outdoors and carries it into your house.\n\nThat sounds odd on a cold morning, but even freezing air holds plenty of heat. Cold is simply less heat, not none at all. The trick is getting that scattered warmth to a useful temperature.\n\nInside the unit runs a sealed loop of fluid that boils at a startlingly low temperature. Outdoor air passes over it, and the fluid evaporates into gas. A compressor then squeezes that gas, and squeezing makes it hot. The hot gas flows through coils indoors, releasing its warmth into your radiators or air. Cooling again, it turns back to liquid and begins another lap.\n\nThink of a bicycle pump growing warm in your hand as you inflate a tyre. Compression concentrates heat you never created.\n\nThis is why a heat pump can seem to beat the maths. For every unit of electricity it draws, it may deliver three or four units of heat. It is not making energy. It is moving energy you did not pay for.\n\nIn short, a heat pump gathers free warmth from outside and concentrates it for your rooms.",
+ "costUsd": 0.045,
+ "cut": []
+}

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t3",
+ "run": 0,
+ "seconds": 12.669,
+ "output": "Most software follows instructions a person wrote down. Someone decides the rules in advance, and the computer obeys them exactly. Machine learning works the other way round. You give the computer examples, and it works out the rules itself.\n\nSay you want a program that spots junk email. Writing rules by hand gets messy fast, because spammers keep changing their wording. Instead, you hand the system thousands of messages already labelled as junk or genuine. It hunts for patterns that separate the two piles. Certain phrases, certain senders, certain formatting habits. Nobody told it what to look for.\n\nThink of a child learning to recognise dogs. You never recite a definition involving fur, four legs and a tail. You just point at dogs, repeatedly, until the child starts getting it right.\n\nWhat the system builds is called a model: a set of adjusted settings that turn an input into a guess. Training means nudging those settings until the guesses improve. Show it a new email afterwards, and it predicts a label.\n\nThis also explains the usual failures. A model trained on narrow or skewed examples inherits that narrowness, and it cannot explain its reasoning.\n\nIn short, machine learning means learning patterns from examples rather than following rules you wrote.",
+ "costUsd": 0.043,
+ "cut": []
+}

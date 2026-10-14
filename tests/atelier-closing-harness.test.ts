@@ -347,7 +347,7 @@ describe('the benchmark runner refuses to start when it could not see what a cal
     }
     const usage = bare('bench/compare/run.mjs', []);
     expect(usage.code).toBe(2);
-    expect(usage.err).toBe('compare: usage: run.mjs --tasks <file> --arm none|skill:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]\n');
+    expect(usage.err).toBe('compare: usage: run.mjs --tasks <file> --arm none|skill:<file>|self-review:<file>|atelier-runtime:<build> --out <responses.jsonl> [--condition <label>] [--trials <n>] [--model <id>] [--max-tokens <n>] [--cap <usd>] [--per-call <usd>] [--placement system|harness] [--sealed <SEALED.json>] [--runtimes <file>] [--preflight] [--provider openai-compatible --base-url <url> --model <id> --price-in <usd per M> --price-out <usd per M>]\n');
   });
   it('the smoke run makes no temporary directory when --work names one', () => {
     const temp = mkdtempSync(join(tmpdir(), 'atelier-smoke-tmp-')); const work = mkdtempSync(join(tmpdir(), 'atelier-smoke-work-'));

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t1",
+ "run": 0,
+ "seconds": 13.418,
+ "output": "You hear that \"the market rose today.\" But the market is thousands of separate companies, each with its own share price. Some went up, some went down. A stock index is the tool that turns all that noise into a single number.\n\nAn index picks a group of companies and tracks their share prices together. It might be the hundred largest firms listed in London, or five hundred big American ones. Each day, the prices are combined into one figure. If that figure climbs, those companies are worth more collectively than they were yesterday.\n\nThink of a class test average. No single pupil's mark tells you how the class did, but the average does, and you can compare it with last term. An index works the same way for shares.\n\nMost indexes weight by company size, so the giants move the number more than the small firms do. The figure itself is fairly meaningless on its own. What matters is the direction and the change: up two percent, down a hundred points.\n\nYou can also invest in one. Funds that simply copy an index are cheap, because nobody is paid to pick winners.\n\nIn short, a stock index is an average share price for a chosen group of companies, used to track how they move together.",
+ "costUsd": 0.1311,
+ "cut": []
+}

@@ -33,6 +33,8 @@ import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
+import { machineTellRule } from '../observers/contrast.js';
+import { PATTERN_LABEL } from '../observers/style.js';
 import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
@@ -153,6 +155,11 @@ export interface MethodProposal {
    * by rewriting a sentence where the owner makes it required.
    */
   readonly counted?: true;
+  /**
+   * Required whatever was read: the owner's standing rule that output adds no machine tell the author does not write
+   * (`tellOffers`). The only rule read off the examples that is required without the owner ruling on it.
+   */
+  readonly required?: true;
 }
 
 const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
@@ -409,6 +416,33 @@ export function sectionLengthsFromExamples(cases: readonly (Pick<GoldenCase, 're
  * run, less any section whose length the owner already stated, and no more than a skill carries of one kind
  * (../observers/selection.ts, `PER_ROLE_LIMIT`): served all at once, rules crowd each other out.
  */
+/**
+ * NO ADDED MACHINE TELLS, ON THIS PATH TOO. Discovery from a folder held the rule and a skill built from a method did
+ * not: its drafts carried 10 to 23 em dashes a document against an example with none. The rule is the same one
+ * (../observers/contrast.ts, `machineTellRule`), worked out from the examples, and required: the moves the author never
+ * makes are banned, an em dash only where no example holds one, and one they do write is held to their own rate.
+ */
+export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], note = ''): MethodProposal[] {
+  const pieces = cases.map((c) => c.reference).filter((t) => t.trim());
+  // THE NOTE ALLOWS A MOVE ONLY IN SO MANY WORDS, never by its own style: a note is written as instructions, and pooled
+  // with the examples a terse one read as a habit of short sentences. "Use em dashes for asides" allows the dash;
+  // "Never use em dashes" does not (a sentence that negates it is no allowance).
+  const allowsDash = note.split(/(?<=[.!?\n])\s*/).some((s) => /\b(?:use|keep|allow|write)\b[^.\n]{0,40}\bem[- ]?dash/i.test(s) && !/\b(?:never|no|not|don'?t|do not|avoid|without)\b/i.test(s));
+  if (!pieces.length) return [];
+  // A move any example makes is the author's (a handful of examples cannot show "most of their pieces"); and the
+  // examples must meet the rule they gave (decision 0015), or it is not offered.
+  const t = machineTellRule(pieces, { anyUse: true, allow: allowsDash ? ['EM_DASH'] : [] });
+  const held = (m: Measurement): boolean => pieces.every((p) => measure(p, m).verdict !== 'VIOLATED');
+  const of = (m: Measurement): string => `${pieces.filter((p) => measure(p, m).verdict !== 'VIOLATED').length} of ${pieces.length} example(s) hold it`;
+  const tell: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['MACHINE_TELL'], maxPer1000: t.cap, never: t.never, role: ['machine-tell'] } };
+  const out: MethodProposal[] = held(tell) ? [{ statement: t.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: tell, onExample: of(tell), conflict: null, counted: true, required: true }] : [];
+  if (t.dashCap !== null) {
+    const dash: Measurement = { observer: 'PATTERN_RATE', params: { pattern: ['EM_DASH'], maxPer1000: t.dashCap } };
+    if (held(dash)) out.push({ statement: `Keep ${PATTERN_LABEL.EM_DASH} to at most ${t.dashCap} per 1,000 words, as the examples do.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: dash, onExample: of(dash), conflict: null, counted: true, required: true });
+  }
+  return out;
+}
+
 export function countedOffers(stated: readonly MethodProposal[], cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
   const said = new Set(stated.flatMap((p) => (p.measurement?.observer === 'LENGTH' ? ((p.measurement.params.in as readonly string[] | undefined) ?? []).map(norm) : [])));
   const sectionsLeft = sectionLengthsFromExamples(cases).filter((p) => !((p.measurement?.params.in as readonly string[] | undefined) ?? []).some((x) => said.has(norm(x))));

@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t0",
+ "run": 0,
+ "seconds": 13.653,
+ "output": "A battery does not hold electricity the way a bucket holds water. It holds a chemical arrangement that wants to change, and it only changes when you let it.\n\nInside are two different materials, kept apart. One of them is happy to give away electrons, those tiny negative particles that make up a current. The other is eager to receive them. Between the two sits a paste or liquid called the electrolyte, which blocks electrons but lets charged atoms drift across.\n\nSo the electrons have nowhere to go. Connect a torch bulb between the two ends, and suddenly they have a route. They pour through the wire, light the bulb on their way, and arrive at the material waiting for them. Meanwhile the electrolyte quietly balances the books.\n\nThink of water held behind a dam. The water is not doing anything, yet it is loaded with possibility, and opening a channel releases it through whatever you place in the path.\n\nA disposable battery runs until the greedy material is full and the generous one is spent. A rechargeable one is different. Push current back in, and you drive the chemistry into reverse, resetting the imbalance.\n\nIn short, a battery stores energy as chemistry held apart, waiting for a path.",
+ "costUsd": 0.1324,
+ "cut": []
+}

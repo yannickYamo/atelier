@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t3",
+ "run": 0,
+ "seconds": 11.356,
+ "output": "Most software follows instructions a person wrote out in advance. Someone decided every rule, step by step, and the computer obeys. Machine learning works differently. Instead of writing the rules, you hand the computer examples and let it work the rules out.\n\nSay you want a program that spots spam email. Writing rules by hand would be hopeless, because spammers keep changing their wording. So you feed the system thousands of emails already labelled as spam or not spam. It hunts for patterns that separate the two piles. Then it applies those patterns to mail it has never seen.\n\nThink of a child learning to recognise dogs. Nobody recites a definition involving fur, four legs and a tail. The child sees dogs, hears the word, and gradually gets the idea. Later they point at a breed they have never met and get it right.\n\nThis is why the examples matter so much. A system trained on narrow or skewed data will learn narrow or skewed patterns. It also explains why these programs make strange mistakes. They have no understanding of dogs or spam. They have statistics about what tends to go with what.\n\nIn short, machine learning means learning the rules from examples rather than being given them.",
+ "costUsd": 0.0417,
+ "cut": []
+}

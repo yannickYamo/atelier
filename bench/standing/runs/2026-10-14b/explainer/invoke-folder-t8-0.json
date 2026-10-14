@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 0,
+ "seconds": 15.748,
+ "output": "You buy insurance so someone else pays when things go wrong. The deductible is the part you still pay yourself before that help begins.\n\nSay your policy carries a \u00a3500 deductible and a storm causes \u00a33,000 of damage to your roof. You hand over the first \u00a3500, and the insurer covers the remaining \u00a32,500. If the repair had cost \u00a3400, you would pay all of it and the insurer nothing at all.\n\nThink of a shared taxi fare where you always cover the first few miles. Your companion pays the rest, however long the journey runs.\n\nWhy does this exist? Partly to keep small claims off the insurer's desk, since processing them costs more than they are worth. Partly to keep you careful, because damage is never entirely free for you.\n\nThe size of your deductible also shapes your monthly premium. Choose a high one and you accept more risk, so the insurer charges you less each month. Choose a low one and your premium climbs. The sensible question is what you could comfortably pay tomorrow if something broke today.\n\nDeductibles usually reset each policy year, and some policies apply a separate one to each claim.\n\nIn short, a deductible is your share of a loss, paid first, before cover starts.",
+ "costUsd": 0.0478,
+ "cut": []
+}

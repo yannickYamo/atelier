@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t6",
+ "run": 0,
+ "seconds": 15.567,
+ "output": "Normally, when you send money online, a bank keeps the record. It knows who paid whom, and everyone trusts its ledger. A blockchain does the same job without any single institution in charge.\n\nInstead of one master list, thousands of computers each hold an identical copy. When a new transaction happens, it is broadcast to all of them. They check it against the history they already hold. If it passes, it joins a batch of recent transactions called a block.\n\nEach new block carries a short code derived from the block before it. That code acts like a seal. Alter an old record and the seal no longer matches, so every later block breaks visibly. The chain is why tampering is so hard.\n\nThink of a classroom where every pupil writes down the same account of what happened, in pen. One pupil could scribble a change, but the other copies would disagree, and the lie fails.\n\nNew blocks are added by participants who compete or stake something valuable to earn the right. That cost discourages cheating, since honest work pays better.\n\nBlockchains are slower and clumsier than a bank database. What you get in exchange is a record no single party controls.\n\nIn short, a blockchain is a shared ledger that many strangers maintain and none of them owns.",
+ "costUsd": 0.0449,
+ "cut": []
+}

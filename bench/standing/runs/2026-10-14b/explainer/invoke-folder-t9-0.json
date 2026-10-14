@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t9",
+ "run": 0,
+ "seconds": 15.934,
+ "output": "Sunlight looks white, but it is a mixture of every colour. Red, orange, yellow, green, blue and violet all travel together until something separates them.\n\nThe air above you does the separating. It is made of countless tiny molecules of nitrogen and oxygen, far smaller than a wavelength of light. When sunlight meets them, some of it bounces off in all directions. That bouncing is called scattering.\n\nThe catch is that not every colour scatters equally. Blue light travels in short, tight waves, and short waves get knocked about far more than long ones. Red light, with its long, lazy waves, mostly sails straight through. Blue gets thrown sideways again and again, bouncing from molecule to molecule across the whole sky.\n\nSo when you look up anywhere away from the Sun, you are seeing blue light that has been redirected towards your eyes. The colour is not in the air itself. It is scattered sunlight arriving from every direction at once.\n\nSunsets follow the same rule. Near the horizon, light travels through much more air, and the blue is scattered away long before it reaches you. What survives the journey is red and orange.\n\nIn short, the sky is blue because air scatters blue light far more easily than red.",
+ "costUsd": 0.0472,
+ "cut": []
+}

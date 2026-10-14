@@ -127,11 +127,12 @@ describe('a count in a sentence that reports, beside a sentence that asks, is no
     'Write roughly two thousand words on the roadmap.', 'At most 300 words, please, on the policy.', 'Write a 20,000 word book on agents.', 'Exactly 50 words for the app store blurb.',
     'Write a four-paragraph intro.', 'No more than 2 pages on the merger.', 'In 400 words, explain the change.', 'A 10-page report on the pilot.', 'Write 1k words on onboarding.'];
   // Known and not read: a length with no count in it, or in a unit this does not count.
-  const NOT_READ = ['Keep it to a page.', 'Write 3 bullet points on the risks.', 'Write a short paragraph on the team.'];
+  // ("Keep it to a page." was one, and is read since the labelled request corpus: a page as a ceiling.)
+  const NOT_READ = ['Write 3 bullet points on the risks.', 'Write a short paragraph on the team.'];
   it('none of the 20 requests that hold a number that is not a length is read as one', () => {
     expect(NOT_LENGTHS.filter((r) => statedLengths(r).length)).toEqual([]);
   });
-  it('the 17 stated lengths it read are still read; the 3 it missed are still missed, and said', () => {
+  it('the 17 stated lengths it read are still read; the 2 it misses are still missed, and said', () => {
     expect(LENGTHS.filter((r) => !statedLengths(r).length)).toEqual([]);
     expect(NOT_READ.filter((r) => statedLengths(r).length)).toEqual([]);
   });
@@ -150,5 +151,49 @@ describe('a length stated after the ask is the length, however it is put', () =>
       'Then trim it to 600 words.', 'I was thinking 600 words.', 'The brief says 600 words.', 'The final piece will be 600 words.']) {
       expect(statedLengths(`Write a post about the launch. ${second}`).map((x) => x.unit), second).toEqual(['words']);
     }
+  });
+});
+
+describe('a count bound to a part of the piece, or to its topic, is never the length of the whole', () => {
+  // From the labelled request corpus (tests/fixtures/readers/requests.jsonl): each of these was held as the length of
+  // the whole piece, so a post was held to ten words for its headline.
+  it('a part limit is not the piece\'s length', () => {
+    for (const r of ['Write a blog post with a headline under 10 words.', 'Write an email with a subject line of no more than 6 words.', 'Write a case study. Open with a hook of under 20 words.',
+      'Write a product launch post. Each section under 200 words.', 'Draft three subject lines for the newsletter, each under 8 words.', 'Write the slide notes for our deck, no more than 80 words per slide.',
+      'Keep the How it works section under 80 words', 'We ship 3 posts a week, each around 800 words. Write this week\'s editorial calendar note.'])
+      expect(statedLength(r), r).toBeNull();
+  });
+  it('a count that is the topic is not a length', () => {
+    expect(statedLength('Write an essay on why Hemingway\'s six-word story still works.')).toBeNull();
+    expect(statedLength('Write a blog post about why we cap PR descriptions at 300 words.')).toBeNull();
+  });
+  it('the piece asked for may be a part noun, and keeps its length', () => {
+    expect(statedLength('Write an intro of about 200 words for the guide.')).toMatchObject({ unit: 'words', target: 200 });
+    expect(statedLength('Write three paragraphs, no more than 300 words.')).toMatchObject({ unit: 'words', kind: 'max', max: 300 });
+  });
+});
+
+describe('a ceiling said in other words is a ceiling', () => {
+  it('"no longer than", "must not exceed", "cap it at", "caps it at", "fit in"', () => {
+    for (const [r, n] of [['Draft a statement for the press. No longer than 200 words.', 200], ['Draft the executive summary. It must not exceed 500 words.', 500], ['Write a post about the launch. Cap it at 600 words.', 600],
+      ['Write a statement of purpose. The program caps it at 1000 words.', 1000], ['Summarise the 14 clauses. The whole thing should fit in 600 words.', 600]] as const)
+      expect(statedLength(r), r).toMatchObject({ unit: 'words', kind: 'max', max: n });
+  });
+});
+
+describe('lengths said the way forms and briefs say them', () => {
+  it('a length at the end of a line in a list, a hyphenated range, a stated limit', () => {
+    expect(statedLength('- Audience: new engineers\n- Format: blog post\n- Length: 800–1,000 words\n- Tone: friendly')).toMatchObject({ unit: 'words', kind: 'range', min: 800, max: 1000 });
+    expect(statedLength('Write a 300-500 word note')).toMatchObject({ unit: 'words', kind: 'range', min: 300, max: 500 });
+    expect(statedLength('Write a case study. Target length is 1,000-1,200 words.')).toMatchObject({ unit: 'words', kind: 'range', min: 1000, max: 1200 });
+    expect(statedLength('Write a policy brief on rent control; the think tank\'s limit is 2 pages.')).toMatchObject({ unit: 'pages', kind: 'max', max: 2 });
+  });
+  it('"a page" as a ceiling', () => {
+    expect(statedLength('Keep it to a page.')).toMatchObject({ unit: 'pages', kind: 'max', max: 1 });
+    expect(statedLength('Write a press release. Should be no longer than a page.')).toMatchObject({ unit: 'pages', kind: 'max', max: 1 });
+    expect(statedLength('Summarise the indemnity clauses, one page max.')).toMatchObject({ unit: 'pages', kind: 'max', max: 1 });
+  });
+  it('and a source\'s length said as a limit is still the source\'s', () => {
+    expect(statedLength('Summarise it. The paper\'s length is 12 pages.')).toBeNull();
   });
 });

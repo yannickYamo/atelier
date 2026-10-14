@@ -51,6 +51,49 @@ only partly observed, or the owner's word was moved by a measurement.
   what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
   request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
   words, and a draft of four tables ran 1,135 for 1,006 written.
+- **The comparison runner has a self-review arm and a preflight.** `bench/compare/run.mjs --arm self-review:<skill>`
+  writes with the skill as a prompt, then makes one call that checks the draft against the method and the material
+  and writes it again: the strongest baseline a pilot met, now on the transport and the cap every arm shares, with
+  both calls as its cost and the check kept in the row. `--preflight` makes one call on the first task and says what
+  it cost and how much of the token limit the answer used, before a paid run: a study once lost a third of its cells
+  to answers cut off at the limit, found afterwards. Nothing is recorded.
+  A runtime arm's row now keeps Atelier's own verdict on the answer (`atelier_state`: VERIFIED, NEEDS_REVIEW or
+  BLOCKED), its calls and tokens from the run's spend ledger, and every row its seconds, so a study can set the
+  verdict against the judge's and compare cost per output; `atelier invoke --json` carries `answer`, the text
+  `--answer-only` prints. A runtime row's cost now comes from the record to four decimals (it was read off the
+  printed summary in cents).
+- **No added machine tells on a skill built from a method.** Discovery from a folder held the owner's rule (a tell the
+  author never writes never appears; one they write is held to their rate); a skill built from a method and its
+  examples carried no such rule and wrote 10 to 23 em dashes a document against an example with none. The rule is now
+  worked out in one place (`machineTellRule`) and both paths carry it, required. From a handful of examples a move any
+  example makes is the author's, and the examples must meet the rule they gave, or it is not offered (one of three
+  example tweets was itself a run of short sentences), and a method note that allows the em dash in so many words ("use em dashes for
+  asides") is not overruled by examples that hold none; a note's own style counts for nothing, and "never use em
+  dashes" is no allowance). The em dash fix that needs no model was also being thrown
+  away when the claim reader, read again, listed one more sentence: a change that adds no word cannot add an invented
+  specific, so that reading no longer counts against it. On eight one-to-two-page teardowns: em dashes 9 to 17 a
+  document → 0 in all eight, none blocked, all inside the length, $0.16 an output. The standing comparison
+  (`runs/2026-10-14b/`): contract 0 of 10 failing, explainer 1 of 10 then 0 of 10 (a missing analogy, which is no
+  tell), 0 em dashes in any output.
+- **The length reader is held to a labelled corpus, and stops holding part limits as the piece's length.** Each fix
+  to the reading of a length was tested on the request that showed the fault, and the next outside run found the
+  next: five rounds. 371 requests (every one the project's history discusses, and 160 fresh) labelled by someone who
+  never read the reader now gate every change: a request read right may never be read wrong, and no new length the
+  person did not ask for may be held (`tests/atelier-reader-corpus.test.ts`). Scored on it, the reader held 11
+  lengths nobody asked for: a part's limit ("a blog post with a headline under 10 words" was held at ten words,
+  "each section under 200 words", "80 words per slide") or a topic ("why we cap PR descriptions at 300 words",
+  "Hemingway's six-word story"). It now reads a count bound to a part, or to what the piece is about, as no length of
+  the whole, and reads "no longer than", "must not exceed", "cap it at" and "fit in" as ceilings, not targets.
+  A part named on its own is usually the piece asked for ("a paragraph of 100 words", "an introduction in 400 words"):
+  it is a part only where it is said as one ("with a headline", "the How it works section"). 32 requests moved to
+  agree, none moved away, and the gate now also refuses a miss turned into a wrong length; one false hold and 50 misses remain, most of them counts of
+  paragraphs and sentences, which are told to the writer and not held. The 160 blind-labelled method steps gate the
+  method reader the same way (`tests/atelier-step-corpus.test.ts`): no check called fully read where it is not.
+- **A run is never refused for material it was not given.** A REQUIRED rule that needs material the person did not
+  bind stopped the run before any draft. The run now goes on: the rule is not attempted (asked for evidence it does
+  not have, a model invents it), the message names the `--with` that lets it fire, and the evaluation shows the rule
+  as not checked, so the work needs review and is not delivered under strict delivery. It is never set aside as if it
+  did not apply. A rule that applies only under a condition, or is not required, is set aside as it always was.
 - **The writer aims inside the length, and a cut is the last resort.** Told "about 500 to 1,000 words", writers
   aimed at the top and ran past it, and every draft was cut. A held length is now told with an aim inside it (three
   fifths of the way up a range, about 85% of a ceiling, a target as said); on eight such requests seven drafts came
@@ -184,6 +227,19 @@ now also reports what a passing output costs.
 - A skill rebuilt from nine pieces or more may write one or two more drafts when a draft misses its length;
   `--no-redraft` turns that off.
 - A corpus of HTML pages is now measured as its visible text: rules approved from the markup should be read again.
+
+### Studies: putting right the sentences the claim check lists (negative, not shipped)
+
+Every teardown a strict reviewer rejected carried confident specifics the material does not hold, and the claim check
+only listed them. A step was built that gave each listed sentence back to the writer for a replacement (said from the
+material, or marked as inferred), applied by code under guards (no new number, most of the sentence kept), and kept
+only where fewer sentences were listed after. Eight one-to-two-page teardowns, two samples each with the step against
+one sample without, read blind by one reviewer with the material: problems of evidence per document 3.81 with the
+step against 3.88 without; inferred weaknesses kept out of fact in 4 of 16 against 0 of 8; four of the sixteen carried
+fragments where a replacement had matched only part of a sentence; cost an output $0.28 against $0.16. Not shipped.
+What it shows: most of what the reviewer rejected is not a specific the claim check can see (an invented motive, a
+duration, "copyable in a sprint", an absence on a page read as a fact); it is a judgement about inference, and a
+listing of figures and names cannot put it right.
 
 ### Studies: a draft cut by the sentences its writer names, on the standing comparison (development evidence)
 

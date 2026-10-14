@@ -51,6 +51,7 @@ import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observer
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
 import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
+import { MATERIAL_NOT_BOUND, CONDITIONAL_NOT_BOUND } from '../../core/eval/record-build.js';
 import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
 import { proseWords } from '../../core/observers/style.js';
 import { isReplyWork } from '../../core/observers/formats.js';
@@ -313,9 +314,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const std = store.getStandard(L, sv.standardVersionHash);
   const satisfiable = checkSatisfiable(std?.requirements ?? [], boundResources());
   const shortfall = describeSatisfiability(satisfiable);
-  if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') die(shortfall ?? 'a REQUIRED rule needs material this invocation does not bind');
+  // A run is never refused for material it was not given (core/state/prerequisite.ts): said where it is seen.
   const report = new RunReport();
-  if (shortfall) report.detail(shortfall);
+  if (shortfall) { if (satisfiable.kind === 'MISSING_REQUIRED_EVIDENCE') report.say(shortfall.trim()); else report.detail(shortfall); }
   // Rules that cannot fire without material the person has not bound: said once, near the top, and read
   // by the taste reader as waiting rather than missed.
   const waiting = waitingForMaterial(satisfiable);
@@ -489,7 +490,7 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // general one refused the run above), so it is also not counted against this output.
   const withheld = std ? std.requirements.filter((q) => waiting.has(q.requirementId)).map((q) => q.statement) : [];
   const waived = new Map<string, string>();
-  for (const q of std?.requirements ?? []) if (waiting.has(q.requirementId)) waived.set(q.requirementId, 'the material it needs is not bound');
+  for (const [id, why] of heldBackReasons(satisfiable)) waived.set(id, why);
   // OUT OF REGISTER, ONLY WHAT THE OWNER'S POLICY CARRIES (core/voice/transfer.ts). A rule learned from blog
   // posts is evidence about blog posts: asked for a contract, a rule whose transfer is unknown is withheld from
   // the prompt and from the count for this run, and named. Nothing is waived in register.
@@ -717,7 +718,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   if (machine === 'answer' && !refused) process.stdout.write(`${shipped}\n`);
   if (machine === 'json') {
     process.stdout.write(`${JSON.stringify({
-      output: refused ? null : rec.output, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
+      // `answer` is what --answer-only prints: the output with its list of specifics not found in the material.
+      output: refused ? null : rec.output, answer: refused ? null : shipped, ...(strict ? { delivered: !refused } : {}), invocationId: rec.invocationId, skillVersion: sv.skillVersionHash, costUsd: Number(spent.toFixed(4)),
       rulesBroken: rec.repair?.violatedAfter ?? [], cut: rec.repair?.storiesCut ?? [], toCheck: rec.repair?.claimsToCheck ?? [],
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),
@@ -1702,8 +1704,16 @@ class RunReport {
 }
 
 /** The rules that cannot fire on this invocation because material they need is not bound. */
+/**
+ * Why each rule short of material is held back: a REQUIRED rule that applies to every output was not checked (the run is
+ * not finished on its account); one that applies under a condition, or is not required, is set aside as it always was.
+ */
+export function heldBackReasons(v: SatisfiabilityVerdict): ReadonlyMap<string, string> {
+  return new Map(v.kind === 'SATISFIABLE' ? [] : v.missing.map((m) => [m.requirementId, m.unfinished ? MATERIAL_NOT_BOUND : CONDITIONAL_NOT_BOUND] as const));
+}
+
 export function waitingForMaterial(v: SatisfiabilityVerdict): ReadonlySet<string> {
-  return new Set(v.kind === 'DEGRADED' ? v.missing.map((m) => m.requirementId) : []);
+  return new Set(v.kind === 'SATISFIABLE' ? [] : v.missing.map((m) => m.requirementId));
 }
 
 /** The taste reader's VETO, less the rules waiting for material: those have nothing to be repaired toward. */

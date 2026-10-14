@@ -18,7 +18,7 @@ import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
+import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes } from './mechanical-repair.js';
 import type { RepairPair } from '../state/canonical-state.js';
@@ -639,7 +639,7 @@ export async function refineToStandard(
     sameInstrument();
     // A FIX THAT NEEDS NO MODEL IS NEVER DROPPED IN SILENCE. When it cannot be kept (it would break another rule),
     // the record says which fix and why, so a refusal names the real conflict and not the rule the fix was for.
-    const accepted = acceptRepair(report, after);
+    const accepted = acceptRepair(report, after, { wordsAdded: !addsNoWords(text, m.text) });
     if (!accepted.ok) { if (!notKept.length) notKept.push(`${m.fixed.join('; ')} not kept: ${accepted.why}`); return; }
     text = m.text; report = after; mechanical.push(...m.fixed);
   };

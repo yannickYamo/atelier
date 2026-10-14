@@ -1,0 +1,9 @@
+{
+ "arm": "invoke-folder",
+ "task": "t8",
+ "run": 0,
+ "seconds": 13.832,
+ "output": "Insurance is a deal: you pay a regular premium, and the insurer covers certain costs when something goes wrong. The deductible is the part of those costs you agree to cover yourself first.\n\nSay your policy has a \u00a3500 deductible and a storm does \u00a33,000 of damage to your roof. You pay the first \u00a3500. The insurer pays the remaining \u00a32,500. If the damage only came to \u00a3400, you would pay all of it and claim nothing.\n\nThink of a shared bar tab where you cover the first round every time. Your friend picks up whatever comes after, but the first round is always yours.\n\nDeductibles exist for two reasons. They stop insurers drowning in tiny claims that cost more to process than to pay. They also give you a reason to be careful, since you have money at stake.\n\nHere is the trade-off that matters to you. A higher deductible usually means a lower premium, because you are carrying more of the risk. A lower deductible costs more each month but hurts less when you claim.\n\nSo choose a figure you could actually find at short notice. A deductible you cannot afford turns a covered loss into a crisis.\n\nIn short, the deductible is your share of a claim, agreed in advance.",
+ "costUsd": 0.0459,
+ "cut": []
+}

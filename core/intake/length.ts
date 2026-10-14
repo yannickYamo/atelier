@@ -39,7 +39,7 @@ const APPROX = /(?:\b(?:about|around|roughly|approximately|approx\.?|circa|some)
 /** Words that report a count of text that exists ("my draft has 300 words"). */
 const REPORTS = /\b(?:has|have|had|having|contains?|wrote|written|pasted|was|were|are|is|runs?|ran|got|with|already|currently)\s+(?:about\s+|around\s+|roughly\s+|just\s+|only\s+|over\s+)?$/i;
 /** What may follow the unit when the number is a length: the end of its phrase, or what the piece is to be about. */
-const ENDS_PHRASE = /^(?:\s*$|\s*[.,;:!?)\]"'’”]|\s+(?:long|in length|in total|total|each|or so|please|about|on|titled|called|explaining|describing|covering|that|which|and)\b)/i;
+const ENDS_PHRASE = /^(?:\s*$|[ \t]*\r?\n|\s*[.,;:!?)\]"'’”]|\s+(?:long|in length|in total|total|each|or so|please|about|on|titled|called|explaining|describing|covering|that|which|and)\b)/i;
 
 type Read = Omit<StatedLength, 'raw'>;
 interface Form { readonly re: RegExp; readonly read: (m: RegExpExecArray) => Read; readonly bare: boolean }
@@ -50,7 +50,7 @@ const FORMS: readonly Form[] = [
     (m) => ({ unit: unitOf(m[3]), kind: 'range', min: toNumber(m[1]), max: toNumber(m[2]), target: null })),
   form(String.raw`\b(?:at least|no (?:fewer|less) than|not (?:fewer|less) than|a minimum of|minimum(?: of)?|not under|(?<!\b(?:no|not)\s)more than|(?<!\bnot\s)over|above)\s+${NUMBER}\s+${UNIT}\b`,
     (m) => ({ unit: unitOf(m[2]), kind: 'min', min: toNumber(m[1]), max: null, target: null })),
-  form(String.raw`\b(?:at most|no more than|not more than|a maximum of|maximum(?: of)?|max|under|within|up to|fewer than|less than|not over)\s+${NUMBER}\s+${UNIT}\b`,
+  form(String.raw`\b(?:at most|no more than|not more than|no longer than|not longer than|must not exceed|not to exceed|not exceed|a maximum of|maximum(?: of)?|max|under|within|up to|fewer than|less than|not over|caps?\s+(?:it\s+|them\s+)?at|capped\s+at|fits?\s+(?:in|within|into)|limit(?:ed)?\s+(?:it\s+)?to)\s+${NUMBER}\s+${UNIT}\b`,
     (m) => ({ unit: unitOf(m[2]), kind: 'max', min: null, max: toNumber(m[1]), target: null })),
   form(String.raw`\bexactly\s+${NUMBER}\s+${UNIT}\b`, (m) => ({ unit: unitOf(m[2]), kind: 'exact', min: null, max: null, target: toNumber(m[1]) })),
   // "500 words max", "500 words or fewer"; "1,500 words minimum", "1,500 words or more"
@@ -75,7 +75,32 @@ const ASKS_FOR = /(?<!\b(?:not|never|don't|dont|doesn't|won't|cannot|can't)\s+(?
 /** Before "a 500-word draft": words that say the piece is there already, or is what another piece is about. */
 const THERE_ALREADY = /\b(?:wrote|written|pasted|attached|here(?:'s| is| are)|proofread|edit|review|tighten|fix|improve|for|of|about|on|from|in|into)\s+(?:an?\s+|the\s+|my\s+|this\s+|that\s+)?(?:attached\s+)?$/i;
 const HYPHEN_FORM = FORMS[6];
-const ALL_FORMS: readonly Form[] = [...FORMS.slice(0, 7), PIECE_FORM, ...FORMS.slice(7)];
+/** "500 words max", "1,500 words or more": the words after the count say it is a length, so no word before it need. */
+const SAID_AFTER: readonly Form[] = [FORMS[4], FORMS[5]];
+// "Keep it to a page", "no longer than a page", "half a page at most": "a" is the count, and only a ceiling says it.
+const A_PAGE = form(String.raw`\b(?:keep it to|no longer than|no more than|not longer than|at most|under|within|up to|max(?:imum)?(?: of)?)\s+(half\s+)?an?\s+page\b`,
+  (m) => ({ unit: 'pages', kind: 'max', min: null, max: m[1] ? 0.5 : 1, target: null }));
+const ALL_FORMS: readonly Form[] = [...FORMS.slice(0, 7), PIECE_FORM, A_PAGE, ...FORMS.slice(7)];
+
+// A COUNT BOUND TO A PART OF THE PIECE IS A LIMIT ON THAT PART, never the length of the whole: held as the piece's
+// length, "a blog post with a headline under 10 words" was a post of ten words. A part is said by "each", "every" or
+// "per", by "no sentence over", or by a part's name in the same clause ("a subject line of no more than 6 words", "the
+// How it works section under 80 words"), unless that part is itself what is asked for ("Write an intro of 200 words").
+const PART = String.raw`(?:headlines?|titles?|subject(?:\s+lines?)?|hooks?|opening(?:\s+lines?)?|openings|intros?|introductions?|ledes?|sections?|slides?|paragraphs?|sentences?|items?|bullets?|lines?|captions?|taglines?|tweets?|clauses?|steps?|chapters?|bios?)`;
+// A part named on its own ("a paragraph of 100 words", "an introduction in 400 words") is usually the piece asked for; a part
+// is the piece's part only where it is said as one: "with a headline", "the How it works section", "its opening".
+const PART_BEFORE = new RegExp(String.raw`(?:\b(?:each|every|per)\s+(?:[\w-]+\s+){0,2}|\bno\s+(?:single\s+)?${PART}\s+(?:[\w-]+\s+){0,3}|\b(?:with|the|its|their|your|our|his|her)\s+(?:an?\s+)?(?:(?!(?:in|into|as|to|for|on)\b)[\w-]+\s+){0,3}${PART}\s+(?:[\w-]+\s+){0,4})$`, 'i');
+const PART_ASKED = new RegExp(String.raw`\b(?:write|draft|give|send|produce|create|compose|prepare|need|want|make)\s+(?:me\s+|us\s+)?(?:an?|the|one|\d+)\s+(?:[\w-]+\s+)?${PART}\s+(?:[\w-]+\s+){0,3}$`, 'i');
+function partBound(before: string, after: string): boolean {
+  if (/^\s+(?:each|per\s+[a-z]+)\b/i.test(after) && !/^\s+per\s+(?:minute|hour|day|week|month|year|second)\b/i.test(after)) return true;
+  const clause = before.slice(Math.max(...[',', '.', ';', '\n', '(', ':'].map((c) => before.lastIndexOf(c))) + 1);
+  return PART_BEFORE.test(clause) && !PART_ASKED.test(clause);
+}
+// A COUNT IN WHAT THE PIECE IS ABOUT IS NOT ITS LENGTH: "a post about why we cap PR descriptions at 300 words". Said by
+// why/how/whether after the asking, with the count after "at" or "to"; "explain how DNS works in 300 words" is a length.
+const TOPIC_COUNT = /\b(?:why|how|whether)\b[^.!?\n]*\b(?:at|to)\s+$/i;
+// A stated limit is a subject that reports a length: "the limit is 2 pages", "target length is 1,000-1,200 words".
+const LENGTH_SUBJECT = /\b(?:length|limit|target|cap|maximum|minimum|budget|word count|word limit)\s+(?:is|was|of)\s+$/i;
 /** Words before a count that say the text is to be changed by that much, not written to it. */
 const EDITS = /\b(?:remove|delete|cut|drop|trim|add|insert|change|fix|rewrite|move|merge|split|by)\s+(?:the\s+|about\s+|around\s+|roughly\s+|up to\s+|at least\s+)?$/i;
 /**
@@ -178,19 +203,31 @@ function located(request: string): { start: number; stated: StatedLength }[] {
     f.re.lastIndex = 0;
     for (let m = f.re.exec(text); m; m = f.re.exec(text)) {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
-      if (POINTS_AT.test(before) || REPORTS.test(before) || EDITS.test(before)) continue;
+      const stated = LENGTH_SUBJECT.test(before) && !SOURCE.test(before.slice(Math.max(...['.', ';', '\n'].map((c) => before.lastIndexOf(c))) + 1));
+      // (a form that opens on its own words, "fits within 50 words", is not a count pointing at text: "a bio that fits within")
+      if ((POINTS_AT.test(before) && /^[\d(]/.test(m[0])) || (REPORTS.test(before) && !stated) || EDITS.test(before)) continue;
+      if (partBound(before, after) || TOPIC_COUNT.test(before)) continue;
+      // "Hemingway's six-word story": a piece of someone else's, not the one to write
+      if (f === HYPHEN_FORM && /(?:'s|’s)\s+$/.test(before)) continue;
       if (reportsBesideAnAsk(text, m.index)) continue;
       if (labelRefusesLength(before, f.read(m).unit)) continue;
       if (f === PIECE_FORM && !ASKS_FOR.test(before)) continue;
       if (f === HYPHEN_FORM && THERE_ALREADY.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
       // something else. One spelled out needs the word before it: "two pages" alone is how people write prose.
-      if (f.bare && !APPROX.test(before) && !ENDS_PHRASE.test(after)) continue;
+      // ("a 300-500 word note": a range in the singular, before the kind of piece, is its length)
+      const read0 = f.read(m);
+      const beforePiece = read0.kind === 'range' && /(?:word|page|paragraph|sentence)$/i.test(m[0]) && new RegExp(String.raw`^\s+(?:[\w-]+\s+)?${PIECE}\b`, 'i').test(after);
+      if (f.bare && !APPROX.test(before) && !ENDS_PHRASE.test(after) && !beforePiece && !stated) continue;
       const numberAt = m.index + m[0].search(/\d/);
-      if (f.bare && spelled.has(numberAt) && !INTRODUCES.test(text.slice(0, m.index)) && text.slice(0, m.index).trim() !== '') continue;
+      if (f.bare && spelled.has(numberAt) && !SAID_AFTER.includes(f) && !INTRODUCES.test(text.slice(0, m.index)) && text.slice(0, m.index).trim() !== '') continue;
       // A count before "per" is a rate: "80 words per minute".
       if (/^\s+(?:per|a|an|every)\s+(?:minute|hour|day|week|month|year|second)\b/i.test(after)) continue;
-      const read = f.read(m);
+      const said = f.read(m);
+      // "the limit is 2 pages" is a ceiling
+      const read = !stated || said.kind !== 'target' ? said
+        : /\b(?:limit|cap|maximum|budget|word limit)\s+(?:is|was|of)\s+$/i.test(before) ? { ...said, kind: 'max' as const, max: said.target, target: null }
+        : /\bminimum\s+(?:is|was|of)\s+$/i.test(before) ? { ...said, kind: 'min' as const, min: said.target, target: null } : said;
       const numbers = [read.min, read.max, read.target].filter((x): x is number => x !== null);
       if (!numbers.length || numbers.some((x) => !Number.isFinite(x) || x <= 0)) continue;
       if (read.kind === 'range' && (read.min ?? 0) > (read.max ?? 0)) continue;
