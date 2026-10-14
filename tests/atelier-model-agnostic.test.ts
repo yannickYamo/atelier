@@ -617,6 +617,7 @@ describe('a model that refuses forced tool choice is asked in words, and a model
   const answer = (model: string) => JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model, stop_reason: 'tool_use', stop_sequence: null,
     content: [{ type: 'tool_use', id: 'tu_1', name: 'emit_answer', input: { ok: true } }], usage: { input_tokens: 5, output_tokens: 5 } });
   const seen: { model: string; choice: string; asked: boolean }[] = [];
+  const thinkingSeen: { model: string; thinking: string | null }[] = [];
   let server: Server; let base = '';
   const saved = process.env.ANTHROPIC_BASE_URL;
 
@@ -638,6 +639,18 @@ describe('a model that refuses forced tool choice is asked in words, and a model
         if (b.model === 'cool-model' && t !== undefined) {
           res.statusCode = 400;
           res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: '`temperature` is deprecated for this model.' } }));
+          return;
+        }
+        const th = (JSON.parse(body) as { thinking?: { type: string } }).thinking;
+        thinkingSeen.push({ model: b.model, thinking: th?.type ?? null });
+        if (b.model === 'thinking-on-gateway') {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'Thinking may not be enabled when tool_choice forces tool use.' } }));
+          return;
+        }
+        if (b.model === 'plain-endpoint' && th !== undefined) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'thinking: Extra inputs are not permitted' } }));
           return;
         }
         if (b.model === 'stubborn-model') {
@@ -668,6 +681,20 @@ describe('a model that refuses forced tool choice is asked in words, and a model
     expect((await ask('new-model')).json).toEqual({ ok: true });
     expect(seen.filter((x) => x.model === 'new-model').map((x) => `${x.choice}${x.asked ? '+asked' : ''}`)).toEqual(['tool', 'auto+asked', 'auto+asked']);
     expect(refusesForcedChoice(new Error('tool_choice not supported'))).toBe(false);
+  });
+  it('every call is sent with thinking disabled, and an endpoint that refuses the field is asked once more without it', async () => {
+    const r = await ask('thinking-model');
+    expect(r.thinkingSent).toBe('disabled');
+    expect(thinkingSeen.filter((x) => x.model === 'thinking-model').map((x) => x.thinking)).toEqual(['disabled']);
+    const p1 = await ask('plain-endpoint'); const p2 = await ask('plain-endpoint');
+    expect(p1.json).toEqual({ ok: true }); expect(p1.thinkingSent).toBeNull(); expect(p2.thinkingSent).toBeNull();
+    // refused once, then remembered: no second refused call
+    expect(thinkingSeen.filter((x) => x.model === 'plain-endpoint').map((x) => x.thinking)).toEqual(['disabled', null, null]);
+  });
+  it('a 400 that mentions thinking for another reason is not taken as the field being refused', async () => {
+    await expect(ask('thinking-on-gateway')).rejects.toThrow();
+    // sent with the field each time: never learned off
+    expect(thinkingSeen.filter((x) => x.model === 'thinking-on-gateway').every((x) => x.thinking === 'disabled')).toBe(true);
   });
   it('a model that refuses forced choice AND temperature, one 400 at a time, still answers: an instrument at temperature 0', async () => {
     const r = await new AnthropicInferenceClient('strict-model', 'sk-test', null).complete({
