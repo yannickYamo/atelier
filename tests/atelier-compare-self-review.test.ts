@@ -125,7 +125,7 @@ process.stdout.write(${JSON.stringify(JSON.stringify({ output: 'Merge it.', cost
   });
 });
 
-describe('Phase F: the judge reads the review, never the footer only Atelier writes', () => {
+describe('the judge reads the review, never the footer only Atelier writes', () => {
   it('a code-review run with a listed specific records the review as delivered, and the list as to_check', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'atelier-rt-footer-')); const data = join(dir, 'data'); const proj = join(dir, 'proj');
     for (const d of [data, proj]) spawnSync('mkdir', ['-p', d]);
@@ -153,7 +153,7 @@ describe('Phase F: the judge reads the review, never the footer only Atelier wri
   });
 });
 
-describe('Phase F: a filtered or declined task is a row, and the arm goes on', () => {
+describe('a filtered or declined task is a row, and the arm goes on', () => {
   const tasks3 = (dir: string) => { writeFileSync(join(dir, 'tasks.jsonl'), ['a', 'b', 'c'].map((id) => JSON.stringify({ id, prompt: `Review change ${id.toUpperCase()}-ID.` })).join('\n') + '\n'); };
   const count = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__count`)).json()) as { count: number }).count;
   it('a provider filter on task b: three rows, b FILTERED with no response, called once, the run exits 0', async () => {

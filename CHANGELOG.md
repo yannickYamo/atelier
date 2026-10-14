@@ -90,6 +90,7 @@ less, and no loss of quality was measured. That serving is now the default for t
 - **An unratified rule never blocks.** The execution plan read `materiality` alone; a requirement nobody confirmed
   (`DERIVED_UNRATIFIED`) that carried REQUIRED in its fields would have been enforced. The plan now reads authority
   first: such a rule is a habit that blocks nothing, and the record says why (`UNRATIFIED`).
+  A stored standard that holds such a requirement compiles it as a habit from now on, so that skill's next rebuild differs from its last; nothing in the standard itself changes.
 - **A fitted limit says what its held-out count is.** When a limit was moved to where the author's own pieces are, the
   held-out pieces helped set it, so their count is named as "against the limit before it was moved", never as an
   independent check. A fitted limit the author's pieces meet is held to the corpus count, as before.
@@ -101,7 +102,7 @@ less, and no loss of quality was measured. That serving is now the default for t
 
 ### Changed: a comparison run records what each arm delivered, and survives a filtered call
 
-- **Calls go out with thinking disabled.** Every call forces one tool call, which extended thinking does not take;
+- **Calls go out with thinking disabled**, on every call the Anthropic provider makes at run time, not only in the comparison runner. Every call forces one tool call, which extended thinking does not take;
   an endpoint that turns thinking on unless told otherwise returned empty or refused calls, so arms meant to be the
   same writer were not. The Anthropic provider sends `thinking: disabled`, learns it off on a 400 that names it (as
   it does for temperature), and records `thinkingSent` on each result; model-arm rows carry it as `thinking`.
