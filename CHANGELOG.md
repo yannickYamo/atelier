@@ -7,6 +7,37 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: a feature miss points at its carriers and says which way and how far
+
+A rule that holds a counted feature of the writing to a range (asides per 1,000 words, the share of one-sentence
+paragraphs) used to fail with no place to point at: a rate lives everywhere and nowhere, so the repair had nothing to
+rewrite and a later draft was told only the range it had missed.
+
+- **A FEATURE miss points at its carrier sentences.** The sentences whose removal moves the value most toward the
+  range are its spans, as many as cover the distance and never more than three, so a text nearer the range is pointed
+  at fewer places. Every FEATURE miss carries a signed distance, in widths of its range: positive above, negative
+  below. This holds for every FEATURE rule, whatever its materiality, so the repair of a REQUIRED feature rule now
+  counts places the way other rules do: a miss pointed at two carriers where it was pointed at three is progress.
+  A rule newly broken is refused as before.
+- **"Never worse" reads the distance too.** A rewrite that leaves a feature rule broken in as many places but moves
+  its value further from the range by a tenth of a width or more is discarded, for every feature rule, enforced or
+  not. The count of places is capped, so without this a value could drift from one width out to three and pass.
+- **Notes state direction and distance.** A draft written again, and each later shape round, is told every miss with
+  which way to move and about how far ("about 4.1 fewer parenthetical asides per 1,000 words", "about 51 words
+  shorter"), not only what was missed.
+- **`invoke --graded <feature ids>|all` (experimental, off by default, never blocks).** Makes a standard's FEATURE
+  rules on the named features repair targets: a miss is rewritten on its carriers and, if still outside after the
+  rewrites, the piece is written once more with the move named, one draft per round at most. The rules stay as the
+  standard has them: a PREFERRED rule never fails the run, the evaluation record never reads it as enforced, and no
+  rule is promoted. The note for such a miss says what your pieces usually do, in a block of its own, and never that
+  the method requires it. The run's call and dollar bounds are raised by exactly what the extra draft and its
+  rewrites may spend, and the record states what they were raised by.
+- **Recorded, on the invocation record and in `--json` (`graded`):** the features graded; how many a rewrite targeted
+  and how many it moved toward the range; the drafts written again for them; the note lines sent; each feature's
+  value before and after, with its range; the rewrites kept and refused, with reasons; and the calls and dollars the
+  flag caused, taken from the run's ledger under their own purpose (`graded`), never estimated. Every repair now also
+  records its rewrites kept and refused, with the reasons (`repair.edits`).
+
 ### Fixed: the pattern check reads a count written in words as a figure
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the

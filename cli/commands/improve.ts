@@ -7,7 +7,7 @@
 import type { FidelityRecord } from '../../core/fidelity/types.js';
 import { mapLimitSettled } from '../../core/inference/concurrency.js';
 import { resolve, basename } from 'node:path';
-import type { Budget, InferenceClient } from '../../core/inference/client.js';
+import type { Budget, InferenceClient, SpendPurpose } from '../../core/inference/client.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import { spend } from '../../core/inference/client.js';
 import { observeRuntime, bindingHash, type RuntimeBinding } from '../../core/runtime/binding.js';
@@ -285,6 +285,8 @@ export async function spendOneWithResult(
   note = '',
   /** this draft's own variation (a temperature, more reference material), when drafts are made to differ */
   variant: DraftVariant = {},
+  /** what the ledger charges this call to: a draft is writing, unless a path that only a flag caused names its own purpose */
+  purpose: SpendPurpose = 'writing',
 ): Promise<{ piece: string; reportedModel: string | null; schemaSent: Record<string, unknown>; servedTask: string; temperatureSent: number | null }> {
   const schema = contract?.schema ?? FREE_TEXT_SCHEMA;
   // CAPTURED FROM THE REQUEST OBJECT, not copied from the argument. A proof built from the same
@@ -306,7 +308,7 @@ export async function spendOneWithResult(
     servedTask = req.variableBlock;
     const res = await client.complete(req);
     return { value: res, cost: res.cost, usage: res };
-  }, 'writing');
+  }, purpose);
   const piece = contract
     ? JSON.stringify(r.json ?? null, null, 2)
     : asText((r.json as { piece?: unknown } | null)?.piece);

@@ -19,6 +19,7 @@
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { featureOf } from '../observers/features.js';
+import { carriersOf } from '../observers/carrier.js';
 import { spanIntegrity } from '../loop/integrity.js';
 import { readFidelity } from './profile.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords, proseSentences, type OperatorId } from './operators.js';
@@ -67,18 +68,13 @@ Hard limits:
 
 const SCHEMA = { type: 'object', properties: { sentence: { type: 'string' } }, required: ['sentence'], additionalProperties: false } as const;
 
-/** The sentence that carries most of `feature`: the one whose removal lowers it most. Null when none lowers it. */
+/** The sentence that carries most of `feature`: the one whose removal lowers it most (../observers/carrier.ts). Null when none lowers it. */
 export function carrier(text: string, feature: string): { s: string; at: number } | null {
   const f = featureOf(feature);
-  const base = f?.measure(text) ?? null;
-  if (!f || base === null) return null;
-  let best: { s: string; at: number; drop: number } | null = null;
+  if (!f) return null;
   // Prose sentences only, split the way the operators split: never a heading, a list, a quotation or code.
-  for (const x of proseSentences(text).filter((y) => y.s.split(/\s+/).length >= 4)) {
-    const v = f.measure(text.slice(0, x.at) + text.slice(x.at + x.s.length));
-    if (v !== null && base - v > (best?.drop ?? 0)) best = { ...x, drop: base - v };
-  }
-  return best ? { s: best.s, at: best.at } : null;
+  const c = carriersOf(text, (t) => f.measure(t), proseSentences(text), 'lower', 1)[0];
+  return c ? { s: c.s, at: c.at } : null;
 }
 
 /** Sites one operator is tried at for one target before the next operator is tried. */

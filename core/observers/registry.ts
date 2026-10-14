@@ -35,6 +35,12 @@ export interface ObserverResult {
   /** the measured quantity, for distributions and the distinctiveness floor. Null for presence checks. */
   readonly value: number | null;
   readonly detail: string;
+  /**
+   * For a rule that holds a value to a band: the signed distance past the band's edge, in widths of the band (1 when
+   * the band has no width or one edge), positive above it, negative below, 0 inside. A repair reads direction and
+   * how far from it; a rule that has no band leaves it unset.
+   */
+  readonly error?: number;
 }
 
 /**
