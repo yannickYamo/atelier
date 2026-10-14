@@ -51,6 +51,18 @@ only partly observed, or the owner's word was moved by a measurement.
   what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
   request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
   words, and a draft of four tables ran 1,135 for 1,006 written.
+- **The length reader is held to a labelled corpus, and stops holding part limits as the piece's length.** Each fix
+  to the reading of a length was tested on the request that showed the fault, and the next outside run found the
+  next: five rounds. 371 requests (every one the project's history discusses, and 160 fresh) labelled by someone who
+  never read the reader now gate every change: a request read right may never be read wrong, and no new length the
+  person did not ask for may be held (`tests/atelier-reader-corpus.test.ts`). Scored on it, the reader held 11
+  lengths nobody asked for: a part's limit ("a blog post with a headline under 10 words" was held at ten words,
+  "each section under 200 words", "80 words per slide") or a topic ("why we cap PR descriptions at 300 words",
+  "Hemingway's six-word story"). It now reads a count bound to a part, or to what the piece is about, as no length of
+  the whole, and reads "no longer than", "must not exceed", "cap it at" and "fit in" as ceilings, not targets.
+  21 requests moved to agree, none moved away; one false hold and 50 misses remain, most of them counts of
+  paragraphs and sentences, which are told to the writer and not held. The 160 blind-labelled method steps gate the
+  method reader the same way (`tests/atelier-step-corpus.test.ts`): no check called fully read where it is not.
 - **A run is never refused for material it was not given.** A REQUIRED rule that needs material the person did not
   bind stopped the run before any draft. The run now goes on: the rule is not attempted (asked for evidence it does
   not have, a model invents it), the message names the `--with` that lets it fire, and the evaluation shows the rule

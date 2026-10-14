@@ -1,0 +1,371 @@
+{"id": "h001", "source": "history", "request": "In about 300 words", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "h002", "source": "history", "request": "a 400-word post, each paragraph under 60 words", "length": {"unit": "words", "min": null, "max": null, "about": 400}, "whole": true, "note": "per-paragraph limit too; 400 words is the whole"}
+{"id": "h003", "source": "history", "request": "Quick mode: one to two pages.", "length": {"unit": "pages", "min": 1, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "h004", "source": "history", "request": "a one-page cover letter", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "h005", "source": "history", "request": "Contract: 30 pages.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h006", "source": "history", "request": "Original: 12 pages.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h007", "source": "history", "request": "a 200-word summary of this ten-page report", "length": {"unit": "words", "min": null, "max": null, "about": 200}, "whole": true, "note": "ten pages is the source"}
+{"id": "h008", "source": "history", "request": "about 500 to 1,000 words", "length": {"unit": "words", "min": 500, "max": 1000, "about": null}, "whole": true, "note": ""}
+{"id": "h009", "source": "history", "request": "Keep the How it works section under 80 words", "length": null, "whole": false, "note": "per-section limit only"}
+{"id": "h010", "source": "history", "request": "unlike the Summary section, keep the whole piece under 200 words", "length": {"unit": "words", "min": null, "max": 200, "about": null}, "whole": true, "note": "names a section but the limit is for the whole"}
+{"id": "h011", "source": "history", "request": "Find 10 words that rhyme", "length": null, "whole": null, "note": "count is the topic"}
+{"id": "h012", "source": "history", "request": "write three paragraphs", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "h013", "source": "history", "request": "about two pages", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "h014", "source": "history", "request": "I explicitly want a detailed explanation", "length": null, "whole": null, "note": "asks for detail, no stated length"}
+{"id": "h015", "source": "history", "request": "one line", "length": null, "whole": null, "note": "lines are not a counted unit here"}
+{"id": "h016", "source": "history", "request": "Write a post titled \"10 words that changed our roadmap\"", "length": null, "whole": null, "note": "count inside a quoted title"}
+{"id": "h017", "source": "history", "request": "Write a post titled “10 words that changed our roadmap”", "length": null, "whole": null, "note": "count inside a quoted title"}
+{"id": "h018", "source": "history", "request": "Reply to the customer who wrote \"please keep it under 50 words\"", "length": null, "whole": null, "note": "quoted words of a third party; unclear what 'it' is"}
+{"id": "h019", "source": "history", "request": "Write about 800 words titled \"10 words that changed our roadmap\"", "length": {"unit": "words", "min": null, "max": null, "about": 800}, "whole": true, "note": "title count is not the length"}
+{"id": "h020", "source": "history", "request": "Write a 20,000 word book", "length": {"unit": "words", "min": null, "max": null, "about": 20000}, "whole": true, "note": ""}
+{"id": "h021", "source": "history", "request": "Give me a 300 word summary of the call", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "h022", "source": "history", "request": "Tighten the 500 word draft I pasted", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h023", "source": "history", "request": "Fix my 500 word essay", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h024", "source": "history", "request": "Write roughly two thousand words", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h025", "source": "history", "request": "Write about fifteen hundred words on pricing", "length": {"unit": "words", "min": null, "max": null, "about": 1500}, "whole": true, "note": ""}
+{"id": "h026", "source": "history", "request": "Keep it under two thousand five hundred words", "length": {"unit": "words", "min": null, "max": 2500, "about": null}, "whole": true, "note": ""}
+{"id": "h027", "source": "history", "request": "Write a two-page brief", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "h028", "source": "history", "request": "Write three paragraphs on pricing", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "h029", "source": "history", "request": "About a thousand words, please", "length": {"unit": "words", "min": null, "max": null, "about": 1000}, "whole": true, "note": ""}
+{"id": "h030", "source": "history", "request": "Around twenty-five hundred words", "length": {"unit": "words", "min": null, "max": null, "about": 2500}, "whole": true, "note": ""}
+{"id": "h031", "source": "history", "request": "No one words it better than she does", "length": null, "whole": null, "note": "'words' is a verb"}
+{"id": "h032", "source": "history", "request": "One of the two words in the title is wrong", "length": null, "whole": null, "note": "count describes existing text"}
+{"id": "h033", "source": "history", "request": "I have two pages of notes for you", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h034", "source": "history", "request": "Write a 500-word introduction in 3 paragraphs", "length": {"unit": "words", "min": null, "max": null, "about": 500}, "whole": true, "note": "also 3 paragraphs; compatible, words is the length"}
+{"id": "h035", "source": "history", "request": "A headline of 5 words. Body: 3 paragraphs.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 3}, "whole": true, "note": "headline limit is per-part; the body is the piece"}
+{"id": "h036", "source": "history", "request": "About 300 words. Actually, make it about 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": "self-correction; the later figure stands"}
+{"id": "h037", "source": "history", "request": "Write something good about pricing", "length": null, "whole": null, "note": ""}
+{"id": "h038", "source": "history", "request": "I wrote a 500 word draft. Tighten it.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h039", "source": "history", "request": "Here is a 500 word draft, make it better", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h040", "source": "history", "request": "A 300 word essay by a student is attached; grade it", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h041", "source": "history", "request": "Proofread the attached 3 page report", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h042", "source": "history", "request": "Reply to a 2 sentence email", "length": null, "whole": null, "note": "length of the email being answered"}
+{"id": "h043", "source": "history", "request": "Write a book proposal for a 90,000 word book", "length": null, "whole": null, "note": "length of the book, not the proposal"}
+{"id": "h044", "source": "history", "request": "Write the jacket copy for a 300 page report", "length": null, "whole": null, "note": "length of the report, not the copy"}
+{"id": "h045", "source": "history", "request": "Draft me a 300 word summary of the call", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "h046", "source": "history", "request": "I need a 1,200 word article on pricing", "length": {"unit": "words", "min": null, "max": null, "about": 1200}, "whole": true, "note": ""}
+{"id": "h047", "source": "history", "request": "Write between two and three paragraphs", "length": {"unit": "paragraphs", "min": 2, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "h048", "source": "history", "request": "Write five two-sentence blurbs", "length": null, "whole": false, "note": "per-blurb length"}
+{"id": "h049", "source": "history", "request": "Write three one-paragraph options", "length": null, "whole": false, "note": "per-option length"}
+{"id": "h050", "source": "history", "request": "Write 2 thousand words", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h051", "source": "history", "request": "about 3 hundred words", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "h052", "source": "history", "request": "Write one thousand, two hundred words", "length": {"unit": "words", "min": null, "max": null, "about": 1200}, "whole": true, "note": ""}
+{"id": "h053", "source": "history", "request": "Remove three sentences", "length": null, "whole": null, "note": "edit"}
+{"id": "h054", "source": "history", "request": "Delete two paragraphs and tighten", "length": null, "whole": null, "note": "edit"}
+{"id": "h055", "source": "history", "request": "Add one sentence about pricing", "length": null, "whole": null, "note": "edit"}
+{"id": "h056", "source": "history", "request": "Write a review of the film Three Sentences", "length": null, "whole": null, "note": "title"}
+{"id": "h057", "source": "history", "request": "Write a post titled 'Ten words that matter'", "length": null, "whole": null, "note": "title"}
+{"id": "h058", "source": "history", "request": "In a word, no. Two words: not yet.", "length": null, "whole": null, "note": "idiom, not a length"}
+{"id": "h059", "source": "history", "request": "Why are two pages better than one page?", "length": null, "whole": null, "note": "question about pages"}
+{"id": "h060", "source": "history", "request": "Our style guide: every post opens with a one sentence summary", "length": null, "whole": null, "note": "describes a style guide, not this output"}
+{"id": "h061", "source": "history", "request": "Remove 3 sentences", "length": null, "whole": null, "note": "edit"}
+{"id": "h062", "source": "history", "request": "Write three sentences on why", "length": {"unit": "sentences", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "h063", "source": "history", "request": "He said it in three words: \"we are done\".", "length": null, "whole": null, "note": "narrative count"}
+{"id": "h064", "source": "history", "request": "Write a scene where she ends it in three words.", "length": null, "whole": null, "note": "count is story content"}
+{"id": "h065", "source": "history", "request": "Chapter one is two pages. Write chapter two.", "length": null, "whole": null, "note": "length of existing chapter"}
+{"id": "h066", "source": "history", "request": "It is two pages, and I hate it. Rewrite.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h067", "source": "history", "request": "The intro consists of two paragraphs. Make it warmer.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h068", "source": "history", "request": "Look at two pages, then decide.", "length": null, "whole": null, "note": "not a length to write"}
+{"id": "h069", "source": "history", "request": "Compare it to two paragraphs that I wrote before.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h070", "source": "history", "request": "The summary of three paragraphs, which I pasted, needs a title.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h071", "source": "history", "request": "There should be two sentences that mention price.", "length": null, "whole": null, "note": "content constraint, not total length"}
+{"id": "h072", "source": "history", "request": "Attachments:\n- two pages on pricing\n- one page on risks\nWrite the cover note.", "length": null, "whole": null, "note": "lengths of attachments"}
+{"id": "h073", "source": "history", "request": "I wrote a 500-word draft; tighten it.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h074", "source": "history", "request": "Proofread the attached 3-page report.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h075", "source": "history", "request": "Write a proposal for a 90,000-word book.", "length": null, "whole": null, "note": "length of the book, not the proposal"}
+{"id": "h076", "source": "history", "request": "Here is a 12-page deck. Write the cover email.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h077", "source": "history", "request": "I don't want a 500 word essay, keep it short.", "length": null, "whole": null, "note": "negated length; 'short' has no number"}
+{"id": "h078", "source": "history", "request": "Write a 2,000-word chapter", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h079", "source": "history", "request": "Write a 500 word blog post", "length": {"unit": "words", "min": null, "max": null, "about": 500}, "whole": true, "note": ""}
+{"id": "h080", "source": "history", "request": "Shorten this by 100 words.", "length": null, "whole": null, "note": "edit amount"}
+{"id": "h081", "source": "history", "request": "Trim it by about 50 words.", "length": null, "whole": null, "note": "edit amount"}
+{"id": "h082", "source": "history", "request": "Expand the second section by 150 words.", "length": null, "whole": null, "note": "edit amount"}
+{"id": "h083", "source": "history", "request": "This draft is 900 words; make it punchier.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h084", "source": "history", "request": "My bio is 3 sentences. Make it funnier.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h085", "source": "history", "request": "I type 80 words per minute; write my bio.", "length": null, "whole": null, "note": "rate"}
+{"id": "h086", "source": "history", "request": "We publish 20 pages per week; write the status note.", "length": null, "whole": null, "note": "rate"}
+{"id": "h087", "source": "history", "request": "Write more than 500 words.", "length": {"unit": "words", "min": 500, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "h088", "source": "history", "request": "Write over 500 words.", "length": {"unit": "words", "min": 500, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "h089", "source": "history", "request": "Write about 500 words, in 3 paragraphs. Do not reuse the 500 words I pasted.", "length": {"unit": "words", "min": null, "max": null, "about": 500}, "whole": true, "note": "also 3 paragraphs; second 500 is the source"}
+{"id": "h090", "source": "history", "request": "Write 2 pages, about 600 words, on the 12 pages attached.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": "2 pages glossed as 600 words; 12 pages is the source"}
+{"id": "h091", "source": "history", "request": "We indexed 1,200 pages. Write the changelog entry.", "length": null, "whole": null, "note": "count of indexed pages"}
+{"id": "h092", "source": "history", "request": "Our docs site has 300 pages. Write a post about search.", "length": null, "whole": null, "note": "size of a site"}
+{"id": "h093", "source": "history", "request": "In 2024 we shipped 12 releases. Write the year-in-review post.", "length": null, "whole": null, "note": ""}
+{"id": "h094", "source": "history", "request": "Summarise the attached 50-page contract.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h095", "source": "history", "request": "Rewrite the 2 paragraphs below so they flow.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h096", "source": "history", "request": "Write a post titled \"10 words that changed our roadmap\".", "length": null, "whole": null, "note": "title"}
+{"id": "h097", "source": "history", "request": "Draft section 4 of the 12-section policy.", "length": null, "whole": null, "note": ""}
+{"id": "h098", "source": "history", "request": "Explain why we cut our docs from 900 pages to 200.", "length": null, "whole": null, "note": "topic figures"}
+{"id": "h099", "source": "history", "request": "The report is 40 pages long; summarise its risks.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h100", "source": "history", "request": "Compare the 5 sentences customers repeat most.", "length": null, "whole": null, "note": "count is the topic"}
+{"id": "h101", "source": "history", "request": "Our README grew to 3,000 words. Write a note asking contributors to trim it.", "length": null, "whole": null, "note": "length of another document"}
+{"id": "h102", "source": "history", "request": "We sent 25 pages of feedback. Write the thank-you email.", "length": null, "whole": null, "note": "length of other material"}
+{"id": "h103", "source": "history", "request": "Turn these 3 paragraphs of notes into a memo.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h104", "source": "history", "request": "The 7 sentences in our mission statement need a rewrite.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h105", "source": "history", "request": "Write the release notes for version 2.4 with 6 fixes.", "length": null, "whole": null, "note": ""}
+{"id": "h106", "source": "history", "request": "Our 100-page handbook is out of date. Write the announcement.", "length": null, "whole": null, "note": "length of other material"}
+{"id": "h107", "source": "history", "request": "Translate the 2-page letter into Spanish.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h108", "source": "history", "request": "We have 14 paragraphs of policy text; write an FAQ.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h109", "source": "history", "request": "Customers read 2 pages on average. Write a short landing page.", "length": null, "whole": null, "note": "statistic"}
+{"id": "h110", "source": "history", "request": "After 500 words of debate, write the decision.", "length": null, "whole": null, "note": "length of other material"}
+{"id": "h111", "source": "history", "request": "Write about 2,000 words on our hiring process.", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h112", "source": "history", "request": "Draft a 600-word blog post on the launch.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h113", "source": "history", "request": "Keep the summary under 150 words.", "length": {"unit": "words", "min": null, "max": 150, "about": null}, "whole": true, "note": "the summary is the output"}
+{"id": "h114", "source": "history", "request": "Write between 800 and 1,000 words on pricing.", "length": {"unit": "words", "min": 800, "max": 1000, "about": null}, "whole": true, "note": ""}
+{"id": "h115", "source": "history", "request": "Give me two paragraphs on the outage.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "h116", "source": "history", "request": "A one-page brief on the market, please.", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "h117", "source": "history", "request": "Write a 1,500 word essay on calm software.", "length": {"unit": "words", "min": null, "max": null, "about": 1500}, "whole": true, "note": ""}
+{"id": "h118", "source": "history", "request": "Three sentences on why we chose Postgres.", "length": {"unit": "sentences", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "h119", "source": "history", "request": "Write roughly two thousand words on the roadmap.", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h120", "source": "history", "request": "At most 300 words, please, on the policy.", "length": {"unit": "words", "min": null, "max": 300, "about": null}, "whole": true, "note": ""}
+{"id": "h121", "source": "history", "request": "Write a 20,000 word book on agents.", "length": {"unit": "words", "min": null, "max": null, "about": 20000}, "whole": true, "note": ""}
+{"id": "h122", "source": "history", "request": "Exactly 50 words for the app store blurb.", "length": {"unit": "words", "min": 50, "max": 50, "about": null}, "whole": true, "note": ""}
+{"id": "h123", "source": "history", "request": "Write a four-paragraph intro.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 4}, "whole": true, "note": ""}
+{"id": "h124", "source": "history", "request": "No more than 2 pages on the merger.", "length": {"unit": "pages", "min": null, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "h125", "source": "history", "request": "In 400 words, explain the change.", "length": {"unit": "words", "min": null, "max": null, "about": 400}, "whole": true, "note": ""}
+{"id": "h126", "source": "history", "request": "A 10-page report on the pilot.", "length": {"unit": "pages", "min": null, "max": null, "about": 10}, "whole": true, "note": ""}
+{"id": "h127", "source": "history", "request": "Write 1k words on onboarding.", "length": {"unit": "words", "min": null, "max": null, "about": 1000}, "whole": true, "note": ""}
+{"id": "h128", "source": "history", "request": "Keep it to a page.", "length": {"unit": "pages", "min": null, "max": 1, "about": null}, "whole": true, "note": ""}
+{"id": "h129", "source": "history", "request": "Write 3 bullet points on the risks.", "length": null, "whole": null, "note": "bullets are not a length unit here"}
+{"id": "h130", "source": "history", "request": "Write a short paragraph on the team.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 1}, "whole": true, "note": "'a paragraph' is one paragraph"}
+{"id": "h131", "source": "history", "request": "I need a post on search. About 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h132", "source": "history", "request": "Write a post on search. It should be 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h133", "source": "history", "request": "Write the changelog entry. Keep it under 200 words.", "length": {"unit": "words", "min": null, "max": 200, "about": null}, "whole": true, "note": ""}
+{"id": "h134", "source": "history", "request": "We indexed 1,200 pages. Write the changelog entry in 150 words.", "length": {"unit": "words", "min": null, "max": null, "about": 150}, "whole": true, "note": "1,200 pages is a fact, not a length"}
+{"id": "h135", "source": "history", "request": "Write a post about the launch. I'd like 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h136", "source": "history", "request": "Write a post about the launch. Please do 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h137", "source": "history", "request": "Write a post about the launch. Stick to 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h138", "source": "history", "request": "Write a post about the launch. It has to be 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h139", "source": "history", "request": "Write a post about the launch. Cap it at 600 words.", "length": {"unit": "words", "min": null, "max": 600, "about": null}, "whole": true, "note": ""}
+{"id": "h140", "source": "history", "request": "Write a post about the launch. Shoot for 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h141", "source": "history", "request": "Write a post about the launch. My editor asked for 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h142", "source": "history", "request": "Write a post about the launch. Then trim it to 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h143", "source": "history", "request": "Write a post about the launch. I was thinking 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h144", "source": "history", "request": "Write a post about the launch. The brief says 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h145", "source": "history", "request": "Write a post about the launch. The final piece will be 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h146", "source": "history", "request": "Write chapter 3, about 2,000 words, on the first winter.", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h147", "source": "history", "request": "a 1500-word essay", "length": {"unit": "words", "min": null, "max": null, "about": 1500}, "whole": true, "note": ""}
+{"id": "h148", "source": "history", "request": "2k words please", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h149", "source": "history", "request": "between 1,500 and 2,000 words", "length": {"unit": "words", "min": 1500, "max": 2000, "about": null}, "whole": true, "note": ""}
+{"id": "h150", "source": "history", "request": "800-1000 words", "length": {"unit": "words", "min": 800, "max": 1000, "about": null}, "whole": true, "note": ""}
+{"id": "h151", "source": "history", "request": "at least 600 words", "length": {"unit": "words", "min": 600, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "h152", "source": "history", "request": "no more than 3 paragraphs", "length": {"unit": "paragraphs", "min": null, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "h153", "source": "history", "request": "exactly 5 sentences", "length": {"unit": "sentences", "min": 5, "max": 5, "about": null}, "whole": true, "note": ""}
+{"id": "h154", "source": "history", "request": "two pages", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "h155", "source": "history", "request": "500 words max", "length": {"unit": "words", "min": null, "max": 500, "about": null}, "whole": true, "note": ""}
+{"id": "h156", "source": "history", "request": "1,500 words minimum", "length": {"unit": "words", "min": 1500, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "h157", "source": "history", "request": "at least 300 and at most 500 words", "length": {"unit": "words", "min": 300, "max": 500, "about": null}, "whole": true, "note": ""}
+{"id": "h158", "source": "history", "request": "Write a detailed post about the 2024 budget and its 12 lines.", "length": null, "whole": null, "note": ""}
+{"id": "h159", "source": "history", "request": "Explain why 17 times 6 is 102.", "length": null, "whole": null, "note": ""}
+{"id": "h160", "source": "history", "request": "0 words", "length": null, "whole": null, "note": "a zero length is not a usable request"}
+{"id": "h161", "source": "history", "request": "summarise this 2,000 words essay", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h162", "source": "history", "request": "the 500 words I pasted", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h163", "source": "history", "request": "fix the 3 sentences below", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h164", "source": "history", "request": "24 pages of the report say otherwise", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h165", "source": "history", "request": "chapter 12 words to avoid", "length": null, "whole": null, "note": "chapter number"}
+{"id": "h166", "source": "history", "request": "in 2024 words matter", "length": null, "whole": null, "note": "year"}
+{"id": "h167", "source": "history", "request": "top 10 words", "length": null, "whole": null, "note": "count is the topic"}
+{"id": "h168", "source": "history", "request": "between 2019 and 2023 paragraphs changed", "length": null, "whole": null, "note": "years"}
+{"id": "h169", "source": "history", "request": "section 4.2 words", "length": null, "whole": null, "note": "section number"}
+{"id": "h170", "source": "history", "request": "My draft has 300 words. Improve it.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h171", "source": "history", "request": "page 3", "length": null, "whole": null, "note": "page number"}
+{"id": "h172", "source": "history", "request": "Write 'Why 100 words of docs beat a meeting', about 900 words", "length": {"unit": "words", "min": null, "max": null, "about": 900}, "whole": true, "note": "title count is not the length"}
+{"id": "h173", "source": "history", "request": "cut this from 3,000 words to 2,000 words", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": "edit with a stated result length"}
+{"id": "h174", "source": "history", "request": "about 2,000 words", "length": {"unit": "words", "min": null, "max": null, "about": 2000}, "whole": true, "note": ""}
+{"id": "h175", "source": "history", "request": "Write the competitive teardown. Quick mode: one to two pages.", "length": {"unit": "pages", "min": 1, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "h176", "source": "history", "request": "Summarise the call. Length: two pages.", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "h177", "source": "history", "request": "Note: two pages were missing from the scan. Write the summary.", "length": null, "whole": null, "note": "pages of the source"}
+{"id": "h178", "source": "history", "request": "Context: three paragraphs of the draft are mine. Tighten it.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h179", "source": "history", "request": "Explain caching in 400 words.", "length": {"unit": "words", "min": null, "max": null, "about": 400}, "whole": true, "note": ""}
+{"id": "h180", "source": "history", "request": "Explain caching in 3 sentences.", "length": {"unit": "sentences", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "h181", "source": "history", "request": "Write a two-page brief, each section under 200 words.", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": "per-section limit too; two pages is the whole"}
+{"id": "h182", "source": "history", "request": "Write it in 7 words.", "length": {"unit": "words", "min": null, "max": null, "about": 7}, "whole": true, "note": ""}
+{"id": "h183", "source": "history", "request": "Summarise the contract. Original: 12 pages.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h184", "source": "history", "request": "Write a one-paragraph abstract. Paper length: eight pages.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 1}, "whole": true, "note": "eight pages is the source paper"}
+{"id": "h185", "source": "history", "request": "Draft a reply to the attached letter (Letter: three pages).", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h186", "source": "history", "request": "Write a summary. Attachments: two pages.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h187", "source": "history", "request": "Write a 200-word summary of this ten-page report.", "length": {"unit": "words", "min": null, "max": null, "about": 200}, "whole": true, "note": "ten pages is the source"}
+{"id": "h188", "source": "history", "request": "Explain caching in about 300 words.", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "h189", "source": "history", "request": "Keep it under 200 words.", "length": {"unit": "words", "min": null, "max": 200, "about": null}, "whole": true, "note": ""}
+{"id": "h190", "source": "history", "request": "Summarize the attached contract. Contract: 30 pages.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h191", "source": "history", "request": "Summarize this proposal. Proposal: 10 pages.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h192", "source": "history", "request": "Write a summary of the case study (Case study: 15 pages).", "length": null, "whole": null, "note": "length of source material"}
+{"id": "h193", "source": "history", "request": "Present it. Slides: 10 pages.", "length": null, "whole": null, "note": "ambiguous: could be the deck to make or the deck given"}
+{"id": "h194", "source": "history", "request": "Draft the memo. Output length: 2 pages.", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "h195", "source": "history", "request": "Draft the memo. Target length: one page.", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "h196", "source": "history", "request": "Write the launch post. Blog post: 800 words.", "length": {"unit": "words", "min": null, "max": null, "about": 800}, "whole": true, "note": "label names the output"}
+{"id": "h197", "source": "history", "request": "Write a one-page cover letter.", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "h198", "source": "history", "request": "Write the teardown. Quick mode: one to two pages.", "length": {"unit": "pages", "min": 1, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "h199", "source": "history", "request": "Write about 600 words on tides.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": ""}
+{"id": "h200", "source": "history", "request": "Draft it in about 300 words.", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "h201", "source": "history", "request": "Write a 400-word post. Each paragraph under 60 words.", "length": {"unit": "words", "min": null, "max": null, "about": 400}, "whole": true, "note": "per-paragraph limit too"}
+{"id": "h202", "source": "history", "request": "Write a 300-word post with a headline under 10 words", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": "headline limit is per-part"}
+{"id": "h203", "source": "history", "request": "Write a 600-word post, no sentence over 25 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": "sentence-length limit is per-part"}
+{"id": "h204", "source": "history", "request": "Write a post about 10 words that changed our roadmap", "length": null, "whole": null, "note": "count is the topic"}
+{"id": "h205", "source": "history", "request": "Write a post titled \"x\". About 900 words.", "length": {"unit": "words", "min": null, "max": null, "about": 900}, "whole": true, "note": ""}
+{"id": "h206", "source": "history", "request": "Write a 300-500 word note", "length": {"unit": "words", "min": 300, "max": 500, "about": null}, "whole": true, "note": ""}
+{"id": "h207", "source": "history", "request": "About 1,200 words", "length": {"unit": "words", "min": null, "max": null, "about": 1200}, "whole": true, "note": ""}
+{"id": "h208", "source": "history", "request": "Write a blog post titled \"Why 100 words of docs beat 10 pages\". About 900 words.", "length": {"unit": "words", "min": null, "max": null, "about": 900}, "whole": true, "note": "counts in the title are not the length"}
+{"id": "h209", "source": "history", "request": "Write a post about the outage", "length": null, "whole": null, "note": ""}
+{"id": "h210", "source": "history", "request": "About 20000 words", "length": {"unit": "words", "min": null, "max": null, "about": 20000}, "whole": true, "note": ""}
+{"id": "h211", "source": "history", "request": "Write a post explaining why we cap commit messages at 72 characters and under 50 words.", "length": null, "whole": null, "note": "ambiguous: 'under 50 words' may be the commit cap (topic) or the post"}
+{"id": "f001", "source": "fresh", "request": "Explain how DNS resolution works in four paragraphs.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 4}, "whole": true, "note": ""}
+{"id": "f002", "source": "fresh", "request": "Write a quick note to my landlord asking about the broken heater.", "length": null, "whole": null, "note": ""}
+{"id": "f003", "source": "fresh", "request": "Explain the difference between TCP and UDP in under 200 words.", "length": {"unit": "words", "min": null, "max": 200, "about": null}, "whole": true, "note": ""}
+{"id": "f004", "source": "fresh", "request": "Write an email to the team about the office move. Keep it brief, under 150 words.", "length": {"unit": "words", "min": null, "max": 150, "about": null}, "whole": true, "note": ""}
+{"id": "f005", "source": "fresh", "request": "Write a two-page summary of the survey results, about 300 words.", "length": null, "whole": null, "note": "ambiguous: two pages and 300 words disagree"}
+{"id": "f006", "source": "fresh", "request": "Write an academic abstract for my paper on soil microbiomes, 150-250 words.", "length": {"unit": "words", "min": 150, "max": 250, "about": null}, "whole": true, "note": ""}
+{"id": "f007", "source": "fresh", "request": "Here's my 3,000-word essay. Can you give me feedback on the argument?", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f008", "source": "fresh", "request": "Code review for the attached diff, please. Keep it to about 200 words; the author is junior and I don't want to overwhelm them.", "length": {"unit": "words", "min": null, "max": null, "about": 200}, "whole": true, "note": ""}
+{"id": "f009", "source": "fresh", "request": "Write a case study of how Acme cut deploy times. Target length is 1,000-1,200 words.", "length": {"unit": "words", "min": 1000, "max": 1200, "about": null}, "whole": true, "note": ""}
+{"id": "f010", "source": "fresh", "request": "Review this pull request and write up your findings. Keep the review under 400 words.", "length": {"unit": "words", "min": null, "max": 400, "about": null}, "whole": true, "note": ""}
+{"id": "f011", "source": "fresh", "request": "Write a 10-minute speech for the retirement party.", "length": null, "whole": null, "note": "minutes are not a counted unit"}
+{"id": "f012", "source": "fresh", "request": "Can you write a short intro for my podcast episode about urban beekeeping?", "length": null, "whole": null, "note": "'short' with no number"}
+{"id": "f013", "source": "fresh", "request": "Write a page or so on the history of the company for the website.", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "f014", "source": "fresh", "request": "Write the conclusion chapter of my thesis, at least 4,000 words.", "length": {"unit": "words", "min": 4000, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "f015", "source": "fresh", "request": "Write an essay on why Hemingway's six-word story still works.", "length": null, "whole": null, "note": "count is the topic"}
+{"id": "f016", "source": "fresh", "request": "Draft a statement for the press about the data breach. No longer than 200 words.", "length": {"unit": "words", "min": null, "max": 200, "about": null}, "whole": true, "note": ""}
+{"id": "f017", "source": "fresh", "request": "Prepare a report on Q2 churn drivers. Length: 3-4 pages.", "length": {"unit": "pages", "min": 3, "max": 4, "about": null}, "whole": true, "note": ""}
+{"id": "f018", "source": "fresh", "request": "Draft a polite email declining the vendor's proposal.", "length": null, "whole": null, "note": ""}
+{"id": "f019", "source": "fresh", "request": "Write a blog post: 'Seven mistakes we made scaling Postgres'. Aim for 1,500 words.", "length": {"unit": "words", "min": null, "max": null, "about": 1500}, "whole": true, "note": "title count is not the length"}
+{"id": "f020", "source": "fresh", "request": "I need a guest post for a dev blog on property-based testing. They asked for 1200-1500 words.", "length": {"unit": "words", "min": 1200, "max": 1500, "about": null}, "whole": true, "note": ""}
+{"id": "f021", "source": "fresh", "request": "Write the slide notes for our deck, no more than 80 words per slide.", "length": null, "whole": false, "note": "per-slide limit only"}
+{"id": "f022", "source": "fresh", "request": "Write a cover letter for a junior data analyst role, no more than 350 words.", "length": {"unit": "words", "min": null, "max": 350, "about": null}, "whole": true, "note": ""}
+{"id": "f023", "source": "fresh", "request": "Write a couple of paragraphs on our hiring philosophy.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 2}, "whole": true, "note": "'a couple' read as two"}
+{"id": "f024", "source": "fresh", "request": "Write a thousand-word explainer on how carbon credits work.", "length": {"unit": "words", "min": null, "max": null, "about": 1000}, "whole": true, "note": ""}
+{"id": "f025", "source": "fresh", "request": "I read at 250 words per minute. Write a talk I can give at a book club.", "length": null, "whole": null, "note": "rate; no duration given"}
+{"id": "f026", "source": "fresh", "request": "Write a summary of the attached contract in plain English. Half a page is plenty.", "length": {"unit": "pages", "min": null, "max": 0.5, "about": null}, "whole": true, "note": "fractional page"}
+{"id": "f027", "source": "fresh", "request": "Write a reply to the reviewer's comments on section 3 of our paper.", "length": null, "whole": null, "note": "section number"}
+{"id": "f028", "source": "fresh", "request": "Summarize the attached quarterly report for the board.", "length": null, "whole": null, "note": ""}
+{"id": "f029", "source": "fresh", "request": "Summarize the attached contract in a few sentences.", "length": null, "whole": null, "note": "'a few' is not a number"}
+{"id": "f030", "source": "fresh", "request": "Write a product launch post. Each section under 200 words.", "length": null, "whole": false, "note": "per-section limit only"}
+{"id": "f031", "source": "fresh", "request": "Write a blog post about migrating from Heroku to Fly.io (about 1,200 words).", "length": {"unit": "words", "min": null, "max": null, "about": 1200}, "whole": true, "note": ""}
+{"id": "f032", "source": "fresh", "request": "We ship 3 posts a week, each around 800 words. Write this week's editorial calendar note.", "length": null, "whole": null, "note": "describes their posts, not this note"}
+{"id": "f033", "source": "fresh", "request": "Write a eulogy for my grandfather, who was a fisherman. About four minutes spoken, maybe 500 to 600 words.", "length": {"unit": "words", "min": 500, "max": 600, "about": null}, "whole": true, "note": "minutes are not a unit"}
+{"id": "f034", "source": "fresh", "request": "Write a press release about the factory opening. Should be no longer than a page.", "length": {"unit": "pages", "min": null, "max": 1, "about": null}, "whole": true, "note": ""}
+{"id": "f035", "source": "fresh", "request": "Draft a reply to this customer who says the app logs them out constantly.", "length": null, "whole": null, "note": ""}
+{"id": "f036", "source": "fresh", "request": "I've pasted two paragraphs from our terms of service. Explain them in plain English.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f037", "source": "fresh", "request": "Write a contract clause summary for each of the 14 clauses in the attached NDA. The whole thing should fit in 600 words.", "length": {"unit": "words", "min": null, "max": 600, "about": null}, "whole": true, "note": "14 clauses is the source"}
+{"id": "f038", "source": "fresh", "request": "Write slide notes for the 'Why now' slide in our pitch deck.", "length": null, "whole": null, "note": ""}
+{"id": "f039", "source": "fresh", "request": "Write a review of the novel 'Ten Thousand Words for Snow' in about 600 words.", "length": {"unit": "words", "min": null, "max": null, "about": 600}, "whole": true, "note": "title count is not the length"}
+{"id": "f040", "source": "fresh", "request": "Draft three subject lines for the newsletter, each under 8 words.", "length": null, "whole": false, "note": "per-item limit only"}
+{"id": "f041", "source": "fresh", "request": "Write about 500 words on composting. Keep it under 300 words.", "length": null, "whole": null, "note": "ambiguous: two conflicting whole lengths"}
+{"id": "f042", "source": "fresh", "request": "Write a brief update for stakeholders on the migration delay.", "length": null, "whole": null, "note": ""}
+{"id": "f043", "source": "fresh", "request": "Write a blog post about why our team switched to trunk-based development.", "length": null, "whole": null, "note": ""}
+{"id": "f044", "source": "fresh", "request": "Write a blog post about 10 words that changed our roadmap.", "length": null, "whole": null, "note": "count is the topic"}
+{"id": "f045", "source": "fresh", "request": "Write a 10-page white paper on zero-trust networking for mid-size banks.", "length": {"unit": "pages", "min": null, "max": null, "about": 10}, "whole": true, "note": ""}
+{"id": "f046", "source": "fresh", "request": "Length: 250 words. Topic: why our onboarding emails get ignored.", "length": {"unit": "words", "min": null, "max": null, "about": 250}, "whole": true, "note": ""}
+{"id": "f047", "source": "fresh", "request": "Write the 2025 annual report letter from the CEO.", "length": null, "whole": null, "note": "year"}
+{"id": "f048", "source": "fresh", "request": "Write an article on battery recycling. About 1,500 words. Actually, keep it closer to 1,000.", "length": {"unit": "words", "min": null, "max": null, "about": 1000}, "whole": true, "note": "self-correction; the later figure stands"}
+{"id": "f049", "source": "fresh", "request": "Write the abstract for my paper on graph neural networks for drug discovery.", "length": null, "whole": null, "note": ""}
+{"id": "f050", "source": "fresh", "request": "Write a research summary on GLP-1 drugs for a general audience, about 5 pages.", "length": {"unit": "pages", "min": null, "max": null, "about": 5}, "whole": true, "note": "GLP-1 is a name, not a count"}
+{"id": "f051", "source": "fresh", "request": "Write chapter two. Chapter one was 4,000 words, if that helps.", "length": null, "whole": null, "note": "length of existing chapter, only a hint"}
+{"id": "f052", "source": "fresh", "request": "Summarize this thread for my manager in 3 sentences or fewer.", "length": {"unit": "sentences", "min": null, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "f053", "source": "fresh", "request": "Write an explainer of our pricing tiers for the help center, ~400 words.", "length": {"unit": "words", "min": null, "max": null, "about": 400}, "whole": true, "note": ""}
+{"id": "f054", "source": "fresh", "request": "Summarize the 5-page memo below for someone who has two minutes.", "length": null, "whole": null, "note": "5 pages is the source; minutes are not a unit"}
+{"id": "f055", "source": "fresh", "request": "Write a 300-word abstract for the conference submission.", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": ""}
+{"id": "f056", "source": "fresh", "request": "Summarise this 40-page report for the leadership team.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f057", "source": "fresh", "request": "Write a summary of chapter 12 for my book club.", "length": null, "whole": null, "note": "chapter number"}
+{"id": "f058", "source": "fresh", "request": "Write a case study. Open with a hook of under 20 words.", "length": null, "whole": false, "note": "limit on the opening only"}
+{"id": "f059", "source": "fresh", "request": "Can you draft a cover email to the board for the Q3 numbers? No more than three paragraphs.", "length": {"unit": "paragraphs", "min": null, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "f060", "source": "fresh", "request": "I'm presenting to the finance team on Thursday. Write speaker notes for the budget section, roughly two pages.", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "f061", "source": "fresh", "request": "Rewrite this paragraph so it reads better, and keep it under 80 words.", "length": {"unit": "words", "min": null, "max": 80, "about": null}, "whole": true, "note": "edit with a stated result length"}
+{"id": "f062", "source": "fresh", "request": "Draft a performance review for a senior engineer who exceeded expectations.", "length": null, "whole": null, "note": ""}
+{"id": "f063", "source": "fresh", "request": "Write a support macro for customers asking how to reset two-factor authentication.", "length": null, "whole": null, "note": ""}
+{"id": "f064", "source": "fresh", "request": "Draft an apology email to customers affected by the billing error.", "length": null, "whole": null, "note": ""}
+{"id": "f065", "source": "fresh", "request": "Write a comprehensive guide to setting up a home Kubernetes lab.", "length": null, "whole": null, "note": ""}
+{"id": "f066", "source": "fresh", "request": "Write a blog post celebrating our 1,000th customer.", "length": null, "whole": null, "note": ""}
+{"id": "f067", "source": "fresh", "request": "Write a teardown of Figma's onboarding; the verdict section should be a single paragraph.", "length": null, "whole": false, "note": "limit on one section only"}
+{"id": "f068", "source": "fresh", "request": "Add a paragraph about pricing to the end of this post.", "length": null, "whole": null, "note": "edit"}
+{"id": "f069", "source": "fresh", "request": "Write the README intro for our CLI tool. Two paragraphs, no more.", "length": {"unit": "paragraphs", "min": null, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "f070", "source": "fresh", "request": "My manuscript is 85,000 words. Write a query letter for agents.", "length": null, "whole": null, "note": "length of the manuscript, not the letter"}
+{"id": "f071", "source": "fresh", "request": "Write a long-form essay on the decline of local newspapers.", "length": null, "whole": null, "note": "'long-form' with no number"}
+{"id": "f072", "source": "fresh", "request": "Write a product description for noise-cancelling headphones aimed at commuters.", "length": null, "whole": null, "note": ""}
+{"id": "f073", "source": "fresh", "request": "Write a 280-character tweet about the launch.", "length": null, "whole": null, "note": "characters are not a counted unit"}
+{"id": "f074", "source": "fresh", "request": "Summarise the attached 40-page audit report in under 300 words.", "length": {"unit": "words", "min": null, "max": 300, "about": null}, "whole": true, "note": "40 pages is the source"}
+{"id": "f075", "source": "fresh", "request": "Write the speaker notes for slide 7.", "length": null, "whole": null, "note": "slide number"}
+{"id": "f076", "source": "fresh", "request": "Write a summary of the board deck (it's 25 slides) in about 250 words.", "length": {"unit": "words", "min": null, "max": null, "about": 250}, "whole": true, "note": "25 slides is the source"}
+{"id": "f077", "source": "fresh", "request": "Our client sent over a 30-page MSA. Write a summary of the indemnity and liability clauses, one page max.", "length": {"unit": "pages", "min": null, "max": 1, "about": null}, "whole": true, "note": "30 pages is the source"}
+{"id": "f078", "source": "fresh", "request": "Find 10 words that rhyme with 'orange' or come close.", "length": null, "whole": null, "note": "count is the task, not a length"}
+{"id": "f079", "source": "fresh", "request": "Write a toast for my sister's wedding. Something I can say in two minutes, so maybe 300 words.", "length": {"unit": "words", "min": null, "max": null, "about": 300}, "whole": true, "note": "minutes are not a unit; 300 words is the stated length"}
+{"id": "f080", "source": "fresh", "request": "Please write between five and seven sentences describing the apartment for the listing.", "length": {"unit": "sentences", "min": 5, "max": 7, "about": null}, "whole": true, "note": ""}
+{"id": "f081", "source": "fresh", "request": "Write an appeal to the parking ticket. Keep it within one page.", "length": {"unit": "pages", "min": null, "max": 1, "about": null}, "whole": true, "note": ""}
+{"id": "f082", "source": "fresh", "request": "Write the closing remarks for tomorrow's conference.", "length": null, "whole": null, "note": ""}
+{"id": "f083", "source": "fresh", "request": "Write a teardown of how our competitor handles cancellations, and be blunt.", "length": null, "whole": null, "note": ""}
+{"id": "f084", "source": "fresh", "request": "Contract: 30 pages. Flag anything unusual in the termination section.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f085", "source": "fresh", "request": "Review my cover letter and tell me what to change.", "length": null, "whole": null, "note": ""}
+{"id": "f086", "source": "fresh", "request": "Write a summary (one page) of the attached 50-page RFP.", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": "50 pages is the source"}
+{"id": "f087", "source": "fresh", "request": "Draft an incident update for customers in no more than 120 words.", "length": {"unit": "words", "min": null, "max": 120, "about": null}, "whole": true, "note": ""}
+{"id": "f088", "source": "fresh", "request": "Make this 3 sentences shorter.", "length": null, "whole": null, "note": "edit amount"}
+{"id": "f089", "source": "fresh", "request": "Write a blog post called '5 Paragraphs Every README Needs'. 1,000 words max.", "length": {"unit": "words", "min": null, "max": 1000, "about": null}, "whole": true, "note": "title count is not the length"}
+{"id": "f090", "source": "fresh", "request": "Draft a contract summary where the 'Payment terms' part is at most 3 sentences.", "length": null, "whole": false, "note": "limit on one part only"}
+{"id": "f091", "source": "fresh", "request": "Write a detailed teardown of Duolingo's streak mechanics.", "length": null, "whole": null, "note": ""}
+{"id": "f092", "source": "fresh", "request": "- Audience: new engineers\n- Format: blog post\n- Length: 800–1,000 words\n- Tone: friendly", "length": {"unit": "words", "min": 800, "max": 1000, "about": null}, "whole": true, "note": ""}
+{"id": "f093", "source": "fresh", "request": "Write a report on the vendor shortlist with an executive summary of no more than one paragraph.", "length": null, "whole": false, "note": "limit on the summary part only"}
+{"id": "f094", "source": "fresh", "request": "Write a blog post about why we cap PR descriptions at 300 words.", "length": null, "whole": null, "note": "limit is the topic"}
+{"id": "f095", "source": "fresh", "request": "Write a warm thank-you note to our volunteers.", "length": null, "whole": null, "note": ""}
+{"id": "f096", "source": "fresh", "request": "Explain what a p-value is to a product manager.", "length": null, "whole": null, "note": ""}
+{"id": "f097", "source": "fresh", "request": "Write a two-sentence horror story.", "length": {"unit": "sentences", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "f098", "source": "fresh", "request": "Write a single paragraph that explains our refund policy.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "f099", "source": "fresh", "request": "Draft a reply to the support ticket below. Keep it short, two or three sentences at most.", "length": {"unit": "sentences", "min": 2, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "f100", "source": "fresh", "request": "Turn these meeting notes into a clean summary for people who missed it.", "length": null, "whole": null, "note": ""}
+{"id": "f101", "source": "fresh", "request": "Write a 1,000-word piece on why we're sunsetting the mobile app, then a 50-word version for Twitter.", "length": null, "whole": null, "note": "ambiguous: two outputs with two lengths"}
+{"id": "f102", "source": "fresh", "request": "Write a post-mortem for last night's outage. At least three pages; legal wants detail.", "length": {"unit": "pages", "min": 3, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "f103", "source": "fresh", "request": "Write an email with a subject line of no more than 6 words.", "length": null, "whole": false, "note": "subject-line limit only"}
+{"id": "f104", "source": "fresh", "request": "Here are 3 paragraphs of notes. Turn them into a memo.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f105", "source": "fresh", "request": "Write a story for kids about a brave snail, under five hundred words.", "length": {"unit": "words", "min": null, "max": 500, "about": null}, "whole": true, "note": ""}
+{"id": "f106", "source": "fresh", "request": "Explain the indemnification clause in this contract like I'm a founder, not a lawyer.", "length": null, "whole": null, "note": ""}
+{"id": "f107", "source": "fresh", "request": "Write a two-paragraph product update for the changelog.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "f108", "source": "fresh", "request": "I need the methods section rewritten for clarity. Target: 900 words.", "length": {"unit": "words", "min": null, "max": null, "about": 900}, "whole": true, "note": "rewrite with a stated target for the output"}
+{"id": "f109", "source": "fresh", "request": "The attached transcript is about 90 pages. Pull out the action items.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f110", "source": "fresh", "request": "Draft a support reply to a customer whose refund is late. Two short paragraphs.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "f111", "source": "fresh", "request": "Write a statement of purpose for a PhD application. The program caps it at 1000 words.", "length": {"unit": "words", "min": null, "max": 1000, "about": null}, "whole": true, "note": ""}
+{"id": "f112", "source": "fresh", "request": "Need a teardown of Notion's onboarding flow. At least 1,000 words, with screenshots described inline.", "length": {"unit": "words", "min": 1000, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "f113", "source": "fresh", "request": "Write a blog post with a headline under 10 words.", "length": null, "whole": false, "note": "headline limit only"}
+{"id": "f114", "source": "fresh", "request": "Give me a 3-sentence elevator pitch for a budgeting app.", "length": {"unit": "sentences", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "f115", "source": "fresh", "request": "Critique the argument in the essay I pasted below.", "length": null, "whole": null, "note": ""}
+{"id": "f116", "source": "fresh", "request": "Write a short bio for the conference program (50 words max).", "length": {"unit": "words", "min": null, "max": 50, "about": null}, "whole": true, "note": ""}
+{"id": "f117", "source": "fresh", "request": "The customer wrote: 'Please keep replies under 100 words, I read on my phone.' Draft the reply.", "length": {"unit": "words", "min": null, "max": 100, "about": null}, "whole": true, "note": "limit comes from the quoted customer but plainly governs this reply"}
+{"id": "f118", "source": "fresh", "request": "Review this 600-line pull request and tell me what you'd block on.", "length": null, "whole": null, "note": "size of source diff"}
+{"id": "f119", "source": "fresh", "request": "Rewrite this paragraph to sound less defensive.", "length": null, "whole": null, "note": "'this paragraph' is the source"}
+{"id": "f120", "source": "fresh", "request": "Write a summary of the key findings in the attached clinical trial paper.", "length": null, "whole": null, "note": ""}
+{"id": "f121", "source": "fresh", "request": "Please write a short story about a lighthouse keeper, around 3,000 words.", "length": {"unit": "words", "min": null, "max": null, "about": 3000}, "whole": true, "note": ""}
+{"id": "f122", "source": "fresh", "request": "Draft a teardown of the Stripe Atlas signup flow, focusing on friction.", "length": null, "whole": null, "note": ""}
+{"id": "f123", "source": "fresh", "request": "Write a post titled '3 Sentences That Saved Our Launch'.", "length": null, "whole": null, "note": "title"}
+{"id": "f124", "source": "fresh", "request": "Cut 200 words from the draft below.", "length": null, "whole": null, "note": "edit amount"}
+{"id": "f125", "source": "fresh", "request": "Write a whitepaper on edge caching, 8 to 10 pages, with a section per vendor, each section under 300 words.", "length": {"unit": "pages", "min": 8, "max": 10, "about": null}, "whole": true, "note": "per-section limit too"}
+{"id": "f126", "source": "fresh", "request": "Write a reference letter for my former intern. A page is fine, no longer.", "length": {"unit": "pages", "min": null, "max": 1, "about": null}, "whole": true, "note": ""}
+{"id": "f127", "source": "fresh", "request": "Write the summary paragraph for the quarterly report. Just one paragraph.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "f128", "source": "fresh", "request": "Write the 'About us' page for a bakery. Somewhere between 200 and 300 words.", "length": {"unit": "words", "min": 200, "max": 300, "about": null}, "whole": true, "note": ""}
+{"id": "f129", "source": "fresh", "request": "Give me a quick summary of the attached paper, two or three sentences.", "length": {"unit": "sentences", "min": 2, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "f130", "source": "fresh", "request": "Draft a contract for a freelance designer working 20 hours a week.", "length": null, "whole": null, "note": ""}
+{"id": "f131", "source": "fresh", "request": "Write a blog post of 2-3 paragraphs about our new office dog.", "length": {"unit": "paragraphs", "min": 2, "max": 3, "about": null}, "whole": true, "note": ""}
+{"id": "f132", "source": "fresh", "request": "Teardown of Linear's pricing page. Length: one to two pages.", "length": {"unit": "pages", "min": 1, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "f133", "source": "fresh", "request": "Give me a five-sentence summary of the meeting transcript below.", "length": {"unit": "sentences", "min": null, "max": null, "about": 5}, "whole": true, "note": ""}
+{"id": "f134", "source": "fresh", "request": "Write a policy brief on rent control; the think tank's limit is 2 pages.", "length": {"unit": "pages", "min": null, "max": 2, "about": null}, "whole": true, "note": ""}
+{"id": "f135", "source": "fresh", "request": "Write a 500-word essay prompt for my students.", "length": null, "whole": null, "note": "500 words is the essay students will write, not the prompt"}
+{"id": "f136", "source": "fresh", "request": "Write the copy for a 30-second radio ad.", "length": null, "whole": null, "note": "seconds are not a counted unit"}
+{"id": "f137", "source": "fresh", "request": "Write a one-liner for the release announcement.", "length": null, "whole": null, "note": "lines are not a counted unit"}
+{"id": "f138", "source": "fresh", "request": "Write a 6-paragraph essay on the causes of World War I for my class.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 6}, "whole": true, "note": "World War I is a name"}
+{"id": "f139", "source": "fresh", "request": "Could you put together a newsletter intro? Under 100 words please, people skim.", "length": {"unit": "words", "min": null, "max": 100, "about": null}, "whole": true, "note": ""}
+{"id": "f140", "source": "fresh", "request": "Write an op-ed on remote work for the local paper. They take pieces of 600 to 750 words.", "length": {"unit": "words", "min": 600, "max": 750, "about": null}, "whole": true, "note": ""}
+{"id": "f141", "source": "fresh", "request": "Delete the last two paragraphs and smooth the transition.", "length": null, "whole": null, "note": "edit"}
+{"id": "f142", "source": "fresh", "request": "Could you write three paragraphs introducing our new CTO to the company?", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 3}, "whole": true, "note": ""}
+{"id": "f143", "source": "fresh", "request": "Write a report on the pilot results, no fewer than 2,000 words.", "length": {"unit": "words", "min": 2000, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "f144", "source": "fresh", "request": "Write a two-page brief on the competitive landscape for the CEO.", "length": {"unit": "pages", "min": null, "max": null, "about": 2}, "whole": true, "note": ""}
+{"id": "f145", "source": "fresh", "request": "Expand the intro by about a hundred words.", "length": null, "whole": null, "note": "edit amount"}
+{"id": "f146", "source": "fresh", "request": "Review this Go function for race conditions.", "length": null, "whole": null, "note": ""}
+{"id": "f147", "source": "fresh", "request": "Write an essay on the ethics of facial recognition (at least 2,500 words).", "length": {"unit": "words", "min": 2500, "max": null, "about": null}, "whole": true, "note": ""}
+{"id": "f148", "source": "fresh", "request": "Write a one-page memo explaining the new expense policy.", "length": {"unit": "pages", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "f149", "source": "fresh", "request": "Write a summary of today's standup for Slack, one sentence.", "length": {"unit": "sentences", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "f150", "source": "fresh", "request": "Write a newsletter section celebrating the release of version 2.0.", "length": null, "whole": null, "note": ""}
+{"id": "f151", "source": "fresh", "request": "Draft the executive summary for our grant application. It must not exceed 500 words.", "length": {"unit": "words", "min": null, "max": 500, "about": null}, "whole": true, "note": ""}
+{"id": "f152", "source": "fresh", "request": "Translate the two-page letter into French.", "length": null, "whole": null, "note": "length of source material"}
+{"id": "f153", "source": "fresh", "request": "Write a FAQ for the new billing system; keep every answer to two sentences.", "length": null, "whole": false, "note": "per-answer limit only"}
+{"id": "f154", "source": "fresh", "request": "Draft a reply to this angry email from a vendor. One paragraph, polite but firm.", "length": {"unit": "paragraphs", "min": null, "max": null, "about": 1}, "whole": true, "note": ""}
+{"id": "f155", "source": "fresh", "request": "Write a code review comment explaining why we shouldn't catch generic exceptions here.", "length": null, "whole": null, "note": ""}
+{"id": "f156", "source": "fresh", "request": "Write a product description for our ceramic mug in exactly 50 words.", "length": {"unit": "words", "min": 50, "max": 50, "about": null}, "whole": true, "note": ""}
+{"id": "f157", "source": "fresh", "request": "Write a LinkedIn post announcing our seed round, max 150 words.", "length": {"unit": "words", "min": null, "max": 150, "about": null}, "whole": true, "note": ""}
+{"id": "f158", "source": "fresh", "request": "I type 80 words per minute; write me a cover letter.", "length": null, "whole": null, "note": "rate"}
+{"id": "f159", "source": "fresh", "request": "Draft slide notes for the 'Roadmap' slide. Keep it to roughly 120 words so I can say it in under a minute.", "length": {"unit": "words", "min": null, "max": null, "about": 120}, "whole": true, "note": ""}
+{"id": "f160", "source": "fresh", "request": "Our handbook runs to 120 pages. Write an announcement that the new version is live.", "length": null, "whole": null, "note": "length of other material"}
