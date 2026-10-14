@@ -654,12 +654,41 @@ export interface RepairRecord {
   /** the taste pass (core/taste/repair.ts): rules the reader, holding VETO, read as missed, and which it no longer does */
   readonly taste?: { readonly targeted: readonly string[]; readonly fixed: readonly string[]; readonly why: string };
   /**
-   * GRADED FEATURES (`--graded`, a study arm): the counted features whose rules were repair targets without being
-   * failures, how many of them a rewrite was pointed at, and how many a kept rewrite moved toward the band. Present
-   * only on a run that asked for it; the evaluation never reads it.
+   * EVERY EDIT THE REPAIR TRIED: how many span rewrites were kept, how many were refused or discarded, and why
+   * (the guard that refused each, the acceptance that discarded a pass). Present whenever a rewrite pass ran.
    */
-  readonly graded?: { readonly features: readonly string[]; readonly targeted: number; readonly repaired: number };
+  readonly edits?: RepairEdits;
+  /**
+   * GRADED FEATURES (`--graded`, a study arm): the counted features whose rules were repair targets without being
+   * failures, and everything the flag caused. Present only on a run that asked for it; the evaluation never reads it.
+   */
+  readonly graded?: GradedRecord;
   readonly why: string;
+}
+
+export interface RepairEdits { readonly accepted: number; readonly rejected: number; readonly reasons: readonly string[] }
+
+/** What `--graded` did on one run. `calls` and `costUsd` are the ledger's lines for the purpose `graded`, not estimates. */
+export interface GradedRecord {
+  /** the features graded on this standard */
+  readonly features: readonly string[];
+  /** how many of them a rewrite of the delivered text was pointed at */
+  readonly targeted: number;
+  /** how many of them a kept rewrite moved toward the band */
+  readonly repaired: number;
+  /** drafts written again for graded misses alone (one per round at most); 0 before the run's wrappers add theirs */
+  readonly redrafts: number;
+  /** the directional note lines for graded misses sent to a redraft or a shape round, as sent */
+  readonly notes: readonly string[];
+  /** each graded feature's value on the first draft and on the delivered text, and its band */
+  readonly values: Readonly<Record<string, { readonly before: number | null; readonly after: number | null; readonly lo: number | null; readonly hi: number | null }>>;
+  /** the span rewrites of passes the flag alone caused: kept, refused or discarded, and why */
+  readonly edits: RepairEdits;
+  /** inference calls and dollars the flag alone caused, from the ledger (`SpendPurpose` 'graded') */
+  readonly calls: number;
+  readonly costUsd: number;
+  /** what the run's call and dollar bounds were raised by for the graded redrafts (one draft per round) */
+  readonly allowance?: { readonly calls: number; readonly usd: number };
 }
 
 /**

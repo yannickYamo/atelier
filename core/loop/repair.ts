@@ -283,8 +283,18 @@ export function cutSpan(text: string, start: number, end: number): string {
 export interface RegressionVerdict { readonly ok: boolean; readonly why: string }
 
 /**
+ * The least a check's |error| (in widths of its band) may move for the move to count: a fall of this much is progress
+ * on a graded feature (`acceptRepair`), and a rise of this much is a regression on any feature (`regressions`).
+ */
+export const GRADED_STEP = 0.1;
+
+/**
  * What got worse between two reports: a rule that was not broken and now is (whatever it was before —
- * MET, or not measurable because the text was too short), or a broken rule broken in more places.
+ * MET, or not measurable because the text was too short), a broken rule broken in more places, or a broken rule
+ * whose value moved further from its band by GRADED_STEP or more (`ObserverResult.error`, the FEATURE observer's
+ * signed distance). The third is read on every check that carries an error, enforced or not: a FEATURE miss is
+ * pointed at three carriers at most, so the count of places could stay at three while the value drifted from one
+ * band-width out to three, and the drift passed as "no worse".
  * Shared by the repair loop and by `fix`, so "worse" means one thing everywhere.
  */
 export function regressions(before: VerifyReport, after: VerifyReport): string[] {
@@ -293,7 +303,8 @@ export function regressions(before: VerifyReport, after: VerifyReport): string[]
     const b = was.get(c.requirementId);
     if (c.result.verdict !== 'VIOLATED') return false;
     if (b?.verdict !== 'VIOLATED') return true;
-    return c.result.spans.length > b.spans.length;
+    if (c.result.spans.length > b.spans.length) return true;
+    return typeof c.result.error === 'number' && typeof b.error === 'number' && Math.abs(c.result.error) - Math.abs(b.error) >= GRADED_STEP - 1e-9;
   }).map((c) => c.requirementId);
 }
 
@@ -315,9 +326,6 @@ export function addsNoWords(before: string, after: string): boolean {
  * no word (`wordsAdded: false`: an em dash made a comma) cannot add an invented specific, so the reading of specifics
  * read again is no evidence against it: an em dash fix was thrown away because that reading listed one sentence more.
  */
-/** The least a graded feature's |error| (in widths of its band) must fall for a pass to count as progress on it. */
-export const GRADED_STEP = 0.1;
-
 export function acceptRepair(before: VerifyReport, after: VerifyReport,
   opts: { wordsAdded?: boolean;
     /** GRADED checks (run-repair.ts, `CheckOptions.graded`), never enforced rules: for these alone, progress is also a fall in |error| of GRADED_STEP or more */
@@ -328,6 +336,9 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
   const req = (r: VerifyReport): number => broken(r).length;
   // Progress is fewer broken REQUIRED rules, or the same rules broken in fewer places: fixing one of two
   // invented figures is a step, and discarding it threw away a good placeholder and ended the loop.
+  // A FEATURE miss counts its places as the carriers it is pointed at (../observers/features.ts), for every FEATURE
+  // rule, enforced or not: a repair needs a target. So a REQUIRED feature rule's miss pointed at two carriers where it
+  // was pointed at three is progress here, by design; one newly broken is refused above, as any rule is.
   const spans = (r: VerifyReport): number => broken(r).reduce((n, c) => n + Math.max(1, c.result.spans.length), 0);
   if (req(after) < req(before)) return { ok: true, why: `REQUIRED rules broken: ${req(before)} → ${req(after)}` };
   if (spans(after) < spans(before)) return { ok: true, why: `places breaking a REQUIRED rule: ${spans(before)} → ${spans(after)}` };

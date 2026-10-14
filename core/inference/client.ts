@@ -327,6 +327,7 @@ export const processSpentUsd = (): number => processSpent;
 export type SpendPurpose =
   | 'writing'          // a draft, a redraw, a completion, a section or its plan
   | 'repair'           // rewriting the spans that broke a rule, or redrafting around a cut claim
+  | 'graded'           // what `--graded` alone caused: a draft written again, or spans rewritten, for a graded feature that no enforced rule asked for
   | 'claim reader'     // reading a draft for invented specifics
   | 'taste reader'     // reading a draft against the rules only a reading can check, and its repair
   | 'context judge'    // what the request asks for: its register, its parts, what a specific refers to

@@ -17,7 +17,7 @@ import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
-import type { RepairRecord, Requirement } from '../../core/state/canonical-state.js';
+import type { RepairRecord, RepairEdits, GradedRecord, Requirement } from '../../core/state/canonical-state.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -49,7 +49,7 @@ import { tastePermissions } from '../../core/taste/calibration.js';
 import { refineTaste } from '../../core/taste/repair.js';
 import { overlapIndex, sentencesKept, sentencesAdded } from '../../core/observers/overlap.js';
 import { recordTaste, readerModel, readerClient as readerClientFor } from './taste.js';
-import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient } from '../../core/inference/client.js';
+import { processSpentUsd, processSpendByPurpose, spendBetween, type Budget, type InferenceClient, type SpendPurpose } from '../../core/inference/client.js';
 import { countWords, wordsWritten } from '../../core/eval/size.js';
 import { MATERIAL_NOT_BOUND, CONDITIONAL_NOT_BOUND } from '../../core/eval/record-build.js';
 import { statedLength, statedLengths, againstStated, statedBounds, notHeldBecause, inWords, ownLengthBand, againstBand, type StatedLength } from '../../core/intake/length.js';
@@ -438,15 +438,25 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const taste = std && argv.includes('--taste') && !argv.includes('--no-taste') ? TasteSession.open(L, std, asked, waiting) : null;
   // The bounds grow with the drafts and the taste reader's calls, and a request the cap cannot cover is
   // refused before anything is spent rather than failing halfway with nothing delivered.
+  // GRADED FEATURES (a study arm, experimental): FEATURE rules on these features are repair targets, never failures.
+  // A graded miss may have the piece written once more (`withRedraft`), one draft per round at most, and the loop may
+  // rewrite that draft twice: the bounds below are raised by exactly that, GRADED_DRAFT_CALLS calls and
+  // GRADED_DRAFT_USD per round, and the record states what they were raised by (`GradedRecord.allowance`).
+  const graded = gradedFeatures(flag('--graded'));
+  if (graded !== undefined && argv.includes('--no-repair')) die('--graded makes feature rules repair targets, and --no-repair turns the repair off: drop one of them.');
+  const gradedRounds = graded !== undefined ? 1 + shapeRounds : 0;
+  const gradedTrace: GradedTrace | null = graded === undefined ? null : { notes: [], redrafts: 0, edits: { accepted: 0, rejected: 0, reasons: [] }, first: null,
+    allowance: { calls: flag('--max-calls') === undefined ? gradedRounds * GRADED_DRAFT_CALLS : 0, usd: flag('--cap') === undefined ? gradedRounds * GRADED_DRAFT_USD : 0 } };
   const budget: Budget = { spentUsd: 0, capUsd: numericFlag('--cap', Math.max(1.0, 0.3 * nDrafts + 0.15 * editBudget + 0.4
-      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0)),
+      + (argv.includes('--sections') ? 0.1 * MAX_SECTIONS * nDrafts : 0)) + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0) + shapeRounds * (0.3 + 0.15 * editBudget + (voiceCould ? 0.03 * MAX_PARAGRAPHS : 0)) + (strict ? (shapeRounds + 1) * 0.4 : 0)
+      + gradedRounds * GRADED_DRAFT_USD),
     // Edits come last; their calls are reserved on top of the repair's (up to five), so a release's edit
     // budget is not silently starved by the rewrites before it.
     // Long form by section: a plan, and up to MAX_SECTIONS calls per draft instead of one.
     // A skill built from a method may write once more with what is missing named, and check that draft like the first.
     maxCalls: numericFlag('--max-calls', nDrafts + editBudget + 4 + (editBudget ? 5 : 0) + (taste?.callsFor(nDrafts) ?? 0) + (std?.requirements.some((r) => r.obligation === 'DELIVERABLE' && r.measurement) ? 6 : 0)
       + (argv.includes('--sections') ? 1 + MAX_SECTIONS * nDrafts : 0) + (nearnessWanted ? 1 : 0) + (voiceCould ? MAX_PARAGRAPHS * 2 + 4 : 0) + shapeRounds * (1 + 5 + editBudget + (voiceCould ? MAX_PARAGRAPHS + 4 : 0) + (taste?.callsFor(1) ?? 0)) + (structureFlag ? 2 : 0)
-      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0)) };
+      + (strict ? (shapeRounds + 1) * (9 + editBudget + (taste?.callsFor(1) ?? 0)) + 1 : 0) + gradedRounds * GRADED_DRAFT_CALLS) };
   // FROM HERE ON, EVERYTHING SPENT IS THIS RUN'S. Taken where the budget is made, before the first call that can
   // draw on it: the reading of the request and the grading of its subject are paid for before any draft, and a
   // snapshot taken at the first draft left them out of the lines by purpose, and out of the total whenever the claim
@@ -551,9 +561,6 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     withheld.push(...p.prose.map((q) => q.statement));
     report.say(`The request states its own format ("${formatAsked}"): ${p.measured.length + p.prose.length} presentation rule(s) withheld for this run.`);
   }
-  // GRADED FEATURES (a study arm, experimental): FEATURE rules on these features are repair targets, never failures.
-  const graded = gradedFeatures(flag('--graded'));
-  if (graded !== undefined && argv.includes('--no-repair')) die('--graded makes feature rules repair targets, and --no-repair turns the repair off: drop one of them.');
   const checks = { ...checksFor(L, { material: materialText, task: asked, context: { request: asked, material }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders'), ...(judge ? { judge } : {}) }),
     ...(waived.size ? { waived } : {}), ...(graded !== undefined ? { graded } : {}) };
   // DRAFTS THAT DIFFER (core/fidelity/types.ts, `diversity`): each draft its own temperature and its own slice of
@@ -638,12 +645,12 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineDraft({ client, budget, name, std, checks, taste }), unmet ? { unmet, notes: completions, redraft: async (note) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {})).piece } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, checks, taste }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
-      shapeRounds > 0 ? { client, budget, std, graded, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
+      shapeRounds > 0 ? { client, budget, std, graded, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
         fresh: planState ? (round: number) => freshPlannedDraft(client, budget, servedForRun, taskForRun, planState, round) : null } : null),
-      planState ? { budget, trace, state: planState } : null)) : null,
+      planState ? { budget, trace, state: planState } : null), gradedTrace, ledgerBefore)) : null,
     std && nDrafts > 1 ? withSections(selectDraft({ n: nDrafts, name, std, checks, taste, ownBand, signals: store.getSignals(L), profile: steerProfile, trace, ledger, sampling, ...(diverse ? { variant: variantOf, retrievedFor } : {}) }), sectionWriter)
       : sectionWriter ? { n: 1, write: sectionWriter, choose: () => ({ index: 0, why: '' }) } : null,
     std && checks.guardClaims !== false ? async (text: string) => {
@@ -976,6 +983,47 @@ interface FidelityTrace { structure?: NonNullable<FidelityRecord['structure']>; 
 /** What a refine step delivers: the text, its repair record, and the report counted on that very text. */
 interface Delivered { readonly output: string; readonly repair: RepairRecord | null; readonly report: VerifyReport }
 
+/**
+ * What one graded redraft may spend, and what the bounds are raised by for each: one draft call at the cap's price of a
+ * draft, and the two rewrite passes the loop may run on that draft (core/loop/run-repair.ts, `maxPasses`) at theirs.
+ */
+export const GRADED_DRAFT_CALLS = 1 + 2;
+export const GRADED_DRAFT_USD = 0.3 + 2 * 0.05;
+
+/**
+ * EVERYTHING `--graded` DID ON A RUN, gathered across the steps that did it: the note lines sent (`withRedraft`,
+ * `withShape`), the drafts written for graded misses alone, every rewrite the flag's passes tried (summed over each
+ * text the loop refined), each feature's value on the first draft, and what the bounds were raised by. Written onto
+ * the delivered record once, at the end (`withGradedRecord`), with the calls and dollars the ledger charged to the flag.
+ */
+export interface GradedTrace { notes: string[]; redrafts: number; edits: { accepted: number; rejected: number; reasons: string[] };
+  first: GradedRecord['values'] | null; readonly allowance: { readonly calls: number; readonly usd: number } }
+
+/** Every text the loop refines adds its graded rewrites to the trace; the first keeps its values as the run's "before". */
+function trackGraded(refine: (draft: string) => Promise<Delivered>, t: GradedTrace | null) {
+  if (!t) return refine;
+  return async (draft: string): Promise<Delivered> => {
+    const d = await refine(draft);
+    const g = d.repair?.graded;
+    if (g) { t.edits.accepted += g.edits.accepted; t.edits.rejected += g.edits.rejected; t.edits.reasons.push(...g.edits.reasons); t.first ??= g.values; }
+    return d;
+  };
+}
+
+/** The delivered record's `graded`, completed from the trace and the ledger: what the whole run did on the flag's account. */
+function withGradedRecord(refine: (draft: string) => Promise<Delivered>, t: GradedTrace | null, ledgerBefore: ReturnType<typeof processSpendByPurpose>) {
+  if (!t) return refine;
+  return async (draft: string): Promise<Delivered> => {
+    const d = await refine(draft);
+    const line = spendBetween(ledgerBefore, processSpendByPurpose()).find((l) => l.purpose === 'graded');
+    const base: RepairRecord = d.repair ?? { passes: 0, violatedBefore: [], violatedAfter: brokenIn(d.report), originalOutputHash: sha(d.output), why: 'every REQUIRED measured rule holds' };
+    const g: GradedRecord = base.graded ?? { features: [], targeted: 0, repaired: 0, redrafts: 0, notes: [], values: {}, edits: { accepted: 0, rejected: 0, reasons: [] }, calls: 0, costUsd: 0 };
+    const values = Object.fromEntries(Object.entries(g.values).map(([f, x]) => [f, { ...x, before: t.first?.[f]?.before ?? x.before }]));
+    const edits: RepairEdits = { accepted: t.edits.accepted, rejected: t.edits.rejected, reasons: [...new Set(t.edits.reasons)] };
+    return { ...d, repair: { ...base, graded: { ...g, redrafts: t.redrafts, notes: [...t.notes], values, edits, calls: line?.calls ?? 0, costUsd: line?.usd ?? 0, allowance: t.allowance } } };
+  };
+}
+
 function withEdits(refine: (draft: string) => Promise<Delivered>,
   e: { client: InferenceClient; budget: Budget; name: string; std: Standard; checks: Checks; profile: FidelityProfile; editBudget: number; trace: FidelityTrace; taste: TasteSession | null } | null) {
   if (!e) return refine;
@@ -1094,7 +1142,8 @@ export interface Unmet { readonly id: string; readonly statement: string; readon
   /** a miss of length, in words: what the writer is told to aim for, since told only the limit it lands just past it again */ readonly aim?: string;
   /** whose length was missed, where it is the request's and not the span of the author's pieces */ readonly of?: 'request';
   /** the miss is of the length of the whole piece (not of one section of it): what a trim can put right */ readonly whole?: true;
-  /** which way and how far, in plain words ("about 120 words shorter", "about 4 fewer parenthetical asides per 1,000 words"), where the miss is a number */ readonly move?: string }
+  /** which way and how far, in plain words ("about 120 words shorter", "about 4 fewer parenthetical asides per 1,000 words"), where the miss is a number */ readonly move?: string;
+  /** a graded feature's miss (`--graded`) of a rule the standard does not enforce: what the author's pieces usually do, never what the work requires */ readonly graded?: true }
 export const LENGTH_ID = 'length';
 /** The fewest pieces from which a draft is written again for its length: (n - 1) / (n + 1) is 0.8 at nine. */
 export const LENGTH_REDRAFT_PIECES = 9;
@@ -1144,7 +1193,8 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
   const gradedMiss = (x: VerifyReport['checked'][number]): Unmet => {
     const m = params.get(x.requirementId); const e = x.result.error ?? 0;
     const move = m && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
-    return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail, off: Math.abs(e), ...(move ? { move } : {}) };
+    // An enforced rule that is also graded is still the method's: only a rule the standard does not enforce is "usually".
+    return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail, off: Math.abs(e), ...(move ? { move } : {}), ...(acts(x) ? {} : { graded: true as const }) };
   };
   return (d) => {
     const rules = [...d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss),
@@ -1166,10 +1216,23 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
 
 /** Each miss on its own line: the rule in the owner's words, what the check found, what to aim for, and which way and how far. */
 const missLines = (unmet: readonly Unmet[]): string => unmet.map((u) => `- ${u.statement} (${u.detail}${u.aim ? `; ${u.aim}` : ''}${u.move ? `; ${u.move}` : ''})`).join('\n');
+/** The note lines for the graded misses alone (`--graded`): what the record keeps of a note, since these are what the flag sent. */
+export const gradedLines = (unmet: readonly Unmet[]): string[] => unmet.filter((u) => u.graded).map((u) => missLines([u]));
+
+/**
+ * THE MISSES, IN TWO BLOCKS: what the work requires, and, under `--graded`, what the author's pieces usually do. A
+ * graded feature's rule is not required, and a note that said "requires" of it told the writer the method said so.
+ * Each block opens with its own line, so a graded miss is never read as an enforced one.
+ */
+const missBlocks = (unmet: readonly Unmet[], whatDraft: string): string => {
+  const required = unmet.filter((u) => !u.graded); const usual = unmet.filter((u) => u.graded);
+  return (required.length ? `${whatDraft} did not hold what this work requires:\n${missLines(required)}\n` : '')
+    + (usual.length ? `${whatDraft} did not do what your pieces usually do (each line says which way and about how far):\n${missLines(usual)}\n` : '');
+};
 
 /** What the writer is told before the one more draft: everything unmet, and the draft it is to keep what it can of. */
 export function redraftNote(unmet: readonly Unmet[], draft: string): string {
-  return `An earlier draft did not hold what this work requires:\n${missLines(unmet)}\n`
+  return missBlocks(unmet, 'An earlier draft')
     + 'Write the whole piece again so that each of them holds. Keep what the earlier draft says wherever it can stay. Where a length is given to aim for, cut or add until you are there, and count before you finish. '
     + 'Fill them only from the request and the material you were given. Where you were not given what one needs, say so in its place. Never invent a figure, a source or a result to fill a table or a section.\n\n'
     + `The earlier draft:\n<earlier-draft>\n${draft.trim()}\n</earlier-draft>`;
@@ -1203,7 +1266,7 @@ export function roundMisses(std: Standard, d: { output: string; report: VerifyRe
  */
 export function shapeNote(unmet: readonly Unmet[]): string {
   if (!unmet.length) return '';
-  return `An earlier draft of this piece did not hold what this work requires:\n${missLines(unmet)}\n`
+  return missBlocks(unmet, 'An earlier draft of this piece')
     + 'Write the piece so that each of them holds. Where a direction and an amount are given, move by about that much. '
     + 'Fill them only from the request and the material you were given; where you were not given what one needs, say so in its place. Never invent a figure, a source or a result.';
 }
@@ -1345,11 +1408,15 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
  * table or a section with what it was not given: a figure the material does not hold is the claim check's either way.
  */
 export function withRedraft(refine: (draft: string) => Promise<Delivered>,
-  c: { unmet: (d: Delivered) => Unmet[]; redraft: (note: string) => Promise<string>; notes: string[] } | null) {
+  c: { unmet: (d: Delivered) => Unmet[]; redraft: (note: string, purpose?: SpendPurpose) => Promise<string>; notes: string[];
+    /** under `--graded`: where the graded note lines sent and the drafts written for graded misses alone are counted */
+    graded?: GradedTrace | null } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
-  const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : 'the method requires');
+  // A graded miss is never something the method requires: it is what the author's pieces usually do.
+  const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : us.every((u) => u.graded) ? 'your pieces usually do'
+    : us.some((u) => u.graded) ? 'the method requires or your pieces usually do' : 'the method requires');
   const others = (x: Delivered, us: readonly Unmet[]): number => brokenIn(x.report).filter((id) => !us.some((u) => u.id === id)).length;
   return async (draft: string) => {
     let d = await refine(draft);
@@ -1380,7 +1447,12 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
           const cut = applyCuts(d.output, named.split('\n'), cutTarget(missing, count(d.output)), count);
           if (!cut.applied.length) { picking = false; c.notes.push('The draft runs long; the writer named nothing that could be removed as written, so the next pass writes it shorter.'); continue; }
           precut ??= d.output; piece = cut.text;
-        } else piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(missing, d.output));
+        } else {
+          // A draft written for graded misses alone is the flag's: its own purpose on the ledger, and counted on the record.
+          const gradedOnly = !trimming && missing.every((u) => u.graded);
+          if (c.graded && !trimming) { c.graded.notes.push(...gradedLines(missing)); if (gradedOnly) c.graded.redrafts += 1; }
+          piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(missing, d.output), gradedOnly ? 'graded' : 'writing');
+        }
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
         const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing);
@@ -1388,7 +1460,7 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
         if (!better && cutting) { picking = false; c.notes.push(`${outcome} The cut was not kept; the next pass writes it shorter.`); continue; }
         if (!better) return say(d, outcome);
-        const kept: Delivered = d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: 'written again with what the work requires named' } };
+        const kept: Delivered = d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: `written again with what ${missing.every((u) => u.graded) ? 'your pieces usually do' : 'the work requires'} named` } };
         // A cut keeps the draft from before it, so what was taken out can be read (the record holds the draft cut from).
         d = say(precut !== null && kept.repair ? { ...kept, repair: { ...kept.repair, draft: precut, originalOutputHash: sha(precut) } } : kept, outcome);
         missing = missing2;
@@ -1430,7 +1502,7 @@ function withCoverage(refine: (draft: string) => Promise<Delivered>,
 }
 
 function withShape(refine: (draft: string) => Promise<Delivered>,
-  s: { client: InferenceClient; budget: Budget; std: Standard; graded?: CheckOptions['graded']; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
+  s: { client: InferenceClient; budget: Budget; std: Standard; graded?: CheckOptions['graded']; gradedTrace?: GradedTrace | null; calibration: TypicalityCalibration | null; detector: FidelityProfile['detector']; target: number | null; authorTarget: number | null;
     rounds: number; servedText: string; task: string; trace: FidelityTrace; taste: TasteSession | null;
     /** how a later round's draft is written, when drafts are written against a plan; null for a plain draft */
     fresh?: ((round: number) => Promise<string>) | null } | null) {
@@ -1460,7 +1532,9 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
         // THE NEXT ROUND LEARNS WHAT THE LAST ONES MISSED. Started from nothing, a round missed the same rule the round
         // before it did; it is told the best round's misses, each with which way and how far (`roundMisses`).
         const bestSoFar = tried.reduce((a, b) => (better(a, b) ? b : a));
-        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, shapeNote(roundMisses(s.std, bestSoFar.d, s.graded)), {})).piece;
+        const misses = roundMisses(s.std, bestSoFar.d, s.graded);
+        if (s.gradedTrace && !s.fresh) s.gradedTrace.notes.push(...gradedLines(misses));
+        const piece = s.fresh ? await s.fresh(round) : (await spendOneWithResult(s.client, s.budget, s.servedText, s.task, null, shapeNote(misses), {})).piece;
         tried.push(await run(piece));
       } catch (err) {
         note = `round ${round} could not run (${(err as Error).message.split('\n')[0]}); the best output so far was delivered`;
@@ -1841,7 +1915,8 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   if (r) {
     report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
       + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
-    if (r.graded) report.detail(`graded features (a study arm, never a failure): ${r.graded.features.join(', ') || 'none in this standard'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range.`);
+    if (r.graded) report.detail(`graded features (a study arm, never a failure): ${r.graded.features.join(', ') || 'none in this standard'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range; `
+      + `${r.graded.redrafts} draft(s) written again for them; ${r.graded.edits.accepted} rewrite(s) kept, ${r.graded.edits.rejected} not; ${r.graded.calls} call(s), $${r.graded.costUsd.toFixed(4)}, on their account.`);
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
     const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
