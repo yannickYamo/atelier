@@ -21,8 +21,11 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 - **A filtered or declined call is a row, not the end of the run.** A provider's content filter or a model's refusal
   was retried three times, paid for each time, and then stopped the whole arm with no row written. It is now written
   once as `filtered` (`CONTENT_FILTER` or `REFUSAL`, and on the self-review arm which call), charged as an estimate
-  (`cost_estimated`), and the arm goes on; a run inside `atelier invoke` that was filtered is read from its message.
-  A transport failure still retries and stops after three.
+  (`cost_estimated`, one call's allowance, which never raises the allowance kept for the next call), and the arm
+  goes on. That includes a filter reported as an HTTP 400 ("Output blocked by content filtering policy") and a
+  backend's refusal, and a run inside `atelier invoke` that was filtered or refused, read from its message. A
+  transport failure still retries and stops after three. The thinking setting is learned off only on a 400 that
+  rejects the field itself, never on one that names it for another reason.
 
 ### Changed, for 2.0: one evaluation record, and a mark never says more than was observed
 
