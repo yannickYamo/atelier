@@ -223,3 +223,76 @@ describe('correction after the blind read: the writer aims inside the length, an
     expect(out.repair.draft).toBe(long);
   });
 });
+
+describe('final review: the cut counts as the rule it serves counts, and falls back when a cut is refused', () => {
+  const table = '| Name | Present | Why it matters here |\n|---|---|---|\n| Scale | Yes | the network grows with every new account added |\n| Brand | No | nobody asks for it by name in this market yet |';
+  const sentences = Array.from({ length: 12 }, (_, i) => `Restated point number ${'abcdefghijkl'[i]} adds little to the argument here.`);
+  const draft = `Lead sentence of the piece stands here.\n\n${table}\n\nOpening claim of this paragraph. ${sentences.join(' ')}`;
+  it('a method limit counted in prose words stops the cut when the prose is inside, whatever the table holds', async () => {
+    const { withRedraft, cutTarget } = await import('../cli/commands/invoke.js');
+    const { proseWords } = await import('../core/observers/style.js');
+    expect(typeof cutTarget).toBe('function');
+    const prose0 = proseWords(draft); const max = prose0 - 20;
+    const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
+    const unmet = (x: { output: string }) => { const n = proseWords(x.output); return n > max ? [{ id: 'x9', whole: true as const, statement: `At most ${max} words.`, detail: `${n} words (at most ${max}): long by ${n - max}`, off: n - max, aim: `aim for ${max - 5} words or fewer` }] : []; };
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => sentences.join('\n') })(draft) as unknown as { output: string };
+    expect(proseWords(out.output)).toBeLessThanOrEqual(max);
+    expect(proseWords(out.output)).toBeGreaterThan(max - 25);
+  });
+  it('a cut the checks refuse (it ran short of a band) is followed by the rewrite, not the end of the step', async () => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
+    const n = (t: string) => wordsWrittenOf(t);
+    const unmet = (x: { output: string }) => { const k = n(x.output); return k > 60 ? [{ id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: 'l', detail: `${k}`, off: k - 60, aim: 'aim for 30 words or fewer' }] : k < 52 ? [{ id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: 'l', detail: `${k}`, off: 52 - k, aim: 'aim for 55 words or more' }] : []; };
+    const long = `Opening claim of this paragraph. ${sentences.slice(0, 7).join(' ')}`;
+    const asked: string[] = [];
+    // the cut lands short of the band (52 to 60), is refused, and the rewrite follows
+    await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async (note) => { asked.push(note); return asked.length === 1 ? sentences.slice(1, 7).join('\n') : Array.from({ length: 55 }, () => 'w').join(' '); } })(long);
+    expect(asked.length).toBeGreaterThanOrEqual(2);
+    expect(asked.at(-1)).toContain('Return the same piece with words removed');
+  });
+});
+
+describe('final review: a page count is read only after a label that names the length, and held as a ceiling', () => {
+  const pages = (r: string) => statedLengths(r).filter((s) => s.unit === 'pages');
+  it('a label that names a document, whatever document, is not a length in pages', () => {
+    for (const r of ['Summarize the attached contract. Contract: 30 pages.', 'Summarize this proposal. Proposal: 10 pages.', 'Write a summary of the case study (Case study: 15 pages).', 'Present it. Slides: 10 pages.', 'Write a one-paragraph abstract. Paper length: eight pages.'])
+      expect(pages(r), r).toEqual([]);
+    for (const r of ['Write the teardown. Quick mode: one to two pages.', 'Summarise the call. Length: two pages.', 'Draft the memo. Output length: 2 pages.', 'Draft the memo. Target length: one page.'])
+      expect(pages(r), r).toHaveLength(1);
+  });
+  it('a length in words after a label is read as before', () => {
+    expect(statedLength('Write the launch post. Blog post: 800 words.')).toMatchObject({ unit: 'words', target: 800 });
+  });
+  it('"a one-page cover letter" is held at most one page: shorter is inside it', async () => {
+    const { requestLength } = await import('../cli/commands/invoke.js');
+    const w = inWords(statedLength('Write a one-page cover letter.')!)!;
+    expect(w).toMatchObject({ kind: 'max', max: WORDS_PER_PAGE });
+    expect(requestLength(Array.from({ length: 400 }, () => 'w').join(' '), w).met).toBe(true);
+  });
+});
+
+describe('final review: more of what a cut must leave alone', () => {
+  it('after an abbreviation, an ordinal, a pronoun across a blank line, inside code, a figure in words', async () => {
+    const { applyCuts } = await import('../cli/commands/invoke.js');
+    const keep = (draft: string, pick: string) => { expect(applyCuts(draft, [pick], 0), pick).toMatchObject({ applied: [] }); };
+    keep('Intro here. We met Dr. Smith at the office today. He agreed.', 'Smith at the office today.');
+    keep('Intro here. First, the cost matters a lot to us. Second, the time matters.', 'First, the cost matters a lot to us.');
+    keep('Intro here. Smith joined the firm early on in its life. He later left.', 'Smith joined the firm early on in its life.');
+    keep('Intro here. A sentence that ends the paragraph now.\n\nThis means the point stands.', 'A sentence that ends the paragraph now.');
+    keep('Intro.\n\n```\nKeep this line. Remove me now please.\n```\n', 'Remove me now please.');
+    keep('Intro here. It happened twice in the last year alone. Next one.', 'It happened twice in the last year alone.');
+  });
+});
+
+describe('final review: the record and the report say the same thing', () => {
+  it('the hash of the draft kept is the hash of that draft', async () => {
+    const { withRedraft, LENGTH_ID } = await import('../cli/commands/invoke.js');
+    const { sha } = await import('../cli/runtime.js');
+    const d = (text: string) => ({ output: text, report: { failed: false, checked: [], unchecked: [] }, repair: null }) as never;
+    const unmet = (x: { output: string }) => { const n = wordsWrittenOf(x.output); return n > 20 ? [{ id: LENGTH_ID, whole: true as const, of: 'request' as const, statement: 'length', detail: `${n} words`, off: n - 20, aim: 'aim for 18 words or fewer' }] : []; };
+    const long = 'Keep this opening sentence here, as it is. Drop this whole sentence because it only restates the opening again. Keep the end of it.';
+    const out = await withRedraft(async (t: string) => d(t), { unmet, notes: [], redraft: async () => 'Drop this whole sentence because it only restates the opening again.' })(long) as unknown as { repair: { draft: string; originalOutputHash: string } };
+    expect(out.repair.originalOutputHash).toBe(sha(out.repair.draft));
+  });
+});

@@ -157,15 +157,18 @@ function reportsBesideAnAsk(text: string, at: number): boolean {
   return bounds.slice(0, -1).some((b, k) => k > i && ASKS.test(text.slice(b, bounds[k + 1])));
 }
 
-// A LABEL CAN NAME THE MATERIAL, NOT THE PIECE: "Original: 12 pages.", "Attachments: two pages.", "Paper length: eight
+// A LABEL CAN NAME THE MATERIAL, NOT THE PIECE: "Original: 12 pages.", "Contract: 30 pages.", "Paper length: eight
 // pages." each give the length of something already there, and held as the length to write they set a target of
-// thousands of words. A label that names a source never introduces a length; one that names a kind of piece does not
-// either where the count is in pages, which is how documents that exist are measured ("Letter: three pages").
+// thousands of words. Pages are how documents that exist are measured, so a count in pages after a label is read only
+// where the label names the length of what is written and nothing else ("Length:", "Quick mode:", "Output length:");
+// any other label, whatever it names, is not a length. A count in words after a label is read as before, except after
+// a label that names a source.
 const SOURCE = /\b(?:original|source|attach(?:ed|ments?)|input|material|existing|current|paper|transcript|file|pdf|deck|appendix|exhibit|enclosed)\b/i;
-function labelNamesMaterial(before: string, unit: LengthUnit): boolean {
+const NAMES_THE_LENGTH = /^\s*(?:(?:quick|full|short|brief|long|detailed|output|response|answer|reply|target|desired|maximum|max|minimum|min|total|overall)\s+)?(?:mode|length|size|format|limit|target|scope)\s*$/i;
+function labelRefusesLength(before: string, unit: LengthUnit): boolean {
   const label = /([^.!?\n(]*):\s*$/.exec(before)?.[1];
   if (label === undefined) return false;
-  return SOURCE.test(label) || (unit === 'pages' && new RegExp(String.raw`\b${PIECE}s?\b`, 'i').test(label));
+  return unit === 'pages' ? !NAMES_THE_LENGTH.test(label) : SOURCE.test(label);
 }
 
 function located(request: string): { start: number; stated: StatedLength }[] {
@@ -177,7 +180,7 @@ function located(request: string): { start: number; stated: StatedLength }[] {
       const before = text.slice(0, m.index).replace(/\bbetween\s+$/i, ''); const after = text.slice(m.index + m[0].length);
       if (POINTS_AT.test(before) || REPORTS.test(before) || EDITS.test(before)) continue;
       if (reportsBesideAnAsk(text, m.index)) continue;
-      if (labelNamesMaterial(before, f.read(m).unit)) continue;
+      if (labelRefusesLength(before, f.read(m).unit)) continue;
       if (f === PIECE_FORM && !ASKS_FOR.test(before)) continue;
       if (f === HYPHEN_FORM && THERE_ALREADY.test(before)) continue;
       // A bare count needs a word before it that introduces a length, or nothing after it that makes it the subject of
@@ -257,7 +260,10 @@ export function inWords(s: StatedLength): StatedLength | null {
   if (s.unit === 'words') return s;
   if (s.unit !== 'pages') return null;
   const w = (n: number | null): number | null => (n === null ? null : Math.round(n * WORDS_PER_PAGE));
-  return { ...s, unit: 'words', min: w(s.min), max: w(s.max), target: w(s.target), read: `at ${WORDS_PER_PAGE} words a page` };
+  const read = `at ${WORDS_PER_PAGE} words a page`;
+  // A page count is a ceiling: "a one-page cover letter" of 400 words is a one-page letter.
+  if (s.kind === 'target' || s.kind === 'exact') return { ...s, unit: 'words', kind: 'max', min: null, max: w(s.target), target: null, read };
+  return { ...s, unit: 'words', min: w(s.min), max: w(s.max), target: w(s.target), read };
 }
 
 /** The fewest and the most a stated length allows; null where it sets no such end. A target is met within a tenth. */

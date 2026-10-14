@@ -44,9 +44,11 @@ only partly observed, or the owner's word was moved by a measurement.
 - **A length asked in pages is held, and counted in words a reader would count.** "Quick mode: one to two pages."
   was not read (a count spelled out after a label was skipped), and a length in pages, where it was read, was never
   held: drafts asked for two pages came back at three and four, and nothing said so. A length in pages is now told
-  to the writer, held at 500 words a page, which the run says beside it, and written again for when it is missed. A
-  label that names the material is not a length: "Original: 12 pages." and "Attachments: two pages." are the
-  length of what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
+  to the writer, held as a ceiling at 500 words a page, which the run says beside it ("a one-page cover letter" of
+  400 words is inside it), and written again for when it is missed. Pages are how documents that exist are
+  measured, so a count in pages after a label is read only where the label names the length of what is written
+  ("Length:", "Quick mode:", "Output length:"): "Contract: 30 pages." and "Original: 12 pages." are the length of
+  what was given, and "a 200-word summary of this ten-page report" is held at 200 words. The length a
   request asks for is counted in words that hold a letter or a digit: the `|` and `---` that draw a table counted as
   words, and a draft of four tables ran 1,135 for 1,006 written.
 - **The writer aims inside the length, and a cut is the last resort.** Told "about 500 to 1,000 words", writers
@@ -54,10 +56,13 @@ only partly observed, or the owner's word was moved by a measurement.
   fifths of the way up a range, about 85% of a ceiling, a target as said); on eight such requests seven drafts came
   in on the first try. A draft that still runs long is cut by sentences the writer names and code removes, never
   rewritten whole (asked to return the piece shorter, a writer removed 5 to 21 words of 50 to 170 asked). Only a
-  whole sentence that stands once in the draft goes, and never one with a figure (in digits or words), in a heading,
-  table row or list, a paragraph's first sentence, a sentence the next one leans on ("That test…", "But…"), or one
-  that would leave emphasis, code, a link or a bracket unclosed. The run keeps the draft from before the cut. Where
-  nothing named can be removed, the next pass writes the piece shorter as before, and says so.
+  whole sentence that stands once in the draft goes, and never one with a figure or an ordinal (in digits or words),
+  in a heading, table row, list or block of code, after an abbreviation, a paragraph's first sentence, a sentence the
+  next one leans on ("That test…", "But…", "He…", even across a blank line), or one that would leave emphasis, code,
+  a link or a bracket unclosed. The cut stops on the count of the rule it serves: every word for the request's
+  length, the words of the prose for the method's own limit and the span of the author's pieces. The run keeps the
+  draft from before the cut. Where nothing named can be removed, or the checks refuse the cut, the next pass writes
+  the piece shorter as before, and says so.
 - **Where the owner requires a length, their examples add no second one.** A draft was being written again toward
   both the stated limit and the span of the examples.
 - **Three kinds of shared wording are three observations.** Wording that recurs across your pieces is your
@@ -188,8 +193,8 @@ bench/standing/runs/2026-10-14/contract` scores it again at no cost).
 
 | domain | outputs failing, 2026-10-13 | outputs failing, now | cost an output | seconds an output |
 |---|---|---|---|---|
-| contract | 10 of 10, all the 220-to-420-word limit | 0 of 10 | $0.203 → $0.165 | 55 → 28 |
-| explainer | 0 of 20 | 0 of 10 | $0.083 → $0.069 | 19 → 13 |
+| contract | 10 of 10, all the 220-to-420-word limit | 0 of 10 | $0.203 → $0.165 | 55 → 29 |
+| explainer | 0 of 20 | 0 of 10 | $0.083 → $0.073 | 19 → 15 |
 
 The contract limit is the method's own, so the change is the cut, not the request's length: a draft asked to come
 back shorter came back nearly as long, and one cut by the sentences the writer names comes back inside. Both runs
