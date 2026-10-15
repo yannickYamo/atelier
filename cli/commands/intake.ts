@@ -482,6 +482,20 @@ export function shortFormFolder(texts: readonly string[], cls: string | null | u
   return (f?.words !== undefined && f.words[1] < 150) || (texts.length > 0 && isShortForm(texts));
 }
 
+/**
+ * THE PIECES INTAKE WILL READ AS FINISHED WORK, among `files`: not a method, a rejected or "before" example, and not a
+ * stub too short to read (the same floor intake applies below). What `atelier new` groups into voices before intake
+ * runs (core/composite/voices.ts), so the grouping and the corpus are the same pieces.
+ */
+export function examplePieces<T extends { readonly id: string; readonly text: string }>(files: readonly T[], mode?: 'GENERATE' | 'GUARD' | 'RESPOND'): T[] {
+  const role = (f: string, words: RegExp): boolean =>
+    f.split('/').slice(0, -1).some((dir) => words.test(dir) && new RegExp(`^(${words.source})s?$`, 'i').test(dir))
+    || new RegExp(`^(${words.source})[-_. ]`, 'i').test(basename(f));
+  const work = files.filter((f) => !/(^|\/)SKILL\.md$/i.test(f.id) && !role(f.id, /methodology|methodologies|methods?|framework|process|playbook/i) && !role(f.id, /rejected|reject|bad|before/i));
+  const min = shortFormFolder(work.map((f) => f.text), flag('--class')) ? 1 : minCharsFor(mode);
+  return work.filter((f) => f.text.trim().length >= min);
+}
+
 function minCharsFor(mode?: string): number {
   return (mode ?? loadSession().intent?.mode) === 'RESPOND' ? MIN_ANSWER_CHARS : MIN_GOLDEN_CHARS;
 }

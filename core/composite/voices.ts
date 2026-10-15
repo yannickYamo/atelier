@@ -23,7 +23,10 @@
 // its own voice than to the next one; 1 is perfectly apart, 0 is no structure). The best cut is taken when
 //
 //   its silhouette is at least 0.5    (the conventional threshold for "a reasonable structure"), and
-//   every voice has at least 2 pieces (one odd piece is an outlier of a voice, not a voice of its own)
+//   every voice has at least 2 pieces (one odd piece is an outlier of a voice, not a voice of its own), and
+//   the two closest voices sit at least 0.3 apart on average (a clean split of pieces that differ in one measure
+//                                     alone, their sentence length say, is one writer; one writer's real pieces sit about
+//                                     0.27 apart)
 //
 // otherwise the folder is ONE voice, exactly as it always was. Fewer than 4 pieces are one voice: there is nothing to
 // compare a split with. The confidence recorded is the silhouette of the cut taken, or, for one voice, one minus the
@@ -38,6 +41,12 @@ import { authorsDeclared, detectAuthors, withoutFrontMatter, type AuthorMap } fr
 
 /** A cut is taken only at this mean silhouette or above. */
 export const MIN_SILHOUETTE = 0.5;
+/**
+ * Two voices are told apart only when they sit at least this far apart on average (the closest pair of voices, by the
+ * mean distance between their pieces). Silhouette measures how clean a split is, not how wide: pieces that differ only
+ * in their sentence length split cleanly and are one writer. One writer's own real pieces sit about 0.27 apart.
+ */
+export const MIN_VOICE_GAP = 0.3;
 /** A voice is read from at least this many pieces. */
 export const MIN_PIECES_PER_VOICE = 2;
 /** Below this many pieces a folder is one voice. */
@@ -54,12 +63,12 @@ export interface VoiceGrouping {
   /** how sure the grouping is, in [0, 1]: the silhouette taken, or one minus the best any cut reached */
   readonly confidence: number;
   /** the best silhouette of each cut tried, by number of voices (cuts with a one-piece voice are marked invalid) */
-  readonly tried: readonly { readonly k: number; readonly silhouette: number; readonly valid: boolean }[];
+  readonly tried: readonly { readonly k: number; readonly silhouette: number; readonly gap: number; readonly valid: boolean }[];
   /** the rule that chose the number, in words, for the record */
   readonly criterion: string;
 }
 
-export const CRITERION = `average-linkage clusters of function-word, character-run, counted-feature and shape distances; the cut of 2 to ${MAX_VOICES} voices with the highest mean silhouette, taken when it is at least ${MIN_SILHOUETTE} and every voice has at least ${MIN_PIECES_PER_VOICE} pieces; otherwise one voice`;
+export const CRITERION = `average-linkage clusters of function-word, character-run, counted-feature and shape distances; the cut of 2 to ${MAX_VOICES} voices with the highest mean silhouette, taken when it is at least ${MIN_SILHOUETTE}, every voice has at least ${MIN_PIECES_PER_VOICE} pieces and the closest two voices are at least ${MIN_VOICE_GAP} apart; otherwise one voice`;
 
 type Vec = readonly (number | null)[];
 interface Reading { readonly fw: Vec | null; readonly tg: Vec; readonly ct: Vec; readonly sh: Vec }
@@ -193,11 +202,13 @@ export function groupByStyle(pieces: readonly { readonly id: string; readonly te
   const d = styleDistances(sorted.map((p) => p.text));
   const cuts = linkage(d);
   const top = Math.min(MAX_VOICES, Math.floor(sorted.length / MIN_PIECES_PER_VOICE));
-  const tried: { k: number; silhouette: number; valid: boolean }[] = [];
+  const tried: { k: number; silhouette: number; gap: number; valid: boolean }[] = [];
+  const between = (a: readonly number[], b: readonly number[]): number => mean(a.flatMap((i) => b.map((j) => d[i][j])));
   for (let k = 2; k <= top; k++) {
     const c = cuts.get(k);
     if (!c) continue;
-    tried.push({ k, silhouette: r3(silhouetteOf(d, c)), valid: c.every((x) => x.length >= MIN_PIECES_PER_VOICE) });
+    const gap = Math.min(...c.flatMap((x, i) => c.slice(i + 1).map((y) => between(x, y))));
+    tried.push({ k, silhouette: r3(silhouetteOf(d, c)), gap: r3(gap), valid: c.every((x) => x.length >= MIN_PIECES_PER_VOICE) && gap >= MIN_VOICE_GAP });
   }
   const valid = tried.filter((t) => t.valid);
   // The best valid cut; a tie goes to fewer voices.

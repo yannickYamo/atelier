@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
-import { groupByStyle, authorship, voicesAsAuthors, describeVoices, MIN_SILHOUETTE } from '../core/composite/voices.js';
+import { groupByStyle, authorship, voicesAsAuthors, describeVoices, MIN_SILHOUETTE, MIN_VOICE_GAP } from '../core/composite/voices.js';
 import { buildTraitTable } from '../core/composite/traits.js';
 import { weighTraits, inferredChoice, inferenceRecord, buildLine, likingIn, type WeighMeta } from '../core/composite/infer.js';
 import { composeSelection, instructs, settleByWeight, type CompositeAuthor } from '../core/composite/selection.js';
@@ -52,6 +52,14 @@ describe('the voices are found in the writing', () => {
     // four of one voice and one of another: the odd one cannot be a voice of one piece
     const odd = { ...ONE_VOICE, 'z-sprint.md': FIVE_VOICES['c-sprint.md'] };
     expect(groupByStyle(pieces(odd)).groups).toHaveLength(1);
+  });
+  it('pieces that differ in one measure alone split cleanly and are still one voice: the voices must sit apart', () => {
+    // twenty pieces of ten-word sentences and four of sixteen: a silhouette near 1, and almost no distance between them
+    const even = (n: number): string => Array.from({ length: 10 }, () => Array.from({ length: 3 }, () => `${Array.from({ length: n - 1 }, () => 'stone').join(' ')} end.`).join(' ')).join('\n\n');
+    const g = groupByStyle(Array.from({ length: 24 }, (_, i) => ({ id: `p${String(i).padStart(2, '0')}.md`, text: even(i < 20 ? 10 : 16) })));
+    expect(g.tried.find((t) => t.k === 2)?.silhouette).toBeGreaterThan(MIN_SILHOUETTE);
+    expect(g.tried.find((t) => t.k === 2)?.gap).toBeLessThan(MIN_VOICE_GAP);
+    expect(g.groups).toHaveLength(1);
   });
   it('a declared author always wins, even one: the writing is then not grouped', () => {
     const one = pieces(FIVE_VOICES).map((p) => ({ ...p, text: `---\nauthor: Ada\n---\n${p.text}` }));

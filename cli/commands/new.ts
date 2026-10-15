@@ -25,7 +25,7 @@ import { floorDimensions, proposeMargins, buildContract } from '../../core/disti
 import { extract } from '../../core/intake/extract.js';
 import { authorship } from '../../core/composite/voices.js';
 import { corpusFiles } from '../corpus.js';
-import { intake } from './intake.js';
+import { intake, examplePieces } from './intake.js';
 import { discover } from './discover.js';
 import { method } from './method.js';
 import { review } from './review.js';
@@ -43,10 +43,10 @@ const shellWord = (p: string): string => (/^[\w./~-]+$/.test(p) ? p : `'${p.repl
  * WHO WROTE THE PIECES AT `path`: the authors declared, or, with none declared, the voices found in the writing
  * (core/composite/voices.ts). Read once, here, and handed to intake, so the build and intake cannot disagree.
  */
-function readAuthorship(path: string): ReturnType<typeof authorship> {
+function readAuthorship(path: string, mode: SkillMode): ReturnType<typeof authorship> {
   const dir = statSync(path).isDirectory();
   const files = corpusFiles(path).flatMap((f) => { const r = extract(f); return r.ok ? [{ id: dir ? relative(path, f) : basename(f), text: (r as { text: string }).text }] : []; });
-  return authorship(files, flagAll('--authors'));
+  return authorship(examplePieces(files, mode), flagAll('--authors'));
 }
 
 /** The folder the sealed corpus was read from, for runs that predate recording it. */
@@ -94,7 +94,7 @@ export async function newSkill(): Promise<void> {
   // combination is inferred (./composite.ts); with no model, from what can be counted in each voice's pieces. Pooled
   // into one author's examples they would give the average of them all, which nobody asked for.
   const fresh = s.run.state === 'EMPTY' || !s.evidence;
-  const who = fresh ? readAuthorship(path) : null;
+  const who = fresh ? readAuthorship(path, mode) : null;
   const composite = fresh && keyless && Boolean(who?.authors);
   // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
   if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';

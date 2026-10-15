@@ -19,8 +19,12 @@ builds in one call, and says what it did in one line:
 - **The voices are found in the writing** (`core/composite/voices.ts`) when no author is declared. Pieces are compared
   on function-word rates, character runs, the counted features and their shape (length, sentence and paragraph
   length, questions, commas), which works for short pieces too; they are joined by average linkage, and the number of
-  voices is the cut with the best mean silhouette, taken only when it is at least 0.5 and every voice has at least two
-  pieces. Otherwise the folder is one voice and builds exactly as before. Front matter, a folder per author and
+  voices is the cut with the best mean silhouette, taken only when it is at least 0.5, every voice has at least two
+  pieces, and the two closest voices sit at least 0.3 apart (one writer's own pieces sit about 0.27 apart; pieces that
+  differ in their sentence length alone split cleanly and are still one writer). Otherwise the folder is one voice and
+  builds exactly as before. Stubs too short to be examples are left out of the grouping as they are of the corpus.
+  A folder that mixes two formats strongly enough (a writer's list posts beside their essays) can read as two voices;
+  `author:` in the front matter keeps it one. Front matter, a folder per author and
   `--authors` still decide when given, a single declared author included. The build says "3 voices found in 9
   pieces" with the grouping's confidence.
 - **Each voice is read on its own from three vantages**: the two discovery always used, and the effect reading (what
