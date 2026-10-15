@@ -229,7 +229,7 @@ describe('SHOULD-FIX 4: a release records what the controller has measured, and 
     expect(s.controller?.effects).toEqual({ 'carrier-rewrite': { movement: 0.4, usdPerAction: 0.01, n: 2 } });
     expect(withMeasuredEffects(DEFAULT_SETTINGS, [], 's1')).toBe(DEFAULT_SETTINGS);
     expect(describeControllerSettings(s.controller)).toEqual([
-      'repair controller: at least 2 band width(s) expected per dollar, at most 4 step(s) a draft, no extra draft',
+      'repair controller: at least 2 band width(s) expected per dollar, at most 4 step(s) a run, no extra draft',
       '  measured effects: carrier-rewrite 0.4 a target for $0.0100 (n=2)']);
     expect(describeControllerSettings(undefined)[0]).toMatch(/\(the defaults\)$/);
   });
