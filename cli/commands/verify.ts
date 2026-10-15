@@ -16,6 +16,7 @@
 // in the text is touched: it keeps its own voice.
 
 import { profileOf, bandWords } from '../../core/observers/selection.js';
+import { sayPooled } from '../../core/observers/pooled.js';
 import { checksFor, shortFormRequest } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
@@ -28,7 +29,7 @@ import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.j
 import { recordTaste } from './taste.js';
 import { recordForText } from '../eval-run.js';
 import { stateLine } from '../../core/eval/run-card.js';
-import { partlyChecked } from '../../core/eval/record.js';
+import { partlyChecked, blocks } from '../../core/eval/record.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
 
@@ -124,6 +125,9 @@ export async function verify(): Promise<void> {
   } else {
     console.log(describeVerify(report, partlyChecked(record)));
     console.log(`\n${record.state.replace('_', ' ')} · ${stateLine(record)}`);
+    // WHAT FAILED, BY NAME: a check the record holds beyond the rule lines above (copying from an example, the request's
+    // own checks) is named here, so the text output says what blocked the work, not only --json.
+    for (const e of record.entries.filter(blocks)) console.log(`  ✗ ${e.statement.replace(/[.]$/, '')}${e.observation.evidence ? `: ${e.observation.evidence}` : ''}`);
     if (report.checked.some((c) => c.requirementId === 'UNSOURCED' && c.result.verdict === 'VIOLATED')) {
       console.log(`\nUNSOURCED: if a flagged story or figure is yours, add it to the skill's material (atelier material --skill ${name} <file>) or pass --allow-unsourced.`);
     }
@@ -133,7 +137,21 @@ export async function verify(): Promise<void> {
       else {
         console.log('\nprofile (0 = inside your range; 1 = a full range-width outside):');
         for (const l of profile.layers) console.log(`  ${l.layer.padEnd(28)} ${l.distance.toFixed(2)}  (${l.features} feature${l.features === 1 ? '' : 's'})`);
-        for (const e of profile.entries) console.log(`    ${e.id.padEnd(20)} ${e.value ?? 'n/a'}  your range ${bandWords(e.band)}${e.distance ? `  → ${e.distance} off` : ''}`);
+        // A POOLED RATE (a short-form build's count rules) has no band a short text can be read against: it is shown as
+        // the rule's own line reads it, the count against what the length expects at the author's rate, never "n/a".
+        const pooledOf = new Map(v.requirements.flatMap((r) => {
+          const m = r.measurement; const id = ((m?.params.feature as readonly string[] | undefined) ?? [])[0];
+          return r.authority !== 'EXPERT_REJECTED' && m?.observer === 'FEATURE' && id && typeof m.params.pooledPerWord === 'number'
+            ? [[id, { rate: m.params.pooledPerWord, detail: report.checked.find((c) => c.requirementId === r.requirementId)?.result.detail ?? null }] as const] : [];
+        }));
+        for (const e of profile.entries) {
+          const pooled = pooledOf.get(e.id);
+          if (pooled && (e.value === null || bandWords(e.band) === 'any value')) {
+            console.log(`    ${e.id.padEnd(20)} ${pooled.detail ?? 'not counted'}  your rate about ${sayPooled(pooled.rate)}`);
+            continue;
+          }
+          console.log(`    ${e.id.padEnd(20)} ${e.value ?? 'n/a'}  your range ${bandWords(e.band)}${e.distance ? `  → ${e.distance} off` : ''}`);
+        }
       }
     }
     if (taste) console.log(`\n${taste.text}`);
