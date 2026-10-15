@@ -201,9 +201,10 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   const out = graded.filter((g) => Math.abs(g.error) > SETTLED_ERROR).length;
   const available = (g: GradedMiss) => (a: 'operators' | 'carrier-rewrite' | 'redraft'): boolean =>
     a === 'operators' ? g.operatorEffect !== null && g.operatorEffect > 0 : a === 'redraft' ? input.can.redraft && !hadRedraft : input.can.rewrite;
-  const planned = graded.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g)) })).filter((x) => x.a !== null);
+  type Rung = 'operators' | 'carrier-rewrite' | 'redraft';
+  const planned = graded.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g)) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
   if (planned.length) {
-    const action = planned[0].a as 'operators' | 'carrier-rewrite' | 'redraft';
+    const action = planned[0].a;
     const group = planned.filter((x) => x.a === action).slice(0, action === 'redraft' ? undefined : TARGETS_PER_STEP).map((x) => x.g);
     const eff = (g: GradedMiss): number => (action === 'operators' ? effectOf('operators', g.operatorEffect ?? prior('operators'), input.history)
       : action === 'carrier-rewrite' ? effectOf('carrier-rewrite', prior('carrier-rewrite'), input.history) * carriersFor(g.error)

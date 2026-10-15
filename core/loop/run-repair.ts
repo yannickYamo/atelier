@@ -841,8 +841,8 @@ export async function refineToStandard(
     const find = (r: VerifyReport, id: string): RuleCheck | undefined => r.checked.find((c) => c.requirementId === id);
     return ids.reduce((n, id) => {
       const b = find(before, id); const a = find(after, id);
-      if (!b || b.result.verdict !== 'VIOLATED') return n;
-      const off = (c: RuleCheck | undefined): number => (!c || c.result.verdict !== 'VIOLATED' ? 0 : enforcedStep ? c.result.spans.length || 1 : Math.abs(c.result.error ?? 0));
+      if (b?.result.verdict !== 'VIOLATED') return n;
+      const off = (c: RuleCheck | undefined): number => (c?.result.verdict !== 'VIOLATED' ? 0 : enforcedStep ? c.result.spans.length || 1 : Math.abs(c.result.error ?? 0));
       const was = off(b); const now = off(a);
       return n + (enforcedStep ? ENFORCED_WEIGHT * Math.max(0, was - now) / Math.max(1, was) : Math.max(0, was - now));
     }, 0);
