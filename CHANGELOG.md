@@ -7,6 +7,42 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Added: a skill from pieces by several authors, combined as you choose
+
+"Here are five examples from different authors. I love different things about them." Read as one author, such a
+folder gave the average of five writers, which is the one voice nobody asked for. `atelier new` now tells the authors
+apart and builds the combination you choose.
+
+- **Who wrote which piece is declared, never guessed** (`core/composite/authors.ts`): `author:` in a piece's front
+  matter, a subfolder per author, or `--authors`. A folder with none of these is one author, exactly as before. The
+  build says "N pieces by K authors: each is read on its own first", and nothing is held back on its own, since an
+  author's one piece held back is an author unread.
+- **Each author is read on their own** (`cli/commands/discover.ts`): every proposal names its author, and every
+  counted band is read from that author's pieces alone. Suggestions are made per author too, so no count is held to
+  another writer's pieces.
+- **A trait table** (`core/composite/traits.ts`, stored with the run): every rule is classed as opening, structure,
+  evidence, pace, voice or method, and as shared (two or more authors, compatible), unique, conflicting, or
+  task-dependent (a conflict between authors who write pieces of different lengths). Deterministic, and free.
+- **One question per author, one screen** (`cli/commands/composite.ts`): "What do you like about this one?", asked in
+  the terminal or given as `--admire <file or author>=<what you like>`. One model call reads every line into the six
+  classes (by keyword when no model can). The screen says what is taken from whom, each conflict (A, B, both as one
+  range, or later), the recurring method moves offered as a proposal read from your examples (your own `--method`
+  note stays authoritative), and what is kept as a habit or set aside. Accepting rules on every proposal through the
+  normal ratification path, each ruling naming the author and pieces it came from. A conflict nobody answered is kept
+  as an open question and neither side instructs; nothing is guessed.
+- **A composite voice** (`core/compiler/voice.ts`, `renderers/agent-skill/render.ts`): one excerpt from every author
+  something was taken from, an equal share of the compact budget each, labelled with whose it is; "how I sound" is
+  written from the traits chosen, not from any one author; no persona is derived, since one read over every author's
+  pieces would describe their average. The copying check covers every piece of every author in the folder, served or
+  not.
+- **The choice is data** (`composite.json` with the skill): a rebuild, and a fresh run with the same answers, give the
+  same files.
+- Pinned in `tests/atelier-composite.test.ts` and `tests/atelier-composite-journey.test.ts`: five invented authors
+  with labelled traits, the classes on known pairs, no band pooled, the chosen openings, evidence and pacing, a unique
+  trait kept when admired, an unadmired author kept only as a shared habit, the paragraph conflict stored as a
+  question, the served excerpts and the copying check, byte-identical rebuild and re-run, and a single-author folder
+  unchanged.
+
 ### Added: a review's citations and named tests are read by code
 
 A review method says "cite the file and line for every finding" and "name the test that would have caught it". Only a

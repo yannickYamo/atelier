@@ -12,6 +12,7 @@
 
 import type { StoredSignal } from '../observers/selection.js';
 import type { Voice } from '../compiler/voice.js';
+import type { CompositeRecord } from '../composite/selection.js';
 import type { ContrastPair } from '../compiler/contrast-examples.js';
 import type { Recurrence, VersionBreakRates } from '../mining/recurrence.js';
 import type { QualityFloorContract, FloorQualification, FrozenBaselineEntry } from '../distinctiveness/floor.js';
@@ -290,6 +291,22 @@ export function getContrast(l: StoreLayout): StoredContrast {
 export function setContrast(l: StoreLayout, c: StoredContrast): void {
   mkdirSync(dirs(l).base, { recursive: true });
   writeAtomic(join(dirs(l).base, 'contrast.json'), JSON.stringify(c, null, 1));
+}
+
+/**
+ * THE COMPOSITE A SKILL WAS BUILT AS (core/composite/selection.ts): pieces by several authors, and which rules the owner
+ * chose from which, with every conflict's answer or open question. Data, kept with the skill so a rebuild serves the
+ * same combination and changes nothing. Null for a skill built from one author's pieces.
+ */
+export function getComposite(l: StoreLayout): CompositeRecord | null {
+  const p = join(dirs(l).base, 'composite.json');
+  return existsSync(p) ? readJson<CompositeRecord>(p, { what: 'the composite record', requireKeys: ['authors', 'decisions', 'conflicts'] }) : null;
+}
+export function setComposite(l: StoreLayout, c: CompositeRecord | null): void {
+  const p = join(dirs(l).base, 'composite.json');
+  if (c === null) { if (existsSync(p)) rmSync(p); return; }
+  mkdirSync(dirs(l).base, { recursive: true });
+  writeAtomic(p, JSON.stringify(c, null, 1));
 }
 
 /**

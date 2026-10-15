@@ -26,6 +26,7 @@ import { intake } from './intake.js';
 import { discover } from './discover.js';
 import { method } from './method.js';
 import { review } from './review.js';
+import { compositeReview } from './composite.js';
 import { ratifyClose } from './ratify.js';
 import { build, pieceFlags } from './build.js';
 import { skillNameFrom } from '../../renderers/agent-skill/render.js';
@@ -147,7 +148,9 @@ export async function newSkill(): Promise<void> {
       console.log(`These rules were read from ${s.publicSource ?? 'someone else\'s public work'}. Accepting ADOPTS them for your skill;`
         + ' it does not make them that author\'s standard, and the record will always say where they came from.\n');
     }
-    if (!(await review({ continueWith: `atelier new ${shellWord(corpus)}`, shownBefore }))) return;
+    // PIECES BY SEVERAL AUTHORS: the screen is the composite (./composite.ts), what the person likes about each.
+    const screen = s.authors ? compositeReview : review;
+    if (!(await screen({ continueWith: `atelier new ${shellWord(corpus)}`, shownBefore }))) return;
     s = loadSession();
     if (!s.decided.some((d) => d.authority !== 'EXPERT_REJECTED')) {
       console.log('\nEvery rule was rejected, so there is nothing to build.'
