@@ -117,6 +117,18 @@ describe('the record', () => {
   });
 });
 
+describe('atelier report prints the steps', () => {
+  it('a record with a controller shows each step and why it stopped, under the repair', async () => {
+    const { traceOf } = await import('../cli/commands/report.js');
+    const controller = controllerRecord([step('carrier-rewrite', ['p1'], 'kept', 0.6, 0.001)], 'every enforced rule holds and nothing graded is off');
+    const rec = { input: 'write a note', at: '2026-01-01T00:00:00Z', observedRuntime: { resolvedModel: 'm' }, runtimeBinding: {},
+      repair: { passes: 1, violatedBefore: [], violatedAfter: [], originalOutputHash: 'h', why: 'w', controller } } as never;
+    const steps = traceOf(rec).find(([name]) => name === 'repair steps');
+    expect(steps?.[1]).toEqual(describeController(controller));
+    expect(steps?.[1][0]).toBe('1. carrier-rewrite on p1: w; expected 1 for $0.05; kept, moved 0.6, 1 call(s), $0.0010');
+  });
+});
+
 describe('summariseEffects: the learning contract, EWMA λ = 0.2 over past records', () => {
   const rec = (at: string, decisions: ControllerDecisionRecord[]): EffectSource => ({ at, repair: { controller: { decisions } } });
   it('in time order, movement per target and dollars per step; not kept moves nothing; hand-offs and failures to run are no evidence', () => {
@@ -148,7 +160,7 @@ describe('through the loop', () => {
   const asideS = 'The rule holds here (as it did last year) and it holds there too (most of the time, at least).';
   const pieceOf = (every: number): string => Array.from({ length: 8 }, (_, i) => Array.from({ length: 3 }, (_, k) => ((i * 3 + k) % every === 0 ? asideS : plainS)).join(' ')).join('\n\n');
   const text = pieceOf(6);
-  const value = featureOf('parenthesis')!.measure(text) as number;
+  const value = featureOf('parenthesis')!.measure(text)!;
   const stdWith = (lo: number, hi: number, extra: object[] = []): StandardVersion => ({ standardVersionHash: 's', requirements: [{ requirementId: 'p1', statement: 'Few asides.', materiality: 'PREFERRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL',
     measurement: { observer: 'FEATURE', params: { feature: ['parenthesis'], minValue: lo, maxValue: hi } } }, ...extra] } as unknown as StandardVersion);
   const opts = (over: object = {}) => ({ graded: 'all' as const, guardClaims: false, ...over });

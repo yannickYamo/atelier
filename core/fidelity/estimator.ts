@@ -201,5 +201,5 @@ export function summariseEffects(records: readonly EffectSource[]): ControllerEf
   }
   const r4 = (x: number): number => Math.round(x * 10000) / 10000;
   return Object.fromEntries([...acc].sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([k, a]) => [k, { movement: r4(a.movement), usdPerAction: r4(a.usd), n: a.n }])) as ControllerEffects;
+    .map(([k, a]) => [k, { movement: r4(a.movement), usdPerAction: r4(a.usd), n: a.n }]));
 }
