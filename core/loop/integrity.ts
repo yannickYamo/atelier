@@ -203,7 +203,7 @@ export function spanIntegrity(fullOriginal: string, replacement: string, allowed
   }
   // ADDED, NOT ONLY LOST. A figure or a name the original never carried is a new claim of fact.
   const before = tally(numbersIn(fullOriginal));
-  for (const [n, k] of tally(numbersIn(replacement))) if (k > (before.get(n) ?? 0)) lost.push(`an added figure ${n}`);
+  for (const [n, k] of tally(numbersIn(replacement))) if (k > (before.get(n) ?? 0)) lost.push(`the figure ${n}, added`);
   if (!recase) {
     const lowerOriginal = fullOriginal.toLowerCase();
     for (const name of namesIn(replacement)) {

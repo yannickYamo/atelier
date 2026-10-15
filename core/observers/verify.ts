@@ -48,6 +48,8 @@ export interface VerifyReport {
   readonly failed: boolean;
 }
 
+export { BAN_OBSERVERS, isOmission } from './obligations.js';
+
 /** May a failed line act (see `RuleCheck.enforced`): the one reading, for everything that repairs, blocks or counts. */
 export const acts = (c: { readonly enforced?: boolean; readonly materiality: string | null }): boolean => c.enforced ?? c.materiality === 'REQUIRED';
 

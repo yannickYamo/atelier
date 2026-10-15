@@ -28,11 +28,11 @@ describe('the size of a miss picks the action', () => {
     expect(sizedAction(0.6, 3)).toBe('redraft');
     expect([0.6, 1.0, 1.2, 2.5, 7].map(carriersFor)).toEqual([1, 1, 2, 3, 3]);
   });
-  it('through decide: each level, with an enforced rule out of reach keeping the loop going for the smallest', () => {
-    // an omission with no redraft to be had keeps the loop going and is not itself a target
+  it('through decide: each level; a miss at or under 0.5 widths is no target of any step, even with an enforced rule keeping the loop going', () => {
+    // an omission with no redraft to be had keeps the loop going and is not itself a target; the 0.4 miss is not one either
     const held = { enforced: [{ id: 'r9', kind: 'omission' as const }], can: { redraft: false, rewrite: true } };
     const small = decide(input({ ...held, graded: [{ id: 'g1', error: 0.4, operatorEffect: 0.2 }] }));
-    expect(small).toMatchObject({ kind: 'act', action: 'operators', targets: ['g1'], expectedGain: 0.2, expectedCostUsd: 0 });
+    expect(small).toMatchObject({ kind: 'stop' });
     const middle = decide(input({ graded: [{ id: 'g2', error: -1.2, operatorEffect: null }] }));
     // gain: min(1.2, 0.4 × 2 carriers) = 0.8, for $0.05
     expect(middle).toMatchObject({ kind: 'act', action: 'carrier-rewrite', targets: ['g2'], carriers: 2, expectedGain: 0.8, expectedCostUsd: 0.05 });
@@ -85,13 +85,13 @@ describe('when it stops', () => {
     // the carrier rewrite is capped at three sentences however far out
     expect(decide(input({ graded: [{ id: 'g', error: 5, operatorEffect: null }], history: r1 }))).toMatchObject({ action: 'carrier-rewrite', carriers: 3 });
   });
-  it('an operator step that fails escalates to a carrier rewrite once, then stops', () => {
-    const small = { enforced: [{ id: 'r9', kind: 'omission' as const }], can: { redraft: false, rewrite: true }, graded: [{ id: 'g', error: 0.4, operatorEffect: 0.2 }] };
-    expect(decide(input(small))).toMatchObject({ action: 'operators' });
-    const o1 = [step('operators', ['g'], 'no change', 0, 0, 0)];
-    expect(decide(input({ ...small, history: o1 }))).toMatchObject({ action: 'carrier-rewrite', targets: ['g'], carriers: 1 });
-    expect(decide(input({ ...small, history: [...o1, step('carrier-rewrite', ['g'], 'not kept')] })))
-      .toEqual({ kind: 'stop', why: 'every action tried failed on what is left: g (operators, carrier-rewrite)' });
+  it('a carrier rewrite that fails steps down to the operators, then stops', () => {
+    const mid = { graded: [{ id: 'g', error: 0.8, operatorEffect: 0.2 }] };
+    expect(decide(input(mid))).toMatchObject({ action: 'carrier-rewrite' });
+    const c1 = [step('carrier-rewrite', ['g'], 'not kept')];
+    expect(decide(input({ ...mid, history: c1 }))).toMatchObject({ action: 'operators', targets: ['g'] });
+    expect(decide(input({ ...mid, history: [...c1, step('operators', ['g'], 'no change', 0, 0, 0)] })))
+      .toEqual({ kind: 'stop', why: 'every action tried failed on what is left: g (carrier-rewrite, operators)' });
   });
   it('a carrier rewrite that failed once is not repeated; one that moved something is', () => {
     const once = [step('carrier-rewrite', ['g'], 'not kept')];
@@ -271,16 +271,15 @@ describe('through the loop', () => {
     expect(r.repair?.controller?.stoppedBecause).toMatch(/^the budget: carrier-rewrite would cost about \$0.05/);
     expect(r.repair?.controller?.decisions).toEqual([]);
   });
-  it('an operator step moves a small miss with no model call, by the profile\'s effect matrix, when something else keeps the loop going', async () => {
-    const conclusion = { requirementId: 'r1', statement: 'End with a Conclusion section.', materiality: 'REQUIRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', obligation: 'DELIVERABLE',
-      measurement: { observer: 'PRESENCE', params: { sections: ['Conclusion'] } } };
+  it('an operator step moves a miss with no model call, by the profile\'s effect matrix, when the budget holds no model call', async () => {
     const profile: FidelityProfile = { version: 1, corpusHash: 'c', detector: null, hash: 'h', bands: [],
       effects: { 'parenthetical-to-commas': { parenthesis: { mean: -2, n: 10 } } } } as unknown as FidelityProfile;
     const writer = scripted([reps('x')]);
-    const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 1.4, [conclusion]), text, 2, opts({ gradedProfile: profile }));
+    const r = await refineToStandard(writer, { spentUsd: 0.99, capUsd: 1 }, 'd', stdWith(0, value / 2), text, 2, opts({ gradedProfile: profile }));
     expect(writer.calls).toBe(0);
     const first = r.repair?.controller?.decisions[0];
     expect(first).toMatchObject({ action: 'operators', targets: ['p1'], outcome: 'kept', expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
+    expect(first?.why).toMatch(/^the budget: carrier-rewrite would cost about \$0\.05.*; the operators still run, no model/);
     expect(first?.observed.movement).toBeGreaterThan(0);
     expect((r.output.match(/\(/g) ?? []).length).toBeLessThan((text.match(/\(/g) ?? []).length);
   });
