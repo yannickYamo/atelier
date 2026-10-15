@@ -7,6 +7,12 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: a comparison run keeps a blocked Atelier answer as a row
+
+- `invoke --json` now exits 1 when the work it delivered is BLOCKED, as `run` does. The comparison runner had read any
+  non-zero exit as a failed call, so a blocked answer was retried three times and then ended the arm. A blocked run
+  that returns its record is now one row, with its state.
+
 ### Fixed: grammar correction keeps the author's words and grammar
 
 - **Spelling is changed only where the slip is certain.** A word is corrected in place when it is a well-known

@@ -253,7 +253,11 @@ function runtimeArm(t) {
     // A model call inside the run that a provider filtered or the model declined: a FILTERED row, never retried.
     const blocked = done.status !== 0 ? filteredIn(done.stderr ?? '') : null;
     if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), ...thinkingOf(rec), cost: rec?.costUsd ?? null };
-    if (done.status !== 0 || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
+    // A BLOCKED RUN IS A DELIVERED ANSWER WITH ITS VERDICT, NOT A FAILED CALL. `invoke --json` exits 1 when the work it
+    // delivered is BLOCKED, as `run` does; the record is complete and is the row. Retrying it would pay for the same run
+    // three times and then end the arm.
+    const blockedButDelivered = done.status === 1 && rec?.eval?.record?.state === 'BLOCKED' && typeof rec.output === 'string';
+    if ((done.status !== 0 && !blockedButDelivered) || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
     // a setup error, not a failed call: retrying would pay for the same run again, so it stops here
     if (rec.output === undefined || rec.toCheck === undefined) die(`${runtimeSpec.cli} gives no "output" and "toCheck" in invoke --json: build it from a commit that has them`);
     // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
