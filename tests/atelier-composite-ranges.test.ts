@@ -9,6 +9,8 @@
 //   instructing, and the screen printed "→ sol ()" or credited an answer the person never gave to that pair;
 //   the count of open questions was not the number the screen showed open;
 //   `--conflict` given after the skill was built was dropped without a word.
+// Since then, two authors' lengths on one measure are asked whether or not their ranges meet: only two counted bands are
+// judged by their numbers (tests/atelier-composite-length-asked.test.ts).
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
@@ -65,13 +67,13 @@ describe('two worded rules on one quantity are compared as ranges', () => {
       expect(relationOf(worded(b), worded(a)), `${b} / ${a}`).toBe('CONFLICT');
     }
   });
-  it('ranges that overlap leave room for both', () => {
+  it('ranges that overlap are asked all the same: whether two wordings meet is not read from their words', () => {
     for (const [a, b] of [
       ['Write at least 300 words.', 'Keep the piece under 900 words.'],
       ['Keep the piece between 400 and 600 words.', 'Write at least 500 words.'],
       ['Let each paragraph run to at least six sentences.', 'Keep paragraphs to at most six sentences.'],
       ['Write sentences of about thirty words.', 'Write long sentences.'],
-    ]) expect(relationOf(worded(a), worded(b)), `${a} / ${b}`).not.toBe('CONFLICT');
+    ]) expect(relationOf(worded(a), worded(b)), `${a} / ${b}`).toBe('CONFLICT');
   });
   it('the reviewer\'s four authors: no two of the piece-length rules instruct together', () => {
     const b = built({
@@ -94,26 +96,29 @@ describe('two worded rules on one quantity are compared as ranges', () => {
     const on = new Set(rec.decisions.filter(instructs).map((d) => statementOf(b)(d.id)));
     for (const s of ['Keep the whole piece under 300 words.', 'Write at least 800 words.', 'Keep the piece between 400 and 600 words.',
       'Keep each paragraph to a single sentence.', 'Keep sentences under ten words.', 'Write sentences of about thirty words.']) expect(on.has(s), s).toBe(false);
-    // what overlaps still instructs: rosa's six sentences at most, beside sol's single sentence open elsewhere
-    expect(on.has('Keep paragraphs to at most six sentences.')).toBe(true);
+    // what overlaps is asked too: rosa's six sentences at most against quin's six at least and sol's single sentence
+    expect(on.has('Keep paragraphs to at most six sentences.')).toBe(false);
+    expect([...on].sort()).toEqual([]);
   });
 });
 
 // ── 2. TWO CEILINGS NEVER CONFLICT ──────────────────────────────────────────────────────────────
-describe('two ceilings on one length are compatible', () => {
+describe('two counted ceilings on one length are compatible; said in words, they are asked', () => {
   const paragraphs = (n: number): Measurement => ({ observer: 'PARAGRAPH_LENGTH', params: { maxSentences: n } });
   const sentences = (median: number, p90: number): Measurement => ({ observer: 'SENTENCE_LENGTH', params: { medianMax: median, p90Max: p90 } });
-  it('"at most six sentences" against "3 sentences at most", worded or counted', () => {
-    expect(relationOf(worded('Keep paragraphs to at most six sentences.'), counted('I keep paragraphs to 3 sentences at most.', paragraphs(3)))).not.toBe('CONFLICT');
-    expect(relationOf(worded('Keep paragraphs to at most six sentences.'), worded('I keep paragraphs to 3 sentences at most.'))).not.toBe('CONFLICT');
-    expect(relationOf(worded('Never more than 30 words in a sentence.'), counted('I keep sentences short: a median under 16 words, and nine in ten under 16.', sentences(16, 16)))).not.toBe('CONFLICT');
-    expect(relationOf(worded('Keep sentences under 25 words.'), worded('Never more than 30 words in a sentence.'))).not.toBe('CONFLICT');
+  it('"at most six sentences" against "3 sentences at most": compatible counted, asked when either is worded', () => {
+    expect(relationOf(counted('I keep paragraphs to 6 sentences at most.', paragraphs(6)), counted('I keep paragraphs to 3 sentences at most.', paragraphs(3)))).not.toBe('CONFLICT');
+    expect(relationOf(counted('I keep sentences short.', sentences(30, 30)), counted('I keep sentences short.', sentences(16, 16)))).not.toBe('CONFLICT');
+    expect(relationOf(worded('Keep paragraphs to at most six sentences.'), counted('I keep paragraphs to 3 sentences at most.', paragraphs(3)))).toBe('CONFLICT');
+    expect(relationOf(worded('Keep paragraphs to at most six sentences.'), worded('I keep paragraphs to 3 sentences at most.'))).toBe('CONFLICT');
+    expect(relationOf(worded('Never more than 30 words in a sentence.'), counted('I keep sentences short: a median under 16 words, and nine in ten under 16.', sentences(16, 16)))).toBe('CONFLICT');
+    expect(relationOf(worded('Keep sentences under 25 words.'), worded('Never more than 30 words in a sentence.'))).toBe('CONFLICT');
   });
   it('a floor above a ceiling still conflicts', () => {
     expect(relationOf(worded('Let each paragraph run to at least six sentences.'), counted('I keep paragraphs to 3 sentences at most.', paragraphs(3)))).toBe('CONFLICT');
     expect(relationOf(worded('Keep paragraphs to three sentences at most.'), worded('Give each paragraph at least five sentences.'))).toBe('CONFLICT');
   });
-  it('the reviewer\'s fifteen pairs from four authors: no conflict, and every chosen rule instructs', () => {
+  it('the reviewer\'s fifteen pairs from four authors: no conflict but the lengths, and every other chosen rule instructs', () => {
     const shared = (median: number): [string, Measurement][] => [
       ['I hedge rarely: at most 2 hedging words per thousand.', { observer: 'HEDGE_RATE', params: { maxPer1000: 2 } }],
       ['I keep paragraphs to 3 sentences at most.', paragraphs(3)],
@@ -126,12 +131,22 @@ describe('two ceilings on one length are compatible', () => {
       sol: ['Never use tables with more than five columns.', 'Avoid the first person in headings.', 'Open with a question.', 'Avoid lists that run longer than seven items.', 'Avoid semicolons in headings.', 'Quote sources directly in the text.', 'Never more than 30 words in a sentence.', 'Keep the piece under 900 words.', ...shared(16)],
     });
     const table = buildTraitTable(b.rules, (id) => b.source[id]);
-    expect(table.conflicts.map((c) => c.sides.map((s) => s.statement).join(' / '))).toEqual([]);
+    // the lengths, each with the measure it states, worked out by hand; every other rule states none
+    const LENGTHS: Readonly<Record<string, string>> = { 'Use short paragraphs.': 'paragraph', 'Keep paragraphs to at most six sentences.': 'paragraph',
+      'I keep paragraphs to 3 sentences at most.': 'paragraph', 'Keep sentences under 25 words.': 'sentence', 'Never more than 30 words in a sentence.': 'sentence',
+      'I keep sentences short: a median under 16 words, and nine in ten under 16.': 'sentence', 'Write at least 300 words.': 'piece', 'Keep the piece under 900 words.': 'piece' };
+    const counts = (st: string): boolean => st.startsWith('I keep');
+    const want = b.rules.flatMap((x, i) => b.rules.slice(i + 1).filter((y) => b.source[x.requirementId] !== b.source[y.requirementId]
+      && LENGTHS[x.statement] !== undefined && LENGTHS[x.statement] === LENGTHS[y.statement] && !(counts(x.statement) && counts(y.statement)))
+      .map((y) => `${x.statement} / ${y.statement}`)).sort();
+    expect(table.conflicts.map((c) => c.sides.map((s) => s.statement).join(' / ')).sort()).toEqual(want);
     const rec = composeSelection(table, b.rules, ['pia', 'quin', 'rosa', 'sol'].map(everything));
     const chosen = rec.decisions.filter((d) => d.outcome === 'SELECTED');
-    expect(chosen.length).toBeGreaterThan(30);
+    expect(chosen.length).toBeGreaterThan(20);
     expect(chosen.filter((d) => !instructs(d)).map((d) => d.id)).toEqual([]);
-    expect(openQuestions(rec)).toEqual([]);
+    const held = rec.decisions.filter((d) => d.outcome === 'OPEN').map((d) => statementOf(b)(d.id));
+    expect(held.every((st) => LENGTHS[st] !== undefined)).toBe(true);
+    expect(openQuestions(rec).length).toBeGreaterThan(0);
   });
 });
 

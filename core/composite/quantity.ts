@@ -1,10 +1,11 @@
 // atelier/core/composite/quantity.ts — ONE GRAMMAR FOR A QUANTITY SAID IN WORDS.
 //
 // "About 300 words", "under 2,000 characters", "at least eight hundred words", "a five-minute read", "never a
-// sentence over 15 words", "paragraphs of between two and four sentences": each is a range on one measure, and two
-// rules on the same measure can both be followed only when their ranges meet. Every place that reads a worded rule's
-// number (the trait table, the final guard, a worded rule against a count: ./traits.ts) reads it here, so one wording
-// is never read two ways by two readers.
+// sentence over 15 words", "paragraphs of between two and four sentences": each is a range on one measure. The reading
+// is SHOWN, beside each side of a length conflict on the composite screen ("reads as: at most 800 words in the piece",
+// or "unclear"), and set beside the model's reading of the same rule. It never decides whether two authors' lengths
+// can both be followed: open-ended wording cannot be read safely enough for that, so two lengths on one measure are
+// always asked (./length.ts).
 //
 // A QUANTITY is { measure, unit, min, max }:
 //   measure   what is counted: the whole piece, each sentence, or each paragraph
@@ -83,12 +84,14 @@ const BOUNDS = [...COMPARATORS].filter(([, k]) => k !== 'ABOUT' && k !== 'EXACT'
 const APPROX = [...COMPARATORS].filter(([, k]) => k === 'ABOUT' || k === 'EXACT').map(([w]) => w).sort((a, b) => b.length - a.length);
 /** What stands right before a number: a bound, then an approximation, then an article, any of them absent. */
 const BEFORE = new RegExp(String.raw`(?:(?:^|\b)(${BOUNDS.map(esc).join('|')})\s+)?(?:(?:(?:^|\b)(${APPROX.map(esc).join('|')})\s+)|(~)\s*)?(?:\b(?:a|an)\s+)?$`);
-const NEGATION = /\b(?:never|no|not|don't|do not|doesn't|nothing|none|avoid)\b/;
+// A negation, or a verb that removes what it names ("cut any sentence over 30 words" keeps them at 30 or under).
+const NEGATION = /\b(?:never|no|not|don't|do not|doesn't|nothing|none|avoid|[a-z]+n['’]t|cut|split|rewrite|trim|shorten|break up|remove|delete)\b/;
 const CLAUSE_END = /[.;:!?,(]|\bbut\b|\band\b/g;
 
-const UNIT_AFTER = /^\+?[\s-]*(?:(?:short|long|full|brief|complete|simple|plain|tight|crisp)\s+)?(words?|characters?|chars?|minutes?(?=(?:[\s-]+(?:of\s+)?read(?:ing)?\b|[\s-]+to\s+read\b|\s+reading\s+time\b))|sentences?|paragraphs?)\b/i;
-const AFTER_MAX = /^\s*(?:long\s+)?,?\s*(?:at most|or fewer|or less|or under|or shorter|max(?:imum)?|tops)\b/i;
-const AFTER_MIN = /^\s*(?:long\s+)?,?\s*(?:or more|or longer|or over|at least|minimum|plus)\b/i;
+const UNIT_AFTER = /^\+?[\s-]*(?:(?:short|long|full|brief|complete|simple|plain|tight|crisp)\s+)?(words?|characters?|chars?|(?:minutes?|mins?)(?=(?:[\s-]+(?:of\s+)?read(?:ing)?\b|[\s-]+to\s+read\b|\s+reading\s+time\b))|sentences?|paragraphs?)\b/i;
+const PER = String.raw`(?:\s+(?:per|a|each|in a|in each|for each|for every|every)\s+(?:sentence|paragraph|piece))?`;
+const AFTER_MAX = new RegExp(String.raw`^${PER}\s*(?:long\s+)?,?\s*(?:at most|or fewer|or less|or under|or shorter|max(?:imum)?|tops)\b`, 'i');
+const AFTER_MIN = new RegExp(String.raw`^${PER}\s*(?:long\s+)?,?\s*(?:or more|or longer|or over|at least|minimum|plus)\b`, 'i');
 
 const PARAGRAPH = /\bparagraphs?\b/i;
 const CONTAINER = /\b(sentences?|paragraphs?|pieces?|essays?|posts?|articles?|drafts?|texts?|reports?|stor(?:y|ies)|newsletters?|headings?|headlines?|titles?|sub-?heads?|sections?|lines?|captions?|quotes?|quotations?|summar(?:y|ies)|intros?|introductions?|openings?|openers?|conclusions?|closings?|endings?|bullets?|items?|subject lines?|tweets?|ledes?|abstracts?|excerpts?)\b/gi;
@@ -104,10 +107,29 @@ interface Num { readonly at: number; readonly end: number; readonly value: numbe
 /** Every number in `s`, as its value, with where it sits: digits with separators, and number phrases of any size. */
 function numbersAt(s: string): Num[] {
   const phrases = numberPhrases(s).map((p) => ({ at: p.index, end: p.index + p.length, value: Number(p.value) }));
-  const digits = [...s.matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g)]
+  // "2k words" is two thousand.
+  const digits = [...s.matchAll(/(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(k\b)?/gi)]
     .filter((m) => !phrases.some((p) => m.index >= p.at && m.index < p.end))
-    .map((m) => ({ at: m.index, end: m.index + m[0].length, value: Number(m[0].replace(/,/g, '')) }));
+    .map((m) => ({ at: m.index, end: m.index + m[0].length, value: Number(m[0].replace(/,|k$/gi, '')) * (m[1] ? 1000 : 1) }));
   return [...phrases, ...digits].sort((a, b) => a.at - b.at);
+}
+
+/**
+ * The unit a bound shares with the bound beside it: "at least 500 [words] and at most 800 words", "less than 1,000 words
+ * but more than 600 [words]". Only between two numbers that each have a comparator, in one sentence; null otherwise.
+ */
+function sharedUnit(s: string, nums: readonly Num[], i: number): RegExpExecArray | null {
+  const bounded = (k: number): boolean => Boolean(BEFORE.exec(s.slice(clauseStart(s, nums[k].at), nums[k].at).toLowerCase())?.[1]);
+  if (!bounded(i)) return null;
+  for (const k of [i + 1, i - 1]) {
+    const o = nums[k];
+    if (!o || !bounded(k)) continue;
+    const [lo, hi] = k > i ? [nums[i].end, o.at] : [o.end, nums[i].at];
+    if (/[.;!?]/.test(s.slice(lo, hi))) continue;
+    const u = UNIT_AFTER.exec(s.slice(o.end));
+    if (u) return u;
+  }
+  return null;
 }
 
 /** Wordings a number reader cannot see as numbers: "a single sentence", "a sentence or two", "one or two". */
@@ -184,11 +206,21 @@ export function quantitiesOf(statement: string): Quantity[] {
     const between = /\bbetween\s+$/i.test(s.slice(0, n.at));
     const range = next && (/^\s*(?:-|–|to|or)\s*$/i.test(link) || (between && /^\s*and\s*$/i.test(link))) ? next : null;
     const last = range ?? n;
-    const unitM = UNIT_AFTER.exec(s.slice(last.end));
+    const unitM = UNIT_AFTER.exec(s.slice(last.end))
+      // "Reading time of four minutes": minutes, where the sentence speaks of reading.
+      ?? (/\bread(?:ing)?\b/i.test(s) ? /^[\s-]*(minutes?|mins?)\b/i.exec(s.slice(last.end)) : null)
+      // A bound whose unit is said once for two ("at least 500 and at most 800 words", "under 1,000 words but over
+      // 600"): the unit of the bound beside it, in the same sentence.
+      ?? (!range ? sharedUnit(s, nums, i) : null);
     if (!unitM) continue;
+    // A rate, not a length ("three sources per 1,000 words", "every 300 words, a subheading"); and a length of something
+    // else ("a 50-word bio", "a 20-word takeaway"): none of the three measures.
+    if (/\b(?:per|every|each)\s+$/i.test(s.slice(0, n.at))) { if (range) i += 1; continue; }
+    const of = unitM[0].replace(/^\+/, '').startsWith('-') ? /^\s+([a-z]+)/i.exec(s.slice(last.end + unitM[0].length))?.[1] : undefined;
+    if (of && !/^(?:pieces?|essays?|posts?|articles?|drafts?|texts?|reports?|stor(?:y|ies)|newsletters?|sentences?|paragraphs?|limit|cap|max(?:imum)?|min(?:imum)?|target|count|length|read|reading)$/i.test(of)) { if (range) i += 1; continue; }
     if (range) i += 1;
     const raw = unitM[1].toLowerCase();
-    const reading = raw.startsWith('minute');
+    const reading = raw.startsWith('min');
     const chars = raw.startsWith('char');
     const unit: QuantityUnit = raw.startsWith('sentence') ? 'sentences' : raw.startsWith('paragraph') ? 'paragraphs' : 'words';
     const unitEnd = last.end + unitM[0].length;
@@ -208,7 +240,8 @@ export function quantitiesOf(statement: string): Quantity[] {
     // A permission: "let a paragraph run to eight sentences", "sentences may go up to forty words" (or "to thirty or more").
     const sentence = s.slice(sentenceStart(s, n.at), n.at);
     if (/\b(?:run|runs|running|go|goes|stretch|stretches|extend|extends|grow|grows|reach|reaches)\s+(?:to|up to)\s+(?:(?:about|around|roughly)\s+)?$/i.test(head)
-      || (bound === 'MAX' && m?.[1] === 'up to' && /\b(?:let|lets|may|can|allow|allowed|allows)\b/i.test(sentence))) { push(null, v, 'allows'); continue; }
+      || (bound === 'MAX' && m?.[1] === 'up to' && /\b(?:let|lets|may|can|allow|allowed|allows)\b/i.test(sentence))
+      || (/\bas long as\s+$/i.test(head) && /\b(?:let|lets|may|can|allow|allowed|allows)\b/i.test(sentence))) { push(null, v, 'allows'); continue; }
     const after = s.slice(unitEnd);
     if (s[n.end] === '+' || AFTER_MIN.test(after)) { push(v, null); continue; }
     if (AFTER_MAX.test(after)) { push(null, v); continue; }
@@ -223,6 +256,7 @@ export function quantitiesOf(statement: string): Quantity[] {
     }
     if (approx === 'EXACT') { push(v, v); continue; }
     if (!approx && /\bto\s+$/i.test(head) && /\b(?:keep|keeps|limit|limits|hold|holds|cap|caps|cut|trim|restrict|stick)\b/i.test(head)) { push(null, v); continue; }
+    if (!approx && /\bat\s+$/i.test(head) && /\b(?:limit|limits|cap|caps|capped|max|top|tops)\b/i.test(head)) { push(null, v); continue; }
     // A size said "about", or plainly: a target, a fifth either side.
     if (NEGATION.test(head)) continue;
     push(Math.round(v * (1 - APPROXIMATELY) * 100) / 100, Math.round(v * (1 + APPROXIMATELY) * 100) / 100, 'about');
@@ -248,28 +282,6 @@ export const quantityOf = (statement: string): Quantity | null => quantitiesOf(s
 
 /** How far two limits may sit apart and still be one trait: within 30% of the larger, and never less than 2 apart counts. */
 export const withinTolerance = (a: number, b: number): boolean => Math.abs(a - b) <= Math.max(2, 0.3 * Math.max(Math.abs(a), Math.abs(b)));
-
-/**
- * TWO QUANTITIES ON ONE MEASURE. CONFLICT when no piece can meet both: ranges that do not meet, or a permission well past
- * a ceiling (ranges that touch only at an end of a size said "about" do not meet). Two ceilings, or two floors, never conflict ("at most six sentences" and "at most three" are both met by
- * three): close together they are one trait (SAME), else UNRELATED. Two quantities on different measures are UNRELATED.
- */
-export function quantityRelation(a: Quantity, b: Quantity): 'SAME' | 'CONFLICT' | 'UNRELATED' {
-  if (a.measure !== b.measure || a.unit !== b.unit) return 'UNRELATED';
-  if (a.allows || b.allows) {
-    const [al, o] = a.allows ? [a, b] : [b, a];
-    if (o.allows || o.max === null || al.max === null) return 'UNRELATED';
-    return al.max > o.max && !withinTolerance(o.max, al.max) ? 'CONFLICT' : 'UNRELATED';
-  }
-  const lo = Math.max(a.min ?? 0, b.min ?? 0); const hi = Math.min(a.max ?? Infinity, b.max ?? Infinity);
-  if (lo > hi) return 'CONFLICT';
-  // Ranges that touch at one point, an end of a size said "about": that end is not part of it.
-  const edge = (q: Quantity): boolean => Boolean(q.about) && (q.min === lo || q.max === lo);
-  if (lo === hi && (edge(a) || edge(b))) return 'CONFLICT';
-  if (a.min === null && b.min === null && a.max !== null && b.max !== null) return withinTolerance(a.max, b.max) ? 'SAME' : 'UNRELATED';
-  if (a.max === null && b.max === null && a.min !== null && b.min !== null) return withinTolerance(a.min, b.min) ? 'SAME' : 'UNRELATED';
-  return 'UNRELATED';
-}
 
 /** Whether two readings of one rule say the same: the same measures, each bound within a tenth (or both open). */
 export function sameReading(a: readonly Quantity[], b: readonly Quantity[]): boolean {

@@ -13,9 +13,9 @@
 // instructions, kept with the run: a continuation with the same list, and every rebuild, reads it from there.
 //
 // THE SAME CALL READS EVERY QUANTITY the instructions state ("about 300 words", "a five-minute read") as a range, by
-// the conventions of the quantity grammar (./quantity.ts). Code compares those ranges with the grammar's own function;
-// a rule the two read differently is read both ways, held against any rule either reading conflicts with, and said so
-// on the screen (./selection.ts). Nothing is resolved by choosing one reading.
+// the conventions of the quantity grammar (./quantity.ts). A rule the two read differently is read both ways, and said
+// so on the screen (./selection.ts); a measure the model names is a length the rule states, asked against any other
+// author's length on it (./length.ts). A reading only adds a question, never removes one.
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';

@@ -54,29 +54,34 @@ const sixSource = Object.fromEntries(SIX.rules.map((r) => [r.id, r.author]));
 const sixTable = buildTraitTable(sixRules, (id) => sixSource[id]);
 const sixAuthors = Object.keys(SIX.admired).map((name) => author(name, SIX.classes[name] ?? [], SIX.admired[name]));
 const sixStatement = (id: string): string => sixRules.find((p) => p.requirementId === id)?.statement ?? id;
-// The reviewer's answers, renumbered: two ceilings on one count never conflict (every counted sentence, paragraph and
-// hedging band here is a ceiling, and a worded ceiling against a counted one is met by short sentences), so those pairs
-// are no conflicts; the reviewer's 3, 17, 18, 20, 23 and 47 are now 3, 10, 11, 13, 16 and 23, and their two "both"
-// answers to two counted ceilings have no conflict left to answer.
-const RUN: Record<number, ConflictAnswer> = { 3: 'B', 10: 'B', 11: 'B', 13: 'A', 16: 'both', 23: 'A' };
+/** A conflict's number in the six authors' table, by its two rules. */
+const sixN = (a: string, b: string): number => sixTable.conflicts.find((c) => c.sides[0].id === a && c.sides[1].id === b)?.n ?? -1;
+// The reviewer's answers, by the pairs they answered: two counted ceilings on one count never conflict (every counted
+// sentence, paragraph and hedging band here is a ceiling), so their two "both" answers to two counted ceilings have no
+// conflict left to answer. A length in words against another author's length is always asked, so the table holds more
+// conflicts than the reviewer saw, and the numbers are read from the pairs, not fixed.
+const HEADINGS = sixN('p13', 'p22');
+const RUN: Record<number, ConflictAnswer> = { [sixN('p2', 'p12')]: 'B', [sixN('p11', 'p43')]: 'B', [sixN('p12', 'p19')]: 'B', [HEADINGS]: 'A', [sixN('p14', 'p28')]: 'both', [sixN('p27', 'p35')]: 'A' };
 
 describe('six authors: the answer to one conflict and admiration in another never ship a contradiction', () => {
-  it('the table is the one the reviewer answered: their conflict 20, now 13, is "Avoid headings" against "Give every section a heading"', () => {
-    expect(sixTable.conflicts.length).toBe(28);
-    expect(sixTable.conflicts[12].sides.map((s) => s.statement)).toEqual(['Avoid headings; let paragraphs carry the structure.', 'Give every section a heading.']);
+  it('the table is the one the reviewer answered: their conflict 20 is "Avoid headings" against "Give every section a heading"', () => {
+    // the reviewer's 28, and ten more: a length in words against another author's count of it is asked (p14, p27, p28)
+    expect(sixTable.conflicts.length).toBe(38);
+    expect(Object.keys(RUN).map(Number).every((n) => n > 0)).toBe(true);
+    expect(sixTable.conflicts[HEADINGS - 1].sides.map((s) => s.statement)).toEqual(['Avoid headings; let paragraphs carry the structure.', 'Give every section a heading.']);
   });
-  for (const [label, answers] of [['--conflict 13=A', { 13: 'A' }], ['the run\'s six answers', RUN]] as const) {
+  for (const [label, answers] of [[`--conflict ${HEADINGS}=A`, { [HEADINGS]: 'A' as const }], ['the run\'s six answers', RUN]] as const) {
     it(`${label}: "Avoid headings…" instructs, "Use short headings." does not`, () => {
       const rec = composeSelection(sixTable, sixRules, sixAuthors, answers);
       const ds = new Map(decisionsFor(rec, sixRules, new Map(), new Map()).map((d) => [d.id, d]));
       expect(ds.get('p13')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
       expect(ds.get('p44')?.decision).toBe('REJECT');
-      expect(rec.decisions.find((d) => d.id === 'p44')).toMatchObject({ outcome: 'REJECTED', settledBy: { n: 13, how: 'ANSWER' } });
+      expect(rec.decisions.find((d) => d.id === 'p44')).toMatchObject({ outcome: 'REJECTED', settledBy: { n: HEADINGS, how: 'ANSWER' } });
       expect(contradictionsLeft(rec, sixRules)).toEqual([]);
-      // the screen says what was built: conflict 14 (bram against faro on headings) stands with bram, by the answer to 13
-      const c21 = rec.conflicts[13];
+      // the screen says what was built: bram against faro on headings stands with bram, by the answer to the headings conflict
+      const c21 = rec.conflicts[sixN('p13', 'p44') - 1];
       expect(c21.sides.map((s) => s.id)).toEqual(['p13', 'p44']);
-      expect(standOf(c21, rec.decisions.find((d) => d.id === 'p13'), rec.decisions.find((d) => d.id === 'p44'))).toBe('→ bram (your answer to conflict 13)');
+      expect(standOf(c21, rec.decisions.find((d) => d.id === 'p13'), rec.decisions.find((d) => d.id === 'p44'))).toBe(`→ bram (your answer to conflict ${HEADINGS})`);
       const screen = describeComposite(rec, sixStatement).join('\n');
       expect(screen).not.toMatch(/both stand: bram/);
       expect(screen).not.toMatch(/p44 +Use short headings\./);
@@ -88,7 +93,7 @@ describe('six authors: the answer to one conflict and admiration in another neve
     const next = (): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed; };
     for (let k = 0; k < 40; k++) {
       const given: Record<number, ConflictAnswer> = {};
-      for (let n = 1; n <= 28; n++) { const v = choices[next() % 4]; if (v && next() % 3 === 0) given[n] = v; }
+      for (let n = 1; n <= sixTable.conflicts.length; n++) { const v = choices[next() % 4]; if (v && next() % 3 === 0) given[n] = v; }
       const rec = composeSelection(sixTable, sixRules, sixAuthors, given);
       expect(contradictionsLeft(rec, sixRules), JSON.stringify(given)).toEqual([]);
     }
