@@ -14,87 +14,43 @@ material never gave, and the pattern check passed both: it read figures only in 
 definition of a figure has always included "nine people" and "47 of them", and the reader's decision already read
 spelled-out numbers as their value.
 
-- **One reading of a number** (`core/loop/numbers.ts`). The spelled-out number phrases the reader's decision parsed
-  ("twenty-five", "two hundred and fifty", "a dozen", "3 million") now live in one module the pattern check reads too,
-  so the two instruments agree on which words are a number and what it is worth, and the two spellings support each
-  other ("40%" in the draft, "forty percent" in the material).
-- **A count written in words is listed, never cut** (`core/loop/claims.ts`, `core/loop/run-repair.ts`). Two to
-  ninety-nine, the hundred, thousand and million forms, "a dozen" and "twelve-plus", when they count the thing that
-  follows ("three of your prospects", "nine people", "forty percent"), are checked against the material like a figure
-  in digits: "three prospects" is supported by "3 prospects" or "three prospects". One the material does not give goes
-  on the `UNSOURCED·check` line for you to check, whatever the kind of work, and never fails or cuts the draft: the
-  pattern check reads such a count with less confidence than a figure in digits, and nobody has measured how often it
-  is the writer's own. Figures in digits are read and cut exactly as before.
-- **What prose counts without asserting a figure is left alone**: a span of time or an age ("two weeks", "ten minutes
-  later", "three years old"), the writer's own family ("I have two kids"), the structure of the piece ("three reasons",
-  "two things", "a hundred small decisions"), the "a hundred" or "a thousand" of hyperbole unless it counts something a
-  figure measures (people, customers, dollars, percent), a count inside a quotation, the lone "one" where it does not
-  count ("one of the reasons", "no one"), an ordinal used as structure ("the first reason"), a set already named ("the
-  three teams") and a quantity with no number ("a few engineer-months"). An "N-plus" form is always a count.
-- Pinned in `tests/atelier-claim-counts.test.ts`: the delivered sentences listed, each true sentence above left alone,
-  support in either spelling, listed never cut with or without a sensor, a digit figure still cut when unsupported, and
-  that a mixed text lists the same findings every time.
-
-### Fixed: an em dash in a table cell
-
-- The repair that removes an em dash the author never uses joined the parts with a comma even when the dash was a
-  whole table cell ("| Switching costs | — | — |"), which left rows reading `|, |, |`. A dash-only cell now becomes
-  `-`, a dash inside a cell's text ` - `, and a table's cell count is never changed. In prose, a dash next to a
-  quotation mark or a colon becomes ` - ` rather than a comma.
-
-### Changed: a skill that writes serves passages from your pieces by default
-
-On the one skill measured part by part, seven words in ten of the export were the author's pieces served whole, under
-one budget of 9,000 words. One newsletter skill was then built both ways and run on five titles: with passages within
-3,000 words (`--piece-budget 3000 --pieces excerpts`) the export ran 7,121 words against 12,555, each run cost 34%
-less, and no loss of quality was measured. That serving is now the default for the class of skill it was measured on.
-
-- **A skill that writes from your pieces is served compact at its first build:** passages from more of your pieces,
-  each by its opening and a passage from its middle, within 3,000 words. The build says so beside its size
-  ("pieces served compact by default"), and stores the choice on the skill exactly as the flags would, so a rebuild
-  reads the skill and not the default, whatever the default becomes.
-- **The whole serving is one flag away, and kept:** `atelier build --name <name> --pieces whole --piece-budget default`
-  serves whole pieces within 9,000 words, as every skill was built before, and later rebuilds keep that choice.
-- **Nothing built before changes.** A skill that already holds a voice keeps its budget and form, stored or not, and
-  rebuilds to the same bytes. A skill that answers shows its examples whole, as before; a skill built from a method
-  (`atelier method`, or `atelier new` with no model) serves whole pieces; `--voice none` serves none. No flag was added.
-- The default was measured on one skill and five titles, and is recorded here with its figures so that the next
-  measurement can move it again.
-
-### Changed: authority is read before materiality, and a figure carries its bound
-
-- **An unratified rule never blocks.** The execution plan read `materiality` alone; a requirement nobody confirmed
-  (`DERIVED_UNRATIFIED`) that carried REQUIRED in its fields would have been enforced. The plan now reads authority
-  first: such a rule is a habit that blocks nothing, and the record says why (`UNRATIFIED`).
-  A stored standard that holds such a requirement compiles it as a habit from now on, so that skill's next rebuild differs from its last; nothing in the standard itself changes.
-- **A fitted limit says what its held-out count is.** When a limit was moved to where the author's own pieces are, the
-  held-out pieces helped set it, so their count is named as "against the limit before it was moved", never as an
-  independent check. A fitted limit the author's pieces meet is held to the corpus count, as before.
-- **No exception under five pieces.** A suggested rule allowed one of the author's pieces to break it from three
-  pieces up: a third of the work at three. Under five pieces none is allowed.
-- **The claim reader's qualification shows its bound.** "Left 39 of 48 clean alone" now carries its one-sided 95%
-  upper bound beside it (false flags at most 30 in 100) on the panel and the skill card; the count is never cited alone.
-- The typicality score's one use (`--until-typical`, a stop rule for drafting) is named at its head.
-
-### Changed: a comparison run records what each arm delivered, and survives a filtered call
-
-- **Calls go out with thinking disabled**, on every call the Anthropic provider makes at run time, not only in the comparison runner. Every call forces one tool call, which extended thinking does not take;
-  an endpoint that turns thinking on unless told otherwise returned empty or refused calls, so arms meant to be the
-  same writer were not. The Anthropic provider sends `thinking: disabled`, learns it off on a 400 that names it (as
-  it does for temperature), and records `thinkingSent` on each result; model-arm rows carry it as `thinking`.
-- **A runtime row is the review as delivered.** `bench/compare/run.mjs` recorded `answer`, which ends with a footer of
-  specifics not found in the material ("check before you use this"). Only Atelier writes it, so a judge could tell
-  the arm, and no one posts a review that ends that way. The row's response is now `output`; the footer's sentences
-  are kept as `to_check`, beside `unverified` (with its reasons), `failed` and `claims_instrument`, so a study can ask
-  whether anything Atelier listed predicts a judge's "would not use".
-- **A filtered or declined call is a row, not the end of the run.** A provider's content filter or a model's refusal
-  was retried three times, paid for each time, and then stopped the whole arm with no row written. It is now written
-  once as `filtered` (`CONTENT_FILTER` or `REFUSAL`, and on the self-review arm which call), charged as an estimate
-  (`cost_estimated`, one call's allowance, which never raises the allowance kept for the next call), and the arm
-  goes on. That includes a filter reported as an HTTP 400 ("Output blocked by content filtering policy") and a
-  backend's refusal, and a run inside `atelier invoke` that was filtered or refused, read from its message. A
-  transport failure still retries and stops after three. The thinking setting is learned off only on a 400 that
-  rejects the field itself, never on one that names it for another reason.
+- **A FEATURE miss points at its carrier sentences.** The sentences whose removal moves the value most toward the
+  range are its spans, as many as cover the distance and never more than three, so a text nearer the range is pointed
+  at fewer places. Every FEATURE miss carries a signed distance, in widths of its range: positive above, negative
+  below. This holds for every FEATURE rule, whatever its materiality: a repair needs a target. The one thing it
+  changes for a REQUIRED feature rule is that a miss pointed at fewer carriers after a rewrite counts as progress.
+  Whether a rewrite made such a rule worse is still read by its verdict alone, as before: never by how many carriers
+  a miss happens to be pointed at, and never by its distance.
+- **Notes state direction and distance.** A draft written again, and each later shape round, is told every miss with
+  which way to move and about how far ("about 4.1 fewer parenthetical asides per 1,000 words", "about 51 words
+  shorter"), not only what was missed.
+- **A counted feature your pieces hold acts on every draft: it is repaired toward your range and never fails a
+  draft.** The standard's FEATURE rules are repair targets on every run, with no flag: a miss is rewritten on its
+  carriers and, if still outside after the rewrites, the piece is written once more with the move named, one draft
+  per round at most. The rules stay as the standard has them: a PREFERRED rule never fails the run, the evaluation
+  record never reads it as enforced, and no rule is promoted. The note for such a miss says what your pieces usually
+  do, in a block of its own, and never that the method requires it. `invoke --graded none` turns this off for a run;
+  it is the only value the switch takes.
+- **The features your pieces hold without a rule act when far out.** Selection keeps more counted features than
+  enter the standard (the profile's signal bands, per length class). On each run, for the output's length class, a
+  signal feature more than one width of its range outside it is a target for that run exactly like a FEATURE rule:
+  carrier sentences, a signed distance, direction and distance in the notes, at most three features a pass across
+  both sources, never a failure, never written into the standard or the record's verdicts. Monitored features never
+  act. Without a profile only the standard's rules act.
+- **Nothing is steered at the cost of the rest.** A rewrite or a draft written again is refused when, over the
+  features your pieces hold for that length class, more of them end outside their range than before, or one it was
+  not pointed at moves from inside its range to more than one width outside. A shorter text raises every rate per
+  1,000 words, so the comparison reads the earlier text at the later text's length. For a graded feature alone, a
+  rewrite that leaves its rule broken and moves the value further from the range by a tenth of a width or more is
+  discarded on the same reading. Enforced rules keep their own acceptance. The run's call and dollar bounds are
+  raised by exactly what the extra draft and its rewrites may spend, and the record states what they were raised by.
+- **Recorded, on the invocation record and in `--json` (`graded`):** the features graded; which were steered and
+  which way, said in one line on the run with the note that they never block; the drafts written again for them; the
+  note lines sent; each feature's value before and after, with its range and where the range came from (`standard`
+  or `profile`); the rewrites kept and refused, with reasons; how many features lay outside their range on the first
+  draft and on the delivered text, and every rewrite refused for displacing others; and the calls and dollars this
+  steering caused, taken from the run's ledger under their own purpose (`graded`), never estimated. Every repair now
+  also records its rewrites kept and refused, with the reasons (`repair.edits`).
 
 ### Changed, for 2.0: one evaluation record, and a mark never says more than was observed
 
