@@ -37,7 +37,8 @@ beforeAll(async () => {
       { containsAll: ['emit_matches', 'eight sentences'], answer: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }, { leftIndex: 1, matchedRightIndex: 1 }] } },
       by('sprint', [rule('Keep the pace fast with sentence fragments.', 'cal.md')]),
       by('protocol', [rule('Never use contractions; keep a formal register.', 'dee.md')]),
-      by('kettle', [rule('Open on a short scene from a story, then turn to the point.', 'eli.md')]),
+      by('kettle', [rule('Open on a short scene from a story, then turn to the point.', 'eli.md'), rule('Close on the line of dialogue that started it.', 'eli.md')]),
+      { containsAll: ['emit_matches', 'line of dialogue'], answer: { matches: [{ leftIndex: 0, matchedRightIndex: 0 }, { leftIndex: 1, matchedRightIndex: 1 }] } },
     ],
   }) });
 });
@@ -98,7 +99,7 @@ describe('atelier new on five pieces by five authors', () => {
     first = run(data, proj, 'new', dir, PURPOSE, '--name', 'mix'); builtAfter.push(built());
     second = run(data, proj, 'new', dir, ...ADMIRE); builtAfter.push(built());
     third = run(data, proj, 'new', dir, '--accept');
-    if (process.env.COMPOSITE_DUMP) writeFileSync(process.env.COMPOSITE_DUMP, [first, second, third].join('\n=====\n'));
+    if (process.env.COMPOSITE_DUMP) writeFileSync(process.env.COMPOSITE_DUMP, [first, second, third, readFileSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'), 'utf8')].join('\n=====\n'));
   }, 300_000);
 
   it('says the pieces are by several authors, each read on its own first, and holds none back', () => {
@@ -145,6 +146,20 @@ describe('atelier new on five pieces by five authors', () => {
     expect(md).toMatch(/- From Ada: openings\. Taken as: "Open with a question the reader is already asking"/);
     expect(md).toMatch(/- From Bea: evidence and its depth/);
     expect(md).not.toMatch(/- From Dee/);
+    // what the person selected INSTRUCTS: in the served skill's instructions, not only in a list of what is shown
+    const todo = /## What to do\n([\s\S]*?)\n## /.exec(md)?.[1] ?? '';
+    expect(todo).toMatch(/Open with a question the reader is already asking\./);           // A's opening
+    expect(todo).toMatch(/Back every claim with a cited figure and its source\./);          // B's evidence
+    expect(todo).toMatch(/Keep the pace fast with sentence fragments\./);                   // C's pacing
+    expect(todo).toMatch(/Open on a short scene from a story, then turn to the point\./);   // E's opening, four of five lack it
+    // an unselected unique trait of an admired author stays a habit: shown, never instructed
+    expect(todo).not.toMatch(/line of dialogue/);
+    expect(md).toMatch(/Moves I sometimes make[\s\S]*Close on the line of dialogue that started it\./);
+    // and nothing from the author nobody admired, nor either side of the open conflict, instructs
+    expect(todo).not.toMatch(/contractions|paragraph run/);
+    // the ruling says whose word it is
+    const ledgers = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? ledgers(join(dir, e.name)) : /ledger/i.test(join(dir, e.name)) ? [readFileSync(join(dir, e.name), 'utf8')] : []));
+    expect(ledgers(join(data, 'skills', 'mix')).join('\n')).toMatch(/selected by you from Ada \(ada\.md\)/);
     const voices = Object.entries(files).filter(([f]) => f.startsWith('voice-'));
     const whose = voices.map(([, t]) => /^\[voice-\d+\] [^\n]*?piece by (\w+)/.exec(t)?.[1]).sort();
     expect(whose).toEqual(['Ada', 'Bea', 'Cal', 'Eli']);

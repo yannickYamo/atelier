@@ -4,16 +4,16 @@
 // not any one of them. So every proposal gets exactly one of four outcomes, and none is dropped in silence:
 //
 //   SELECTED   its author was admired for the class it falls in (./admire.ts): approved, and it instructs
-//   HABIT      not selected, and shared with another author (./traits.ts): kept as a preference, shown and never
-//              instructed. Recurrence is evidence; it is not thereby the person's rule
-//   REJECTED   not selected and not shared: what the person did not ask for from that author
+//   HABIT      not selected, and shared with another author (./traits.ts), or by an author the person admired for
+//              something else: kept as a preference, shown and never instructed. Evidence, not the person's rule
+//   REJECTED   not selected, not shared, by an author the person said nothing about
 //   OPEN       one side of a conflict nobody has answered: neither side instructs, and the question is kept
 //
 // A conflict is answered by the person (`--conflict 1=A`), or by their admiration when exactly one side's class
 // was admired from its author; with both sides admired, or neither, it stays open. Nothing here guesses.
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
-import { TRAIT_LABEL, mergedMeasurement, type Conflict, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
+import { TRAIT_LABEL, mergedMeasurement, takenAs, type Conflict, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
 
 export interface CompositeAuthor {
   readonly name: string;
@@ -37,6 +37,11 @@ export interface CompositeDecision {
   readonly range?: Measurement;
   /** on 'both' of two worded rules, which cannot be one range: each is kept, shown and never instructed over the other */
   readonly shownOnly?: true;
+  /**
+   * SELECTED BY THE PERSON'S OWN LINE about this author (directly, or by settling a conflict): the owner's word, not
+   * inferred evidence, so it is ratified to instruct (cli/commands/composite.ts, `decisionsFor`).
+   */
+  readonly byAdmiration?: true;
 }
 
 export interface AnsweredConflict extends Conflict {
@@ -60,7 +65,9 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
   answers: Readonly<Record<number, ConflictAnswer>> = {}): CompositeRecord {
   const classesOf = new Map(authors.map((a) => [a.name, new Set(a.classes)]));
   const rowOf = new Map(table.rows.map((r) => [r.id, r]));
-  const admired = (id: string): boolean => { const r = rowOf.get(id); return Boolean(r && classesOf.get(r.author)?.has(r.cls)); };
+  const admired = (id: string): boolean => { const r = rowOf.get(id); return Boolean(r?.classes.some((c) => classesOf.get(r.author)?.has(c))); };
+  // The class each rule is taken for: of the classes it carries, the one its author's line named, else its first.
+  const clsOf = (id: string): TraitClass | undefined => { const r = rowOf.get(id); return r ? takenAs(r.classes, classesOf.get(r.author)) : undefined; };
 
   // Conflicts first: an answer decides both sides; so does admiration of exactly one side.
   const conflicts: AnsweredConflict[] = table.conflicts.map((c) => {
@@ -72,7 +79,7 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     return { ...c, answer: null, resolvedBy: null };
   });
   const byId = new Map(proposals.map((p) => [p.requirementId, p]));
-  const sideOutcome = new Map<string, { outcome: Outcome; why: string; mergedInto?: string; range?: Measurement; shownOnly?: true }>();
+  const sideOutcome = new Map<string, { outcome: Outcome; why: string; mergedInto?: string; range?: Measurement; shownOnly?: true; byAdmiration?: true }>();
   for (const c of conflicts) {
     const [a, b] = c.sides;
     const who = `${a.author} against ${b.author} on ${c.label}`;
@@ -89,8 +96,8 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
       }
     } else {
       const win = c.answer === 'A' ? a : b; const lose = c.answer === 'A' ? b : a;
-      const how = c.resolvedBy === 'ADMIRATION' ? `you admired ${win.author}'s ${TRAIT_LABEL[c.cls]}` : `you answered ${c.answer}`;
-      sideOutcome.set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): ${how}` });
+      const how = c.resolvedBy === 'ADMIRATION' ? `you admired ${win.author}'s ${TRAIT_LABEL[clsOf(win.id) ?? c.cls]}` : `you answered ${c.answer}`;
+      sideOutcome.set(win.id, { outcome: 'SELECTED', why: `conflict ${c.n} (${who}): ${how}`, ...(c.resolvedBy === 'ADMIRATION' ? { byAdmiration: true as const } : {}) });
       sideOutcome.set(lose.id, { outcome: 'REJECTED', why: `conflict ${c.n} (${who}): ${how}` });
     }
   }
@@ -98,12 +105,16 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
   const decisions: CompositeDecision[] = proposals.flatMap((p) => {
     const r = rowOf.get(p.requirementId);
     if (!r) return [];
-    const base = { id: r.id, author: r.author, cls: r.cls, kind: r.kind };
+    const cls = clsOf(r.id) ?? r.cls;
+    const base = { id: r.id, author: r.author, cls, kind: r.kind };
     const side = sideOutcome.get(r.id);
     if (side) return [{ ...base, ...side }];
-    if (admired(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `you admired ${r.author}'s ${TRAIT_LABEL[r.cls]}` }];
+    if (admired(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `you admired ${r.author}'s ${TRAIT_LABEL[cls]}`, byAdmiration: true as const }];
     if (r.kind === 'SHARED') return [{ ...base, outcome: 'HABIT' as const, why: `shared with ${r.with.length} other rule(s) and not chosen: kept as a habit, shown and not instructed` }];
-    return [{ ...base, outcome: 'REJECTED' as const, why: `${r.author}'s ${TRAIT_LABEL[r.cls]} was not what you chose from them` }];
+    // An author the person said they like, for something else: the rest of what their pieces show is kept as a habit,
+    // shown and never instructed. An author they said nothing about gives nothing alone.
+    if (authors.find((a) => a.name === r.author)?.admired) return [{ ...base, outcome: 'HABIT' as const, why: `not what you chose from ${r.author}: kept as a habit, shown and not instructed` }];
+    return [{ ...base, outcome: 'REJECTED' as const, why: `${r.author}'s ${TRAIT_LABEL[cls]} was not what you chose from them` }];
   });
 
   // RECURRING DECISION MOVES: method rules chosen, or shared by two or more authors. Offered as a methodology the
@@ -123,6 +134,7 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
   const out: string[] = [];
   const selected = c.decisions.filter((d) => d.outcome === 'SELECTED' && !d.mergedInto);
   out.push(`Your composite: ${selected.length} rule(s) chosen from ${new Set(selected.map((d) => d.author)).size} of ${c.authors.length} authors. It is your combination, not any one author and not their average.`);
+  out.push('What you chose from an author instructs the writer once you accept (a counted one steers the drafts and never fails one); everything else is shown or set aside.');
   for (const a of c.authors) {
     const mine = selected.filter((d) => d.author === a.name);
     const classes = [...new Set(mine.map((d) => d.cls))].map((k) => TRAIT_LABEL[k]);

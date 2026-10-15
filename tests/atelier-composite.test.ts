@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { detectAuthors, frontMatterAuthor } from '../core/composite/authors.js';
-import { buildTraitTable, traitClassOf, relationOf, mergedMeasurement } from '../core/composite/traits.js';
+import { buildTraitTable, traitClassOf, traitClassesOf, relationOf, mergedMeasurement } from '../core/composite/traits.js';
 import { keywordClasses, readAdmiration } from '../core/composite/admire.js';
 import { composeSelection, openQuestions, describeComposite, compositeVoiceOf, type CompositeAuthor } from '../core/composite/selection.js';
 import { selectCompositePieces, copyGuardPieces, pieceLabel } from '../core/compiler/voice.js';
@@ -38,6 +38,7 @@ const PROPOSALS: readonly (readonly [string, Requirement])[] = [
   ['D', rule('p4', 'Never use contractions; keep a formal register.', null, 'BOUNDARY')],
   ['D', rule('m5', 'Hedge at most 2 times per 1000 words.', { observer: 'HEDGE_RATE', params: { maxPer1000: 2 } })],
   ['E', rule('p5', 'Open on a short scene from a story, then turn to the point.')],
+  ['E', rule('p6', 'Close on the line of dialogue that started it.')],
 ];
 const proposals = PROPOSALS.map(([, p]) => p);
 const sourceOf = (id: string): string | undefined => PROPOSALS.find(([, p]) => p.requirementId === id)?.[0];
@@ -71,6 +72,11 @@ describe('the trait table: classes and kinds, per author, never pooled', () => {
     expect(traitClassOf(rule('x', 'Open on a short scene from a story, then turn to the point.'))).toBe('opening');
     expect(traitClassOf(rule('x', 'x', { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 2 } }))).toBe('pace');
     expect(traitClassOf(rule('x', 'Decide what to cut before drafting anything.'))).toBe('method');
+    // a rule about two things carries both, whatever order its words come in
+    const one = traitClassesOf(rule('x', 'Let a paragraph run long when the evidence needs it.'));
+    const other = traitClassesOf(rule('x', 'When the evidence needs it, let a paragraph run long.'));
+    expect(one).toEqual(['evidence', 'pace']);
+    expect(other).toEqual(one);
     // and the person's lines, read by their words when no model reads them
     expect(keywordClasses('the way it opens', ['opening', 'pace'])).toEqual(['opening']);
     expect(keywordClasses('how deep the evidence goes', ['evidence', 'pace'])).toEqual(['evidence']);
@@ -120,6 +126,19 @@ describe('the composite: what the person chose, not the average and not any one 
     const without = composeSelection(table, proposals, LIKES.map((a) => (a.name === 'E' ? author('E', null, []) : a)));
     expect(without.decisions.find((d) => d.id === 'p5')?.outcome).toBe('REJECTED');
   });
+  it('a rule of two classes is taken for the one the person named: the tie goes to them', () => {
+    const two = [rule('q1', 'Let a paragraph run long when the evidence needs it.'), rule('q2', 'Never hedge a claim in the opening line.')];
+    const src = (id: string): string | undefined => (id === 'q1' ? 'A' : 'B');
+    const t = buildTraitTable(two, src);
+    expect(t.rows.find((r) => r.id === 'q1')?.classes).toEqual(['evidence', 'pace']);
+    const byPace = composeSelection(t, two, [author('A', 'the long paragraphs', ['pace']), author('B', null, [])]);
+    expect(byPace.decisions.find((d) => d.id === 'q1')).toMatchObject({ outcome: 'SELECTED', cls: 'pace', byAdmiration: true });
+    const byEvidence = composeSelection(t, two, [author('A', 'the evidence', ['evidence']), author('B', null, [])]);
+    expect(byEvidence.decisions.find((d) => d.id === 'q1')).toMatchObject({ outcome: 'SELECTED', cls: 'evidence' });
+  });
+  it('an unselected unique trait of an author the person admired stays a habit, shown and never instructed', () => {
+    expect(outcome('p6')).toBe('HABIT');
+  });
   it('keeps D only if admired; what D shares with another author is a habit, never instructed', () => {
     expect(outcome('p4')).toBe('REJECTED');
     expect(outcome('m5')).toBe('HABIT');
@@ -154,11 +173,25 @@ describe('the composite: what the person chose, not the average and not any one 
     expect(c.decisions.map((d) => d.id).sort()).toEqual(proposals.map((p) => p.requirementId).sort());
   });
   it('the rulings go through the normal decide path, each naming its author and pieces, and an open side instructs nothing', () => {
+    // thin evidence everywhere, as with one piece per author: the suggestion alone would instruct nothing
     const sugg = new Map<string, Suggestion>(proposals.map((p) => [p.requirementId, { decision: 'APPROVE', materiality: 'PREFERRED', needs: null, why: 'seen', strength: 1 }]));
     const list = decisionsFor(c, proposals, sugg, new Map());
     const of = (id: string) => list.find((d) => d.id === id);
-    expect(of('p1')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
-    expect(of('p1')?.suggested?.why).toMatch(/composite, from A \(a\.md\): you admired A's openings/);
+    // what the person selected is their word: a worded rule instructs
+    for (const id of ['p1', 'p2', 'p3', 'p5']) expect(of(id), id).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
+    expect(of('p1')?.suggested?.why).toMatch(/^selected by you from A \(a\.md\): you admired A's openings/);
+    // a counted one they selected is a target, never a failure, until they say otherwise
+    expect(of('m4')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
+    expect(of('m4')?.suggested?.why).toMatch(/selected by you from C .*never fails a draft/);
+    // what nobody selected keeps the evidence's weight
+    expect(of('p6')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
+    expect(of('p6')?.suggested?.why).toMatch(/^composite, from E/);
+    // and the evidence's own rejection of an unselected rule stands, where a selected one is the person's word
+    const rejecting = new Map(sugg);
+    for (const id of ['p6', 'p1']) rejecting.set(id, { decision: 'REJECT', materiality: null, needs: null, why: 'never seen again', strength: 0 });
+    const ruled = decisionsFor(c, proposals, rejecting, new Map());
+    expect(ruled.find((d) => d.id === 'p6')).toMatchObject({ decision: 'REJECT' });
+    expect(ruled.find((d) => d.id === 'p1')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
     expect(of('m1')).toMatchObject({ decision: 'REJECT' });
     expect(of('m1')?.suggested?.why).toMatch(/conflict 1 .* unanswered/);
     expect(of('m5')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
