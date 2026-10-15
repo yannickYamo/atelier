@@ -77,6 +77,8 @@ const build = (request: string): { data: string; proj: string; out: string; md: 
   return { data, proj, out, md: existsSync(skill) ? readFileSync(skill, 'utf8') : '', comp: existsSync(c) ? JSON.parse(readFileSync(c, 'utf8')) as ReturnType<typeof build>['comp'] : { conflicts: [] } };
 };
 const whatToDo = (md: string): string => md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
+const served = (md: string, dir: string): string => [md, ...(existsSync(join(dir, 'examples')) ? readdirSync(join(dir, 'examples')).sort().map((f) => readFileSync(join(dir, 'examples', f), 'utf8')) : [])].join('\n');
+const servedOf = (b: { md: string; proj: string }): string => served(b.md, join(b.proj, '.claude', 'skills', 'mix'));
 
 describe('a rule whose numbers the model reads differently from its words', () => {
   let first: ReturnType<typeof build>; let asked: ReturnType<typeof build>; let stored = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0;
@@ -97,14 +99,15 @@ describe('a rule whose numbers the model reads differently from its words', () =
     const pair = first.comp.conflicts.find((c) => c.provenance === 'read by the model at build');
     expect(pair).toMatchObject({ resolvedBy: 'INFERENCE', reason: expect.stringMatching(/^p\d+ read two ways/) as unknown });
   });
-  it('exactly one length instructs; with a length in the request, neither does and the skill states no band of its own', () => {
+  it('exactly one length is served, as preferred steering; with a length in the request, neither is and the skill states no band of its own', () => {
     expect(first.md).not.toBe('');
-    expect([LONG, QUICK].filter((r) => whatToDo(first.md).includes(r))).toHaveLength(1);
-    expect(whatToDo(first.md)).toContain(OPEN_Q);
+    expect([LONG, QUICK].filter((r) => servedOf(first).includes(r))).toHaveLength(1);
+    expect(servedOf(first)).toContain(OPEN_Q);
+    for (const r of [LONG, QUICK, OPEN_Q]) expect(whatToDo(first.md)).not.toContain(r);
     expect(asked.out).not.toMatch(/^EXIT/);
-    expect(whatToDo(asked.md)).not.toContain(LONG);
-    expect(whatToDo(asked.md)).not.toContain(QUICK);
-    expect(whatToDo(asked.md)).toContain(OPEN_Q);
+    expect(servedOf(asked)).not.toContain(LONG);
+    expect(servedOf(asked)).not.toContain(QUICK);
+    expect(servedOf(asked)).toContain(OPEN_Q);
     expect(asked.md).not.toMatch(/My pieces of this kind run about/);
   });
   it('the reading is kept with the run, and a rebuild asks the model nothing', () => {

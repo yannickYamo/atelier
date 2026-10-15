@@ -115,14 +115,28 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
     expect(lines[0]).toBe(inf.line);
   });
 
-  it('each voice\'s most characteristic traits instruct', () => {
-    const md = readFileSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'), 'utf8');
+  it('each voice\'s most characteristic traits steer through preferred examples, never hard instructions', () => {
+    const files = skillFiles(proj, 'mix');
+    const md = files['SKILL.md'];
     const todo = /## What to do\n([\s\S]*?)\n## /.exec(md)?.[1] ?? '';
-    for (const r of [ASK_OPEN, FIG_EVIDENCE, RUN_PACE, LAW_FORMAL, TALE_FIGURE]) expect(todo).toContain(r);
-    for (const r of [ASK_OPEN, FIG_EVIDENCE, RUN_PACE, LAW_FORMAL, TALE_FIGURE]) expect(inf.weights.find((w) => w.statement === r)?.chosen).toBe(true);
+    const served = Object.values(files).join('\n');
+    for (const r of [ASK_OPEN, FIG_EVIDENCE, RUN_PACE, LAW_FORMAL, TALE_FIGURE]) {
+      expect(served).toContain(r);
+      expect(todo).not.toContain(r);
+      expect(inf.weights.find((w) => w.statement === r)?.chosen).toBe(true);
+    }
     // the ruling says it was inferred, from which voice
     const ledgers = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? ledgers(join(dir, e.name)) : /ledger/i.test(join(dir, e.name)) ? [readFileSync(join(dir, e.name), 'utf8')] : []));
     expect(ledgers(join(data, 'skills', 'mix')).join('\n')).toMatch(/inferred from voice 1 \(a-meetings\.md, f-inbox\.md\)/);
+  });
+
+  it('the inferred traits ship as preferred steering; only the editorial grammar rule is required', () => {
+    const dir = join(data, 'skills', 'mix', 'standards');
+    const standards = readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')) as { requirements: { materiality: string | null; measurement?: { observer: string } }[] });
+    const requirements = standards.flatMap((s) => s.requirements);
+    expect(requirements.filter((r) => r.materiality === 'REQUIRED' && r.measurement?.observer !== 'GRAMMAR')).toEqual([]);
+    expect(requirements.filter((r) => r.materiality === 'REQUIRED' && r.measurement?.observer === 'GRAMMAR')).toHaveLength(1);
+    expect(requirements.filter((r) => r.materiality === 'PREFERRED').length).toBeGreaterThan(0);
   });
 
   it('the clash is settled one way, with its reason, and never both sides ship', () => {
@@ -141,7 +155,7 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
     expect(inf.effectReadings).toEqual([id(RUN_EFFECT)]);
     const report = viaModel(data, proj, 'report', '--skill', 'mix');
     expect(report).toContain('HOW THE VOICES WERE COMBINED (inferred from the pieces; nothing was asked)');
-    // what instructs from whom, and how the clash stands, in the composite's own words
+    // what stands from whom, and how the clash stands, in the composite's own words
     expect(report).toMatch(/THE COMPOSITE\n {2}The composite: \d+ rule\(s\) taken from 5 of 5 voices, each voice's most characteristic\./);
     expect(report).toMatch(/A {2}voice 1: Use contractions throughout, in a casual register\.\n {8}B {2}voice 4: Never use contractions; keep a formal register\.\n {8}→ voice 4 \(the more characteristic\)/);
     expect(report).not.toMatch(/you chose|you admired|answer with --conflict/);
@@ -190,7 +204,7 @@ describe('the same ten pieces with no model set up', () => {
 });
 
 describe('a folder of one voice behaves as it always did', () => {
-  it('six pieces by one writer are one voice: no voices line, no composite', () => {
+  it('six unlabelled pieces by one writer take the same single-author path and compile identically apart from build time', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-infer-1-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-infer-1-proj-'));
     const out = keyless(data, proj, 'new', folder(proj, ONE_VOICE), 'a team blog post', '--name', 'one');
     expect(out).not.toMatch(/^EXIT/);
@@ -198,5 +212,14 @@ describe('a folder of one voice behaves as it always did', () => {
     expect(existsSync(join(proj, '.claude', 'skills', 'one', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(data, 'skills', 'one', 'composite.json'))).toBe(false);
     expect(readFileSync(join(proj, '.claude', 'skills', 'one', 'SKILL.md'), 'utf8')).not.toMatch(/composite/i);
+
+    const labelledData = mkdtempSync(join(tmpdir(), 'atelier-infer-1-labelled-data-')); const labelledProj = mkdtempSync(join(tmpdir(), 'atelier-infer-1-labelled-proj-'));
+    const labelled = Object.fromEntries(Object.entries(ONE_VOICE).map(([name, text]) => [name, `---\nauthor: Ann\n---\n${text}`]));
+    const labelledOut = keyless(labelledData, labelledProj, 'new', folder(labelledProj, labelled), 'a team blog post', '--name', 'one');
+    expect(labelledOut).not.toMatch(/^EXIT/);
+    expect(labelledOut).not.toMatch(/voices found|by \d+ authors|Combined/);
+    expect(existsSync(join(labelledData, 'skills', 'one', 'composite.json'))).toBe(false);
+    const withoutBuildTime = (files: Record<string, string>): Record<string, string> => Object.fromEntries(Object.entries(files).map(([name, text]) => [name, text.replace(/^mintedAt:\s+.*$/m, 'mintedAt:        <build time>')]));
+    expect(withoutBuildTime(skillFiles(labelledProj, 'one'))).toEqual(withoutBuildTime(skillFiles(proj, 'one')));
   });
 });

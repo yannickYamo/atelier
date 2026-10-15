@@ -50,7 +50,7 @@ describe('keyless atelier new on pieces by four authors', () => {
     expect(first).not.toMatch(/What do you like|--admire|--accept|Nothing was decided/);
     expect(first.split('\n').filter((l) => l.startsWith("Combined 4 writers: "))).toHaveLength(1);
     // with no model to read the final instructions, the build says how clashes between voices were found
-    expect(first).toContain('(clashes between voices were found by keyword only: a whole-piece structure rule may still sit beside a structure it rules out; atelier report --skill <name> lists what instructs)');
+    expect(first).toContain('(clashes between voices were found by keyword only: a whole-piece structure rule may still sit beside a structure it rules out; atelier report --skill <name> lists what stands)');
     expect(existsSync(join(skill, 'SKILL.md'))).toBe(true);
   });
   it('serves no piece with its front matter, and says the composite in its own words', () => {

@@ -125,19 +125,21 @@ describe('atelier new on five pieces by five authors', () => {
     expect(lines[0]).toMatch(/^Combined 5 writers: openings[^,]* from Ada, [^,]*evidence handling[^,]* from Bea, [^,]*pace[^,]* from Cal, [^,]*tone and word choice[^,]* from Dee, openings[^,]* from Eli; \d+ clashes settled by which was more characteristic\. Say `atelier fix` to change any of it\.$/);
   });
 
-  it('a composite voice, one excerpt from each chosen author, labelled as theirs; what is most characteristic of each instructs', () => {
+  it('a composite voice, one excerpt from each chosen author, labelled as theirs; what is most characteristic of each is served as preferred steering', () => {
     const files = skillFiles(proj, 'mix');
     const md = files['SKILL.md'];
     expect(md).toMatch(/My voice is a composite/);
     expect(md).toMatch(/- From Ada: openings[^\n]*Taken as: "Open with a question the reader is already asking"/);
     expect(md).toMatch(/- From Bea: [^\n]*evidence and its depth/);
-    const todo = /## What to do\n([\s\S]*?)\n## /.exec(md)?.[1] ?? '';
+    const hard = /## What to do\n([\s\S]*?)\n## /.exec(md)?.[1] ?? '';
+    const todo = Object.values(files).join('\n');
+    for (const r of ['Open with a question the reader is already asking.', 'Keep the pace fast with sentence fragments.']) expect(hard).not.toContain(r);
     expect(todo).toMatch(/Open with a question the reader is already asking\./);           // A's opening
     expect(todo).toMatch(/Back every claim with a cited figure and its source\./);          // B's evidence
     expect(todo).toMatch(/Keep the pace fast with sentence fragments\./);                   // C's pacing
     expect(todo).toMatch(/Open on a short scene from a story, then turn to the point\./);   // E's opening, four of five lack it
     expect(todo).toMatch(/Never use contractions; keep a formal register\./);              // D's register: nobody has to say they like it
-    // the two paragraph lengths clash: exactly one of them instructs, never both
+    // the two paragraph lengths clash: exactly one of them is served, never both
     const sides = [/Never let a paragraph run past two sentences\./, /Let a paragraph run to eight sentences/].filter((re) => re.test(todo));
     expect(sides).toHaveLength(1);
     // the ruling says it was inferred, and from whom

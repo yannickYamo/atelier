@@ -244,7 +244,7 @@ export function describeInference(inf: InferenceRecord, outcomeOf: (id: string) 
     for (const [voice, said] of Object.entries(inf.preference.said)) out.push(`    ${voice}: "${said}" → ${(inf.preference.classes[voice] ?? []).map((c) => TRAIT_LABEL[c]).join(', ') || 'nothing their rules carry'}`);
   }
   if (inf.requestLength) out.push('', `  The request names the length (${inf.requestLength}): no voice's rule on the piece's length is taken.`);
-  out.push('', '  Rules by voice: weight = consistency × distinctiveness × preference. Taken: each voice\'s most characteristic, and what every voice shows (method).');
+  out.push('', '  Rules by voice: weight = consistency × distinctiveness × preference. Taken as preferred, never-blocking steering: each voice\'s most characteristic, and what every voice shows (method).');
   for (const v of g.voices) {
     const mine = inf.weights.filter((x) => x.voice === v.name).sort((a, b) => b.weight - a.weight || a.id.localeCompare(b.id));
     if (!mine.length) continue;

@@ -60,6 +60,7 @@ const run = (data: string, proj: string, ...args: string[]): string => {
 const contradictionCalls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies.filter((b) => b.includes('"emit_contradictions"')).length;
 
 const whatToDo = (md: string): string => md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
+const served = (md: string, dir: string): string => [md, ...(existsSync(join(dir, 'examples')) ? readdirSync(join(dir, 'examples')).sort().map((f) => readFileSync(join(dir, 'examples', f), 'utf8')) : [])].join('\n');
 const project = (): { data: string; proj: string } => {
   const base = mkdtempSync(join(tmpdir(), 'atelier-instructions-'));
   const data = join(base, 'data'); const proj = join(base, 'proj');
@@ -70,12 +71,13 @@ const project = (): { data: string; proj: string } => {
 const skillOf = (proj: string): string => { const f = join(proj, '.claude', 'skills', 'mix', 'SKILL.md'); return existsSync(f) ? readFileSync(f, 'utf8') : ''; };
 
 describe('a composite\'s final instructions', () => {
-  let first = ''; let second = ''; let md = ''; let md2 = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0;
+  let first = ''; let second = ''; let md = ''; let md2 = ''; let all = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0;
   let comp: { conflicts: { provenance?: string; reason?: string; resolvedBy: string; answer: string | null; settledWhy?: string }[] } = { conflicts: [] };
   beforeAll(async () => {
     const one = project();
     first = run(one.data, one.proj, 'new', 'writers', 'a weekly newsletter', '--name', 'mix');
     md = skillOf(one.proj);
+    all = served(md, join(one.proj, '.claude', 'skills', 'mix'));
     comp = existsSync(join(one.data, 'skills', 'mix', 'composite.json')) ? JSON.parse(readFileSync(join(one.data, 'skills', 'mix', 'composite.json'), 'utf8')) as typeof comp : comp;
     callsAfterBuild = await contradictionCalls();
     run(one.data, one.proj, 'build', '--name', 'mix');
@@ -87,14 +89,16 @@ describe('a composite\'s final instructions', () => {
     second = run(two.data, two.proj, 'new', 'writers', 'a weekly newsletter', '--name', 'mix', '--set', `${id}=required`);
     md2 = skillOf(two.proj);
   }, 300_000);
-  it('the model\'s pair is settled by which side is more characteristic, recorded with where it came from, and only one side instructs', () => {
+  it('the model\'s pair is settled by which side is more characteristic, recorded with where it came from, and only one side is served, as preferred steering', () => {
     expect(first).not.toMatch(/^EXIT/);
     expect(first).not.toMatch(/What do you like|--conflict|open question/);
     expect(first).not.toContain('found by keyword only');
     const pair = comp.conflicts.find((c) => c.provenance === 'read by the model at build');
     expect(pair).toMatchObject({ reason: REASON, resolvedBy: 'INFERENCE', answer: expect.stringMatching(/^[AB]$/) as unknown });
-    expect([FRAGMENTS, CLAUSES].filter((r) => whatToDo(md).includes(r))).toHaveLength(1);
-    expect([HEADINGS, PROSE].filter((r) => whatToDo(md).includes(r))).toHaveLength(1);
+    expect([FRAGMENTS, CLAUSES].filter((r) => all.includes(r))).toHaveLength(1);
+    expect([HEADINGS, PROSE].filter((r) => all.includes(r))).toHaveLength(1);
+    // inferred, so none of them is a hard instruction
+    for (const r of [FRAGMENTS, CLAUSES, HEADINGS, PROSE]) expect(whatToDo(md)).not.toContain(r);
   });
   it('--set outranks the inference: only the rule it made required ships', () => {
     expect(second).not.toMatch(/^EXIT/);

@@ -57,7 +57,7 @@ describe('the keyword reading of what is liked', () => {
   });
 });
 
-describe('the side chosen in a conflict instructs', () => {
+describe('the side chosen in a conflict steers until the owner explicitly makes it required', () => {
   const ps = [aRequirement({ requirementId: 'p1', statement: 'Use contractions throughout, in a chatty register.' }), aRequirement({ requirementId: 'p2', statement: 'Never use contractions; keep a formal, precise register.' })];
   const source: Record<string, string> = { p1: 'Ada', p2: 'Dee' };
   const table = buildTraitTable(ps, (id) => source[id]);
@@ -66,11 +66,12 @@ describe('the side chosen in a conflict instructs', () => {
     expect(table.conflicts.length).toBe(1);
     expect(describeTraitCounts(table)).toBe('2 rule(s) read, each author on their own: 0 shared, 0 unique to one author, 2 in conflict between authors');
   });
-  it('--conflict 1=B: the chosen side is ratified REQUIRED, as the owner\'s word; the other is rejected', () => {
+  it('--conflict 1=B chooses the side but keeps it PREFERRED; --set is the separate blocking decision', () => {
     const record = composeSelection(table, ps, authors, { 1: 'B' });
     const ds = decisionsFor(record, ps, new Map(), new Map());
-    expect(ds.find((d) => d.id === 'p2')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
+    expect(ds.find((d) => d.id === 'p2')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
     expect(ds.find((d) => d.id === 'p1')?.decision).toBe('REJECT');
+    expect(decisionsFor(record, ps, new Map(), new Map([['p2', 'required']])).find((d) => d.id === 'p2')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
   });
 });
 

@@ -3,7 +3,8 @@
 // The target of a composite skill is what the person chose from each author: not the average of the authors and
 // not any one of them. So every proposal gets exactly one of four outcomes, and none is dropped in silence:
 //
-//   SELECTED   its author was admired for the class it falls in (./admire.ts): approved, and it instructs
+//   SELECTED   its author was admired for the class it falls in, or inference chose it: it stands in the composite as
+//              preferred steering; materiality is decided separately and only an explicit --set can make it required
 //   HABIT      not selected, and shared with another author (./traits.ts), or by an author the person admired for
 //              something else: kept as a preference, shown and never instructed. Evidence, not the person's rule
 //   REJECTED   not selected, not shared, by an author the person said nothing about
@@ -71,8 +72,8 @@ export interface CompositeDecision {
   /** on 'both' of two worded rules, which cannot be one range: each is kept, shown and never instructed over the other */
   readonly shownOnly?: true;
   /**
-   * SELECTED BY THE PERSON'S OWN LINE about this author (directly, or by settling a conflict): the owner's word, not
-   * inferred evidence, so it is ratified to instruct (cli/commands/composite.ts, `decisionsFor`).
+   * SELECTED BY THE PERSON'S OWN LINE about this author (directly, or by settling a conflict). It decides which trait
+   * stands in the composite, not whether it may block; `decisionsFor` keeps it PREFERRED unless --set says required.
    */
   readonly byAdmiration?: true;
   /**
@@ -372,7 +373,7 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
   return { authors, decisions, conflicts: settledConflicts, methodology: steps.length ? { proposal: true, steps } : null, ...(notes.length ? { notes } : {}) };
 }
 
-/** Whether a decided rule will instruct the writer: chosen, not merely shown, and not carried in another rule's range. */
+/** Whether a decided rule stands in the composite: selected, not merely shown, and not carried in another rule's range. */
 export const instructs = (d: CompositeDecision | undefined): boolean => d?.outcome === 'SELECTED' && !d.shownOnly && !d.mergedInto;
 
 /**
@@ -599,10 +600,10 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
   const inferred = Boolean(c.inference);
   if (inferred) {
     out.push(`The composite: ${selected.length} rule(s) taken from ${new Set(selected.map((d) => d.author)).size} of ${c.authors.length} voices, each voice's most characteristic. Not any one voice, and not their average.`);
-    out.push('What was taken instructs the writer (a counted one steers the drafts and never fails one); everything else is shown or set aside.');
+    out.push('What was taken steers as preferred examples and never blocks; everything else is shown or set aside.');
   } else {
     out.push(`Your composite: ${selected.length} rule(s) chosen from ${new Set(selected.map((d) => d.author)).size} of ${c.authors.length} authors. It is your combination, not any one author and not their average.`);
-    out.push('What you chose from an author instructs the writer once you accept (a counted one steers the drafts and never fails one); everything else is shown or set aside.');
+    out.push('What you chose steers as preferred and never blocks until you explicitly make a rule required; everything else is shown or set aside.');
   }
   for (const a of c.authors) {
     const mine = selected.filter((d) => d.author === a.name);
@@ -643,7 +644,7 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
     for (const x of c.conflicts) {
       const [a, b] = x.sides;
       const stand = standOf(x, decided.get(a.id), decided.get(b.id), ranged);
-      out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}${x.provenance ? ` (read by the model at build: ${x.reason ?? 'the two cannot both be followed'})` : x.foundLast ? ' (found among the rules that would instruct: the two cannot both)' : ''}`);
+      out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}${x.provenance ? ` (read by the model at build: ${x.reason ?? 'the two cannot both be followed'})` : x.foundLast ? ' (found among the rules that would stand together: the two cannot both)' : ''}`);
       // A length said in words is shown as the grammar reads it, for the person to judge: the reading decides nothing.
       const rule = (side: ConflictSide): { statement: string; measurement: Measurement | null } => ({ statement: side.statement, measurement: measurementOf?.(side.id) ?? null });
       const measures = measurementOf ? sharedLengthMeasures(rule(a), rule(b)) : [];
