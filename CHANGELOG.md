@@ -55,12 +55,18 @@ apart and builds the combination you choose.
 - **A trait table** (`core/composite/traits.ts`, stored with the run): every rule is classed as opening, structure,
   evidence, pace, voice or method, and as shared (two or more authors, compatible), unique, conflicting, or
   task-dependent (a conflict between authors who write pieces of different lengths). Deterministic, and free.
+- **A rule may carry two classes** (a paragraph rule that mentions evidence is pace and evidence), read from every
+  trait word it uses, never from their order; when it does, it is taken for the class your line named.
 - **One question per author, one screen** (`cli/commands/composite.ts`): "What do you like about this one?", asked in
   the terminal or given as `--admire <file or author>=<what you like>`. One model call reads every line into the six
   classes (by keyword when no model can). The screen says what is taken from whom, each conflict (A, B, both as one
   range, or later), the recurring method moves offered as a proposal read from your examples (your own `--method`
   note stays authoritative), and what is kept as a habit or set aside. Accepting rules on every proposal through the
-  normal ratification path, each ruling naming the author and pieces it came from. A conflict nobody answered is kept
+  normal ratification path. What your line selected is your word, not inferred evidence: a worded rule is ratified
+  required and instructs the writer, a counted one is a target that steers drafts and never fails one (until you
+  `--set` it required), and its ruling says "selected by you from <author>". What you did not select keeps the
+  evidence's ruling: shared, or by an author you admired for something else, it is kept as a habit, shown and never
+  instructed; otherwise it is set aside. A conflict nobody answered is kept
   as an open question and neither side instructs; nothing is guessed.
 - **A composite voice** (`core/compiler/voice.ts`, `renderers/agent-skill/render.ts`): one excerpt from every author
   something was taken from, an equal share of the compact budget each, labelled with whose it is; "how I sound" is
@@ -71,7 +77,8 @@ apart and builds the combination you choose.
   same files.
 - Pinned in `tests/atelier-composite.test.ts` and `tests/atelier-composite-journey.test.ts`: five invented authors
   with labelled traits, the classes on known pairs, no band pooled, the chosen openings, evidence and pacing, a unique
-  trait kept when admired, an unadmired author kept only as a shared habit, the paragraph conflict stored as a
+  trait kept when admired, the selected rules instructing in the compiled skill, an unselected trait kept as a habit, an unadmired author kept
+  only as a shared habit, a rule of two classes classed the same whatever its word order, the paragraph conflict stored as a
   question, the served excerpts and the copying check, byte-identical rebuild and re-run, and a single-author folder
   unchanged.
 
