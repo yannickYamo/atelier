@@ -7,6 +7,34 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: a length said in words is read one way, and two rules are compared as ranges
+
+- **One reading for a quantity said in words.** A composite read the numbers in its authors' rules with a handful of
+  patterns, so most wordings were missed: "about 300 words", "under 2,000 characters", "at least eight hundred words",
+  "a five-minute read", "roughly 1,200 words", "under three minutes of reading". Rules that cannot all be followed
+  were shipped side by side. Each rule is now read into a range on what it measures (the piece, each sentence or each
+  paragraph) by one grammar: numbers in digits or in words of any size; "at most", "no more than", "under", "up to",
+  "within" as ceilings; "at least", "over", "more than", "minimum" as floors; a negation turns a comparator round
+  ("never a sentence over 15 words" is a ceiling of 15); "N to M", "N-M", "between N and M"; "about", "around",
+  "roughly", or a size said plainly, as a fifth either side; "a single sentence" and "a sentence or two". Characters
+  count six to a word, a minute of reading 230 words. Two rules conflict only when their ranges do not meet: of 35
+  pairs written to test it, 24 were judged wrong before and all 35 are right now. "No more than 1,000 words" was read
+  as a floor of 1,001 and put in conflict with "over 900 words"; it is a ceiling. A length said in words is classed as
+  a count of it is (structure for the piece, pace for a sentence or a paragraph), no longer as a recurring move.
+- **Two ceilings never conflict.** "A median under 5 words" against "a median under 40", or "at most 22 hedging words
+  per thousand" against "at most 2", were shown as conflicts to answer, though a piece under the lower ceiling meets
+  both. Two counted rules on one measure now conflict only when their ranges do not meet: a floor above the other's
+  ceiling, or two bands with no overlap.
+- **The model reads the numbers too, and a rule read two ways is never resolved by choosing.** When a model is set up,
+  the one reading of the final instructions also returns each rule's quantity as a range. Where it and the grammar
+  disagree, the screen says the rule is "read two ways", and the rule is held against any rule either reading
+  conflicts with: such a pair is asked, and neither side instructs until you answer. The reading is kept with the run;
+  a rebuild asks nothing.
+- **No length band where the length is left open.** When the authors' rules on the piece's length sit in a conflict
+  nobody answered, the skill no longer states a length read from the authors' usual pieces.
+- **"both (one range)" is offered only where the two make one range** (two counted bands on one count). For two
+  statements the screen offers "both", which keeps them shown and not instructed.
+
 ### Fixed: one acceptance rule, one step record and one hand-off for every repair step
 
 - **A rule you require is never delivered worse by its value.** Every replacement of the text (a span rewrite, a
