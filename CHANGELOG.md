@@ -7,7 +7,7 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
-### Fixed: the pattern check reads a count written in words as a figure
+### Fixed: the pattern check reads a count written in words, and lists it for you to check
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the
 material never gave, and the pattern check passed both: it read figures only in digits, while the claim reader's
@@ -16,17 +16,24 @@ spelled-out numbers as their value.
 
 - **One reading of a number** (`core/loop/numbers.ts`). The spelled-out number phrases the reader's decision parsed
   ("twenty-five", "two hundred and fifty", "a dozen", "3 million") now live in one module the pattern check reads too,
-  so the two instruments agree on which words are a number and what it is worth.
-- **A count that quantifies something is a figure** (`core/loop/claims.ts`). Two to ninety-nine, the hundred, thousand
-  and million forms, "a dozen" and "twelve-plus", when they count the thing that follows ("three of your prospects",
-  "nine people", "forty percent"), are checked against the material like a figure in digits: "three prospects" is
-  supported by "3 prospects" or "three prospects", and cut or slotted when nothing supports it. What was never a
-  figure stays so: the lone "one" where it does not count ("one of the reasons", "no one", "one day"), an ordinal used as
-  structure ("the first reason"), a set already named ("the three teams", "these two"), and a quantity with no number
-  ("a few engineer-months"). Figures in digits are read exactly as before, and the two spellings now support each other
-  ("40%" in the draft, "forty percent" in the material).
-- Pinned in `tests/atelier-claim-counts.test.ts`: the delivered sentences, support in either spelling, the exclusions,
-  digit figures unchanged, and that a mixed text lists the same claims every time.
+  so the two instruments agree on which words are a number and what it is worth, and the two spellings support each
+  other ("40%" in the draft, "forty percent" in the material).
+- **A count written in words is listed, never cut** (`core/loop/claims.ts`, `core/loop/run-repair.ts`). Two to
+  ninety-nine, the hundred, thousand and million forms, "a dozen" and "twelve-plus", when they count the thing that
+  follows ("three of your prospects", "nine people", "forty percent"), are checked against the material like a figure
+  in digits: "three prospects" is supported by "3 prospects" or "three prospects". One the material does not give goes
+  on the `UNSOURCED·check` line for you to check, whatever the kind of work, and never fails or cuts the draft: the
+  pattern check reads such a count with less confidence than a figure in digits, and nobody has measured how often it
+  is the writer's own. Figures in digits are read and cut exactly as before.
+- **What prose counts without asserting a figure is left alone**: a span of time or an age ("two weeks", "ten minutes
+  later", "three years old"), the writer's own family ("I have two kids"), the structure of the piece ("three reasons",
+  "two things", "a hundred small decisions"), the "a hundred" or "a thousand" of hyperbole unless it counts something a
+  figure measures (people, customers, dollars, percent), a count inside a quotation, the lone "one" where it does not
+  count ("one of the reasons", "no one"), an ordinal used as structure ("the first reason"), a set already named ("the
+  three teams") and a quantity with no number ("a few engineer-months"). An "N-plus" form is always a count.
+- Pinned in `tests/atelier-claim-counts.test.ts`: the delivered sentences listed, each true sentence above left alone,
+  support in either spelling, listed never cut with or without a sensor, a digit figure still cut when unsupported, and
+  that a mixed text lists the same findings every time.
 
 ### Changed, for 2.0: one evaluation record, and a mark never says more than was observed
 
