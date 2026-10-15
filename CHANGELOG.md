@@ -7,6 +7,50 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed, for 2.0: a feature miss points at its carriers and says which way and how far
+
+A rule that holds a counted feature of the writing to a range (asides per 1,000 words, the share of one-sentence
+paragraphs) used to fail with no place to point at: a rate lives everywhere and nowhere, so the repair had nothing to
+rewrite and a later draft was told only the range it had missed.
+
+- **A FEATURE miss points at its carrier sentences.** The sentences whose removal moves the value most toward the
+  range are its spans, as many as cover the distance and never more than three, so a text nearer the range is pointed
+  at fewer places. Every FEATURE miss carries a signed distance, in widths of its range: positive above, negative
+  below. This holds for every FEATURE rule, whatever its materiality: a repair needs a target. The one thing it
+  changes for a REQUIRED feature rule is that a miss pointed at fewer carriers after a rewrite counts as progress.
+  Whether a rewrite made such a rule worse is still read by its verdict alone, as before: never by how many carriers
+  a miss happens to be pointed at, and never by its distance.
+- **Notes state direction and distance.** A draft written again, and each later shape round, is told every miss with
+  which way to move and about how far ("about 4.1 fewer parenthetical asides per 1,000 words", "about 51 words
+  shorter"), not only what was missed.
+- **A counted feature your pieces hold acts on every draft: it is repaired toward your range and never fails a
+  draft.** The standard's FEATURE rules are repair targets on every run, with no flag: a miss is rewritten on its
+  carriers and, if still outside after the rewrites, the piece is written once more with the move named, one draft
+  per round at most. The rules stay as the standard has them: a PREFERRED rule never fails the run, the evaluation
+  record never reads it as enforced, and no rule is promoted. The note for such a miss says what your pieces usually
+  do, in a block of its own, and never that the method requires it. `invoke --graded none` turns this off for a run;
+  it is the only value the switch takes.
+- **The features your pieces hold without a rule act when far out.** Selection keeps more counted features than
+  enter the standard (the profile's signal bands, per length class). On each run, for the output's length class, a
+  signal feature more than one width of its range outside it is a target for that run exactly like a FEATURE rule:
+  carrier sentences, a signed distance, direction and distance in the notes, at most three features a pass across
+  both sources, never a failure, never written into the standard or the record's verdicts. Monitored features never
+  act. Without a profile only the standard's rules act.
+- **Nothing is steered at the cost of the rest.** A rewrite or a draft written again is refused when, over the
+  features your pieces hold for that length class, more of them end outside their range than before, or one it was
+  not pointed at moves from inside its range to more than one width outside. A shorter text raises every rate per
+  1,000 words, so the comparison reads the earlier text at the later text's length. For a graded feature alone, a
+  rewrite that leaves its rule broken and moves the value further from the range by a tenth of a width or more is
+  discarded on the same reading. Enforced rules keep their own acceptance. The run's call and dollar bounds are
+  raised by exactly what the extra draft and its rewrites may spend, and the record states what they were raised by.
+- **Recorded, on the invocation record and in `--json` (`graded`):** the features graded; which were steered and
+  which way, said in one line on the run with the note that they never block; the drafts written again for them; the
+  note lines sent; each feature's value before and after, with its range and where the range came from (`standard`
+  or `profile`); the rewrites kept and refused, with reasons; how many features lay outside their range on the first
+  draft and on the delivered text, and every rewrite refused for displacing others; and the calls and dollars this
+  steering caused, taken from the run's ledger under their own purpose (`graded`), never estimated. Every repair now
+  also records its rewrites kept and refused, with the reasons (`repair.edits`).
+
 ### Fixed: the pattern check reads a count written in words, and lists it for you to check
 
 A draft said "three of your prospects will believe the products overlap" and "Twelve-plus optimizers", counts the
