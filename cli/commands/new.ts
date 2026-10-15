@@ -23,9 +23,9 @@ import { ensureGrammar } from '../../core/observers/grammar.js';
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { floorDimensions, proposeMargins, buildContract } from '../../core/distinctiveness/measured.js';
 import { extract } from '../../core/intake/extract.js';
-import { detectAuthors } from '../../core/composite/authors.js';
+import { authorship } from '../../core/composite/voices.js';
 import { corpusFiles } from '../corpus.js';
-import { intake } from './intake.js';
+import { intake, examplePieces } from './intake.js';
 import { discover } from './discover.js';
 import { method } from './method.js';
 import { review } from './review.js';
@@ -39,11 +39,14 @@ const MODES: readonly SkillMode[] = ['GENERATE', 'GUARD', 'RESPOND'];
 /** A path as a person can paste it back into a shell. */
 const shellWord = (p: string): string => (/^[\w./~-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`);
 
-/** Whether the pieces at `path` are declared to be by several authors: the same reading intake makes. */
-function severalAuthors(path: string): boolean {
+/**
+ * WHO WROTE THE PIECES AT `path`: the authors declared, or, with none declared, the voices found in the writing
+ * (core/composite/voices.ts). Read once, here, and handed to intake, so the build and intake cannot disagree.
+ */
+function readAuthorship(path: string, mode: SkillMode): ReturnType<typeof authorship> {
   const dir = statSync(path).isDirectory();
   const files = corpusFiles(path).flatMap((f) => { const r = extract(f); return r.ok ? [{ id: dir ? relative(path, f) : basename(f), text: (r as { text: string }).text }] : []; });
-  return detectAuthors(files, flagAll('--authors')) !== null;
+  return authorship(examplePieces(files, mode), flagAll('--authors'));
 }
 
 /** The folder the sealed corpus was read from, for runs that predate recording it. */
@@ -86,16 +89,17 @@ export async function newSkill(): Promise<void> {
   // adds the rules only a reading finds, and can be added later. Decided before anything is written for the other
   // path, and what the person said the skill is for is kept as what it is for.
   const keyless = !canReach('discovery');
-  // PIECES BY SEVERAL AUTHORS, WITH NO MODEL: told apart exactly as with one (core/composite/authors.ts, declared only),
-  // and read the same way, each author on their own: what can be counted in each one's pieces, the trait table, and the
-  // composite screen, where the person's lines are read by their words. Pooled into one author's examples they would
-  // give the average of them all, which nobody asked for.
+  // PIECES BY SEVERAL VOICES, WITH OR WITHOUT A MODEL: declared (front matter, a folder per author, --authors), or
+  // found in the writing when none is declared (core/composite/voices.ts). Each voice is read on its own and the
+  // combination is inferred (./composite.ts); with no model, from what can be counted in each voice's pieces. Pooled
+  // into one author's examples they would give the average of them all, which nobody asked for.
   const fresh = s.run.state === 'EMPTY' || !s.evidence;
-  const composite = fresh && keyless && severalAuthors(path);
+  const who = fresh ? readAuthorship(path, mode) : null;
+  const composite = fresh && keyless && Boolean(who?.authors);
   // Nothing at build reads with a model when none is set up: the persona and the other readings are left out, and said.
   if (keyless) process.env.ATELIER_BUILD_NO_MODEL = '1';
   if (composite) {
-    console.log('No model is set up (ANTHROPIC_API_KEY), so each author is read for what can be counted in their pieces alone, and what you say you like about each is read by its words.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
+    console.log('No model is set up (ANTHROPIC_API_KEY), so each voice is read for what can be counted in its pieces alone.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
   } else if (fresh && keyless) {
     console.log('No model is set up (ANTHROPIC_API_KEY), so the skill is built from what can be counted in your examples, with no rules read by a model and none for you to approve.\n  To have a model read them too, set the key and run this again in a folder of its own.\n');
     if (intent && !argv.includes('--for')) argv.push('--for', intent);
@@ -132,7 +136,7 @@ export async function newSkill(): Promise<void> {
     // A held-out check without having to know what one is: some of the work is set aside before
     // anything reads it (when there are six or more pieces), unless the person named their own.
     if (!argv.includes('--reserve')) argv.push('--auto-reserve');
-    intake(path, flag('--work-type') ?? (mode === 'RESPOND' ? 'answers' : 'writing'), mode);
+    intake(path, flag('--work-type') ?? (mode === 'RESPOND' ? 'answers' : 'writing'), mode, { voices: who?.voices ?? null });
     s = loadSession();
     // The name is the run's from the first call: a continuation that does not repeat --name must build
     // the same skill (it once built one named after the folder, and the class set on the first call
@@ -146,16 +150,16 @@ export async function newSkill(): Promise<void> {
       die(`this run has already built its skill, so --piece-budget and --pieces would be ignored here. Rebuild it with them: atelier build --name ${s.skillName ?? '<name>'} --piece-budget <words>`);
     }
     console.log(`Continuing the run already in this project (state ${s.run.state}).\n`);
-    // AN ANSWER AFTER THE BUILD changes nothing built: the conflicts were settled when the composite was accepted. Said
-    // plainly, with the one way to build with it, never dropped in silence.
+    // AN ANSWER AFTER THE BUILD (the hidden expert override, --conflict) changes nothing built: the clashes were settled
+    // when the composite was built. Said plainly, with the one way to build with it, never dropped in silence.
     const late = flagAll('--conflict');
     if (s.run.state === 'BUILT' && s.authors && late.length) {
       const given = [...Object.entries(s.conflictAnswers ?? {}).flatMap(([n, v]) => (v ? [`${n}=${v}`] : [])), ...late]
         .reduce<string[]>((all, x) => [...all.filter((y) => y.split('=')[0] !== x.split('=')[0]), x], []);
       const admired = Object.entries(s.admire ?? {}).map(([a, t]) => ` --admire ${shellWord(`${a}=${t}`)}`).join('');
-      console.log(`--conflict ${late.join(', --conflict ')}: not applied. This skill is already built, with the answers given when you accepted it; an answer after the build needs a rebuild with the answer.\n`
-        + `  To rebuild with it, start the run again and give every answer on the call that accepts (your pieces are read again):\n`
-        + `    atelier abort\n    atelier new ${shellWord(corpus)}${s.intent ? ` ${shellWord(s.intent.text)}` : ''}${s.skillName ? ` --name ${shellWord(s.skillName)}` : ''}${admired} --accept ${given.map((x) => `--conflict ${x}`).join(' ')}\n`);
+      console.log(`--conflict ${late.join(', --conflict ')}: not applied. This skill is already built, with every clash settled when it was combined; an answer after the build needs a rebuild with the answer.\n`
+        + `  To rebuild with it, start the run again and give every answer on the call that builds (your pieces are read again):\n`
+        + `    atelier abort\n    atelier new ${shellWord(corpus)}${s.intent ? ` ${shellWord(s.intent.text)}` : ''}${s.skillName ? ` --name ${shellWord(s.skillName)}` : ''}${admired} ${given.map((x) => `--conflict ${x}`).join(' ')}\n`);
     }
     if (intent && !s.intent) { saveSession({ ...s, intent: { text: intent, mode } }); s = loadSession(); }
     if (flag('--name') && s.skillName !== skillNameFrom(name)) { saveSession({ ...s, skillName: skillNameFrom(name) }); s = loadSession(); }
@@ -180,7 +184,7 @@ export async function newSkill(): Promise<void> {
       console.log(`These rules were read from ${s.publicSource ?? 'someone else\'s public work'}. Accepting ADOPTS them for your skill;`
         + ' it does not make them that author\'s standard, and the record will always say where they came from.\n');
     }
-    // PIECES BY SEVERAL AUTHORS: the screen is the composite (./composite.ts), what the person likes about each.
+    // PIECES BY SEVERAL VOICES: no screen; the combination is inferred and built (./composite.ts).
     const screen = s.authors ? compositeReview : review;
     if (!(await screen({ continueWith: `atelier new ${shellWord(corpus)}`, shownBefore }))) return;
     s = loadSession();

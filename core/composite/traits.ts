@@ -3,9 +3,9 @@
 // Discovery has read each author's pieces on their own (cli/commands/discover.ts), so every proposal names the
 // author it came from. This pass, deterministic and free, sorts those proposals two ways:
 //
-//   CLASS   what a rule is about, one or more of six: opening, structure, evidence, pace, voice, method. A counted rule is
+//   CLASS   what a rule is about, one or more of eight: opening, structure, evidence, pace, voice, method, figure, effect. A counted rule is
 //           classed by its observer; a worded one by the words it uses. The person's "I like how it opens" is
-//           mapped to the same six (./admire.ts), which is how a free line selects rules.
+//           mapped to the same eight (./admire.ts), which is how a free line selects rules.
 //   KIND    how a rule stands to the other authors' rules of the same class:
 //             SHARED          two or more authors propose compatible rules (a limit within tolerance, or the same
 //                             statement in other words). Evidence that the trait recurs; not thereby a rule.
@@ -24,11 +24,20 @@ import { NUMBER_WORDS } from '../loop/numbers.js';
 import { boundedNumber, quantitiesOf, withinTolerance, type Quantity } from './quantity.js';
 import { sharedLengthMeasures } from './length.js';
 
-export type TraitClass = 'opening' | 'structure' | 'evidence' | 'pace' | 'voice' | 'method';
-export const TRAIT_CLASSES: readonly TraitClass[] = ['opening', 'structure', 'evidence', 'pace', 'voice', 'method'];
+// FIGURE and EFFECT come last: what a person most often likes in a writer is how they write (their figures of speech,
+// and what the writing does to whoever reads it), and a rule about either was a decision move before they had a class.
+// Last, so a rule that also names an opening or a pace is still mainly about that.
+export type TraitClass = 'opening' | 'structure' | 'evidence' | 'pace' | 'voice' | 'method' | 'figure' | 'effect';
+export const TRAIT_CLASSES: readonly TraitClass[] = ['opening', 'structure', 'evidence', 'pace', 'voice', 'method', 'figure', 'effect'];
 export const TRAIT_LABEL: Readonly<Record<TraitClass, string>> = {
   opening: 'openings', structure: 'argument structure', evidence: 'evidence and its depth',
   pace: 'pacing and paragraph construction', voice: 'tone, register and voice', method: 'method and recurring moves',
+  figure: 'figures of speech and imagery', effect: 'emotion and effect on the reader',
+};
+/** The same classes in a word or two, for the one line a build ends on. */
+export const TRAIT_SHORT: Readonly<Record<TraitClass, string>> = {
+  opening: 'openings', structure: 'structure', evidence: 'evidence handling', pace: 'pace', voice: 'tone and word choice',
+  method: 'recurring moves', figure: 'figures of speech', effect: 'emotional effect',
 };
 
 /** How a counted rule's observer places it. Anything not listed is read from its words. */
@@ -51,6 +60,8 @@ export const CLASS_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['pace', /\b(sentence|sentences|paragraph|paragraphs|pace|pacing|rhythm|fragment|fragments|brisk|fast|slow|cadence|clipped|tempo)\b/i],
   ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|subheading|subheadings|list|lists|bullet|bullets|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
   ['voice', new RegExp(String.raw`\b(tone|register|voice|formal|informal|casual|conversational|chatty|relaxed|colloquial|impersonal|person|tense|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|${COUNT_UNIT}word|${COUNT_UNIT}words|phrasing|vocabulary|irony|understatement|slang|diction)\b`, 'i')],
+  ['figure', /\b(metaphor|metaphors|metaphorical|analogy|analogies|simile|similes|image|images|imagery|figurative|figures? of speech|personification|comparison|comparisons|allusion|allusions)\b/i],
+  ['effect', /\b(emotion|emotions|emotional|feel|feels|feeling|feelings|moved|moving|suspense|tension|surprise|surprises|delight|urgency|unease|empathy|laugh|laughter|tender|tenderness|nostalgia|nostalgic|dread)\b/i],
 ];
 const BY_WORDS = CLASS_WORDS;
 

@@ -2,16 +2,17 @@
 //
 // "Here are five examples from different authors. I love different things about them." Read as one author,
 // such a folder gives the average of five writers, which is the one voice nobody asked for. So the authors are
-// told apart before anything reads the pieces, from three declarations and no guess:
+// told apart before anything reads the pieces. Here, from three declarations:
 //
 //   front matter     `author: Ada` at the top of a piece
 //   subfolders       ada/one.md, bea/two.md: a folder per author
 //   --authors        a list of files, each by an author of its own
 //
-// A folder with none of these is one author, exactly as it always was. Nothing here reads the prose: a
-// difference in style is never taken for a difference in author.
+// Nothing here reads the prose. A declaration always wins; with none at all, `atelier new` groups the pieces by how
+// they are written (./voices.ts), and a folder that does not split is one author, exactly as it always was.
 
-export type AuthorsHow = 'FRONT_MATTER' | 'SUBFOLDERS' | 'LISTED';
+/** INFERRED: no author was declared, and the pieces were grouped by how they are written (./voices.ts). */
+export type AuthorsHow = 'FRONT_MATTER' | 'SUBFOLDERS' | 'LISTED' | 'INFERRED';
 
 export interface AuthorMap {
   /** the authors, in a fixed order (alphabetical), so every later screen and record lists them the same way */
@@ -63,6 +64,16 @@ export function detectAuthors(files: readonly { readonly id: string; readonly te
     return finish(Object.fromEntries(files.map((f) => [f.id, dir(f.id) ?? UNATTRIBUTED])), 'SUBFOLDERS');
   }
   return null;
+}
+
+/**
+ * WHETHER ANYONE SAID WHO WROTE THE PIECES: front matter naming an author, a folder per author (even one), or
+ * `--authors`. A declaration of one author is still a declaration: such a folder is never split by style (./voices.ts).
+ */
+export function authorsDeclared(files: readonly { readonly id: string; readonly text: string }[], listed: readonly string[] | null = null): boolean {
+  if (listed?.length) return true;
+  if (files.some((f) => frontMatterAuthor(f.text) !== null)) return true;
+  return files.length > 0 && files.every((f) => f.id.indexOf('/') > 0);
 }
 
 /** One line for the build screen. */

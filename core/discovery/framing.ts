@@ -87,6 +87,15 @@ that effect. A rule about effect is still a decision rule; state it as something
 export const DEFAULT_FRAMINGS: readonly FramingId[] = ['A', 'B'];
 
 /**
+ * A COMPOSITE READS EACH VOICE FROM ALL THREE VANTAGES. What a person likes in a writer is as often what the writing
+ * does to them as how it is built, so the effect reading (C) is on for pieces by several voices. It still has no recall
+ * number: a rule only C reached is recorded as an "effect reading", and the build's record says it is not yet measured.
+ */
+export const COMPOSITE_FRAMINGS: readonly FramingId[] = ['A', 'B', 'C'];
+/** What a rule only the effect vantage reached is called in a composite's record. */
+export const EFFECT_READING = 'effect reading';
+
+/**
  * The shared opening. Everything above the per-prompt field list, framing clause included.
  *
  * NOTE ON THE CLAUSE TEXT: both call sites previously carried a CONDENSED paraphrase of B —

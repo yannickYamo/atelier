@@ -1,10 +1,9 @@
 // tests/atelier-composite-keyless.test.ts — PIECES BY SEVERAL AUTHORS, WITH NO MODEL SET UP, THROUGH THE SHIPPED BINARY.
 //
 // Keyless `atelier new` on a folder whose pieces say `author:` in their front matter pooled every author into one,
-// printed no authors line, showed no composite screen, and served the pieces with their front matter in them. The
-// authors are declared, so telling them apart needs no model: each author's pieces are counted on their own, the trait
-// table and the composite screen follow, the person's lines are read by their words, and no served piece carries its
-// front matter, on this path or the one-author path.
+// printed no authors line, and served the pieces with their front matter in them. The authors are declared, so telling
+// them apart needs no model: each author's pieces are counted on their own, the combination is inferred and built in
+// the same call with nothing asked, and no served piece carries its front matter, on this path or the one-author path.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -40,30 +39,18 @@ describe('keyless atelier new on pieces by four authors', () => {
   if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` first.`);
   const p = project(PIECES);
   const first = p.run('new', 'writers', 'a column combining what I like', '--name', 'mix');
-  const builtAfterFirst = existsSync(join(p.proj, '.claude', 'skills', 'mix'));
-  const second = p.run('new', 'writers', '--admire', 'ada.md=above all, how it opens', '--admire', 'cal.md=the speed and the short sentences', '--accept');
   const skill = join(p.proj, '.claude', 'skills', 'mix');
 
-  it('names the authors, counts each one alone, and asks what is liked before building anything', () => {
+  it('names the authors, counts each one alone, and builds the combination in the same call, asking nothing', () => {
     expect(first).not.toMatch(/^EXIT/);
     expect(first).toContain('4 piece(s) by 4 authors (author: in each piece): each is read on its own first. Ada, Bea, Cal, Dee.');
     for (const who of ['Ada', 'Bea', 'Cal', 'Dee']) expect(first).toMatch(new RegExp(`rule\\(s\\) counted from ${who}'s pieces alone`));
     expect(first).toContain('Counted only: no model read them.');
-    // one count of the table, said the same way on both lines
-    const counts = [...first.matchAll(/(\d+) rule\(s\) read, each author on their own: (\d+) shared, (\d+) unique to one author, (\d+) in conflict between authors/g)].map((m) => m.slice(1).join('/'));
-    expect(counts.length).toBe(2);
-    expect(counts[0]).toBe(counts[1]);
-    expect(first).toContain('For each author, say what you like about their pieces');
-    expect(builtAfterFirst).toBe(false);
-  });
-  it('shows the composite screen, the lines read by their words, and builds the combination', () => {
-    expect(second).not.toMatch(/^EXIT/);
-    expect(second).toContain('(your lines were read by their words, not by a model)');
-    // with no model to read the final instructions, the screen says how contradictions between authors were checked
-    expect(second).toContain('Contradictions between authors are checked by keyword only: a whole-piece structure rule may still sit beside a structure it rules out (one unbroken block of prose beside headings or lists), so read the instructions below.');
-    expect(second).toContain('Your composite:');
-    expect(second).toMatch(/From Cal: pacing and paragraph construction/);
-    expect(second).toContain('Your composite is recorded');
+    expect([...first.matchAll(/(\d+) rule\(s\) read, each author on their own: (\d+) shared, (\d+) unique to one author, (\d+) in conflict between authors/g)]).toHaveLength(1);
+    expect(first).not.toMatch(/What do you like|--admire|--accept|Nothing was decided/);
+    expect(first.split('\n').filter((l) => l.startsWith("Combined 4 writers: "))).toHaveLength(1);
+    // with no model to read the final instructions, the build says how clashes between voices were found
+    expect(first).toContain('(clashes between voices were found by keyword only: a whole-piece structure rule may still sit beside a structure it rules out; atelier report --skill <name> lists what instructs)');
     expect(existsSync(join(skill, 'SKILL.md'))).toBe(true);
   });
   it('serves no piece with its front matter, and says the composite in its own words', () => {
@@ -81,13 +68,13 @@ describe('a composite built again with --piece-budget default', () => {
   it('serves each chosen writer\'s piece whole', () => {
     const p = project(PIECES);
     p.run('new', 'writers', 'a column combining what I like', '--name', 'mix');
-    p.run('new', 'writers', '--admire', 'cal.md=the speed and the short sentences', '--accept');
-    const voice = (): string => readFileSync(join(p.proj, '.claude', 'skills', 'mix', 'examples', 'voice-1.md'), 'utf8');
-    expect(voice()).toContain('[…]');
+    const dir = join(p.proj, '.claude', 'skills', 'mix', 'examples');
+    const cal = (): string => readdirSync(dir).filter((f) => f.startsWith('voice-')).map((f) => readFileSync(join(dir, f), 'utf8')).find((t) => t.includes('The sprint starts')) ?? '';
+    expect(cal()).toContain('[…]');
     const out = p.run('build', '--name', 'mix', '--piece-budget', 'default');
     expect(out).not.toMatch(/^EXIT/);
-    expect(voice()).not.toContain('[…]');
-    expect(voice()).toContain('Lap 80.');
+    expect(cal()).not.toContain('[…]');
+    expect(cal()).toContain('Lap 80.');
   });
 });
 
@@ -106,13 +93,13 @@ describe('keyless atelier new on one author whose pieces carry front matter', ()
 });
 
 describe('an author below the counting floor', () => {
-  it('is told why nothing was counted, and the next step names an author, not a file', () => {
+  it('is told why nothing was counted, and the build goes on without asking', () => {
     if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` first.`);
     const eve = fm('Eve', 'The ferry left late again this morning. Nobody on the quay seemed to mind the wait. The gulls took the bread from the bench. By noon the water had gone flat and grey, and the town went back to work.');
     const p = project({ ...PIECES, 'eve.md': eve });
     const out = p.run('new', 'writers', 'a column', '--name', 'mix');
     expect(out).toContain("nothing could be counted from Eve's 1 piece(s) (4 sentence(s), 1 paragraph(s), 40 word(s)): an author is counted from at least 30 sentences, 10 paragraphs or 1,000 words of their pieces read together");
-    expect(out).toMatch(/--admire Ada="<what you like about this author>"/);
-    expect(out).not.toMatch(/--admire [\w.]+\.md=/);
+    expect(out).not.toMatch(/--admire|What do you like/);
+    expect(out.split('\n').filter((l) => l.startsWith("Combined 5 writers: "))).toHaveLength(1);
   });
 });

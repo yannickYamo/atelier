@@ -28,6 +28,9 @@ import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import type { EvalSummary } from '../../core/eval/summary.js';
 import { DATA, die, argv, flag, positional, positionals, runFile } from '../runtime.js';
 import { readJson } from '../../core/state/read-json.js';
+import { describeInference } from '../../core/composite/infer.js';
+import { describeComposite } from '../../core/composite/selection.js';
+import { openLine } from './composite.js';
 
 /** The skill a run belongs to: named, or found by its id across the store. */
 function locate(id: string): { L: store.StoreLayout; rec: InvocationRecord } {
@@ -53,8 +56,24 @@ export function report(): void {
     // The last reproduction on held-back cases, when one was run (`atelier reproduce`): kept beside the skill, and
     // said to be of an earlier version when the skill has been built again since.
     const repro = existsSync(reproductionFile({ root: DATA, skillName: name })) ? readJson<ReproductionRecord>(reproductionFile({ root: DATA, skillName: name }), { what: 'the reproduction record' }) : null;
-    if (argv.includes('--json')) { console.log(JSON.stringify(repro ? { ...card, reproduction: repro } : card, null, 1)); return; }
+    // A SKILL COMBINING SEVERAL VOICES: how the combination was inferred (core/composite/infer.ts), whole.
+    const composite = store.getComposite({ root: DATA, skillName: name });
+    const inference = composite?.inference ?? null;
+    if (argv.includes('--json')) { console.log(JSON.stringify({ ...card, ...(repro ? { reproduction: repro } : {}), ...(inference ? { composite: inference } : {}) }, null, 1)); return; }
     console.log(renderSkillCard(card, process.stdout.columns || 110));
+    // A SKILL OF SEVERAL VOICES: what instructs from whom and how each clash stands, then, when it was inferred, every
+    // weight and every reason. An older composite built with questions still open says so.
+    if (composite) {
+      const std = store.getStandard({ root: DATA, skillName: name }, card.standardVersion);
+      const req = new Map((std?.requirements ?? []).map((r) => [r.requirementId, r]));
+      console.log(`\nTHE COMPOSITE\n${describeComposite(composite, (id) => req.get(id)?.statement ?? id, (id) => req.get(id)?.measurement ?? undefined).map((l) => `  ${l}`).join('\n')}`);
+      const open = openLine(composite).trim();
+      if (open) console.log(`  ${open}`);
+    }
+    if (inference) {
+      const outcome = new Map((composite?.decisions ?? []).map((d) => [d.id, d.outcome === 'SELECTED' ? (d.mergedInto ? 'in range' : 'taken') : d.outcome === 'HABIT' ? 'habit' : d.outcome === 'REJECTED' ? 'aside' : 'open']));
+      console.log(describeInference(inference, (id) => outcome.get(id)).join('\n'));
+    }
     if (repro) console.log(`\n${renderReproduction(repro)}${repro.skillVersion === card.skillVersion ? '' : `\n  (read on version ${repro.skillVersion.slice(0, 8)}; the skill has been built again since: atelier reproduce --skill ${name})`}`);
     return;
   }
