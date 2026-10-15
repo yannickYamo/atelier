@@ -16,7 +16,7 @@
 // in the text is touched: it keeps its own voice.
 
 import { profileOf } from '../../core/observers/selection.js';
-import { checksFor } from '../checks.js';
+import { checksFor, shortFormRequest } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
 import { describeVerify } from '../../core/observers/verify.js';
@@ -39,8 +39,12 @@ export async function verify(): Promise<void> {
   const v = store.getStandard(L, sv.standardVersionHash) ?? fail(`standard ${sv.standardVersionHash} is missing.`);
   // The class check runs before anything is read: a text of the wrong kind has nothing to check against.
   const cls = checkClass(store.getDocClass(L), flag('--class'));
-  if (!cls.ok) fail(cls.why);
-  const classNote = cls.ok ? cls.note : null;
+  // A short piece checked against a standard read from longer ones (core/observers/short-form.ts): its method and bans
+  // hold, its counted bands do not apply, and the output is held to the format's limit or to --limit.
+  const shortAsked = shortFormRequest(v.requirements, flag('--class'), flag('--limit'));
+  const short = typeof shortAsked === 'string' ? fail(shortAsked) : shortAsked;
+  if (!cls.ok && !short.transfer) fail(cls.why);
+  const classNote = short.transfer ? short.transfer.said : cls.ok ? cls.note : null;
   const file = positional([name]);
   let text: string;
   if (file && file !== '-') {
@@ -59,7 +63,8 @@ export async function verify(): Promise<void> {
   // The request is supplied, as it is to invoke: a detail the person typed is theirs to have repeated.
   const material = [flag('--task') ?? '', ...[...store.getMaterial(L), ...boundMaterial()].map((m) => m.text)].filter(Boolean).join('\n\n');
   const named = [...store.getMaterial(L), ...boundMaterial()].map((m) => ({ name: m.name, text: m.text }));
-  const checks = checksFor(L, { material, task: flag('--task') ?? '', context: { ...(flag('--task') ? { request: flag('--task') } : {}), material: named }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') });
+  const checks = { ...checksFor(L, { material, task: flag('--task') ?? '', context: { ...(flag('--task') ? { request: flag('--task') } : {}), material: named }, guardClaims: !argv.includes('--allow-unsourced'), placeholders: argv.includes('--placeholders') }),
+    ...(short.format ? { format: short.format } : {}), ...(short.transfer ? { doesNotApply: short.transfer.doesNotApply } : {}) };
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
     const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);

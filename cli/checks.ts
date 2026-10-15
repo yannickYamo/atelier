@@ -13,7 +13,23 @@ import { modelJudge, type ContextJudge } from '../core/loop/context-judge.js';
 import type { Budget, InferenceClient } from '../core/inference/client.js';
 import { flag, providerFor, clientAndBinding, boundMaterial, DATA } from './runtime.js';
 import { join } from 'node:path';
-import { formatOf } from '../core/observers/formats.js';
+import { formatOf, type FormatProfile } from '../core/observers/formats.js';
+import { shortFormOptions, shortFormTransfer, type ShortTransfer } from '../core/observers/short-form.js';
+import type { Requirement } from '../core/state/canonical-state.js';
+
+/**
+ * WHAT A SHORT-FORM REQUEST CHANGES (core/observers/short-form.ts): the format the output is held to (the class's, with
+ * `--limit` as its character limit where one is given), and, on a standard read from longer pieces, the bands that do
+ * not apply to a short output. A string when `--limit` is not a number of characters.
+ */
+export function shortFormRequest(requirements: readonly Requirement[] | null, declared: string | null | undefined, given: string | undefined):
+  { readonly format: FormatProfile | null; readonly transfer: ShortTransfer | null } | string {
+  const o = shortFormOptions(declared, given);
+  if (typeof o === 'string') return o;
+  const f = formatOf(declared);
+  const format = given === undefined ? f : { ...(f ?? { id: 'limit', label: `a piece of at most ${given} characters`, strictSpecifics: false }), maxChars: Number(given) };
+  return { format, transfer: requirements ? shortFormTransfer(requirements, o.limit ?? null) : null };
+}
 
 /** The claim reader's default on Anthropic: small, fast, and it only has to type and quote. */
 export const CLAIMS_MODEL_DEFAULT = 'claude-haiku-4-5';
