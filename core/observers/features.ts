@@ -385,6 +385,25 @@ export function featureMove(p: Readonly<Record<string, unknown>>, v: number): st
 /** How many carrier sentences a miss is pointed at, at most. */
 const MAX_CARRIERS = 3;
 
+/** How far a text's length may move (as a share) before a rate per 1,000 words is read at the new length (`errorAtLength`). */
+export const LENGTH_DRIFT = 0.02;
+/** The prose words a rate per 1,000 is counted over: what a comparison of one rate across two lengths scales by. */
+export const featureWordCount = proseWordCount;
+
+/**
+ * A FEATURE check's error, read as it would be at another length. A rate per 1,000 words rises when a text shortens
+ * with the count unchanged: a rewrite that fixed one banned word and cut 5% of the words raised every such rate by 5%,
+ * and read as a drift that discarded a good pass. So when the length moved by more than LENGTH_DRIFT, the value is
+ * scaled by (words before / words after), the rate the same count would show at the new length, and the error is
+ * taken on the band from that. A share or a value is no rate of the length and is read as it is.
+ */
+export function errorAtLength(p: Readonly<Record<string, unknown>>, value: number, wordsBefore: number, wordsAfter: number): number {
+  const f = featureOf(((p.feature as readonly string[] | undefined) ?? [])[0] ?? '');
+  const ratio = wordsBefore > 0 && wordsAfter > 0 ? wordsBefore / wordsAfter : 1;
+  if (f?.unit !== 'per1000' || Math.abs(ratio - 1) <= LENGTH_DRIFT) return missOf(p, value).error;
+  return missOf(p, r3(value * ratio)).error;
+}
+
 /**
  * FEATURE: one registered feature held to a band, both sides. A rate has no single place it lives, so a miss is pointed
  * at its CARRIERS (./carrier.ts): the sentences whose removal moves the value most toward the band, as many of them

@@ -18,6 +18,7 @@ import type { ContextJudge } from './context-judge.js';
 import type { ClaimSensor } from './claim-extract.js';
 import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
+import { errorAtLength, featureWordCount } from '../observers/features.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes } from './mechanical-repair.js';
@@ -719,6 +720,16 @@ export async function refineToStandard(
   const pairs: RepairPair[] = [];
   const keys = keysOf(v.requirements);
   const keyOf = new Map(v.requirements.map((r, i) => [r.requirementId, keys[i]]));
+  // LENGTH DRIFT, for the graded checks' distance. A rate per 1,000 words rises when a rewrite shortens the text with
+  // the count unchanged; the before-report the acceptance compares against reads each graded miss with its value
+  // scaled to the after-length (../observers/features.ts, `errorAtLength`), so only the count's own move is read.
+  const featureParams = new Map(v.requirements.flatMap((r) => (r.measurement?.observer === 'FEATURE' ? [[r.requirementId, r.measurement.params] as const] : [])));
+  const atLength = (r: VerifyReport, soft: ReadonlySet<string>, from: string, to: string): VerifyReport => {
+    if (!soft.size) return r;
+    const wb = featureWordCount(from); const wa = featureWordCount(to);
+    return { ...r, checked: r.checked.map((c) => { const p = soft.has(c.requirementId) ? featureParams.get(c.requirementId) : undefined;
+      return p && c.result.verdict === 'VIOLATED' && typeof c.result.value === 'number' ? { ...c, result: { ...c.result, error: errorAtLength(p, c.result.value, wb, wa) } } : c; }) };
+  };
   const checkOf = new Map(v.requirements.flatMap((r) => (r.measurement ? [[r.requirementId, measurementId(r.measurement)] as const] : [])));
   while (pending(report) && stylePasses < maxPasses) {
     // The graded checks this pass targets are read as enforced by the planner and by the acceptance, on copies.
@@ -770,7 +781,7 @@ export async function refineToStandard(
     // A rewrite that adds an invented claim makes UNSOURCED worse, and `acceptRepair` refuses it.
     const verdict = next === text
       ? { ok: false, why: reverted.length ? `every rewrite was refused (${reverted.map((r) => r.lost[0]).slice(0, 2).join('; ')})` : 'the rewrite returned nothing usable' }
-      : acceptRepair(withGraded(report, gradedIds), withGraded(after, gradedIds), { graded: soft });
+      : acceptRepair(atLength(withGraded(report, gradedIds), soft, text, next), withGraded(after, gradedIds), { graded: soft });
     if (!verdict.ok) {
       why = `a rewrite was discarded: ${verdict.why}`;
       for (const e of tally) { e.rejected += applied.length; if (applied.length || !reverted.length) e.reasons.push(`discarded: ${verdict.why}`); }
