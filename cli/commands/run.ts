@@ -52,14 +52,16 @@ export function sortArgs(tokens: readonly string[]): { skill: string | null; tas
  */
 export function doneOf(run: Pick<EngineRun, 'report' | 'cut'>): string[] {
   // The engine's sentences name rules by their ids and quote each: here, only what happened, as it ended.
-  const all = run.report.filter((l) => /^(?:Written again|The draft (?:runs|leaves out))/.test(l)); const last = all.at(-1) ?? '';
-  const still = Number(/it now leaves out (\d+)/.exec(last)?.[1] ?? 0); const kept = all.filter((l) => l.startsWith('Written again')).length;
+  const all = run.report.filter((l) => /^(?:Written again|The draft (?:runs|leaves out|misses))/.test(l)); const last = all.at(-1) ?? '';
+  // a graded miss is "missed", a rule "left out": either still there is still missing
+  const still = Number(/it now (?:leaves out|misses) (\d+)/.exec(last)?.[1] ?? 0); const kept = all.filter((l) => l.startsWith('Written again')).length;
   const times = kept > 1 ? `${kept} times` : 'once';
   const again = !all.length ? '' : !kept ? 'one more draft was tried and was no better, so the first was kept'
     : last.includes('nearer and still outside') || still || !last.startsWith('Written again') ? `written again ${times} for what was missing${still ? `; ${still} thing${still === 1 ? ' is' : 's are'} still missing` : '; the length is nearer and still off'}`
       : `written again ${times}, and it now holds what was missing`;
   const cut = run.cut?.length ?? 0;
-  return [again, cut ? `${cut} sentence${cut === 1 ? '' : 's'} removed (not found in your material)` : ''].filter(Boolean);
+  const budget = run.report.find((l) => l.startsWith('Repair stopped by the budget'));
+  return [again, budget ? budget.replace(/^Repair stopped/, 'repair stopped').replace(/\.$/, '') : '', cut ? `${cut} sentence${cut === 1 ? '' : 's'} removed (not found in your material)` : ''].filter(Boolean);
 }
 
 /** The card of a run: its record (core/eval/record.ts), what it cost, and what was done to the draft. */

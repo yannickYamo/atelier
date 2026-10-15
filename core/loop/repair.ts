@@ -17,7 +17,7 @@
 //      ratified measurement; the loop has no authority to relax a target to make a draft pass.
 
 import { sentencesOf, paragraphsOf } from '../observers/registry.js';
-import { acts, type RuleCheck, type VerifyReport } from '../observers/verify.js';
+import { acts, isOmission, type RuleCheck, type VerifyReport } from '../observers/verify.js';
 import { errorAtLength, featureWordCount } from '../observers/features.js';
 import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
@@ -102,7 +102,7 @@ export function planRepair(text: string, report: VerifyReport,
     // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
     // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another. Nor is a
     // test the work never named: an omission has no span to rewrite.
-    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES' || c.observer === 'NAMES_TEST') continue;
+    if (isOmission(c)) continue;
     // What the grammar checker was unsure of is listed for the person and rewritten by nobody.
     if (isGrammarNote(c)) continue;
     for (const sp of c.result.spans) {
@@ -294,8 +294,8 @@ export interface RegressionVerdict { readonly ok: boolean; readonly why: string 
 /**
  * The least a FEATURE check's |error| (in widths of its band) may move for the move to count: a fall of this much is
  * progress on it (`acceptRepair`), and a rise of this much is a regression on it (`regressions`). Read on every FEATURE
- * check that carries an error, enforced or graded; a caller comparing two lengths of one text reads the earlier
- * report at the later length first (`readAtLength`), so a shorter text raising every rate is not read as a move.
+ * check that carries an error, enforced or graded; a caller comparing two lengths of one text reads a steering check
+ * of the earlier report at the later length first (`readAtLength`); an enforced rule is read as it is.
  */
 export const GRADED_STEP = 0.1;
 
@@ -303,16 +303,23 @@ export const GRADED_STEP = 0.1;
 const hasDistance = (c: { observer?: string; result: { error?: number } }): boolean => c.observer === 'FEATURE' && typeof c.result.error === 'number';
 
 /**
- * A report with each broken FEATURE check's error read as it would be at another length (../observers/features.ts,
+ * A report with each broken STEERING FEATURE check's error read as it would be at another length (../observers/features.ts,
  * `errorAtLength`): what the earlier text of an edit is compared as, so only the count's own move is read. `paramsOf`
  * gives a check's FEATURE params (the standard's measurement, or a SIGNAL check's own band); a check without them is
  * read as it is.
+ *
+ * ONLY FOR STEERING (./controller.ts, the separation principle). An enforced rule is judged by its value on the text
+ * as it is: an owner's "at most 5 asides per 1,000 words" broken at 11.7 and delivered at 16 is worse, whatever the
+ * length did. `steering` says which checks are graded or SIGNAL; by default every check that does not act (a rule the
+ * standard does not enforce, a SIGNAL band). A caller whose report marks graded checks as acting (run-repair.ts,
+ * `withGraded`) passes its own.
  */
-export function readAtLength(r: VerifyReport, from: string, to: string, paramsOf: (c: RuleCheck) => Readonly<Record<string, unknown>> | undefined): VerifyReport {
+export function readAtLength(r: VerifyReport, from: string, to: string, paramsOf: (c: RuleCheck) => Readonly<Record<string, unknown>> | undefined,
+  steering: (c: RuleCheck) => boolean = (c) => !acts(c)): VerifyReport {
   const wb = featureWordCount(from); const wa = featureWordCount(to);
   return { ...r, checked: r.checked.map((c) => {
     const v = c.result.value;
-    const p = c.observer === 'FEATURE' && c.result.verdict === 'VIOLATED' && typeof v === 'number' ? paramsOf(c) : undefined;
+    const p = c.observer === 'FEATURE' && c.result.verdict === 'VIOLATED' && typeof v === 'number' && steering(c) ? paramsOf(c) : undefined;
     return p && typeof v === 'number' ? { ...c, result: { ...c.result, error: errorAtLength(p, v, wb, wa) } } : c;
   }) };
 }

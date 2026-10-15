@@ -8,7 +8,7 @@ import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type SpendLine } from '../inference/client.js';
 import type { StandardVersion, RepairRecord, RepairEdits, GradedRecord, ControllerDecisionRecord } from '../state/canonical-state.js';
-import { acts, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
+import { acts, isOmission, verifyText, type VerifyReport, type RuleCheck } from '../observers/verify.js';
 import { planFor } from '../plan/execution-plan.js';
 import { unsourcedClaims, wordCountClaims, claimUnitsOf } from './claims.js';
 import { derivedFromKnown } from './derived.js';
@@ -20,7 +20,7 @@ import { checkFormat, type FormatProfile } from '../observers/formats.js';
 import { findTerms } from '../observers/text.js';
 import { signalRules, signalChecks, isSignal, displacement, ownerWords, type Displacement } from './graded.js';
 import type { FidelityProfile, ControllerSettings } from '../fidelity/types.js';
-import { decide, controllerRecord, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
+import { decide, controllerRecord, recordTarget, ENFORCED_WEIGHT, SETTLED_ERROR, type ControllerInput, type Decision, type EnforcedMiss, type GradedMiss } from './controller.js';
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
@@ -144,7 +144,7 @@ export interface CheckOptions {
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const base = waive(waive(verifyText(skill, v, text, opts.context), opts.waived), opts.doesNotApply, 'does not apply');
+  const base = withWaivers(verifyText(skill, v, text, opts.context), opts);
   const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
@@ -259,6 +259,9 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
 
 /** The line that fails a writing check whose qualified claim reader could not run. */
 export const UNREAD = 'UNSOURCED·unread';
+
+/** A report with this run's waivers on it: a rule withheld for the run, and one the format cannot hold, read as not applicable. */
+export const withWaivers = (r: VerifyReport, opts: Pick<CheckOptions, 'waived' | 'doesNotApply'>): VerifyReport => waive(waive(r, opts.waived), opts.doesNotApply, 'does not apply');
 
 /** The report with each waived rule shown as not applicable, with its reason, and `failed` recomputed. */
 function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>, said = 'withheld for this run'): VerifyReport {
@@ -641,16 +644,20 @@ export async function refineToStandard(
   const withSignals = (t: string, r: VerifyReport): VerifyReport => (profile ? { ...r, checked: [...r.checked, ...signalChecks(t, profile)] } : r);
   const recorded = (r: VerifyReport): VerifyReport => (profile ? { ...r, checked: r.checked.filter((c) => !isSignal(c.requirementId)) } : r);
   const check = async (t: string): Promise<VerifyReport> => withSignals(t, memory.apply(t, await checkDraftAsync(skill, v, t, opts)));
-  // LENGTH DRIFT, for every FEATURE check's distance. A rate per 1,000 words rises when a rewrite shortens the text with
-  // the count unchanged; the before-report the acceptance compares against reads each FEATURE miss with its value
-  // scaled to the after-length (./repair.ts, `readAtLength`), so only the count's own move is read.
+  // LENGTH DRIFT, for a STEERING FEATURE check's distance. A rate per 1,000 words rises when a rewrite shortens the text
+  // with the count unchanged; the before-report the acceptance compares against reads each graded or SIGNAL miss with its
+  // value scaled to the after-length (./repair.ts, `readAtLength`), so only the count's own move is read. An enforced
+  // rule is never rescaled: it is judged by its value on the text as it is (./controller.ts, the separation principle).
   const paramsOfCheck = featureParamsOf(v);
-  const atLength = (r: VerifyReport, from: string, to: string): VerifyReport => readAtLength(r, from, to, paramsOfCheck);
+  let enforcedIds: ReadonlySet<string> = new Set();
+  const atLength = (r: VerifyReport, from: string, to: string): VerifyReport => readAtLength(r, from, to, paramsOfCheck, (c) => !enforcedIds.has(c.requirementId));
   // STEERING IS SUBORDINATE TO THE OWNER'S RULES. A step taken for an enforced rule (a rewrite, a mechanical or grammar
   // fix, a draft written again) is never refused for a graded feature or a SIGNAL band it moved: those are read only
   // on steps pointed at them (a carrier rewrite, the operators).
   const steering = (r: VerifyReport): Set<string> => new Set(r.checked.filter((c) => isSignal(c.requirementId) || (graded.has(c.requirementId) && !acts(c))).map((c) => c.requirementId));
   let first = await check(draft);
+  // which rules the standard enforces: read before any copy marks a graded check as acting (`withGraded`)
+  enforcedIds = new Set(first.checked.filter((c) => acts(c)).map((c) => c.requirementId));
   // WHAT KEEPS THE LOOP GOING (./controller.ts): an enforced rule broken, or a graded miss over SETTLED_ERROR band widths.
   // A graded miss nearer its band than that is delivered as it is: no pull to the median.
   const gradedOff = (r: VerifyReport): RuleCheck[] => r.checked.filter((c) => graded.has(c.requirementId) && !acts(c) && c.result.verdict === 'VIOLATED');
@@ -720,7 +727,7 @@ export async function refineToStandard(
     const grammar = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && c.observer === 'GRAMMAR' && !isGrammarNote(c)
       && c.result.spans.some((sp) => sp.replacement !== undefined)).map((c) => c.requirementId);
     const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId) && !grammar.includes(c.requirementId))
-      .map((c) => ({ id: c.requirementId, kind: c.obligation === 'DELIVERABLE' || c.observer === 'LINES' || !c.result.spans.length ? 'omission' as const : 'span' as const }));
+      .map((c) => ({ id: c.requirementId, kind: isOmission(c) || !c.result.spans.length ? 'omission' as const : 'span' as const }));
     // one miss per feature: a rule and a signal on the same feature are one target, the further out of the two
     const byFeature = new Map<string, GradedMiss>();
     for (const c of gradedOff(r)) {
@@ -735,7 +742,7 @@ export async function refineToStandard(
       can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
   };
   // Said to the owner: no SIGNAL feature is named by its id in a why, a note or a reason (./graded.ts, `ownerWords`).
-  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions.map((d) => ({ ...d, why: ownerWords(d.why),
+  const controllerOf = (): { controller: ReturnType<typeof controllerRecord> } => ({ controller: controllerRecord(decisions.map((d) => ({ ...d, targets: d.targets.map(recordTarget), why: ownerWords(d.why),
     observed: { ...d.observed, ...(d.observed.note ? { note: ownerWords(d.observed.note) } : {}) } })), ownerWords(stoppedBecause ?? 'every enforced rule holds and nothing graded is off'), handed) });
   if (!pending(first)) {
     const toCheck = listedClaims(first);
@@ -936,7 +943,7 @@ export async function refineToStandard(
     const tally = gradedPass ? [edits, gradedEdits] : [edits];
     for (const r of reverted) {
       const t = targets.find((x) => x.id === r.id);
-      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed ' : r.lost.every((l) => l.startsWith('added ')) ? '' : 'lost '}${r.lost.join(', ')}`);
+      kept.push(`"${t?.text.slice(0, 80) ?? `span ${r.id}`}" kept: the rewrite ${r.kind === 'MOVE' || r.kind === 'SLOT' ? 'changed ' : r.lost.every((l) => l.startsWith('added ')) ? '' : r.lost.some((l) => /^added |^an added |, added$/.test(l)) ? 'changed ' : 'lost '}${r.lost.join(', ')}`);
       for (const id of t?.requirementIds ?? []) if (!revertedRules.includes(id)) revertedRules.push(id);
       for (const e of tally) { e.rejected += 1; e.reasons.push(`refused (${r.kind ?? 'MEANING'}): ${r.lost.join(', ')}`); }
     }

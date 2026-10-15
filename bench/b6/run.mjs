@@ -34,6 +34,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, cpSync
 import { join, resolve, basename, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { invokeRecord } from './invoke-json.mjs';
 import { factLedger, factCoverage, authorFactDensity } from '../../dist/core/loop/fact-ledger.js';
 import { buildProfile, readFidelity } from '../../dist/core/fidelity/profile.js';
 import { trainDetector, scoreDetector } from '../../dist/core/fidelity/stylometry.js';
@@ -268,8 +269,9 @@ async function generate() {
         // `open` is Atelier as 0.7 ran it: no fidelity loop, and 0.7's two drafts. `loop` asks for the loop by
         // name: since 1.0 the default release is 0.7's cost, so an arm that passes nothing is the open arm again.
         const extra = x.arm === 'open' ? ['--no-fidelity', '--drafts', '2'] : ['--fidelity'];
-        const raw = execFileSync('node', [CLI, 'invoke', '--skill', `b6-${x.reg}`, '--json', '--no-taste', '--model', MODEL, ...priceFlags(w), ...extra, brief], { cwd: proj, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-        const j = JSON.parse(raw); text = j.output; cost = j.costUsd ?? 0;
+        // a BLOCKED run exits 1 with its record on stdout: that record is kept (./invoke-json.mjs)
+        const j = invokeRecord(() => execFileSync('node', [CLI, 'invoke', '--skill', `b6-${x.reg}`, '--json', '--no-taste', '--model', MODEL, ...priceFlags(w), ...extra, brief], { cwd: proj, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+        text = j.output; cost = j.costUsd ?? 0;
         meta = { invocationId: j.invocationId, rulesBroken: j.rulesBroken, cut: j.cut, toCheck: j.toCheck, fidelity: j.fidelity ?? null };
       }
       budget.spentUsd += cost;
