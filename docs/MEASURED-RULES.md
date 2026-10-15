@@ -256,29 +256,53 @@ pieces carry on average.
 ## What the loop does with them
 
 `invoke` and the Claude Code plugin check every draft. When a REQUIRED rule is broken, only the spans
-that broke it are rewritten (`core/loop/repair.ts`).
+that broke it are rewritten (`core/loop/repair.ts`). A ban stated as a step of your method ("Never use the
+words simply or just") is such a rule: its sentences are rewritten in place, and it is never reported as
+something the draft left out.
 
 Which step comes next is chosen by a bounded controller (`core/loop/controller.ts`), not a fixed number of
 passes. An enforced rule broken in place is rewritten first; one that needs something the draft lacks is
 written again; invented claims are cut in code before anything else; then a length out of its band; then the
-author's counted features, furthest out first. A feature under 0.5 band widths out is moved by re-punctuation
-(no model), from 0.5 to 1.5 its carrier sentences are rewritten (one per band width, at most three), and
-beyond that, or with three features out, the piece is written again with each miss's direction and distance.
-A step is taken while its expected movement per dollar, priced from what the run has already paid, is at
-least `controller.minGainPerUsd` (2), the budget holds it, and fewer than `controller.maxActions` (4) steps
-were taken. The repair stops when every enforced rule holds and no feature is over 0.5 band widths out, when
+author's counted features, furthest out first, at most three a step (a draft written again included), and
+never one 0.5 band widths out or nearer. From 0.5 to 1.5 its carrier sentences are rewritten (one per band
+width, at most three), and beyond that, or with three features out, the piece is written again with each
+targeted miss's direction and distance. Re-punctuation (no model) is the step down when a rewrite failed, and
+still runs when the budget holds no model call. A steering step is taken while its expected movement per
+dollar, priced from what the run has already paid, is at least `controller.minGainPerUsd` (2), the budget holds
+it, and fewer than `controller.maxActions` (4) steps were taken in the run, across every draft. The repair stops when every enforced rule holds and no feature is over 0.5 band widths out, when
 every step it could take on what is left has failed, when the budget is spent, or when nothing left can be
 reached. A failed step is never repeated on its target: a redraft that does no better gives way to a carrier
 rewrite, then the operators; an operator step that fails gives way to a carrier rewrite once. Every step, its expected and observed movement and cost, and the reason it
-stopped are recorded under `repair.controller` and printed by `atelier report`. The guarantees are:
+stopped are recorded under `repair.controller` and printed by `atelier report`. A repair the budget stopped
+is said on the run itself, not only in its record.
+
+**Enforced rules and steering never share a gate.** The two kinds of target pass through the same steps, and
+are judged apart:
+
+1. A rule you require (a REQUIRED feature rule included) is judged by its value on the text as it is: held or
+   broken, then how far out, then, for a rule that is not a counted feature, in how many places. A rate is
+   never rescaled for a change of length on such a rule: "at most 5 asides per 1,000 words" broken at 11.7 and
+   delivered at 16 is worse. Comparing a rate at the new length is for the features your pieces usually hold.
+2. The gain-per-dollar gate and the effects a release has learned are read for steering steps only. A step for
+   a rule you require is taken whenever the step limit and the budget allow it.
+3. The step limit is per run: the steps on the first draft, the draft written again (one step) and the steps on
+   it count together.
+4. Once a draft has been written again for the features, a feature still more than 1.5 band widths out is
+   rewritten on its carriers on the new draft, then re-punctuated, within the limit. A run never ends on a
+   request for a redraft that no redraft followed.
+5. What a draft written again moved is recorded as the real change in its distance from the band, and the
+   effects a release learns are read from those records.
+
+The guarantees are:
 
 - **The splice is deterministic.** The model returns replacement text for numbered spans, and the
   code puts them back. Nothing outside a span can change.
 - **A rewrite never makes a measured rule worse.** A pass is kept only if every rule that held still
   holds, and the broken REQUIRED rules are fewer, broken in fewer places, or (for a counted feature) nearer
   their band. A counted feature is read by its distance from the band, never by how many sentences carry
-  it: one carrier further out is worse than three nearer in. A rate is compared at the new length, so a
-  shorter text is not read as a feature drifting.
+  it: one carrier further out is worse than three nearer in. For a feature your pieces usually hold, a rate
+  is compared at the new length, so a shorter text is not read as a feature drifting; a rule you require is
+  read on the text as it is.
 - **Your rules come before your range.** A step taken for a rule you require (a span rewrite, a mechanical
   or grammar fix, a draft written again) is never refused because it moved one of the features your
   pieces usually hold; what it moved is recorded as observed. Those features are weighed only on the steps

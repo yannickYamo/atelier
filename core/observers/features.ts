@@ -373,6 +373,8 @@ function missOf(p: Readonly<Record<string, unknown>>, v: number): { lo: number |
 const r1 = (x: number): number => Math.round(x * 10) / 10;
 /** A distance in the feature's own unit, rounded to one decimal; a share's in percentage points. */
 const amount = (f: Feature, d: number): string => (f.unit === 'share' ? `${r1(d * 100)} points` : `${r1(d)}`);
+/** "about 4.1", or, for a distance that rounds to nothing, "under 0.1": never "about 0" of a miss that is there. */
+const about = (f: Feature, d: number): string => (d > 0 && /^-?0(?: points)?$/.test(amount(f, d)) ? `under ${f.unit === 'share' ? '0.1 points' : '0.1'}` : `about ${amount(f, d)}`);
 const unitOf = (f: Feature): string => (f.unit === 'per1000' ? ' per 1,000 words' : '');
 const rangeOf = (f: Feature, lo: number | null, hi: number | null): string =>
   (lo !== null && hi !== null ? `${fmt(f, lo)} to ${fmt(f, hi)}` : lo !== null ? `at least ${fmt(f, lo)}` : `at most ${fmt(f, hi ?? 0)}`) + unitOf(f);
@@ -386,8 +388,8 @@ export function featureMove(p: Readonly<Record<string, unknown>>, v: number): st
   if (!f) return null;
   const m = missOf(p, v);
   if (m.distance === 0) return null;
-  return f.unit === 'value' ? `${f.label}: about ${amount(f, m.distance)} ${m.above ? 'lower' : 'higher'}`
-    : `about ${amount(f, m.distance)} ${m.above ? 'fewer' : 'more'} ${f.label}${unitOf(f)}`;
+  return f.unit === 'value' ? `${f.label}: ${about(f, m.distance)} ${m.above ? 'lower' : 'higher'}`
+    : `${about(f, m.distance)} ${m.above ? 'fewer' : 'more'} ${f.label}${unitOf(f)}`;
 }
 
 /** How many carrier sentences a miss is pointed at, at most. */
@@ -478,10 +480,10 @@ export const FEATURE: Observer = {
       if (covered >= m.distance) break;
       covered += c.moves;
       spans.push({ start: c.at, end: c.at + c.s.length, text: c.s, why: m.above
-        ? `this sentence carries about ${amount(f, c.moves)} of the ${amount(f, m.distance)} to remove`
-        : `this sentence has room for one; about ${amount(f, m.distance)} to add` });
+        ? `this sentence carries ${about(f, c.moves)} of the ${amount(f, m.distance)} to remove`
+        : `this sentence has room for one; ${about(f, m.distance)} to add` });
     }
     return { verdict: 'VIOLATED', spans, value: v, error: m.error,
-      detail: `${f.label} ${fmt(f, v)}${unitOf(f)}; your range is ${rangeOf(f, m.lo, m.hi)}; about ${amount(f, m.distance)} to ${verb}` };
+      detail: `${f.label} ${fmt(f, v)}${unitOf(f)}; your range is ${rangeOf(f, m.lo, m.hi)}; ${about(f, m.distance)} to ${verb}` };
   },
 };

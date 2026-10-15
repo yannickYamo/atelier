@@ -24,11 +24,27 @@
 // gives way to a carrier rewrite, then the operators; an operator step gives way to a carrier rewrite once. When every
 // action open to a target has failed, the stop names them.
 //
+// THE SEPARATION PRINCIPLE. Enforced rules and taste steering pass through the same steps but never share a gate.
+//  (a) ENFORCED rules (the owner's REQUIRED, a REQUIRED FEATURE rule included) are judged for progress and regression
+//      by their actual value on the actual text: the verdict, then |error| as measured on the text as it is (never
+//      rescaled for a change of length), then the count of spans for a rule that is not a FEATURE rule. Reading an
+//      earlier text at a later length (../loop/repair.ts, `readAtLength`) is for graded and SIGNAL checks only.
+//  (b) The expected-gain-per-dollar gate (minGainPerUsd, κ) and the release's learned effects (`controller.effects`)
+//      are read for STEERING steps only. A step for an enforced rule is taken whenever maxActions and the budget allow
+//      it, whatever the learned effects say.
+//  (c) maxActions is per RUN, across drafts: the caller hands the steps already taken (the first draft's, and the
+//      draft written again, which counts as one step) to the refinement of the next draft as its history.
+//  (d) A draft written again for graded misses happens at most as often as the caller's redraft allowance. Once one
+//      has been written in a run (`hadRedraft`), a target still over REDRAFT_ERROR steps down on the new draft to a
+//      carrier rewrite, then the operators, within the cap; a record never ends on a hand-off with no redraft after it.
+//  (e) What a redraft moved is recorded as the real change in |error|, before minus after; the learned effects are
+//      summarised from those records.
+//
 // Pure: the caller reads the report, the ledger and the budget, and executes and records what is decided here.
 
 import type { ControllerAction, ControllerDecisionRecord, ControllerRecord } from '../state/canonical-state.js';
 import type { ControllerEffects, ControllerSettings } from '../fidelity/types.js';
-import { ownerWords } from './graded.js';
+import { ownerWords, isSignal, SIGNAL_PREFIX } from './graded.js';
 
 export const CONTROLLER_POLICY = 'bounded-v1' as const;
 
@@ -138,12 +154,21 @@ const SEQUENCE: Readonly<Record<'operators' | 'carrier-rewrite' | 'redraft', rea
   operators: ['operators', 'carrier-rewrite'],
 };
 
+/**
+ * One target, however it is written: a SIGNAL feature is recorded under its plain feature name in what the person may
+ * read (`recordTarget`), and read back as the same target here.
+ */
+const targetKey = (id: string): string => (isSignal(id) ? id.slice(SIGNAL_PREFIX.length) : id);
+/** The id a record names a target by: a SIGNAL band's internal prefix never reaches a record the person may read. */
+export const recordTarget = targetKey;
+const hits = (d: ControllerDecisionRecord, id: string): boolean => d.targets.some((t) => targetKey(t) === targetKey(id));
+
 /** A step failed when it kept nothing or moved nothing. A hand-off to a redraft is no step of its own: its redraft is. */
 const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && (d.outcome !== 'kept' || d.observed.movement <= 0);
 
 /** The chosen actions that failed on a target, in the order they failed. */
 const failuresOn = (id: string, history: readonly ControllerDecisionRecord[]): ControllerAction[] =>
-  history.filter((d) => d.targets.includes(id) && CHOSEN.has(d.action) && failed(d)).map((d) => d.action);
+  history.filter((d) => hits(d, id) && CHOSEN.has(d.action) && failed(d)).map((d) => d.action);
 
 /** The first action in the target's sequence that has not failed on it and that this caller can carry out; null when none is left. */
 function actionFor(base: 'operators' | 'carrier-rewrite' | 'redraft', id: string, history: readonly ControllerDecisionRecord[],
@@ -171,9 +196,10 @@ const usd = (x: number): string => `$${x > 0 && x < 0.01 ? x.toFixed(4) : x.toFi
 export function decide(input: ControllerInput, s: ControllerSettings | null = null): Decision | Stop {
   const set = controllerSettings(s);
   // An in-place correction is deterministic: one that failed on a rule fails the same way again, so it is never repeated.
-  const grammarFailed = (id: string): boolean => input.history.some((d) => d.action === 'grammar' && d.targets.includes(id) && failed(d));
-  // ONE REDRAFT IS ONE STEP. The hand-off and the draft written again are both on the record; only the draft counts.
-  const taken = input.history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft').length;
+  const grammarFailed = (id: string): boolean => input.history.some((d) => d.action === 'grammar' && hits(d, id) && failed(d));
+  // ONE REDRAFT IS ONE STEP. The hand-off and the draft written again are both on the record; only the draft counts. A
+  // step that could not run (a call that failed, a hand-off no draft followed) took nothing and is not counted.
+  const taken = input.history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run').length;
   const reachable = <T extends { id: string }>(xs: readonly T[]): T[] => xs.filter((x) => !input.unreachable.has(x.id));
   const enforced = reachable(input.enforced);
   const graded = reachable(input.graded).filter((g) => g.error !== 0)
@@ -184,23 +210,30 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     return { kind: 'stop', why: input.graded.length ? `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths` : 'every enforced rule holds and nothing graded is off' };
   }
   if (taken >= set.maxActions) return { kind: 'stop', why: `the controller took its ${set.maxActions} steps` };
-  const usdPerCall = (a: ControllerAction): number => input.observedUsdPerCall[a] ?? (a !== 'cut' && a !== 'mechanical' && a !== 'grammar' ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
-  const prior = (a: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft'): number => set.effects[a]?.movement ?? DEFAULT_EFFECT[a];
+  // LEARNED EFFECTS STEER, NEVER ENFORCE. The release's measured effects (what an action moved, what it cost) are read for
+  // a steering step only; a step for an enforced rule is priced and expected at the documented defaults, or at what this
+  // run has itself paid, and is never weighed against minGainPerUsd.
+  const usdPerCall = (a: ControllerAction, steering = true): number => input.observedUsdPerCall[a]
+    ?? (steering && a !== 'cut' && a !== 'mechanical' && a !== 'grammar' ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
+  const prior = (a: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft', steering = true): number => (steering ? set.effects[a]?.movement : undefined) ?? DEFAULT_EFFECT[a];
   const candidates: Decision[] = [];
+  /** the candidates taken for an enforced rule: never gated by expected gain per dollar */
+  const forEnforced = new Set<Decision>();
+  const enforcedStep = (c: Decision): void => { candidates.push(c); forEnforced.add(c); };
   const failedOnce = (id: string, a: ControllerAction): boolean => failuresOn(id, input.history).includes(a);
   const hadRedraft = input.history.some((d) => d.action === 'redraft');
 
   // (1) ENFORCED: span rules rewritten, then omissions written again.
   const spans = enforced.filter((m) => m.kind === 'span' && !failedOnce(m.id, 'rewrite'));
   if (spans.length && input.can.rewrite) {
-    const eff = Math.min(1, effectOf('rewrite', prior('rewrite'), input.history));
-    candidates.push({ kind: 'act', action: 'rewrite', targets: spans.map((m) => m.id), why: `${spans.length} enforced rule(s) broken in place: their spans are rewritten`,
-      expectedGain: r3(ENFORCED_WEIGHT * eff * spans.length), expectedCostUsd: usdPerCall('rewrite') });
+    const eff = Math.min(1, prior('rewrite', false));
+    enforcedStep({ kind: 'act', action: 'rewrite', targets: spans.map((m) => m.id), why: `${spans.length} enforced rule(s) broken in place: their spans are rewritten`,
+      expectedGain: r3(ENFORCED_WEIGHT * eff * spans.length), expectedCostUsd: usdPerCall('rewrite', false) });
   }
   const omissions = enforced.filter((m) => m.kind === 'omission');
   if (omissions.length && input.can.redraft && !hadRedraft) {
-    candidates.push({ kind: 'act', action: 'redraft', targets: omissions.map((m) => m.id), why: `${omissions.length} enforced rule(s) need something the draft does not have: it is written again with them named`,
-      expectedGain: r3(ENFORCED_WEIGHT * omissions.length), expectedCostUsd: usdPerCall('redraft') });
+    enforcedStep({ kind: 'act', action: 'redraft', targets: omissions.map((m) => m.id), why: `${omissions.length} enforced rule(s) need something the draft does not have: it is written again with them named`,
+      expectedGain: r3(ENFORCED_WEIGHT * omissions.length), expectedCostUsd: usdPerCall('redraft', false) });
   }
   // (2) CLAIMS: ordering only. They are cut in code before any step; nothing here is chosen for them.
   // (3) LENGTH out of its band: written again (a draft that only runs long is trimmed by the caller's redraft).
@@ -208,31 +241,36 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     candidates.push({ kind: 'act', action: 'redraft', targets: ['length'], why: 'the length is outside its band: written again to it',
       expectedGain: r3(Math.min(Math.abs(input.length.error), effectOf('redraft', prior('redraft'), input.history))), expectedCostUsd: usdPerCall('redraft') });
   }
-  // (4) GRADED: the furthest out first; the step is the action the furthest calls for, over every miss that calls for it.
-  const out = graded.filter((g) => Math.abs(g.error) > SETTLED_ERROR).length;
+  // (4) GRADED: the furthest out first; the step is the action the furthest calls for, over every miss that calls for it,
+  // at most TARGETS_PER_STEP of them whatever the action (a redraft included), and never one at or under SETTLED_ERROR:
+  // a miss that near its band is no target of any step.
+  const far = graded.filter((g) => Math.abs(g.error) > SETTLED_ERROR);
+  const out = far.length;
   const available = (g: GradedMiss) => (a: 'operators' | 'carrier-rewrite' | 'redraft'): boolean =>
     a === 'operators' ? g.operatorEffect !== null && g.operatorEffect > 0 : a === 'redraft' ? input.can.redraft && !hadRedraft : input.can.rewrite;
   type Rung = 'operators' | 'carrier-rewrite' | 'redraft';
-  const planned = graded.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g)) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
+  const planned = far.map((g) => ({ g, a: actionFor(sizedAction(g.error, out), g.id, input.history, available(g)) })).filter((x): x is { g: GradedMiss; a: Rung } => x.a !== null);
   if (planned.length) {
     const action = planned[0].a;
-    const group = planned.filter((x) => x.a === action).slice(0, action === 'redraft' ? undefined : TARGETS_PER_STEP).map((x) => x.g);
+    const group = planned.filter((x) => x.a === action).slice(0, TARGETS_PER_STEP).map((x) => x.g);
     const eff = (g: GradedMiss): number => (action === 'operators' ? effectOf('operators', g.operatorEffect ?? prior('operators'), input.history)
       : action === 'carrier-rewrite' ? effectOf('carrier-rewrite', prior('carrier-rewrite'), input.history) * carriersFor(g.error)
         : effectOf('redraft', prior('redraft'), input.history));
     const gain = r3(group.reduce((n, g) => n + Math.min(Math.abs(g.error), eff(g)), 0));
     const k = Math.max(...group.map((g) => carriersFor(g.error)));
-    const far = group.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ');
+    const named = group.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ');
     // The range named is the one the action is sized for; a target stepped down to it from a larger action (a redraft
     // that did no better) is said at its own distance, never as inside a range it is not in.
     const sized = group.every((g) => sizedAction(g.error, out) === action);
     const how = action === 'operators' ? 'moved by re-punctuation, no model' : action === 'carrier-rewrite' ? `up to ${k} carrier sentence(s) each rewritten` : 'written again with each one\'s direction and distance';
-    const why = !sized ? `graded miss(es) at ${far} band widths: ${how}`
-      : action === 'operators' ? `graded miss(es) under ${SETTLED_ERROR} band widths (${far}): ${how}`
-        : action === 'carrier-rewrite' ? `graded miss(es) of ${SETTLED_ERROR} to ${REDRAFT_ERROR} band widths (${far}): ${how}`
-          : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once` : `over ${REDRAFT_ERROR} band widths`} (${far}): ${how}`;
+    // The why names exactly the targets: where more features are out than one step takes, it says so.
+    const furthest = out > group.length ? `, the furthest ${group.length} taken` : '';
+    const why = !sized ? `graded miss(es) at ${named} band widths: ${how}`
+      : action === 'operators' ? `graded miss(es) under ${SETTLED_ERROR} band widths (${named}): ${how}`
+        : action === 'carrier-rewrite' ? `graded miss(es) of ${SETTLED_ERROR} to ${REDRAFT_ERROR} band widths (${named}): ${how}`
+          : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once${furthest}` : `over ${REDRAFT_ERROR} band widths`} (${named}): ${how}`;
     // A SWITCH SAYS SO: which action failed on these targets, and what it found.
-    const switched = group.flatMap((g) => input.history.filter((d) => d.targets.includes(g.id) && CHOSEN.has(d.action) && failed(d))
+    const switched = group.flatMap((g) => input.history.filter((d) => hits(d, g.id) && CHOSEN.has(d.action) && failed(d))
       .map((d) => `${d.action} on ${g.id} ${d.outcome}${d.observed.note ? ` (${d.observed.note})` : ''}`));
     const whyNow = switched.length ? `${why}; switched to it because ${[...new Set(switched)].join('; ')}` : why;
     candidates.push({ kind: 'act', action, targets: group.map((g) => g.id), why: whyNow, expectedGain: gain, expectedCostUsd: usdPerCall(action), ...(action === 'carrier-rewrite' ? { carriers: k } : {}) });
@@ -240,13 +278,13 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   // (5) MECHANICAL ERRORS the grammar rule confirmed: each corrected in place by the checker's own suggestion, in code.
   // After everything above, so a rewrite of a sentence cannot undo it; free, so it never stops paying.
   if (grammar.length) {
-    candidates.push({ kind: 'act', action: 'grammar', targets: grammar, why: `${grammar.length} rule(s) with a confirmed mechanical error: corrected in place, no model`,
-      expectedGain: r3(ENFORCED_WEIGHT * grammar.length), expectedCostUsd: usdPerCall('grammar') });
+    enforcedStep({ kind: 'act', action: 'grammar', targets: grammar, why: `${grammar.length} rule(s) with a confirmed mechanical error: corrected in place, no model`,
+      expectedGain: r3(ENFORCED_WEIGHT * grammar.length), expectedCostUsd: usdPerCall('grammar', false) });
   }
   // (6) ONE MORE DRAFT, where the release allows it and an enforced rule still fails that nothing above can reach.
   if (!candidates.length && set.extraDraft && input.enforced.length && input.can.redraft && !hadRedraft) {
-    candidates.push({ kind: 'act', action: 'redraft', targets: input.enforced.map((m) => m.id), why: 'an enforced rule still fails and nothing else can reach it: one more draft, as the release allows',
-      expectedGain: r3(ENFORCED_WEIGHT * input.enforced.length * DEFAULT_EFFECT.rewrite), expectedCostUsd: usdPerCall('redraft') });
+    enforcedStep({ kind: 'act', action: 'redraft', targets: input.enforced.map((m) => m.id), why: 'an enforced rule still fails and nothing else can reach it: one more draft, as the release allows',
+      expectedGain: r3(ENFORCED_WEIGHT * input.enforced.length * DEFAULT_EFFECT.rewrite), expectedCostUsd: usdPerCall('redraft', false) });
   }
   if (!candidates.length) {
     // THE REWRITE PASSES ALLOWED WERE USED: something left that a rewrite would take, and no rewrite pass left to take it.
@@ -258,7 +296,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     return { kind: 'stop', why: exhausted.length ? `every action tried failed on what is left: ${exhausted.map((x) => `${x.id} (${x.fails.join(', ')})`).join('; ')}`
       : 'only what no step here can reach is left (nothing to rewrite in it, or a region the guards protect)' };
   }
-  let refused: string | null = null;
+  let refused: string | null = null; let budgetRefusedGraded = false;
   for (const c of candidates) {
     const model = MODEL_ACTIONS.has(c.action);
     const noCall = model && input.budget.callsLeft !== null && input.budget.callsLeft < 1;
@@ -266,13 +304,24 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
       // Said as what ran out: the calls, or the dollars, never a cost of "$0.00" beside an empty purse of calls.
       refused ??= noCall && c.expectedCostUsd <= input.budget.usdLeft ? `the budget: ${c.action} needs a model call, and no call is left`
         : `the budget: ${c.action} would cost about ${usd(c.expectedCostUsd)}${input.budget.callsLeft !== null ? ` and a call` : ''}, and ${usd(Math.max(0, input.budget.usdLeft))}${input.budget.callsLeft !== null ? ` and ${input.budget.callsLeft} call(s)` : ''} are left`;
+      if (!forEnforced.has(c)) budgetRefusedGraded = true;
       continue;
     }
-    if (c.expectedCostUsd > 0 && c.expectedGain / c.expectedCostUsd < set.minGainPerUsd) {
+    if (!forEnforced.has(c) && c.expectedCostUsd > 0 && c.expectedGain / c.expectedCostUsd < set.minGainPerUsd) {
       refused ??= `it stopped paying: ${c.action} was expected to move ${c.expectedGain} for ${usd(c.expectedCostUsd)}, under ${set.minGainPerUsd} per dollar`;
       continue;
     }
     return c;
+  }
+  // A FREE STEP STILL RUNS WHEN THE BUDGET HOLDS NO MODEL CALL: the operators, on the far misses they can move and have
+  // not failed on, before the stop.
+  if (budgetRefusedGraded) {
+    const free = far.filter((g) => g.operatorEffect !== null && g.operatorEffect > 0 && !failuresOn(g.id, input.history).includes('operators')).slice(0, TARGETS_PER_STEP);
+    if (free.length) {
+      return { kind: 'act', action: 'operators', targets: free.map((g) => g.id),
+        why: `${refused}; the operators still run, no model: graded miss(es) at ${free.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ')} band widths`,
+        expectedGain: r3(free.reduce((n, g) => n + Math.min(Math.abs(g.error), effectOf('operators', g.operatorEffect ?? prior('operators'), input.history)), 0)), expectedCostUsd: 0 };
+    }
   }
   return { kind: 'stop', why: refused ?? 'nothing to do' };
 }

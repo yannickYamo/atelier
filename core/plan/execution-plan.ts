@@ -14,7 +14,7 @@
 // It is derived from the standard and never stored: a plan kept beside the standard could differ from it.
 
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
-import { targetOf } from '../observers/obligations.js';
+import { targetOf, isOmission } from '../observers/obligations.js';
 import { observes, inOwnerWords, type Observes } from '../eval/observes.js';
 
 /** RULE: the owner requires it. JUDGEMENT: they require it and no check reads it. HABIT: seen in their examples, not required. */
@@ -68,7 +68,7 @@ function planned(r: Requirement): PlannedRule {
   const enforced = Boolean(check) && notEnforced === null;
   // What no sentence rewrite fixes is written again: a part the work must contain, a citation that is no line of
   // the material, a test the work never named. Everything else that is enforced is a sentence's to fix.
-  const onMiss: OnMiss = !check ? 'NONE' : !enforced ? 'SHOW' : r.obligation === 'DELIVERABLE' || m?.observer === 'LINES' || m?.observer === 'NAMES_TEST' ? 'REDRAFT' : 'REWRITE';
+  const onMiss: OnMiss = !check ? 'NONE' : !enforced ? 'SHOW' : isOmission({ obligation: r.obligation, observer: m?.observer }) ? 'REDRAFT' : 'REWRITE';
   return { id: r.requirementId, statement: r.statement, role, stated: inOwnerWords(r), check, enforced, notEnforced, onMiss };
 }
 
