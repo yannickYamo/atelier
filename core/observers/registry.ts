@@ -20,6 +20,7 @@ import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
 import { TABLE, CITED, LINES, LENGTH } from './obligations.js';
+import { SHAPE } from './shape.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
 export interface Span {
@@ -69,6 +70,7 @@ export { proseRegions, wordsOf, sentencesOf, paragraphsOf, quantile, findTerms, 
 export type { Sentence } from './text.js';
 import { proseRegions, wordsOf, sentencesOf, paragraphsOf, quantile, findTerms, splitTerm, DEFAULT_HEDGES } from './text.js';
 import { BAN_ONLY_FAMILIES } from './tells.js';
+import { pooledOut, expectedBand } from './pooled.js';
 
 const num = (p: Measurement['params'], k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
 const list = (p: Measurement['params'], k: string): readonly string[] | null => {
@@ -155,12 +157,15 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       if (hi === 0) return `no ${what}${prefer ? `; write "${prefer}" instead` : ''}`;
       const never = list(p, 'never');
       if (never?.length) return `${what}: none of ${never.length} kind(s) you never use, and at most ${hi} per 1,000 words of the rest`;
-      return `${what}: ${lo !== null ? `at least ${lo}` : ''}${lo !== null && hi !== null ? ' and ' : ''}${hi !== null ? `at most ${hi}` : ''} per 1,000 words`;
+      const pooled = num(p, 'pooledPerWord') !== null ? '; a short piece is held to the count its length expects at your pooled rate' : '';
+      return `${what}: ${lo !== null ? `at least ${lo}` : ''}${lo !== null && hi !== null ? ' and ' : ''}${hi !== null ? `at most ${hi}` : ''} per 1,000 words${pooled}`;
     },
     validate: (p) => {
       const id = (list(p, 'pattern') ?? [])[0];
       if (!id || !PATTERN_IDS.includes(id as PatternId)) return `pattern must be one of ${PATTERN_IDS.join(', ')}`;
       if (num(p, 'minPer1000') === null && num(p, 'maxPer1000') === null) return 'needs minPer1000, maxPer1000 or both';
+      const pooled = num(p, 'pooledPerWord');
+      if (pooled !== null && (pooled < 0 || (num(p, 'pooledWords') ?? 0) <= 0)) return 'a pooled rate needs pooledPerWord ≥ 0 and pooledWords > 0';
       return null;
     },
     observe(text, p) {
@@ -168,13 +173,26 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const words = proseWords(text);
       const prefer = (list(p, 'prefer') ?? [])[0];
       // A move the author never makes is banned outright, so it is checked at any length: a two-line
-      // support reply that opens "Let me be blunt" has made it. A RATE needs 150 words to mean anything.
+      // support reply that opens "Let me be blunt" has made it. A RATE needs 150 words to mean anything,
+      // unless the rule carries one pooled over the author's short pieces (./pooled.ts): then a short text is
+      // held to the count expected of its length, and "under 150 words" is never the answer.
       if (words < 150) {
         const neverShort = new Set(list(p, 'never') ?? []);
         const bannedShort = neverShort.size ? findPattern(text, id).filter((s) => s.family !== undefined && neverShort.has(s.family)) : [];
-        return bannedShort.length
-          ? { verdict: 'VIOLATED', spans: bannedShort, value: null, detail: `${bannedShort.length} move(s) you never make` }
-          : { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 150 words' };
+        if (bannedShort.length) return { verdict: 'VIOLATED', spans: bannedShort, value: null, detail: `${bannedShort.length} move(s) you never make` };
+        const pooled = num(p, 'pooledPerWord');
+        if (pooled === null || words === 0) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: words === 0 ? 'no prose to count' : 'under 150 words' };
+        const hits = findPattern(text, id).filter((s) => !(s.family !== undefined && (neverShort.has(s.family) || BAN_ONLY_FAMILIES.has(s.family))))
+          .map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
+        const lambda = pooled * words; const k = hits.length;
+        const [okLo, okHi] = expectedBand(lambda);
+        const side = num(p, 'maxPer1000') !== null && num(p, 'minPer1000') !== null ? 'both' : num(p, 'minPer1000') !== null ? 'low' : 'high';
+        const out = pooledOut(k, lambda, side);
+        const expected = `about ${Math.round(lambda * 10) / 10} expected in ${words} words (${side === 'high' ? `at most ${okHi}` : side === 'low' ? `at least ${okLo}` : `${okLo} to ${okHi}`} is within your rate)`;
+        if (!out) return { verdict: 'MET', spans: [], value: k, detail: `${k} in ${words} words; ${expected}` };
+        return out === 'high'
+          ? { verdict: 'VIOLATED', spans: hits.slice(okHi), value: k, detail: `${k} in ${words} words; ${expected}` }
+          : { verdict: 'VIOLATED', spans: [], value: k, detail: `${k} in ${words} words; ${expected}` };
       }
       const all = findPattern(text, id).map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
       // A MOVE THE AUTHOR NEVER MAKES IS NEVER ALLOWED. `never` names families (./tells.ts) absent from
@@ -259,6 +277,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   FEATURE,
   // ── What a method requires of the work: a table, and figures the writer was given (./obligations.ts) ──
   TABLE, CITED, LINES, LENGTH,
+  // ── The shape of one short piece, read whole at any length (./shape.ts) ──
+  SHAPE,
 };
 
 export const observerFor = (id: ObserverId): Observer => OBSERVERS[id];
