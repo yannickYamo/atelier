@@ -66,11 +66,15 @@ harper.js, which runs offline in the process; it loads on the first standard tha
 load, the check says so with the reason and the rule reads as unverified, never as met.
 
 The checker proposes far more than the rule acts on. A finding counts only when it is one of these kinds, listed
-in `core/observers/grammar.ts` (`MECHANICAL_RULES`): common-word spelling and common typos, subject–verb agreement
-(the pronoun cases the checker covers: "they was", "he go"), a word repeated by accident, a/an, a missing
+in `core/observers/grammar.ts` (`MECHANICAL_RULES`): common-word spelling and common typos, subject–verb agreement,
+a word repeated by accident, a/an, a missing
 apostrophe in a standard contraction, double punctuation, a space before punctuation. Everything else it proposes
 (capitalisation, style, word choice, a fragment, an "And" or "But" opener, a one-word sentence) is listed under
 the rule as "to check" and never changed.
+
+Subject–verb agreement is checked only where the checker catches it: a pronoun subject ("they was", "he go",
+"I is", "there is" before a plural). Agreement with any other subject ("the results was") is not checked, and the
+rule claims nothing about it.
 
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
 citations, figures and currency, front matter, capitalised words (names, products, acronyms), words the
@@ -79,10 +83,13 @@ word the text uses three times or more, and a word doubled for emphasis ("very v
 dialect the pieces spell in (the same British/American count the style check uses); where they do not settle it,
 only a word wrong in both dialects counts.
 
-Repair corrects each error in place with the checker's suggestion, inside the error's span, and keeps the result
+In the repair loop, correcting mechanical errors is the controller's last kind of step, after enforced rules, length
+and graded features, so a later rewrite cannot undo it; it needs no model call. Repair corrects each error in place with the checker's suggestion, inside the error's span, and keeps the result
 only if the whole text's figures and names are unchanged and no other rule is newly broken. A correction that
 would change a figure or a name is refused and listed. An error with no sure correction gets a sentence rewrite
-told to fix only that error. `ATELIER_GRAMMAR=off` sets the check aside for a process.
+told to fix only that error. `ATELIER_GRAMMAR=off` switches the check off for a process; the rule then reads as not
+checked, with that reason, exactly as when the checker cannot load, so a required grammar rule leaves the run at
+NEEDS REVIEW and never reads as met.
 
 ## Counted features, and which of them are your taste
 

@@ -127,15 +127,29 @@ export function splitLongParagraphs(text: string, max: number): string {
  * is theirs, and a cap on its rate is left to the rewrite. A paragraph is split only when a REQUIRED
  * paragraph-length rule is broken.
  */
-export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string): { text: string; fixed: string[] } {
+/**
+ * The mechanical errors of the GRAMMAR rules named (all of them when `only` is absent), corrected in place on the spans
+ * the report holds for this text. The controller's grammar step (./run-repair.ts) and the last fixes both use it.
+ */
+export function grammarFixes(v: StandardVersion, report: VerifyReport, text: string, only?: ReadonlySet<string>): { text: string; fixed: string[] } {
   const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
   let out = text; const fixed: string[] = [];
-  // Mechanical errors first, while the spans the check reported still index this text: the fixes below move offsets.
   for (const c of report.checked) {
-    if (!broken.has(c.requirementId) || c.observer !== 'GRAMMAR' || !v.requirements.some((r) => r.requirementId === c.requirementId)) continue;
+    if (!broken.has(c.requirementId) || c.observer !== 'GRAMMAR' || (only && !only.has(c.requirementId)) || !v.requirements.some((r) => r.requirementId === c.requirementId)) continue;
     const g = correctMechanicalErrors(out, c.result.spans);
     if (g.corrected) { out = g.text; fixed.push(`${c.requirementId}: ${g.corrected} mechanical error(s) corrected`); }
+    // One rule's spans index the text as it was: after a correction moves offsets, the next rule waits for a re-check.
+    if (g.corrected) break;
   }
+  return { text: out, fixed };
+}
+
+export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: string, opts: { readonly grammar?: boolean } = {}): { text: string; fixed: string[] } {
+  const broken = new Set(report.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
+  // Mechanical errors first, while the spans the check reported still index this text: the fixes below move offsets.
+  // Left out where the controller corrects them as a step of its own (`grammar: false`).
+  const g = opts.grammar === false ? { text, fixed: [] } : grammarFixes(v, report, text);
+  let out = g.text; const fixed: string[] = [...g.fixed];
   for (const r of v.requirements) {
     if (!broken.has(r.requirementId) || !r.measurement) continue;
     const p = r.measurement.params as { pattern?: readonly string[]; never?: readonly string[]; maxSentences?: number };
