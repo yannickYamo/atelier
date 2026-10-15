@@ -15,12 +15,14 @@
 import { createInterface } from 'node:readline';
 import { die, argv, flagAll, flagEach, loadSession, saveSession, orchestrated, sha, runFile, canReach, clientFor, proposerModel, numericFlag, type Session } from '../runtime.js';
 import { existsSync } from 'node:fs';
+import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { readJson } from '../../core/state/read-json.js';
-import type { Requirement } from '../../core/state/canonical-state.js';
+import type { Measurement, Requirement } from '../../core/state/canonical-state.js';
 import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
 import { buildTraitTable, describeTraitCounts, TRAIT_LABEL, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
 import { readAdmiration, keywordClasses, type AdmireLine } from '../../core/composite/admire.js';
-import { composeSelection, describeComposite, openQuestions, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer } from '../../core/composite/selection.js';
+import { composeSelection, describeComposite, instructs, openQuestions, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair } from '../../core/composite/selection.js';
+import { readContradictions, type InstructionLine } from '../../core/composite/contradictions.js';
 import type { AuthorMap } from '../../core/composite/authors.js';
 import { formatMeasure } from './amend.js';
 import { restateLimits } from '../../core/observers/derive.js';
@@ -96,6 +98,49 @@ async function readLines(s: Session, lines: readonly AdmireLine[]): Promise<{ cl
   return read;
 }
 
+/** Said on the composite screen when no model read the final instructions for contradictions. */
+export const KEYWORD_ONLY_LINE = 'Contradictions between authors are checked by keyword only; read the instructions below.';
+
+interface ContradictionRead { readonly key: string; readonly pairs: readonly ModelPair[]; readonly via: 'MODEL' | 'KEYWORDS' }
+const contradictionFile = (): string => runFile('composite-contradictions.json');
+const storedContradictions = (): ContradictionRead | null => {
+  const f = contradictionFile();
+  return existsSync(f) ? readJson<ContradictionRead>(f, { what: 'the reading of the composite\'s instructions', requireKeys: ['key', 'pairs', 'via'] }) : null;
+};
+
+/** The rules that will instruct, as the writer would be told them: a range at its merged limits. */
+export function instructionLines(record: CompositeRecord, proposals: readonly Requirement[]): InstructionLine[] {
+  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
+  return record.decisions.filter(instructs).flatMap((d) => {
+    const p = byId.get(d.id);
+    if (!p) return [];
+    const statement = d.range && p.measurement ? restateLimits(p.statement, p.measurement, d.range) ?? p.statement : p.statement;
+    return [{ id: d.id, author: d.author, statement }];
+  });
+}
+
+/**
+ * THE FINAL INSTRUCTIONS, READ ONCE BY A MODEL for pairs that cannot both be followed (core/composite/contradictions.ts),
+ * and kept with the run under a hash of the list: a continuation with the same list, and every rebuild, read nothing
+ * again. With no model, or a reading that failed, the screen says the check was by keyword only.
+ */
+async function readInstructions(lines: readonly InstructionLine[]): Promise<{ pairs: readonly ModelPair[]; via: 'MODEL' | 'KEYWORDS' | 'NONE' }> {
+  if (!canReach('discovery')) return { pairs: [], via: 'KEYWORDS' };
+  if (new Set(lines.map((l) => l.author)).size < 2) return { pairs: [], via: 'NONE' };
+  const key = sha(JSON.stringify(lines.map((l) => [l.id, l.author, l.statement])));
+  const stored = storedContradictions();
+  if (stored?.key === key) return { pairs: stored.pairs, via: stored.via };
+  let read: ContradictionRead;
+  try {
+    read = { key, pairs: await readContradictions(clientFor(proposerModel()), { spentUsd: 0, capUsd: numericFlag('--cap', 3.0), maxCalls: 1 }, lines), via: 'MODEL' };
+  } catch (e) {
+    console.log(`(the instructions could not be read by the model: ${(e as Error).message.split('\n')[0]})`);
+    read = { key, pairs: [], via: 'KEYWORDS' };
+  }
+  writeAtomic(contradictionFile(), JSON.stringify(read, null, 1));
+  return read;
+}
+
 /** Ask, in a terminal, for the lines not given. Enter says nothing about that author. */
 async function askLines(authors: AuthorMap, have: Record<string, string>): Promise<Record<string, string>> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -148,24 +193,39 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
   const compAuthors: CompositeAuthor[] = authors.names.map((name) => ({ name, pieces: piecesOf(authors, name), admired: admire[name] ?? null, classes: read.classes[name] ?? [] }));
   const answersOf = (all: Record<number, ConflictAnswer | null>): Record<number, ConflictAnswer> =>
     Object.fromEntries(Object.entries(all).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
-  const shown = composeSelection(table, pending, compAuthors, answersOf(s.conflictAnswers ?? {}));
-  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, shown.conflicts.length)) };
-  if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
-  const answers = answersOf(answered);
-  const record = composeSelection(table, pending, compAuthors, answers);
-  const statementOf = (id: string): string => s.proposals.find((p) => p.requirementId === id)?.statement ?? id;
-
-  // ── THE ONE SCREEN ───────────────────────────────────────────────────────────────────────────
+  // A rule the person makes required with --set is their latest word: it goes through the same guard as every rule
+  // that will instruct, and wins over an answer given before it (core/composite/selection.ts).
   const ids = new Set(pending.map((p) => p.requirementId));
   const fromFlags = parseChanges(flagAll('--set').join(' '), ids);
   if (fromFlags.errors.length) die(fromFlags.errors.join('\n'));
   const changes = fromFlags.changes;
+  const forcedOf = (): Set<string> => new Set([...changes].filter(([, v]) => v === 'required').map(([k]) => k));
+  const shown = composeSelection(table, pending, compAuthors, answersOf(s.conflictAnswers ?? {}), { forced: forcedOf(), modelPairs: storedContradictions()?.pairs ?? [] });
+  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, shown.conflicts.length)) };
+  if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
+  const answers = answersOf(answered);
+  // The guard by keyword first; then the rules that would instruct are read once by the model, and what it finds is asked.
+  const compose = async (): Promise<{ record: CompositeRecord; via: 'MODEL' | 'KEYWORDS' | 'NONE' }> => {
+    const forced = forcedOf();
+    const first = composeSelection(table, pending, compAuthors, answers, { forced });
+    const read = await readInstructions(instructionLines(first, s.proposals));
+    return { record: read.pairs.length ? composeSelection(table, pending, compAuthors, answers, { forced, modelPairs: read.pairs }) : first, via: read.via };
+  };
+  let { record, via } = await compose();
+  const statementOf = (id: string): string => s.proposals.find((p) => p.requirementId === id)?.statement ?? id;
+  const measurementOf = (id: string): Measurement | undefined => s.proposals.find((p) => p.requirementId === id)?.measurement ?? undefined;
+
+  // ── THE ONE SCREEN ───────────────────────────────────────────────────────────────────────────
   const mode: SkillMode = s.intent?.mode ?? modeFromIntent(s.intent?.text ?? '').mode;
   const sugg = suggestionsByAuthor(pending, s, mode);
   // THE SCREEN IS PRINTED BEFORE ANYTHING IS RECORDED, unless this very composite was printed by an earlier call:
   // a continuation that brings new lines or answers changes it, and only the person may make it theirs.
   const editorial = pending.filter((p) => p.measurement?.observer === 'GRAMMAR').map((p) => `Every author: ${p.requirementId}  ${p.statement}  (REQUIRED: the editorial rule every build carries)`);
-  const screen = [...describeComposite(record, statementOf), ...editorial];
+  const screenOf = (r: CompositeRecord, v: typeof via): string[] => {
+    const lines = describeComposite(r, statementOf, measurementOf);
+    return [...lines.slice(0, 2), ...(v === 'KEYWORDS' ? [KEYWORD_ONLY_LINE] : []), ...lines.slice(2), ...editorial];
+  };
+  const screen = screenOf(record, via);
   const screenKey = sha(screen.join('\n'));
   if (!accepted || !opts.shownBefore || s.compositeShown !== screenKey) {
     console.log('');
@@ -174,7 +234,15 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
     console.log('');
     saveSession({ ...loadSession(), compositeShown: screenKey }); s = loadSession();
   }
-  if (!accepted && process.stdin.isTTY) accepted = await promptAccept(ids, changes);
+  if (!accepted && process.stdin.isTTY) {
+    const before = [...forcedOf()].join(' ');
+    accepted = await promptAccept(ids, changes);
+    // A rule made required at the prompt goes through the guard too, and what changed is shown before it is recorded.
+    if (accepted && [...forcedOf()].join(' ') !== before) {
+      ({ record, via } = await compose());
+      for (const l of record.notes ?? []) console.log(l);
+    }
+  }
   if (!accepted) {
     printHowToAccept(opts.continueWith, record);
     return false;
@@ -269,6 +337,11 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
     const said = restated && restated !== p.statement ? { statement: restated } : {};
     const c = changes.get(p.requirementId);
     if (c === 'reject') return { id: p.requirementId, decision: 'REJECT', suggested };
+    // A rule made required that the guard still kept from instructing (it cannot be followed with another rule the
+    // person made required, or the model's reading asks about it): it stays out until that conflict is answered.
+    if (c === 'required' && d && (d.outcome === 'OPEN' || d.outcome === 'REJECTED') && !d.mergedInto) {
+      return { id: p.requirementId, decision: 'REJECT', suggested: { ...suggested, why: `--set ${p.requirementId}=required could not instruct: ${d.why}` } };
+    }
     if (c) return { id: p.requirementId, decision: 'APPROVE', materiality: c in WEIGHTS ? WEIGHTS[c] : weight ?? 'PREFERRED', suggested, ...(range ? { measure: range, ...said } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
     if (decision === 'REJECT') return { id: p.requirementId, decision: 'REJECT', suggested };
     return { id: p.requirementId, decision: 'APPROVE', materiality: weight ?? 'PREFERRED', suggested, ...(range ? { measure: range, ...said } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
@@ -293,7 +366,7 @@ function printHowToAccept(continueWith: string | undefined, record: CompositeRec
   const open = openQuestions(record);
   console.log('Nothing was decided. When you are ready:');
   console.log(`  ${cmd}   accept this composite${continueWith ? ', and build' : ''}`);
-  if (open.length) console.log(`  ${cmd} --conflict ${open[0].n}=A   answer a conflict first (A, B, both, or later: left open)`);
+  if (open.length) { const n = open[0].reopened?.in ?? open[0].n; console.log(`  ${cmd} --conflict ${n}=A   answer a conflict first (A, B, both, or later: left open)`); }
   console.log(`  ${cmd} --set <id>=required   make a chosen rule instruct, or <id>=reject to drop one`);
 }
 

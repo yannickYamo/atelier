@@ -338,6 +338,7 @@ export type SpendPurpose =
   | 'nearness'         // which of the author's pieces are on the request's subject
   | 'structure'        // reading a text's paragraph moves
   | 'preference'       // reading what the person likes about each author's pieces into trait classes (core/composite/admire.ts)
+  | 'composite contradictions' // reading a composite's final instructions for pairs that cannot both be followed (core/composite/contradictions.ts)
   | 'other';
 
 /** What the provider reported for one call. Absent where a call site does not pass it on. */
