@@ -101,7 +101,7 @@ async function readLines(s: Session, lines: readonly AdmireLine[]): Promise<{ cl
 }
 
 /** Said under the build line when no model read the final instructions for contradictions. */
-export const KEYWORD_ONLY_NOTE = 'clashes between voices were found by keyword only: a whole-piece structure rule may still sit beside a structure it rules out; atelier report --skill <name> lists what instructs';
+export const KEYWORD_ONLY_NOTE = 'clashes between voices were found by keyword only: a whole-piece structure rule may still sit beside a structure it rules out; atelier report --skill <name> lists what stands';
 
 /** The model's one reading of the final instructions: the pairs it names, and the quantities it read (absent in a reading kept before it read them). */
 interface ContradictionRead { readonly key: string; readonly pairs: readonly ModelPair[]; readonly quantities?: readonly ModelQuantity[]; readonly via: 'MODEL' | 'KEYWORDS' }
@@ -111,7 +111,7 @@ const storedContradictions = (): ContradictionRead | null => {
   return existsSync(f) ? readJson<ContradictionRead>(f, { what: 'the reading of the composite\'s instructions', requireKeys: ['key', 'pairs', 'via'] }) : null;
 };
 
-/** The rules that will instruct, as the writer would be told them: a range at its merged limits. */
+/** The rules that stand in the composite, as a contradiction reader sees them: a range at its merged limits. */
 export function instructionLines(record: CompositeRecord, proposals: readonly Requirement[]): InstructionLine[] {
   const byId = new Map(proposals.map((p) => [p.requirementId, p]));
   return record.decisions.filter(instructs).flatMap((d) => {
@@ -268,15 +268,12 @@ function suggestionsByAuthor(pending: readonly Requirement[], s: Session, mode: 
 
 /**
  * THE RULINGS.
- *   Selected by the person's own line about its author, or the side they chose in a conflict (`--conflict n=A`), and
- *     accepted here: the OWNER'S WORD, not inferred evidence. A
- *     worded rule is ratified REQUIRED, so it instructs the writer; a counted one is a target the drafts are steered and
- *     chosen by and never a failure (PREFERRED), until the person makes it required with `--set`. Its ruling says
- *     "selected by you from <author>".
- *   Chosen otherwise ("both" of two statements, kept and shown): the weight its own author's evidence
- *     suggests, as any proposal.
- *   A habit: approved, shown and not instructed. Set aside, or one side of an open conflict: rejected, with the reason.
- * Nothing here makes a counted rule blocking: only the person's `--set` does.
+ *   Every trait read from the pieces is PREFERRED: it steers the writer and can be repaired, but it never blocks. That
+ *     includes a trait raised by `--admire`, a side selected by inference, and a side chosen with the expert conflict
+ *     override. Those inputs decide what belongs in the composite, not whether it is allowed to block.
+ *   A habit is approved and shown. Set-aside or open sides are rejected with the reason.
+ *   Only an explicit `--set <id>=required` can make one of these inferred traits REQUIRED. The editorial grammar rule
+ *     remains REQUIRED because it belongs to every build rather than being inferred from an author's voice.
  */
 export function decisionsFor(record: CompositeRecord, pending: readonly Requirement[], sugg: ReadonlyMap<string, Suggestion>, changes: ReadonlyMap<string, string>): RatificationDecision[] {
   const piecesFor = new Map(record.authors.map((a) => [a.name, a.pieces]));
@@ -297,14 +294,11 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
     const decision: 'APPROVE' | 'REJECT' = !d || d.outcome === 'REJECTED' || d.outcome === 'OPEN' || (d.outcome === 'HABIT' && s?.decision === 'REJECT') ? 'REJECT' : 'APPROVE';
     const owners = Boolean(d?.byAdmiration && d.outcome === 'SELECTED' && !d.shownOnly);
     // INFERRED (core/composite/infer.ts): taken as the most characteristic of its voice, its method, or the side of a
-    // clash that was more characteristic. It instructs as a chosen rule does, and its ruling says it was inferred.
+    // clash that was more characteristic. It steers as a preferred trait and its ruling says it was inferred.
     const inferred = Boolean(d?.inferred && d.outcome === 'SELECTED' && !d.shownOnly);
     const counted = Boolean(p.measurement ?? d?.range);
-    const weight = !d || decision === 'REJECT' ? null
-      : owners || inferred ? (counted ? 'PREFERRED' : 'REQUIRED')
-        : d.outcome === 'HABIT' || d.shownOnly ? 'PREFERRED'
-          : s?.decision === 'APPROVE' && s.materiality ? s.materiality : 'PREFERRED';
-    const target = counted ? ', a counted target that steers and never fails a draft' : '';
+    const weight = !d || decision === 'REJECT' ? null : 'PREFERRED';
+    const target = counted ? ', a counted target that steers and never fails a draft' : ', a preferred trait that steers and never blocks';
     const saidBy = owners ? `selected by you ${from}${target}` : inferred ? `inferred ${from}${target}` : `composite, ${from}`;
     const suggested = { decision, materiality: weight, why: `${saidBy}: ${d?.why ?? 'no trait row'}${s ? `; evidence: ${s.why}` : ''}` };
     const range = d?.range ? formatMeasure(d.range) : null;

@@ -17,24 +17,24 @@ builds in one call, and says what it did in one line:
     settled by which was more characteristic. Say `atelier fix` to change any of it.
 
 - **The voices are found in the writing** (`core/composite/voices.ts`) when no author is declared. Pieces are compared
-  on function-word rates, character runs, the counted features and their shape (length, sentence and paragraph
-  length, questions, commas), which works for short pieces too; they are joined by average linkage, and the number of
-  voices is the cut with the best mean silhouette, taken only when it is at least 0.5, every voice has at least two
-  pieces, and the two closest voices sit at least 0.3 apart (one writer's own pieces sit about 0.27 apart; pieces that
-  differ in their sentence length alone split cleanly and are still one writer). Otherwise the folder is one voice and
-  builds exactly as before. Stubs too short to be examples are left out of the grouping as they are of the corpus.
-  A folder that mixes two formats strongly enough (a writer's list posts beside their essays) can read as two voices;
-  `author:` in the front matter keeps it one. Front matter, a folder per author and
-  `--authors` still decide when given, a single declared author included. The build says "3 voices found in 9
-  pieces" with the grouping's confidence.
+  on voice signals such as function-word rates, character runs, punctuation and wording. Layout, format and length do
+  not decide authorship; shape can strengthen a split only where the voice signals already agree. The pieces are
+  joined by average linkage, and the number of voices is the cut with the best mean silhouette, taken only when it is
+  at least 0.5, every voice has at least two pieces, every pair of voices has like-format pieces that can be compared,
+  and the two closest voices sit at least 0.3 apart on those pieces. Otherwise the folder is one voice and builds
+  exactly as before. One writer's essays, short posts, tweets, threads and lists therefore stay one voice without
+  labels. Stubs too short to be examples are left out of the grouping as they are of the corpus. Front matter, a
+  folder per author and `--authors` still decide when given, a single declared author included. The build says
+  "3 voices found in 9 pieces" with the grouping's confidence.
 - **Each voice is read on its own from three vantages**: the two discovery always used, and the effect reading (what
   the writing does to a reader). A rule only the effect reading found is marked so in the record, and said to be not
   yet measured. Two classes join the trait table: figures of speech and imagery, and emotion and effect on the reader.
 - **Every rule is weighed** (`core/composite/infer.ts`): how consistently its voice shows it (unseen pieces that show
   it, pieces inside its band, or how many vantages reached it) times how distinctive it is (unlike the other voices,
   and for a counted rule unlike a few plain model drafts on the same topics) times any liking you stated. Each voice's
-  most characteristic rules are taken; what every voice shows is applied as method; the rest is kept as habits, shown
-  and not instructed.
+  most characteristic rules are taken as preferred steering; what every voice shows is applied as preferred method;
+  the rest is kept as habits, shown and not instructed. No rule inferred from the pieces can block a draft. A liking
+  changes a trait's weight, while only an explicit `--set <id>=required` makes one required.
 - **Clashes are settled, never left open** (`core/composite/selection.ts`): the side with the higher weight stands;
   a tie goes to the rule more voices show, then to the voice with more pieces. A pair a model reads as impossible to
   follow together is settled the same way. Both sides never ship. A length named in the request sets the length: no
@@ -46,11 +46,13 @@ builds in one call, and says what it did in one line:
 - **The whole table is kept**: the grouping, every rule's weight and why, and every settled clash with its reason are
   stored with the composite (so a rebuild reads them and calls no model), written to the run's
   `composite-inference.json`, and shown by `atelier report --skill <name>`.
-- Pinned in `tests/atelier-composite-inferred.test.ts` and `tests/atelier-composite-inferred-journey.test.ts`: ten
-  pieces by five invented voices with no front matter grouped into the five, a real folder of one writer and a
-  six-piece folder of one voice kept as one, weights checked against hand-worked values, a stated liking moving only
-  what it names, clashes settled with their reasons, shared rules taken as method, a byte-identical rebuild with no
-  model call, the same flow with no model set up, and a single-voice folder unchanged.
+- Pinned in `tests/atelier-composite-inferred.test.ts`, `tests/atelier-composite-inferred-journey.test.ts` and
+  `tests/atelier-voices-format.test.ts`: ten pieces by five invented voices with no front matter grouped into the five;
+  unlabelled folders mixing one writer's essays, short posts, tweets, threads and lists kept as one; two writers in the
+  same format still separated; weights checked against hand-worked values; every inferred trait preferred and
+  non-blocking until explicitly made required; a stated liking moving only what it names; clashes settled with their
+  reasons; shared rules taken as method; a byte-identical rebuild with no model call; and the same flow with no model
+  set up.
 
 ### Fixed: a rule a repair left unmeasurable is never said to hold
 

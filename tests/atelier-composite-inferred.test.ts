@@ -12,6 +12,7 @@ import { buildTraitTable } from '../core/composite/traits.js';
 import { weighTraits, inferredChoice, inferenceRecord, buildLine, likingIn, type WeighMeta } from '../core/composite/infer.js';
 import { composeSelection, instructs, settleByWeight, type CompositeAuthor } from '../core/composite/selection.js';
 import { decisionsFor, requestLength } from '../cli/commands/composite.js';
+import { buildRecord } from '../core/eval/record-build.js';
 import type { AuthorMap } from '../core/composite/authors.js';
 import type { Suggestion } from '../core/ratification/suggest.js';
 import { FIVE_VOICES, FIVE_GROUPS, ONE_VOICE } from './fixtures/composite/five-voices.js';
@@ -170,14 +171,30 @@ describe('clashes are settled by inference, one side always, with the reason', (
     expect(c.methodology?.steps.map((s) => s.id).sort()).toEqual(['m1', 'm2', 'm3']);
     for (const id of ['m1', 'm2', 'm3']) expect(d(id)).toMatchObject({ outcome: 'SELECTED', inferred: true, why: 'shown by every voice: applied as method' });
   });
-  it('the rulings say they were inferred: a worded rule instructs, a counted one steers', () => {
+  it('every inferred trait is preferred: it steers, but a violation cannot block until the owner makes it required', () => {
     const sugg = new Map<string, Suggestion>(props.map((p) => [p.requirementId, { decision: 'APPROVE', materiality: 'PREFERRED', needs: null, why: 'seen', strength: 1 }]));
     const list = decisionsFor(c, props, sugg, new Map());
-    expect(list.find((x) => x.id === 'p3')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
-    expect(list.find((x) => x.id === 'p3')?.suggested?.why).toMatch(/^inferred from voice 2 \(b1\.md, b2\.md\): conflict 1/);
+    expect(list.filter((x) => x.decision === 'APPROVE' && x.materiality === 'REQUIRED')).toEqual([]);
+    expect(list.find((x) => x.id === 'p3')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
+    expect(list.find((x) => x.id === 'p3')?.suggested?.why).toMatch(/^inferred from voice 2 \(b1\.md, b2\.md\), a preferred trait that steers and never blocks: conflict 1/);
     expect(list.find((x) => x.id === 'm4')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
     expect(list.find((x) => x.id === 'p2')).toMatchObject({ decision: 'REJECT' });
     expect(list.find((x) => x.id === 'p4')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });   // a habit: shown, not instructed
+
+    const base = props.find((x) => x.requirementId === 'p3')!;
+    // A worded trait can acquire a deterministic reader later; its preferred materiality still decides that a miss
+    // is observed rather than blocking. The statement remains the inferred worded rule.
+    const observedWorded = { ...base, measurement: { observer: 'LEXICON', params: { terms: ['casual'] } } } as Requirement;
+    const preferred = { ...observedWorded, authority: 'EXPERT_RATIFIED' as const, materiality: 'PREFERRED' as const };
+    const brokenPreferred = buildRecord({ requirements: [preferred], checked: [{ id: 'p3', required: false, verdict: 'VIOLATED', detail: 'uses a casual register' }], waived: new Map(), request: null, claims: null, copying: null });
+    expect(brokenPreferred.state).not.toBe('BLOCKED');
+    expect(brokenPreferred.entries.find((x) => x.id === 'p3')).toMatchObject({ dimension: 'HABIT', required: false, result: 'FAIL' });
+
+    const madeRequired = decisionsFor(c, props, sugg, new Map([['p3', 'required']])).find((x) => x.id === 'p3');
+    expect(madeRequired).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
+    const required = { ...observedWorded, authority: 'EXPERT_RATIFIED' as const, materiality: 'REQUIRED' as const };
+    const brokenRequired = buildRecord({ requirements: [required], checked: [{ id: 'p3', required: true, verdict: 'VIOLATED', detail: 'uses a casual register' }], waived: new Map(), request: null, claims: null, copying: null });
+    expect(brokenRequired.state).toBe('BLOCKED');
   });
   it('one line says it all, and the record holds the rest', () => {
     const rec = inferenceRecord(c, AUTHORS, null, ws, null, null);

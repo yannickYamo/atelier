@@ -178,21 +178,21 @@ describe('the composite: what the person chose, not the average and not any one 
     const sugg = new Map<string, Suggestion>(proposals.map((p) => [p.requirementId, { decision: 'APPROVE', materiality: 'PREFERRED', needs: null, why: 'seen', strength: 1 }]));
     const list = decisionsFor(c, proposals, sugg, new Map());
     const of = (id: string) => list.find((d) => d.id === id);
-    // what the person selected is their word: a worded rule instructs
-    for (const id of ['p1', 'p2', 'p3', 'p5']) expect(of(id), id).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
-    expect(of('p1')?.suggested?.why).toMatch(/^selected by you from A \(a\.md\): you admired A's openings/);
+    // Stated admiration changes what is selected, not what may block: all inferred traits steer as preferred.
+    for (const id of ['p1', 'p2', 'p3', 'p5']) expect(of(id), id).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
+    expect(of('p1')?.suggested?.why).toMatch(/^selected by you from A \(a\.md\), a preferred trait that steers and never blocks: you admired A's openings/);
     // a counted one they selected is a target, never a failure, until they say otherwise
     expect(of('m4')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
-    expect(of('m4')?.suggested?.why).toMatch(/selected by you from C .*never fails a draft/);
+    expect(of('m4')?.suggested?.why).toMatch(/selected by you from C .*counted target that steers and never fails a draft/);
     // what nobody selected keeps the evidence's weight
     expect(of('p6')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
     expect(of('p6')?.suggested?.why).toMatch(/^composite, from E/);
-    // and the evidence's own rejection of an unselected rule stands, where a selected one is the person's word
+    // and the evidence's own rejection of an unselected rule stands, while an admired one remains preferred steering
     const rejecting = new Map(sugg);
     for (const id of ['p6', 'p1']) rejecting.set(id, { decision: 'REJECT', materiality: null, needs: null, why: 'never seen again', strength: 0 });
     const ruled = decisionsFor(c, proposals, rejecting, new Map());
     expect(ruled.find((d) => d.id === 'p6')).toMatchObject({ decision: 'REJECT' });
-    expect(ruled.find((d) => d.id === 'p1')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
+    expect(ruled.find((d) => d.id === 'p1')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
     expect(of('m1')).toMatchObject({ decision: 'REJECT' });
     expect(of('m1')?.suggested?.why).toMatch(/conflict 1 .* unanswered/);
     expect(of('m5')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });

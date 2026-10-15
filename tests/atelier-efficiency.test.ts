@@ -30,11 +30,6 @@ const piece = (id: number, paragraphs: number): string => Array.from({ length: p
   `Piece ${id} paragraph ${k} opens here. I think this matters, and I don't say that lightly, because the argument of piece ${id} turns on point ${k}. `
   + `We decided first and explained after, which is how the work of piece ${id} went at step ${k}, and nobody regretted it.`).join('\n\n');
 const list = (id: number): string => `# List ${id}\n\n${Array.from({ length: 30 }, (_, k) => `- **Item ${k} of list ${id}.** A short point about step ${k}.`).join('\n')}`;
-/**
- * Declared one author's: the lists and the prose read as two voices by how they are written (core/composite/voices.ts),
- * and these journeys are about one author's skill.
- */
-const oneAuthor = (text: string): string => `---\nauthor: Ann\n---\n${text}`;
 
 const standard = (): StandardVersion => ({ standardVersionHash: 's', evidenceId: 'e', workType: 'writing', authorityState: 'RATIFIED', mintedAt: '2026-10-05T00:00:00Z',
   requirements: [
@@ -694,7 +689,7 @@ describe('through the binary: a writing skill is served compact by default, the 
   const proj = mkdtempSync(join(tmpdir(), 'atelier-eff-proj-'));
   const dir = join(proj, 'posts');
   mkdirSync(dir, { recursive: true });
-  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), oneAuthor(i % 4 === 3 ? list(i) : piece(i, 30)));
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
   const out = (name: string): string => join(proj, name);
   const exported = (name: string, ...flags: string[]): string => { run(data, proj, 'export', '--skill', 'voice', '--out', out(name), ...flags); return readFileSync(out(name), 'utf8'); };
   const build = (...flags: string[]): string => run(data, proj, 'build', '--name', 'voice', ...flags);
@@ -1052,7 +1047,7 @@ describe('through the binary: a rebuild never undoes an amendment', () => {
   const proj = mkdtempSync(join(tmpdir(), 'atelier-amend-proj-'));
   const dir = join(proj, 'posts');
   mkdirSync(dir, { recursive: true });
-  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), oneAuthor(i % 4 === 3 ? list(i) : piece(i, 30)));
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
   const build = (...flags: string[]): string => run(data, proj, 'build', ...flags);
   beforeAll(() => {
     run(data, proj, 'new', dir, 'write me a blog post in the voice and style of these', '--name', 'voice');
@@ -1087,7 +1082,7 @@ describe('through the binary: a project that moved keeps its skill', () => {
   const proj = join(root, 'first');
   const dir = join(proj, 'posts');
   mkdirSync(dir, { recursive: true });
-  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), oneAuthor(i % 4 === 3 ? list(i) : piece(i, 30)));
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
   const exported = (p: string, name: string): string => { run(data, p, 'export', '--skill', 'voice', '--out', join(p, name)); return readFileSync(join(p, name), 'utf8'); };
   let before = '';
   beforeAll(() => {
@@ -1142,7 +1137,7 @@ describe('through the binary: a rebuild never takes "write this, not that" pairs
   const proj = mkdtempSync(join(tmpdir(), 'atelier-pairs-proj-'));
   const dir = join(proj, 'posts');
   mkdirSync(dir, { recursive: true });
-  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), oneAuthor(i % 4 === 3 ? list(i) : piece(i, 30)));
+  for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
   const exported = (name: string): string => { run(data, proj, 'export', '--skill', 'voice', '--out', join(proj, name)); return readFileSync(join(proj, name), 'utf8'); };
   const r = { before: '', plain: '', plainSaid: '', asked: '', keptAfter: '', none: '' };
   beforeAll(() => {
@@ -1188,7 +1183,7 @@ describe('through the binary: a rule check that comes back empty is asked again 
   const project = (): { data: string; proj: string; dir: string } => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-ask-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-ask-proj-'));
     const dir = join(proj, 'posts'); mkdirSync(dir, { recursive: true });
-    for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), oneAuthor(i % 4 === 3 ? list(i) : piece(i, 30)));
+    for (let i = 0; i < 9; i++) writeFileSync(join(dir, `post-${i}.md`), i % 4 === 3 ? list(i) : piece(i, 30));
     return { data, proj, dir };
   };
   afterAll(async () => { await script({}); });

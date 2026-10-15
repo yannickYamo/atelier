@@ -71,10 +71,10 @@ describe('six authors: the answer to one conflict and admiration in another neve
     expect(sixTable.conflicts[HEADINGS - 1].sides.map((s) => s.statement)).toEqual(['Avoid headings; let paragraphs carry the structure.', 'Give every section a heading.']);
   });
   for (const [label, answers] of [[`--conflict ${HEADINGS}=A`, { [HEADINGS]: 'A' as const }], ['the run\'s six answers', RUN]] as const) {
-    it(`${label}: "Avoid headings…" instructs, "Use short headings." does not`, () => {
+    it(`${label}: "Avoid headings…" stands as preferred steering, "Use short headings." does not`, () => {
       const rec = composeSelection(sixTable, sixRules, sixAuthors, answers);
       const ds = new Map(decisionsFor(rec, sixRules, new Map(), new Map()).map((d) => [d.id, d]));
-      expect(ds.get('p13')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
+      expect(ds.get('p13')).toMatchObject({ decision: 'APPROVE', materiality: 'PREFERRED' });
       expect(ds.get('p44')?.decision).toBe('REJECT');
       expect(rec.decisions.find((d) => d.id === 'p44')).toMatchObject({ outcome: 'REJECTED', settledBy: { n: HEADINGS, how: 'ANSWER' } });
       expect(contradictionsLeft(rec, sixRules)).toEqual([]);
