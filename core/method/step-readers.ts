@@ -207,8 +207,17 @@ function paragraphLength(step: string): Measurement | null {
   const t = step.trim();
   if (!/\bparagraphs?\b/i.test(t) || /\b(?:first|last|final|opening|closing|second|third|next|previous|this|that)\s+paragraph\b/i.test(t)) return null;
   if (/\b(?:at least|no fewer than|minimum|a minimum of)\b/i.test(t)) return null;
-  // A negation is read only as "no paragraph …", "no more than", "no longer than".
-  if (negated(t.replace(/\bno (?:paragraph|more than|longer than)\b/gi, ' '))) return null;
+  // One paragraph named by what it is ("the Summary paragraph", "the closing paragraph"): not every paragraph.
+  if (/\bthe\s+(?!paragraphs?\b)[\w-]+\s+paragraph\b(?!s)/i.test(t)) return null;
+  // A permission sets no ceiling: "paragraphs of one sentence are fine", "a paragraph may run to four sentences".
+  const ceilingWords = /\bno\s+paragraph\b|\bnever\b|\bnot\b|n't\b/i;
+  if (/\b(?:are|is)\s+(?:fine|ok|okay|allowed|acceptable|welcome)\b|\b(?:may|can)\b/i.test(t) && !ceilingWords.test(t)) return null;
+  // A negation is read only as "no paragraph …", "no more than", "no longer than", or "never exceed / never more than".
+  if (negated(t.replace(/\bno (?:paragraph|more than|longer than)\b/gi, ' ').replace(/\bnever\s+(?:exceed(?:s|ing)?|run(?:s)?\s+(?:past|longer than|beyond)|(?:have|has|be)?\s*(?:more|longer)\s+than)\b/gi, ' '))) return null;
+  // Another instruction in the same step with its own object: "Number the paragraphs, and keep the summary to two
+  // sentences" holds the summary, not every paragraph, to its count.
+  const afterParagraph = t.slice(t.search(/\bparagraphs?\b/i));
+  if (/\b(?:keep|limit|hold|cap|restrict)\s+(?:the|your|its|their|this|that)\s+(?!paragraphs?\b)\w+/i.test(afterParagraph)) return null;
   // "Paragraphs run 2 to 4 sentences": a range has a floor, which the check does not hold.
   if (new RegExp(String.raw`\b${SMALL_N}\s*(?:to|-|–|and)\s*${SMALL_N}\s+sentences?\b`, 'i').test(t) || /\bbetween\b/i.test(t)) return null;
   // "three paragraphs of two sentences": a count of paragraphs is a count of something else.
@@ -226,9 +235,11 @@ function paragraphLength(step: string): Measurement | null {
   for (const [re, shift] of forms) {
     const m = re.exec(after);
     if (!m) continue;
+    // "within three sentences of its claim": a distance from something, not the length of a paragraph.
+    if (/^\s+(?:of|from|after|before)\b/i.test(after.slice(m.index + m[0].length))) return null;
     // "more than N" and its kin set a ceiling only under "no paragraph" or "never": "paragraphs of more than three
     // sentences" says nothing of a limit.
-    if (/longer|more|over|past|beyond|exceed/i.test(m[0]) && !/^(?:at most|no more than|no longer than)/i.test(m[0]) && !/\bno paragraph\b/i.test(t)) return null;
+    if (/longer|more|over|past|beyond|exceed/i.test(m[0]) && !/^(?:at most|no more than|no longer than)/i.test(m[0]) && !/\bno paragraph\b|\bnever\b/i.test(t)) return null;
     const max = smallOf(m[1]) + shift;
     return max >= 1 ? { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: max } } : null;
   }

@@ -34,4 +34,15 @@ describe('the atelier-runtime arm\'s rows', () => {
     expect(row.thinking).toBe('disabled');
     expect(row).not.toHaveProperty('thinking_reason');
   });
+  it('carry the provider\'s reason when the record says no setting was reported', () => {
+    const row = rowFrom({ output: 'Looks fine.', toCheck: [], costUsd: 0, thinking: null });
+    expect(row.thinking).toBeNull();
+    expect(row.thinking_reason).toBe('the provider did not report sending a thinking setting on every call of the run');
+  });
+  it('carry the model the run says answered, not the harness\'s --model', () => {
+    expect(rowFrom({ output: 'Looks fine.', toCheck: [], costUsd: 0, model: 'local-7b' }).model).toBe('local-7b');
+    const unsaid = rowFrom({ output: 'Looks fine.', toCheck: [], costUsd: 0 });
+    expect(unsaid.model).toBeNull();
+    expect(unsaid.model_reason).toBe('the run record does not say which model answered');
+  });
 });
