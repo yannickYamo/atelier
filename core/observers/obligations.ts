@@ -315,7 +315,8 @@ function itemsIn(text: string, start: number, end: number, paragraphs: boolean):
     if (!t || /^#{1,6}\s/.test(t) || TABLE_ROW.test(line)) { close(); continue; }
     const item = ITEM.exec(line);
     // A nested item carries on its parent's finding: a sub-bullet is where the citation often sits.
-    if (item && (!open || !open.list || item[1].length < 2)) { close(); open = { start: lineStart + item[0].length, end: lineStart + line.trimEnd().length, list: true }; continue; }
+    // (A tab indents as far as four spaces: a tab-indented sub-bullet is nested too.)
+    if (item && (!open || !open.list || item[1].replace(/\t/g, '    ').length < 2)) { close(); open = { start: lineStart + item[0].length, end: lineStart + line.trimEnd().length, list: true }; continue; }
     if (!open) open = { start: lineStart + line.search(/\S/), end: lineStart + line.trimEnd().length, list: false };
     else open.end = lineStart + line.trimEnd().length;
   }

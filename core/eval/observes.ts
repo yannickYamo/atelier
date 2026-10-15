@@ -42,9 +42,11 @@ function kindWords(m: Measurement): string[] {
     ...(strings(p.options).length ? words('one holds hold says say reads read gives give states state only exactly following') : [])];
   if (m.observer === 'PRESENCE' && strings(p.starts).length) return words('first last final closing opening paragraph starts start begins begin opens open');
   if (m.observer === 'TABLE') return words('table include includes add adds contain contains columns column named called');
-  if (m.observer === 'LENGTH') return [...words('keep hold limit cap length long longer run runs between least most no more fewer less under over up maximum minimum below above exceed exceeds'),
+  if (m.observer === 'LENGTH') return [...words('write writes keep hold limit cap length long longer run runs between least most no more fewer less under over up maximum minimum below above exceed exceeds'),
     ...strings(p.unit).flatMap((u) => (u === 'sentence' ? ['sentence', 'words', 'word'] : [u, u.replace(/s$/, '')])),
     ...(strings(p.in).length ? ['section'] : strings(p.unit)[0] === 'sentence' ? [] : words('whole entire total'))];
+  // (A paragraph's length is said in words as often as in digits: "three sentences or fewer".)
+  if (m.observer === 'PARAGRAPH_LENGTH') return words('keep hold limit cap write every each all any no paragraph paragraphs sentence sentences most least more fewer less under over below longer than up maximum max or run runs past exceed exceeds go goes one two three four five six seven eight nine ten eleven twelve');
   if (m.observer === 'LEXICON') return words('never not don avoid use using say saying write writing word words phrase phrases t');
   return [];
 }

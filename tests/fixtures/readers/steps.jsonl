@@ -49,3 +49,19 @@
 {"id": "s049", "step": "Each point cites the line it rests on.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES_EACH"}
 {"id": "s050", "step": "Cite line numbers for every quote from the transcript.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "LINES"}
 {"id": "s051", "step": "Name the test case that covers the fix.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "NAMES_TEST"}
+{"id": "s052", "step": "Name the A/B test that was run last quarter.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s053", "step": "Name the load test that failed in staging.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s054", "step": "Keep every paragraph to three sentences or fewer.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:3"}
+{"id": "s055", "step": "Keep every paragraph under five sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:4"}
+{"id": "s056", "step": "No paragraph longer than 4 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:4"}
+{"id": "s057", "step": "Paragraphs of at most 3 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:3"}
+{"id": "s058", "step": "No paragraph runs past three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:3"}
+{"id": "s059", "step": "Each paragraph is two sentences at most.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:2"}
+{"id": "s060", "step": "Keep paragraphs short.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s061", "step": "The first paragraph is three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s062", "step": "Each paragraph has at least two sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s063", "step": "Paragraphs are usually under 4 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s064", "step": "Write three paragraphs of 2 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s065", "step": "Never write a paragraph of three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s066", "step": "Paragraphs of more than three sentences need a heading.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s067", "step": "Keep paragraphs between 2 and 4 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}

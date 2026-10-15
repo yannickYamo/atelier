@@ -61,10 +61,14 @@ function rows(e: Entry, w: number): string[] {
 /** Where the run stands, in one sentence that counts what was verified and what is left. */
 export function stateLine(r: EvaluationRecord): string {
   const required = r.entries.filter((e) => e.required && e.result !== 'NOT_APPLICABLE');
-  const passed = required.filter((e) => e.result === 'PASS').length; const failed = r.entries.filter(blocks); const open = r.entries.filter(needsReview).length;
-  if (r.state === 'BLOCKED') return `Not usable as it stands: ${s(failed.length, 'requirement')} seen to fail. ${passed} of ${required.length} verified${open ? `, ${open} left for you` : ''}.`;
+  const passed = required.filter((e) => e.result === 'PASS').length; const failed = r.entries.filter(blocks);
+  // THE COUNTS ADD UP: what is left to read is counted among the required rules the sentence counts; a check set aside
+  // for this run (counted as not applying) is said apart, so "2 of 6 verified; 5 left" never happens.
+  const open = required.filter(needsReview).length; const aside = r.entries.filter((e) => needsReview(e) && e.result === 'NOT_APPLICABLE').length;
+  const asideSaid = aside ? `; ${aside} set aside for this run` : '';
+  if (r.state === 'BLOCKED') return `Not usable as it stands: ${s(failed.length, 'requirement')} seen to fail. ${passed} of ${required.length} verified${open ? `, ${open} left for you` : ''}${asideSaid}.`;
   if (r.state === 'VERIFIED') return `Every requirement was read in full and held (${required.length} of ${required.length}).`;
-  return `Nothing was seen to fail. ${passed} of ${required.length} verified; ${open} left for you to read.`;
+  return `Nothing was seen to fail. ${passed} of ${required.length} verified; ${open} left for you to read${asideSaid}.`;
 }
 
 /** What to do now: different for each state, and always one thing first. */

@@ -13,7 +13,7 @@ import { spelledCounts } from '../core/loop/numbers.js';
 
 const MAT = 'Our survey found 40% of teams adopted it. The report counted 1,200 users in 2023.';
 // sentence -> the kinds the digit-only check cut it for ('' = kept)
-const BEFORE: ReadonlyArray<readonly [string, string]> = [
+const BEFORE: readonly (readonly [string, string])[] = [
   ['Our survey found 40% of teams adopted it within two weeks.', ''],
   ['A 2024 survey found that 40% of teams use two tools.', ''],
   ['The study found 40% of teams, one in three, adopted it.', ''],
@@ -52,10 +52,10 @@ describe('the cut path reads digit figures exactly as before', () => {
 
 describe('spelled counts that are not a count of a measured thing', () => {
   const none = ["She said 'three customers' left.", 'He earned seven figures last year.', 'Fifty-fifty odds.', 'Their two kids hate it.', "It's 'two customers', she said."];
-  for (const s of none) it(`${s} lists nothing`, () => expect(spelledCounts(s)).toEqual([]));
+  for (const s of none) it(`${s} lists nothing`, () => { expect(spelledCounts(s)).toEqual([]); });
   it('a ratio states both numbers', () => {
     expect(spelledCounts('Three in ten developers use it.')).toEqual(['3', '10']);
     expect(spelledCounts('Seven out of ten readers skip the intro.')).toEqual(['7', '10']);
   });
-  it('an apostrophe inside a word opens no quotation', () => expect(spelledCounts("The team's three engineers left.")).toEqual(['3']));
+  it('an apostrophe inside a word opens no quotation', () => { expect(spelledCounts("The team's three engineers left.")).toEqual(['3']); });
 });

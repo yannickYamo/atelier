@@ -193,6 +193,46 @@ export function sectionLength(step: string, sections: readonly string[]): Measur
   return { observer: 'LENGTH', params: { unit: [b.unit], in: [named[0]], need: 1, ...(b.min !== null ? { min: b.min } : {}), ...(b.max !== null ? { max: b.max } : {}) } };
 }
 
+/**
+ * THE LONGEST A PARAGRAPH MAY RUN, IN SENTENCES: "Keep every paragraph to three sentences or fewer", "no paragraph
+ * longer than 4 sentences", "each paragraph under five sentences". The same count a habit of the examples is held to
+ * (PARAGRAPH_LENGTH), so the owner's step is checked as surely as their habit. Read only for every paragraph: a step
+ * about one of them ("the first paragraph is two sentences"), a floor ("at least two sentences"), a count of
+ * paragraphs ("three paragraphs of two sentences") or a negation other than "no paragraph" is a judgement.
+ */
+const SMALL: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+const SMALL_N = String.raw`(\d{1,2}|${Object.keys(SMALL).join('|')})`;
+const smallOf = (x: string): number => (/^\d/.test(x) ? Number(x) : SMALL[x.toLowerCase()]);
+function paragraphLength(step: string): Measurement | null {
+  const t = step.trim();
+  if (!/\bparagraphs?\b/i.test(t) || /\b(?:first|last|final|opening|closing|second|third|next|previous|this|that)\s+paragraph\b/i.test(t)) return null;
+  if (/\b(?:at least|no fewer than|minimum|a minimum of)\b/i.test(t)) return null;
+  // A negation is read only as "no paragraph …", "no more than", "no longer than".
+  if (negated(t.replace(/\bno (?:paragraph|more than|longer than)\b/gi, ' '))) return null;
+  // "three paragraphs of two sentences": a count of paragraphs is a count of something else.
+  if (new RegExp(String.raw`\b${SMALL_N}\s+paragraphs?\b`, 'i').test(t)) return null;
+  // Every number the step gives is the one read: two counts of sentences are a judgement.
+  const counts = [...t.matchAll(new RegExp(String.raw`\b${SMALL_N}\s+sentences?\b`, 'gi'))];
+  if (counts.length !== 1) return null;
+  const after = t.slice(t.search(/\bparagraphs?\b/i));
+  const forms: readonly (readonly [RegExp, number])[] = [
+    [new RegExp(String.raw`\b(?:at most|no more than|no longer than|up to|a maximum of|maximum of|max(?:imum)?|to|of|within)\s+${SMALL_N}\s+sentences?\b(?!\s+or\s+more)`, 'i'), 0],
+    [new RegExp(String.raw`\b${SMALL_N}\s+sentences?\s+(?:or\s+(?:fewer|less)|at most|max(?:imum)?)\b`, 'i'), 0],
+    [new RegExp(String.raw`\b(?:under|fewer than|less than|below)\s+${SMALL_N}\s+sentences?\b`, 'i'), -1],
+    [new RegExp(String.raw`\b(?:longer than|more than|over|past|beyond|exceed(?:s|ing)?)\s+${SMALL_N}\s+sentences?\b`, 'i'), 0],
+  ];
+  for (const [re, shift] of forms) {
+    const m = re.exec(after);
+    if (!m) continue;
+    // "more than N" and its kin set a ceiling only under "no paragraph" or "never": "paragraphs of more than three
+    // sentences" says nothing of a limit.
+    if (/longer|more|over|past|beyond|exceed/i.test(m[0]) && !/^(?:at most|no more than|no longer than)/i.test(m[0]) && !/\bno paragraph\b/i.test(t)) return null;
+    const max = smallOf(m[1]) + shift;
+    return max >= 1 ? { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: max } } : null;
+  }
+  return null;
+}
+
 /** 'The last paragraph starts with "In short,"'. */
 function edgeWords(step: string): Measurement | null {
   // The check reads how a PARAGRAPH starts: "the last sentence starts with" is about another thing, and is not read.
@@ -236,6 +276,8 @@ export function statedCount(step: string): Measurement | null {
   if (SOFT.test(step)) return null;
   const longest = longestSentence(step);
   if (longest) return longest;
+  const paragraph = paragraphLength(step);
+  if (paragraph) return paragraph;
   // A step that gives a count is about that count: where it is not a length of the whole work, it is nothing else.
   const counts = countsIn(step);
   return counts.length ? wholeLength(step, counts) : edgeWords(step) ?? bannedWords(step);
@@ -298,4 +340,6 @@ export function sectionsMentioned(step: string, sections: readonly string[]): st
  */
 const NAMES_A_TEST = new RegExp(String.raw`\b(?:nam(?:e|es|ing)|add(?:s|ed|ing)?|writ(?:e|es|ing)|propos(?:e|es|ing)|suggest(?:s|ed|ing)?)\b[^.;]*?\btests?`
   + String.raw`(?:(?:'s)?\s+names?\b|(?:\s+(?:cases?|functions?))?(?=\s+(?:that|which|for|to|covering|catching|would|could|named|called|of)\b|\s*[.,;:)]|\s*$))`, 'i');
-export const namesTest = (step: string): boolean => NAMES_A_TEST.test(step) && !FORBIDS_OR_CONDITIONS.test(step);
+/** A test that is an experiment or an examination, not one in code: "the A/B test that was run", "a load test", "a blood test". */
+const NOT_A_CODE_TEST = /\b(?:A\/B|AB|split|multivariate|usability|user|load|stress|penetration|pen|blood|driving|taste|beta|market|field|clinical|drug|smell|litmus|acid|stress|eye|hearing|personality|aptitude|IQ)[\s-]+tests?\b/i;
+export const namesTest = (step: string): boolean => NAMES_A_TEST.test(step) && !FORBIDS_OR_CONDITIONS.test(step) && !NOT_A_CODE_TEST.test(step);

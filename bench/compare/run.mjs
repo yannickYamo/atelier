@@ -223,6 +223,14 @@ function filteredIn(stderr) {
   return m[1] === 'REFUSAL' ? 'REFUSAL' : m[1] === 'CONTENT_FILTER' || FILTER_WORDS.test(m[1]) ? 'CONTENT_FILTER' : null;
 }
 
+// THE THINKING SETTING OF A RUNTIME ROW, LIKE EVERY OTHER ROW'S. Taken from the run's own record where it says (a build
+// that records it); otherwise null, with the reason, so a study never reads a missing field as "no thinking".
+function thinkingOf(rec) {
+  const said = rec?.thinking ?? rec?.eval?.thinking;
+  return said === 'disabled' || said === 'enabled' ? { thinking: said }
+    : { thinking: null, thinkingReason: rec ? 'the run record does not say what thinking setting its calls were sent with' : 'the run left no record' };
+}
+
 function runtimeArm(t) {
   const tmp = mkdtempSync(join(tmpdir(), 'compare-material-'));
   try {
@@ -240,25 +248,25 @@ function runtimeArm(t) {
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
-      return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
+      return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
     // A model call inside the run that a provider filtered or the model declined: a FILTERED row, never retried.
     const blocked = done.status !== 0 ? filteredIn(done.stderr ?? '') : null;
-    if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), cost: rec?.costUsd ?? null };
+    if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), ...thinkingOf(rec), cost: rec?.costUsd ?? null };
     if (done.status !== 0 || !rec) throw new Error((done.stderr || done.stdout || `exit ${done.status}`).trim().split('\n').slice(-5).join('\n'));
     // a setup error, not a failed call: retrying would pay for the same run again, so it stops here
     if (rec.output === undefined || rec.toCheck === undefined) die(`${runtimeSpec.cli} gives no "output" and "toCheck" in invoke --json: build it from a commit that has them`);
     // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
     // material ("check before you use this"), which only this arm writes. Judged, it names the arm, and no one posts a
     // review that ends that way. The list is kept beside the response as to_check, for the study and never the judge.
-    return { response: String(rec.output ?? '').trim(), ...ledgerOf(rec), ...signalsOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    return { response: String(rec.output ?? '').trim(), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
 // The fields only some rows carry: the self-review's check, Atelier's verdict and its own check signals, the thinking
 // setting the call was sent with (model arms; the runtime arm's calls go through the same provider), and wall time.
 const extraOf = (r) => ({ ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), ...(r.signals ? r.signals : {}),
-  ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), seconds: r.seconds });
+  ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), ...(r.thinkingReason ? { thinking_reason: r.thinkingReason } : {}), seconds: r.seconds });
 let filtered = 0;
 
 const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`) : []);

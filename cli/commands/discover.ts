@@ -112,7 +112,8 @@ export async function discover(): Promise<void> {
   const noModel = !canReach('discovery');
   if (noModel && !s.authors) die('no model is set up (ANTHROPIC_API_KEY), so there is nothing to read the rules with. Build from the examples alone: atelier new <folder>');
   // `let`: a refused or unserved default proposer is replaced, and every later proposer call uses the replacement.
-  let client = clientFor(proposerModel());
+  // (With no model, nothing below calls one: the client is never made.)
+  let client = noModel ? (null as unknown as InferenceClient) : clientFor(proposerModel());
   let proposals: Requirement[];
   let proposalMeta: Record<string, ProposalMeta>;
   let heldOutChecked: boolean;

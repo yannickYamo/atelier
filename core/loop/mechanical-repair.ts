@@ -165,15 +165,36 @@ export function mechanicalFixes(v: StandardVersion, report: VerifyReport, text: 
 }
 
 /**
+ * THE LINES OF A TABLE, HOWEVER IT IS WRITTEN. A row that starts with `|`, inside a blockquote (`> |`) too; and a GFM
+ * table with no leading pipe, known by its delimiter row (`--- | ---`): its header, and every line with a `|` after
+ * the delimiter until the block ends. Each keeps its cells as cells.
+ */
+function tableRows(lines: readonly string[]): Set<number> {
+  const out = new Set<number>();
+  const body = (l: string): string => l.replace(/^\s*(?:>\s*)*/, '');
+  const delimiter = /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$/;
+  lines.forEach((l, i) => {
+    if (body(l).startsWith('|')) out.add(i);
+    if (delimiter.test(body(l)) && i > 0 && body(lines[i - 1]).includes('|')) {
+      out.add(i - 1); out.add(i);
+      for (let j = i + 1; j < lines.length && body(lines[j]).trim() && body(lines[j]).includes('|'); j++) out.add(j);
+    }
+  });
+  return out;
+}
+
+/**
  * Apply `f` to each prose line outside code fences, leaving inline code as it is; a table row (a line that
  * starts with `|`) goes to `row` instead, whole, so its cells can be kept.
  */
 function mapProse(text: string, f: (line: string) => string, row: (line: string) => string): string {
   let fence = false;
-  return text.split('\n').map((line) => {
+  const lines = text.split('\n');
+  const rows = tableRows(lines);
+  return lines.map((line, i) => {
     if (/^\s*(```|~~~)/.test(line)) { fence = !fence; return line; }
     if (fence) return line;
-    if (/^\s*\|/.test(line)) return /[—–]/.test(line) ? row(line) : line;
+    if (rows.has(i)) return /[—–]/.test(line) ? row(line) : line;
     if (!line.includes('—')) return line;
     // Inline code keeps its dashes: split around backticks and treat only the parts outside them.
     return line.split(/(`[^`]*`)/).map((part, i) => (i % 2 ? part : f(part))).join('');
