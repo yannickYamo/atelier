@@ -676,12 +676,16 @@ export interface GradedRecord {
   readonly targeted: number;
   /** how many of them a kept rewrite moved toward the band */
   readonly repaired: number;
+  /** the features a rewrite or a draft written again was pointed at, standard rules and profile signals alike */
+  readonly steered: readonly string[];
   /** drafts written again for graded misses alone (one per round at most); 0 before the run's wrappers add theirs */
   readonly redrafts: number;
   /** the directional note lines for graded misses sent to a redraft or a shape round, as sent */
   readonly notes: readonly string[];
-  /** each graded feature's value on the first draft and on the delivered text, and its band */
-  readonly values: Readonly<Record<string, { readonly before: number | null; readonly after: number | null; readonly lo: number | null; readonly hi: number | null }>>;
+  /** each graded feature's value on the first draft and on the delivered text, its band, and where the band came from: a FEATURE rule of the standard, or a SIGNAL band of the profile */
+  readonly values: Readonly<Record<string, { readonly before: number | null; readonly after: number | null; readonly lo: number | null; readonly hi: number | null; readonly source: 'standard' | 'profile' }>>;
+  /** the displacement guard (core/loop/graded.ts): features outside their band on the first draft and on the delivered text, and every rewrite or draft it refused, with why */
+  readonly displacement?: { readonly before: number; readonly after: number; readonly refusedFor: readonly string[] };
   /** the span rewrites of passes the flag alone caused: kept, refused or discarded, and why */
   readonly edits: RepairEdits;
   /** inference calls and dollars the flag alone caused, from the ledger (`SpendPurpose` 'graded') */
