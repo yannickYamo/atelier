@@ -132,14 +132,17 @@ const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'kept' ||
  */
 function actionFor(base: 'operators' | 'carrier-rewrite' | 'redraft', id: string, history: readonly ControllerDecisionRecord[],
   available: (a: 'operators' | 'carrier-rewrite' | 'redraft') => boolean): 'operators' | 'carrier-rewrite' | 'redraft' | null {
-  // what is not available is passed over: an operator that moves nothing here, a redraft this caller cannot write
-  let a: typeof base | null = base;
-  while (a && !available(a)) a = LADDER[LADDER.indexOf(a) + 1] ?? (base === 'redraft' && available('carrier-rewrite') ? 'carrier-rewrite' : null);
-  if (!a) return null;
-  const fails = history.filter((d) => d.targets.includes(id) && CHOSEN.has(d.action) && failed(d)).length;
-  if (fails < 2) return a;
-  if (fails > 2) return null;
-  let next: typeof base | null = LADDER[LADDER.indexOf(a) + 1] ?? null;
+  const fails = history.filter((d) => d.targets.includes(id) && CHOSEN.has(d.action) && failed(d));
+  if (fails.length > 2) return null;
+  if (fails.length < 2) {
+    // what is not available is passed over: an operator that moves nothing here, a redraft this caller cannot write
+    let a: typeof base | null = base;
+    while (a && !available(a)) a = LADDER[LADDER.indexOf(a) + 1] ?? (base === 'redraft' && available('carrier-rewrite') ? 'carrier-rewrite' : null);
+    return a;
+  }
+  // THE SWITCH: one rung above the action that failed, the first that is available
+  const last = fails[fails.length - 1].action;
+  let next: typeof base | null = LADDER[LADDER.indexOf(last as typeof base) + 1] ?? null;
   while (next && !available(next)) next = LADDER[LADDER.indexOf(next) + 1] ?? null;
   return next;
 }
