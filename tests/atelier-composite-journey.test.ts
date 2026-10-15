@@ -170,6 +170,14 @@ describe('atelier new on five pieces by five authors', () => {
     expect(comp.conflicts.some((c) => c.answer === null)).toBe(true);
   });
 
+  it('the composite carries the owner\'s editorial rule, REQUIRED, from no single author', () => {
+    expect(second).toMatch(/Every author: g1 {2}No mechanical errors: spelling, agreement, punctuation\. {2}\(REQUIRED/);
+    const dir = join(data, 'skills', 'mix', 'standards');
+    const std = readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')) as { requirements: { measurement?: { observer: string }; materiality: string; authority: string; statement: string }[] });
+    const g = std.flatMap((v) => v.requirements).filter((r) => r.measurement?.observer === 'GRAMMAR');
+    expect(g.length).toBeGreaterThan(0);
+    expect(g[0]).toMatchObject({ statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'EXPERT_RATIFIED' });
+  });
   it('a phrase lifted from any author is copying, served or not', () => {
     const f = join(proj, 'lifted.md');
     writeFileSync(f, `A new essay on the harbour. ${LIFTED} The rest is mine and says something else entirely about tides.`);

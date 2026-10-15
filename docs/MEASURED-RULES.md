@@ -61,7 +61,9 @@ output from then on.
 ### Mechanical errors
 
 Every new build proposes one editorial rule, required by default and approved like any other: *No mechanical
-errors: spelling, agreement, punctuation.* A skill built before it existed does not gain it. The checker is
+errors: spelling, agreement, punctuation.* A skill built before it existed does not gain it. A build from pieces by several
+authors carries it too, as the editorial rule, not one author's trait. It holds for short-form output as for long:
+it is never one of the bands set down as not applying when a long-form standard writes a short piece. The checker is
 harper.js, which runs offline in the process; it loads on the first standard that carries the rule. If it cannot
 load, the check says so with the reason and the rule reads as unverified, never as met.
 

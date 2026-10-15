@@ -82,6 +82,13 @@ export async function onCorpusReader<T>(call: (client: InferenceClient) => Promi
   }
 }
 
+/** The rule "No mechanical errors", read from the pieces it will be held to (core/observers/grammar.ts). */
+function grammarProposal(pieces: readonly string[], others: readonly Requirement[]): Requirement {
+  return { requirementId: 'g1', statement: GRAMMAR_STATEMENT, appliesWhen: 'GENERAL', kind: 'BOUNDARY', authority: 'DERIVED_UNRATIFIED', provenance: sourceProvenance(),
+    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true,
+    measurement: grammarMeasurement(pieces, termsOf(others)) };
+}
+
 export async function discover(): Promise<void> {
   const s = loadSession();
   if (!s.evidence) die('nothing sealed. Run `atelier intake <path>` first.');
@@ -374,6 +381,15 @@ export async function discover(): Promise<void> {
       lengthClass[name] = contextClassOf(Math.round(quantile(words, 0.5)));
       if (measured.length) console.log(`  ${measured.length} rule(s) counted from ${name}'s pieces alone: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
     }
+    // NO MECHANICAL ERRORS, for the composite too: the owner's editorial rule, not any one author's trait. It names no
+    // author, so it is no row of the trait table; read over every author's pieces (each one's own words are known), and
+    // ruled REQUIRED on the composite screen (./composite.ts), demoted only by the person's --set.
+    await ensureGrammar();
+    const allPieces = openItems.map((i) => i.text);
+    const grammar = grammarProposal(allPieces, proposals);
+    proposals = [...proposals, grammar];
+    proposalMeta = { ...proposalMeta, [grammar.requirementId]: { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: null,
+      corpus: grammar.measurement ? { pieces: allPieces.length, breaking: piecesBreaking(allPieces, grammar.measurement) } : null } satisfies ProposalMeta };
     const table = buildTraitTable(proposals, (id) => proposalMeta[id]?.source, (a) => lengthClass[a] ?? null);
     writeAtomic(runFile('trait-table.json'), JSON.stringify(table, null, 1));
     persist(heldOutPieces || null);
@@ -449,9 +465,7 @@ export async function discover(): Promise<void> {
   // the same ruling as everything else on the screen (suggested REQUIRED; demoted like any rule), and the same corpus
   // check: the author's own pieces are held against it with their vocabulary known.
   await ensureGrammar();
-  const grammar: Requirement = { requirementId: 'g1', statement: GRAMMAR_STATEMENT, appliesWhen: 'GENERAL', kind: 'BOUNDARY', authority: 'DERIVED_UNRATIFIED', provenance: sourceProvenance(),
-    evidence: null, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true,
-    measurement: grammarMeasurement(ownPieces, termsOf(proposals)) };
+  const grammar = grammarProposal(ownPieces, proposals);
   proposals = [...proposals, grammar];
   proposalMeta = { ...proposalMeta, [grammar.requirementId]: { framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: null, corpus: corpusOf(grammar) } satisfies ProposalMeta };
   // ── WHAT THE MODEL DOES THAT THE AUTHOR DOESN'T ───────────────────────────────────────────────

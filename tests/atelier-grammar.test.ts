@@ -25,6 +25,7 @@ import { checkDraft } from '../core/loop/run-repair.js';
 import { suggest } from '../core/ratification/suggest.js';
 import { grammarOffer } from '../core/method/standard.js';
 import { buildRecord } from '../core/eval/record-build.js';
+import { shortFormTransfer } from '../core/observers/short-form.js';
 import { aRequirement } from './fixtures.js';
 import { parseMeasure } from '../cli/commands/ratify.js';
 import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
@@ -207,6 +208,24 @@ describe('the suite\'s fixed checker (ATELIER_GRAMMAR=stub)', () => {
       const r = measure('They was late. We recieve the the report.', m());
       expect(r.verdict).toBe('VIOLATED');
       expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They were late. We receive the report.');
+    } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
+  });
+});
+
+describe('a short output from a standard read from long pieces', () => {
+  it('keeps the grammar rule: it is no band counted off long pieces, and it is applied to the short output', async () => {
+    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
+    try {
+      const band = aRequirement({ requirementId: 'm1', statement: 'Sentences run to a median of 18 words.', kind: 'BOUNDARY', materiality: 'PREFERRED',
+        measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 18, p90Max: 30 } } });
+      const v = standard(rule(), band);
+      const transfer = shortFormTransfer(v.requirements, { chars: 280, from: 'x-post' });
+      expect(transfer).not.toBeNull();
+      expect([...transfer!.doesNotApply.keys()]).toEqual(['m1']);
+      const short = checkDraft('g', v, 'They was right. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply });
+      expect(short.checked.find((c) => c.requirementId === 'g1')?.result).toMatchObject({ verdict: 'VIOLATED', spans: [{ text: 'was', replacement: 'were' }] });
+      expect(short.failed).toBe(true);
+      expect(checkDraft('g', v, 'They were right. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply }).checked.find((c) => c.requirementId === 'g1')?.result.verdict).toBe('MET');
     } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
   });
 });

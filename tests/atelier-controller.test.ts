@@ -260,6 +260,9 @@ describe('through the loop', () => {
       .toMatchObject({ kind: 'act', action: 'grammar', targets: ['g'], expectedCostUsd: 0, expectedGain: 2 });
     expect(decide(input({ grammar: [] }))).toMatchObject({ kind: 'stop' });
     expect(decide(input({ grammar: ['g'], unreachable: new Set(['g']) }))).toMatchObject({ kind: 'stop' });
+    // a grammar step that failed is not repeated, on this draft or carried from the one before
+    expect(decide(input({ grammar: ['g'], history: [step('grammar', ['g'], 'not kept', 0, 0, 0)] }))).toMatchObject({ kind: 'stop' });
+    expect(decide(input({ grammar: ['g', 'h'], history: [step('grammar', ['g'], 'no change', 0, 0, 0)] }))).toMatchObject({ action: 'grammar', targets: ['h'] });
   });
   it('the budget stop is recorded, and nothing is called', async () => {
     const writer = scripted([reps('x')]);

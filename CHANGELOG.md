@@ -206,9 +206,10 @@ A skill held drafts to the author's habits and never to spelling or agreement: "
 - **The author's voice is protected.** Code, quotations, block quotes, URLs, citations, figures, names, the
   standard's own terms and the words of the author's own pieces are never flagged. Spelling follows the dialect the
   pieces spell in. Fragments, "And" and "But" openers, one-word sentences and doubled words of emphasis are never errors.
-- **New builds carry the rule.** Building from pieces or from a method proposes "No mechanical errors: spelling,
+- **New builds carry the rule.** Building from pieces, from a method, or from pieces by several authors proposes "No mechanical errors: spelling,
   agreement, punctuation." as required, through the usual approval. Stored standards are untouched, and an existing
-  skill rebuilds to the same bytes. `--measure GRAMMAR:dialect=british` declares it by hand.
+  skill rebuilds to the same bytes. It holds for short output from a long-form standard too.
+  `--measure GRAMMAR:dialect=british` declares it by hand.
 - **Repair corrects in place** (`core/loop/mechanical-repair.ts`), as the repair controller's last kind of step
   (`core/loop/controller.ts`), after enforced rules, length and graded features, with no model call: the checker's suggestion, inside the span, kept
   only if no other rule is newly broken and every figure and name is unchanged. A correction that would change a
