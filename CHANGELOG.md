@@ -7,6 +7,20 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: grammar findings said as listed, never as held
+
+- **`verify --repair` no longer says every rule holds when it left a grammar rule unverified.** On a text whose
+  only findings were listed, it printed "nothing to repair: every REQUIRED measured rule holds", and `--json` carried
+  `repair: null` with no trace of the rule. It now says "nothing changed: N possible slips are listed for you to
+  check" and lists them, and `--json` names the rule under `unverified` with its items under `listed`.
+- **A space before a comma or a full stop is shown with the words around it**: `"waited , and" (a space before a
+  comma)`, where it read `"" (a space before a comma: "" → "(removed)")`.
+- **The docs say what is listed and what is never flagged.** A name the checker knows is not flagged; any other
+  capitalised word is listed as "a name, an acronym or a coined word", and your own terms and a word used three times
+  are listed as yours, never changed. The help, the README and the measured-rules page now also say that under
+  `--fix-grammar` a slip whose fix another of your rules refuses stays in the text and the rule reads broken, which can
+  block the work; the sentence about a rewrite for an error with no sure correction is gone, as no such step exists.
+
 ### Fixed: one acceptance rule, one step record and one hand-off for every repair step
 
 - **A rule you require is never delivered worse by its value.** Every replacement of the text (a span rewrite, a

@@ -24,6 +24,7 @@ import * as fstore from '../../core/state/fidelity-store.js';
 import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraftAsync, refineToStandard } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
+import { grammarListed, toCheckList } from '../../core/observers/grammar.js';
 import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding, assertReachable } from '../runtime.js';
 import type { InferenceClient } from '../../core/inference/client.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
@@ -86,12 +87,20 @@ export async function verify(): Promise<void> {
     const client: InferenceClient = { complete: (req) => { if (!model) { assertReachable('target'); model = clientAndBinding('target').client; } return model.complete(req); } };
     const r = await refineToStandard(client, budget, name, v, text, 2, checks);
     for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
+    // WHAT WAS LISTED, NOT CHANGED: a grammar rule whose findings are only listed is unverified, never held. Its items
+    // are said here, in both outputs, so "nothing changed" never reads as "every rule holds".
+    const listed = r.report.checked.filter(grammarListed).map((c) => ({ rule: c.requirementId, statement: c.statement,
+      items: c.result.spans.map((s) => ({ text: s.text, start: s.start, end: s.end, why: s.why })) }));
+    const slips = listed.flatMap((l) => l.items);
     if (argv.includes('--json')) {
-      console.log(JSON.stringify({ output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd }, null, 1));
+      console.log(JSON.stringify({ output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd,
+        ...(listed.length ? { unverified: listed.map((l) => l.rule), listed } : {}) }, null, 1));
     } else {
       console.log(r.output);
       console.error(r.repair ? `(repaired: ${r.repair.violatedBefore.length} REQUIRED rule(s) broken before, ${r.repair.violatedAfter.length} after; ${r.repair.why}; $${budget.spentUsd.toFixed(4)})`
-        : '(nothing to repair: every REQUIRED measured rule holds)');
+        : slips.length ? `(nothing changed: ${slips.length} possible slip${slips.length === 1 ? ' is' : 's are'} listed for you to check)`
+          : '(nothing to repair: every REQUIRED measured rule holds)');
+      for (const l of listed) console.error(`  ${l.rule} unverified, listed for you to check: ${toCheckList(l.items, l.items.length)}`);
     }
     if (r.report.failed) process.exitCode = 1;
     return;
