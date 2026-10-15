@@ -7,6 +7,36 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: two contradictory rules never both instruct a composite
+
+- **One final check over every rule that will instruct.** After each rule is decided, and before anything is
+  compiled, every pair of rules from two authors that will instruct (chosen by admiration or by an answer, a range at
+  the limits it will be checked against) is read by the same conflict detector the table uses. A rule could still
+  reach the writer beside one it contradicts by three routes: chosen by an answer in one conflict while the other
+  side's author was admired in another ("Avoid headings" and "Use short headings" both shipped); two rules with no
+  class in common, which the table never pairs; and a "both" range whose widened limit contradicts a third rule. Now,
+  for a contradicting pair: "both" answered for that pair lets both stand, and the screen says so; a side chosen by an
+  explicit answer stands and the other is set aside, naming that answer; otherwise neither instructs and the pair is
+  an open question on the screen, under its table number or a number after the table's, answered with `--conflict`
+  like any other. The screen, the author lines and the count of open questions are read from the outcome after it.
+- **A value banned only somewhere is scoped.** "Avoid the first person in headings", "Avoid a casual tone in
+  headings", "Avoid American spelling in quotations" and "Avoid the present tense in captions" no longer conflict with
+  the first person, a casual tone, American spelling or the present tense in general.
+- **A plain verb negated is a ban.** "Do not cite sources" conflicts with "Cite a source for every claim", and "Never
+  quote sources" with "Quote sources". "Never invent examples" still bans inventing, not examples.
+- **Admiring a class takes the rules mainly about it.** A rule is taken for the class of the first class word it
+  says: "Never use bullet lists; carry items in sentences" is about lists, and admiring someone's paragraphs no longer
+  takes it.
+- **The keyword reading of what a person likes uses the words rules are sorted by**, one list for both: "the bullet
+  lists", "the headings" and "its numbered steps" name structure.
+- A step about one paragraph ("Open with a paragraph of no more than two sentences") no longer sets a ceiling on every
+  paragraph. "Cap every paragraph at three sentences" and "Each paragraph: three sentences, max." now do. "Paragraphs
+  must not run beyond four sentences" and "Never let a paragraph exceed five sentences" are still read as judgements:
+  widening the negations read as ceilings would set ceilings on conditional steps.
+- An author line names only conflicts still open as the ones to answer, and says which answers set aside what was
+  liked; a side kept and shown by a worded "both" is said to be kept, not set aside; "neither side instructs" is said
+  only of open conflicts where it is true; a range's example shows each contributing author's observation.
+
 ### Fixed: a composite decides each rule once, and the person's words come first
 
 - **One outcome per rule, across every conflict it is in.** With three or more authors a rule sits in several pairwise

@@ -10,10 +10,32 @@
 //   OPEN       one side of a conflict nobody has answered: neither side instructs, and the question is kept
 //
 // A conflict is answered by the person (`--conflict 1=A`), or by their admiration when exactly one side's class
-// was admired from its author; with both sides admired, or neither, it stays open. Nothing here guesses.
+// was admired from its author; with both sides admired, or neither, it stays open. Nothing here guesses. Admiring a
+// class takes the rules MAINLY about it (traits.ts, `primaryClassOf`): a ban on bullet lists that says "sentences"
+// is not pace.
+//
+// THE INVARIANT, HELD LAST: TWO CONTRADICTORY RULES NEVER BOTH INSTRUCT. Each rule is decided once across all its
+// conflicts (`resolvePerRule`), but a rule can still come to instruct by more than one route: chosen in one conflict
+// by the person's answer while the other side's author is admired in another; admired for a class while a rule it
+// contradicts is chosen for another class, the table only pairing rules of a shared class; a "both" range whose
+// widened limits now contradict a third rule. So after every rule is decided, and before anything is compiled, one
+// guard (`guardInstructing`) takes every rule that will instruct (chosen by admiration or by an answer, a range's
+// carrier included, at the limits it will be checked against) and tests every pair from two authors with the same
+// detector the table uses (traits.ts, `relationOf`: worded against worded, worded against counted, counted bands and
+// ranges). For a pair that contradicts:
+//
+//   the person answered "both" for that pair       both stand, as they said, and the screen says so
+//   one side was chosen by an explicit answer      it stands; the other is set aside, naming that answer
+//   neither side was (or both were)                NEITHER instructs: the pair is an open question on the screen,
+//                                                   under the table's own number when the two (or rules carried in
+//                                                   their ranges) are a pair of it, else under a number after the
+//                                                   table's, which `--conflict` answers like any other
+//
+// One author's own rules are not paired here: they are read from one body of work, as in a skill of one author.
+// The screen, the author lines and the count of open questions are all read from the outcome after the guard.
 
 import type { Measurement, Requirement } from '../state/canonical-state.js';
-import { TRAIT_LABEL, mergedMeasurement, takenAs, type Conflict, type ConflictSide, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
+import { TRAIT_LABEL, labelOf, mergedMeasurement, primaryClassOf, relationOf, type Conflict, type ConflictSide, type TraitClass, type TraitKind, type TraitTable } from './traits.js';
 
 export interface CompositeAuthor {
   readonly name: string;
@@ -54,7 +76,10 @@ export interface CompositeDecision {
 
 export interface AnsweredConflict extends Conflict {
   readonly answer: ConflictAnswer | null;
-  readonly resolvedBy: 'ANSWER' | 'ADMIRATION' | null;
+  /** ANOTHER_ANSWER: settled by the guard, for the side the person chose in another conflict */
+  readonly resolvedBy: 'ANSWER' | 'ADMIRATION' | 'ANOTHER_ANSWER' | null;
+  /** found by the final guard, not by the table: two rules of no shared class, or a range against a third rule */
+  readonly foundLast?: true;
 }
 
 /** The composite as stored on the skill: what was chosen from whom, and what stays open. Data, so a rebuild reads it and changes nothing. */
@@ -161,9 +186,10 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
   answers: Readonly<Record<number, ConflictAnswer>> = {}): CompositeRecord {
   const classesOf = new Map(authors.map((a) => [a.name, new Set(a.classes)]));
   const rowOf = new Map(table.rows.map((r) => [r.id, r]));
-  const admired = (id: string): boolean => { const r = rowOf.get(id); return Boolean(r?.classes.some((c) => classesOf.get(r.author)?.has(c))); };
-  // The class each rule is taken for: of the classes it carries, the one its author's line named, else its first.
-  const clsOf = (id: string): TraitClass | undefined => { const r = rowOf.get(id); return r ? takenAs(r.classes, classesOf.get(r.author)) : undefined; };
+  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
+  // The class each rule is taken for: what it is mainly about. Admiring a class takes the rules mainly about it.
+  const clsOf = (id: string): TraitClass | undefined => { const p = byId.get(id); return p ? primaryClassOf(p) : rowOf.get(id)?.cls; };
+  const admired = (id: string): boolean => { const r = rowOf.get(id); const c = clsOf(id); return Boolean(r && c && classesOf.get(r.author)?.has(c)); };
 
   // Conflicts first: what the person answered, else admiration of exactly one side, else open.
   const conflicts: AnsweredConflict[] = table.conflicts.map((c) => {
@@ -174,9 +200,8 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     if (aa !== ab) return { ...c, answer: aa ? 'A' : 'B', resolvedBy: 'ADMIRATION' };
     return { ...c, answer: null, resolvedBy: null };
   });
-  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
   const sideOutcome = resolvePerRule(conflicts, byId, clsOf);
-  const decisions: CompositeDecision[] = proposals.flatMap((p) => {
+  const decided: CompositeDecision[] = proposals.flatMap((p) => {
     const r = rowOf.get(p.requirementId);
     if (!r) return [];
     const cls = clsOf(r.id) ?? r.cls;
@@ -185,18 +210,132 @@ export function composeSelection(table: TraitTable, proposals: readonly Requirem
     if (r.sameAs) return [{ ...base, outcome: 'REJECTED' as const, why: `the same rule as ${r.sameAs}, read again: it stands and falls with ${r.sameAs}`, mergedInto: r.sameAs }];
     const side = sideOutcome.get(r.id);
     if (side) return [{ ...base, ...side, ...(admired(r.id) ? { admired: true as const } : {}) }];
-    if (admired(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `you admired ${r.author}'s ${TRAIT_LABEL[cls]}`, byAdmiration: true as const }];
+    if (admired(r.id)) return [{ ...base, outcome: 'SELECTED' as const, why: `you admired ${r.author}'s ${TRAIT_LABEL[cls]}`, byAdmiration: true as const, admired: true as const }];
     if (r.kind === 'SHARED') return [{ ...base, outcome: 'HABIT' as const, why: `shared with ${r.with.length} other rule(s) and not chosen: kept as a habit, shown and not instructed` }];
     // An author the person said they like, for something else: the rest of what their pieces show is kept as a habit,
     // shown and never instructed. An author they said nothing about gives nothing alone.
     if (authors.find((a) => a.name === r.author)?.admired) return [{ ...base, outcome: 'HABIT' as const, why: `not what you chose from ${r.author}: kept as a habit, shown and not instructed` }];
     return [{ ...base, outcome: 'REJECTED' as const, why: `${r.author}'s ${TRAIT_LABEL[cls]} was not what you chose from them` }];
   });
+  const repeats = new Set(table.rows.filter((r) => r.sameAs).map((r) => r.id));
+  const guarded = guardInstructing(decided, conflicts, byId, answers, repeats);
+  const decisions = guarded.decisions;
 
   // RECURRING DECISION MOVES: method rules chosen, or shared by two or more authors. Offered as a methodology the
   // person may adopt, marked a proposal read from the examples; a method note of theirs (`--method`) is authoritative instead.
   const steps = decisions.filter((d) => d.cls === 'method' && (d.outcome === 'SELECTED' || d.kind === 'SHARED')).map((d) => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? '' }));
-  return { authors, decisions, conflicts, methodology: steps.length ? { proposal: true, steps } : null };
+  return { authors, decisions, conflicts: guarded.conflicts, methodology: steps.length ? { proposal: true, steps } : null };
+}
+
+/** Whether a decided rule will instruct the writer: chosen, not merely shown, and not carried in another rule's range. */
+export const instructs = (d: CompositeDecision | undefined): boolean => d?.outcome === 'SELECTED' && !d.shownOnly && !d.mergedInto;
+
+/**
+ * THE FINAL GUARD (see the head of this file): no two rules that will instruct contradict each other, unless the
+ * person answered "both" for that very pair. Exported so the invariant can be held on any decided set.
+ */
+export function guardInstructing(decided: readonly CompositeDecision[], conflicts: readonly AnsweredConflict[], byId: ReadonlyMap<string, Requirement>,
+  answers: Readonly<Record<number, ConflictAnswer>>, repeats: ReadonlySet<string> = new Set()): { decisions: CompositeDecision[]; conflicts: AnsweredConflict[] } {
+  const ds = new Map(decided.map((d) => [d.id, d]));
+  const order = decided.map((d) => d.id);
+  // A range's carrier stands for every rule merged into it (a repetition of one rule is not a range member).
+  const membersOf = (id: string): string[] => [id, ...decided.filter((d) => d.mergedInto === id && !repeats.has(d.id)).map((d) => d.id)];
+  const asRead = (d: CompositeDecision): Pick<Requirement, 'statement' | 'measurement' | 'kind'> => {
+    const p = byId.get(d.id);
+    return { statement: p?.statement ?? '', measurement: d.range ?? p?.measurement ?? undefined, kind: p?.kind ?? 'GENERATIVE' };
+  };
+  const side = (d: CompositeDecision): ConflictSide => ({ id: d.id, author: d.author, statement: byId.get(d.id)?.statement ?? d.id });
+  const live = decided.filter(instructs);
+  const all: AnsweredConflict[] = [...conflicts];
+  let next = conflicts.reduce((m, c) => Math.max(m, c.n), 0) + 1;
+  // Every contradicting pair among the rules that will instruct, found before any is settled, so the numbers given
+  // to pairs the table never had depend on the answers to the table's conflicts alone.
+  const found: { a: string; b: string; c: AnsweredConflict }[] = [];
+  for (let i = 0; i < live.length; i++) {
+    for (let j = i + 1; j < live.length; j++) {
+      const a = live[i]; const b = live[j];
+      if (a.author === b.author || relationOf(asRead(a), asRead(b)) !== 'CONFLICT') continue;
+      const ma = membersOf(a.id); const mb = membersOf(b.id);
+      const known = all.find((x) => (ma.includes(x.sides[0].id) && mb.includes(x.sides[1].id)) || (mb.includes(x.sides[0].id) && ma.includes(x.sides[1].id)));
+      if (known) {
+        const aFirst = ma.includes(known.sides[0].id);
+        found.push({ a: aFirst ? a.id : b.id, b: aFirst ? b.id : a.id, c: known });
+        continue;
+      }
+      const pa = byId.get(a.id); const pb = byId.get(b.id);
+      const n = next++; const given = answers[n] ?? null;
+      const c: AnsweredConflict = { n, cls: a.cls, label: pa && pb ? labelOf(pa, pb) : 'one statement against another', taskDependent: false,
+        sides: [side(a), side(b)], answer: given, resolvedBy: given ? 'ANSWER' : null, foundLast: true };
+      all.push(c);
+      found.push({ a: a.id, b: b.id, c });
+    }
+  }
+  if (!found.length) return { decisions: [...decided], conflicts: all };
+
+  const who = (c: AnsweredConflict): string => `${c.sides[0].author} against ${c.sides[1].author} on ${c.label}`;
+  const conflictOf = new Map(all.map((c) => [c.n, c]));
+  const update = (c: AnsweredConflict, to: Partial<AnsweredConflict>): void => { conflictOf.set(c.n, { ...(conflictOf.get(c.n) ?? c), ...to }); };
+  const withConflict = (d: CompositeDecision, n: number): readonly number[] => [...new Set([...(d.inConflicts ?? []), n])].sort((x, y) => x - y);
+  // A rule that no longer instructs takes the rules carried in its range with it: they stood only through it.
+  const bare = (d: CompositeDecision, n: number): CompositeDecision => ({ id: d.id, author: d.author, cls: d.cls, kind: d.kind, outcome: d.outcome, why: d.why,
+    inConflicts: withConflict(d, n), ...(d.admired ? { admired: true as const } : {}) });
+  const setAside = (loser: string, winner: CompositeDecision, c: AnsweredConflict): void => {
+    const by = winner.settledBy ?? { n: c.n, how: 'ANSWER' as const };
+    for (const id of membersOf(loser)) {
+      const d = ds.get(id); if (!d) continue;
+      ds.set(id, { ...bare(d, c.n), outcome: 'REJECTED', settledBy: by,
+        why: `conflict ${c.n} (${who(c)}): ${winner.author}'s rule stands by your answer${by.n === c.n ? '' : ` to conflict ${by.n}`}, and the two cannot both instruct` });
+    }
+  };
+  const open = (id: string, c: AnsweredConflict): void => {
+    for (const m of membersOf(id)) {
+      const d = ds.get(m); if (!d) continue;
+      ds.set(m, { ...bare(d, c.n), outcome: 'OPEN', openIn: c.n, why: `conflict ${c.n} (${who(c)}) is unanswered: neither side instructs until you answer it` });
+    }
+  };
+  const explicit = (d: CompositeDecision | undefined): boolean => d?.settledBy?.how === 'ANSWER';
+  // 1. What the person said decides first: "both" for the pair; an answer for the pair; an answer that chose one side elsewhere.
+  const undecided: typeof found = [];
+  for (const f of found) {
+    const da = ds.get(f.a); const db = ds.get(f.b);
+    if (!instructs(da) || !instructs(db) || !da || !db) continue;
+    const c = conflictOf.get(f.c.n) ?? f.c;
+    if (c.resolvedBy === 'ANSWER' && c.answer === 'both') {
+      for (const d of [da, db]) ds.set(d.id, { ...d, inConflicts: withConflict(d, c.n) });
+      continue;
+    }
+    if (c.resolvedBy === 'ANSWER' && (c.answer === 'A' || c.answer === 'B')) {
+      const [win, lose] = c.answer === 'A' ? [da, db] : [db, da];
+      ds.set(win.id, { ...win, inConflicts: withConflict(win, c.n) });
+      setAside(lose.id, { ...win, settledBy: { n: c.n, how: 'ANSWER' } }, c);
+      continue;
+    }
+    if (explicit(da) !== explicit(db)) {
+      const [win, lose] = explicit(da) ? [da, db] : [db, da];
+      ds.set(win.id, { ...win, inConflicts: withConflict(win, c.n) });
+      setAside(lose.id, win, c);
+      update(c, { answer: win.id === f.a ? 'A' : 'B', resolvedBy: 'ANOTHER_ANSWER' });
+      continue;
+    }
+    undecided.push(f);
+  }
+  // 2. Nothing the person said decides it: neither instructs, and the pair is asked, never guessed.
+  for (const f of undecided) {
+    const da = ds.get(f.a); const db = ds.get(f.b);
+    if (!instructs(da) || !instructs(db)) continue;
+    const c = conflictOf.get(f.c.n) ?? f.c;
+    open(f.a, c); open(f.b, c);
+    update(c, { answer: null, resolvedBy: null });
+  }
+  return { decisions: order.flatMap((id) => { const d = ds.get(id); return d ? [d] : []; }), conflicts: [...conflictOf.values()].sort((x, y) => x.n - y.n) };
+}
+
+/** The open conflicts, split by whether one side still instructs through an answer to another conflict. */
+export function openStanding(c: CompositeRecord): { readonly neither: AnsweredConflict[]; readonly oneSide: AnsweredConflict[] } {
+  const byId = new Map(c.decisions.map((d) => [d.id, d]));
+  const open = openQuestions(c);
+  const stands = (x: AnsweredConflict): boolean => x.sides.some((s) => instructs(byId.get(s.id)) || byId.get(s.id)?.mergedInto !== undefined && instructs(byId.get(byId.get(s.id)?.mergedInto ?? '')));
+  return { neither: open.filter((x) => !stands(x)), oneSide: open.filter(stands) };
 }
 
 /** The conflicts still open on a composite, which the build and the skill's record show and never answer. */
@@ -216,11 +355,19 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
     const classes = [...new Set(mine.map((d) => d.cls))].map((k) => TRAIT_LABEL[k]);
     if (!a.admired && !mine.length) { out.push(`  ${a.name}: nothing said, so nothing is taken from this author alone.`); continue; }
     if (!mine.length) {
-      // What carries it may be there, and held in a conflict: said, with the conflicts to answer.
-      const held = [...new Set(c.decisions.filter((d) => d.author === a.name && d.admired && d.outcome !== 'SELECTED').flatMap((d) => d.inConflicts ?? []))].sort((x, y) => x - y);
+      // What carries it may be there, and held in a conflict still open (said, with the conflicts to answer), or set
+      // aside by an answer already given or by admiration of the other side (said, with what set it aside).
+      const carried = c.decisions.filter((d) => d.author === a.name && d.admired && d.outcome !== 'SELECTED' && !d.mergedInto);
+      const held = [...new Set(carried.flatMap((d) => (d.outcome === 'OPEN' && d.openIn !== undefined ? [d.openIn] : [])))].sort((x, y) => x - y);
+      const by = (how: 'ANSWER' | 'ADMIRATION'): number[] => [...new Set(carried.flatMap((d) => (d.outcome === 'REJECTED' && d.settledBy?.how === how ? [d.settledBy.n] : [])))].sort((x, y) => x - y);
+      const answered = by('ANSWER'); const admiredElse = by('ADMIRATION');
+      const reasons = [...(answered.length ? [`your answer${answered.length === 1 ? '' : 's'} to conflict ${answered.join(', ')}`] : []),
+        ...(admiredElse.length ? [`what you admired of the other side in conflict ${admiredElse.join(', ')}`] : [])];
       out.push(held.length
         ? `  ${a.name}: "${a.admired}": what carries that is in conflict ${held.join(', ')}, so nothing is taken from this author until you answer${held.length === 1 ? ' it' : ' them'}.`
-        : `  ${a.name}: "${a.admired}": nothing read from these pieces carries that, so nothing is taken.`);
+        : reasons.length
+          ? `  ${a.name}: "${a.admired}": what carries that was set aside by ${reasons.join(' and ')}, so nothing is taken from this author.`
+          : `  ${a.name}: "${a.admired}": nothing read from these pieces carries that, so nothing is taken.`);
       continue;
     }
     out.push(`  From ${a.name}: ${classes.join('; ')}${a.admired ? `  ("${a.admired}")` : '  (from a conflict you answered)'}`);
@@ -232,7 +379,7 @@ export function describeComposite(c: CompositeRecord, statementOf: (id: string) 
     for (const x of c.conflicts) {
       const [a, b] = x.sides;
       const stand = standOf(x, decided.get(a.id), decided.get(b.id));
-      out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}`);
+      out.push(`  ${x.n}. ${x.label}${x.taskDependent ? ' (the two write pieces of different lengths: this may be the kind of work, not taste)' : ''}${x.foundLast ? ' (found among the rules that would instruct: the two cannot both)' : ''}`);
       out.push(`      A  ${a.author}: ${a.statement}`);
       out.push(`      B  ${b.author}: ${b.statement}`);
       out.push(`      ${stand}`);
@@ -279,7 +426,8 @@ export function standOf(x: AnsweredConflict, da: CompositeDecision | undefined, 
   if (sa && sb) return `→ both stand: ${said(a, da)} (${reason(da)}) and ${said(b, db)} (${reason(db)})`;
   if (sa) return `→ ${said(a, da)} (${reason(da)})${waits(b, db)}`;
   if (sb) return `→ ${said(b, db)} (${reason(db)})${waits(a, da)}`;
-  const why = (side: ConflictSide, d: CompositeDecision | undefined): string => `${side.author} ${d?.outcome === 'OPEN' ? `open in conflict ${openAt(d)}` : `set aside (${reason(d) || 'not what you chose'})`}`;
+  const why = (side: ConflictSide, d: CompositeDecision | undefined): string => `${side.author} ${d?.outcome === 'OPEN' ? `open in conflict ${openAt(d)}`
+    : d?.shownOnly ? `kept, shown and not instructed (${reason(d) || 'your answer'})` : `set aside (${reason(d) || 'not what you chose'})`}`;
   const firstOpen = da?.outcome === 'OPEN' ? openAt(da) : db?.outcome === 'OPEN' ? openAt(db) : null;
   return `→ neither instructs: ${why(a, da)}, ${why(b, db)}${firstOpen !== null ? `. ${askAt(firstOpen)}` : ''}`;
 }
