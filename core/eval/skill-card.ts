@@ -26,6 +26,10 @@ export interface SkillCard {
   readonly rules: {
     readonly total: number; readonly required: number; readonly counted: number; readonly read: number;
     readonly conditional: number; readonly needsMaterial: number;
+    /** how many the owner wrote themselves (their method's steps, their own words); absent on a card kept before it was counted */
+    readonly written?: number;
+    /** how many nobody has confirmed: proposed, in the standard, and not yet the owner's */
+    readonly unconfirmed?: number;
   };
   readonly claims: { readonly instrument: string; readonly qualified: boolean;
     readonly measured: { readonly caught: number; readonly planted: number; readonly leftAlone: number; readonly clean: number; readonly on: string } | null;
@@ -65,7 +69,12 @@ export function renderSkillCard(c: SkillCard, width = 110, opts: { next?: boolea
   out.push('');
   out.push('  EVERY OUTPUT IS CHECKED BY');
   const r = c.rules;
-  out.push(`    ${pad('your rules', 18)}${r.total} approved by you: ${r.required} required · ${r.counted} counted on every output · ${r.read} read by the taste reader${r.conditional ? ` · ${r.conditional} apply only under a condition` : ''}${r.needsMaterial ? ` · ${r.needsMaterial} wait for your material` : ''}`);
+  // WHO STANDS BEHIND THEM, AS THE STANDARD SAYS: written by the owner, or read from their work (approved, or applied by
+  // the build where every example met it), and how many nobody has confirmed. Never "approved by you" for a rule the
+  // owner did not rule on.
+  const whose = r.written === undefined ? `${r.total} in force`
+    : `${r.total} in force (${r.written} written by you, ${r.total - r.written} read from your work${r.unconfirmed ? `, ${r.unconfirmed} not yet confirmed by you` : ''})`;
+  out.push(`    ${pad('your rules', 18)}${whose}: ${r.required} required · ${r.counted} counted on every output · ${r.read} read by the taste reader${r.conditional ? ` · ${r.conditional} apply only under a condition` : ''}${r.needsMaterial ? ` · ${r.needsMaterial} wait for your material` : ''}`);
   const m = c.claims.measured;
   out.push(`    ${pad('invented claims', 18)}${c.claims.instrument}${c.claims.unmeasured ? `: ${c.claims.unmeasured}; what it finds is listed, never cut` : m ? `: caught ${m.caught}/${m.planted} planted, left ${m.leftAlone}/${m.clean} clean alone (false flags at most ${falseFlagPct(m)} in 100), on ${m.on}` : c.claims.qualified ? '' : ': not qualified, so the pattern check decides what is cut'}${c.claims.answers ? ' · answers: work and results by pattern, other specifics listed' : ''}`);
   if (c.copying) out.push(`    ${pad('copying', 18)}a run of 12 or more words shared with your pieces fails`);

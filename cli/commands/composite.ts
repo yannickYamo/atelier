@@ -23,6 +23,7 @@ import { readAdmiration, keywordClasses, type AdmireLine } from '../../core/comp
 import { composeSelection, describeComposite, openQuestions, type CompositeAuthor, type CompositeRecord, type ConflictAnswer } from '../../core/composite/selection.js';
 import type { AuthorMap } from '../../core/composite/authors.js';
 import { formatMeasure } from './amend.js';
+import { restateLimits } from '../../core/observers/derive.js';
 import { applyDecisions, type RatificationDecision } from './ratify.js';
 import { parseChanges, type ReviewOptions } from './review.js';
 
@@ -232,14 +233,17 @@ export function decisionsFor(record: CompositeRecord, pending: readonly Requirem
       : owners ? (counted ? 'PREFERRED' : 'REQUIRED')
         : d.outcome === 'HABIT' || d.shownOnly ? 'PREFERRED'
           : s?.decision === 'APPROVE' && s.materiality ? s.materiality : 'PREFERRED';
-    const said = owners ? `selected by you ${from}${counted ? ', a counted target that steers and never fails a draft' : ''}` : `composite, ${from}`;
-    const suggested = { decision, materiality: weight, why: `${said}: ${d?.why ?? 'no trait row'}${s ? `; evidence: ${s.why}` : ''}` };
+    const saidBy = owners ? `selected by you ${from}${counted ? ', a counted target that steers and never fails a draft' : ''}` : `composite, ${from}`;
+    const suggested = { decision, materiality: weight, why: `${saidBy}: ${d?.why ?? 'no trait row'}${s ? `; evidence: ${s.why}` : ''}` };
     const range = d?.range ? formatMeasure(d.range) : null;
+    // The rule that carries both limits says the limits it is checked against, not its own author's alone.
+    const restated = d?.range && p.measurement ? restateLimits(p.statement, p.measurement, d.range) : null;
+    const said = restated && restated !== p.statement ? { statement: restated } : {};
     const c = changes.get(p.requirementId);
     if (c === 'reject') return { id: p.requirementId, decision: 'REJECT', suggested };
-    if (c) return { id: p.requirementId, decision: 'APPROVE', materiality: c in WEIGHTS ? WEIGHTS[c] : weight ?? 'PREFERRED', suggested, ...(range ? { measure: range } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
+    if (c) return { id: p.requirementId, decision: 'APPROVE', materiality: c in WEIGHTS ? WEIGHTS[c] : weight ?? 'PREFERRED', suggested, ...(range ? { measure: range, ...said } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
     if (decision === 'REJECT') return { id: p.requirementId, decision: 'REJECT', suggested };
-    return { id: p.requirementId, decision: 'APPROVE', materiality: weight ?? 'PREFERRED', suggested, ...(range ? { measure: range } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
+    return { id: p.requirementId, decision: 'APPROVE', materiality: weight ?? 'PREFERRED', suggested, ...(range ? { measure: range, ...said } : {}), ...(s?.needs ? { needs: s.needs } : {}) };
   });
 }
 
@@ -252,7 +256,7 @@ function printAsk(authors: AuthorMap, table: TraitTable, continueWith: string | 
   }
   const cmd = continueWith ?? 'atelier new <the same folder>';
   const first = authors.names[0] ?? 'author';
-  console.log(`Then:  ${cmd} --admire ${piecesOf(authors, first)[0] ?? first}="<what you like about it>" --admire …`);
+  console.log(`Then:  ${cmd} --admire ${/\s/.test(first) ? `"${first}"` : first}="<what you like about this author>" --admire …`);
   console.log(`  (--yes goes on with no line for an author: nothing is taken from them alone)`);
 }
 

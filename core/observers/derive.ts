@@ -290,6 +290,13 @@ export function restateLimits(statement: string, original: Measurement, fitted: 
 
 interface Piece { readonly id: string; readonly text: string }
 
+/** How much of the pieces there is to count, in the floors' own terms: what an author below every floor is told. */
+export function countedFloorOf(texts: readonly string[]): string {
+  const sentences = texts.flatMap(sentencesOf).length; const paragraphs = texts.flatMap(paragraphsOf).length;
+  const words = texts.reduce((n, t) => n + proseRegions(t).reduce((k, r) => k + wordsOf(r.text).length, 0), 0);
+  return `${sentences} sentence(s), ${paragraphs} paragraph(s), ${words} word(s)`;
+}
+
 /**
  * Targets are counted from `read` — the pieces discovery was allowed to read — and checked against
  * `held`, which it never saw. With nothing held out, conformance is reported on `read` and marked as
@@ -333,7 +340,9 @@ export function deriveMeasuredRules(read: readonly Piece[], held: readonly Piece
   if (sentences.length >= MIN_SENTENCES) {
     const lens = sentences.map((s) => s.words);
     const med = quantile(lens, 0.5); const p90 = quantile(lens, 0.9);
-    const medianMax = Math.ceil(med * 1.2 + 1); const p90Max = Math.ceil(p90 * 1.15 + 1);
+    // The margins differ (a median moves more than a tail), so where the two sit close the median's ceiling could pass
+    // the tail's: "a median under 25 words, and nine in ten under 24" describes no text. The tail never sits below it.
+    const medianMax = Math.ceil(med * 1.2 + 1); const p90Max = Math.max(Math.ceil(p90 * 1.15 + 1), medianMax);
     // The statement quotes the numbers it is checked against, so the rule and its check cannot disagree.
     push((m) => `I keep sentences short: a median under ${limit(m, 'medianMax')} words, and nine in ten under ${limit(m, 'p90Max')}.`, 'GENERATIVE',
       { observer: 'SENTENCE_LENGTH', params: { medianMax, p90Max } },

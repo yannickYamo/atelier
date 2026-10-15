@@ -65,7 +65,10 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
   block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? `checks for: ${propositionOf(p.measurement)} (for a diff, a line the change adds); ` : ''}your example: ${p.onExample ?? 'held'}${beside(p)}`);
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);
-  block('Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so', counted, (p) => `${looksFor(p)}${p.onExample ?? 'held'}`);
+  // What every example meets and the build requires (the machine-writing moves, mechanical errors, a platform's limit)
+  // is said to be required here: a rule that blocks is never listed as one that waits for the owner's word.
+  block('Counted from your examples, and not in your method: required, since every example meets it. Checked on every output, and it blocks', counted.filter((p) => p.required), (p) => `${looksFor(p)}${p.onExample ?? 'held'}`);
+  block('Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so', counted.filter((p) => !p.required), (p) => `${looksFor(p)}${p.onExample ?? 'held'}`);
   if (cls !== 'FULL_REPRO_CASE') out.push('', cls === 'TASK_AND_REFERENCE'
     ? 'Your example carries its task and no material, so nothing about what the work is made from can be checked.'
     : 'Your example carries neither its task nor its material: only what the work contains can be checked. Add `request:` to its front matter and a `<example>.material` folder beside it.');
@@ -112,7 +115,11 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
   if (part.length) out.push('', `Checked in part: the rest is yours to read (${part.length}):`,
     ...part.map((p) => `  - ${p.statement}\n      checked: ${lookedFor(p)}\n      not checked: ${cover(p)?.unchecked ?? ''}${disagrees(p)}`));
   if (judged.length) out.push('', `You judge these yourself (${judged.length}):`, ...judged.map((p) => `  - ${p.statement}`));
-  if (shown.length) out.push('', `Also learned from your examples: ${shown.length} habit${shown.length === 1 ? '' : 's'} (see them with --report).`);
+  const requiredShown = shown.filter((p) => p.required); const habits = shown.filter((p) => !p.required);
+  // One line: what blocks is said to block, and only the rest is called a habit.
+  const parts = [...(requiredShown.length ? [`${requiredShown.length} required, since every example meets ${requiredShown.length === 1 ? 'it' : 'them'}, and checked on every run`] : []),
+    ...(habits.length ? [`${habits.length} habit${habits.length === 1 ? '' : 's'}, shown and never blocking`] : [])];
+  if (parts.length) out.push('', `Also learned from your examples: ${parts.join('; ')} (see them with --report).`);
   return out;
 }
 

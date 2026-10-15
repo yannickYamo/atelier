@@ -102,3 +102,15 @@ describe('keyless atelier new on one author whose pieces carry front matter', ()
     for (const f of served) expect(readFileSync(join(dir, f), 'utf8')).not.toMatch(/topic:/);
   });
 });
+
+describe('an author below the counting floor', () => {
+  it('is told why nothing was counted, and the next step names an author, not a file', () => {
+    if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run \`npm run build\` first.`);
+    const eve = fm('Eve', 'The ferry left late again this morning. Nobody on the quay seemed to mind the wait. The gulls took the bread from the bench. By noon the water had gone flat and grey, and the town went back to work.');
+    const p = project({ ...PIECES, 'eve.md': eve });
+    const out = p.run('new', 'writers', 'a column', '--name', 'mix');
+    expect(out).toContain("nothing could be counted from Eve's 1 piece(s) (4 sentence(s), 1 paragraph(s), 40 word(s)): an author is counted from at least 30 sentences, 10 paragraphs or 1,000 words of their pieces read together");
+    expect(out).toMatch(/--admire Ada="<what you like about this author>"/);
+    expect(out).not.toMatch(/--admire [\w.]+\.md=/);
+  });
+});
