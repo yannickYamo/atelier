@@ -72,7 +72,7 @@ step. It changes how the standard is carried out, never the standard.
   operators whose measured effect moves it the right way. From 0.5 to 1.5, its carrier sentences are rewritten, one
   per band width (at most three). Over 1.5, or three features out at once, the piece is written again with the
   direction and distance of each miss named. A feature inside its band is never a target, and the displacement guard
-  still refuses any step that pushes another feature out.
+  still refuses any steering step that pushes another feature out.
 - **Stops when it stops paying.** Each step's expected movement is weighed against its expected cost, read from what
   this run has already paid per call. A step is taken while it is expected to move at least two band widths per
   dollar, the budget holds it, and fewer than four steps were taken. It stops when every enforced rule holds and no
@@ -93,6 +93,35 @@ step. It changes how the standard is carried out, never the standard.
   and `controller.effects`, the measured movement and cost of each step, which `summariseEffects`
   (`core/fidelity/estimator.ts`) reads from past runs as an exponentially weighted mean (λ = 0.2). A run reads effects
   only from its release; absent, the documented defaults apply, so existing releases keep their ids.
+
+### Fixed: your rules come before your range, and the repair keeps its word
+
+- **A fix to a rule you require is never thrown away for a feature of your range.** A rewrite that removed a banned
+  word was discarded because it added parenthetical asides, and the draft was delivered failing. A step taken for a
+  required rule (a rewrite, a mechanical or grammar fix, a draft written again) is now never refused for what it does
+  to the features your pieces usually hold; what it moved is recorded as observed. Those features are weighed only on
+  the steps aimed at them, and they are named in words, never by an internal id.
+- **A counted feature is judged by how far it is from its band.** Three carrier sentences becoming one counted as
+  progress while the value moved twice as far out. For every counted feature, required or not, progress and "worse"
+  are now its distance from the band, compared at the new length.
+- **A draft handed to a redraft is written again.** A mechanical fix recorded after the hand-off made the redraft
+  look withdrawn, and it was never written. One redraft now counts as one of the controller's four steps, not two.
+- **A draft written again adds no figure.** One holding a figure that neither the earlier draft, the request nor your
+  material holds is not kept; the earlier draft stands and the repair steps down.
+- **A one-sided range is read from its edge.** "At most 0.001 asides per 1,000 words" was stored with a lower edge of
+  minus a billion and read as no distance at all; it is now read in the feature's own unit, and printed as "at most".
+- **One exit code.** `atelier invoke --json` (and `--answer-only`) exits 1 on a blocked run, as `atelier run` does.
+- **Short form from longer pieces.** A post is never written again toward the length of your longer pieces, and a
+  length you stated that the format cannot hold ("between 300 and 450 words" in 280 characters) is said once, in the
+  run and in its JSON `note`, as not applying to that format.
+- **The controller's settings are live.** Each new implementation release (`atelier fidelity --set`, `--next`,
+  `--distill`) records what every repair action has measurably moved and cost on this skill's runs, and
+  `atelier fidelity --skill <name>` shows the controller settings in force.
+- **What a run prints says one thing.** "Still broken" is no longer followed by "every rule now holds"; a feature that
+  did not move is not listed as steered; an added negation is said as added; a feature too high is "missed", not
+  "left out"; a step the calls cannot hold says so instead of "$0.00"; the stop at the rewrite-pass cap says so; a
+  step taken after a redraft did no better gives the real distance; a feature note states its move once.
+  `--cap`, `--max-calls` and `--accept-new-binding` are in the help for `run` and `invoke`.
 
 ### Added: a skill from pieces by several authors, combined as you choose
 

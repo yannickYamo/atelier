@@ -275,7 +275,18 @@ stopped are recorded under `repair.controller` and printed by `atelier report`. 
 - **The splice is deterministic.** The model returns replacement text for numbered spans, and the
   code puts them back. Nothing outside a span can change.
 - **A rewrite never makes a measured rule worse.** A pass is kept only if every rule that held still
-  holds, and the broken REQUIRED rules are fewer or broken in fewer places.
+  holds, and the broken REQUIRED rules are fewer, broken in fewer places, or (for a counted feature) nearer
+  their band. A counted feature is read by its distance from the band, never by how many sentences carry
+  it: one carrier further out is worse than three nearer in. A rate is compared at the new length, so a
+  shorter text is not read as a feature drifting.
+- **Your rules come before your range.** A step taken for a rule you require (a span rewrite, a mechanical
+  or grammar fix, a draft written again) is never refused because it moved one of the features your
+  pieces usually hold; what it moved is recorded as observed. Those features are weighed only on the steps
+  aimed at them. Every repair step's measured effect is written into the next implementation release
+  (`atelier fidelity --set` or `--next`), and `atelier fidelity --skill <name>` shows the controller's
+  settings in force.
+- **A draft written again adds no figure.** One that holds a figure neither the earlier draft, the
+  request nor your material holds is not kept.
 - **A rewrite may change how something is said, never what it claims** (`core/loop/integrity.ts`).
   Every rewritten span must keep its figures, negations, qualifiers ("may", "most", "roughly"), proper
   names and `[placeholders]`, unless the broken rule named that very word. A ratio's competing word may

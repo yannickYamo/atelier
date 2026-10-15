@@ -356,7 +356,8 @@ export const FEATURES: readonly Feature[] = [
 const BY_ID = new Map(FEATURES.map((f) => [f.id, f]));
 export const featureOf = (id: string): Feature | null => BY_ID.get(id) ?? null;
 
-const num = (p: Readonly<Record<string, unknown>>, k: string): number | null => (typeof p[k] === 'number' ? p[k] : null);
+// An edge stored as ±1e9 or ±Infinity is an edge the band does not have: read as absent, never as a width of a billion.
+const num = (p: Readonly<Record<string, unknown>>, k: string): number | null => (typeof p[k] === 'number' && Number.isFinite(p[k]) && Math.abs(p[k]) < 1e9 ? p[k] : null);
 const fmt = (f: Feature, x: number): string => (f.unit === 'share' ? `${Math.round(x * 100)}%` : `${x}`);
 
 /** The band a FEATURE measurement states, and how far outside it `v` sits: positive above, negative below, 0 inside. */
