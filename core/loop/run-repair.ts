@@ -4,6 +4,7 @@
 // if it breaks nothing that held and fixes at least one thing that did not (`acceptRepair`). Every
 // call is metered through the caller's budget. The standard is read, never written.
 
+import { inRepairChain } from '../inference/step-guard.js';
 import type { CheckContext } from '../observers/registry.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend, processSpendByPurpose, spendBetween, type SpendPurpose, type SpendLine } from '../inference/client.js';
@@ -24,7 +25,7 @@ import { decide, controllerRecord, recordTarget, stepWords, stepLedger, DEFAULT_
 import { applyOperator, operatorsToward, sitesOf, keepsWords } from '../fidelity/operators.js';
 import { SITES_PER_OPERATOR } from '../fidelity/structural.js';
 import { spanIntegrity } from './integrity.js';
-import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
+import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, ruleParamsOf, cutSpan, applyStep, lostToLength, tooShort, unmeasuredIn, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA,
   type Reverted, type Applied, type RepairTarget, type Proposed, type NoChange, type StepPlan, type StepRule, type StepResult } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
@@ -51,6 +52,13 @@ function cutClaim(text: string, start: number, end: number): string {
   const row = !pre.trim() && !post.trim() && span.startsWith('|');
   const under = nl === -1 ? null : /^[ \t]*(=+|-+)[ \t]*(?:\n|$)/.exec(text.slice(nl + 1));
   const setext = !pre.trim() && !post.trim() && under !== null;
+  // A SENTENCE THAT WAS ITS WHOLE PARAGRAPH goes with its line, and the blank line around it is left once: a cut never
+  // leaves an empty paragraph behind.
+  if (!heading && !row && !setext && !pre.trim() && !post.trim()) {
+    const head = text.slice(0, lineStart); let rest = text.slice(nl === -1 ? text.length : nl + 1);
+    if (/(?:^|\n)[ \t]*\n$/.test(head) || !head) rest = rest.replace(/^(?:[ \t]*\n)+/, '');
+    return !rest.trim() ? head.replace(/\s+$/, '') + (text.endsWith('\n') ? '\n' : '') : `${head}${rest}`;
+  }
   if (!heading && !row && !setext) return cutSpan(text, start, end);
   const stop = setext && under ? nl + 1 + under[0].length : nl === -1 ? text.length : nl + 1;
   // The blank line that set the heading off goes with it, unless it is all that separates two blocks.
@@ -399,17 +407,26 @@ export async function enforceClaims(skill: string, v: StandardVersion, text: str
     // REQUIRED rules only: a preference does not outweigh an invented figure. And not under --placeholders: the
     // person asked for a visible slot, which hides nothing. With no counted REQUIRED rule there is nothing to read.
     const guarded = !opts.placeholders && planFor(v).rules.some((p) => p.enforced);
-    const brokenIn = (t: string): Set<string> => new Set(!guarded ? [] : checkDraft(skill, v, t, { ...opts, guardClaims: false }).checked
-      .filter((c) => acts(c) && c.result.verdict === 'VIOLATED').map((c) => c.requirementId));
-    let held = brokenIn(next);
+    // UNMEASURABLE IS NOT HELD (./repair.ts, `lostToLength`). A rule read before a cut, broken or held, that the shorter
+    // text is too short to read is not held after it: it stays among the rules not held, so no cut counts as having
+    // mended it, and the record says it was not measured (`RepairRecord.unmeasured`). The cut itself is made: what it
+    // removes is invented, and a rule nobody can read is not one it was seen to break.
+    const readIn = (t: string): RuleCheck[] => (!guarded ? [] : checkDraft(skill, v, t, { ...opts, guardClaims: false }).checked.filter((c) => acts(c)));
+    const notHeld = (now: readonly RuleCheck[], was: readonly RuleCheck[]): Set<string> => new Set(now.filter((c) => c.result.verdict === 'VIOLATED'
+      || lostToLength(was.find((b) => b.requirementId === c.requirementId), c)).map((c) => c.requirementId));
+    let reading = readIn(next);
+    let held = notHeld(reading, reading);
     for (const sp of spans) {
       const without = opts.placeholders ? `${next.slice(0, sp.start)}${CLAIM_SLOT}${next.slice(sp.end)}` : cutClaim(next, sp.start, sp.end);
       // NO CUT EMPTIES A SECTION. The last sentence under a heading stays, still flagged: the check fails on it
       // and names it, which a person can act on. A heading over nothing passed as a section that was there.
       if (emptyHeadings(without) > emptyHeadings(next)) { kept.add(sp.text.trim().slice(0, 160)); continue; }
-      const after = brokenIn(without);
-      if ([...after].some((id) => !held.has(id))) { kept.add(sp.text.trim().slice(0, 160)); continue; }
-      held = after;
+      const now = readIn(without);
+      const after = notHeld(now, reading);
+      // a rule broken before the cut and unreadable after it stays not held
+      for (const id of held) if (now.some((c) => c.requirementId === id && tooShort(c))) after.add(id);
+      if (now.some((c) => c.result.verdict === 'VIOLATED' && !held.has(c.requirementId))) { kept.add(sp.text.trim().slice(0, 160)); continue; }
+      held = after; reading = now.map((c) => (tooShort(c) ? reading.find((b) => b.requirementId === c.requirementId) ?? c : c));
       next = without;
       cut.push(sp.text.trim().slice(0, 160));
     }
@@ -644,6 +661,14 @@ export async function refineToStandard(
   client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses = 2,
   opts: CheckOptions = {},
 ): Promise<Refined> {
+  // A caller that hands no ledger (verify --repair, fix) runs this refinement as the run: a repair chain of its own, in
+  // which no model call is made outside a step or a registered reader (../inference/step-guard.ts).
+  return opts.controller?.ledger ? refineOnLedger(client, budget, skill, v, draft, maxPasses, opts)
+    : inRepairChain(() => refineOnLedger(client, budget, skill, v, draft, maxPasses, opts));
+}
+
+async function refineOnLedger(client: InferenceClient, budget: Budget, skill: string, v: StandardVersion, draft: string, maxPasses: number,
+  opts: CheckOptions): Promise<Refined> {
   const memory = claimMemory();
   // GRADED FEATURES (`opts.graded`): repair targets that are never failures. Which rules, which checks a pass is
   // pointed at, and what the run did about them; `pending` is what keeps the loop going where `failed` would not.
@@ -708,7 +733,7 @@ export async function refineToStandard(
   // controller reads the whole run's steps from it. A caller with none to hand gets one of its own here.
   const settings = opts.controller?.settings ?? null;
   const budgetNow = (): ControllerInput['budget'] => ({ usdLeft: budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0), callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null });
-  const ledger = opts.controller?.ledger ?? stepLedger(settings, budgetNow, opts.controller?.history ?? []);
+  const ledger = opts.controller?.ledger ?? stepLedger(settings, budgetNow, opts.controller?.history ?? [], [opts.context?.request ?? '', opts.material ?? ''].join('\n\n'));
   const ledgerStart = ledger.entries.length;
   /** this refinement's own steps: the ledger's entries from where it began */
   const decisions = (): ControllerDecisionRecord[] => ledger.entries.slice(ledgerStart);
@@ -1154,8 +1179,11 @@ export async function refineToStandard(
     why = `${why} (the claim reader failed during the repair, so the draft and every rewrite were read again by the pattern check: `
       + 'each comparison used one instrument, and a claim only the reader could see is no longer checked)';
   }
+  // UNMEASURABLE IS NOT HELD: a rule the draft was read on that the text delivered is too short to read is said as not measured.
+  const lost = unmeasuredIn(first, report);
+  if (lost.length) why = `${why.replace(/every REQUIRED measured rule (?:now )?holds/, 'nothing REQUIRED that could be measured is broken')}; not measured: ${lost.join(', ')} (the text delivered is too short to measure ${lost.length === 1 ? 'it' : 'them'})`;
   return { output: text, report: recorded(report),
-    repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft,
+    repair: { passes, violatedBefore: broken(first), violatedAfter: broken(report), originalOutputHash: sha(draft), draft, ...(lost.length ? { unmeasured: lost } : {}),
       ...(kept.length ? { integrityReverted: kept, revertedRules } : {}), ...(pairs.length ? { pairs: pairs.slice(0, MAX_PAIRS_KEPT) } : {}),
       ...(cut.length ? { storiesCut: cut } : {}), ...(toCheck.length ? { claimsToCheck: toCheck } : {}), ...editsRecord(), ...gradedRecord(report, text), ...controllerOf(), why: ownerWords(why) } };
 }

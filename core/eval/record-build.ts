@@ -42,6 +42,8 @@ export interface RecordFacts {
   readonly copying: { readonly longest: number; readonly limit: number; readonly tellable: boolean; /** the shared words themselves */ readonly words?: string } | null;
   /** of the rules set aside, those the request replaced with a constraint of its own, which is itself in the record */
   readonly replaced?: ReadonlySet<string>;
+  /** rules read on the draft (broken or held) that the delivered text is too short to read: not measured, never "does not apply" */
+  readonly unmeasured?: ReadonlySet<string>;
 }
 
 const NOTHING: Observation = { proposition: null, coverage: 'NONE', qualification: 'UNAVAILABLE', evidence: null };
@@ -87,6 +89,12 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   // met. The check finished, so the run is still deliverable (a finding never blocks, under --strict either).
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_LISTED)) {
     return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE' }, verdict: null });
+  }
+  // UNMEASURABLE IS NOT HELD. A rule the draft was read on, broken or held, that the text delivered is too short to read
+  // does apply: it was not measured on what ships, and the evaluation of it did not finish. Unverified, never a pass.
+  if (line.verdict === 'NOT_APPLICABLE' && f.unmeasured?.has(p.id)) {
+    return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE',
+      incomplete: `not measured: ${p.id} was read on the draft, and the text delivered is ${line.detail.replace(/^not measured: /, '')}` }, verdict: null });
   }
   if (line.verdict === 'NOT_APPLICABLE') return entry({ ...base, observation: seen(line.detail), applies: false, verdict: null });
   return entry({ ...base, observation: seen(line.detail), verdict: line.verdict });

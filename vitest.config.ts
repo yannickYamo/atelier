@@ -15,7 +15,9 @@ export default defineConfig({
     // The grammar engine builds its dictionary in about five seconds per process, and most of this suite spawns the
     // binary many times over: the suite runs a small fixed checker instead (providers/grammar.ts, `stubGrammar`),
     // wired in the same place as the real one, so the rule is still checked. The grammar tests ask for harper itself.
-    env: { ATELIER_CLAIMS: 'pattern', ATELIER_GRAMMAR: 'stub' },
+    // A model call made while a repair chain runs, outside a step and outside a registered reader, throws under the suite
+    // (core/inference/step-guard.ts): in-process and in every binary the tests spawn with this environment.
+    env: { ATELIER_CLAIMS: 'pattern', ATELIER_GRAMMAR: 'stub', ATELIER_STEP_GUARD: 'throw' },
     setupFiles: ['tests/setup-grammar.ts'],
     // Source imports use .js specifiers (NodeNext), which is what `tsc` emits and what Node runs.
     // Vitest resolves them back to the .ts on disk, so the tests exercise the same module graph the

@@ -33,6 +33,7 @@
 // its wording, and it certifies nothing beyond the list above.
 
 import { wordsOf } from '../observers/text.js';
+import { numbersIn as valuesIn } from './numbers.js';
 
 // "cannot", "can not" and "can't" each count once: "cannot" is its own word; the other two are caught by not / n't.
 const NEGATION = /\b(?:not|no|never|none|nor|without|nothing|nobody|neither|cannot)\b|n['’]t\b/gi;
@@ -89,6 +90,25 @@ export const numbersIn = (s: string): string[] => [
   ...(s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/[.,]$/, '').replace(/,/g, '')),
   ...(s.match(/\b[a-z]+\b/gi) ?? []).map((w) => NUMBER_WORDS[w.toLowerCase()]).filter((n): n is string => Boolean(n)),
 ];
+/** A day or a month named: a date, though it holds no digit ("on Tuesday", "in October"). Not "May", far more often a modal. */
+const DATE_WORDS = /\b(?:January|February|March|April|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/g;
+/**
+ * EVERY FIGURE A TEXT STATES, each as its value: digits ("9,000" is 9000, so a percentage, a sum of money and a date in
+ * digits are read by their number), a number in words ("nine thousand", "twelve", "a dozen"), and a day or a month
+ * named. A list's own numbering ("3. ") is layout, not a figure, and is not read.
+ */
+export function figuresIn(t: string): string[] {
+  const s = t.replace(/^\s*\d+[.)]\s/gm, '');
+  return [...new Set([...numbersIn(s), ...valuesIn(s), ...(s.match(DATE_WORDS) ?? [])])];
+}
+/**
+ * NO STEP ADDS A FIGURE (./repair.ts, `applyStep`). The figures `after` holds that neither `before` nor the source (the
+ * request and the bound material) does: what no text a step proposes may add, whichever loop proposes it.
+ */
+export function addedFigures(before: string, after: string, source: string): string[] {
+  const had = new Set([...figuresIn(before), ...figuresIn(source)]);
+  return figuresIn(after).filter((n) => !had.has(n));
+}
 /** How many times each item occurs: "most cases and most teams" carries "most" twice. */
 const tally = (xs: readonly string[]): Map<string, number> => { const m = new Map<string, number>(); for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1); return m; };
 const termCount = (s: string, t: string): number => (s.match(new RegExp(`(?<![A-Za-z])${t.replace(/\s+/g, '\\s+')}(?![A-Za-z])`, 'gi')) ?? []).length;

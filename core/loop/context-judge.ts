@@ -15,6 +15,7 @@
 // Built and tested; not yet measured the way the claim reader is. Its findings only redraft a sentence,
 // waive a presentation rule for one run, or mark an answer's own work claims, and each is reported.
 
+import { readingAs } from '../inference/step-guard.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { createHash } from 'node:crypto';
@@ -112,7 +113,7 @@ export function modelJudge(client: InferenceClient, budget: Budget): ContextJudg
   const ask = async (system: string, user: string, tool: string, schema: Record<string, unknown>): Promise<unknown> => {
     try {
       const res = await spend(budget, 0.005, async () => {
-        const x = await client.complete({ stableBlock: system, variableBlock: '', userMessage: user, toolName: tool,
+        const x = await readingAs('context judge', client).complete({ stableBlock: system, variableBlock: '', userMessage: user, toolName: tool,
           toolDescription: 'Return the judgement.', schema, maxTokens: 800, temperature: 0 });
         return { value: x, cost: x.cost, usage: x };
       }, 'context judge');

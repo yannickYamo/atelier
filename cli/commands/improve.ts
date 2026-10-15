@@ -36,6 +36,14 @@ import { sha, DATA, die, argv, flag, clientFor, numericFlag, assertReachable, sk
 import type { RepairRecord, InvocationRecord, InvocationSettings, TaskSource } from '../../core/state/canonical-state.js';
 import { assertRequestBound } from '../../core/state/canonical-state.js';
 import { asText } from '../../core/discovery/text.js';
+import { applyStep, type Proposed } from '../../core/loop/repair.js';
+import { stepLedger, controllerRecord, DEFAULT_COST } from '../../core/loop/controller.js';
+import type { VerifyReport } from '../../core/observers/verify.js';
+
+/** What the claim guard found in a structured output, as the one line the one acceptance rule reads: the invented-claim line. */
+const claimsReport = (found: readonly string[]): VerifyReport => ({ skill: '', standardVersionHash: '', unchecked: [], conditional: [], failed: found.length > 0,
+  checked: [{ requirementId: 'UNSOURCED', statement: 'Every specific is in your material or your request.', materiality: 'REQUIRED', phase: 'ACCURACY',
+    result: { verdict: found.length ? 'VIOLATED' : 'MET', spans: found.map((t) => ({ start: 0, end: t.length, text: t, why: 'not in your material or your request' })), value: found.length, detail: `${found.length} specific(s) not in the material supplied` } }] });
 
 // ── improve ──────────────────────────────────────────────────────────────────────────────────
 /**
@@ -408,13 +416,32 @@ export async function runOnce(
   const picked = written.length > 1 && select ? await select.choose(written.map((w) => w.piece), written.map((w) => ({ index: w.index, temperatureSent: w.temperatureSent })))
     : { index: 0, why: n > 1 ? `the only draft of ${n} that came back` : '' };
   let { piece: draft, reportedModel, schemaSent, servedTask } = written[picked.index];
+  let contractRepair: RepairRecord | null = null;
   if (contract !== null && claimGuard) {
-    const found = await claimGuard(stringLeaves(draft));
+    const guard = claimGuard;
+    const found = await guard(stringLeaves(draft));
     if (found.length) {
       const note = 'Your previous answer asserted specifics that are not in anything you were given. Leave them out; '
         + 'say the point without them, or leave the field general:\n' + found.map((f) => `- "${f.slice(0, 200)}"`).join('\n');
-      ({ piece: draft, reportedModel, schemaSent, servedTask } = await spendOneWithResult(client, budget, servedText, task, contract, note));
-      const still = await claimGuard(stringLeaves(draft));
+      // THE ONE STEP (core/loop/repair.ts, `applyStep`). A structured output has no repair chain, so the one draft written
+      // again around what the claim guard found is the one step on a ledger made for this run: gated by the budget,
+      // entered before it runs, its call counted on it, and kept only on the one acceptance rule (fewer specifics no
+      // source holds, no figure the earlier output, the request or the material does not hold).
+      const ledger = stepLedger(null, () => ({ usdLeft: budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0), callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }), [], task);
+      const s = await applyStep<Proposed & { readonly written: Awaited<ReturnType<typeof spendOneWithResult>>; readonly still: readonly string[] }>(ledger,
+        { action: 'claim-redraft', targets: ['UNSOURCED'], why: `the output asserted ${found.length} specific(s) not in your material or your request: written again once without them`,
+          expectedGain: found.length, expectedCostUsd: DEFAULT_COST['claim-redraft'], forEnforced: ['UNSOURCED'] },
+        { text: stringLeaves(draft), report: claimsReport(found) }, async () => {
+          const again = await spendOneWithResult(client, budget, servedText, task, contract, note);
+          const leaves = stringLeaves(again.piece); const still = await guard(leaves);
+          return { text: leaves, report: claimsReport(still), written: again, still };
+        }, { enforced: new Set(['UNSOURCED']), purposes: ['writing'] });
+      const kept = s.kind === 'judged' && s.kept ? s.after : null;
+      if (kept) ({ piece: draft, reportedModel, schemaSent, servedTask } = kept.written);
+      contractRepair = { passes: 0, violatedBefore: ['UNSOURCED'], violatedAfter: kept && !kept.still.length ? [] : ['UNSOURCED'], originalOutputHash: sha(written[picked.index].piece),
+        controller: controllerRecord(ledger.entries, kept ? 'the output was written again once' : s.kind === 'refused' || s.kind === 'failed' ? s.why : `not kept: ${s.kind === 'judged' ? s.why ?? '' : s.why}`),
+        why: kept && !kept.still.length ? 'the output was written again once without the specifics no source holds' : 'the output still asserts specifics no source holds' };
+      const still = kept ? kept.still : found;
       if (still.length) {
         die(`the output still asserts ${still.length} specific(s) that are not in your material or your request, after one retry:\n`
           + still.map((f) => `  - "${f.slice(0, 200)}"`).join('\n')
@@ -423,7 +450,7 @@ export async function runOnce(
     }
   }
   // A structured output is held by its contract, not by prose rules; it is never span-rewritten.
-  const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: null };
+  const refined = refine && contractText === null ? await refine(draft) : { output: draft, repair: contractRepair };
   const output = refined.output;
   const at = new Date().toISOString();
   // THE PROOF. Not "the file is in the package" — the schema the provider received, hashed, against the
