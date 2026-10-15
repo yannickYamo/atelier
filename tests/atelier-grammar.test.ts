@@ -317,7 +317,7 @@ describe('through the binary', () => {
     const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced');
     expect(r.code).toBe(1);
     expect(r.out).toMatch(new RegExp(`FAIL {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
-    expect(r.out).toMatch(/1 mechanical error\(s\): subject–verb agreement; 1 construction\(s\) the checker is unsure of/);
+    expect(r.out).toMatch(/1 mechanical error\(s\): subject–verb agreement; 1 listed to check/);
     expect(r.out).toMatch(/› "was" {2}\(subject–verb agreement: "was" → "were"\)/);
     expect(r.out).toMatch(new RegExp(`warn {2}${g?.requirementId ?? 'g'}·check {2}Constructions the grammar checker is unsure of`));
     writeFileSync(join(proj, 'clean.md'), 'They were late to the meeting. The plan still holds.');
