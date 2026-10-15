@@ -7,6 +7,31 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: grammar changes text only where an error has no legitimate reading
+
+- **One rule for what is changed in place.** Grammar now changes text only where the error has no legitimate reading in
+  any major English variety or register; anything with a plausible reading is listed, never changed. On a set of 150
+  sentences (120 correct, 30 with errors), 12 correct sentences were rewritten before in every dialect setting; none
+  is now. 25 of the 30 errors are still fixed in place; 4 more are listed (an engine miss stays a miss).
+- **Capitalised words are never changed.** A known misspelling with a capital is listed wherever it stands, a
+  sentence's start included: "Wellcome Collection", "Pharoah Sanders", "Grammer", "Untill Then", "Teh Hong Piow". So
+  "Thsi is" and "Tommorow we ship" are listed too, no longer fixed.
+- **The misspelling list, audited.** 44 entries with a legitimate reading are gone: "teh" (tea in Malay and Singapore
+  English), "calender" (a real word), "embarras" (French), "wich" (a spelling of "wych"), the listed variants
+  "supercede", "publically", "accidently", "incidently", "dumbell" and "existant", the contractions typed without an
+  apostrophe ("dont", "thats", "youre", "theres" and 25 more), the names "Wellcome", "Pharoah", "Grammer" and
+  "Sergent", and one entry that corrected to itself. 475 remain.
+- **A word said twice is listed, never collapsed**: "had had", "that that", "Bora Bora", "Walla Walla", "mahi mahi",
+  "tsk tsk", "yada yada". An accidental "the the" is listed with them.
+- **"a" or "an" before a word in h is listed** ("an historian", "an hotel"), as is one before an acronym. "its" where
+  "it's" may be meant, "there is" before a plural and a full-width comma are listed too. A capital article keeps its
+  case: "A essay" becomes "An essay", not "AN essay".
+- **`verify --repair` asks for a model key only when a rewrite needs one.** A repair that is all mechanical (a known
+  misspelling, an agreement, a/an, punctuation, an em dash) now runs with no key set.
+- **A stub in a folder of long pieces is no longer served as an example** when a skill is built without a model: it
+  is left out and named, as a build with a model does. A folder of short pieces keeps every piece.
+- A paragraph of one sentence is reported as "longest 1 sentence".
+
 ### Fixed: a composite decides each rule once, and the person's words come first
 
 - **One outcome per rule, across every conflict it is in.** With three or more authors a rule sits in several pairwise

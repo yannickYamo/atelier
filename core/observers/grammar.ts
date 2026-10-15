@@ -1,15 +1,29 @@
 // atelier/core/observers/grammar.ts — MECHANICAL ERRORS, FOUND AND NAMED; THE VOICE LEFT ALONE.
 //
-// One editorial rule every author holds without stating it: a word spelt wrong, a verb that does not agree with
-// its subject, "the the", "an bug", a missing apostrophe in "dont", a space before a comma. Nothing else here is
-// voice, and nothing of the voice is here. The checker that finds them is a grammar engine wired in by the
-// process that runs Atelier (`setGrammarProvider`): core names what a lint is and decides what to do with it, and
-// never imports the engine, so a build without one still runs and says so.
+// THE ONE RULE. A text is changed in place only where the error has NO legitimate reading in any major English
+// variety or register. Anything with a plausible legitimate reading (a name, a dialect's word, a loanword, a register's
+// spelling, a word said twice, an older usage) is LISTED for the person to read, never changed. Correctness goes up;
+// the voice is untouched. Concretely, the only changes made in place are:
+//
+//   - a pronoun–verb agreement from the fixed table below ("they was", "you was", "I has", "he go");
+//   - "a" or "an" before a word that does not start with "h" and is not an acronym ("a essay", "an new bike");
+//   - a comma, semicolon, colon or full stop typed twice (",,"), and a space before punctuation ("done ?", "paw ,");
+//   - a lower-case word on the curated list of well-known misspellings (./grammar-words.ts), each with its one
+//     correction ("definately", "recieve").
+//
+// Everything else is listed, and in particular: a capitalised word, wherever it stands, even at a sentence's start
+// ("Wellcome", "Pharoah", "Untill Then", "Teh Hong Piow", and so "Thsi" too); a word repeated ("had had", "that that",
+// "Bora Bora", "mahi mahi", "tsk tsk", and so an accidental "the the" too); "a" or "an" before a word in h ("an
+// historian", "an hotel"); a contraction with or without its apostrophe ("dont", "its"); and every word the checker
+// does not know. The recall this costs is accepted: a slip that is listed is still in front of the person.
+//
+// The checker that finds them is a grammar engine wired in by the process that runs Atelier (`setGrammarProvider`):
+// core names what a lint is and decides what to do with it, and never imports the engine, so a build without one
+// still runs and says so.
 //
 // WHAT COUNTS. The engine proposes far more than it is allowed to act on. A lint is CONFIRMED only when it is of
-// a kind this file lists as unambiguously mechanical (`MECHANICAL_RULES`) and survives every guard below;
-// everything else the engine proposes is UNCERTAIN: listed for the person to read, never repaired, never a rule
-// broken. The guards, in the order they run:
+// a kind this file lists (`MECHANICAL_RULES`), survives every guard below and the one rule above; everything else the
+// engine proposes is UNCERTAIN: listed for the person to read, never repaired, never a rule broken. The guards:
 //
 //   protected regions   code (fenced and inline), quotations and block quotes, URLs, email addresses, paths,
 //                       file names and `path:line` citations, figures and currency, front matter, link targets,
@@ -20,18 +34,17 @@
 //   the author's variant  spelling is checked in the dialect the standard records; where none is recorded, only a
 //                       word misspelt in BOTH British and American English counts.
 //   intentional choices a fragment, an "And" or "But" opener, a one-word sentence, a lower-case styling, a word
-//                       repeated for emphasis, two spaces after a full stop, "!!": none of these is in the list, and the
-//                       repetition guard keeps "very very" and "no no".
+//                       repeated, two spaces after a full stop, "!!": none of these is changed.
 //   known misspellings  a spelling is changed only where the word is on the curated list of well-known misspellings,
-//                       each with its one correction (./grammar-words.ts), found by this file's own pass over the
-//                       text: whole words, outside the protected regions, whatever the engine calls the word, in any
-//                       case at a sentence's start ("Untill" → "Until"). No guess at the word meant is ever made.
-//                       Every other word the checker does not know (a slip, a coinage, slang, a word of one dialect,
-//                       a closed compound it would split, a plural it would make a possessive) is listed, never
-//                       changed, and no spelling is ever converted between British and American English.
+//                       found by this file's own pass over the text: whole words, outside the protected regions,
+//                       written in lower case. No guess at the word meant is ever made. Every other word the checker
+//                       does not know (a slip, a coinage, slang, a word of one dialect, a closed compound it would
+//                       split, a plural it would make a possessive) is listed, never changed, and no spelling is ever
+//                       converted between British and American English.
 //   the author's grammar  a pronoun agreement the author's own pieces use ("it don't") is their voice: not changed,
-//                       not listed. Without that evidence only the clear cases are corrected ("they was", "I has",
-//                       "he go"); vernacular ("it don't") and an error with no correction ("I is") are listed.
+//                       not listed. Without that evidence only the table's cases are corrected ("they was", "I has",
+//                       "he go"); vernacular ("it don't"), "there is" with a plural, and an error with no single
+//                       correction ("I is") are listed.
 //   claims              a correction that would change a figure or a capitalised name is refused: it is listed
 //                       as uncertain with the reason, and nothing is changed.
 //
@@ -75,8 +88,10 @@ export const isGrammarNote = (c: { readonly requirementId: string; readonly obse
 
 // ── THE ALLOWED KINDS, AS A LIST ────────────────────────────────────────────────────────────────
 //
-// Rule names of the engine (harper.js 2.10) that find an error no author intends, each with the label the report
-// uses. Nothing outside this list is ever corrected. Added to only with a reason, here.
+// Rule names of the engine (harper.js 2.10) this file reads, each with the label the report uses. Nothing outside this
+// list is ever corrected, and of these only agreement (the table's cases), a/an (not before "h", not before an
+// acronym) and a space before a comma are corrected in place; the rest (`LISTED_RULES`) are always listed, under the
+// one rule at the head of this file. Added to only with a reason, here.
 export const MECHANICAL_RULES: Readonly<Record<string, string>> = {
   SpellCheck: 'spelling',
   PronounVerbAgreement: 'subject–verb agreement',
@@ -91,12 +106,20 @@ export const MECHANICAL_RULES: Readonly<Record<string, string>> = {
   DoublePunctuation: 'double punctuation',
   SpaceBeforePunctuation: 'a space before punctuation',
 };
+/**
+ * Kinds read and always listed, each with why: every one has a legitimate reading somewhere. A word said twice is
+ * "had had", "that that", "Bora Bora" or "tsk tsk" as often as a slip; "its" is a possessive as often as a missing
+ * apostrophe; "there's" with a plural is ordinary speech.
+ */
+const LISTED_RULES: Readonly<Record<string, string>> = {
+  RepeatedWords: 'a word repeated: "had had", "that that" and "Bora Bora" are English, so it is listed, never collapsed',
+  ItsContraction: '"its" may be the possessive the author meant',
+  ThereIsAgreement: '"there is" before a plural is ordinary in speech and in several varieties',
+};
 /** Engine categories allowed whole: a Typo is a fixed table of common slips ("teh"), held to the spelling guards. */
 const MECHANICAL_KINDS: ReadonlySet<string> = new Set(['Typo']);
 /** Spelling-like lints: the word guards below apply to them, and only to them. */
 const SPELLING = (l: GrammarLint): boolean => l.rule === 'SpellCheck' || l.kind === 'Typo';
-/** A word doubled on purpose is emphasis, not a slip. */
-const EMPHASIS: ReadonlySet<string> = new Set(['very', 'really', 'so', 'no', 'yes', 'never', 'again', 'many', 'more', 'much', 'far', 'long', 'ha', 'bye', 'hush', 'well', 'now', 'please', 'quite', 'ever', 'on', 'out']);
 /** Capitalised words that are not names wherever they sit (the meaning guard's own list, kept in step). */
 const NOT_NAMES: ReadonlySet<string> = new Set(['most', 'every', 'each', 'all', 'some', 'many', 'few', 'the', 'this', 'that', 'these', 'those', 'it', 'its', 'we', 'you', 'they', 'he', 'she', 'our', 'your', 'their', 'my', 'and', 'but', 'or', 'if', 'when', 'why', 'what', 'how', 'not', 'no', 'a', 'an', 'i']);
 
@@ -191,18 +214,11 @@ export function knownMisspelling(word: string): string | null {
   return Object.hasOwn(MISSPELLINGS, w) ? MISSPELLINGS[w] : null;
 }
 
-/** Does the word at `at` open a sentence: the text's start, a line's start (past a heading or list marker), or after ". ! ?". */
-function opensSentence(text: string, at: number): boolean {
-  const line = text.slice(text.lastIndexOf('\n', at - 1) + 1, at);
-  if (/^[ \t]*(?:#{1,6}[ \t]+|[-*+>][ \t]+|\d+[.)][ \t]+)?["'“‘([*_]*$/u.test(line)) return true;
-  return /[.!?…]["'”’)\]*_]*\s+["'“‘([*_]*$/u.test(text.slice(Math.max(0, at - 40), at));
-}
-
 /**
  * The known misspellings of a text, found by this file's own pass: whole words outside the protected regions. Each is
- * corrected, its case kept (lower case, or a capital where it opens a sentence), unless it is the author's word (their
- * vocabulary, the request or material, or used three times or more) or a capital in mid-sentence (a name, perhaps):
- * those are listed. What the engine says about the word does not matter.
+ * corrected where it is written in lower case, unless it is the author's word (their vocabulary, the request or
+ * material, or used three times or more); a capitalised one, wherever it stands, may be a name: those are listed.
+ * What the engine says about the word does not matter.
  */
 function misspellingsIn(text: string, protectedIn: readonly Range[], known: ReadonlySet<string>, counts: ReadonlyMap<string, number>): { confirmed: Span[]; uncertain: Span[] } {
   const confirmed: Span[] = []; const uncertain: Span[] = [];
@@ -214,10 +230,9 @@ function misspellingsIn(text: string, protectedIn: readonly Range[], known: Read
     const span = (why: string, replacement?: string): Span => ({ ...at, text: word, why, ...(replacement !== undefined ? { replacement } : {}) });
     if (known.has(lower)) { uncertain.push(span('a word of the author\'s own, or one the request or material carries (a known misspelling)')); continue; }
     if ((counts.get(lower) ?? 0) >= 3) { uncertain.push(span('used three times or more: a spelling the author chooses (a known misspelling)')); continue; }
-    const capital = word === lower[0].toUpperCase() + lower.slice(1) && word !== lower;
-    if (word !== lower && !(capital && opensSentence(text, m.index))) { uncertain.push(span(`a capitalised word may be a name (a known misspelling of "${right}")`)); continue; }
-    const fix = capital ? right[0].toUpperCase() + right.slice(1) : right;
-    confirmed.push(span(`spelling: "${word}" → "${fix}"`, fix));
+    // A capital anywhere, a sentence's start included, may be a name ("Wellcome", "Untill Then", "Teh Hong Piow").
+    if (word !== lower) { uncertain.push(span(`a capitalised word may be a name (a known misspelling of "${right}")`)); continue; }
+    confirmed.push(span(`spelling: "${word}" → "${right}"`, right));
   }
   return { confirmed, uncertain };
 }
@@ -337,7 +352,8 @@ export function readGrammar(text: string, params: Measurement['params'], context
     const span = (why: string, replacement?: string): Span => ({ start: l.start, end: l.end, text: problem, why, ...(replacement !== undefined ? { replacement } : {}) });
     const note = (why: string): void => { uncertain.push(span(`${why} (${l.rule}: ${l.message.replace(/\s+/g, ' ').trim()})`)); };
     if (label === null) { note('the checker proposes a change this rule does not make'); continue; }   // (c) not in the list
-    const fix = l.replacement;
+    if (Object.hasOwn(LISTED_RULES, l.rule)) { note(LISTED_RULES[l.rule]); continue; }   // a legitimate reading exists
+    let fix = l.replacement;
     if (SPELLING(l)) {
       const word = problem.trim();
       if (/^[A-Z]/.test(word) || /[A-Z]/.test(word.slice(1)) || /\d/.test(word)) { note('a name, an acronym or a coined word is the author\'s'); continue; }
@@ -358,16 +374,22 @@ export function readGrammar(text: string, params: Measurement['params'], context
       }
     }
     if (fix === null) { note('no correction the checker is sure of'); continue; }
-    if (l.rule === 'RepeatedWords') {
-      const words = lowerWords(problem);
-      if (words.length !== 2 || words[0] !== words[1]) { note('not one word twice'); continue; }
-      if (EMPHASIS.has(words[0])) { note('a word repeated for emphasis'); continue; }
+    if (l.rule === 'AnA') {
+      // "an historian", "an hotel": an older and still current usage. "a FAQ", "an MRI": read as letters or as a word.
+      const next = /^[\s*_"'“‘(]*([\p{L}\p{N}]+(?:[.'’-][\p{L}\p{N}]+)*)/u.exec(text.slice(l.end))?.[1] ?? '';
+      if (!/^(?:a|an)$/i.test(problem) || !/^(?:a|an)$/i.test(fix)) { note('not one article for the other'); continue; }
+      if (/^h/i.test(next)) { note('"a" or "an" before a word in h: "an historian" is a usage of its own'); continue; }
+      if (!next || /\d/.test(next) || /\p{Lu}/u.test(next.slice(1)) || /^\p{Lu}+$/u.test(next) || next.includes('.')) { note('"a" or "an" before an acronym or a figure: it depends on how it is read aloud'); continue; }
+      // The case of the article as written: "A essay" becomes "An essay", never "AN essay".
+      fix = /^\p{Lu}/u.test(problem) ? fix[0].toUpperCase() + fix.slice(1).toLowerCase() : fix.toLowerCase();
     }
+    // A comma's fix is only the space before it: a full-width comma or a missing space after one is the author's.
+    if (l.rule === 'CommaFixes' && !(/^[ \t]+$/.test(problem) && fix === '')) { note('a comma written as the author chose'); continue; }
     // A correction may not change a figure or a name: that is a claim, not a mechanical slip.
     if (fix !== null && fix !== '') {
       if (numbersIn(problem).join('|') !== numbersIn(fix).join('|')) { note('the correction would change a figure'); continue; }
       const kept = new Set(namesOf(fix).map(bare));
-      if (namesOf(problem).some((n) => !kept.has(bare(n)) && !(l.rule === 'RepeatedWords'))) { note('the correction would change a name'); continue; }
+      if (namesOf(problem).some((n) => !kept.has(bare(n)))) { note('the correction would change a name'); continue; }
       if (fix.includes('\n')) { note('the correction spans a line break'); continue; }
     }
     confirmed.push(span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : `${label}: "${problem.trim()}" → "${fix.trim() || '(removed)'}"`, fix ?? undefined));
@@ -398,8 +420,8 @@ export const GRAMMAR: Observer = {
   id: 'GRAMMAR',
   describe: (p) => {
     const d = dialectOf(p);
-    return `no mechanical error: a known misspelling, subject–verb agreement, a word repeated by accident, a/an, a missing apostrophe, a space before a comma; `
-      + `any other word the checker does not know${d ? ` in ${d === 'british' ? 'British' : 'American'} English` : ''}, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched`;
+    return `no mechanical error with no legitimate reading: a known misspelling in lower case, a pronoun–verb agreement ("they was"), a/an, punctuation typed twice or after a space; `
+      + `a capitalised word, a word repeated, "an" before "h", any other word the checker does not know${d ? ` in ${d === 'british' ? 'British' : 'American'} English` : ''}, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched`;
   },
   validate: (p) => {
     const d = list(p, 'dialect');

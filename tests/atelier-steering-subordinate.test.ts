@@ -262,8 +262,8 @@ describe.skipIf(!existsSync(CLI))('end to end: the hand-off honoured, one exit c
   it('B1 (the wall-of-text case): a hand-off followed by a mechanical fix still writes the redraft, and the feature moves', async () => {
     const plain = 'The ferry leaves the pier at eleven and the crossing is calm on most nights of the year.';
     const aside = 'The ferry leaves (as it always has) and the crossing (on most nights) is calm and quiet.';
-    const wall = `${Array.from({ length: 12 }, (_, i) => (i % 2 ? plain : aside)).join(' ')} We walked to teh ramp.`;
-    const calm = `${Array.from({ length: 12 }, () => plain).join(' ')} We walked to teh ramp.`;
+    const wall = `${Array.from({ length: 12 }, (_, i) => (i % 2 ? plain : aside)).join(' ')} We walked to the ramp, seperate from the crowd.`;
+    const calm = `${Array.from({ length: 12 }, () => plain).join(' ')} We walked to the ramp, seperate from the crowd.`;
     fresh();
     await script({ when: [{ contains: 'did not do what your pieces usually do', answer: { piece: calm } }], byTool: { emit_piece: { piece: wall }, emit_replacements: { replacements: [] } } });
     add('No spelling mistakes.', 'REQUIRED', 'GRAMMAR:dialect=american');

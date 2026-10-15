@@ -24,7 +24,8 @@ import * as fstore from '../../core/state/fidelity-store.js';
 import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraftAsync, refineToStandard } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
-import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding } from '../runtime.js';
+import { DATA, argv, flag, positional, assertSkillName, boundMaterial, numericFlag, clientAndBinding, assertReachable } from '../runtime.js';
+import type { InferenceClient } from '../../core/inference/client.js';
 import { describeTaste, vetoMisses, actsAsMiss } from '../../core/taste/reader.js';
 import { recordTaste } from './taste.js';
 import { recordForText } from '../eval-run.js';
@@ -79,7 +80,11 @@ export async function verify(): Promise<void> {
     ...(short.format ? { format: short.format } : {}), ...(short.transfer ? { doesNotApply: short.transfer.doesNotApply } : {}) };
   if (argv.includes('--repair')) {
     const budget = { spentUsd: 0, capUsd: numericFlag('--cap', 1), maxCalls: numericFlag('--max-calls', 4) };
-    const r = await refineToStandard(clientAndBinding('target').client, budget, name, v, text, 2, checks);
+    // The model is asked for only when a rewrite needs it: a repair that is all mechanical (a known misspelling, a/an,
+    // an agreement, punctuation) runs with no key, and a key is asked for at the first call that needs one.
+    let model: InferenceClient | null = null;
+    const client: InferenceClient = { complete: (req) => { if (!model) { assertReachable('target'); model = clientAndBinding('target').client; } return model.complete(req); } };
+    const r = await refineToStandard(client, budget, name, v, text, 2, checks);
     for (const n of checks.claimSensor?.notes ?? []) console.error(`(${n})`);
     if (argv.includes('--json')) {
       console.log(JSON.stringify({ output: r.output, failed: r.report.failed, repair: r.repair, spentUsd: budget.spentUsd }, null, 1));
