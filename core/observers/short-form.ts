@@ -22,7 +22,7 @@ import { formatOf } from './formats.js';
 import { MIN_PIECES_TO_COUNT, thinEvidence } from '../ratification/suggest.js';
 import { FEATURES, type Feature } from './features.js';
 import { pooledRateOf, pooledParams, POOLED_MIN_EVENTS, sayPooled, isShortForm, type PooledRate } from './pooled.js';
-import { shapeOf, SHAPE_LABEL, sayKind, type Shape, type ShapeId, type NumericShape, type KindShape } from './shape.js';
+import { shapeOf, SHAPE_LABEL, sayKind, countOf, type Shape, type ShapeId, type NumericShape, type KindShape } from './shape.js';
 import { ownLengthBand } from '../intake/length.js';
 import { proseWordsOf, quantile } from './text.js';
 
@@ -102,9 +102,12 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
     const min = Math.min(band[0], max);
     const said = id === 'longestSentence'
       ? `The longest sentence in my pieces runs ${lo === hi ? `${lo}` : `${lo} to ${hi}`} words; in a new piece it stays ${min > 0 ? `between ${min} and ${max}` : `at most ${max}`} words`
-      : `My pieces run ${lo === hi ? `${lo}` : `${lo} to ${hi}`} ${SHAPE_LABEL[id]}; a new piece ${min > 0 ? `stays between ${min} and ${max}` : max === 0 ? 'has none' : `has at most ${max}`}`;
+      : `My pieces run ${lo === hi ? countOf(lo, SHAPE_LABEL[id]) : `${lo} to ${countOf(hi, SHAPE_LABEL[id])}`}; a new piece ${min > 0 ? `stays between ${min} and ${max}` : max === 0 ? 'has none' : `has at most ${max}`}`;
+    // A habit band that runs past the platform's limit (stated on its own line above) is said as the habit it is,
+    // with the limit governing: "between 77 and 131" never stands beside "at most 100" as if both held.
+    const governs = past && opts.limit && max > opts.limit ? `; the platform's limit of ${opts.limit} characters governs` : '';
     out.push({ shape: id, measurement: { observer: 'SHAPE', params: { shape: [id], ...(min > 0 ? { min } : {}), max, ...(id === 'characters' ? url : {}) } },
-      statement: `${said}${limit !== null && max === limit ? ` (${limit} is the platform's limit)` : ''}.`,
+      statement: `${said}${limit !== null && max === limit ? ` (${limit} is the platform's limit)` : ''}${governs}.`,
       evidence: `${lo} to ${hi} ${id === 'longestSentence' ? 'words in the longest sentence' : SHAPE_LABEL[id]} over ${n} pieces`, ...requiredAt(SHAPE_REQUIRED_FROM),
       ...(limit !== null && max === limit ? { limited: true as const } : {}) });
   }
@@ -205,14 +208,20 @@ export function shortFormMeasured(read: readonly { readonly id: string; readonly
   };
   // A SKILL THAT ANSWERS takes its length and its shape from the request, never from a habit of the examples
   // (../compiler/scope.ts): its pieces' rates are read, and no band of their shape is proposed.
+  // A RATE TOO RARE TO POOL OVER THE READ PIECES ALONE (twelve tweets carry eight of something) is pooled over every
+  // piece not reserved, the held-out ones too, as the method build pools all its examples. Its check on the held-out
+  // pieces is then not independent, and says so.
+  const readRates = pooledRateRules(texts);
+  const ownRates = held.length ? pooledRateRules(own.map((p) => p.text)).filter((r) => !readRates.some((x) => x.feature.id === r.feature.id)) : [];
   const rules = [
-    ...(opts.answers ? [] : shapeBandRules(texts, opts)).map((s) => ({ statement: s.statement, evidence: s.evidence, measurement: s.measurement })),
-    ...pooledRateRules(texts).map((r) => ({ statement: r.statement, evidence: r.evidence, measurement: r.measurement })),
+    ...(opts.answers ? [] : shapeBandRules(texts, opts)).map((s) => ({ statement: s.statement, evidence: s.evidence, measurement: s.measurement, pooledOverHeld: false })),
+    ...readRates.map((r) => ({ statement: r.statement, evidence: r.evidence, measurement: r.measurement, pooledOverHeld: false })),
+    ...ownRates.map((r) => ({ statement: r.statement, evidence: `${r.evidence}, the held-out pieces among them`, measurement: r.measurement, pooledOverHeld: true })),
   ];
   return rules.map((r, i): MeasuredProposal => ({
     requirement: { requirementId: `s${i + 1}`, statement: r.statement, appliesWhen: 'GENERAL', kind: /^\s*no\b/i.test(r.statement) ? 'BOUNDARY' : 'GENERATIVE', authority: 'DERIVED_UNRATIFIED', provenance,
       evidence: r.evidence, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true, measurement: r.measurement },
-    conformance: conformance(r.measurement),
+    conformance: r.pooledOverHeld ? { ...conformance(r.measurement), independent: false } : conformance(r.measurement),
   }));
 }
 

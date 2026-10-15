@@ -15,6 +15,8 @@ import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../.
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
 import { detectAuthors, describeAuthors } from '../../core/composite/authors.js';
+import { formatOf } from '../../core/observers/formats.js';
+import { isShortForm } from '../../core/observers/pooled.js';
 
 import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile, orchestrated } from '../runtime.js';
 
@@ -57,7 +59,7 @@ export function autoReserveIds(ids: readonly string[], rank: (id: string) => num
 }
 
 export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUARD' | 'RESPOND'): void {
-  const minChars = minCharsFor(mode);
+  let minChars = minCharsFor(mode);
   const dir = resolve(path);
   if (!existsSync(dir)) die(`no such path: ${dir}`);
   // A folder of someone's work usually also contains files that are ABOUT the work. Reading a README as
@@ -233,6 +235,11 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   const classified = read
     .filter((r) => !inPackage(r.file) || /(^|\/)SKILL\.md$/i.test(r.file))
     .map((r) => ({ ...r, kind: classify(r.file) }));
+  // SHORT WORK IS FINISHED WORK. The floor drops a stub from a folder of long pieces; it has nothing to say about a post
+  // on X. Where the class is a short format (one whose pieces run under 150 words) or the pieces are short as a set
+  // (their median under 150 prose words), every piece with text is an example, whatever its length.
+  const shortWork = shortFormFolder(classified.filter((r) => r.kind === 'GOLDEN').map((r) => r.text), flag('--class'));
+  if (shortWork) minChars = 1;
   const thinGoldens = classified.filter((r) => r.kind === 'GOLDEN' && r.text.trim().length < minChars);
   if (thinGoldens.length) {
     console.log(`\nToo short to read as finished work (${minChars}+ characters), left out:`);
@@ -461,6 +468,12 @@ function reportProvenance(aiAssisted: boolean | null): void {
  * mode is passed in by `new`, which knows it before intake runs; read from the session it was still
  * empty on a first run, and the three short answers of a respond skill were dropped at 200 characters.
  */
+/** Short form, by the class named (a format whose pieces run under 150 words) or by the pieces themselves (median under 150 prose words). */
+export function shortFormFolder(texts: readonly string[], cls: string | null | undefined): boolean {
+  const f = formatOf(cls);
+  return (f?.words !== undefined && f.words[1] < 150) || (texts.length > 0 && isShortForm(texts));
+}
+
 function minCharsFor(mode?: string): number {
   return (mode ?? loadSession().intent?.mode) === 'RESPOND' ? MIN_ANSWER_CHARS : MIN_GOLDEN_CHARS;
 }

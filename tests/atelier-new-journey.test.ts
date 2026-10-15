@@ -278,10 +278,12 @@ describe('whose work it is is decided once, at intake, and kept', () => {
 // answer at 200 characters. Driven through the binary, as a person would run it: a unit test of the
 // floor passed all along, because it set the session first.
 describe('atelier new --mode respond keeps a one-line answer', () => {
-  const answers = (proj: string): string => {
+  // `long`: pieces of about 300 words, so the folder is long form as a set and the floor applies to its stub (a folder
+  // of short pieces keeps every piece, whatever the mode: tests/atelier-short-work.test.ts).
+  const answers = (proj: string, long = false): string => {
     const dir = join(proj, 'answers');
     mkdirSync(dir, { recursive: true });
-    for (let i = 0; i < 7; i++) writeFileSync(join(dir, `answer-${i}.md`), `Run the migration, then restart the worker. ${'Check the log for the first error and paste it. '.repeat(5)}`);
+    for (let i = 0; i < 7; i++) writeFileSync(join(dir, `answer-${i}.md`), `Run the migration, then restart the worker. ${'Check the log for the first error and paste it. '.repeat(long ? 30 : 5)}`);
     writeFileSync(join(dir, '06-thanks.md'), 'Glad it works. Nothing left open on this one.');
     return dir;
   };
@@ -290,9 +292,9 @@ describe('atelier new --mode respond keeps a one-line answer', () => {
     const out = run(data, proj, 'new', answers(proj), "answer a developer's requests in a coding assistant, the way these answers do", '--mode', 'respond', '--name', 'dev');
     expect(out).not.toMatch(/Too short to read as finished work[\s\S]*06-thanks/);
   });
-  it('polarity: the same folder built as writing still leaves it out', () => {
+  it('polarity: a folder of long pieces built as writing still leaves it out', () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-short-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-short-proj-'));
-    const out = run(data, proj, 'new', answers(proj), 'write me a blog post in the voice and style of these', '--mode', 'generate', '--name', 'dev');
+    const out = run(data, proj, 'new', answers(proj, true), 'write me a blog post in the voice and style of these', '--mode', 'generate', '--name', 'dev');
     expect(out).toMatch(/Too short to read as finished work \(200\+ characters\)[\s\S]*06-thanks/);
   });
 });
