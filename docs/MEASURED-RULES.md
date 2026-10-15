@@ -36,7 +36,7 @@ it, but there is nothing specific to rewrite.
 | `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
 | `FEATURE` | one counted feature from `core/observers/features.ts` (colons, parentheses, the serial comma, sentence-length tails, cadence, sentence openers, passives, three-item lists, links, lexical diversity, pronouns, modals, names, reading ease, commas per sentence, unevenness, and more), held to a band on both sides | `FEATURE:feature=colon,minValue=2,maxValue=9` |
-| `GRAMMAR` | mechanical errors with no legitimate reading: a known misspelling in lower case, a pronoun–verb agreement slip, a/an, double punctuation, a space before punctuation; the rest is listed (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
+| `GRAMMAR` | mechanical errors with no legitimate reading: a known misspelling in lower case, "he are" / "she are" / "I are", a/an before a lower-case common word, two commas, a space before a comma or full stop; the rest is listed (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
 `THAT_OPENER`, `HERES_OPENER`, `SIGNPOST`, `INTENSIFIER`, `SHORT_VERDICT`, `BOLD_SPAN`,
@@ -69,10 +69,15 @@ load, the check says so with the reason and the rule reads as unverified, never 
 
 **The one rule.** Text is changed in place only where the error has no legitimate reading in any major English
 variety or register. Anything with a plausible legitimate reading is listed under the rule as "to check", never
-changed. So the only changes made in place are: a pronoun–verb agreement slip from a fixed table ("they was",
-"you was", "I has", "he go"); "a" or "an" the wrong way round, except before a word in h ("an historian", "an hotel")
-or an acronym ("a FAQ", "an MRI"), which depend on how it is said; a comma, semicolon, colon or full stop typed twice;
-a space before punctuation; and a lower-case word on the list of known misspellings. Listed, never changed: every
+changed. So the only changes made in place are: a pronoun–verb pairing no variety uses ("he are", "she are",
+"I are"); "a" or "an" the wrong way round before a lower-case common English word the checker knows ("a essay",
+"an new bike"); two commas after a word; a space before a comma or a full stop; and a lower-case word on the list of
+known misspellings. Listed, never changed: "a" or "an" before a word in h ("an historian", "an hotel"), before a word
+read as letters in any case ("an nda", "a usb stick", "an mri", "an sms", "an led"), before a "u" whose sound the
+checker guesses ("a unanimous", "an urchin") and before any word the checker does not know; a dialect's agreement
+("they was", "we was", "you was", "they is", "I has", "he go", "she have"); a colon typed twice ("std::vector",
+"Vec::new"), a full stop typed twice ("hmm.. not sure"), a semicolon twice, "!!" and "??"; a space before "!", "?",
+":" or ";" (French and typographic spacing: "Bonjour !", "Q : Where"); every
 capitalised word, at a sentence's start as anywhere else ("Wellcome", "Pharoah", "Untill Then", "Teh Hong Piow"); every
 word said twice ("had had", "that that", "Bora Bora", "mahi mahi", "tsk tsk"); "its" where "it's" may be meant;
 "there is" before a plural; and every word the checker does not know. The price is paid knowingly: a misspelling
@@ -85,10 +90,12 @@ nothing is corrected, the rule's line reads "held; N listed to check", never "no
 only when nothing is listed either.
 
 A spelling is changed only for a known misspelling: a word on the curated list in `core/observers/grammar-words.ts`
-(over 450 entries, "recieve", "untill", "seperate", "definately"), each with its one correction, written in lower
+(452 entries, "recieve", "seperate", "definately"), each with its one correction, written in lower
 case. An entry is in neither the American nor the British word list, its correction is in both, no other word is a
 likely reading of it, and it has no legitimate reading anywhere: not a word of a variety ("teh" is tea in Malay and
-Singapore English), a real word ("calender"), a loanword ("embarras"), a listed variant ("supercede"), a register's
+Singapore English), a real word ("calender", "stoped": mined from below), a loanword ("embarras"), a word of a
+language often mixed with English ("posible", "dilema", "assistent", "correspondance", "adress"), an older spelling
+still met in print ("untill", "independant", "priviledge"), a listed variant ("supercede"), a register's
 spelling (a contraction typed without its apostrophe: "dont", "thats", "youre") or a common proper name
 ("Wellcome"). Atelier finds these words itself, whole words outside the never-flagged regions, whatever the checker
 calls them. No other spelling is ever changed, because a guess at the word a writer meant is never certain: a typo
@@ -99,12 +106,13 @@ with what the checker suggests. No spelling is ever converted between British an
 Subject–verb agreement is checked only where the checker catches it: a pronoun subject ("they was", "he go",
 "I is", "there is" before a plural). Agreement with any other subject ("the results was") is not checked, and the
 rule claims nothing about it. A pronoun agreement the author's own pieces use ("it don't") is read at build and is
-never corrected or listed. Otherwise only the clear slips are corrected ("they was", "you was", "I has", "he go");
-vernacular ("it don't") and an error with no single correction ("I is") are listed.
+never corrected or listed. Otherwise only a pairing no variety of English uses is corrected ("he are", "she are",
+"I are"); a dialect's agreement ("they was", "we was", "I has", "he go", "it don't") and an error with no single
+correction ("I is") are listed.
 
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
 citations, file names, email addresses, @mentions, #hashtags, $cashtags, emoji, ALL-CAPS tokens, figures and
-currency, front matter, capitalised words (names, products, acronyms; a known misspelling with a capital is
+currency, front matter, quotations in guillemets and low-high quotes (« », ‹ ›, „ “), capitalised words (names, products, acronyms; a known misspelling with a capital is
 listed, wherever it stands, since it may be a name), words the
 standard's other rules name, words of the request and the bound material, words the author's own pieces use (with the checker off at build, every word of theirs that is not a common
 English word), a
