@@ -1,4 +1,5 @@
 import type { Voice } from '../core/compiler/voice.js';
+import { stepGuarded } from '../core/inference/step-guard.js';
 import { parseArgs } from 'node:util';
 // cli/runtime.ts — the shared ground every command stands on.
 //
@@ -390,7 +391,9 @@ export const callsSeen = (): readonly CallSeen[] => seenCalls;
 /** The thinking setting a run's calls were sent with: 'disabled' when every call that says said so; null otherwise. */
 export const thinkingOfCalls = (calls: readonly CallSeen[]): 'disabled' | null =>
   calls.length > 0 && calls.every((c) => c.thinkingSent === 'disabled') ? 'disabled' : null;
-const observed = (role: Role, client: InferenceClient): InferenceClient => ({
+// Every client the CLI makes carries the step guard (core/inference/step-guard.ts): while a repair chain runs, a call
+// outside a step and outside a registered reader is an error.
+const observed = (role: Role, client: InferenceClient): InferenceClient => stepGuarded({
   complete: async (req) => {
     const r = await client.complete(req);
     seenCalls.push({ role, modelId: r.modelId, thinkingSent: r.thinkingSent });

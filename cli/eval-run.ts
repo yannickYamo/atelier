@@ -109,7 +109,8 @@ export function buildRunEval(x: RunEvalInput): EvalSummary {
   if (x.request?.met === false) reasons.push(`the length the request asks for was not met (${x.request.detail})`);
   // THE RECORD (core/eval/record.ts): the same facts, each with what was observed of it, judged in one place.
   const record = x.contract || !std ? undefined : recordForText({ L: x.L, std, text: rec.output, report: final, sensor: x.sensor, claimsOff: x.claimsOff, answers: x.answers, unmeasured: x.unmeasured ?? null,
-    waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut });
+    waived: new Map(x.applicability.filter((a) => a.status === 'WAIVED').map((a) => [a.requirementId, a.why ?? 'set aside for this run'])), request: x.request ?? null, cut: counts.cut,
+    lostToLength: rec.repair?.unmeasured ?? [] });
   // THE YES/NO KEPT WITH THE RUN IS THE RECORD'S (core/eval/record.ts, `standingOf`): nothing required was seen to
   // fail and every check finished. It is not "verified", and it is decided nowhere but there.
   const standing = record ? standingOf(record) : { deliverable: reasons.length === 0, reasons };
@@ -201,7 +202,9 @@ const isClaimLine = (id: string): boolean => id.startsWith('UNSOURCED') || CLAIM
  * about the same words under the same standard.
  */
 export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; text: string; report: VerifyReport | null; sensor: ClaimSensor | undefined; claimsOff: boolean; answers: boolean;
-  unmeasured: string | null; waived?: ReadonlyMap<string, string>; request?: { asked: string; met: boolean | null; detail: string } | null; cut?: number }): EvaluationRecord {
+  unmeasured: string | null; waived?: ReadonlyMap<string, string>; request?: { asked: string; met: boolean | null; detail: string } | null; cut?: number;
+  /** rules the draft was read on that the text is too short to read (core/state/canonical-state.ts, `RepairRecord.unmeasured`) */
+  lostToLength?: readonly string[] }): EvaluationRecord {
   const line = (id: string): RuleCheck | undefined => x.report?.checked.find((c) => c.requirementId === id);
   const spans = (id: string): number => (line(id)?.result.verdict === 'VIOLATED' ? line(id)?.result.spans.length ?? 0 : 0);
   const state = x.claimsOff ? 'off' as const : !x.report || line(UNREAD) ? 'not-checked' as const : 'checked' as const;
@@ -218,6 +221,7 @@ export function recordForText(x: { L: store.StoreLayout; std: StandardVersion; t
       delivered: spans('UNSOURCED'), open: spans(INCONCLUSIVE) + spans(CLAIMS_TO_CHECK) + spans(PUBLIC_FACTS), cut: x.cut ?? 0, unconfirmed: spans(INCONCLUSIVE) },
     // Wording found in three or more pieces of the corpus is the author's standard wording, and is not counted.
     copying: shared ? { longest: shared.longestShared, limit: copyLimit(voice), tellable: (voice?.lengthPieces ?? voice?.pieces?.length ?? 0) >= STANDARD_WORDING_PIECES, ...(shared.longestWords ? { words: shared.longestWords } : {}) } : null,
+    unmeasured: new Set(x.lostToLength ?? []),
     replaced: new Set(x.request ? x.std.requirements.filter((r) => x.waived?.has(r.requirementId) && r.measurement?.observer === 'LENGTH' && !r.measurement.params.in).map((r) => r.requirementId) : []),
   });
 }
