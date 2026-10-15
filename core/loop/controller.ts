@@ -20,6 +20,10 @@
 // observed. Expected cost is this run's own ledger per call of that purpose, or the release's, or a documented
 // default. A step is taken while gain / cost ≥ minGainPerUsd and the budget holds it, at most maxActions steps.
 //
+// FAILURE. A step that kept nothing or moved nothing is never repeated on its target. A redraft that did no better
+// gives way to a carrier rewrite, then the operators; an operator step gives way to a carrier rewrite once. When every
+// action open to a target has failed, the stop names them.
+//
 // Pure: the caller reads the report, the ledger and the budget, and executes and records what is decided here.
 
 import type { ControllerAction, ControllerDecisionRecord, ControllerRecord } from '../state/canonical-state.js';
@@ -121,30 +125,30 @@ export function sizedAction(error: number, featuresOut: number): 'operators' | '
 /** Carrier sentences to rewrite for a miss: ceil(|error|), at least one, at most MAX_CARRIERS. */
 export const carriersFor = (error: number): number => Math.max(1, Math.min(MAX_CARRIERS, Math.ceil(Math.abs(error))));
 
-const LADDER: readonly ('operators' | 'carrier-rewrite' | 'redraft')[] = ['operators', 'carrier-rewrite', 'redraft'];
-
-/** A step failed when it kept nothing or moved nothing. */
-const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'kept' || d.observed.movement <= 0;
-
 /**
- * WHAT A TARGET GETS NOW. Its sized action while that has failed fewer than twice on it; after two failures, the next
- * action up the ladder (operators, carrier rewrite, redraft), once; after that switched action fails too, nothing.
+ * WHAT A TARGET MAY GET, IN ORDER, from the action its size calls for. A failed step is never repeated on the same
+ * target: the next action down is tried instead (a redraft that did no better gives way to a carrier rewrite, that to
+ * the operators), and an operator step that failed escalates to a carrier rewrite once. When every action in the
+ * sequence has failed on it, nothing is left for that target.
  */
+const SEQUENCE: Readonly<Record<'operators' | 'carrier-rewrite' | 'redraft', readonly ('operators' | 'carrier-rewrite' | 'redraft')[]>> = {
+  redraft: ['redraft', 'carrier-rewrite', 'operators'],
+  'carrier-rewrite': ['carrier-rewrite', 'operators'],
+  operators: ['operators', 'carrier-rewrite'],
+};
+
+/** A step failed when it kept nothing or moved nothing. A hand-off to a redraft is no step of its own: its redraft is. */
+const failed = (d: ControllerDecisionRecord): boolean => d.outcome !== 'handed to a redraft' && (d.outcome !== 'kept' || d.observed.movement <= 0);
+
+/** The chosen actions that failed on a target, in the order they failed. */
+const failuresOn = (id: string, history: readonly ControllerDecisionRecord[]): ControllerAction[] =>
+  history.filter((d) => d.targets.includes(id) && CHOSEN.has(d.action) && failed(d)).map((d) => d.action);
+
+/** The first action in the target's sequence that has not failed on it and that this caller can carry out; null when none is left. */
 function actionFor(base: 'operators' | 'carrier-rewrite' | 'redraft', id: string, history: readonly ControllerDecisionRecord[],
   available: (a: 'operators' | 'carrier-rewrite' | 'redraft') => boolean): 'operators' | 'carrier-rewrite' | 'redraft' | null {
-  const fails = history.filter((d) => d.targets.includes(id) && CHOSEN.has(d.action) && failed(d));
-  if (fails.length > 2) return null;
-  if (fails.length < 2) {
-    // what is not available is passed over: an operator that moves nothing here, a redraft this caller cannot write
-    let a: typeof base | null = base;
-    while (a && !available(a)) a = LADDER[LADDER.indexOf(a) + 1] ?? (base === 'redraft' && available('carrier-rewrite') ? 'carrier-rewrite' : null);
-    return a;
-  }
-  // THE SWITCH: one rung above the action that failed, the first that is available
-  const last = fails[fails.length - 1].action;
-  let next: typeof base | null = LADDER[LADDER.indexOf(last as typeof base) + 1] ?? null;
-  while (next && !available(next)) next = LADDER[LADDER.indexOf(next) + 1] ?? null;
-  return next;
+  const failedOn = new Set(failuresOn(id, history));
+  return SEQUENCE[base].find((a) => !failedOn.has(a) && available(a)) ?? null;
 }
 
 /** What one action is expected to move per target: the measured prior, moved halfway toward this run's own observations. */
@@ -176,11 +180,11 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   const usdPerCall = (a: ControllerAction): number => input.observedUsdPerCall[a] ?? (a !== 'cut' && a !== 'mechanical' && a !== 'grammar' ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
   const prior = (a: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft'): number => set.effects[a]?.movement ?? DEFAULT_EFFECT[a];
   const candidates: Decision[] = [];
-  const failedTwice = (id: string, a: ControllerAction): boolean => input.history.filter((d) => d.action === a && d.targets.includes(id) && failed(d)).length >= 2;
+  const failedOnce = (id: string, a: ControllerAction): boolean => failuresOn(id, input.history).includes(a);
   const hadRedraft = input.history.some((d) => d.action === 'redraft');
 
   // (1) ENFORCED: span rules rewritten, then omissions written again.
-  const spans = enforced.filter((m) => m.kind === 'span' && !failedTwice(m.id, 'rewrite'));
+  const spans = enforced.filter((m) => m.kind === 'span' && !failedOnce(m.id, 'rewrite'));
   if (spans.length && input.can.rewrite) {
     const eff = Math.min(1, effectOf('rewrite', prior('rewrite'), input.history));
     candidates.push({ kind: 'act', action: 'rewrite', targets: spans.map((m) => m.id), why: `${spans.length} enforced rule(s) broken in place: their spans are rewritten`,
@@ -215,7 +219,11 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     const why = action === 'operators' ? `graded miss(es) under ${SETTLED_ERROR} band widths (${far}): moved by re-punctuation, no model`
       : action === 'carrier-rewrite' ? `graded miss(es) of ${SETTLED_ERROR} to ${REDRAFT_ERROR} band widths (${far}): up to ${k} carrier sentence(s) each rewritten`
         : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once` : `over ${REDRAFT_ERROR} band widths`} (${far}): written again with each one's direction and distance`;
-    candidates.push({ kind: 'act', action, targets: group.map((g) => g.id), why, expectedGain: gain, expectedCostUsd: usdPerCall(action), ...(action === 'carrier-rewrite' ? { carriers: k } : {}) });
+    // A SWITCH SAYS SO: which action failed on these targets, and what it found.
+    const switched = group.flatMap((g) => input.history.filter((d) => d.targets.includes(g.id) && CHOSEN.has(d.action) && failed(d))
+      .map((d) => `${d.action} on ${g.id} ${d.outcome}${d.observed.note ? ` (${d.observed.note})` : ''}`));
+    const whyNow = switched.length ? `${why}; switched to it because ${[...new Set(switched)].join('; ')}` : why;
+    candidates.push({ kind: 'act', action, targets: group.map((g) => g.id), why: whyNow, expectedGain: gain, expectedCostUsd: usdPerCall(action), ...(action === 'carrier-rewrite' ? { carriers: k } : {}) });
   }
   // (5) GRAMMAR, where an observer reads it.
   if (input.grammar?.length && input.can.rewrite) {
@@ -228,8 +236,9 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
       expectedGain: r3(ENFORCED_WEIGHT * input.enforced.length * DEFAULT_EFFECT.rewrite), expectedCostUsd: usdPerCall('redraft') });
   }
   if (!candidates.length) {
-    const exhausted = [...input.enforced, ...input.graded].some((m) => input.history.some((d) => d.targets.includes(m.id) && CHOSEN.has(d.action) && failed(d)));
-    return { kind: 'stop', why: exhausted ? 'the same repair failed on what is left, and the action it switched to failed too'
+    // THE STOP NAMES THE FAILURES: every target left, with each action that failed on it.
+    const exhausted = [...input.enforced, ...input.graded].map((m) => ({ id: m.id, fails: [...new Set(failuresOn(m.id, input.history))] })).filter((x) => x.fails.length);
+    return { kind: 'stop', why: exhausted.length ? `every action tried failed on what is left: ${exhausted.map((x) => `${x.id} (${x.fails.join(', ')})`).join('; ')}`
       : 'only what no step here can reach is left (nothing to rewrite in it, or a region the guards protect)' };
   }
   let refused: string | null = null;

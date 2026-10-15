@@ -19,7 +19,7 @@ import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
 import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord } from '../../core/state/canonical-state.js';
-import { askedForRedraft, joinRecords, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT } from '../../core/loop/controller.js';
+import { askedForRedraft, joinRecords, controllerRecord, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -640,13 +640,15 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
+  // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
+  // asks (only where `withRedraft` runs), the run's ledger from its start, for what a step costs, and the steps already
+  // taken on a piece being refined again after a redraft that did no better.
+  const refineFor = (history?: readonly ControllerDecisionRecord[]) => trackGraded(refineDraft({ client, budget, name, std: std!, taste,
+    checks: { ...checks, controller: { settings: runSettings?.controller ?? null, redraft: unmet !== null, ledgerFrom: ledgerBefore, ...(history ? { history } : {}) } } }), gradedTrace);
   const rec = await runOnce(L, sv, servedForRun, servedHash, deliveryForRun, taskForRun, client, budget, binding,
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
-    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(trackGraded(refineDraft({ client, budget, name, std, taste,
-      // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again
-      // when it asks (only where `withRedraft` runs), and the run's ledger from its start, for what a step costs.
-      checks: { ...checks, controller: { settings: runSettings?.controller ?? null, redraft: unmet !== null, ledgerFrom: ledgerBefore } } }), gradedTrace), unmet ? { unmet, notes: completions, redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+    std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineFor(), unmet ? { unmet, notes: completions, resume: (text, history) => refineFor(history)(text), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
@@ -1440,7 +1442,13 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     /** where the graded note lines sent and the drafts written for graded misses alone are counted */
     graded?: GradedTrace | null;
     /** the displacement guard (core/loop/graded.ts) on a draft written again: why it may not be kept, or nothing */
-    displaced?: (before: string, after: string) => readonly string[] } | null) {
+    displaced?: (before: string, after: string) => readonly string[];
+    /**
+     * THE NEXT SMALLER STEP, after a redraft the controller asked for did no better: the piece as it was before the
+     * redraft refined again, with every step already taken (the failed redraft among them) as the controller's history,
+     * so a carrier rewrite or the operators are tried on the same targets instead of the draft being left as it was.
+     */
+    resume?: (text: string, history: readonly ControllerDecisionRecord[]) => Promise<Delivered> } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
@@ -1505,9 +1513,22 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         const outcome = displaced.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It displaced what your pieces hold: ${displaced.join('; ')}.` : redraftOutcome(missing, missing2, better, named, whose);
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
         // THE STEP ON THE RECORD: what the draft written again moved, what it cost, and the steps taken on it after.
-        const joined = joinRecords(d.repair?.controller, { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } },
-          d2.repair?.controller, better ? undefined : `the draft written again did not do better: ${outcome}`);
+        const redrafted: ControllerDecisionRecord = { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } };
+        // A draft that is not kept hands nothing on: its own request for a redraft never happened.
+        const after2 = better ? d2.repair?.controller : d2.repair?.controller && controllerRecord(d2.repair.controller.decisions.filter((x) => x.outcome !== 'handed to a redraft'), d2.repair.controller.stoppedBecause);
+        const joined = joinRecords(d.repair?.controller, redrafted, after2, better ? undefined : `the draft written again did not do better: ${outcome}`);
         if (!better && cutting) { picking = false; d = withController(d, joined); c.notes.push(`${outcome} The cut was not kept; the next pass writes it shorter.`); continue; }
+        if (!better && asked && c.resume) {
+          // A FAILED REDRAFT SWITCHES DOWN, never stops the repair: the piece before it is refined again with the failed
+          // redraft in the controller's history, which then tries a carrier rewrite on the same targets, then the operators.
+          const d3 = await c.resume(d.output, [...(d.repair?.controller?.decisions ?? []), redrafted]);
+          const ctl = controllerRecord([...joined.decisions, ...(d3.repair?.controller?.decisions ?? [])], d3.repair?.controller?.stoppedBecause ?? joined.stoppedBecause);
+          const first = d.repair;
+          const cutAll = [...new Set([...(first?.storiesCut ?? []), ...(d3.repair?.storiesCut ?? [])])];
+          const resumed: Delivered = withController(d3.repair && first ? { ...d3, repair: { ...d3.repair, draft: first.draft, originalOutputHash: first.originalOutputHash, violatedBefore: first.violatedBefore,
+            passes: first.passes + d3.repair.passes, ...(cutAll.length ? { storiesCut: cutAll } : {}) } } : d3, ctl);
+          return say(resumed, outcome);
+        }
         if (!better) return say(withController(d, joined), outcome);
         const kept: Delivered = withController(d2.repair ? d2 : { ...d2, repair: { passes: 0, violatedBefore: ids, violatedAfter: brokenIn(d2.report), originalOutputHash: sha(piece), draft: piece, why: `written again with what ${missing.every((u) => u.graded) ? 'your pieces usually do' : 'the work requires'} named` } }, joined);
         // A cut keeps the draft from before it, so what was taken out can be read (the record holds the draft cut from).
