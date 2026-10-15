@@ -31,7 +31,7 @@
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import { wordsOf } from '../observers/text.js';
-import { unsourcedClaims, claimUnitsOf, type Claim } from './claims.js';
+import { unsourcedClaims, wordCountClaims, claimUnitsOf, type Claim } from './claims.js';
 import { numberPhrases, numbersIn } from './numbers.js';
 export { numbersIn } from './numbers.js';
 import { normalizeClass } from '../observers/doc-class.js';
@@ -49,6 +49,12 @@ export interface ClaimReading {
   readonly publicFacts: readonly { readonly start: number; readonly end: number; readonly text: string; readonly why: string }[];
   /** which instrument produced this reading, as it will be reported */
   readonly instrument: string;
+  /**
+   * Findings of lower confidence than `claims`: a count written in words the pattern check found (claims.ts,
+   * `wordCountClaims`). Listed for the person to check (run-repair.ts, UNSOURCED·check), never cut, whatever
+   * the kind of work. A model reader types such counts as FIGURE specifics itself and leaves this absent.
+   */
+  readonly listed?: readonly Claim[];
   /** what the reader typed, verbatim, for audit: the decision above is made from these */
   readonly specifics?: readonly ExtractedSpecific[];
   /**
@@ -430,7 +436,7 @@ export function patternSensor(material: string, placeholders: boolean, why = 'pa
     reading: (text) => {
       const k = sha(text);
       let r = cache.get(k);
-      if (!r) { r = { claims: unsourcedClaims(text, material, placeholders), publicFacts: [], instrument }; cache.set(k, r); }
+      if (!r) { r = { claims: unsourcedClaims(text, material, placeholders), listed: wordCountClaims(text, material), publicFacts: [], instrument }; cache.set(k, r); }
       return r;
     },
   };
