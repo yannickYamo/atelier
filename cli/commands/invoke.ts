@@ -8,9 +8,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { methodReading, methodLine } from '../../core/eval/obligations.js';
 import type { CheckContext } from '../../core/observers/registry.js';
 import { checksFor, claimInstrumentOf, contextJudgeFor, smallReaderFor, CLAIMS_MODEL_DEFAULT, shortFormRequest } from '../checks.js';
-import { regressions } from '../../core/loop/repair.js';
+import { regressions, readAtLength, featureParamsOf } from '../../core/loop/repair.js';
+import { numbersIn } from '../../core/loop/integrity.js';
 import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut, listedClaims, brokenByCut, gradedRules, PUBLIC_FACTS, INCONCLUSIVE, type CheckOptions } from '../../core/loop/run-repair.js';
-import { signalChecks, displacement } from '../../core/loop/graded.js';
+import { signalChecks, displacement, isSignal } from '../../core/loop/graded.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
 import { acts, verifyText, type VerifyReport } from '../../core/observers/verify.js';
@@ -18,8 +19,8 @@ import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
 import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
-import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord } from '../../core/state/canonical-state.js';
-import { askedForRedraft, joinRecords, controllerRecord, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT } from '../../core/loop/controller.js';
+import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord, StandardVersion } from '../../core/state/canonical-state.js';
+import { askedForRedraft, redraftHandOff, joinRecords, controllerRecord, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -644,12 +645,13 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   // five from nine pieces. On fewer the drafts are still chosen by length, which costs nothing. --no-redraft turns
   // the step off whole.
   const enough = (store.getVoice(L)?.lengthPieces ?? 0) >= LENGTH_REDRAFT_PIECES;
+  // A short piece from a long-form standard (`transfer`) is never written again toward the length of the longer pieces.
   // A length the request states in words is held as the request's own: a draft that misses it is written again.
   // Only where it can be read one way (core/intake/length.ts, `notHeldBecause`); otherwise it is shown as not counted.
   const notHeld = stated && contractFile === null ? notHeldBecause(asked, stated) : null;
   // A length in pages is held in words, at the number of words a page that it says (core/intake/length.ts, `inWords`).
   const askedWords = stated && contractFile === null && !notHeld ? inWords(stated) : null;
-  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
+  const unmet = std && !argv.includes('--no-redraft') ? unmetReader(std, ownBand && ownSpan && enough && !transfer ? { band: ownBand, span: ownSpan } : null, askedWords, graded, graded !== undefined ? carried : null) : null;
   let delivered: Delivered | null = null;
   const keepDelivered = (refine: (draft: string) => Promise<Delivered>) => async (draft: string): Promise<Delivered> => (delivered = await refine(draft));
   // THE BOUNDED CONTROLLER (core/loop/controller.ts): the release's settings, whether a draft can be written again when it
@@ -661,7 +663,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineFor(), unmet ? { unmet, notes: completions, resume: (text, history) => refineFor(history)(text), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
-        displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [] } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
+        displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [],
+        addedFigures: (from: string, to: string) => addedFigures(from, to, materialText) } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
       strict && judge?.covers ? { client, budget, judge, asked, servedText: servedForRun, task: taskForRun, notes: completions } : null),
       shapeRounds > 0 ? { client, budget, std, graded, gradedProfile: graded !== undefined ? carried : null, gradedTrace, calibration: fid?.typicality ?? null, detector: fid?.profile.detector ?? null, target: shapeTarget, authorTarget, rounds: shapeRounds, servedText: servedForRun, task: taskForRun, trace, taste,
@@ -746,6 +749,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
   const nonconformant = strict && !evaluation?.result.conformant;
   const refused = nonconformant && !argv.includes('--allow-nonconformant');
   if (nonconformant) process.exitCode = STRICT_EXIT;
+  // ONE RUN, ONE EXIT CODE. Read by a machine (--json, --answer-only), a blocked run exits 1, as `atelier run` does for the
+  // same run (run.ts, `exitFor`): a script that reads only the code must not take a blocked output for a usable one.
+  else if (machine && evaluation?.record?.state === 'BLOCKED') process.exitCode = 1;
   if (strict && !machine && !refused) console.log(`\n${nonconformant ? 'NOT CONFORMANT, delivered because --allow-nonconformant was given:\n\n' : ''}${rec.output}\n`);
   if (refused) {
     const why = evaluation ? evaluation.result.reasons.join('; ') : 'the run could not be evaluated';
@@ -768,6 +774,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),
       withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
+      // what a short-form request set down as not applying, said once (core/observers/short-form.ts)
+      ...(transfer ? { note: transfer.said } : {}),
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,
         outside: rec.fidelity.reading?.outside.map((o) => o.id) ?? [], detector: rec.fidelity.reading?.detector?.p ?? null,
         edits: rec.fidelity.edits ?? [], applicability: rec.fidelity.applicability ?? [] } } : {}),
@@ -1021,7 +1029,8 @@ export interface GradedTrace { notes: string[]; redrafts: number; edits: { accep
 
 /** Which features a run steered and which way, from the record: "parenthetical asides fewer (17.2 → 4.3 per 1,000 words)". */
 export function steeredLine(g: GradedRecord): string {
-  return g.steered.map((id) => {
+  // A feature that did not move was aimed at, not steered: it is not said as moved ("higher (0.392 → 0.392)").
+  return g.steered.filter((id) => !g.values[id] || g.values[id].before !== g.values[id].after).map((id) => {
     const f = featureOf(id); const x = g.values[id];
     if (!f || !x) return id;
     const move = x.before !== null ? featureMove({ feature: [id], ...(x.lo !== null ? { minValue: x.lo } : {}), ...(x.hi !== null ? { maxValue: x.hi } : {}) }, x.before) : null;
@@ -1077,7 +1086,7 @@ function withEdits(refine: (draft: string) => Promise<Delivered>,
       const b = await checkDraftAsync(e.name, e.std, before, e.checks);
       const a = await checkDraftAsync(e.name, e.std, after, e.checks);
       if (reader?.degraded) return false;
-      return editKeepsStandard(b, a);
+      return editKeepsStandard(b, a, { from: before, to: after, std: e.std });
     };
     let edited: Awaited<ReturnType<typeof steerTowardRange>>;
     // Deterministic operators are free and tried first, up to OPERATOR_TRIES; the edit budget is the number of
@@ -1085,7 +1094,7 @@ function withEdits(refine: (draft: string) => Promise<Delivered>,
     // Operator candidates are screened by the deterministic checks (no claim reader); the final text is read in full below.
     const screen = (before: string, after: string): Promise<boolean> => {
       const offline = { ...e.checks, claimSensor: undefined };
-      return Promise.resolve(editKeepsStandard(checkDraft(e.name, e.std, before, offline), checkDraft(e.name, e.std, after, offline)));
+      return Promise.resolve(editKeepsStandard(checkDraft(e.name, e.std, before, offline), checkDraft(e.name, e.std, after, offline), { from: before, to: after, std: e.std }));
     };
     try { edited = await steerTowardRange(e.client, e.budget, r.output, e.profile, { operators: OPERATOR_TRIES, sentences: e.editBudget }, breaksNothing, screen); } catch (err) {
       e.trace.edits.push({ target: '-', kept: false, why: `the structural edit could not run (${(err as Error).message.split('\n')[0]})` });
@@ -1098,7 +1107,7 @@ function withEdits(refine: (draft: string) => Promise<Delivered>,
     // checks (the claim reader included). If that full read finds anything worse than before the steering, the
     // steering is undone: the operators were screened by the deterministic checks only.
     const final = await checkDraftAsync(e.name, e.std, edited.text, e.checks);
-    if (!editKeepsStandard(await checkDraftAsync(e.name, e.std, r.output, e.checks), final) || reader?.degraded) {
+    if (!editKeepsStandard(await checkDraftAsync(e.name, e.std, r.output, e.checks), final, { from: r.output, to: edited.text, std: e.std }) || reader?.degraded) {
       e.trace.edits.push({ target: '-', kept: false, why: 'the steered text, read in full, was worse than before it; the text before steering was delivered' });
       return r;
     }
@@ -1136,7 +1145,7 @@ function withVoice(refine: (draft: string) => Promise<Delivered>,
     v.trace.voice = { bank: v.bank.hash, paragraphs: passed.paragraphs };
     if (passed.text === r.output) return r;
     const final = await checkDraftAsync(v.name, v.std, passed.text, v.checks);
-    if (!editKeepsStandard(await checkDraftAsync(v.name, v.std, r.output, v.checks), final) || v.checks.claimSensor?.degraded) {
+    if (!editKeepsStandard(await checkDraftAsync(v.name, v.std, r.output, v.checks), final, { from: r.output, to: passed.text, std: v.std }) || v.checks.claimSensor?.degraded) {
       v.trace.voice = { bank: v.bank.hash, note: 'undone: the rewritten text, read in full, was worse than before it; the text before the voice pass was delivered',
         paragraphs: passed.paragraphs.map((p) => (p.kept ? { ...p, kept: false, why: 'undone with the pass: the assembled text did not keep the standard' } : p)) };
       return r;
@@ -1234,7 +1243,7 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
     const m = signal ? { params: signal } : params.get(x.requirementId); const e = x.result.error ?? 0;
     const move = m && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
     // An enforced rule that is also graded is still the method's: only a rule the standard does not enforce is "usually".
-    return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: x.result.detail, off: Math.abs(e), ...(move ? { move } : {}), ...(acts(x) ? {} : { graded: true as const }) };
+    return { id: x.requirementId, statement: stated.get(x.requirementId) ?? x.statement, detail: move ? withoutAmount(x.result.detail) : x.result.detail, off: Math.abs(e), ...(move ? { move } : {}), ...(acts(x) ? {} : { graded: true as const }) };
   };
   return (d) => {
     const rules = [...d.report.checked.filter((x) => must.has(x.requirementId) && x.result.verdict === 'VIOLATED').map(ruleMiss),
@@ -1255,6 +1264,12 @@ export function unmetReader(std: Standard, own: { band: readonly [number, number
       detail: `${n} words, ${wordsOutside(n, own.band)} ${n > own.band[1] ? 'too many' : 'too few'}`, off: wordsOutside(n, own.band), ...(aim ? { aim } : {}), ...(move ? { move } : {}) }];
   };
 }
+
+/**
+ * A FEATURE check's detail without the amount it closes on ("…; about 25.5 to remove"): where the miss carries its move
+ * (`featureMove`, "about 25.5 fewer parenthetical asides per 1,000 words"), the line says the move once.
+ */
+const withoutAmount = (detail: string): string => detail.replace(/;\s*(?:about\s+)?[\d.]+(?:\s+points)?\s+to\s+(?:remove|add)\s*$/, '');
 
 /** Each miss on its own line: the rule in the owner's words, what the check found, what to aim for, and which way and how far. */
 const missLines = (unmet: readonly Unmet[]): string => unmet.map((u) => `- ${u.statement} (${u.detail}${u.aim ? `; ${u.aim}` : ''}${u.move ? `; ${u.move}` : ''})`).join('\n');
@@ -1297,7 +1312,7 @@ export function roundMisses(std: Standard, d: { output: string; report: VerifyRe
     const e = x.result.error; const m = params.get(x.requirementId);
     if (e === undefined || e === 0) return base;
     const move = m?.observer === 'FEATURE' && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
-    return { ...base, off: Math.abs(e), ...(move ? { move } : {}) };
+    return { ...base, ...(move ? { detail: withoutAmount(base.detail), move } : {}), off: Math.abs(e) };
   });
   return [...named, ...rest];
 }
@@ -1439,8 +1454,10 @@ function redraftOutcome(before: readonly Unmet[], after: readonly Unmet[], kept:
     return kept ? `Written again for length: the first draft ran ${before[0].detail}, outside ${what}; ${now ? `it now runs ${now.detail}, nearer and still outside` : 'it is now inside it'}.`
       : `The draft runs ${before[0].detail}, outside ${what}; one more draft did not do better, so the first is kept.`;
   }
-  return kept ? `Written again: the first draft left out ${before.length} thing(s) ${whose(before)} (${named(before)}); it now leaves out ${after.length}${after.length ? ` (${named(after)})` : ''}.`
-    : `The draft leaves out ${before.length} thing(s) ${whose(before)} (${named(before)}); one more draft did not do better, so the first is kept.`;
+  // A graded miss is a feature off the author's range (too many asides as often as too few): missed, never "left out".
+  const [now, past] = before.every((u) => u.graded) ? ['misses', 'missed'] : ['leaves out', 'left out'];
+  return kept ? `Written again: the first draft ${past} ${before.length} thing(s) ${whose(before)} (${named(before)}); it now ${now} ${after.length}${after.length ? ` (${named(after)})` : ''}.`
+    : `The draft ${now} ${before.length} thing(s) ${whose(before)} (${named(before)}); one more draft did not do better, so the first is kept.`;
 }
 
 /**
@@ -1455,6 +1472,8 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     graded?: GradedTrace | null;
     /** the displacement guard (core/loop/graded.ts) on a draft written again: why it may not be kept, or nothing */
     displaced?: (before: string, after: string) => readonly string[];
+    /** the figures a draft written again holds that neither the earlier draft, the request nor the material does (`addedFigures`) */
+    addedFigures?: (before: string, after: string) => readonly string[];
     /**
      * THE NEXT SMALLER STEP, after a redraft the controller asked for did no better: the piece as it was before the
      * redraft refined again, with every step already taken (the failed redraft among them) as the controller's history,
@@ -1463,7 +1482,9 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
     resume?: (text: string, history: readonly ControllerDecisionRecord[]) => Promise<Delivered> } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
-  const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})` : `${u.id}: "${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
+  // A SIGNAL feature has no id the owner knows: it is said by its statement alone (core/loop/graded.ts, `ownerWords`).
+  const named = (us: readonly Unmet[]): string => us.map((u) => (u.id === LENGTH_ID ? `the length ${u.of === 'request' ? 'the request asks for' : 'your pieces run'} (the draft: ${u.detail})`
+    : `${isSignal(u.id) ? '' : `${u.id}: `}"${u.statement.length > 70 ? `${u.statement.slice(0, 67)}...` : u.statement}"`)).join('; ');
   // A graded miss is never something the method requires: it is what the author's pieces usually do.
   const whose = (us: readonly Unmet[]): string => (us.some((u) => u.id === LENGTH_ID) ? 'the work requires' : us.every((u) => u.graded) ? 'your pieces usually do'
     : us.some((u) => u.graded) ? 'the method requires or your pieces usually do' : 'the method requires');
@@ -1494,7 +1515,7 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
       if (!trimming && missing.every((u) => u.graded) && d.repair?.controller && !askedForRedraft(d.repair.controller)) break;
       if (trimming) trims += 1; else redrafts += 1;
       const cutting = trimming && picking;
-      const asked = askedForRedraft(d.repair?.controller) ? d.repair?.controller?.decisions[d.repair.controller.decisions.length - 1] : undefined;
+      const asked = redraftHandOff(d.repair?.controller);
       const step = (outcome: ControllerDecisionRecord['outcome'], snap: readonly SpendLine[], movement: number, note?: string): ControllerDecisionRecord => {
         const cost = spendBetween(snap, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded');
         return { action: 'redraft', targets: missing.map((u) => u.id), why: trimming ? 'the piece runs long: cut to its length' : asked?.why ?? `written again with ${missing.length} miss(es) named`,
@@ -1512,17 +1533,29 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         } else {
           // A draft written for graded misses alone is the flag's: its own purpose on the ledger, and counted on the record.
           const gradedOnly = !trimming && missing.every((u) => u.graded);
-          if (c.graded && !trimming) { c.graded.notes.push(...gradedLines(missing)); if (gradedOnly) c.graded.redrafts += 1; }
-          piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(missing, d.output), gradedOnly ? 'graded' : 'writing');
+          // A draft written again for what the work requires carries, of the graded misses, only those far enough out to
+          // keep a repair going (over SETTLED_ERROR band widths): a nearer one is never a pull on the owner's draft.
+          const told = gradedOnly ? missing : missing.filter((u) => !u.graded || (u.off ?? 0) > SETTLED_ERROR);
+          if (c.graded && !trimming) { c.graded.notes.push(...gradedLines(told)); if (gradedOnly) c.graded.redrafts += 1; }
+          piece = await c.redraft(trimming ? trimNote(missing, d.output) : redraftNote(told, d.output), gradedOnly ? 'graded' : 'writing');
         }
         const drafted = step('kept', stepSnap, 0);
         const d2 = await refine(piece);
         const missing2 = c.unmet(d2);
-        // A draft written again may not displace what the author's pieces hold, any more than a rewrite may.
-        const displaced = c.displaced?.(d.output, d2.output) ?? [];
+        // A draft written again for graded misses alone may not displace what the author's pieces hold, any more than a
+        // steering rewrite may. One written for what the work requires is never refused for it: the owner's rules come
+        // first, and what it displaced is said as observed.
+        const forRules = missing.some((u) => !u.graded);
+        const seen = c.displaced?.(d.output, d2.output) ?? [];
+        const displaced = forRules ? [] : seen;
         if (displaced.length && c.graded) c.graded.displaced.push(...displaced);
-        const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing) && !displaced.length;
-        const outcome = displaced.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It displaced what your pieces hold: ${displaced.join('; ')}.` : redraftOutcome(missing, missing2, better, named, whose);
+        // NO INVENTED SPECIFIC BY ANY REPAIR: a draft written again is held to the guard a span rewrite is. A figure that
+        // neither the earlier draft, the request nor the material holds makes it not kept, and the earlier draft stands.
+        const invented = c.addedFigures?.(d.output, d2.output) ?? [];
+        const better = nearer(missing2, missing) && others(d2, missing2) <= others(d, missing) && !displaced.length && !invented.length;
+        const outcome = invented.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It added ${invented.length === 1 ? 'a figure' : 'figures'} that neither the earlier draft, the request nor your material holds (${invented.join(', ')}).`
+          : displaced.length ? `${redraftOutcome(missing, missing2, false, named, whose)} It displaced what your pieces hold: ${displaced.join('; ')}.`
+          : `${redraftOutcome(missing, missing2, better, named, whose)}${forRules && seen.length && better ? ` Displacement observed: ${seen.join('; ')}.` : ''}`;
         // a cut the checks refuse leaves the draft as it was, and the next pass writes it shorter instead
         // THE STEP ON THE RECORD: what the draft written again moved, what it cost, and the steps taken on it after.
         const redrafted: ControllerDecisionRecord = { ...drafted, outcome: better ? 'kept' : 'not kept', observed: { ...drafted.observed, movement: better ? Math.round(Math.max(0, redraftGain(missing) - redraftGain(missing2)) * 1000) / 1000 : 0, note: outcome } };
@@ -1548,11 +1581,22 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
         missing = missing2;
       } catch (err) {
         const why = `the draft to add them could not be written (${(err as Error).message.split('\n')[0]})`;
-        return say(withController(d, joinRecords(d.repair?.controller, step('could not run', stepSnap, 0, why), undefined, why)), `The draft leaves out ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); ${why}.`);
+        return say(withController(d, joinRecords(d.repair?.controller, step('could not run', stepSnap, 0, why), undefined, why)), `The draft ${missing.every((u) => u.graded) ? 'misses' : 'leaves out'} ${missing.length} thing(s) ${whose(missing)} (${named(missing)}); ${why}.`);
       }
     }
     return d;
   };
+}
+
+/**
+ * The figures `after` holds that `before` and the source (the request and the material) do not: what a draft written
+ * again may not add (core/loop/integrity.ts, `numbersIn`, the figures a span rewrite is held to). A list's own numbering
+ * ("3. ") is layout, not a figure, and is not read.
+ */
+export function addedFigures(before: string, after: string, source: string): string[] {
+  const read = (t: string): string[] => numbersIn(t.replace(/^\s*\d+[.)]\s/gm, ''));
+  const had = new Set([...read(before), ...read(source)]);
+  return [...new Set(read(after).filter((n) => !had.has(n)))];
 }
 
 /** What a draft written again is expected to move: each rule (and a length) it misses held, and each graded miss's distance, up to one width. */
@@ -1753,10 +1797,12 @@ function carriedProfile(p: FidelityProfile, policy: TransferPolicy): FidelityPro
  * Whether an edit kept the standard, on the same terms as a span repair: nothing that held now broken, nothing
  * broken in more places (core/loop/repair.ts, `regressions`), and no claim flagged that was not flagged before.
  */
-export function editKeepsStandard(before: VerifyReport, after: VerifyReport): boolean {
+export function editKeepsStandard(before: VerifyReport, after: VerifyReport,
+  /** the two texts and the standard: a FEATURE rule's distance before is read at the length after (core/loop/repair.ts, `readAtLength`) */
+  texts?: { readonly from: string; readonly to: string; readonly std: Pick<StandardVersion, 'requirements'> }): boolean {
   const flagged = (x: VerifyReport): Set<string> => new Set(x.checked.filter((c) => c.requirementId.startsWith('UNSOURCED')).flatMap((c) => c.result.spans.map((sp) => sp.text.trim())));
   const was = flagged(before);
-  return regressions(before, after).length === 0 && [...flagged(after)].every((t) => was.has(t));
+  return regressions(texts ? readAtLength(before, texts.from, texts.to, featureParamsOf(texts.std)) : before, after).length === 0 && [...flagged(after)].every((t) => was.has(t));
 }
 
 /**
@@ -2000,6 +2046,12 @@ function reportDrift(report: RunReport, L: store.StoreLayout, sv: SkillVersion, 
   report.say(`on this binding describe a model that is no longer the one serving you.\n`);
 }
 
+/** A repair's why, beside rules still broken: without "every REQUIRED measured rule (now) holds", which they contradict. */
+export const stillBrokenWhy = (why: string): string => {
+  const rest = why.replace(/every REQUIRED measured rule (?:now )?holds(?: \(([^)]*)\))?(?:;\s*)?/, (_m, inner?: string) => (inner ? `${inner}; ` : '')).replace(/;\s*$/, '').trim();
+  return rest ? ` ${rest}` : '';
+};
+
 /** The counted checks and the invented-claim check: a rule still broken is always said, and so is a cut. */
 function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, checks: Checks): void {
   // A SKILL BUILT FROM A METHOD says on every run what of the method was held, by kind (core/eval/obligations.ts).
@@ -2015,14 +2067,16 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
       report.detail(`graded features (never a failure): ${r.graded.features.join(', ') || 'none'}; ${r.graded.targeted} targeted by a rewrite, ${r.graded.repaired} moved toward your range; `
         + `${r.graded.redrafts} draft(s) written again for them; ${r.graded.edits.accepted} rewrite(s) kept, ${r.graded.edits.rejected} not; ${r.graded.calls} call(s), $${r.graded.costUsd.toFixed(4)}, on their account`
         + `${r.graded.displacement ? `; features outside your range: ${r.graded.displacement.before} on the first draft, ${r.graded.displacement.after} delivered${r.graded.displacement.refusedFor.length ? `; ${r.graded.displacement.refusedFor.length} rewrite(s) refused for displacing others` : ''}` : ''}.`);
-      if (r.graded.steered.length) report.say(`Steered toward your range, never a block: ${steeredLine(r.graded)}.`);
+      const steered = steeredLine(r.graded);
+      if (steered) report.say(`Steered toward your range, never a block: ${steered}.`);
     }
     const heavy = r.storiesCut ? heavyCut(r.draft ?? '', r.storiesCut) : null;
     if (heavy) report.say(`Warning: ${heavy}.`);
     const unconfirmed = r.violatedAfter.includes(INCONCLUSIVE);
     const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
     if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
-    if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
+    // What the repair says of itself is said beside what is still broken only where it does not claim the opposite.
+    if (others.length) report.say(`Still broken after repair: ${others.join(', ')}.${stillBrokenWhy(r.why)}`);
     if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : r.violatedBefore.includes('UNSOURCED') ? 'held once what could not be traced to your material was cut' : 'held once the draft was corrected'})` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);

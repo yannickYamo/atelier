@@ -9,7 +9,7 @@
 // one it was not pointed at from inside to far outside, is refused (`displacement`).
 
 import { FEATURE, featureOf, featureWordCount, LENGTH_DRIFT } from '../observers/features.js';
-import { distanceFromBand } from '../observers/selection.js';
+import { distanceFromBand, openEdge } from '../observers/selection.js';
 import { bandsFor } from '../fidelity/profile.js';
 import { contextClassOf, type FeatureBand, type FidelityProfile } from '../fidelity/types.js';
 import type { RuleCheck } from '../observers/verify.js';
@@ -51,13 +51,19 @@ export function signalChecks(text: string, profile: FidelityProfile | null | und
     const far = r.verdict === 'VIOLATED' && Math.abs(r.error ?? 0) > SIGNAL_FAR && !(f.specifics && (r.error ?? 0) < 0);
     const result = far || r.verdict !== 'VIOLATED' ? r : { ...r, verdict: 'MET' as const, spans: [] };
     const unit = f.unit === 'per1000' ? ' per 1,000 words' : '';
-    return [{ requirementId: `${SIGNAL_PREFIX}${b.id}`, statement: `Keep ${f.label} where your pieces hold it (${fmt(f.unit, b.band[0])} to ${fmt(f.unit, b.band[1])}${unit}).`,
+    return [{ requirementId: `${SIGNAL_PREFIX}${b.id}`, statement: `Keep ${f.label} where your pieces hold it (${openEdge(b.band[0]) ? `at most ${fmt(f.unit, b.band[1])}` : openEdge(b.band[1]) ? `at least ${fmt(f.unit, b.band[0])}` : `${fmt(f.unit, b.band[0])} to ${fmt(f.unit, b.band[1])}`}${unit}).`,
       materiality: null, enforced: false, observer: 'FEATURE', result, feature: b.id, params }];
   });
 }
 
 /** Is this check a SIGNAL feature's (never a line of the recorded report)? */
 export const isSignal = (id: string): boolean => id.startsWith(SIGNAL_PREFIX);
+
+/**
+ * A SIGNAL FEATURE IS NEVER NAMED BY ITS ID TO THE OWNER. Every line a run records or prints is passed through this:
+ * `signal·parenthesis` becomes "parenthetical asides (as your pieces hold them)", what it is, said as no rule of theirs.
+ */
+export const ownerWords = (s: string): string => s.replace(new RegExp(`${SIGNAL_PREFIX}([^\\s,;()]+)`, 'g'), (_m, f: string) => `${featureOf(f)?.label ?? f} (as your pieces hold them)`);
 
 export interface Displacement {
   /** steering features outside their band on the earlier text, read at the later text's length */

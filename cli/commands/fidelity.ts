@@ -28,6 +28,8 @@ import { DEFAULT_SETTINGS, type ImplementationSettings } from '../../core/fideli
 import type { Budget } from '../../core/inference/client.js';
 import type { InvocationRecord } from '../../core/state/canonical-state.js';
 import { releaseWithSettings } from '../fidelity.js';
+import { bandWords, openEdge } from '../../core/observers/selection.js';
+import { controllerSettings } from '../../core/loop/controller.js';
 import { calibrateTypicality, standardise, typicalityOf, MAX_UNMEASURED, type TypicalityCalibration } from '../../core/fidelity/typicality.js';
 import { readJson } from '../../core/state/read-json.js';
 import { basename } from 'node:path';
@@ -95,7 +97,7 @@ function readOne(text: string, profile: NonNullable<ReturnType<typeof fstore.get
     const v = r.values[b.id];
     if (v === null || v === undefined) continue;
     const out = r.outside.find((o) => o.id === b.id);
-    console.log(`  ${out ? (out.direction === 'high' ? 'HIGH' : 'LOW ') : 'ok  '}  ${featureOf(b.id)?.label ?? b.id}: ${round(v)} (yours ${round(b.band[0])} to ${round(b.band[1])})`);
+    console.log(`  ${out ? (out.direction === 'high' ? 'HIGH' : 'LOW ') : 'ok  '}  ${featureOf(b.id)?.label ?? b.id}: ${round(v)} (yours ${bandWords([openEdge(b.band[0]) ? b.band[0] : Number(round(b.band[0])), openEdge(b.band[1]) ? b.band[1] : Number(round(b.band[1]))])})`);
   }
   if (r.detector) console.log(`Style detector ${r.detector.version}: P(model-written) ${r.detector.p}. A monitor, never a requirement; valid for: ${familiesOf(profile)}.`);
 }
@@ -125,6 +127,7 @@ function report(L: store.StoreLayout, profile: NonNullable<ReturnType<typeof fst
       : `  not qualified yet: atelier qualify --skill ${L.skillName}`);
   }
   console.log(`\nActive implementation release ${active.id}: ${describeSettings(active.settings)}; ${active.notes.length} experience note(s); ${active.why}.`);
+  for (const line of describeControllerSettings(active.settings.controller)) console.log(`  ${line}`);
   console.log(`\n${records.length} output(s) recorded with a reading.`);
   if (records.length) {
     const series: FidelityObservation[] = records.map((r) => ({ at: r.at, binding: r.observedRuntime.bindingHash, cls: r.reading.cls, values: r.reading.values }));
@@ -235,11 +238,20 @@ function parseSettings(spec: string, base: ImplementationSettings): Implementati
     counts[k] = Math.floor(n);
   }
   if (counts.drafts < 1) die('drafts must be at least 1.');
-  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(voiceGate ? { voiceGate } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}) };
+  return { drafts: counts.drafts, editBudget: counts.editBudget, retrievalK: counts.retrievalK, notesCap: counts.notesCap, ...(diversity ? { diversity: true } : {}), ...(voice ? { voice } : {}), ...(voiceGate ? { voiceGate } : {}), ...(selection ? { selection } : {}), ...(context ? { context } : {}), ...(nearness ? { nearness } : {}), ...(delivery ? { delivery } : {}), ...(base.controller ? { controller: base.controller } : {}) };
 }
 
 const describeSettings = (s: ImplementationSettings): string =>
   `${s.drafts} draft(s)${s.diversity ? ' made to differ' : ''}, ${s.editBudget} structural edit(s), ${s.retrievalK} passage(s) retrieved, ${s.notesCap} note(s) served${s.voice ? ', the voice pass on (in-context pairs)' : ''}${s.selection === 'sample' ? ', drafts drawn by density ratio' : ''}${s.context === 'local' ? ', held to your range on the request\'s subject' : ''}${s.nearness === 'reader' ? ', nearest pieces read by subject' : ''}${s.delivery === 'strict' ? ', strict delivery (only a conformant output is delivered)' : ''}`;
+
+/** The repair controller's settings in force on a release, each at its value or its default, and what each action has moved. */
+export function describeControllerSettings(c: ImplementationSettings['controller']): string[] {
+  const s = controllerSettings(c);
+  const effects = Object.entries(s.effects);
+  return [`repair controller: at least ${s.minGainPerUsd} band width(s) expected per dollar, at most ${s.maxActions} step(s) a draft, ${s.extraDraft ? 'one more draft when an enforced rule still fails' : 'no extra draft'}${c ? '' : ' (the defaults)'}`,
+    effects.length ? `  measured effects: ${effects.map(([a, e]) => `${a} ${e?.movement} a target for $${e?.usdPerAction.toFixed(4)} (n=${e?.n})`).join('; ')}`
+      : '  measured effects: none yet (a release made after runs with repair steps records them)'];
+}
 
 const round = (x: number): string => (Math.abs(x) >= 10 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
 

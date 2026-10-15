@@ -60,9 +60,10 @@ describe('acceptance: a graded feature nearer its band is progress; an enforced 
   it('|error| 2.0 → 1.2 with the same count of places is accepted, for a graded check', () => {
     const v = acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.2)]), { graded: new Set(['g']) });
     expect(v).toMatchObject({ ok: true }); expect(v.why).toMatch(/graded feature\(s\) nearer the band: g 2.0 → 1.2/);
-    // under the step, or not named as graded, it is no progress
+    // under the step it is no progress
     expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.95)]), { graded: new Set(['g']) }).ok).toBe(false);
-    expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.2)])).ok).toBe(false);
+    // an enforced FEATURE rule not named as graded is read by its distance too: nearer by 0.8 width is progress
+    expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([graded('g', 1.2)]))).toMatchObject({ ok: true, why: 'feature rule(s) nearer the band: g 2.0 → 1.2' });
   });
   it('the same move with an enforced rule newly broken is refused', () => {
     const v = acceptRepair(reportOf([graded('g', 2), enforced('e', 'MET')]), reportOf([graded('g', 1.2), enforced('e', 'VIOLATED')]), { graded: new Set(['g']) });
@@ -75,47 +76,52 @@ describe('acceptance: a graded feature nearer its band is progress; an enforced 
   });
 });
 
-describe('never worse reads the distance of a GRADED feature, and only then: without the flag a FEATURE check is read by its verdict', () => {
+describe('never worse reads the distance of every FEATURE check, graded or enforced, and never its count of carriers', () => {
   const graded = (id: string, error: number, spans = 3, enforced = true): RuleCheck => ({ ...check(id, error), enforced, result: { verdict: 'VIOLATED', value: 2, detail: '', error, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) } });
   const lex = (id: string, verdict: 'MET' | 'VIOLATED', spans = 1): RuleCheck => ({ requirementId: id, statement: id, materiality: 'REQUIRED', enforced: true, observer: 'LEXICON',
     result: { verdict, value: null, detail: '', spans: verdict === 'VIOLATED' ? Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) : [] } });
   const both = new Set(['g1', 'g2']);
   it('g1 2.0 → 1.8 beside g2 1.0 → 3.0, three carriers each, both graded, is refused: the places did not grow, the distance did', () => {
     const before = reportOf([graded('g1', 2.0), graded('g2', 1.0)]); const after = reportOf([graded('g1', 1.8), graded('g2', 3.0)]);
-    expect(regressions(before, after, both)).toEqual(['g2']);
+    expect(regressions(before, after)).toEqual(['g2']);
     const v = acceptRepair(before, after, { graded: both });
     expect(v.ok).toBe(false); expect(v.why).toMatch(/made g2 worse/);
   });
   it('a drift under the step is no regression; exactly the step is', () => {
-    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.05)]), both)).toEqual([]);
-    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.0 + GRADED_STEP)]), both)).toEqual(['g2']);
+    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.05)]))).toEqual([]);
+    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.0 + GRADED_STEP)]))).toEqual(['g2']);
     // the sign is the side of the band; the distance is what is read
-    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', -1.3)]), both)).toEqual(['g2']);
-    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', 0.5)]), both)).toEqual([]);
+    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', -1.3)]))).toEqual(['g2']);
+    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', 0.5)]))).toEqual([]);
   });
-  it('FLAG ABSENT: a FEATURE check is read by its verdict alone, never by its distance or its count of carriers', () => {
-    // |error| 1.0 → 1.15 with equal verdicts: not a regression (a rewrite that cut 5% of the words raised every rate by 5%)
-    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 1.15, 3)]))).toEqual([]);
-    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 3.0, 3)]))).toEqual([]);
+  it('every FEATURE check is read by its distance, never by its count of carriers; a steering check a step is not for is never read', () => {
+    // |error| up by the step or more is worse, enforced or not (a length drift is taken out first, by readAtLength)
+    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 1.15, 3)]))).toEqual(['f']);
+    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 3.0, 3)]))).toEqual(['f']);
+    expect(regressions(reportOf([graded('f', 1.0, 3, false)]), reportOf([graded('f', 3.0, 3, false)]))).toEqual(['f']);
+    // a check the step was not for (a graded feature or a SIGNAL band, on a step for an enforced rule) is never read
+    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 3.0, 3)]), { ignore: new Set(['f']) })).toEqual([]);
+    expect(regressions(reportOf([{ ...check('f', 0, 'MET'), enforced: false }]), reportOf([graded('f', 3.0, 3, false)]), { ignore: new Set(['f']) })).toEqual([]);
     // two carriers to three at an equal value: a changed carrier distribution is never worse
     expect(regressions(reportOf([graded('f', 1.0, 2)]), reportOf([graded('f', 1.0, 3)]))).toEqual([]);
     expect(regressions(reportOf([graded('f', 1.0, 2, false)]), reportOf([graded('f', 0.8, 3, false)]))).toEqual([]);
     // a FEATURE rule newly VIOLATED still is
     expect(regressions(reportOf([{ ...check('f', 0, 'MET'), enforced: true }]), reportOf([graded('f', 0.3, 1)]))).toEqual(['f']);
-    // naming another check as graded reads nothing of this one
-    expect(regressions(reportOf([graded('f', 1.0, 2)]), reportOf([graded('f', 1.5, 3)]), new Set(['other']))).toEqual([]);
+    // ignoring another check reads this one as ever
+    expect(regressions(reportOf([graded('f', 1.0, 2)]), reportOf([graded('f', 1.5, 3)]), { ignore: new Set(['other']) })).toEqual(['f']);
     // a check with no error keeps the count of places as its measure
     expect(regressions(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 2)]))).toEqual([]);
     expect(regressions(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 3)]))).toEqual(['e']);
     expect(regressions(reportOf([lex('e', 'MET')]), reportOf([lex('e', 'VIOLATED')]))).toEqual(['e']);
   });
-  it('an enforced rule behaves as it did: fewer places is progress, as many is none; a feature drift beside it is refused only when that feature is graded', () => {
+  it('a span rule: fewer places is progress, as many is none; a feature rule drifting out beside it is refused, unless the step is not for it', () => {
     expect(acceptRepair(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 1)])).ok).toBe(true);
     expect(acceptRepair(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 2)])).ok).toBe(false);
     const before = reportOf([lex('e', 'VIOLATED', 2), graded('f', 1.0)]); const after = reportOf([lex('e', 'VIOLATED', 1), graded('f', 1.5)]);
-    expect(acceptRepair(before, after)).toMatchObject({ ok: true, why: 'places breaking a REQUIRED rule: 5 → 4' });
-    const v = acceptRepair(before, after, { graded: new Set(['f']) });
+    const v = acceptRepair(before, after);
     expect(v.ok).toBe(false); expect(v.why).toMatch(/made f worse/);
+    // a feature's carriers are never counted as places: 2 → 1 is the span rule alone
+    expect(acceptRepair(before, after, { ignore: new Set(['f']) })).toMatchObject({ ok: true, why: 'places breaking a REQUIRED rule: 2 → 1' });
   });
   it('a graded rate is read at the new length: a shorter text with the count unchanged is no drift; a share or a value is read as it is', () => {
     const colon = { feature: ['colon'], minValue: 2, maxValue: 3 };
@@ -133,22 +139,27 @@ describe('never worse reads the distance of a GRADED feature, and only then: wit
   it('the acceptance names what it counted: graded rules, not REQUIRED, when only graded checks were broken', () => {
     const met = { ...check('g', 0, 'MET'), enforced: true };
     expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([met]), { graded: new Set(['g']) }).why).toBe('graded rules broken: 1 → 0');
-    expect(acceptRepair(reportOf([graded('g', 2, 3)]), reportOf([graded('g', 1.95, 2)]), { graded: new Set(['g']) }).why).toBe('places breaking a graded rule: 3 → 2');
+    // a feature's carriers are not places: three to two at about the same distance is no progress
+    expect(acceptRepair(reportOf([graded('g', 2, 3)]), reportOf([graded('g', 1.95, 2)]), { graded: new Set(['g']) }).why).toBe('the rewrite fixed no graded rule');
     expect(acceptRepair(reportOf([graded('g', 2, 3)]), reportOf([graded('g', 1.95, 3)]), { graded: new Set(['g']) }).why).toBe('the rewrite fixed no graded rule');
     expect(acceptRepair(reportOf([graded('g', 2), lex('e', 'VIOLATED')]), reportOf([met, lex('e', 'VIOLATED')]), { graded: new Set(['g']) }).why).toBe('REQUIRED or graded rules broken: 2 → 1');
     expect(acceptRepair(reportOf([lex('e', 'VIOLATED')]), reportOf([lex('e', 'MET')])).why).toBe('REQUIRED rules broken: 1 → 0');
   });
 });
 
-describe('FEATURE misses carry spans for every FEATURE rule, by design: what that changes for an enforced one', () => {
-  // A repair needs a target, so a FEATURE miss points at its carriers whatever the rule's materiality. For a REQUIRED
-  // FEATURE rule this is the one change from before the spans: its miss counts places, and fewer places is progress.
+describe('FEATURE misses carry spans for every FEATURE rule; an enforced one is still judged by its distance', () => {
+  // A repair needs a target, so a FEATURE miss points at its carriers whatever the rule's materiality. The carriers are
+  // where a rewrite starts, never a measure: progress and regression on any FEATURE rule are read by |error|.
   const feature = (error: number, spans: number): RuleCheck => ({ requirementId: 'f', statement: 'f', materiality: 'REQUIRED', enforced: true, observer: 'FEATURE',
     result: { verdict: 'VIOLATED', value: 2, detail: '', error, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) } });
   const met: RuleCheck = { requirementId: 'f', statement: 'f', materiality: 'REQUIRED', enforced: true, observer: 'FEATURE', result: { verdict: 'MET', value: 2, detail: '', error: 0, spans: [] } };
-  it('three carrier spans to two counts as progress for an enforced FEATURE rule, with no graded set', () => {
+  it('an enforced FEATURE rule nearer its band is progress; fewer carriers further out is a regression, and fewer at the same distance is nothing', () => {
     const v = acceptRepair(reportOf([feature(1.0, 3)]), reportOf([feature(0.6, 2)]));
-    expect(v.ok).toBe(true); expect(v.why).toBe('places breaking a REQUIRED rule: 3 → 2');
+    expect(v.ok).toBe(true); expect(v.why).toBe('feature rule(s) nearer the band: f 1.0 → 0.6');
+    // the reviewer's case: 1.727 widths over three carriers became 3.673 over one
+    const worse = acceptRepair(reportOf([feature(1.727, 3)]), reportOf([feature(3.673, 1)]));
+    expect(worse.ok).toBe(false); expect(worse.why).toBe('the rewrite made f worse');
+    expect(acceptRepair(reportOf([feature(1.0, 3)]), reportOf([feature(1.0, 1)])).ok).toBe(false);
   });
   it('a FEATURE rule newly VIOLATED is still a regression, and the whole pass is refused', () => {
     expect(regressions(reportOf([met]), reportOf([feature(0.3, 1)]))).toEqual(['f']);
@@ -316,7 +327,9 @@ describe('through the loop: a far-out signal is rewritten on its carriers, recor
     const writer = scripted([reps(asideS.replace(/[()]/g, '').replace(/ and it holds/, ': and it holds').replace(/ too /, ': too '))]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, far, 2, { graded: 'all', gradedProfile: p, guardClaims: false });
     expect(r.output).toBe(far);
-    expect(r.repair?.why).toMatch(/discarded: it displaced what your pieces hold/);
+    // the steering step's refusal is on its own record; the run's why still says the draft holds every rule
+    expect(r.repair?.controller?.decisions.some((d) => d.outcome === 'not kept' && (d.observed.note ?? '').startsWith("it displaced what your pieces hold"))).toBe(true);
+    expect(r.repair?.why).toBe('every REQUIRED measured rule now holds');
     expect(r.repair?.graded?.displacement?.refusedFor.length).toBeGreaterThan(0);
     expect(r.repair?.graded?.edits.rejected).toBeGreaterThan(0);
   });
