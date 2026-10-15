@@ -28,6 +28,7 @@
 
 import type { ControllerAction, ControllerDecisionRecord, ControllerRecord } from '../state/canonical-state.js';
 import type { ControllerEffects, ControllerSettings } from '../fidelity/types.js';
+import { ownerWords } from './graded.js';
 
 export const CONTROLLER_POLICY = 'bounded-v1' as const;
 
@@ -160,6 +161,8 @@ function effectOf(action: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft
 }
 
 const r3 = (x: number): number => Math.round(x * 1000) / 1000;
+/** Dollars as said: to the cent, or to a hundredth of a cent where a cent would read as nothing. */
+const usd = (x: number): string => `$${x > 0 && x < 0.01 ? x.toFixed(4) : x.toFixed(2)}`;
 
 /**
  * THE NEXT STEP, or why there is none. Candidates in priority order; the first the budget holds and that pays at
@@ -169,7 +172,8 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   const set = controllerSettings(s);
   // An in-place correction is deterministic: one that failed on a rule fails the same way again, so it is never repeated.
   const grammarFailed = (id: string): boolean => input.history.some((d) => d.action === 'grammar' && d.targets.includes(id) && failed(d));
-  const taken = input.history.filter((d) => CHOSEN.has(d.action)).length;
+  // ONE REDRAFT IS ONE STEP. The hand-off and the draft written again are both on the record; only the draft counts.
+  const taken = input.history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft').length;
   const reachable = <T extends { id: string }>(xs: readonly T[]): T[] => xs.filter((x) => !input.unreachable.has(x.id));
   const enforced = reachable(input.enforced);
   const graded = reachable(input.graded).filter((g) => g.error !== 0)
@@ -219,9 +223,14 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
     const gain = r3(group.reduce((n, g) => n + Math.min(Math.abs(g.error), eff(g)), 0));
     const k = Math.max(...group.map((g) => carriersFor(g.error)));
     const far = group.map((g) => `${g.id} ${Math.abs(g.error).toFixed(2)}`).join(', ');
-    const why = action === 'operators' ? `graded miss(es) under ${SETTLED_ERROR} band widths (${far}): moved by re-punctuation, no model`
-      : action === 'carrier-rewrite' ? `graded miss(es) of ${SETTLED_ERROR} to ${REDRAFT_ERROR} band widths (${far}): up to ${k} carrier sentence(s) each rewritten`
-        : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once` : `over ${REDRAFT_ERROR} band widths`} (${far}): written again with each one's direction and distance`;
+    // The range named is the one the action is sized for; a target stepped down to it from a larger action (a redraft
+    // that did no better) is said at its own distance, never as inside a range it is not in.
+    const sized = group.every((g) => sizedAction(g.error, out) === action);
+    const how = action === 'operators' ? 'moved by re-punctuation, no model' : action === 'carrier-rewrite' ? `up to ${k} carrier sentence(s) each rewritten` : 'written again with each one\'s direction and distance';
+    const why = !sized ? `graded miss(es) at ${far} band widths: ${how}`
+      : action === 'operators' ? `graded miss(es) under ${SETTLED_ERROR} band widths (${far}): ${how}`
+        : action === 'carrier-rewrite' ? `graded miss(es) of ${SETTLED_ERROR} to ${REDRAFT_ERROR} band widths (${far}): ${how}`
+          : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once` : `over ${REDRAFT_ERROR} band widths`} (${far}): ${how}`;
     // A SWITCH SAYS SO: which action failed on these targets, and what it found.
     const switched = group.flatMap((g) => input.history.filter((d) => d.targets.includes(g.id) && CHOSEN.has(d.action) && failed(d))
       .map((d) => `${d.action} on ${g.id} ${d.outcome}${d.observed.note ? ` (${d.observed.note})` : ''}`));
@@ -240,6 +249,10 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
       expectedGain: r3(ENFORCED_WEIGHT * input.enforced.length * DEFAULT_EFFECT.rewrite), expectedCostUsd: usdPerCall('redraft') });
   }
   if (!candidates.length) {
+    // THE REWRITE PASSES ALLOWED WERE USED: something left that a rewrite would take, and no rewrite pass left to take it.
+    const wouldRewrite = !input.can.rewrite && (spans.length > 0 || graded.some((g) => actionFor(sizedAction(g.error, out), g.id, input.history, (a) => (a === 'operators' ? available(g)(a) : a === 'carrier-rewrite'))
+      === 'carrier-rewrite'));
+    if (wouldRewrite) return { kind: 'stop', why: `the rewrite passes allowed were used, with ${[...spans.map((m) => m.id), ...graded.map((g) => g.id)].join(', ')} left` };
     // THE STOP NAMES THE FAILURES: every target left, with each action that failed on it.
     const exhausted = [...input.enforced, ...input.graded].map((m) => ({ id: m.id, fails: [...new Set(failuresOn(m.id, input.history))] })).filter((x) => x.fails.length);
     return { kind: 'stop', why: exhausted.length ? `every action tried failed on what is left: ${exhausted.map((x) => `${x.id} (${x.fails.join(', ')})`).join('; ')}`
@@ -248,12 +261,15 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   let refused: string | null = null;
   for (const c of candidates) {
     const model = MODEL_ACTIONS.has(c.action);
-    if (c.expectedCostUsd > input.budget.usdLeft || (model && input.budget.callsLeft !== null && input.budget.callsLeft < 1)) {
-      refused ??= `the budget: ${c.action} would cost about $${c.expectedCostUsd.toFixed(2)}${input.budget.callsLeft !== null ? ` and a call` : ''}, and $${Math.max(0, input.budget.usdLeft).toFixed(2)}${input.budget.callsLeft !== null ? ` and ${input.budget.callsLeft} call(s)` : ''} are left`;
+    const noCall = model && input.budget.callsLeft !== null && input.budget.callsLeft < 1;
+    if (c.expectedCostUsd > input.budget.usdLeft || noCall) {
+      // Said as what ran out: the calls, or the dollars, never a cost of "$0.00" beside an empty purse of calls.
+      refused ??= noCall && c.expectedCostUsd <= input.budget.usdLeft ? `the budget: ${c.action} needs a model call, and no call is left`
+        : `the budget: ${c.action} would cost about ${usd(c.expectedCostUsd)}${input.budget.callsLeft !== null ? ` and a call` : ''}, and ${usd(Math.max(0, input.budget.usdLeft))}${input.budget.callsLeft !== null ? ` and ${input.budget.callsLeft} call(s)` : ''} are left`;
       continue;
     }
     if (c.expectedCostUsd > 0 && c.expectedGain / c.expectedCostUsd < set.minGainPerUsd) {
-      refused ??= `it stopped paying: ${c.action} was expected to move ${c.expectedGain} for $${c.expectedCostUsd.toFixed(2)}, under ${set.minGainPerUsd} per dollar`;
+      refused ??= `it stopped paying: ${c.action} was expected to move ${c.expectedGain} for ${usd(c.expectedCostUsd)}, under ${set.minGainPerUsd} per dollar`;
       continue;
     }
     return c;
@@ -262,25 +278,36 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
 }
 
 /** The record of a draft's steps, with the calls and dollars summed from the steps themselves. */
-export function controllerRecord(decisions: readonly ControllerDecisionRecord[], stoppedBecause: string): ControllerRecord {
+export function controllerRecord(decisions: readonly ControllerDecisionRecord[], stoppedBecause: string, handedToRedraft = false): ControllerRecord {
   return { policy: CONTROLLER_POLICY, decisions: [...decisions], stoppedBecause,
-    callsUsed: decisions.reduce((n, d) => n + d.observed.calls, 0), usdUsed: Math.round(decisions.reduce((n, d) => n + d.observed.usd, 0) * 1e6) / 1e6 };
+    callsUsed: decisions.reduce((n, d) => n + d.observed.calls, 0), usdUsed: Math.round(decisions.reduce((n, d) => n + d.observed.usd, 0) * 1e6) / 1e6,
+    ...(handedToRedraft ? { handedToRedraft: true as const } : {}) };
 }
 
 /** Two drafts' records as one run's, with a step between them (a draft written again), in the order they happened. */
 export function joinRecords(first: ControllerRecord | undefined, step: ControllerDecisionRecord, second: ControllerRecord | undefined, stoppedBecause?: string): ControllerRecord {
-  return controllerRecord([...(first?.decisions ?? []), step, ...(second?.decisions ?? [])], stoppedBecause ?? second?.stoppedBecause ?? first?.stoppedBecause ?? step.why);
+  return controllerRecord([...(first?.decisions ?? []), step, ...(second?.decisions ?? [])], stoppedBecause ?? second?.stoppedBecause ?? first?.stoppedBecause ?? step.why,
+    second?.handedToRedraft === true);
 }
 
-/** Did the controller hand this draft to be written again? */
+/**
+ * Did the controller hand this draft to be written again? Read from the record's flag, never from its last step: a
+ * mechanical fix tried after the hand-off is bookkeeping and does not take the redraft back. A record written before
+ * the flag reads as it did, by its last step.
+ */
 export const askedForRedraft = (r: ControllerRecord | undefined): boolean => {
+  if (r?.handedToRedraft) return true;
   const last = r?.decisions[r.decisions.length - 1];
   return last?.action === 'redraft' && last.outcome === 'handed to a redraft';
 };
 
+/** The step that handed the draft to a redraft, when it did: what the draft written again is recorded under. */
+export const redraftHandOff = (r: ControllerRecord | undefined): ControllerDecisionRecord | undefined =>
+  (askedForRedraft(r) ? [...(r?.decisions ?? [])].reverse().find((d) => d.action === 'redraft' && d.outcome === 'handed to a redraft') : undefined);
+
 /** One plain line per step, for `atelier report`. */
 export function describeController(r: ControllerRecord): string[] {
-  return [...r.decisions.map((d, i) => `${i + 1}. ${d.action} on ${d.targets.join(', ') || '-'}: ${d.why}; expected ${d.expectedGain} for $${d.expectedCostUsd.toFixed(2)}; `
-    + `${d.outcome}${d.observed.movement ? `, moved ${d.observed.movement}` : ''}, ${d.observed.calls} call(s), $${d.observed.usd.toFixed(4)}${d.observed.note ? ` (${d.observed.note})` : ''}`),
-  `stopped: ${r.stoppedBecause} · ${r.callsUsed} call(s), $${r.usdUsed.toFixed(4)} on its steps`];
+  return [...r.decisions.map((d, i) => ownerWords(`${i + 1}. ${d.action} on ${d.targets.join(', ') || '-'}: ${d.why}; expected ${d.expectedGain} for ${usd(d.expectedCostUsd)}; `
+    + `${d.outcome}${d.observed.movement ? `, moved ${d.observed.movement}` : ''}, ${d.observed.calls} call(s), $${d.observed.usd.toFixed(4)}${d.observed.note ? ` (${d.observed.note})` : ''}`)),
+  `stopped: ${ownerWords(r.stoppedBecause)} · ${r.callsUsed} call(s), $${r.usdUsed.toFixed(4)} on its steps`];
 }

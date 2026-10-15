@@ -158,9 +158,20 @@ export function signalDistance(text: string, signals: readonly StoredSignal[]): 
 export interface ProfileEntry { readonly id: string; readonly layer: string; readonly value: number | null; readonly band: readonly [number, number]; readonly distance: number | null }
 
 export function distanceFromBand(v: number, band: readonly [number, number]): number {
-  const width = Math.max(band[1] - band[0], 0.001);
-  return r3(Math.max(0, band[0] - v, v - band[1]) / width);
+  // A ONE-SIDED BAND has no width: a ruled range with one open edge is stored with that edge at ±1e9 (or ±Infinity),
+  // and read across that "width" every value sat at 0 widths out. As a FEATURE rule's miss is (../observers/features.ts),
+  // it is read in the feature's own unit from the edge it has.
+  const lo = openEdge(band[0]) ? null : band[0]; const hi = openEdge(band[1]) ? null : band[1];
+  const width = lo !== null && hi !== null ? Math.max(hi - lo, 0.001) : 1;
+  return r3(Math.max(0, lo === null ? 0 : lo - v, hi === null ? 0 : v - hi) / width);
 }
+
+/** An edge a band does not have: infinite, or the ±1e9 a ruled one-sided range is stored with. */
+export const openEdge = (x: number): boolean => !Number.isFinite(x) || Math.abs(x) >= 1e9;
+
+/** A band as the owner reads it: "0.2 to 3", "at most 0.001", "at least 4". */
+export const bandWords = (band: readonly [number, number]): string => (openEdge(band[0]) && openEdge(band[1]) ? 'any value'
+  : openEdge(band[0]) ? `at most ${band[1]}` : openEdge(band[1]) ? `at least ${band[0]}` : `${band[0]} to ${band[1]}`);
 
 /**
  * The profile of one text: every counted feature the skill holds (its FEATURE rules and its signals),

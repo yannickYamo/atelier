@@ -160,7 +160,9 @@ export function spanIntegrity(fullOriginal: string, replacement: string, allowed
   // and may never rise: an added "not" flips a claim as surely as a dropped one.
   const negBefore = count(original, NEGATION); const negAfter = count(replacement, NEGATION);
   const negLicensed = drops.reduce((n, d) => n + count(d, NEGATION), 0);
-  if (negAfter > count(fullOriginal, NEGATION) || negBefore - negAfter > negLicensed) lost.push(`negation (${negBefore} → ${negAfter})`);
+  // Said as what happened: a negation added is not one lost.
+  if (negAfter > count(fullOriginal, NEGATION)) lost.push(`added a negation (${negBefore} → ${negAfter})`);
+  else if (negBefore - negAfter > negLicensed) lost.push(`negation (${negBefore} → ${negAfter})`);
   // A qualifier the rule named for removal may go. One named only to be SWAPPED may change into another
   // qualifier ("may" → "might") but not vanish, so across swapped qualifiers the total must hold.
   const dropped = (t: string): boolean => drops.some((d) => d === t.toLowerCase() || hasTerm(d, t));

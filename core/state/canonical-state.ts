@@ -706,6 +706,11 @@ export interface ControllerRecord {
   /** the sums of the decisions' observed calls and dollars: what the ledger charged for them */
   readonly callsUsed: number;
   readonly usdUsed: number;
+  /**
+   * the controller handed this draft to be written again, and the draft has not been written yet: read by the caller
+   * (cli/commands/invoke.ts, `withRedraft`) whatever bookkeeping step was recorded after the hand-off
+   */
+  readonly handedToRedraft?: true;
 }
 
 export interface RepairEdits { readonly accepted: number; readonly rejected: number; readonly reasons: readonly string[] }
