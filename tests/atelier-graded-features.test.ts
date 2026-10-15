@@ -425,29 +425,32 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     // every repair's edits are counted on the record, flag or not
     expect(graded?.repair?.edits).toMatchObject({ accepted: g.edits.accepted, rejected: 0 });
   });
-  it('a miss too far for a rewrite: the piece is written again first, told which way and how far; one that does no better leaves the first', async () => {
+  it('a miss too far for a rewrite: written again first; a redraft that does no better switches to a carrier rewrite, kept when it helps', async () => {
     // eight aside sentences: about 34 per 1,000 against a band of 2 to 9, about 3.6 widths out: over 1.5, so a redraft
     const far = Array.from({ length: 8 }, (_, i) => Array.from({ length: 3 }, (_, k) => ((i * 3 + k) % 3 === 0 ? aside : plain)).join(' ')).join('\n\n');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: far }, emit_replacements: { replacements: replacements(3) } } }) });
     const before = await rewritesSent();
     const out = invoke();
-    // no carrier rewrite was spent on a miss this far out: the piece was written again instead
-    expect(await rewritesSent()).toBe(before);
-    // the scripted writer returns the same piece, which is no nearer: the first draft is delivered
-    expect(out.output).toBe(far);
-    expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 0 });
+    // the scripted writer returns the same piece, which is no nearer; the first draft's carriers are then rewritten
+    expect(await rewritesSent()).toBeGreaterThan(before);
+    const parens = (t: string): number => (t.match(/\(/g) ?? []).length;
+    expect(parens(out.output)).toBeLessThan(parens(far));
+    expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 1, repaired: 1 });
     // The redraft is the flag's (one draft, counted and charged to it), its directional line is recorded as sent, and it
     // never said "requires".
     const g = out.graded!;
     expect(g.redrafts).toBe(1);
     expect(g.notes).toHaveLength(1); expect(g.notes[0]).toMatch(/^- Few asides in parentheses\. \(parenthetical asides [\d.]+ per 1,000 words; .*about [\d.]+ fewer parenthetical asides per 1,000 words\)$/);
-    expect(g.calls).toBe(1);
-    // THE STEPS, RECONSTRUCTABLE: the first draft handed to a redraft, the redraft not kept and why, the second draft's own call
+    expect(g.values.parenthesis.after).toBeLessThan(g.values.parenthesis.before ?? 0);
+    // THE STEPS, RECONSTRUCTABLE: handed to a redraft, the redraft not kept and why, then the carrier rewrite on the same
+    // target, kept, with the switch named; the redrafted piece's own request for another redraft is not on the record
     const ctl = (out as { controller?: ControllerRecord }).controller!;
-    expect(ctl.decisions.map((d) => [d.action, d.outcome])).toEqual([['redraft', 'handed to a redraft'], ['redraft', 'not kept'], ['redraft', 'handed to a redraft']]);
+    expect(ctl.decisions.slice(0, 3).map((d) => [d.action, d.outcome])).toEqual([['redraft', 'handed to a redraft'], ['redraft', 'not kept'], ['carrier-rewrite', 'kept']]);
+    expect(ctl.decisions.filter((d) => d.outcome === 'handed to a redraft')).toHaveLength(1);
     expect(ctl.decisions[1].observed.note).toMatch(/one more draft did not do better, so the first is kept/);
     expect(ctl.decisions[1].observed.calls).toBe(1);
-    expect(ctl.stoppedBecause).toMatch(/did not do better/);
+    expect(ctl.decisions[2].why).toMatch(/switched to it because redraft on x1 not kept/);
+    expect(ctl.decisions.filter((d) => d.action === 'redraft' && d.outcome !== 'handed to a redraft')).toHaveLength(1);
     expect(ctl.callsUsed).toBe(g.calls);
     expect(out.eval.spend?.find((l) => l.purpose === 'graded')?.calls).toBe(g.calls);
     const said = out.report.join('\n');
