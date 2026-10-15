@@ -434,8 +434,10 @@ export const FEATURE: Observer = {
       if (n === 0) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'no prose to count' };
       const k = f.count(text); const lambda = pooled * n;
       const [okLo, okHi] = expectedBand(lambda);
-      const out = pooledOut(k, lambda);
-      const expected = `about ${Math.round(lambda * 10) / 10} expected in ${n} words (${okLo === okHi ? `${okLo}` : `${okLo} to ${okHi}`} is within your rate)`;
+      // A specific (a figure, a name, a link) is only ever capped: a floor would reward inventing one.
+      const side = f.specifics ? 'high' as const : 'both' as const;
+      const out = pooledOut(k, lambda, side);
+      const expected = `about ${Math.round(lambda * 10) / 10} expected in ${n} words (${side === 'high' ? `at most ${okHi}` : okLo === okHi ? `${okLo}` : `${okLo} to ${okHi}`} is within your rate)`;
       if (!out) return { verdict: 'MET', spans: [], value: k, error: 0, detail: `${f.label}: ${k} in ${n} words; ${expected}` };
       const over = out === 'high';
       const carriers = over ? carriersOf(text, (t) => f.count?.(t) ?? 0, proseSentencesOf(text).map((s) => ({ s: s.text, at: s.start })), 'lower', Math.max(1, k - okHi)) : [];

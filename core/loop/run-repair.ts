@@ -94,6 +94,12 @@ export interface CheckOptions {
    * Reported as not applicable with the reason, never silently dropped.
    */
   readonly waived?: ReadonlyMap<string, string>;
+  /**
+   * Rules that do not apply to this output, and why: a band counted off long pieces, on a short-form output
+   * (../observers/short-form.ts, `shortFormTransfer`). Reported as not applicable with the reason; never waived, so
+   * the record says they do not apply, and nothing is left for a person to read on their account.
+   */
+  readonly doesNotApply?: ReadonlyMap<string, string>;
   /** a small model for the questions that need context (./context-judge.ts); absent, the word patterns decide */
   readonly judge?: ContextJudge;
   /**
@@ -115,7 +121,7 @@ export interface CheckOptions {
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const base = waive(verifyText(skill, v, text, opts.context), opts.waived);
+  const base = waive(waive(verifyText(skill, v, text, opts.context), opts.waived), opts.doesNotApply, 'does not apply');
   const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
@@ -222,10 +228,10 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
 export const UNREAD = 'UNSOURCED·unread';
 
 /** The report with each waived rule shown as not applicable, with its reason, and `failed` recomputed. */
-function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>): VerifyReport {
+function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>, said = 'withheld for this run'): VerifyReport {
   if (!waived?.size) return r;
   const checked = r.checked.map((c) => (waived.has(c.requirementId)
-    ? { ...c, result: { verdict: 'NOT_APPLICABLE' as const, spans: [], value: null, detail: `withheld for this run: ${waived.get(c.requirementId) ?? ''}` } } : c));
+    ? { ...c, result: { verdict: 'NOT_APPLICABLE' as const, spans: [], value: null, detail: `${said}: ${waived.get(c.requirementId) ?? ''}` } } : c));
   return { ...r, checked, failed: checked.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
 }
 

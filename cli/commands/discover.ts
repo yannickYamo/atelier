@@ -25,6 +25,7 @@ import { extract } from '../../core/intake/extract.js';
 import { deriveMeasuredRules, piecesBreaking } from '../../core/observers/derive.js';
 import type { Measurement } from '../../core/state/canonical-state.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
+import { shortFormMeasured, shortFormOptions } from '../../core/observers/short-form.js';
 import { buildProfile } from '../../core/fidelity/profile.js';
 import { SELECTION } from '../../core/observers/selection.js';
 import { CLASS_MIN_PIECES, CONTEXT_CLASSES, contextClassOf } from '../../core/fidelity/types.js';
@@ -355,6 +356,21 @@ export async function discover(): Promise<void> {
     console.log(`${measured.length} measurable rule(s) counted from the same pieces: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
     proposals = [...proposals, ...measured.map((m) => m.requirement)];
     proposalMeta = { ...proposalMeta, ...Object.fromEntries(measured.map((m) => [m.requirement.requirementId, {
+      framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance, corpus: corpusOf(m.requirement) } satisfies ProposalMeta])) };
+  }
+  // ── SHORT PIECES: THEIR SHAPE AND THEIR POOLED RATES (core/observers/short-form.ts) ─────────────
+  //
+  // Every count above wants long pieces. Twenty tweets carry a length, a shape and a rate pooled over all their
+  // words; read here from the same pieces, checked on the held-out ones, and weighed by the review like any count.
+  // The platform's limit is the format's (--class x-post: 280) or the owner's (--limit), never read off the pieces.
+  const shortGiven = shortFormOptions(declaredClass(s), flag('--limit'));
+  const shortOpts = typeof shortGiven === 'string' ? die(shortGiven) : shortGiven;
+  const shortMeasured = shortFormMeasured(openItems.filter((i) => readIds.has(i.id)), openItems.filter((i) => heldIds.has(i.id)), sourceProvenance(),
+    { limit: shortOpts.limit?.chars ?? null, ...(shortOpts.urlChars !== undefined ? { urlChars: shortOpts.urlChars } : {}) });
+  if (shortMeasured.length) {
+    console.log(`${shortMeasured.length} rule(s) of shape and pooled rate read from your short pieces: ${shortMeasured.map((m) => m.requirement.requirementId).join(', ')}${shortOpts.limit ? `; platform limit ${shortOpts.limit.chars} characters (${shortOpts.limit.from})` : ''}.`);
+    proposals = [...proposals, ...shortMeasured.map((m) => m.requirement)];
+    proposalMeta = { ...proposalMeta, ...Object.fromEntries(shortMeasured.map((m) => [m.requirement.requirementId, {
       framings: [], alsoPhrasedAs: [], heldOut: null, needs: null, inSample: m.conformance, corpus: corpusOf(m.requirement) } satisfies ProposalMeta])) };
   }
   // ── WHAT THE MODEL DOES THAT THE AUTHOR DOESN'T ───────────────────────────────────────────────

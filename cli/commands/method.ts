@@ -25,8 +25,8 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, stepsOf, shortFormOffers, type MethodProposal, type ShortFormOptions } from '../../core/method/standard.js';
-import { formatOf } from '../../core/observers/formats.js';
+import { proposalsAcross, countedOffers, tellOffers, stepsOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { readCase, corpusFiles } from '../corpus.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
@@ -92,7 +92,13 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
   const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Checked and shown on every run; it blocks nothing until you confirm it.` : '');
   // With no method there is nothing of the owner's to list: what the examples show is all the skill is, so it is shown.
   if (!stated.length) return ['No method was given: the skill is your examples, served to the writer, and what can be counted in them. Whether new work reads like them is yours to judge.',
-    ...(shown.length ? ['', `Seen in your examples: shown to the writer, and required only if you say so (${shown.length}):`, ...shown.map((p) => `  - ${p.statement}`)] : ['', 'Nothing that can be counted is common to all of them: the writer is given the pieces themselves.']),
+    // What every example meets, read from enough of them (a short piece's shape; the machine-tell ban), is required
+    // and said to be; the rest is shown, with how many more examples would let it block where that is the reason.
+    ...(shown.some((p) => p.required) ? ['', `Seen in every one of your examples, and required (${shown.filter((p) => p.required).length}):`, ...shown.filter((p) => p.required).map((p) => `  - ${p.statement}`)] : []),
+    ...(shown.some((p) => !p.required) ? ['', `Seen in your examples: shown to the writer, and required only if you say so (${shown.filter((p) => !p.required).length}):`,
+      ...shown.filter((p) => !p.required).map((p) => `  - ${p.statement}${p.onExample?.includes('more would let it block') ? `
+      ${p.onExample.slice(p.onExample.indexOf('read from'))}` : ''}`)] : []),
+    ...(!shown.length ? ['', 'Nothing that can be counted is common to all of them: the writer is given the pieces themselves.'] : []),
     '', 'A method note makes rules of your own: atelier new <your-work> --method <how-you-do-it.md>'];
   const out: string[] = [`${stated.length} step(s) in your method.`];
   if (whole.length) out.push('', `Checked on every run (${whole.length}):`, ...whole.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}${disagrees(p)}`));
@@ -141,16 +147,10 @@ function readExamples(goldenPath: string, notePath: string): { folder: string | 
   return { folder, cases };
 }
 
-/**
- * `--limit <chars>`: the platform's character limit, the owner's to state; or the format's where `--class` names one
- * that has it. Checked before anything is built: a limit that is not a whole number is refused, never guessed at.
- */
+/** `--limit <chars>`, or the limit of the format `--class` names (core/observers/short-form.ts, `shortFormOptions`). */
 export function shortFormFlags(cls: string | undefined, given: string | undefined = flag('--limit')): ShortFormOptions {
-  if (given !== undefined && !/^\d{1,6}$/.test(given.trim())) die(`--limit takes a whole number of characters, got "${given}".`);
-  if (given !== undefined && Number(given) <= 0) die('--limit must be greater than zero.');
-  const f = formatOf(cls);
-  const limit = given !== undefined ? { chars: Number(given), from: '--limit' } : f?.maxChars !== undefined ? { chars: f.maxChars, from: f.label } : null;
-  return { limit, ...(f?.urlChars !== undefined ? { urlChars: f.urlChars } : {}) };
+  const o = shortFormOptions(cls, given);
+  return typeof o === 'string' ? die(o) : o;
 }
 
 /** The command as it was typed, less some of its words: what to say to do the same thing again. */

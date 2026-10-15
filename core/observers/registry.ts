@@ -138,7 +138,7 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
     validate: (p) => { const n = num(p, 'maxPer1000'); return n === null ? 'needs maxPer1000' : n < 0 ? 'maxPer1000 cannot be negative' : null; },
     observe(text, p) {
       const words = proseRegions(text).reduce((n, r) => n + wordsOf(r.text).length, 0);
-      if (words < 100) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'under 100 words' };
+      if (words < 100) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: 'too short to measure: under 100 words' };
       const spans = findTerms(text, list(p, 'terms') ?? DEFAULT_HEDGES);
       const rate = Math.round((spans.length / words) * 10000) / 10;
       const max = num(p, 'maxPer1000') ?? Infinity;
@@ -181,7 +181,7 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
         const bannedShort = neverShort.size ? findPattern(text, id).filter((s) => s.family !== undefined && neverShort.has(s.family)) : [];
         if (bannedShort.length) return { verdict: 'VIOLATED', spans: bannedShort, value: null, detail: `${bannedShort.length} move(s) you never make` };
         const pooled = num(p, 'pooledPerWord');
-        if (pooled === null || words === 0) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: words === 0 ? 'no prose to count' : 'under 150 words' };
+        if (pooled === null || words === 0) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: words === 0 ? 'no prose to count' : 'too short to measure: under 150 words' };
         const hits = findPattern(text, id).filter((s) => !(s.family !== undefined && (neverShort.has(s.family) || BAN_ONLY_FAMILIES.has(s.family))))
           .map((s) => (prefer ? { ...s, why: `${s.why}; write "${prefer}" instead` } : s));
         const lambda = pooled * words; const k = hits.length;

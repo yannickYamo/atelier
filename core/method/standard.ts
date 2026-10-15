@@ -33,7 +33,7 @@ import { PER_ROLE_LIMIT } from '../observers/selection.js';
 import { tablesOf, figuresOf, targetOf } from '../observers/obligations.js';
 import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
-import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, type ShapeBandRule, type PooledRateRule } from '../observers/short-form.js';
+import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, type ShapeBandRule, type PooledRateRule, type ShortFormOptions } from '../observers/short-form.js';
 import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 import { machineTellRule } from '../observers/contrast.js';
 import { PATTERN_LABEL } from '../observers/style.js';
@@ -454,8 +454,7 @@ export function countedOffers(stated: readonly MethodProposal[], cases: readonly
   return [...countedFromExamples(cases), ...sectionsLeft].slice(0, PER_ROLE_LIMIT);
 }
 
-/** The platform's facts for a build from short pieces: a character limit and where it came from, and how a link is counted. */
-export interface ShortFormOptions { readonly limit?: { readonly chars: number; readonly from: string } | null; readonly urlChars?: number }
+export type { ShortFormOptions };
 /** How many counted offers a skill built from short pieces carries at most: the shapes, the rates, and what else was counted. */
 export const SHORT_FORM_OFFER_LIMIT = 20;
 
@@ -470,7 +469,9 @@ export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> &
   if (!isShortForm(texts) || texts.length < 3) return { proposals: [], limits: [], shapes: [], rates: [] };
   const mayBreak = allowed(texts.length, CORPUS_RULE_SHARE);
   const shapes = shapeBandRules(texts, { limit: opts.limit?.chars ?? null, ...(opts.urlChars !== undefined ? { urlChars: opts.urlChars } : {}) })
-    .filter((s) => piecesBreaking(texts, s.measurement).length === 0);
+    // A band the pieces break is not theirs, and is not offered; a ceiling that is the platform's limit is the owner's
+    // fact and is offered whatever the pieces do, with how many of them run past it.
+    .filter((s) => s.limited === true || piecesBreaking(texts, s.measurement).length === 0);
   const rates = pooledRateRules(texts).filter((r) => piecesBreaking(texts, r.measurement).length <= mayBreak);
   const met = (m: Measurement): string => { const k = piecesBreaking(texts, m).length; return k === 0 ? `all ${texts.length} of your examples meet it` : `all but ${k} of your ${texts.length} examples meet it`; };
   const proposals: MethodProposal[] = [
