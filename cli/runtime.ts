@@ -654,6 +654,10 @@ export interface Session {
   admire?: Readonly<Record<string, string>> | null;
   /** how the admiration lines were read into trait classes, keyed by a hash of the lines: read once, kept for a continuation */
   admireRead?: { readonly key: string; readonly classes: Readonly<Record<string, readonly TraitClass[]>>; readonly via: 'MODEL' | 'KEYWORDS' } | null;
+  /** the answers given to the conflicts between authors, by number (null: left for later), kept until the composite is accepted */
+  conflictAnswers?: Readonly<Record<number, 'A' | 'B' | 'both' | null>> | null;
+  /** a hash of the composite screen last printed: a continuation that would show the same screen need not print it again */
+  compositeShown?: string | null;
   /** the composite the person approved (core/composite/selection.ts): which proposals from which author, and the conflicts' answers */
   composite?: CompositeRecord | null;
 }
