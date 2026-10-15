@@ -592,12 +592,16 @@ export const GRADED_PER_PASS = 3;
 /**
  * The rules a run grades (`CheckOptions.graded`): requirement id to the feature it counts. The standard's FEATURE
  * rules, and, with a profile, its SIGNAL features under their own ids (./graded.ts). Empty without the option.
+ * A FEATURE rule the plan enforces (one the owner REQUIRED) is never graded: it is the owner's, enforced like any rule they require (its carriers
+ * rewritten through the controller), and never steered as a habit or written again as one.
  */
 export function gradedRules(v: Pick<StandardVersion, 'requirements'>, graded: CheckOptions['graded'], profile?: FidelityProfile | null): Map<string, string> {
   const out = new Map<string, string>();
   if (graded === undefined) return out;
+  // which rules a run enforces is the plan's to say (../plan/execution-plan.ts), never the rule's own field
+  const enforced = new Set(planFor(v).rules.filter((p) => p.enforced).map((p) => p.id));
   for (const r of v.requirements) {
-    if (r.authority === 'EXPERT_REJECTED' || r.measurement?.observer !== 'FEATURE') continue;
+    if (r.authority === 'EXPERT_REJECTED' || enforced.has(r.requirementId) || r.measurement?.observer !== 'FEATURE') continue;
     const f = (r.measurement.params.feature as readonly string[] | undefined)?.[0];
     if (f && (graded === 'all' || graded.includes(f))) out.set(r.requirementId, f);
   }

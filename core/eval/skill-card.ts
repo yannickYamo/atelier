@@ -23,6 +23,8 @@ export interface SkillCard {
   readonly corpus: { readonly pieces: number; readonly heldBack: number } | null;
   /** whether the skill serves pieces of the author's, so a copied run can be found */
   readonly copying: boolean;
+  /** the shortest run of words shared with one of the author's pieces that fails as copying (cli/eval-run.ts, `copyLimit`); absent on a card kept before it was */
+  readonly copyLimit?: number;
   readonly rules: {
     readonly total: number; readonly required: number; readonly counted: number; readonly read: number;
     readonly conditional: number; readonly needsMaterial: number;
@@ -77,7 +79,7 @@ export function renderSkillCard(c: SkillCard, width = 110, opts: { next?: boolea
   out.push(`    ${pad('your rules', 18)}${whose}: ${r.required} required · ${r.counted} counted on every output · ${r.read} read by the taste reader${r.conditional ? ` · ${r.conditional} apply only under a condition` : ''}${r.needsMaterial ? ` · ${r.needsMaterial} wait for your material` : ''}`);
   const m = c.claims.measured;
   out.push(`    ${pad('invented claims', 18)}${c.claims.instrument}${c.claims.unmeasured ? `: ${c.claims.unmeasured}; what it finds is listed, never cut` : m ? `: caught ${m.caught}/${m.planted} planted, left ${m.leftAlone}/${m.clean} clean alone (false flags at most ${falseFlagPct(m)} in 100), on ${m.on}` : c.claims.qualified ? '' : ': not qualified, so the pattern check decides what is cut'}${c.claims.answers ? ' · answers: work and results by pattern, other specifics listed' : ''}`);
-  if (c.copying) out.push(`    ${pad('copying', 18)}a run of 12 or more words shared with your pieces fails`);
+  if (c.copying) out.push(`    ${pad('copying', 18)}a run of ${c.copyLimit ?? 12} or more words shared with your pieces fails`);
   if (c.fidelity) {
     const f = c.fidelity;
     out.push('');

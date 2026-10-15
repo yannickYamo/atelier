@@ -20,6 +20,7 @@ import { readerModel } from './commands/taste.js';
 import type { SkillCard } from '../core/eval/skill-card.js';
 import { skillSizeOf } from '../core/eval/size.js';
 import { composeServed } from './served.js';
+import { copyLimit } from './eval-run.js';
 
 /** The card for the skill's active version (or `skillVersion`), built from its stored state and stored once. */
 export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; skillVersion?: string; persist?: boolean } = {}): SkillCard | null {
@@ -67,6 +68,8 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
     builtAt: stored?.builtAt ?? (opts.persist ? new Date().toISOString() : null),
     corpus: evidence ? (() => { const held = opts.heldBack ?? stored?.corpus?.heldBack ?? 0; return { pieces: Math.max(0, evidence.items.length - held), heldBack: held }; })() : null,
     copying: (store.getVoice(L)?.pieces?.length ?? 0) + (store.getVoice(L)?.passages?.length ?? 0) > 0,
+    // ONE LIMIT, ONE WORDING: the run's own (cli/eval-run.ts), never a number written here.
+    copyLimit: copyLimit(store.getVoice(L)),
     rules: {
       total: live.length, required: live.filter((q) => q.materiality === 'REQUIRED').length,
       counted: live.filter((q) => q.measurement).length, read: live.filter((q) => !q.measurement).length,
