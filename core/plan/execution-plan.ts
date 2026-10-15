@@ -67,8 +67,8 @@ function planned(r: Requirement): PlannedRule {
   const notEnforced: NotEnforced = !check ? null : unratified ? 'UNRATIFIED' : r.materiality === 'REQUIRED' ? null : r.contested ? 'DISPUTED_BY_EXAMPLES' : r.related ? 'RELATED_CHECK' : 'NOT_REQUIRED';
   const enforced = Boolean(check) && notEnforced === null;
   // What no sentence rewrite fixes is written again: a part the work must contain, a citation that is no line of
-  // the material. Everything else that is enforced is a sentence's to fix.
-  const onMiss: OnMiss = !check ? 'NONE' : !enforced ? 'SHOW' : r.obligation === 'DELIVERABLE' || m?.observer === 'LINES' ? 'REDRAFT' : 'REWRITE';
+  // the material, a test the work never named. Everything else that is enforced is a sentence's to fix.
+  const onMiss: OnMiss = !check ? 'NONE' : !enforced ? 'SHOW' : r.obligation === 'DELIVERABLE' || m?.observer === 'LINES' || m?.observer === 'NAMES_TEST' ? 'REDRAFT' : 'REWRITE';
   return { id: r.requirementId, statement: r.statement, role, stated: inOwnerWords(r), check, enforced, notEnforced, onMiss };
 }
 
