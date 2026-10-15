@@ -240,3 +240,53 @@ export function statedCount(step: string): Measurement | null {
   const counts = countsIn(step);
   return counts.length ? wholeLength(step, counts) : edgeWords(step) ?? bannedWords(step);
 }
+
+// ── A STEP ABOUT CITING PLACES IN THE CODE, AND ONE ABOUT NAMING A TEST ───────────────────────────────
+//
+// "Cite each item as path:line" named the form, and was the only wording read as a step about citing. Owners write
+// the same step a dozen ways ("point to the line", "reference the changed line", "give the file and line", "every
+// finding points at the code"), and each left to judgement is a review whose citations nobody looked up. Read here
+// by what the step asks (a verb of citing with the line as its object, or a file and its line), never by the word
+// "line" alone: "Start with a Summary line" cites nothing. A step that forbids the form or asks for it only sometimes
+// is a judgement about when, as before.
+
+/** A step that forbids, or conditions: "do not cite…", "where there is one", "if a finding is about code". */
+export const FORBIDS_OR_CONDITIONS = /\b(?:do not|don't|never|not|no(?!-)|unless|if|when|where|whenever|except|optional(?:ly)?|avoid|without|instead of|rather than)\b/i;
+/** A verb of citing, with a line as its object: "cite the line", "point to the exact line", "reference the changed line", "quote the line". */
+const CITES_A_LINE = /\b(?:cit(?:e|es|ed|ing)|referenc(?:e|es|ed|ing)|point(?:s|ed|ing)?\s+(?:to|at)|quot(?:e|es|ed|ing))\b[^.;]*?\b(?:lines?|line numbers?)\b/i;
+/** A verb of giving, with a file and its line as its object: "give the file and line", "the file path with a line number". */
+const GIVES_FILE_AND_LINE = /\b(?:giv(?:e|es|ing)|nam(?:e|es|ing)|stat(?:e|es|ing)|includ(?:e|es|ing)|say|says|writ(?:e|es|ing)|carr(?:y|ies|ying)|with|show|shows)\b[^.;]*?\b(?:file|path|filename)(?:\s+(?:name|path))?\s+(?:and|with|plus|,)\s+(?:the\s+|a\s+|its\s+)?lines?(?:\s+numbers?)?\b/i;
+/** The things a review is made of, which a step may ask to cite one by one. */
+const AN_ITEM = String.raw`(?:findings?|claims?|issues?|comments?|items?|remarks?|points?|risks?|problems?|defects?|suggestions?|nits?|bullets?)`;
+/** "Every finding points at the code", "each claim about the code points to the line". */
+const EACH_POINTS_AT = new RegExp(String.raw`\b(?:every|each|all|any)\s+(?:[\w-]+\s+){0,3}?${AN_ITEM}\b[^.;]*?\bpoints?\s+(?:at|to)\s+(?:the\s+|its\s+|a\s+)?(?:code|lines?|diff|change|source)\b`, 'i');
+/** A step that asks for a citation on each thing, not somewhere: "every finding", "each blocking issue", "for every comment". */
+const PER_ITEM = new RegExp(String.raw`\b(?:every|each|all|per)\s+(?:[\w-]+\s+){0,3}?${AN_ITEM}\b`, 'i');
+
+/**
+ * IS THE STEP ABOUT CITING PLACES IN WHAT THE WRITER WAS GIVEN, and does it ask for one on every item? Null where it
+ * is not, or where it forbids or conditions the citing. `citesLines` (../loop/locators.ts) reads the named form;
+ * the other wordings are read here. `sections`: the example's sections, so that "each Blocking issue cites…" is
+ * read as the items under Blocking Issues and nowhere else.
+ */
+export function citesPlaces(step: string, cites: (t: string) => boolean, sections: readonly string[] = []): { perItem: boolean; sections: string[] } | null {
+  if (FORBIDS_OR_CONDITIONS.test(step)) return null;
+  if (!(cites(step) || CITES_A_LINE.test(step) || GIVES_FILE_AND_LINE.test(step) || EACH_POINTS_AT.test(step))) return null;
+  const perItem = PER_ITEM.test(step);
+  return { perItem, sections: perItem ? sectionsMentioned(step, sections) : [] };
+}
+
+/** The example's sections a step speaks of by name, in any case, singular or plural: "each Blocking issue" names Blocking Issues. */
+export function sectionsMentioned(step: string, sections: readonly string[]): string[] {
+  const low = lowered(step);
+  const forms = (sec: string): string[] => { const n = norm(sec); return [...new Set([n, n.replace(/s\b/g, ''), n.replace(/(?<=\w)$/, 's')])]; };
+  return sections.filter((sec) => norm(sec).length >= 3 && forms(sec).some((f) => low.includes(` ${f} `)));
+}
+
+/**
+ * IS THE STEP ABOUT NAMING A TEST? "Name the test that would have caught it", "suggest a test for each fix", "write
+ * the test's name". A verb of naming or proposing, then "test" as what is named; not a test's table, column or
+ * section (those are other steps), and not where the step forbids or conditions it ("say which test if it does").
+ */
+const NAMES_A_TEST = /\b(?:nam(?:e|es|ing)|add(?:s|ed|ing)?|writ(?:e|es|ing)|propos(?:e|es|ing)|suggest(?:s|ed|ing)?)\b[^.;]*?\btests?\b(?!\s+(?:coverage|table|column|section|heading|rows?|plan))/i;
+export const namesTest = (step: string): boolean => NAMES_A_TEST.test(step) && !FORBIDS_OR_CONDITIONS.test(step);

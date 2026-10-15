@@ -399,7 +399,7 @@ export function parseMeasure(spec: string): Measurement {
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
     FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels', 'options'],
-    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'] };
+    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min', 'perItem', 'sections'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'], NAMES_TEST: [] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
   const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
