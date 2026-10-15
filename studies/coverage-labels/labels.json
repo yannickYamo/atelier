@@ -100,6 +100,11 @@
   "unread": "Bottom Line claims carrying [n] citations to numbered Evidence items"
  },
  {
+  "id": "teardown-31",
+  "label": "FULL",
+  "unread": ""
+ },
+ {
   "id": "teardown-32",
   "label": "PARTIAL",
   "unread": "review scores paired with review counts; figures attached to the right thing and not reformatted"
