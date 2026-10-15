@@ -74,13 +74,23 @@ apostrophe in a standard contraction, double punctuation, a space before punctua
 (capitalisation, style, word choice, a fragment, an "And" or "But" opener, a one-word sentence) is listed under
 the rule as "to check" and never changed.
 
+A spelling is corrected only where the slip is certain: the word is a well-known misspelling with one correction
+(the documented list in `core/observers/grammar-words.ts`), or it is one mistyped neighbouring key, or one extra
+letter struck beside the right one, away from exactly one of the 2,000 most common English words (both dialects),
+in a lower-case word of four letters or more. Any other word the checker does not know is listed, never changed:
+a coinage, slang, a word of the other dialect, a closed compound it would split, a plural it would make possessive.
+
 Subject–verb agreement is checked only where the checker catches it: a pronoun subject ("they was", "he go",
 "I is", "there is" before a plural). Agreement with any other subject ("the results was") is not checked, and the
-rule claims nothing about it.
+rule claims nothing about it. A pronoun agreement the author's own pieces use ("it don't") is read at build and is
+never corrected or listed. Otherwise only the clear slips are corrected ("they was", "you was", "I has", "he go");
+vernacular ("it don't") and an error with no single correction ("I is") are listed.
 
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
-citations, figures and currency, front matter, capitalised words (names, products, acronyms), words the
-standard's other rules name, words of the request and the bound material, words the author's own pieces use, a
+citations, file names, email addresses, @mentions, #hashtags, $cashtags, emoji, ALL-CAPS tokens, figures and
+currency, front matter, capitalised words (names, products, acronyms), words the
+standard's other rules name, words of the request and the bound material, words the author's own pieces use (with the checker off at build, every word of theirs that is not a common
+English word), a
 word the text uses three times or more, and a word doubled for emphasis ("very very"). Spelling is checked in the
 dialect the pieces spell in (the same British/American count the style check uses); where they do not settle it,
 only a word wrong in both dialects counts.

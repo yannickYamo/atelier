@@ -19,6 +19,7 @@ import { profileOf } from '../../core/observers/selection.js';
 import { checksFor, shortFormRequest } from '../checks.js';
 import { readFileSync, existsSync } from 'node:fs';
 import * as store from '../../core/state/store.js';
+import * as fstore from '../../core/state/fidelity-store.js';
 import { describeVerify } from '../../core/observers/verify.js';
 import { checkDraftAsync, refineToStandard } from '../../core/loop/run-repair.js';
 import { checkClass } from '../../core/observers/doc-class.js';
@@ -30,6 +31,16 @@ import { stateLine } from '../../core/eval/run-card.js';
 import { partlyChecked } from '../../core/eval/record.js';
 
 export { verifyText, describeVerify, describeMeasurement } from '../../core/observers/verify.js';
+
+/**
+ * The author's range as the skill card counts it (core/eval/skill-card.ts): the features of the fidelity profile the
+ * active release serves, every piece's band. Read only; a skill with no release has none.
+ */
+function profileBands(L: store.StoreLayout): { id: string; band: readonly [number, number] }[] {
+  const active = fstore.getActiveRelease(L)?.release ?? null;
+  const profile = active?.profileHash ? fstore.getProfile(L, active.profileHash) : active ? fstore.getProfile(L) : null;
+  return (profile?.bands ?? []).filter((b) => b.cls === 'all').map((b) => ({ id: b.id, band: b.band }));
+}
 
 export async function verify(): Promise<void> {
   const name = flag('--skill') ?? fail('--skill <name> required: atelier verify --skill <name> <file>   (or pipe the text in)');
@@ -103,8 +114,8 @@ export async function verify(): Promise<void> {
     const lo = typeof m.params.minValue === 'number' ? m.params.minValue : -Infinity;
     const hi = typeof m.params.maxValue === 'number' ? m.params.maxValue : Infinity;
     return [{ id: ((m.params.feature as readonly string[] | undefined) ?? [])[0] ?? '', band: [lo, hi] as const }];
-  }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band }))];
-  const profile = argv.includes('--profile') ? profileOf(text, bands) : null;
+  }), ...store.getSignals(L).map((s) => ({ id: s.id, band: s.band })), ...profileBands(L)];
+  const profile = argv.includes('--profile') ? profileOf(text, bands.filter((b, i) => bands.findIndex((x) => x.id === b.id) === i)) : null;
   // THE SAME RECORD A RUN CARRIES (cli/eval-run.ts): this text, under this standard, judged the same way.
   const record = recordForText({ L, std: v, text, report, sensor: checks.claimSensor, claimsOff: argv.includes('--allow-unsourced'), answers: checks.format?.claims === 'list', unmeasured: checks.listsBecause ?? null });
   if (argv.includes('--json')) {

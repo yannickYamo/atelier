@@ -7,6 +7,29 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: grammar correction keeps the author's words and grammar
+
+- **Spelling is changed only where the slip is certain.** A word is corrected in place when it is a well-known
+  misspelling with one correction (a documented list of 136, `core/observers/grammar-words.ts`), or one mistyped
+  neighbouring key away from exactly one of the 2,000 most common English words (both dialects). Every other word
+  the checker does not know is listed, never changed: coinages ("grokkable"), slang ("arvo"), a word of one dialect
+  ("grandad", "colour" under an American standard), a closed compound it would split ("timeboxed"), a plural it would
+  make possessive ("learnings"). A hyphenated compound is never split.
+- **More is never touched:** @mentions, #hashtags, $cashtags, emoji, email addresses, file names and ALL-CAPS tokens.
+- **Pronoun agreement.** A non-standard agreement the author's own pieces use ("it don't") is read at build and is
+  theirs: not corrected, not listed. Without it, only the clear slips are corrected ("they was", "you was", "I has",
+  "he go"); vernacular is listed, and an error with no single correction ("I is") is listed, not rewritten by a model.
+- **A build with the checker off or failed still keeps the author's vocabulary:** every word of their pieces that is
+  not a common English word, so a later run never corrects their own terms.
+- **What the checker is unsure of is shown item by item** wherever its count is: on the run, in `atelier report`, and
+  in the `invoke --json` record (`listed` on the grammar rule's check line).
+- **A grammar check that did not run reads "not checked"** in `verify`, never `n/a`, and a run no longer says every
+  required rule holds when one was not checked.
+- **Short form.** A platform limit some of the author's own pieces run past (`--limit`) is stated as the platform's
+  rule, with the pieces that exceed it named, and is no longer listed among what every example shows; the character
+  band stays the author's habit. A band whose minimum is 0 states only its maximum ("at most 6").
+- `verify --profile` reads the same range of the author's features that the skill card counts.
+
 ### Fixed: several authors without a model, plain conflicts, and figures cut only for their digits
 
 - **Pieces by several authors are told apart without a model.** `atelier new` with no key on a folder whose pieces
