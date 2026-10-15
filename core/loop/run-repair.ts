@@ -988,7 +988,12 @@ export async function refineToStandard(
   // recorded with what it moved and what the ledger charged for it. The loop ends where the controller stops.
   for (;;) {
     const d = decide(controllerInput(text, report, stylePasses < maxPasses), settings);
-    if (d.kind === 'stop') { stoppedBecause = d.why; break; }
+    if (d.kind === 'stop') {
+      stoppedBecause = d.why;
+      // A step the budget cannot hold is a repair that could not run: the draft is delivered as it stands, and said so.
+      if (d.why.startsWith('the budget')) why = `the rewrite could not run (${d.why}); the draft is delivered as it stands`;
+      break;
+    }
     const snap = processSpendByPurpose();
     if (d.action === 'redraft') {
       // Written again by the caller (cli/commands/invoke.ts, `withRedraft`), told each miss's direction and distance.
