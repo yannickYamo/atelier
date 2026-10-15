@@ -5,9 +5,11 @@
 // not measured, every time, so that a line of ticks is never read as the method having been followed.
 import type { Requirement } from '../state/canonical-state.js';
 import type { VerifyReport } from '../observers/verify.js';
+import { isOmission } from '../observers/obligations.js';
 
 export interface MethodReading {
-  readonly deliverable: { readonly held: number; readonly applicable: number; readonly missing: readonly string[] };
+  /** `missing`: a part the work must contain and does not; `broken`: a ban stated as a step, broken in a sentence (`isOmission`) */
+  readonly deliverable: { readonly held: number; readonly applicable: number; readonly missing: readonly string[]; readonly broken?: readonly string[] };
   readonly execution: { readonly held: number; readonly applicable: number; readonly missing: readonly string[]; readonly notRead: number };
   /** steps of the method no code checks */
   readonly judgement: number;
@@ -25,13 +27,17 @@ export function methodReading(requirements: readonly Requirement[], report: Veri
       missing: read.filter((x) => x.v === 'VIOLATED').map((x) => x.r.requirementId), notRead: read.filter((x) => x.v === 'NOT_APPLICABLE').length };
   };
   const d = of('DELIVERABLE'); const e = of('EXECUTION');
-  return { deliverable: { held: d.held, applicable: d.applicable, missing: d.missing }, execution: e, judgement: live.filter((r) => !r.measurement).length };
+  // A BAN BROKEN IS BROKEN, NOT MISSING: only what is left out is said as missing.
+  const left = (id: string): boolean => { const r = live.find((x) => x.requirementId === id); return isOmission({ obligation: r?.obligation, observer: r?.measurement?.observer }); };
+  const broken = d.missing.filter((id) => !left(id));
+  return { deliverable: { held: d.held, applicable: d.applicable, missing: d.missing.filter(left), ...(broken.length ? { broken } : {}) }, execution: e, judgement: live.filter((r) => !r.measurement).length };
 }
 
 /** "Method: contains 5 of 5 · made from what was given 1 of 1 · 12 judgement step(s) not measured". */
 export function methodLine(m: MethodReading): string {
   const parts = [
-    m.deliverable.applicable ? `contains ${m.deliverable.held} of ${m.deliverable.applicable} thing(s) it must${m.deliverable.missing.length ? ` (missing: ${m.deliverable.missing.join(', ')})` : ''}` : '',
+    m.deliverable.applicable ? `contains ${m.deliverable.held} of ${m.deliverable.applicable} thing(s) it must${m.deliverable.missing.length || m.deliverable.broken?.length
+      ? ` (${[m.deliverable.missing.length ? `missing: ${m.deliverable.missing.join(', ')}` : '', m.deliverable.broken?.length ? `broken: ${m.deliverable.broken.join(', ')}` : ''].filter(Boolean).join('; ')})` : ''}` : '',
     m.execution.applicable ? `made from what was given ${m.execution.held} of ${m.execution.applicable}${m.execution.missing.length ? ` (not: ${m.execution.missing.join(', ')})` : ''}` : '',
     m.execution.notRead ? `${m.execution.notRead} check(s) on the material not read: none was bound` : '',
     m.judgement ? `${m.judgement} judgement step(s) not measured` : '',

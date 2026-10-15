@@ -677,7 +677,7 @@ export interface RepairRecord {
 }
 
 /** What the bounded controller may do on one step. */
-export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar';
+export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar' | 'trim';
 
 /** One step the controller took, and what came of it. Movement is movement: never a probability of acceptance. */
 export interface ControllerDecisionRecord {
@@ -711,6 +711,21 @@ export interface ControllerRecord {
    * (cli/commands/invoke.ts, `withRedraft`) whatever bookkeeping step was recorded after the hand-off
    */
   readonly handedToRedraft?: true;
+  /**
+   * `--until-typical`: every shape round's own steps, the kept round's among them (`kept`). Each round is a draft
+   * attempt of its own, with its own step limit; `decisions` above are the kept round's.
+   */
+  readonly rounds?: readonly ShapeRoundSteps[];
+}
+
+/** One shape round's steps, as its own record. */
+export interface ShapeRoundSteps {
+  readonly round: number;
+  readonly kept: boolean;
+  readonly decisions: readonly ControllerDecisionRecord[];
+  readonly stoppedBecause: string;
+  readonly callsUsed: number;
+  readonly usdUsed: number;
 }
 
 export interface RepairEdits { readonly accepted: number; readonly rejected: number; readonly reasons: readonly string[] }

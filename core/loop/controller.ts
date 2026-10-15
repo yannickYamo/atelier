@@ -39,6 +39,9 @@
 //      carrier rewrite, then the operators, within the cap; a record never ends on a hand-off with no redraft after it.
 //  (e) What a redraft moved is recorded as the real change in |error|, before minus after; the learned effects are
 //      summarised from those records.
+//  (f) ONE COUNTER. Every step that calls a model or changes the text passes through it, whoever carries it out: the
+//      caller's trims (a draft that only runs long, cut) and drafts written again are steps here, recorded as 'trim' and
+//      'redraft', asked of `stepGate` before they are taken, counted against maxActions and priced from the ledger.
 //
 // Pure: the caller reads the report, the ledger and the budget, and executes and records what is decided here.
 
@@ -76,10 +79,44 @@ export const DEFAULT_EFFECT: Readonly<Record<'rewrite' | 'operators' | 'carrier-
 /** Dollars per step when this run's ledger and the release say nothing: the estimates the calls are reserved at. */
 export const DEFAULT_COST: Readonly<Record<ControllerAction, number>> = {
   cut: 0, mechanical: 0, operators: 0, rewrite: 0.05, 'carrier-rewrite': 0.05, redraft: 0.4, grammar: 0,
+  // a trim returns the whole piece, as a draft does: reserved at a draft's price until the ledger says otherwise
+  trim: 0.4,
 };
-const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft']);
-/** Steps the controller chose, as against code that always runs (the claim cut, the mechanical fixes). */
-const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', 'carrier-rewrite', 'redraft', 'grammar']);
+const MODEL_ACTIONS: ReadonlySet<ControllerAction> = new Set(['rewrite', 'carrier-rewrite', 'redraft', 'trim']);
+/** Steps counted against maxActions, as against code that always runs (the claim cut, the mechanical fixes). */
+const CHOSEN: ReadonlySet<ControllerAction> = new Set(['rewrite', 'operators', 'carrier-rewrite', 'redraft', 'grammar', 'trim']);
+
+/**
+ * THE STEPS A RUN HAS TAKEN, the one count every caller reads. A redraft is one step: its hand-off is on the record but
+ * is no step of its own. A step that could not run (a call that failed, a hand-off no draft followed) took nothing.
+ */
+export const stepsTaken = (history: readonly ControllerDecisionRecord[]): number =>
+  history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run').length;
+
+/** The stop said when the step limit is reached. */
+export const capStop = (maxActions: number): string => `the controller took its ${maxActions} steps`;
+
+/** Why the budget cannot hold one step, said as what ran out; null when it can. */
+function budgetRefusal(action: ControllerAction, cost: number, budget: ControllerInput['budget']): string | null {
+  const noCall = MODEL_ACTIONS.has(action) && budget.callsLeft !== null && budget.callsLeft < 1;
+  if (cost <= budget.usdLeft && !noCall) return null;
+  // Said as what ran out: the calls, or the dollars, never a cost of "$0.00" beside an empty purse of calls.
+  return noCall && cost <= budget.usdLeft ? `the budget: ${action} needs a model call, and no call is left`
+    : `the budget: ${action} would cost about ${usd(cost)}${budget.callsLeft !== null ? ` and a call` : ''}, and ${usd(Math.max(0, budget.usdLeft))}${budget.callsLeft !== null ? ` and ${budget.callsLeft} call(s)` : ''} are left`;
+}
+
+/**
+ * MAY A CALLER TAKE THIS STEP? For a step the controller does not choose itself but that counts all the same (a trim, a
+ * draft written again by the caller): null when the step limit and the budget hold it, or the stop, said as which ran
+ * out. A redraft the controller handed over was allowed when it was handed over (the hand-off is no step), and is not
+ * asked again.
+ */
+export function stepGate(action: 'trim' | 'redraft', expectedCostUsd: number, history: readonly ControllerDecisionRecord[],
+  budget: ControllerInput['budget'] | null, s: ControllerSettings | null = null): string | null {
+  const set = controllerSettings(s);
+  if (stepsTaken(history) >= set.maxActions) return capStop(set.maxActions);
+  return budget ? budgetRefusal(action, expectedCostUsd, budget) : null;
+}
 
 export interface EnforcedMiss {
   readonly id: string;
@@ -199,7 +236,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   const grammarFailed = (id: string): boolean => input.history.some((d) => d.action === 'grammar' && hits(d, id) && failed(d));
   // ONE REDRAFT IS ONE STEP. The hand-off and the draft written again are both on the record; only the draft counts. A
   // step that could not run (a call that failed, a hand-off no draft followed) took nothing and is not counted.
-  const taken = input.history.filter((d) => CHOSEN.has(d.action) && d.outcome !== 'handed to a redraft' && d.outcome !== 'could not run').length;
+  const taken = stepsTaken(input.history);
   const reachable = <T extends { id: string }>(xs: readonly T[]): T[] => xs.filter((x) => !input.unreachable.has(x.id));
   const enforced = reachable(input.enforced);
   const graded = reachable(input.graded).filter((g) => g.error !== 0)
@@ -209,12 +246,12 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   if (!input.enforced.length && !input.length && !grammar.length && input.graded.every((g) => Math.abs(g.error) <= SETTLED_ERROR)) {
     return { kind: 'stop', why: input.graded.length ? `every enforced rule holds and no graded miss is over ${SETTLED_ERROR} band widths` : 'every enforced rule holds and nothing graded is off' };
   }
-  if (taken >= set.maxActions) return { kind: 'stop', why: `the controller took its ${set.maxActions} steps` };
+  if (taken >= set.maxActions) return { kind: 'stop', why: capStop(set.maxActions) };
   // LEARNED EFFECTS STEER, NEVER ENFORCE. The release's measured effects (what an action moved, what it cost) are read for
   // a steering step only; a step for an enforced rule is priced and expected at the documented defaults, or at what this
   // run has itself paid, and is never weighed against minGainPerUsd.
   const usdPerCall = (a: ControllerAction, steering = true): number => input.observedUsdPerCall[a]
-    ?? (steering && a !== 'cut' && a !== 'mechanical' && a !== 'grammar' ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
+    ?? (steering && a !== 'cut' && a !== 'mechanical' && a !== 'grammar' && a !== 'trim' ? set.effects[a]?.usdPerAction : undefined) ?? DEFAULT_COST[a];
   const prior = (a: 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft', steering = true): number => (steering ? set.effects[a]?.movement : undefined) ?? DEFAULT_EFFECT[a];
   const candidates: Decision[] = [];
   /** the candidates taken for an enforced rule: never gated by expected gain per dollar */
@@ -271,7 +308,7 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
           : `graded miss(es) ${out >= REDRAFT_FEATURES ? `on ${out} features at once${furthest}` : `over ${REDRAFT_ERROR} band widths`} (${named}): ${how}`;
     // A SWITCH SAYS SO: which action failed on these targets, and what it found.
     const switched = group.flatMap((g) => input.history.filter((d) => hits(d, g.id) && CHOSEN.has(d.action) && failed(d))
-      .map((d) => `${d.action} on ${g.id} ${d.outcome}${d.observed.note ? ` (${d.observed.note})` : ''}`));
+      .map((d) => `${d.action} on ${g.id} ${d.outcome === 'kept' ? 'moved nothing' : d.outcome}${d.observed.note ? ` (${d.observed.note})` : ''}`));
     const whyNow = switched.length ? `${why}; switched to it because ${[...new Set(switched)].join('; ')}` : why;
     candidates.push({ kind: 'act', action, targets: group.map((g) => g.id), why: whyNow, expectedGain: gain, expectedCostUsd: usdPerCall(action), ...(action === 'carrier-rewrite' ? { carriers: k } : {}) });
   }
@@ -298,12 +335,9 @@ export function decide(input: ControllerInput, s: ControllerSettings | null = nu
   }
   let refused: string | null = null; let budgetRefusedGraded = false;
   for (const c of candidates) {
-    const model = MODEL_ACTIONS.has(c.action);
-    const noCall = model && input.budget.callsLeft !== null && input.budget.callsLeft < 1;
-    if (c.expectedCostUsd > input.budget.usdLeft || noCall) {
-      // Said as what ran out: the calls, or the dollars, never a cost of "$0.00" beside an empty purse of calls.
-      refused ??= noCall && c.expectedCostUsd <= input.budget.usdLeft ? `the budget: ${c.action} needs a model call, and no call is left`
-        : `the budget: ${c.action} would cost about ${usd(c.expectedCostUsd)}${input.budget.callsLeft !== null ? ` and a call` : ''}, and ${usd(Math.max(0, input.budget.usdLeft))}${input.budget.callsLeft !== null ? ` and ${input.budget.callsLeft} call(s)` : ''} are left`;
+    const short = budgetRefusal(c.action, c.expectedCostUsd, input.budget);
+    if (short) {
+      refused ??= short;
       if (!forEnforced.has(c)) budgetRefusedGraded = true;
       continue;
     }
@@ -358,5 +392,7 @@ export const redraftHandOff = (r: ControllerRecord | undefined): ControllerDecis
 export function describeController(r: ControllerRecord): string[] {
   return [...r.decisions.map((d, i) => ownerWords(`${i + 1}. ${d.action} on ${d.targets.join(', ') || '-'}: ${d.why}; expected ${d.expectedGain} for ${usd(d.expectedCostUsd)}; `
     + `${d.outcome}${d.observed.movement ? `, moved ${d.observed.movement}` : ''}, ${d.observed.calls} call(s), $${d.observed.usd.toFixed(4)}${d.observed.note ? ` (${d.observed.note})` : ''}`)),
-  `stopped: ${ownerWords(r.stoppedBecause)} · ${r.callsUsed} call(s), $${r.usdUsed.toFixed(4)} on its steps`];
+  `stopped: ${ownerWords(r.stoppedBecause)} · ${r.callsUsed} call(s), $${r.usdUsed.toFixed(4)} on its steps`,
+  // every shape round's steps, each round with a step limit of its own
+  ...(r.rounds ?? []).filter((x) => !x.kept).map((x) => `shape round ${x.round} (not kept): ${x.decisions.length ? x.decisions.map((d) => `${d.action} on ${d.targets.join(', ') || '-'} ${d.outcome}`).join('; ') : 'no step'}; stopped: ${ownerWords(x.stoppedBecause)} · ${x.callsUsed} call(s), $${x.usdUsed.toFixed(4)}`)];
 }

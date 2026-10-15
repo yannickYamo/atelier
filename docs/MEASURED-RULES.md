@@ -287,14 +287,23 @@ is said on the run itself, not only in its record.
 **Enforced rules and steering never share a gate.** The two kinds of target pass through the same steps, and
 are judged apart:
 
-1. A rule you require (a REQUIRED feature rule included) is judged by its value on the text as it is: held or
-   broken, then how far out, then, for a rule that is not a counted feature, in how many places. A rate is
+1. A rule you require (a REQUIRED feature rule included) is judged by its value on the text as it is, and is
+   repaired as a rule you require: its carrier sentences rewritten through the controller, never steered as a
+   feature your pieces usually hold, nor written again as one. It is judged held or broken first, then how far
+   out, then, for a rule that is not a counted feature, in how many places. A rate is
    never rescaled for a change of length on such a rule: "at most 5 asides per 1,000 words" broken at 11.7 and
    delivered at 16 is worse. Comparing a rate at the new length is for the features your pieces usually hold.
 2. The gain-per-dollar gate and the effects a release has learned are read for steering steps only. A step for
    a rule you require is taken whenever the step limit and the budget allow it.
 3. The step limit is per run: the steps on the first draft, the draft written again (one step) and the steps on
-   it count together.
+   it count together. Every repair step that calls a model or changes the text passes through this one count,
+   whoever carries it out: a draft that only runs long is cut ("trim") and a draft written again ("redraft") are
+   steps like a span rewrite, recorded as such with what the ledger charged for them, and taken only while the limit
+   and the budget hold them. When either runs out, the stop says which and what was not taken. The one exception
+   is opt-in: under `invoke --until-typical`, each shape round is a draft attempt of its own with a step limit of its
+   own (per round), every round's steps are recorded under `repair.controller.rounds`, and a later round is told
+   only what the controller would act on: every rule you require, and of the features your pieces usually hold only
+   those over 0.5 band widths out, at most three, the furthest first.
 4. Once a draft has been written again for the features, a feature still more than 1.5 band widths out is
    rewritten on its carriers on the new draft, then re-punctuated, within the limit. A run never ends on a
    request for a redraft that no redraft followed.

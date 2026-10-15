@@ -19,9 +19,9 @@ import { isGrammarNote, readGrammar, toCheckList } from '../../core/observers/gr
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
-import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings } from '../../core/fidelity/types.js';
-import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord, StandardVersion } from '../../core/state/canonical-state.js';
-import { askedForRedraft, redraftHandOff, joinRecords, controllerRecord, recordTarget, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR } from '../../core/loop/controller.js';
+import { LOOP_SETTINGS, DIVERSITY_TEMPERATURES, type FidelityProfile, type FidelityReading, type FidelityRecord, type ImplementationSettings, type ControllerSettings } from '../../core/fidelity/types.js';
+import type { RepairRecord, RepairEdits, GradedRecord, Requirement, ControllerRecord, ControllerDecisionRecord, ShapeRoundSteps, StandardVersion } from '../../core/state/canonical-state.js';
+import { askedForRedraft, redraftHandOff, joinRecords, controllerRecord, recordTarget, stepGate, DEFAULT_COST, DEFAULT_EFFECT, ENFORCED_WEIGHT, SETTLED_ERROR, TARGETS_PER_STEP } from '../../core/loop/controller.js';
 import { releaseFor, implementationBlock } from '../fidelity.js';
 import { buildRunEval, copyLimit } from '../eval-run.js';
 import { needsReview } from '../../core/eval/record.js';
@@ -665,6 +665,8 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
     resolveProvenance(flag('--provenance'), process.env), contractFile,
     flag('--task') ? 'FLAG' : 'POSITIONAL',
     std && !argv.includes('--no-repair') ? keepDelivered(withGradedRecord(withStructureRead(withShape(withCoverage(withVoice(withEdits(withRedraft(refineFor(), unmet ? { unmet, notes: completions, resume: (text, history) => refineFor(history)(text), check: (text: string) => checkDraft(name, std, text, { ...checks, claimSensor: undefined }), redraft: async (note, purpose) => (await spendOneWithResult(client, budget, servedForRun, taskForRun, null, note, {}, purpose)).piece, graded: gradedTrace,
+        steps: { settings: runSettings?.controller ?? null, budget: () => ({ usdLeft: budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0), callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }),
+          usdPerCall: () => { const ls = spendBetween(ledgerBefore, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded'); const n = ls.reduce((k, l) => k + l.calls, 0); return n ? ls.reduce((k, l) => k + l.usd, 0) / n : undefined; } },
         displaced: (from: string, to: string) => displacement(from, to, graded !== undefined ? carried : null, new Set())?.refusedFor ?? [],
         addedFigures: (from: string, to: string) => addedFigures(from, to, materialText) } : null), fid && (editBudget > 0 || argv.includes('--fidelity')) ? { client, budget, name, std, checks, profile: editProfile ?? fid.profile, editBudget, trace, taste } : null),
       voiceRuns && bank && fid ? { client, budget, name, std, checks, bank, copied: fid.index ? overlapIndex(fid.index.passages.map((p) => p.text)) : null, trace, taste, reader: smallReaderFor()?.client ?? null, gate: runSettings?.voiceGate === 'reader' ? 'reader' as const : 'lists' as const } : null),
@@ -1325,8 +1327,9 @@ export function redraftNote(unmet: readonly Unmet[], draft: string): string {
  * EVERYTHING A DELIVERED ROUND LEFT UNMET, for the round after it: what `unmetReader` reads (a part the work must
  * contain, a length), and every other REQUIRED rule the report finds broken, each with its check's detail and, where the
  * rule holds a value to a band, which way and how far (`ObserverResult.error`, `featureMove`). A shape round used to
- * start from nothing; told this, it starts from what the last round missed. A graded feature's rule (`--graded`) is
- * in it whatever its materiality: a repair target is a miss to be told of.
+ * start from nothing; told this, it starts from what the last round missed. The graded misses (`--graded`) obey the
+ * controller's rules (core/loop/controller.ts): only one over SETTLED_ERROR band widths is told, the furthest first,
+ * at most TARGETS_PER_STEP of them; every rule the work requires is told.
  */
 export function roundMisses(std: Standard, d: { output: string; report: VerifyReport }, graded?: CheckOptions['graded'], profile?: FidelityProfile | null): Unmet[] {
   const named = unmetReader(std, null, null, graded, profile)?.(d) ?? [];
@@ -1340,7 +1343,9 @@ export function roundMisses(std: Standard, d: { output: string; report: VerifyRe
     const move = m?.observer === 'FEATURE' && typeof x.result.value === 'number' ? featureMove(m.params, x.result.value) : null;
     return { ...base, ...(move ? { detail: withoutAmount(base.detail), move } : {}), off: Math.abs(e) };
   });
-  return [...named, ...rest];
+  const habits = [...named, ...rest].filter((u) => u.graded && (u.off ?? 0) > SETTLED_ERROR)
+    .sort((a, b) => (b.off ?? 0) - (a.off ?? 0) || a.id.localeCompare(b.id)).slice(0, TARGETS_PER_STEP);
+  return [...[...named, ...rest].filter((u) => !u.graded), ...habits];
 }
 
 /**
@@ -1507,7 +1512,13 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
      */
     resume?: (text: string, history: readonly ControllerDecisionRecord[]) => Promise<Delivered>;
     /** the deterministic checks on a text as written, before any step: what a draft written again moved is read on it */
-    check?: (text: string) => VerifyReport } | null) {
+    check?: (text: string) => VerifyReport;
+    /**
+     * THE RUN'S ONE STEP COUNTER (core/loop/controller.ts, `stepGate`): the release's controller settings, the budget as
+     * it stands, and what a draft has cost per call on this run's ledger. Every trim and every draft written again here is
+     * a step on it; without it the documented step limit still holds, and only the budget goes unread.
+     */
+    steps?: { settings: ControllerSettings | null; budget: () => { usdLeft: number; callsLeft: number | null }; usdPerCall?: () => number | undefined } } | null) {
   if (!c) return refine;
   // Said in the owner's own words, with the id beside it: "x3" alone tells them nothing.
   // A SIGNAL feature has no id the owner knows: it is said by its statement alone (core/loop/graded.ts, `ownerWords`).
@@ -1565,16 +1576,28 @@ export function withRedraft(refine: (draft: string) => Promise<Delivered>,
       // handed the draft over, a miss far enough out to pay for a whole draft. A nearer one is left as it is, or was
       // rewritten on its carriers.
       if (!trimming && missing.every((u) => u.graded) && d.repair?.controller && !askedForRedraft(d.repair.controller)) break;
+      const asked = redraftHandOff(d.repair?.controller);
+      // ONE COUNTER FOR THE RUN. A trim or a draft written again is a step like the controller's own: taken only while the
+      // step limit and the budget hold it. One that answers the controller's hand-off was allowed when it was handed over.
+      const action = trimming ? 'trim' as const : 'redraft' as const;
+      const priced = c.steps?.usdPerCall?.() ?? DEFAULT_COST[action];
+      const refused = asked ? null : stepGate(action, priced, d.repair?.controller?.decisions ?? [], c.steps?.budget() ?? null, c.steps?.settings ?? null);
+      if (refused) {
+        const was = d.repair?.controller;
+        const stop = `${refused}; the ${action} was not taken`;
+        d = withController(d, controllerRecord(was?.decisions ?? [], stop, was?.handedToRedraft === true));
+        c.notes.push(`The draft ${trimming ? 'still runs long' : `still ${missing.every((u) => u.graded) ? 'misses' : 'leaves out'} ${missing.length} thing(s) ${whose(missing)} (${named(missing)})`}; no ${trimming ? 'further cut' : 'further draft'} was made: ${refused.replace(/^the budget: /, 'the budget would not hold it: ')}.`);
+        break;
+      }
       if (trimming) trims += 1; else redrafts += 1;
       const cutting = trimming && picking;
-      const asked = redraftHandOff(d.repair?.controller);
       // A DRAFT WRITTEN AGAIN IS A GRADED STEP LIKE ANY: where the controller asked for it, the graded misses it is told
       // and recorded for are the ones it named (at most three, the furthest first); every rule the work requires is told.
       const aimed = asked ? missing.filter((u) => !u.graded || asked.targets.includes(recordTarget(u.id))) : missing;
       const step = (outcome: ControllerDecisionRecord['outcome'], snap: readonly SpendLine[], movement: number, note?: string): ControllerDecisionRecord => {
         const cost = spendBetween(snap, processSpendByPurpose()).filter((l) => l.purpose === 'writing' || l.purpose === 'graded');
-        return { action: 'redraft', targets: aimed.map((u) => recordTarget(u.id)), why: trimming ? 'the piece runs long: cut to its length' : asked?.why ?? `written again with ${missing.length} miss(es) named`,
-          expectedGain: asked?.expectedGain ?? redraftGain(missing), expectedCostUsd: asked?.expectedCostUsd ?? DEFAULT_COST.redraft, outcome,
+        return { action, targets: aimed.map((u) => recordTarget(u.id)), why: trimming ? 'the piece runs long: cut to its length' : asked?.why ?? `written again with ${missing.length} miss(es) named`,
+          expectedGain: asked?.expectedGain ?? redraftGain(missing), expectedCostUsd: asked?.expectedCostUsd ?? priced, outcome,
           observed: { movement: Math.round(movement * 1000) / 1000, calls: cost.reduce((n, l) => n + l.calls, 0), usd: Math.round(cost.reduce((n, l) => n + l.usd, 0) * 1e6) / 1e6, ...(note ? { note } : {}) } };
       };
       const stepSnap = processSpendByPurpose();
@@ -1764,12 +1787,28 @@ function withShape(refine: (draft: string) => Promise<Delivered>,
       rounds: tried.map((t, k) => ({ round: k, draft: sha(t.draft), p: t.p, author: t.author, broken: t.broken, kept: t === best })), ...(note ? { note } : {}) };
     // A LATER ROUND'S OUTPUT CARRIES ITS OWN DRAFT. The run's selection record describes round 0's drafts; the kept
     // round's draft is recorded on the repair record, which a round that needed no repair would otherwise lack.
-    if (best !== tried[0] && !best.d.repair) {
-      return { ...best.d, repair: { passes: 0, violatedBefore: [], violatedAfter: brokenIn(best.d.report), originalOutputHash: sha(best.draft), draft: best.draft,
-        why: `shape round ${tried.indexOf(best)} of ${tried.length - 1}, kept for its shape; every REQUIRED measured rule as counted` } };
-    }
-    return best.d;
+    const kept: Delivered = best !== tried[0] && !best.d.repair
+      ? { ...best.d, repair: { passes: 0, violatedBefore: [], violatedAfter: brokenIn(best.d.report), originalOutputHash: sha(best.draft), draft: best.draft,
+        why: `shape round ${tried.indexOf(best)} of ${tried.length - 1}, kept for its shape; every REQUIRED measured rule as counted` } }
+      : best.d;
+    return withRounds(kept, tried.map((t) => ({ d: t.d, kept: t === best })));
   };
+}
+
+/**
+ * EVERY SHAPE ROUND'S STEPS ON THE RECORD. Each round is a draft attempt of its own, with its own step limit (the
+ * controller's maxActions, per round under `--until-typical`); the kept round's steps stay the record's decisions, and
+ * every round's, the rounds not kept among them, are listed under `rounds`. With one round there is nothing to add.
+ */
+export function withRounds(kept: Delivered, rounds: readonly { d: Delivered; kept: boolean }[]): Delivered {
+  if (rounds.length < 2) return kept;
+  const steps: ShapeRoundSteps[] = rounds.map((r, round) => {
+    const c = r.d.repair?.controller;
+    return { round, kept: r.kept, decisions: c?.decisions ?? [], stoppedBecause: c?.stoppedBecause ?? 'no repair step was needed', callsUsed: c?.callsUsed ?? 0, usdUsed: c?.usdUsed ?? 0 };
+  });
+  if (!steps.some((x) => x.decisions.length)) return kept;
+  const own = kept.repair?.controller ?? controllerRecord([], 'no repair step was needed');
+  return withController(kept, { ...own, rounds: steps });
 }
 
 /** The plans of one run: the author's chain (nearest pieces weighted), each plan written so far, its seed, and which draft had which. */
@@ -2252,9 +2291,16 @@ function reportRestyle(report: RunReport, output: string, material: readonly { n
   for (const a of added) report.detail(`    added: "${a.slice(0, 200)}"`);
 }
 
-/** What a run says when its repair steps stopped on the budget, or null when they stopped for another reason. */
-export const budgetStopLine = (c: ControllerRecord | undefined): string | null =>
-  (c?.stoppedBecause.startsWith('the budget') ? `Repair stopped by the budget: ${c.stoppedBecause.replace(/^the budget: /, '')}. Allow more with --cap <usd> or --max-calls <n>.` : null);
+/**
+ * What a run says when the budget refused a repair step, or null when it refused none: the stop itself, or a step it
+ * refused before the free operator steps that then ran (core/loop/controller.ts), which leave the stop saying something else.
+ */
+export const budgetStopLine = (c: ControllerRecord | undefined): string | null => {
+  if (!c) return null;
+  if (c.stoppedBecause.startsWith('the budget')) return `Repair stopped by the budget: ${c.stoppedBecause.replace(/^the budget: /, '')}. Allow more with --cap <usd> or --max-calls <n>.`;
+  const refused = c.decisions.map((d) => /^the budget: (.*?); the operators still run/.exec(d.why)?.[1]).find((x) => x !== undefined);
+  return refused ? `Repair stopped by the budget: ${refused} (only re-punctuation, which needs no model, ran after it). Allow more with --cap <usd> or --max-calls <n>.` : null;
+};
 
 /** What a run says of a passage lifted from the author's examples, at the evaluation's limit and in its words; null under it. */
 export const liftedLine = (longest: number, limit: number): string | null =>

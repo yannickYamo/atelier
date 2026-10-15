@@ -7,6 +7,28 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: every repair step of a run is counted once
+
+- **One step counter per run.** The controller counted its own steps, while a draft that only ran long was cut, and a
+  draft was written again, beside it: a run could take five steps while its record said it took its four. A cut
+  ("trim") and a draft written again ("redraft") are now steps like any other: recorded with what the ledger charged,
+  priced from what the run has paid, and taken only while the step limit (four a run by default) and the budget hold
+  them. When either runs out the stop says which, and what was not taken.
+- **Shape rounds have their own limit, and all of it is recorded.** Under `--until-typical` each round is a draft
+  attempt with a step limit of its own; every round's steps are kept under `repair.controller.rounds`, the rounds not
+  kept among them. A later round is told only what the controller would act on: every rule you require, and of your
+  usual features only those more than half a band width out, at most three, the furthest first.
+- **A feature rule you require is yours, not a habit.** A REQUIRED feature rule (one added with `atelier add`, say) is
+  no longer graded: its carrier sentences are rewritten through the controller as for any rule you require, and it
+  is never written again as an item "the method requires".
+- **A budget stop is said even when free steps followed.** When the budget refused a rewrite and re-punctuation then
+  ran, the run now says the budget stopped the rewrite.
+- **A ban broken is "broken", not "missing".** The method line says `(broken: x1)` for a broken ban and keeps
+  "missing" for what was left out.
+- Smaller: a step down after a draft written again that moved nothing says "moved nothing"; `atelier fidelity`
+  says the step limit is per run; the skill card states the copying limit runs use; the benchmark keeps each item's
+  final state (BLOCKED or not) with it.
+
 ### Fixed: a composite decides each rule once, and the person's words come first
 
 - **One outcome per rule, across every conflict it is in.** With three or more authors a rule sits in several pairwise
