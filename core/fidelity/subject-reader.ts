@@ -18,6 +18,7 @@
 // Qualified by studies/SUBJECT_READER_PREREGISTRATION.md. Until that passes it is opt-in and labelled so; it chooses
 // which of the author's own passages are shown and which pieces a reading weighs, and never gates or cuts.
 
+import { readingAs } from '../inference/step-guard.js';
 import { createHash } from 'node:crypto';
 import { spend, type Budget, type InferenceClient } from '../inference/client.js';
 import { wordsOf } from '../observers/text.js';
@@ -106,7 +107,7 @@ export async function readSubjectCards(client: InferenceClient, budget: Budget, 
   for (const [i, piece] of ids.entries()) {
     try {
       const raw = await spend(budget, 0.01, async () => {
-        const x = await client.complete({ stableBlock: CARD_SYSTEM, variableBlock: '', userMessage: `<piece>\n${cardText(index, piece)}\n</piece>`,
+        const x = await readingAs('subject reader', client).complete({ stableBlock: CARD_SYSTEM, variableBlock: '', userMessage: `<piece>\n${cardText(index, piece)}\n</piece>`,
           toolName: 'emit_card', toolDescription: 'Return what the piece is about.', schema: CARD_SCHEMA, maxTokens: 400, temperature: 0 });
         return { value: x.json, cost: x.cost, usage: x };
       }, 'nearness');
@@ -142,7 +143,7 @@ export async function gradeSubjects(client: InferenceClient, budget: Budget, req
   if (!cards.cards.length || !request.trim()) return null;
   try {
     const raw = await spend(budget, 0.01, async () => {
-      const x = await client.complete({ stableBlock: GRADE_SYSTEM, variableBlock: `<cards>\n${renderCards(cards.cards)}\n</cards>`,
+      const x = await readingAs('subject reader', client).complete({ stableBlock: GRADE_SYSTEM, variableBlock: `<cards>\n${renderCards(cards.cards)}\n</cards>`,
         userMessage: `<request>\n${request}\n</request>`, toolName: 'emit_pieces', toolDescription: 'Return the pieces on the request\'s subject.',
         schema: GRADE_SCHEMA, maxTokens: 600, temperature: 0 });
       return { value: x.json, cost: x.cost, usage: x };

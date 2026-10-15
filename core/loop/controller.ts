@@ -170,6 +170,11 @@ export type PlannedStep = Pick<ControllerDecisionRecord, 'action' | 'targets' | 
  */
 export interface StepLedger {
   readonly settings: ControllerSettings | null;
+  /**
+   * What the run was given to write from: the request and the bound material. No step may put in place a text holding a
+   * figure that neither the text before it nor this holds (./repair.ts, `applyStep`). Empty where nothing was given.
+   */
+  readonly source: string;
   /** every step of the run, in the order each was begun */
   readonly entries: readonly ControllerDecisionRecord[];
   /** the budget as it stands, where the run reads one */
@@ -192,7 +197,7 @@ export interface StepLedger {
 
 /** A new ledger for one run, with the steps already taken on it (a caller that refines a piece again) when there are any. */
 export function stepLedger(settings: ControllerSettings | null = null, budget: (() => ControllerInput['budget']) | null = null,
-  history: readonly ControllerDecisionRecord[] = []): StepLedger {
+  history: readonly ControllerDecisionRecord[] = [], source = ''): StepLedger {
   const entries: ControllerDecisionRecord[] = [...history];
   const NONE = { movement: 0, calls: 0, usd: 0 };
   const refuse = (step: PlannedStep, why: string): void => {
@@ -205,7 +210,7 @@ export function stepLedger(settings: ControllerSettings | null = null, budget: (
       outcome: 'refused', observed: { ...NONE, note: why } });
   };
   return {
-    settings, entries,
+    settings, entries, source,
     budget: () => (budget ? budget() : null),
     begin(step) { entries.push({ action: step.action, targets: [...step.targets], why: step.why, expectedGain: step.expectedGain, expectedCostUsd: step.expectedCostUsd, outcome: 'could not run', observed: { ...NONE } }); return entries.length - 1; },
     settle(at, outcome, observed) { const d = { ...entries[at], outcome, observed: { ...observed } }; entries[at] = d; return d; },

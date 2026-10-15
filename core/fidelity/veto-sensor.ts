@@ -36,6 +36,7 @@
 // NO TARGET ESCALATE RATE. An instrument tuned to abstain more would prove only that it can be made
 // to abstain. What matters is whether abstention lands on cases that are actually undecidable.
 
+import { readingAs } from '../inference/step-guard.js';
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
 import type { Requirement } from '../state/canonical-state.js';
@@ -85,7 +86,7 @@ export async function observeApplicability(
   client: InferenceClient, budget: Budget, task: string, requirement: Requirement, estimateUsd = 0.004,
 ): Promise<ApplicabilityOutcome> {
   const res = await spend(budget, estimateUsd, async () => {
-    const x = await client.complete({
+    const x = await readingAs('taste reader', client).complete({
       stableBlock: APPLICABILITY_SYSTEM,
       variableBlock: `## RULE\n\n${requirement.statement}\n\nApplies when: ${requirement.appliesWhen}\n\n## TASK\n\n${task}`,
       userMessage: 'Answer now.', toolName: 'emit_applicability',
@@ -179,7 +180,7 @@ export async function observeVeto(
 ): Promise<VetoResult> {
   const r = admitted.requirement;
   const res = await spend(budget, estimateUsd, async () => {
-    const x = await client.complete({
+    const x = await readingAs('taste reader', client).complete({
       stableBlock: VETO_SYSTEM,
       variableBlock: `## RULE\n\n${r.statement}\n\n## TASK\n\n${task}\n\n## OUTPUT\n\n${output}`,
       userMessage: 'Answer now.', toolName: 'emit_veto',

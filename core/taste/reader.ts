@@ -11,6 +11,7 @@
 //
 // The reader reports. What its readings may do is decided by calibration (./calibration.ts).
 
+import { readingAs } from '../inference/step-guard.js';
 import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
 import { keysOf } from '../state/rule-key.js';
@@ -110,7 +111,7 @@ interface RawReading { n: number | string; verdict: 'FOLLOWED' | 'MISSED' | 'UNC
 
 async function readOnce(client: InferenceClient, budget: Budget, text: string, rules: readonly Requirement[]): Promise<Map<number, RawReading>> {
   const res = await spend(budget, 0.03, async () => {
-    const x = await client.complete({
+    const x = await readingAs('taste reader', client).complete({
       stableBlock: READING_SYSTEM, variableBlock: '',
       userMessage: `RULES\n${rules.map((r, i) => `${i + 1}. ${r.statement}`).join('\n')}\n\nTEXT\n"""\n${text}\n"""`,
       toolName: 'emit_readings', toolDescription: 'One reading per numbered rule.',
@@ -133,7 +134,7 @@ export async function applicability(client: InferenceClient, budget: Budget, tas
   // Without a task there is nothing to decide from: conditional rules are read, and say so in their why.
   if (!task) return out;
   const res = await spend(budget, 0.01, async () => {
-    const x = await client.complete({
+    const x = await readingAs('taste reader', client).complete({
       stableBlock: APPLICABILITY_SYSTEM, variableBlock: '',
       userMessage: `TASK\n${task}\n\nCONDITIONS\n${conditional.map(({ r }, j) => `${j + 1}. ${r.appliesWhen}`).join('\n')}`,
       toolName: 'emit_applicability', toolDescription: 'One answer per numbered condition.',

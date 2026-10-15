@@ -118,7 +118,7 @@ const readerClient: InferenceClient = { complete: async (req: InferenceRequest) 
 const BANK: PairBank = { version: 1, sourceHash: 's', rejected: {} as PairBank['rejected'], builtAt: 'now', hash: 'b',
   pairs: [{ neutral: 'Thank you for writing to us about the order. I am sorry it arrived late.', author: 'Thanks for writing to us about the order. Sorry it came late.' }] } as unknown as PairBank;
 
-function chain(writer: InferenceClient, maxActions = MAX_STEPS) {
+function chain(writer: InferenceClient, maxActions = MAX_STEPS, profile: FidelityProfile = PROFILE) {
   const budget = { spentUsd: 0, capUsd: 100 };
   const checks = { guardClaims: false } as const;
   const notes: string[] = [];
@@ -130,7 +130,7 @@ function chain(writer: InferenceClient, maxActions = MAX_STEPS) {
   return invoke.repairChain(refine,
     { notes, unmet: (d) => (d.output.includes(SIGN) ? [] : [{ id: 'x9', statement: 'Sign off with your name.', detail: 'missing' }]),
       redraft: async (note, purpose) => (await spendOneWithResult(writer, budget, 'served', 'task', null, note, {}, purpose)).piece, paramsOf: ruleParamsOf(STD) },
-    { client: writer, budget, name: 'd', std: STD, checks, profile: PROFILE, editBudget: 1, trace, taste: null },
+    { client: writer, budget, name: 'd', std: STD, checks, profile, editBudget: 1, trace, taste: null },
     { client: writer, budget, name: 'd', std: STD, checks, bank: BANK, copied: null, trace, taste: null },
     { client: writer, budget, judge, asked: `reply to Hannah, and say ${PART}`, servedText: 'served', task: 'task', notes, paramsOf: ruleParamsOf(STD) },
     null, { settings: { maxActions }, budget: () => ({ usdLeft: 100, callsLeft: null }) });
@@ -190,7 +190,7 @@ const ALLOWED: Readonly<Record<string, readonly { readonly line: RegExp; readonl
     { line: /const edited = await steerTowardRange\(/, why: 'the structural edits, inside their `applyStep` proposal' },
     { line: /const passed = await voicePass\(/, why: 'the voice pass, inside its `applyStep` proposal' },
     { line: /t = await refineTaste\(/, why: 'the taste rewrite, which takes the run\'s ledger and is a step through `applyStep`' },
-    { line: /const ledger = stepLedger\(steps\?\.settings \?\? null, steps\?\.budget \?\? null\);/, why: 'THE one ledger a run (or a shape round) makes, in `withShape`' },
+    { line: /const ledger = stepLedger\(steps\?\.settings \?\? null, steps\?\.budget \?\? null, \[\], steps\?\.source \?\? ''\);/, why: 'THE one ledger a run (or a shape round) makes, in `withShape`, with the request and the material a step may not add a figure beyond' },
   ],
   'core/loop/run-repair.ts': [
     { line: /const x = await client\.complete\(\{ stableBlock: REDRAFT_SYSTEM/, why: 'the draft written again around a claim cut, called only from its `applyStep` proposal' },
@@ -202,6 +202,16 @@ const ALLOWED: Readonly<Record<string, readonly { readonly line: RegExp; readonl
   'core/taste/repair.ts': [{ line: /const x = await client\.complete\(\{ stableBlock: checks\.placeholders/, why: 'the taste rewrite, inside its `applyStep` proposal' }],
 };
 const CALL = /\bcomplete\(|\bspendOne\w*\(|\bsteerTowardRange\(|\bvoicePass\(|\brefineTaste\(|\bstepLedger\(|\bspendOneWithResult\b/;
+
+// THE BRANCHES THE RUN ABOVE DOES NOT TAKE run here, every client of the chain carrying the step guard
+// (core/inference/step-guard.ts): a model call any of them makes outside a step, in whatever module it is written, throws.
+describe('1b. the runtime guard on branches the structural run does not take', () => {
+  it('a profile that predates the operators: the structural edits\' own branch for it', async () => {
+    const writer = scripted();
+    const d = await chain(writer, 12, { ...PROFILE, effects: undefined })(FIRST);
+    expect(d.repair?.controller?.callsUsed).toBe(writer.calls.length);
+  }, 60_000);
+});
 
 describe('2. static: no model call and no ledger in the chain outside the listed places', () => {
   for (const file of CHAIN) {

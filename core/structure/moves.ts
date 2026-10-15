@@ -18,6 +18,7 @@
 // It reports. Its features steer nothing until they pass the sealed qualification
 // (studies/STRUCTURE_READER_PREREGISTRATION.md).
 
+import { readingAs } from '../inference/step-guard.js';
 import { createHash } from 'node:crypto';
 import { paragraphsOf } from '../observers/text.js';
 import { spend, type Budget, type InferenceClient } from '../inference/client.js';
@@ -98,7 +99,7 @@ export function checkLabels(raw: unknown, n: number): StructureMove[] | null {
 async function readOnce(client: InferenceClient, budget: Budget, paragraphs: readonly string[], order: readonly StructureMove[]): Promise<StructureMove[] | null> {
   const numbered = paragraphs.map((p, i) => `[${i + 1}] ${p}`).join('\n\n');
   return spend(budget, 0.02, async () => {
-    const x = await client.complete({ stableBlock: systemFor(order), variableBlock: '', userMessage: numbered,
+    const x = await readingAs('structure read', client).complete({ stableBlock: systemFor(order), variableBlock: '', userMessage: numbered,
       toolName: 'emit_labels', toolDescription: 'Return one move per numbered paragraph.', schema: SCHEMA,
       maxTokens: Math.max(800, paragraphs.length * 40), temperature: 0 });
     return { value: checkLabels(x.json, paragraphs.length), cost: x.cost, usage: x };

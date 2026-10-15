@@ -21,10 +21,11 @@ import { acts, isOmission, type RuleCheck, type VerifyReport } from '../observer
 import { errorAtLength, featureWordCount } from '../observers/features.js';
 import type { StandardVersion } from '../state/canonical-state.js';
 import { displacedFamilies } from '../observers/style.js';
-import { spanIntegrity, namesIn, numbersIn } from './integrity.js';
+import { spanIntegrity, namesIn, numbersIn, addedFigures } from './integrity.js';
 import { isGrammarNote } from '../observers/grammar.js';
 import { processSpendByPurpose, spendBetween, type SpendPurpose } from '../inference/client.js';
 import type { PlannedStep, StepLedger } from './controller.js';
+import { inStep } from '../inference/step-guard.js';
 
 /** What a rewrite is told for a mechanical error no correction in place could fix: the error, and nothing else. */
 const GRAMMAR_HINT = 'Fix only the mechanical error named, in the fewest words; change no other word, and keep every figure, name and spelling the author chose';
@@ -395,8 +396,41 @@ function further(b: RuleCheck, a: RuleCheck, paramsOf?: ParamsOf): boolean {
   if (x.kind !== y.kind) { x = { kind: 'places', d: b.result.spans.length }; y = { kind: 'places', d: a.result.spans.length }; }
   return y.d - x.d >= stepOf(y.kind) && (y.kind !== 'places' || y.d > x.d);
 }
-/** Is `a` nearer holding than `b` was, read on one measure? */
+/**
+ * A CHECK THAT READ NOTHING BECAUSE THE TEXT IS TOO SHORT: its observer's "too short to measure", or the record's
+ * `UNMEASURED` mark on it. Not a rule the request or the format excludes (that is "does not apply"): one that could be
+ * read on a longer text and cannot be on this one.
+ */
+export const UNMEASURED = 'not measured: ';
+export const tooShort = (c: { result: { verdict: string; detail: string } } | undefined): boolean =>
+  c?.result.verdict === 'NOT_APPLICABLE' && (c.result.detail.startsWith('too short to measure') || c.result.detail.startsWith(UNMEASURED));
+/**
+ * UNMEASURABLE IS NOT HELD. Was the rule read on `b` (broken or held) and is `a` too short to read it? Then nothing is
+ * known of it on `a`: a step that does this moved it no nearer holding, and the record may never say it holds.
+ */
+export const lostToLength = (b: { result: { verdict: string } } | undefined, a: { result: { verdict: string; detail: string } } | undefined): boolean =>
+  (b?.result.verdict === 'VIOLATED' || b?.result.verdict === 'MET') && tooShort(a);
+/**
+ * `after` as every comparison of it with `before` reads it: a rule `before` read and `after` is too short to read stands
+ * as it stood on `before`, so becoming unmeasurable is neither progress (a broken rule is still broken) nor a pass.
+ */
+export function asMeasured(before: VerifyReport, after: VerifyReport): VerifyReport {
+  const was = new Map(before.checked.map((c) => [c.requirementId, c]));
+  if (!after.checked.some((c) => lostToLength(was.get(c.requirementId), c))) return after;
+  return { ...after, checked: after.checked.map((c) => { const b = was.get(c.requirementId); return b && lostToLength(b, c) ? b : c; }) };
+}
+/**
+ * The enforced rules `before` read and `after` is too short to read, by id: what the record says was not measured on
+ * the text delivered (core/eval/record-build.ts), never that it holds.
+ */
+export const unmeasuredIn = (before: VerifyReport, after: VerifyReport): string[] => {
+  const was = new Map(before.checked.map((c) => [c.requirementId, c]));
+  return after.checked.filter((c) => acts(c) && lostToLength(was.get(c.requirementId), c)).map((c) => c.requirementId);
+};
+
+/** Is `a` nearer holding than `b` was, read on one measure? A rule `a` is too short to read is not: nothing is known of it. */
 function nearerOn(b: RuleCheck, a: RuleCheck | undefined, paramsOf?: ParamsOf): boolean {
+  if (lostToLength(b, a)) return false;
   if (a?.result.verdict !== 'VIOLATED') return true;
   let x = distanceOf(b, paramsOf); let y = distanceOf(a, paramsOf);
   if (x.kind !== y.kind) { x = { kind: 'places', d: b.result.spans.length }; y = { kind: 'places', d: a.result.spans.length }; }
@@ -412,7 +446,7 @@ function nearerOn(b: RuleCheck, a: RuleCheck | undefined, paramsOf?: ParamsOf): 
  */
 export function enforcedNeverWorse(before: VerifyReport, after: VerifyReport, enforcedIds: ReadonlySet<string>, paramsOf?: ParamsOf): string[] {
   const was = new Map(before.checked.map((c) => [c.requirementId, c]));
-  return after.checked.filter((c) => {
+  return asMeasured(before, after).checked.filter((c) => {
     if (!enforcedIds.has(c.requirementId) || c.result.verdict !== 'VIOLATED' || isGrammarNote(c)) return false;
     const b = was.get(c.requirementId);
     if (b?.result.verdict !== 'VIOLATED') return true;
@@ -496,6 +530,8 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
     enforced?: ReadonlySet<string>;
     /** what says whether a rate is a ceiling or a floor (`distanceOf`) */
     paramsOf?: ParamsOf } = {}): RegressionVerdict {
+  // A rule the rewrite made too short to read stands as it stood: no fewer broken rules for it, and no pass.
+  after = asMeasured(before, after);
   const enforced = new Set([...(opts.enforced ?? [...before.checked, ...after.checked].filter((c) => acts(c) && !opts.graded?.has(c.requirementId)).map((c) => c.requirementId))]
     .filter((id) => !opts.ignore?.has(id)));
   const steer = regressions(before, after, { ignore: new Set([...(opts.ignore ?? []), ...enforced]), paramsOf: opts.paramsOf });
@@ -539,8 +575,10 @@ export function acceptRepair(before: VerifyReport, after: VerifyReport,
  *      the step is then counted while the draft is refined, and what it cost is read at that moment, so the steps on the
  *      draft are not charged to it twice;
  *   4. judges the result: no enforced rule newly broken or further from holding by its value (`enforcedNeverWorse`, with
- *      the standard's params), and, for a step made for targets (`forEnforced`), at least one of them nearer holding
- *      (`enforcedNearer`); then the step's own goal (`also`: what it was for, its own guards). Kept only when all hold;
+ *      the standard's params); no figure added that neither the text before it, the request nor the bound material holds
+ *      (./integrity.ts, `addedFigures`, against the ledger's `source`); and, for a step made for targets (`forEnforced`),
+ *      at least one of them nearer holding (`enforcedNearer`), where a rule the step left too short to measure is not
+ *      nearer (`lostToLength`); then the step's own goal (`also`: what it was for, its own guards). Kept only when all hold;
  *   5. settles the step as kept or not kept with why, what it moved and what the ledger charged for it. The steps taken
  *      on a draft that is not kept are marked as taken on that draft, and the hand-offs it made are withdrawn.
  * The caller keeps the text this returns; nothing else may replace the working text.
@@ -550,8 +588,11 @@ export interface Proposed { readonly text: string; readonly report: VerifyReport
 export interface NoChange { readonly unchanged: string; readonly outcome?: 'no change' | 'not kept' }
 /** What the step is, and the targets it is made for: one of them must be nearer holding after it. */
 export interface StepPlan extends PlannedStep { readonly forEnforced?: readonly string[] }
-/** The one rule's reading of a proposal: the enforced rules it made worse, and which of its targets it moved nearer (null: made for none). */
-export interface StepVerdict { readonly worse: readonly string[]; readonly nearer: readonly string[] | null }
+/**
+ * The one rule's reading of a proposal: the enforced rules it made worse, the figures it added that neither the text
+ * before it, the request nor the material holds, and which of its targets it moved nearer (null: made for none).
+ */
+export interface StepVerdict { readonly worse: readonly string[]; readonly invented: readonly string[]; readonly nearer: readonly string[] | null }
 export interface StepRule<T extends Proposed> {
   /** the rules the standard enforces; absent, every check acting in either report */
   readonly enforced?: ReadonlySet<string>;
@@ -583,6 +624,12 @@ export async function applyStep<T extends Proposed>(ledger: StepLedger, plan: St
   propose: (taken: (movement?: number) => void) => Promise<T | NoChange>, rule: StepRule<T>): Promise<StepResult<T>> {
   const refused = ledger.gate(plan);
   if (refused) return { kind: 'refused', why: refused };
+  // Every call the step makes, in whatever module, is the step's: the run's clients allow it (../inference/step-guard.ts).
+  return inStep(() => takeStep(ledger, plan, before, propose, rule));
+}
+
+async function takeStep<T extends Proposed>(ledger: StepLedger, plan: StepPlan, before: Proposed | (() => Proposed),
+  propose: (taken: (movement?: number) => void) => Promise<T | NoChange>, rule: StepRule<T>): Promise<StepResult<T>> {
   const snap = processSpendByPurpose();
   const cost = (): { calls: number; usd: number } => {
     const ls = spendBetween(snap, processSpendByPurpose()).filter((l) => rule.purposes.includes(l.purpose));
@@ -611,12 +658,16 @@ export async function applyStep<T extends Proposed>(ledger: StepLedger, plan: St
   const enforced = rule.enforced ?? new Set([...b.report.checked, ...after.report.checked].filter((c) => acts(c)).map((c) => c.requirementId));
   const quiet = rule.wordsAdded !== undefined && !rule.wordsAdded(after);
   const worse = enforcedNeverWorse(b.report, after.report, enforced, rule.paramsOf).filter((id) => !quiet || !id.startsWith('UNSOURCED'));
+  // NO NEW INVENTED SPECIFIC, ON ANY PATH: a figure neither the text before the step, the request nor the material holds.
+  const invented = addedFigures(b.text, after.text, ledger.source);
   const forE = plan.forEnforced ?? [];
   const nearer = forE.length ? forE.filter((id) => (b.report.checked.some((c) => c.requirementId === id && c.result.verdict === 'VIOLATED')
     ? enforcedNearer(b.report, after.report, [id], rule.paramsOf).length > 0 : rule.nearerOther?.(id, after) ?? false)) : null;
-  const verdict: StepVerdict = { worse, nearer };
+  const verdict: StepVerdict = { worse, invented, nearer };
   const own = await rule.also?.(after, verdict) ?? null;
-  const why = worse.length ? `it made ${worse.join(', ')} worse` : nearer && !nearer.length ? `it moved none of ${forE.join(', ')} nearer holding` : own;
+  const why = worse.length ? `it made ${worse.join(', ')} worse`
+    : invented.length ? `it added ${invented.length === 1 ? 'a figure' : 'figures'} that neither the text before it, the request nor your material holds (${invented.join(', ')})`
+      : nearer && !nearer.length ? `it moved none of ${forE.join(', ')} nearer holding` : own;
   const kept = why === null;
   const note = rule.note ? rule.note(after, kept, why, { ...verdict, own }) : why ?? undefined;
   ledger.settle(at, kept ? 'kept' : 'not kept', { movement: r3(rule.movement?.(after, kept) ?? 0), ...spent, ...(note ? { note } : {}) });
