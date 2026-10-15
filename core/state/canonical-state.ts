@@ -663,7 +663,45 @@ export interface RepairRecord {
    * failures, and everything the flag caused. Present only on a run that asked for it; the evaluation never reads it.
    */
   readonly graded?: GradedRecord;
+  /**
+   * THE BOUNDED CONTROLLER (core/loop/controller.ts): every repair action chosen, in order, with what it was expected to
+   * gain and cost, what it did, and why the repair stopped. Present wherever the repair loop ran on a draft that was
+   * off in any way; absent under --no-repair, which runs no repair at all.
+   */
+  readonly controller?: ControllerRecord;
   readonly why: string;
+}
+
+/** What the bounded controller may do on one step. */
+export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar';
+
+/** One step the controller took, and what came of it. Movement is movement: never a probability of acceptance. */
+export interface ControllerDecisionRecord {
+  readonly action: ControllerAction;
+  /** the rule ids (or SIGNAL ids) it was pointed at */
+  readonly targets: readonly string[];
+  readonly why: string;
+  /** expected movement: summed band widths toward the band (graded), or rules held (enforced, weighted) */
+  readonly expectedGain: number;
+  readonly expectedCostUsd: number;
+  readonly outcome: 'kept' | 'not kept' | 'no change' | 'handed to a redraft' | 'could not run';
+  readonly observed: {
+    /** what moved, in the units of `expectedGain`; 0 when nothing was kept */
+    readonly movement: number;
+    /** inference calls and dollars this step cost, from the ledger */
+    readonly calls: number;
+    readonly usd: number;
+    readonly note?: string;
+  };
+}
+
+export interface ControllerRecord {
+  readonly policy: 'bounded-v1';
+  readonly decisions: readonly ControllerDecisionRecord[];
+  readonly stoppedBecause: string;
+  /** the sums of the decisions' observed calls and dollars: what the ledger charged for them */
+  readonly callsUsed: number;
+  readonly usdUsed: number;
 }
 
 export interface RepairEdits { readonly accepted: number; readonly rejected: number; readonly reasons: readonly string[] }

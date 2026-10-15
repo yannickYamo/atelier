@@ -12,6 +12,7 @@
 // appended (a later rating of the same run supersedes it), and `atelier eval` reports the share of yes per
 // release with its N and interval. Nothing else in Atelier is a measure of satisfaction.
 
+import { describeController } from '../../core/loop/controller.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as store from '../../core/state/store.js';
@@ -112,6 +113,8 @@ export function traceOf(rec: InvocationRecord): [string, string[]][] {
       ...(r.claimsToCheck ?? []).slice(0, 8).map((c) => `check: "${c.slice(0, 100)}"`)]]);
     out.push(['repair', [`before: ${r.violatedBefore.join(', ') || 'nothing broken'} · after: ${r.violatedAfter.join(', ') || 'nothing broken'} · ${r.passes} pass(es)`, r.why,
       ...(r.integrityReverted?.length ? [`${r.integrityReverted.length} rewrite(s) refused for changing what the text claims`] : [])]]);
+    // Every step the controller chose, in order: what it was expected to move and cost, what it did, and why it stopped.
+    if (r.controller) out.push(['repair steps', describeController(r.controller)]);
   }
   if (f?.edits?.length) out.push(['steering', f.edits.map((e) => `${e.actuator ?? 'edit'} on ${featureOf(e.target)?.label.split(' (')[0] ?? e.target}${e.before !== undefined ? ` (${e.before ?? '-'} to ${e.after ?? '-'})` : ''}: ${e.kept ? 'kept' : 'not kept'}, ${e.why}`)]);
   if (f?.reading) out.push(['delivered', [`${f.reading.inBand} of ${f.reading.measured} features in range${f.coverage ? ` · used ${f.coverage.used} of ${f.coverage.supplied} supplied facts` : ''}`]]);

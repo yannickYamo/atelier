@@ -211,6 +211,29 @@ export interface ImplementationSettings {
    * conform is refused with its reasons and a failing exit. Opt-in in 1.x (decision 0008); the default from 2.0.
    */
   readonly delivery?: 'strict';
+  /**
+   * THE BOUNDED REPAIR CONTROLLER (../loop/controller.ts): how much a repair step must be expected to move per dollar,
+   * how many steps a draft may take, whether one more draft may be written when an enforced rule still fails, and the
+   * measured effect of each action. Absent, or any field absent: the documented defaults (`CONTROLLER_DEFAULTS`).
+   * It changes how the standard is carried out, never the standard.
+   */
+  readonly controller?: ControllerSettings;
+}
+
+/** The measured effect of one repair action: mean movement per target (band widths), mean dollars per action, outputs it was read on. */
+export interface ActionEffect { readonly movement: number; readonly usdPerAction: number; readonly n: number }
+/** Effects by action, as `summariseEffects` (./estimator.ts) reads them from past invocation records. */
+export type ControllerEffects = Readonly<Partial<Record<'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft', ActionEffect>>>;
+
+export interface ControllerSettings {
+  /** expected movement per dollar below which the controller stops */
+  readonly minGainPerUsd?: number;
+  /** hard cap on the steps the controller takes on one draft */
+  readonly maxActions?: number;
+  /** one more draft when an enforced rule still fails and nothing else can reach it */
+  readonly extraDraft?: boolean;
+  /** what each action has moved on past runs; a release step fills it, a run only reads it */
+  readonly effects?: ControllerEffects;
 }
 
 /** The fixed temperatures diverse drafts cycle through, recorded with each draft. */
