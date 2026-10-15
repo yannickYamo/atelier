@@ -7,6 +7,11 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: a rule a repair left unmeasurable is never said to hold
+
+- The run's detail line said "all now hold" when a repair had shortened the text below what a check can read. It now
+  names such rules as not measured on the text delivered, beside those still broken and those that now hold.
+
 ### Fixed: what every step is held to
 
 - **No step adds a figure you did not give.** A draft written again around a cut claim kept "Our seals are rated for
