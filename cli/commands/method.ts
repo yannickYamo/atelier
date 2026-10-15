@@ -179,7 +179,7 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     // A rule counted off the examples is a rule of style: it carries no obligation of the method, so a sentence
     // that breaks it is rewritten, and the work is not written again for it.
     // (A length is the exception: no sentence carries it, so made required it is met by writing the work again.)
-    ...(p.counted && p.measurement?.observer !== 'LENGTH' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
+    ...(p.counted && p.measurement?.observer !== 'LENGTH' && p.measurement?.observer !== 'SHAPE' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
     // What was read off the examples is worded from its check; a step is the owner's sentence.
     ...(p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement ? { wordedFromCheck: true as const } : {}),
     // A stated step the owner's own work does not do: theirs, checked, and not enforced until they confirm it.
