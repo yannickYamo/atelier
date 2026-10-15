@@ -52,11 +52,13 @@ describe('the grammar rule, with the real engine', () => {
     expect(fixed).toEqual({ text: 'They were late to the meeting. The plan still holds.', corrected: 1 });
     expect(measure(fixed.text, m()).verdict).toBe('MET');
   });
-  it('a repeated word, a wrong article, a missing apostrophe and a space before a comma are corrected; nothing else moves', () => {
+  it('a wrong article and a space before a comma are corrected; a repeated word and a missing apostrophe are listed; nothing else moves', () => {
     const text = 'The the team shipped an bug fix. Its a plain gain, isnt it? Really , it is.';
     const out = correctMechanicalErrors(text, measure(text, m()).spans);
-    expect(out.text).toBe('The team shipped a bug fix. It\'s a plain gain, isn\'t it? Really, it is.');
-    expect(out.corrected).toBe(5);
+    expect(out.text).toBe('The the team shipped a bug fix. Its a plain gain, isnt it? Really, it is.');
+    expect(out.corrected).toBe(2);
+    const listed = readGrammar(text, {}).uncertain.map((u) => u.text);
+    expect(listed).toEqual(expect.arrayContaining(['The the', 'Its', 'isnt']));
   });
   it('the fix runs through the mechanical repair and is kept by the never-worse acceptance', () => {
     const v = standard(rule());
@@ -165,19 +167,19 @@ describe('the guards, on a scripted engine', () => {
   const lint = (l: Partial<GrammarLint> & Pick<GrammarLint, 'rule' | 'start' | 'end'>): GrammarLint => ({ kind: 'Grammar', message: 'scripted', replacement: null, ...l });
   const scripted = (lints: readonly GrammarLint[]): GrammarEngine => ({ lint: () => lints });
   const under = async (lints: readonly GrammarLint[]): Promise<void> => { resetGrammar(); setGrammarProvider({ load: () => Promise.resolve(scripted(lints)) }); await ensureGrammar(); };
-  it('a correction that would change a figure is refused and listed, with the reason', async () => {
+  it('an article fix that is not one article for the other (it would bring in a figure) is refused and listed, with the reason', async () => {
     const text = 'Pick a apple for the slot.';
     await under([lint({ rule: 'AnA', start: 5, end: 6, replacement: 'an 3' })]);
     const r = readGrammar(text, {});
     expect(r.confirmed).toEqual([]);
-    expect(r.uncertain).toMatchObject([{ text: 'a', why: expect.stringMatching(/would change a figure/) }]);
+    expect(r.uncertain).toMatchObject([{ text: 'a', why: expect.stringMatching(/not one article for the other/) }]);
   });
-  it('a correction that would change a capitalised name is refused and listed', async () => {
+  it('a comma fix that would rewrite a capitalised name is refused and listed', async () => {
     const text = 'Ask Acme , then decide.';
     await under([lint({ rule: 'CommaFixes', start: 4, end: 10, replacement: 'Bcme,' })]);
     const r = readGrammar(text, {});
     expect(r.confirmed).toEqual([]);
-    expect(r.uncertain[0].why).toMatch(/would change a name/);
+    expect(r.uncertain[0].why).toMatch(/a comma written as the author chose/);
   });
   it('a spelling suggestion that is another word, not this one spelt right, is refused', async () => {
     const text = 'The grommit held.';
@@ -210,7 +212,8 @@ describe('the suite\'s fixed checker (ATELIER_GRAMMAR=stub)', () => {
       expect(measure('They were late to the meeting. The plan still holds.', m())).toMatchObject({ verdict: 'MET', detail: 'no mechanical error' });
       const r = measure('They was late. We recieve the the report.', m());
       expect(r.verdict).toBe('VIOLATED');
-      expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They were late. We receive the report.');
+      // A repeated word is listed, never collapsed: "the the" stays for the person to read.
+      expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They were late. We receive the the report.');
     } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
   });
 });
