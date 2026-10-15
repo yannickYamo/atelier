@@ -139,12 +139,24 @@ export function shortFormSummary(texts: readonly string[], shapes: readonly Shap
   return `${texts.length} short piece${texts.length === 1 ? '' : 's'}: median ${quantile(words, 0.5)} words, ${Math.min(...chars)} to ${Math.max(...chars)} characters`;
 }
 
+/** The same limits in one line, for the short build screen; the lines of `shortFormLimits` are the long account. */
+export function shortFormBrief(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string {
+  const blocking = shapes.filter((s) => s.required).length; const waiting = shapes.filter((s) => !s.required);
+  const more = waiting.length ? Math.max(...waiting.map((s) => s.more)) : 0;
+  const bands = answers ? 'no band of shape (answers take their length from the request)'
+    : `${blocking} shape band${blocking === 1 ? '' : 's'} required${waiting.length ? `, ${waiting.length} shown until ${more} more example${more === 1 ? '' : 's'}` : ''}`;
+  const rateGap = rates.length ? null : piecesForARate(texts);
+  const said = rates.length ? `${rates.length} rate${rates.length === 1 ? '' : 's'} pooled (never blocking)` : `no rate yet${rateGap !== null ? ` (about ${rateGap} more piece${rateGap === 1 ? '' : 's'})` : ''}`;
+  return `${shortFormSummary(texts)}; ${bands}; ${said}; ${limit ? `limit ${limit.chars} characters (${limit.from})` : 'no platform limit (--limit <chars>)'}.`;
+}
+
 /**
  * THE LIMITS OF A SMALL CORPUS, SAID ON THE BUILD SCREEN: which bands may block and which may not yet, and how many
  * more examples would let them; that rates never block. Nothing here changes a rule.
  */
-export function shortFormLimits(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null): string[] {
+export function shortFormLimits(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string[] {
   const out = [shortFormSummary(texts)];
+  if (answers) out.push('These answer requests: their length and shape follow the request, so no band of either is held.');
   const blocking = shapes.filter((s) => s.required); const waiting = shapes.filter((s) => !s.required);
   if (blocking.length) out.push(`${blocking.length} shape band${blocking.length === 1 ? '' : 's'} read from ${texts.length} examples, every example meets ${blocking.length === 1 ? 'it' : 'them'}: required.`);
   for (const more of [...new Set(waiting.map((s) => s.more))].sort((a, b) => a - b)) {
@@ -170,7 +182,7 @@ export { isShortForm };
  * count (../ratification/suggest.ts). Nothing when the pieces are not short form.
  */
 export function shortFormMeasured(read: readonly { readonly id: string; readonly text: string }[], held: readonly { readonly id: string; readonly text: string }[],
-  provenance: Requirement['provenance'], opts: { readonly limit?: number | null; readonly urlChars?: number } = {}): MeasuredProposal[] {
+  provenance: Requirement['provenance'], opts: { readonly limit?: number | null; readonly urlChars?: number; readonly answers?: boolean } = {}): MeasuredProposal[] {
   const texts = read.map((p) => p.text);
   if (!isShortForm(texts) || texts.length < MIN_PIECES_TO_COUNT) return [];
   const own = [...read, ...held.filter((h) => !read.some((r) => r.id === h.id))];
@@ -180,8 +192,10 @@ export function shortFormMeasured(read: readonly { readonly id: string; readonly
     const rs = checkOn.map((t) => measure(t, m));
     return { applicable: rs.filter((r) => r.verdict !== 'NOT_APPLICABLE').length, present: rs.filter((r) => r.verdict === 'MET').length, independent: held.length > 0, ...(thin ? { thin } : {}) };
   };
+  // A SKILL THAT ANSWERS takes its length and its shape from the request, never from a habit of the examples
+  // (../compiler/scope.ts): its pieces' rates are read, and no band of their shape is proposed.
   const rules = [
-    ...shapeBandRules(texts, opts).map((s) => ({ statement: s.statement, evidence: s.evidence, measurement: s.measurement })),
+    ...(opts.answers ? [] : shapeBandRules(texts, opts)).map((s) => ({ statement: s.statement, evidence: s.evidence, measurement: s.measurement })),
     ...pooledRateRules(texts).map((r) => ({ statement: r.statement, evidence: r.evidence, measurement: r.measurement })),
   ];
   return rules.map((r, i): MeasuredProposal => ({
@@ -192,7 +206,9 @@ export function shortFormMeasured(read: readonly { readonly id: string; readonly
 }
 
 /** The platform's facts for short pieces: a character limit and where it came from, and how a link is counted. */
-export interface ShortFormOptions { readonly limit?: { readonly chars: number; readonly from: string } | null; readonly urlChars?: number }
+export interface ShortFormOptions { readonly limit?: { readonly chars: number; readonly from: string } | null; readonly urlChars?: number;
+  /** the pieces answer requests (the format lists claims: an assistant reply, a code review comment): length follows the request */
+  readonly answers?: boolean }
 
 /**
  * `--limit <chars>`, the owner's to state, or the limit of the format the class names (a post on X: 280); and how
@@ -203,7 +219,7 @@ export function shortFormOptions(cls: string | null | undefined, given: string |
   if (given !== undefined && (!/^\d{1,6}$/.test(given.trim()) || Number(given) <= 0)) return `--limit takes a whole number of characters above zero, got "${given}".`;
   const f = formatOf(cls);
   const limit = given !== undefined ? { chars: Number(given), from: '--limit' } : f?.maxChars !== undefined ? { chars: f.maxChars, from: f.label } : null;
-  return { limit, ...(f?.urlChars !== undefined ? { urlChars: f.urlChars } : {}) };
+  return { limit, ...(f?.urlChars !== undefined ? { urlChars: f.urlChars } : {}), ...(f?.claims === 'list' ? { answers: true } : {}) };
 }
 
 // ── A LONG-FORM STANDARD ASKED FOR A SHORT PIECE ────────────────────────────────────────────────────────
@@ -267,6 +283,6 @@ export function shortFormTransfer(requirements: readonly Requirement[], limit: {
   return {
     doesNotApply, limit,
     note: `\n\n(This is short form: at most ${limit.chars} characters (${limit.from}). The standard was read from longer pieces. Its method and its bans hold; its counts of length, paragraphs and sentence mix do not apply here. Compress the piece, and keep the essential argument: it must survive the compression.)`,
-    said: `Short form (at most ${limit.chars} characters, ${limit.from}) from a standard read from longer pieces: its method and bans hold; ${n} band${n === 1 ? '' : 's'} counted off your longer pieces do${n === 1 ? 'es' : ''} not apply to this output.`,
+    said: `Short form (at most ${limit.chars} characters, ${limit.from}) from a standard read from longer pieces: its method and bans hold; ${n === 0 ? 'none of its rules is a band counted off longer pieces' : `${n} band${n === 1 ? '' : 's'} counted off your longer pieces do${n === 1 ? 'es' : ''} not apply to this output`}.`,
   };
 }

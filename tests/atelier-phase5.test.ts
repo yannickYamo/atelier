@@ -193,7 +193,12 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
   it('verify refuses a text declared as another class with exit 2, and notes the assumption otherwise', () => {
     const { proj, run } = seed();
     const f = join(proj, 'd.md'); writeFileSync(f, 'We had coffee on Monday.');
-    expect(run('verify', '--skill', 'nodrink', f, '--class', 'tweet').code).toBe(2);
+    expect(run('verify', '--skill', 'nodrink', f, '--class', 'white paper').code).toBe(2);
+    // A short-form kind is not another standard's thresholds: the rules carry, and what was read off longer pieces
+    // does not apply (core/observers/short-form.ts).
+    const short = run('verify', '--skill', 'nodrink', f, '--class', 'tweet');
+    expect(short.code).toBe(0);
+    expect(short.out).toMatch(/Short form \(at most 280 characters, a post on X\)/);
     const ok = run('verify', '--skill', 'nodrink', f);
     expect(ok.code).toBe(0);
     expect(ok.out).toContain('checked as blog-post');
@@ -229,7 +234,7 @@ describe('through the binary: class and UNSOURCED on verify, invoke and the MCP 
   });
   it('invoke refuses another class before spending anything', () => {
     const { run } = seed();
-    const r = run('invoke', '--skill', 'nodrink', 'write a tweet', '--class', 'tweet', '--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:9', '--model', 'x');
+    const r = run('invoke', '--skill', 'nodrink', 'write a white paper', '--class', 'white paper', '--provider', 'openai-compatible', '--base-url', 'http://127.0.0.1:9', '--model', 'x');
     expect(r.code).not.toBe(0);
     expect(r.out).toContain('this standard measures blog-post');
   });

@@ -17,7 +17,9 @@ tweet. Short pieces are now read for what they carry.
   in characters (as the platform counts them: a link on X is 23), words, sentences and longest sentence, its line
   breaks, hashtags, mentions, links and emoji, what it opens and closes on, and how its first word is cased, banded
   like a section's length. A band every example meets is required from five examples; under five it is shown and used
-  to choose between drafts, and the build screen says how many more examples would let it block.
+  to choose between drafts, and the build screen says how many more examples would let it block. A skill that answers
+  requests (`--mode respond`, or an answer class) takes its length and shape from the request, as before: its rates
+  are read, and no band of its shape is held.
 - **Rates pooled over the pieces** (`core/observers/pooled.ts`). Where the pieces are short (median under 150 words), a
   counted feature with at least ten occurrences across them is read as one rate over all their words, and a short
   output is held to the count its length expects (a two-sided Poisson tail at 5%; a figure, a name or a link is only
@@ -26,7 +28,7 @@ tweet. Short pieces are now read for what they carry.
   (`--limit <chars>` at build, run or verify), the character band is held under it, and the build screen says where
   it came from and how many of your examples run past it.
 - **A long-form standard asked for a short piece** (`--class x-post`, or `--limit` under 1,000 characters on `run` or
-  `verify`) keeps every step of your method and every ban; the bands counted off your longer pieces (paragraphs,
+  `verify`) is no longer refused as another kind of document: it keeps every step of your method and every ban; the bands counted off your longer pieces (paragraphs,
   sentence mix, word count, rates) are recorded as not applying to that output, never as unverified; the output is
   held to the limit; and the writer is told that the essential argument has to survive the compression.
 - **Floors by evidence, not by length**, on the discovery path (`core/observers/derive.ts`, `contrast.ts`): a counted

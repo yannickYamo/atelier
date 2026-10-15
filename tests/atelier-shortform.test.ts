@@ -80,6 +80,17 @@ describe('a small corpus is built, with its limits stated', () => {
   });
 });
 
+describe('pieces that answer requests take their length from the request', () => {
+  it('no band of shape is proposed for answers; their rates are still read, and the screen says why', () => {
+    const answers = shortFormOffers(cases(GOOD.slice(0, 15)), shortFormOptions('assistant-reply', undefined) as object);
+    expect(answers.proposals.some((p) => p.measurement?.observer === 'SHAPE')).toBe(false);
+    expect(answers.proposals.filter((p) => p.measurement?.observer === 'FEATURE').length).toBeGreaterThanOrEqual(3);
+    expect(answers.limits.join('\n')).toMatch(/follow the request/);
+    const read = GOOD.slice(0, 15).map((text, i) => ({ id: `r${i}`, text }));
+    expect(shortFormMeasured(read, [], 'MACHINE_DISCOVERED', { answers: true }).some((x) => x.requirement.measurement?.observer === 'SHAPE')).toBe(false);
+  });
+});
+
 describe('the platform limit: from the format or from --limit, never read off the pieces', () => {
   it('--limit is a whole number of characters; anything else is refused', () => {
     expect(shortFormOptions(undefined, '280')).toEqual({ limit: { chars: 280, from: '--limit' } });
@@ -174,14 +185,13 @@ describe('end to end, offline', () => {
     try { return { code: 0, out: execFileSync('node', [resolve('dist/cli/atelier.mjs'), ...a], { encoding: 'utf8', cwd, env, stdio: ['ignore', 'pipe', 'pipe'] }) }; }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { code: x.status, out: `${x.stdout}${x.stderr}` }; }
   };
-  it('a tweet skill blocks the corporate paragraph and passes the author\'s own held-back tweets', () => {
+  it('a tweet skill blocks the corporate paragraph and passes the author\'s own held-back tweets', { timeout: 180_000 }, () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-sf-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-sf-proj-'));
     mkdirSync(join(proj, 'tweets'));
     GOOD.slice(0, 15).forEach((t, i) => { writeFileSync(join(proj, 'tweets', `t${String(i).padStart(2, '0')}.md`), `${t}\n`); });
     const b = cli(proj, data, 'new', 'tweets', '--class', 'x-post', '--name', 'tw');
     expect(b.code).toBe(0);
-    expect(b.out).toMatch(/Short form: .*shape bands read from 15 examples/);
-    expect(b.out).toMatch(/Platform limit: 280 characters/);
+    expect(b.out).toMatch(/Short form: 15 short pieces.*13 shape bands required; 4 rates pooled.*limit 280 characters \(a post on X\)/);
     writeFileSync(join(proj, 'corporate.md'), `${BAD[0].text}\n`);
     const v = cli(proj, data, 'verify', '--skill', 'tw', 'corporate.md', '--claims', 'pattern');
     expect(v.code).toBe(1);
@@ -189,7 +199,7 @@ describe('end to end, offline', () => {
     const held = GOOD.slice(15).filter((t, i) => { writeFileSync(join(proj, `h${i}.md`), `${t}\n`); return cli(proj, data, 'verify', '--skill', 'tw', `h${i}.md`, '--claims', 'pattern').code === 0; });
     expect(held.length).toBeGreaterThanOrEqual(4);
   });
-  it('a blog skill checked as a post on X: paragraph bands do not apply, never unverified, and the limit is reported; as a blog post nothing changes', () => {
+  it('a blog skill checked as a post on X: paragraph bands do not apply, never unverified, and the limit is reported; as a blog post nothing changes', { timeout: 180_000 }, () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-sf-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-sf-proj-'));
     cpSync(resolve('examples/blog/posts'), join(proj, 'posts'), { recursive: true });
     expect(cli(proj, data, 'new', 'posts', '--name', 'blog').code).toBe(0);

@@ -366,7 +366,8 @@ export async function discover(): Promise<void> {
   const shortGiven = shortFormOptions(declaredClass(s), flag('--limit'));
   const shortOpts = typeof shortGiven === 'string' ? die(shortGiven) : shortGiven;
   const shortMeasured = shortFormMeasured(openItems.filter((i) => readIds.has(i.id)), openItems.filter((i) => heldIds.has(i.id)), sourceProvenance(),
-    { limit: shortOpts.limit?.chars ?? null, ...(shortOpts.urlChars !== undefined ? { urlChars: shortOpts.urlChars } : {}) });
+    { limit: shortOpts.limit?.chars ?? null, ...(shortOpts.urlChars !== undefined ? { urlChars: shortOpts.urlChars } : {}),
+      answers: s.intent?.mode === 'RESPOND' || shortOpts.answers === true });
   if (shortMeasured.length) {
     console.log(`${shortMeasured.length} rule(s) of shape and pooled rate read from your short pieces: ${shortMeasured.map((m) => m.requirement.requirementId).join(', ')}${shortOpts.limit ? `; platform limit ${shortOpts.limit.chars} characters (${shortOpts.limit.from})` : ''}.`);
     proposals = [...proposals, ...shortMeasured.map((m) => m.requirement)];
