@@ -53,7 +53,7 @@ const STILL_FIXED: readonly (readonly [string, string])[] = [
   ['We definately need a bigger whiteboard.', 'We definitely need a bigger whiteboard.'],
   ['The enviroment variables were never set.', 'The environment variables were never set.'],
   ['The neighbours were embarassed by the noise.', 'The neighbours were embarrassed by the noise.'],
-  ['Our collegue in Pune pushed the fix.', 'Our colleague in Pune pushed the fix.'],
+  ['The team acheived the goal early.', 'The team achieved the goal early.'],
   ['He are late for the standup again.', 'He is late for the standup again.'],
   ['She wrote a essay on the strike.', 'She wrote an essay on the strike.'],
   ['He bought an new bike for the commute.', 'He bought a new bike for the commute.'],
@@ -201,9 +201,13 @@ describe('through the binary, with no model key', () => {
     expect(r.out).not.toMatch(/Too short to read/);
     expect(r.out).toMatch(/4 examples from posts/);
   }, 120_000);
-  it('verify --repair makes the mechanical fixes with no key, and lists what has a reading', () => {
+  it('verify --repair leaves every grammar finding as written by default; with --fix-grammar it makes the mechanical fixes with no key', () => {
     writeFileSync(join(proj, 'b4.md'), 'He are riding into the wind all morning and it dont stop, but the the views was worth it.\n');
-    const r = run('verify', '--skill', 'walks', 'b4.md', '--repair');
+    const kept = run('verify', '--skill', 'walks', 'b4.md', '--repair');
+    expect(kept.code, kept.out).toBe(0);
+    expect(kept.out).not.toMatch(/ANTHROPIC_API_KEY/);
+    expect(kept.out).toMatch(/^He are riding into the wind all morning and it dont stop, but the the views was worth it\.$/m);
+    const r = run('verify', '--skill', 'walks', 'b4.md', '--repair', '--fix-grammar');
     expect(r.code, r.out).toBe(0);
     expect(r.out).not.toMatch(/ANTHROPIC_API_KEY/);
     expect(r.out).toMatch(/^He is riding into the wind all morning and it dont stop, but the the views was worth it\.$/m);

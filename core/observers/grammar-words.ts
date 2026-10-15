@@ -1,6 +1,7 @@
 // atelier/core/observers/grammar-words.ts — THE ONE LIST A SPELLING IS CHANGED BY, AND THE COMMON WORDS.
 //
-// A spelling is changed in place only when the word is a well-known misspelling with exactly one correction
+// By default no spelling is changed: every finding is listed for the person (./grammar.ts). Under `--fix-grammar`, a
+// spelling is changed in place only when the word is a well-known misspelling with exactly one correction
 // (`MISSPELLINGS`), found by Atelier's own pass over the text (./grammar.ts). No guess at the word the writer meant is
 // ever made: every other word the checker does not know is listed for the person, never changed.
 //
@@ -18,7 +19,9 @@
 // "developement", "truely", "peculier"), a listed variant ("supercede", "publically", "accidently", "dumbell"), a register's
 // spelling (the contractions typed without an apostrophe: "dont", "thats", "youre"), or a common proper name
 // ("Wellcome", "Pharoah", "Grammer"). Added to only with that check (tests/atelier-grammar-voice.test.ts holds the
-// dictionary half of it; tests/atelier-grammar-reading.test.ts the other).
+// dictionary half of it; tests/atelier-grammar-reading.test.ts the other). Removed on review because a reader can mean
+// or meet them as written, or their one correction is not certain: "wiht", "personell", "collegue", "equipement",
+// "congradulations", "playwrite", "mischievious", "comming".
 //
 // COMMON_WORDS: the 1995 most frequent English words, both dialects: the head of a web word-frequency count
 // (Peter Norvig's `count_1w`, from the Google Web Trillion Word Corpus), kept only where the word is in the American
@@ -56,8 +59,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   catagory: 'category',
   cemetary: 'cemetery',
   changable: 'changeable',
-  collegue: 'colleague',
-  comming: 'coming',
   commited: 'committed',
   commitee: 'committee',
   completly: 'completely',
@@ -224,7 +225,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   completley: 'completely',
   concensus: 'consensus',
   condem: 'condemn',
-  congradulations: 'congratulations',
   conscencious: 'conscientious',
   consciencious: 'conscientious',
   contraversy: 'controversy',
@@ -258,7 +258,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   enviromental: 'environmental',
   enviroments: 'environments',
   equiped: 'equipped',
-  equipement: 'equipment',
   everyting: 'everything',
   eveything: 'everything',
   exagerate: 'exaggerate',
@@ -332,7 +331,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   millenia: 'millennia',
   minature: 'miniature',
   miniture: 'miniature',
-  mischievious: 'mischievous',
   mispelled: 'misspelled',
   mispelling: 'misspelling',
   morgage: 'mortgage',
@@ -367,10 +365,8 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   percieved: 'perceived',
   permanant: 'permanent',
   perseverence: 'perseverance',
-  personell: 'personnel',
   persue: 'pursue',
   plagerism: 'plagiarism',
-  playwrite: 'playwright',
   poeple: 'people',
   possesion: 'possession',
   potatos: 'potatoes',
@@ -471,7 +467,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   whcih: 'which',
   wherre: 'where',
   wierdness: 'weirdness',
-  wiht: 'with',
   withold: 'withhold',
   wiull: 'will',
   woudl: 'would',

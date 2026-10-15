@@ -8,7 +8,7 @@
 // PRIORITY. (1) an enforced REQUIRED rule broken: a span rule is rewritten, an omission is written again;
 // (2) invented claims, cut in code before anything else (ordering only: no model step is ever chosen for them);
 // (3) a length out of its band; (4) graded features and far-out signals, the largest |error| first, at most
-// GRADED_PER_PASS a step; (5) mechanical errors the GRAMMAR rule confirmed, corrected in place in code (no model call);
+// GRADED_PER_PASS a step; (5) under --fix-grammar only, mechanical errors the GRAMMAR rule confirmed, corrected in place in code (no model call);
 // (6) otherwise stop, or one more draft where the release allows it and an enforced rule still fails.
 //
 // SIZE. A graded miss under 0.5 band widths is moved by the deterministic operators (../fidelity/operators.ts); from

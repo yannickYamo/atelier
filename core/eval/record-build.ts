@@ -12,7 +12,7 @@
 import type { Requirement } from '../state/canonical-state.js';
 import { planFor, type PlannedRule } from '../plan/execution-plan.js';
 import { entry, recordOf, type Entry, type EvaluationRecord, type Observation } from './record.js';
-import { GRAMMAR_NOT_RUN } from '../observers/grammar.js';
+import { GRAMMAR_NOT_RUN, GRAMMAR_LISTED } from '../observers/grammar.js';
 
 export interface CheckedLine { readonly id: string; readonly statement?: string; readonly required: boolean; readonly verdict: 'MET' | 'VIOLATED' | 'NOT_APPLICABLE'; readonly detail: string }
 
@@ -82,6 +82,11 @@ function standardEntry(p: PlannedRule, f: RecordFacts): Entry {
   // A check whose engine could not run did not read the text: unverified, with the reason, never "does not apply".
   if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_NOT_RUN)) {
     return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE', incomplete: `not checked: ${p.id} (${line.detail})` }, verdict: null });
+  }
+  // A grammar check that listed what it found: the findings are the person's to read, so the rule is unverified, never
+  // met. The check finished, so the run is still deliverable (a finding never blocks, under --strict either).
+  if (line.verdict === 'NOT_APPLICABLE' && line.detail.startsWith(GRAMMAR_LISTED)) {
+    return entry({ ...base, observation: { ...seen(line.detail), coverage: 'NONE' }, verdict: null });
   }
   if (line.verdict === 'NOT_APPLICABLE') return entry({ ...base, observation: seen(line.detail), applies: false, verdict: null });
   return entry({ ...base, observation: seen(line.detail), verdict: line.verdict });
