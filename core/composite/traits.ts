@@ -3,7 +3,7 @@
 // Discovery has read each author's pieces on their own (cli/commands/discover.ts), so every proposal names the
 // author it came from. This pass, deterministic and free, sorts those proposals two ways:
 //
-//   CLASS   what a rule is about, one of six: opening, structure, evidence, pace, voice, method. A counted rule is
+//   CLASS   what a rule is about, one or more of six: opening, structure, evidence, pace, voice, method. A counted rule is
 //           classed by its observer; a worded one by the words it uses. The person's "I like how it opens" is
 //           mapped to the same six (./admire.ts), which is how a free line selects rules.
 //   KIND    how a rule stands to the other authors' rules of the same class:
@@ -35,7 +35,7 @@ const BY_OBSERVER: Readonly<Partial<Record<string, TraitClass>>> = {
   HEDGE_RATE: 'voice', LEXICON: 'voice', TERM_RATE: 'voice', PATTERN_RATE: 'voice', RATIO: 'voice', STYLE_DISTANCE: 'voice', FEATURE: 'voice',
 };
 
-/** In this order: the first class whose words a statement uses wins, so "I open with a short scene" is an opening, not pace. */
+/** The words of each class. A statement carries every class whose words it uses, wherever they stand in it. */
 const BY_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['opening', /\b(open|opens|opening|openings|begin|begins|beginning|first (?:sentence|line|paragraph|words)|lead(?:s)? with|start(?:s)? with|hook|title)\b/i],
   ['evidence', /\b(evidence|figure|figures|number|numbers|data|source|sources|cite|cites|citation|citations|example|examples|specific|specifics|detail|details|proof|statistic|statistics|quote|quotes|footnote|reference|references)\b/i],
@@ -44,20 +44,35 @@ const BY_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['voice', /\b(tone|register|voice|formal|informal|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|word|words|phrasing|vocabulary|irony|understatement|slang|diction)\b/i],
 ];
 
-/** What a rule is about. The observer decides for a counted rule; the words for a worded one; a decision move otherwise. */
-export function traitClassOf(r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass {
+/**
+ * WHAT A RULE IS ABOUT, AS EVERY CLASS IT CARRIES. The observer decides for a counted rule; for a worded one, every class
+ * whose words it uses, in the fixed order of TRAIT_CLASSES (never the order of its words), so "a paragraph may run long
+ * when the evidence needs it" is both pace and evidence, and so is the same rule said the other way round. A rule with
+ * none of these words is a decision move.
+ */
+export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass[] {
   const byObserver = r.measurement ? BY_OBSERVER[r.measurement.observer] : undefined;
-  if (byObserver) return byObserver;
-  for (const [cls, re] of BY_WORDS) if (re.test(r.statement)) return cls;
-  return 'method';
+  if (byObserver) return [byObserver];
+  const found = new Set(BY_WORDS.filter(([, re]) => re.test(r.statement)).map(([cls]) => cls));
+  const ordered = TRAIT_CLASSES.filter((c) => found.has(c));
+  return ordered.length ? ordered : ['method'];
 }
+
+/** The first of a rule's classes, in the fixed order: how it is listed when nothing chooses between its classes. */
+export const traitClassOf = (r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass => traitClassesOf(r)[0];
+
+/** The class a rule is taken for: the first of its classes the person named for its author, else its first. A tie goes to the person. */
+export const takenAs = (classes: readonly TraitClass[], named: ReadonlySet<TraitClass> | undefined): TraitClass => classes.find((c) => named?.has(c)) ?? classes[0];
 
 export type TraitKind = 'SHARED' | 'UNIQUE' | 'CONFLICTING' | 'TASK_DEPENDENT';
 
 export interface TraitRow {
   readonly id: string;
   readonly author: string;
+  /** the first of its classes, in the fixed order */
   readonly cls: TraitClass;
+  /** every class the rule carries (one for a counted rule; one or more for a worded one) */
+  readonly classes: readonly TraitClass[];
   readonly kind: TraitKind;
   /** the ids of the other authors' rules this one is shared with, or conflicts with */
   readonly with: readonly string[];
@@ -153,31 +168,32 @@ const labelOf = (a: Requirement, b: Requirement): string => {
  */
 export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id: string) => string | undefined,
   lengthClassOf: (author: string) => ContextClass | null = () => null): TraitTable {
-  const items = proposals.flatMap((p) => { const author = sourceOf(p.requirementId); return author ? [{ p, author, cls: traitClassOf(p) }] : []; });
+  const items = proposals.flatMap((p) => { const author = sourceOf(p.requirementId); const classes = traitClassesOf(p); return author ? [{ p, author, cls: classes[0], classes }] : []; });
   const same = new Map<string, string[]>(); const conflict = new Map<string, string[]>();
   const conflicts: Conflict[] = [];
   const push = (m: Map<string, string[]>, k: string, v: string): void => { m.set(k, [...(m.get(k) ?? []), v]); };
   for (let i = 0; i < items.length; i++) {
     for (let j = i + 1; j < items.length; j++) {
       const a = items[i]; const b = items[j];
-      if (a.author === b.author || a.cls !== b.cls) continue;
+      const common = a.classes.filter((c) => b.classes.includes(c));
+      if (a.author === b.author || !common.length) continue;
       const rel = relationOf(a.p, b.p);
       if (rel === 'SAME') { push(same, a.p.requirementId, b.p.requirementId); push(same, b.p.requirementId, a.p.requirementId); }
       if (rel === 'CONFLICT') {
         push(conflict, a.p.requirementId, b.p.requirementId); push(conflict, b.p.requirementId, a.p.requirementId);
         const la = lengthClassOf(a.author); const lb = lengthClassOf(b.author);
-        conflicts.push({ n: conflicts.length + 1, cls: a.cls, label: labelOf(a.p, b.p), taskDependent: la !== null && lb !== null && la !== lb,
+        conflicts.push({ n: conflicts.length + 1, cls: common[0], label: labelOf(a.p, b.p), taskDependent: la !== null && lb !== null && la !== lb,
           sides: [{ id: a.p.requirementId, author: a.author, statement: a.p.statement }, { id: b.p.requirementId, author: b.author, statement: b.p.statement }] });
       }
     }
   }
-  const rows: TraitRow[] = items.map(({ p, author, cls }) => {
+  const rows: TraitRow[] = items.map(({ p, author, cls, classes }) => {
     const id = p.requirementId;
     const c = conflict.get(id) ?? []; const s = same.get(id) ?? [];
     const kind: TraitKind = c.length
       ? (conflicts.filter((x) => x.sides.some((side) => side.id === id)).every((x) => x.taskDependent) ? 'TASK_DEPENDENT' : 'CONFLICTING')
       : s.length ? 'SHARED' : 'UNIQUE';
-    return { id, author, cls, kind, with: [...new Set([...c, ...s])] };
+    return { id, author, cls, classes, kind, with: [...new Set([...c, ...s])] };
   });
   return { rows, conflicts };
 }

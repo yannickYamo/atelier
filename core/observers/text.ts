@@ -75,6 +75,8 @@ export function proseRegions(text: string): { start: number; text: string }[] {
 }
 
 export const wordsOf = (s: string): string[] => s.match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) ?? [];
+/** The words of prose in a text: no heading, table, code or front matter counted. */
+export const proseWordsOf = (text: string): number => proseRegions(text).reduce((n, r) => n + wordsOf(r.text).length, 0);
 
 export interface Sentence { readonly start: number; readonly end: number; readonly text: string; readonly words: number }
 

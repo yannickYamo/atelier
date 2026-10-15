@@ -26,9 +26,13 @@ step. It changes how the standard is carried out, never the standard.
   this run has already paid per call. A step is taken while it is expected to move at least two band widths per
   dollar, the budget holds it, and fewer than four steps were taken. It stops when every enforced rule holds and no
   feature is more than 0.5 band widths out (a correct draft with one harmless deviation is delivered as written);
-  when the same step has failed twice on the same target and the step it switched to failed too; when the budget is
-  spent; or when only what no step can reach is left. A draft is written again for the author's features alone only
-  when the controller asked for it.
+  when every step it could take on what is left has failed; when the budget is spent; or when only what no step can
+  reach is left. A draft is written again for the author's features alone only when the controller asked for it.
+- **A failed step is never repeated on its target.** A draft written again that does no better gives way to a carrier
+  rewrite of the same features (at most three sentences each) on the draft before it, then to the operators; an
+  operator step that fails gives way to a carrier rewrite once. Each switch is recorded with the failure that caused it,
+  and a stop after the last names every action that failed on each target. All of it stays within the step cap and the
+  budget.
 - **On the record.** `repair.controller` lists every step with what it was aimed at, why, what it was expected to move
   and cost, what it moved, and what the ledger charged for it, and why the repair stopped; `invoke --json` carries it
   and `atelier report` prints it. Movement is movement, never a probability of acceptance. `--no-repair` runs no repair
@@ -55,12 +59,18 @@ apart and builds the combination you choose.
 - **A trait table** (`core/composite/traits.ts`, stored with the run): every rule is classed as opening, structure,
   evidence, pace, voice or method, and as shared (two or more authors, compatible), unique, conflicting, or
   task-dependent (a conflict between authors who write pieces of different lengths). Deterministic, and free.
+- **A rule may carry two classes** (a paragraph rule that mentions evidence is pace and evidence), read from every
+  trait word it uses, never from their order; when it does, it is taken for the class your line named.
 - **One question per author, one screen** (`cli/commands/composite.ts`): "What do you like about this one?", asked in
   the terminal or given as `--admire <file or author>=<what you like>`. One model call reads every line into the six
   classes (by keyword when no model can). The screen says what is taken from whom, each conflict (A, B, both as one
   range, or later), the recurring method moves offered as a proposal read from your examples (your own `--method`
   note stays authoritative), and what is kept as a habit or set aside. Accepting rules on every proposal through the
-  normal ratification path, each ruling naming the author and pieces it came from. A conflict nobody answered is kept
+  normal ratification path. What your line selected is your word, not inferred evidence: a worded rule is ratified
+  required and instructs the writer, a counted one is a target that steers drafts and never fails one (until you
+  `--set` it required), and its ruling says "selected by you from <author>". What you did not select keeps the
+  evidence's ruling: shared, or by an author you admired for something else, it is kept as a habit, shown and never
+  instructed; otherwise it is set aside. A conflict nobody answered is kept
   as an open question and neither side instructs; nothing is guessed.
 - **A composite voice** (`core/compiler/voice.ts`, `renderers/agent-skill/render.ts`): one excerpt from every author
   something was taken from, an equal share of the compact budget each, labelled with whose it is; "how I sound" is
@@ -71,7 +81,8 @@ apart and builds the combination you choose.
   same files.
 - Pinned in `tests/atelier-composite.test.ts` and `tests/atelier-composite-journey.test.ts`: five invented authors
   with labelled traits, the classes on known pairs, no band pooled, the chosen openings, evidence and pacing, a unique
-  trait kept when admired, an unadmired author kept only as a shared habit, the paragraph conflict stored as a
+  trait kept when admired, the selected rules instructing in the compiled skill, an unselected trait kept as a habit, an unadmired author kept
+  only as a shared habit, a rule of two classes classed the same whatever its word order, the paragraph conflict stored as a
   question, the served excerpts and the copying check, byte-identical rebuild and re-run, and a single-author folder
   unchanged.
 
@@ -146,6 +157,39 @@ rewrite and a later draft was told only the range it had missed.
   draft and on the delivered text, and every rewrite refused for displacing others; and the calls and dollars this
   steering caused, taken from the run's ledger under their own purpose (`graded`), never estimated. Every repair now
   also records its rewrites kept and refused, with the reasons (`repair.edits`).
+
+### Added: short form (tweets, short posts, concise replies) is measured and held
+
+A skill built from five tweets learned two rules: every counted measure needed 150 words, so a folder of tweets
+measured nothing, and a 486-character corporate paragraph read NEEDS REVIEW against a tweet skill, the same as a good
+tweet. Short pieces are now read for what they carry.
+
+- **Shape bands, with no word floor** (`core/observers/shape.ts`, `core/observers/short-form.ts`). Each piece's length
+  in characters (as the platform counts them: a link on X is 23), words, sentences and longest sentence, its line
+  breaks, hashtags, mentions, links and emoji, what it opens and closes on, and how its first word is cased, banded
+  like a section's length. A band every example meets is required from five examples; under five it is shown and used
+  to choose between drafts, and the build screen says how many more examples would let it block. A skill that answers
+  requests (`--mode respond`, or an answer class) takes its length and shape from the request, as before: its rates
+  are read, and no band of its shape is held.
+- **Rates pooled over the pieces** (`core/observers/pooled.ts`). Where the pieces are short (median under 150 words), a
+  counted feature with at least ten occurrences across them is read as one rate over all their words, and a short
+  output is held to the count its length expects (a two-sided Poisson tail at 5%; a figure, a name or a link is only
+  ever capped). Rates are preferences: they choose between drafts and never block.
+- **The platform's limit is never read off the pieces.** It is the format's (`--class x-post`: 280) or yours
+  (`--limit <chars>` at build, run or verify), the character band is held under it, and the build screen says where
+  it came from and how many of your examples run past it.
+- **A long-form standard asked for a short piece** (`--class x-post`, or `--limit` under 1,000 characters on `run` or
+  `verify`) is no longer refused as another kind of document: it keeps every step of your method and every ban; the bands counted off your longer pieces (paragraphs,
+  sentence mix, word count, rates) are recorded as not applying to that output, never as unverified; the output is
+  held to the limit; and the writer is told that the essential argument has to survive the compression.
+- **Floors by evidence, not by length**, on the discovery path (`core/observers/derive.ts`, `contrast.ts`): a counted
+  rule's floor is a pooled count (thirty sentences, ten occurrences) at any length, and one read from fewer than five
+  pieces is suggested as a preference with how many more pieces would let it block. A move the author never makes is a ban and is not affected.
+- **Nothing unmeasurable reads as met**: a rate on a text too short for it says "too short to measure" and does not
+  apply.
+- Measured on a fixture of 20 tweets by one invented author and 10 pieces that are not theirs, a skill built from 15:
+  before, 5 of 5 held-back tweets passed and 1 of 10 bad pieces was blocked (3 of 10 with `--class x-post`, by the
+  280-character limit alone); now 5 of 5 pass and 9 of 10 are blocked. Pinned in `tests/atelier-shortform.test.ts`.
 
 ### Added: mechanical errors are found and corrected, and the voice is left alone
 

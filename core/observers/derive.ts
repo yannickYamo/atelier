@@ -15,7 +15,7 @@
 import type { Measurement, ObserverId, Requirement } from '../state/canonical-state.js';
 import { sentencesOf, paragraphsOf, wordsOf, proseRegions, quantile, findTerms, DEFAULT_HEDGES, measure, validateMeasurement } from './registry.js';
 import { lengthMix, mixDistance } from './balance.js';
-import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
+import { allowed, CORPUS_RULE_SHARE, thinEvidence } from '../ratification/suggest.js';
 
 /**
  * Phrases that mark text as generic model output, proposed as banned ONLY where the author's own
@@ -47,7 +47,9 @@ export interface MeasuredProposal {
      * still the held-out pieces against the limit BEFORE it was moved: the moved limit was set using those pieces,
      * so they are no independent check of it, and its evidence is the corpus count kept beside it.
      */
-    readonly fitted?: boolean };
+    readonly fitted?: boolean;
+    /** read from fewer pieces than a rule needs to block (../ratification/suggest.ts, `thinEvidence`) */
+    readonly thin?: { readonly pieces: number; readonly more: number } };
 }
 
 export const MIN_WORDS = 1000;
@@ -309,6 +311,10 @@ export function deriveMeasuredRules(read: readonly Piece[], held: readonly Piece
   // computed as before and then set where these pieces are (`fitToCorpus`), allowing the pieces the review allows.
   const own = [...read, ...held.filter((h) => !read.some((r) => r.id === h.id))].map((p) => p.text);
   const mayBreak = allowed(own.length, CORPUS_RULE_SHARE);
+  // FLOORS BY EVIDENCE (../ratification/suggest.ts): the floors below are pooled counts (thirty sentences, ten
+  // paragraphs), at any length. Under five pieces what is read is thin, and never blocks. One author's single piece
+  // in a composite (../composite) is read this way: a band of theirs, shown, never required on that evidence.
+  const thin = thinEvidence(own.length);
   let n = 0;
   const push = (statement: (m: Measurement) => string, kind: Requirement['kind'], computed: Measurement, evidence: string): void => {
     n += 1;
@@ -319,7 +325,7 @@ export function deriveMeasuredRules(read: readonly Piece[], held: readonly Piece
         evidence: fitted ? `${evidence}; ${fitNote(computed, fitted, own)}` : evidence,
         evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null, wordedFromCheck: true, measurement },
       // Against the limit as computed: the held-out pieces helped set a fitted one, so they cannot check it.
-      conformance: { ...conformanceOn(checkOn, computed), independent: held.length > 0, ...(fitted ? { fitted: true } : {}) },
+      conformance: { ...conformanceOn(checkOn, computed), independent: held.length > 0, ...(fitted ? { fitted: true } : {}), ...(thin ? { thin } : {}) },
     });
   };
   const limit = (m: Measurement, key: string): number => m.params[key] as number;

@@ -106,6 +106,8 @@ export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'H
   | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
   // what a method requires of the work itself (core/observers/obligations.ts)
   | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH' | 'NAMES_TEST'
+  // the shape of one short piece: characters, words, sentences, line breaks, hashtags, what it opens and closes on (core/observers/shape.ts)
+  | 'SHAPE'
   // mechanical errors, found by a grammar engine the process wires in (core/observers/grammar.ts)
   | 'GRAMMAR';
 export interface Measurement {

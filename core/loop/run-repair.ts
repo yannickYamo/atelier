@@ -109,6 +109,12 @@ export interface CheckOptions {
    * Reported as not applicable with the reason, never silently dropped.
    */
   readonly waived?: ReadonlyMap<string, string>;
+  /**
+   * Rules that do not apply to this output, and why: a band counted off long pieces, on a short-form output
+   * (../observers/short-form.ts, `shortFormTransfer`). Reported as not applicable with the reason; never waived, so
+   * the record says they do not apply, and nothing is left for a person to read on their account.
+   */
+  readonly doesNotApply?: ReadonlyMap<string, string>;
   /** a small model for the questions that need context (./context-judge.ts); absent, the word patterns decide */
   readonly judge?: ContextJudge;
   /**
@@ -123,7 +129,9 @@ export interface CheckOptions {
    * and a far miss is rewritten on its carriers instead), and the ledger as it stood when the run began, so the cost of
    * a step is read from what this run has paid.
    */
-  readonly controller?: { readonly settings?: ControllerSettings | null; readonly redraft?: boolean; readonly ledgerFrom?: readonly SpendLine[] };
+  readonly controller?: { readonly settings?: ControllerSettings | null; readonly redraft?: boolean; readonly ledgerFrom?: readonly SpendLine[];
+    /** steps already taken on this piece (a redraft that did no better, and the steps before it): what failed is not repeated */
+    readonly history?: readonly ControllerDecisionRecord[] };
 }
 
 
@@ -137,7 +145,7 @@ export interface CheckOptions {
  * owner's standard; it is the product's floor, and it is reported as its own line, `UNSOURCED`.
  */
 export function checkDraft(skill: string, v: StandardVersion, text: string, opts: CheckOptions = {}): VerifyReport {
-  const base = waive(verifyText(skill, v, text, opts.context), opts.waived);
+  const base = waive(waive(verifyText(skill, v, text, opts.context), opts.waived), opts.doesNotApply, 'does not apply');
   const tellRule = v.requirements.find((r) => r.authority !== 'EXPERT_REJECTED' && r.measurement?.observer === 'PATTERN_RATE'
     && (r.measurement.params.pattern as string[] | undefined)?.[0] === 'MACHINE_TELL');
   const learned = tellRule && opts.learnedTells?.length ? findTerms(text, opts.learnedTells) : [];
@@ -254,10 +262,10 @@ export function checkDraft(skill: string, v: StandardVersion, text: string, opts
 export const UNREAD = 'UNSOURCED·unread';
 
 /** The report with each waived rule shown as not applicable, with its reason, and `failed` recomputed. */
-function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>): VerifyReport {
+function waive(r: VerifyReport, waived?: ReadonlyMap<string, string>, said = 'withheld for this run'): VerifyReport {
   if (!waived?.size) return r;
   const checked = r.checked.map((c) => (waived.has(c.requirementId)
-    ? { ...c, result: { verdict: 'NOT_APPLICABLE' as const, spans: [], value: null, detail: `withheld for this run: ${waived.get(c.requirementId) ?? ''}` } } : c));
+    ? { ...c, result: { verdict: 'NOT_APPLICABLE' as const, spans: [], value: null, detail: `${said}: ${waived.get(c.requirementId) ?? ''}` } } : c));
   return { ...r, checked, failed: checked.some((c) => acts(c) && c.result.verdict === 'VIOLATED') };
 }
 
@@ -714,7 +722,7 @@ export async function refineToStandard(
     const usdLeft = budget.capUsd - budget.spentUsd - (budget.inFlightUsd ?? 0);
     const rewriteUsd = perCall(['repair', 'graded']); const draftUsd = perCall(['writing']);
     return { enforced, claims: flaggedClaims(r).length, length: null, graded: [...byFeature.values()], grammar,
-      budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: decisions,
+      budget: { usdLeft, callsLeft: budget.maxCalls !== undefined ? budget.maxCalls - (budget.calls ?? 0) : null }, history: [...(opts.controller?.history ?? []), ...decisions],
       observedUsdPerCall: { ...(rewriteUsd !== undefined ? { rewrite: rewriteUsd, 'carrier-rewrite': rewriteUsd } : {}), ...(draftUsd !== undefined ? { redraft: draftUsd } : {}) },
       can: { redraft: opts.controller?.redraft ?? false, rewrite: canRewrite }, unreachable };
   };

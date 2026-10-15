@@ -255,8 +255,9 @@ beyond that, or with three features out, the piece is written again with each mi
 A step is taken while its expected movement per dollar, priced from what the run has already paid, is at
 least `controller.minGainPerUsd` (2), the budget holds it, and fewer than `controller.maxActions` (4) steps
 were taken. The repair stops when every enforced rule holds and no feature is over 0.5 band widths out, when
-the same step failed twice on a target and the step it switched to failed too, when the budget is spent, or
-when nothing left can be reached. Every step, its expected and observed movement and cost, and the reason it
+every step it could take on what is left has failed, when the budget is spent, or when nothing left can be
+reached. A failed step is never repeated on its target: a redraft that does no better gives way to a carrier
+rewrite, then the operators; an operator step that fails gives way to a carrier rewrite once. Every step, its expected and observed movement and cost, and the reason it
 stopped are recorded under `repair.controller` and printed by `atelier report`. The guarantees are:
 
 - **The splice is deterministic.** The model returns replacement text for numbered spans, and the

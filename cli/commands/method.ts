@@ -25,7 +25,8 @@ import { draftHash, appendDecision, type RatificationLedger } from '../../core/r
 import { decide } from '../../core/ratification/authority.js';
 import type { Requirement } from '../../core/state/canonical-state.js';
 import type { GoldenCase } from '../../core/golden/case.js';
-import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, type MethodProposal } from '../../core/method/standard.js';
+import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, shortFormOffers, type MethodProposal } from '../../core/method/standard.js';
+import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles } from '../corpus.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
@@ -92,7 +93,13 @@ export function shortScreen(ps: readonly MethodProposal[]): string[] {
   const disagrees = (p: MethodProposal): string => (p.conflict ? `\n      ! ${p.conflict}.\n        Checked and shown on every run; it blocks nothing until you confirm it.` : '');
   // With no method there is nothing of the owner's to list: what the examples show is all the skill is, so it is shown.
   if (!stated.length) return ['No method was given: the skill is your examples, served to the writer, and what can be counted in them. Whether new work reads like them is yours to judge.',
-    ...(shown.length ? ['', `Seen in your examples: shown to the writer, and required only if you say so (${shown.length}):`, ...shown.map((p) => `  - ${p.statement}`)] : ['', 'Nothing that can be counted is common to all of them: the writer is given the pieces themselves.']),
+    // What every example meets, read from enough of them (a short piece's shape; the machine-tell ban), is required
+    // and said to be; the rest is shown, with how many more examples would let it block where that is the reason.
+    ...(shown.some((p) => p.required) ? ['', `Seen in every one of your examples, and required (${shown.filter((p) => p.required).length}):`, ...shown.filter((p) => p.required).map((p) => `  - ${p.statement}`)] : []),
+    ...(shown.some((p) => !p.required) ? ['', `Seen in your examples: shown to the writer, and required only if you say so (${shown.filter((p) => !p.required).length}):`,
+      ...shown.filter((p) => !p.required).map((p) => `  - ${p.statement}${p.onExample?.includes('more would let it block') ? `
+      ${p.onExample.slice(p.onExample.indexOf('read from'))}` : ''}`)] : []),
+    ...(!shown.length ? ['', 'Nothing that can be counted is common to all of them: the writer is given the pieces themselves.'] : []),
     '', 'A method note makes rules of your own: atelier new <your-work> --method <how-you-do-it.md>'];
   const out: string[] = [`${stated.length} step(s) in your method.`];
   if (whole.length) out.push('', `Checked on every run (${whole.length}):`, ...whole.map((p) => `  - ${p.statement}${p.byName ? `\n      checked as: ${lookedFor(p)}` : ''}${disagrees(p)}`));
@@ -141,6 +148,12 @@ function readExamples(goldenPath: string, notePath: string): { folder: string | 
   return { folder, cases };
 }
 
+/** `--limit <chars>`, or the limit of the format `--class` names (core/observers/short-form.ts, `shortFormOptions`). */
+export function shortFormFlags(cls: string | undefined, given: string | undefined = flag('--limit')): ShortFormOptions {
+  const o = shortFormOptions(cls, given);
+  return typeof o === 'string' ? die(o) : o;
+}
+
 /** The command as it was typed, less some of its words: what to say to do the same thing again. */
 function typedWithout(drop: readonly string[]): string {
   const typed = process.argv.slice(2); const at = typed.indexOf('--name');
@@ -180,7 +193,7 @@ export function decideSteps(proposals: readonly MethodProposal[], nextId: () => 
     // A rule counted off the examples is a rule of style: it carries no obligation of the method, so a sentence
     // that breaks it is rewritten, and the work is not written again for it.
     // (A length is the exception: no sentence carries it, so made required it is met by writing the work again.)
-    ...(p.counted && p.measurement?.observer !== 'LENGTH' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
+    ...(p.counted && p.measurement?.observer !== 'LENGTH' && p.measurement?.observer !== 'SHAPE' ? {} : { obligation: p.obligation }), ...(p.measurement ? { measurement: p.measurement } : {}),
     // What was read off the examples is worded from its check; a step is the owner's sentence.
     ...(p.origin === 'SHOWN_BY_EXAMPLE' && p.measurement ? { wordedFromCheck: true as const } : {}),
     // A stated step the owner's own work does not do: theirs, checked, and not enforced until they confirm it.
@@ -246,12 +259,19 @@ export async function method(): Promise<void> {
   // the owner judges: a skill of examples alone still has a standard, and says honestly what it is.
   const likeThese: MethodProposal[] = notePath === null ? [{ statement: `New work reads like the ${cases.length === 1 ? 'example' : `${cases.length} examples`} given: the same kind of piece, at their length, in their manner.`,
     origin: 'SHOWN_BY_EXAMPLE', obligation: 'JUDGEMENT', measurement: null, onExample: null, conflict: null }] : [];
-  const counted = countedOffers(read.proposals, cases);
+  // THE PLATFORM'S FACTS FOR SHORT PIECES, never assumed: a character limit from `--limit`, or from the format the class
+  // names (a post on X: 280), and how that format counts a link. Said on the screen, with what a small corpus can and
+  // cannot yet require (core/observers/short-form.ts).
+  const shortForm = shortFormFlags(flag('--class'));
+  const short = shortFormOffers(cases, shortForm);
+  const counted = countedOffers(read.proposals, cases, shortForm);
   const proposals = [...likeThese, ...read.proposals, ...counted, ...tellOffers(cases, note), ...grammarOffer(cases, [...read.proposals, ...counted])];
   const example = cases[lead];
   const whole = argv.includes('--report');
   console.log(`${notePath === null ? 'No method note: built from your examples' : `Method: ${basename(notePath)}`}  ·  ${cases.length === 1 ? `example: ${example.id}` : `${cases.length} examples from ${basename(goldenPath)}`}${whole && cases.length > 1 ? `; checks read from ${example.id}, then held against the rest` : ''}${whole && example.material.length ? ` with ${example.material.length} file(s) of material` : ''}\n`);
   for (const line of whole ? describeMethod(proposals, example.caseClass) : shortScreen(proposals)) console.log(line);
+  // The limits of a corpus of short pieces: one line on the screen, the whole account with --report.
+  if (short.brief) { console.log(''); for (const line of whole ? short.limits : [short.brief]) console.log(`Short form: ${line}`); }
 
   // THE KIND OF WORK, SAID AND RECORDED, NEVER ASKED. It decides one thing: on a kind the claim check was measured on
   // (essays, posts), a sentence not found in bound material is cut; anywhere else it is listed for the owner to check.
