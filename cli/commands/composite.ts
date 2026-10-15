@@ -20,7 +20,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { suggestAll, modeFromIntent, type Suggestion, type SkillMode } from '../../core/ratification/suggest.js';
 import { buildTraitTable, describeTraitCounts, TRAIT_LABEL, type TraitClass, type TraitTable } from '../../core/composite/traits.js';
 import { readAdmiration, keywordClasses, type AdmireLine } from '../../core/composite/admire.js';
-import { composeSelection, describeComposite, openQuestions, type CompositeAuthor, type CompositeRecord, type ConflictAnswer } from '../../core/composite/selection.js';
+import { composeSelection, describeComposite, openQuestions, openStanding, type CompositeAuthor, type CompositeRecord, type ConflictAnswer } from '../../core/composite/selection.js';
 import type { AuthorMap } from '../../core/composite/authors.js';
 import { formatMeasure } from './amend.js';
 import { restateLimits } from '../../core/observers/derive.js';
@@ -143,11 +143,15 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
   s = loadSession();
 
   // ── THE CONFLICTS' ANSWERS, KEPT WITH THE RUN UNTIL ACCEPTED ─────────────────────────────────
-  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), table.conflicts.length) };
-  if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
-  const answers = Object.fromEntries(Object.entries(answered).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
-
+  // The numbers a person may answer are the conflicts on the screen: the table's, and any the final guard found
+  // among the rules that would instruct (core/composite/selection.ts), numbered after them.
   const compAuthors: CompositeAuthor[] = authors.names.map((name) => ({ name, pieces: piecesOf(authors, name), admired: admire[name] ?? null, classes: read.classes[name] ?? [] }));
+  const answersOf = (all: Record<number, ConflictAnswer | null>): Record<number, ConflictAnswer> =>
+    Object.fromEntries(Object.entries(all).filter((e): e is [string, ConflictAnswer] => e[1] !== null).map(([k, v]) => [Number(k), v]));
+  const shown = composeSelection(table, pending, compAuthors, answersOf(s.conflictAnswers ?? {}));
+  const answered = { ...(s.conflictAnswers ?? {}), ...parseConflictAnswers(flagAll('--conflict'), Math.max(table.conflicts.length, shown.conflicts.length)) };
+  if (JSON.stringify(answered) !== JSON.stringify(s.conflictAnswers ?? {})) { saveSession({ ...s, conflictAnswers: answered }); s = loadSession(); }
+  const answers = answersOf(answered);
   const record = composeSelection(table, pending, compAuthors, answers);
   const statementOf = (id: string): string => s.proposals.find((p) => p.requirementId === id)?.statement ?? id;
 
@@ -176,14 +180,38 @@ export async function compositeReview(opts: ReviewOptions = {}): Promise<boolean
     return false;
   }
 
+  // A range's rule shows what each author's pieces showed of it, not its carrier's alone.
+  const ranged = rangeEvidence(record, s.proposals);
+  if (ranged.size) { saveSession({ ...loadSession(), proposals: s.proposals.map((p) => (ranged.has(p.requirementId) ? { ...p, evidence: ranged.get(p.requirementId) ?? p.evidence } : p)) }); s = loadSession(); }
   applyDecisions(decisionsFor(record, pending, sugg, changes));
   saveSession({ ...loadSession(), composite: record });
-  const open = openQuestions(record);
   console.log((changes.size ? `Your changes: ${[...changes].map(([k, v]) => `${k} → ${v}`).join(' · ')}. ` : '')
-    + `Your composite is recorded: ${record.decisions.filter((d) => d.outcome === 'SELECTED').length} rule(s) chosen.`
-    + (open.length ? ` ${open.length} conflict(s) kept as open question(s); neither side of each instructs.` : ''));
+    + `Your composite is recorded: ${record.decisions.filter((d) => d.outcome === 'SELECTED').length} rule(s) chosen.` + openLine(record));
   if (!orchestrated()) console.log('To build it: atelier new <the same folder> --accept');
   return true;
+}
+
+/** The open questions, said as they stand after the final guard: "neither side instructs" only of those where it is true. */
+export function openLine(record: CompositeRecord): string {
+  const { neither, oneSide } = openStanding(record);
+  return (neither.length ? ` ${neither.length} conflict(s) kept as open question(s); neither side instructs.` : '')
+    + (oneSide.length ? ` ${oneSide.length} more unanswered, where one side stands by your answer to another conflict.` : '');
+}
+
+/**
+ * THE OBSERVATION BEHIND A RANGE: one line per author whose limit it carries ("ada: your median is 3 words…"), so the
+ * rule's example shows each contributing author's pieces, not its carrier's alone. By id, for the carriers only.
+ */
+export function rangeEvidence(record: CompositeRecord, proposals: readonly Requirement[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const byId = new Map(proposals.map((p) => [p.requirementId, p]));
+  for (const d of record.decisions) {
+    if (!d.range || d.outcome !== 'SELECTED') continue;
+    const members = [d, ...record.decisions.filter((x) => x.mergedInto === d.id && byId.get(x.id)?.measurement)];
+    const lines = members.flatMap((m) => { const e = byId.get(m.id)?.evidence; return e ? [`${m.author}: ${e}`] : []; });
+    if (lines.length > 1) out.set(d.id, [...new Set(lines)].join('\n'));
+  }
+  return out;
 }
 
 /** Suggestions made per author, over that author's pieces alone: a count is never held to another author's corpus. */

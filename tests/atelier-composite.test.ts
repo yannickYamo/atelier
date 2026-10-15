@@ -126,7 +126,7 @@ describe('the composite: what the person chose, not the average and not any one 
     const without = composeSelection(table, proposals, LIKES.map((a) => (a.name === 'E' ? author('E', null, []) : a)));
     expect(without.decisions.find((d) => d.id === 'p5')?.outcome).toBe('REJECTED');
   });
-  it('a rule of two classes is taken for the one the person named: the tie goes to them', () => {
+  it('a rule of two classes is taken for what it is mainly about: admiring a class it only mentions does not take it', () => {
     const two = [rule('q1', 'Let a paragraph run long when the evidence needs it.'), rule('q2', 'Never hedge a claim in the opening line.')];
     const src = (id: string): string | undefined => (id === 'q1' ? 'A' : 'B');
     const t = buildTraitTable(two, src);
@@ -134,7 +134,8 @@ describe('the composite: what the person chose, not the average and not any one 
     const byPace = composeSelection(t, two, [author('A', 'the long paragraphs', ['pace']), author('B', null, [])]);
     expect(byPace.decisions.find((d) => d.id === 'q1')).toMatchObject({ outcome: 'SELECTED', cls: 'pace', byAdmiration: true });
     const byEvidence = composeSelection(t, two, [author('A', 'the evidence', ['evidence']), author('B', null, [])]);
-    expect(byEvidence.decisions.find((d) => d.id === 'q1')).toMatchObject({ outcome: 'SELECTED', cls: 'evidence' });
+    // it is about how long a paragraph runs, and only mentions evidence: kept as a habit of an admired author, never instructed
+    expect(byEvidence.decisions.find((d) => d.id === 'q1')).toMatchObject({ outcome: 'HABIT', cls: 'pace' });
   });
   it('an unselected unique trait of an author the person admired stays a habit, shown and never instructed', () => {
     expect(outcome('p6')).toBe('HABIT');

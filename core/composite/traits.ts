@@ -35,14 +35,20 @@ const BY_OBSERVER: Readonly<Partial<Record<string, TraitClass>>> = {
   HEDGE_RATE: 'voice', LEXICON: 'voice', TERM_RATE: 'voice', PATTERN_RATE: 'voice', RATIO: 'voice', STYLE_DISTANCE: 'voice', FEATURE: 'voice',
 };
 
-/** The words of each class. A statement carries every class whose words it uses, wherever they stand in it. */
-const BY_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
+/**
+ * THE WORDS OF EACH CLASS: one list, read the same way for a rule (here) and for what a person says they like
+ * (./admire.ts, when no model reads their line). A statement carries every class whose words it uses, wherever they
+ * stand in it. A count's unit ("fifteen words in a sentence") is not a word about words.
+ */
+const COUNT_UNIT = String.raw`(?<!\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred)\s)`;
+export const CLASS_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['opening', /\b(open|opens|opening|openings|begin|begins|beginning|first (?:sentence|line|paragraph|words)|lead(?:s)? with|start(?:s)? with|hook|title)\b/i],
   ['evidence', /\b(evidence|figure|figures|number|numbers|data|source|sources|cite|cites|citation|citations|example|examples|specific|specifics|detail|details|proof|statistic|statistics|quote|quotes|footnote|reference|references)\b/i],
   ['pace', /\b(sentence|sentences|paragraph|paragraphs|pace|pacing|rhythm|fragment|fragments|brisk|fast|slow|cadence|clipped|tempo)\b/i],
-  ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|list|lists|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
-  ['voice', /\b(tone|register|voice|formal|informal|casual|conversational|chatty|relaxed|colloquial|impersonal|person|tense|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|word|words|phrasing|vocabulary|irony|understatement|slang|diction)\b/i],
+  ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|list|lists|bullet|bullets|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
+  ['voice', new RegExp(String.raw`\b(tone|register|voice|formal|informal|casual|conversational|chatty|relaxed|colloquial|impersonal|person|tense|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|${COUNT_UNIT}word|${COUNT_UNIT}words|phrasing|vocabulary|irony|understatement|slang|diction)\b`, 'i')],
 ];
+const BY_WORDS = CLASS_WORDS;
 
 /**
  * WHAT A RULE IS ABOUT, AS EVERY CLASS IT CARRIES. The observer decides for a counted rule; for a worded one, every class
@@ -61,8 +67,23 @@ export function traitClassesOf(r: Pick<Requirement, 'statement' | 'measurement'>
 /** The first of a rule's classes, in the fixed order: how it is listed when nothing chooses between its classes. */
 export const traitClassOf = (r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass => traitClassesOf(r)[0];
 
-/** The class a rule is taken for: the first of its classes the person named for its author, else its first. A tie goes to the person. */
-export const takenAs = (classes: readonly TraitClass[], named: ReadonlySet<TraitClass> | undefined): TraitClass => classes.find((c) => named?.has(c)) ?? classes[0];
+/**
+ * WHAT A RULE IS MAINLY ABOUT: the class of its observer, or of the first class word it says. "Never use bullet lists;
+ * carry items in sentences" is about lists, and only mentions sentences; "Let a paragraph run long when the argument
+ * needs room" is about paragraphs. Admiring a class takes the rules mainly about it, never a rule that merely uses
+ * one of its words (./selection.ts).
+ */
+export function primaryClassOf(r: Pick<Requirement, 'statement' | 'measurement'>): TraitClass {
+  const byObserver = r.measurement ? BY_OBSERVER[r.measurement.observer] : undefined;
+  if (byObserver) return byObserver;
+  let best: { cls: TraitClass; at: number } | null = null;
+  for (const cls of TRAIT_CLASSES) {
+    const re = BY_WORDS.find(([c]) => c === cls)?.[1];
+    const at = re ? r.statement.search(re) : -1;
+    if (at >= 0 && (!best || at < best.at)) best = { cls, at };
+  }
+  return best?.cls ?? 'method';
+}
 
 export type TraitKind = 'SHARED' | 'UNIQUE' | 'CONFLICTING' | 'TASK_DEPENDENT';
 
@@ -124,8 +145,12 @@ type Relation = 'SAME' | 'CONFLICT' | 'UNRELATED';
  */
 const SUBJECT = /\b(contractions?|headings?|lists?|bullet(?:s| points?)?|questions?|sources?|citations?|dash(?:es)?|emoji|jargon|footnotes?|anecdotes?|examples?|figures?|paragraphs?|sentences?|spellings?|exclamation marks?|semicolons?|tables?|hedg(?:e|es|ing))\b/gi;
 const CLAUSE_NEGATION = /^(never|no|not|avoid|avoids|without|don't|doesn't|rarely|none)$/i;
-/** Words that may sit between a negation and what it governs: "never use bullet lists", "with no lists", "never as I". */
-const FILLER = /^(use|using|uses|write|writing|include|including|put|add|any|a|an|the|ever|be|have|has|as|in|more|too|many|much|do|does)$/i;
+/**
+ * Words that may sit between a negation and what it governs: "never use bullet lists", "with no lists", "never as I".
+ * A verb that only says to do the thing itself ("do not cite sources", "never quote sources") is one of them: the
+ * negation bans its object. Any other verb narrows it ("never invent examples" bans inventing, not examples).
+ */
+const FILLER = /^(use|using|uses|write|writing|include|including|put|add|any|a|an|the|ever|be|have|has|as|in|more|too|many|much|do|does|cite|citing|quote|quoting|mention|mentioning|name|naming|give|giving|provide|providing|offer|offering|employ|employing|insert|inserting|show|showing)$/i;
 /** Words after a subject that narrow it to a kind of itself: "headings that are questions", "no source without a link". */
 const RESTRICT = /^(that|which|who|whose|with|without|unless|except|when|whenever|where|if|than)$/i;
 /** Prepositions that narrow a subject, unless what follows is the whole piece: "in headings" narrows, "in the piece" does not. */
@@ -155,12 +180,17 @@ export const singular = (w: string): string => {
 };
 
 type Polarity = 'pos' | 'neg' | 'scoped';
-interface Reading { readonly subjects: Map<string, Polarity>; readonly values: Map<string, { pos: Set<string>; neg: Set<string> }> }
+interface Reading {
+  readonly subjects: Map<string, Polarity>; readonly values: Map<string, { pos: Set<string>; neg: Set<string> }>;
+  /** a negation in it governs only a kind or a place of what it names ("avoid the present tense in captions") */
+  readonly narrowed: boolean;
+}
 
 /** The polarity of every subject and value a statement names, clause by clause. */
 export function readPolarity(statement: string): Reading {
   const subjects = new Map<string, Polarity>();
   const values = new Map<string, { pos: Set<string>; neg: Set<string> }>();
+  let narrowed = false;
   const setSubject = (k: string, p: Polarity): void => {
     const was = subjects.get(k);
     // A subject said both ways keeps its general reading: a ban or an ask outranks a narrowed mention.
@@ -197,7 +227,7 @@ export function readPolarity(statement: string): Reading {
           to = tokens[e - 1].end;
           const next = tokens[e];
           const comma = next ? clause.slice(to, next.at).includes(',') : true;
-          if (next && !comma && (RESTRICT.test(next.w) || (PREPOSITION.test(next.w) && !GENERAL_SCOPE.test(clause.slice(next.end).trim())))) { phraseScoped = true; narrowFrom = to; }
+          if (next && !comma && (RESTRICT.test(next.w) || (PREPOSITION.test(next.w) && !GENERAL_SCOPE.test(clause.slice(next.end).trim())))) { phraseScoped = true; narrowFrom = to; narrowed = true; }
         }
       }
     }
@@ -213,12 +243,14 @@ export function readPolarity(statement: string): Reading {
       else setSubject(x.k, 'pos');
     }
     for (const v of vals) {
-      if (inBan(v)) setValue(v.dim, v.v, true);
+      // A value banned only somewhere ("avoid the first person in headings", "avoid a casual tone in headings") says
+      // nothing of the rest of the piece: it is scoped, as a narrowed subject is.
+      if (inBan(v)) { if (!phraseScoped) setValue(v.dim, v.v, true); }
       else if (v.at >= narrowFrom && !commaAfter(v.at)) continue;
       else setValue(v.dim, v.v, false);
     }
   }
-  return { subjects, values };
+  return { subjects, values, narrowed };
 }
 
 export function plainlyOpposed(a: string, b: string): boolean {
@@ -239,7 +271,7 @@ export function plainlyOpposed(a: string, b: string): boolean {
 const bansOutright = (statement: string): boolean => {
   const r = readPolarity(statement);
   if ([...r.subjects.values()].includes('neg')) return true;
-  if ([...r.subjects.values()].includes('scoped')) return false;
+  if ([...r.subjects.values()].includes('scoped') || r.narrowed) return false;
   return NEGATION.test(statement) && !CAP.test(statement);
 };
 
@@ -346,7 +378,7 @@ export function mergedMeasurement(a: Measurement | null | undefined, b: Measurem
 }
 
 /** What two conflicting rules disagree on, in a few words. */
-const labelOf = (a: Requirement, b: Requirement): string => {
+export const labelOf = (a: Requirement, b: Requirement): string => {
   const m = a.measurement ?? b.measurement;
   if (m) {
     const names: Readonly<Record<string, string>> = { PARAGRAPH_LENGTH: 'paragraph length', SENTENCE_LENGTH: 'sentence length', HEDGE_RATE: 'hedging', FRAGMENT_SHARE: 'fragments', OPENING: 'opening length', HEADINGS: 'headings', RHYTHM: 'rhythm' };

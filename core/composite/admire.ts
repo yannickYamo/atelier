@@ -10,7 +10,7 @@
 
 import type { InferenceClient, Budget } from '../inference/client.js';
 import { spend } from '../inference/client.js';
-import { TRAIT_CLASSES, TRAIT_LABEL, type TraitClass } from './traits.js';
+import { CLASS_WORDS, TRAIT_CLASSES, TRAIT_LABEL, type TraitClass } from './traits.js';
 
 export interface AdmireLine { readonly author: string; readonly text: string; readonly available: readonly TraitClass[] }
 
@@ -36,14 +36,21 @@ it" is every class listed as available for that writer. Pick only from the class
 writer: a class their pieces gave no rule for cannot be chosen. A line that admires nothing listed gets no class.
 Never pick a class for a writer whose line is empty.`;
 
-const KEYWORDS: readonly (readonly [TraitClass, RegExp])[] = [
-  ['opening', /\b(open|opens|opening|openings|begin|begins|start|starts|hook|first line|lead)\b/i],
-  ['structure', /\b(structure|structured|argument|arguments|order|ordered|section|sections|build|builds|organi[sz]ed|outline|flow|close|closing|ending)\b/i],
-  ['evidence', /\b(evidence|figure|figures|data|number|numbers|source|sources|detail|details|depth|dense|example|examples|specific|specifics|proof|research)\b/i],
-  ['pace', /\b(pace|pacing|rhythm|speed|fast|quick|brisk|short|sentence|sentences|paragraph|paragraphs|fragment|fragments|tempo|momentum)\b/i],
-  ['voice', /\b(voice|tone|register|formal|formality|informal|warm|dry|wry|humou?r|funny|plain|direct|style|sound|sounds|word|words|phrasing|contraction|contractions)\b/i],
-  ['method', /\b(method|approach|decides|decision|decisions|discipline|process|way of working|moves|thinks|thinking|reasoning)\b/i],
-];
+/**
+ * THE KEYWORD READING uses the same words of each class a rule is sorted by (./traits.ts, CLASS_WORDS), so a line
+ * that admires "the bullet lists", "the headings" or "its numbered steps" names the class those rules are in. Added to
+ * them only words of praise that no rule says ("the speed of it", "how the argument builds"), and the words of
+ * method, which a rule never names (a rule with no class word is a method rule).
+ */
+const PRAISE: Readonly<Partial<Record<TraitClass, RegExp>>> = {
+  opening: /\b(start|starts|lead|first line)\b/i,
+  structure: /\b(build|builds|organi[sz]ed|flow|ordered)\b/i,
+  evidence: /\b(depth|deep|dense|research)\b/i,
+  pace: /\b(speed|quick|momentum)\b/i,
+  voice: /\b(formality|funny|direct|style|sound|sounds)\b/i,
+  method: /\b(method|approach|decides|decision|decisions|discipline|process|way of working|moves|thinks|thinking|reasoning)\b/i,
+};
+const KEYWORDS: readonly (readonly [TraitClass, RegExp | undefined, RegExp | undefined])[] = TRAIT_CLASSES.map((c) => [c, CLASS_WORDS.find(([k]) => k === c)?.[1], PRAISE[c]]);
 
 /** The classes a line names, by its words. The fallback when no model reads it. */
 export function keywordClasses(text: string, available: readonly TraitClass[]): TraitClass[] {
@@ -51,7 +58,7 @@ export function keywordClasses(text: string, available: readonly TraitClass[]): 
   if (!t) return [];
   // Only an explicit "everything" or "all of it" takes every class: "above all, the openings" names one.
   if (/\b(everything|all of it)\b/i.test(t) && !/\b(not|except|but)\b/i.test(t)) return [...available];
-  return KEYWORDS.filter(([, re]) => re.test(t)).map(([c]) => c).filter((c) => available.includes(c));
+  return KEYWORDS.filter(([, words, praise]) => words?.test(t) === true || praise?.test(t) === true).map(([c]) => c).filter((c) => available.includes(c));
 }
 
 /**

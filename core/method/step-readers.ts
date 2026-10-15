@@ -209,6 +209,9 @@ function paragraphLength(step: string): Measurement | null {
   if (/\b(?:at least|no fewer than|minimum|a minimum of)\b/i.test(t)) return null;
   // One paragraph named by what it is ("the Summary paragraph", "the closing paragraph"): not every paragraph.
   if (/\bthe\s+(?!paragraphs?\b)[\w-]+\s+paragraph\b(?!s)/i.test(t)) return null;
+  // One paragraph named by where it stands: "Open with a paragraph of no more than two sentences", "end on a short
+  // paragraph". That one paragraph's length, not every paragraph's.
+  if (/\b(?:open|opens|opening|begin|begins|start|starts|lead|leads|end|ends|ending|close|closes|closing|finish|finishes|conclude|concludes)\s+(?:with|on|by)\s+(?:a|an|one|a single)\s+(?:[\w-]+\s+)?paragraph\b(?!s)/i.test(t)) return null;
   // A permission sets no ceiling: "paragraphs of one sentence are fine", "a paragraph may run to four sentences".
   const ceilingWords = /\bno\s+paragraph\b|\bnever\b|\bnot\b|n't\b/i;
   if (/\b(?:are|is)\s+(?:fine|ok|okay|allowed|acceptable|welcome)\b|\b(?:may|can)\b/i.test(t) && !ceilingWords.test(t)) return null;
@@ -229,6 +232,10 @@ function paragraphLength(step: string): Measurement | null {
   const forms: readonly (readonly [RegExp, number])[] = [
     [new RegExp(String.raw`\b(?:at most|no more than|no longer than|up to|a maximum of|maximum of|max(?:imum)?|to|of|within)\s+${SMALL_N}\s+sentences?\b(?!\s+or\s+more)`, 'i'), 0],
     [new RegExp(String.raw`\b${SMALL_N}\s+sentences?\s+(?:or\s+(?:fewer|less)|at most|max(?:imum)?)\b`, 'i'), 0],
+    // "Each paragraph: three sentences, max." The ceiling closes the clause; "three sentences, maximum two long" is not one.
+    [new RegExp(String.raw`\b${SMALL_N}\s+sentences?,\s*(?:at most|max(?:imum)?)\.?(?=\s*(?:[;!]|$))`, 'i'), 0],
+    // "Cap every paragraph at three sentences": a cap or a limit set at a number.
+    ...(/^\s*(?:cap|limit)\b/i.test(t) ? [[new RegExp(String.raw`\bat\s+${SMALL_N}\s+sentences?\b`, 'i'), 0] as const] : []),
     [new RegExp(String.raw`\b(?:under|fewer than|less than|below)\s+${SMALL_N}\s+sentences?\b`, 'i'), -1],
     [new RegExp(String.raw`\b(?:longer than|more than|over|past|beyond|exceed(?:s|ing)?)\s+${SMALL_N}\s+sentences?\b`, 'i'), 0],
   ];
