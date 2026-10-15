@@ -1,0 +1,210 @@
+{
+ "admired": {
+  "kai": "the casual tone, the bullet lists and the headings",
+  "lena": "the formal register and the long careful paragraphs",
+  "milo": "its numbered steps",
+  "nora": "the warm voice",
+  "otto": "above all, the short sentences"
+ },
+ "classes": {
+  "kai": [],
+  "lena": [
+   "pace",
+   "voice"
+  ],
+  "milo": [],
+  "nora": [
+   "voice"
+  ],
+  "otto": [
+   "pace"
+  ]
+ },
+ "answers": {
+  "2": "both",
+  "6": "B",
+  "7": "A"
+ },
+ "rules": [
+  {
+   "id": "m1",
+   "author": "kai",
+   "statement": "I keep sentences short: a median under 5 words, and nine in ten under 13.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 5,
+     "p90Max": 13
+    }
+   }
+  },
+  {
+   "id": "m2",
+   "author": "kai",
+   "statement": "I keep paragraphs to 3 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 3
+    }
+   }
+  },
+  {
+   "id": "m3",
+   "author": "lena",
+   "statement": "I keep sentences short: a median under 40 words, and nine in ten under 49.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 40,
+     "p90Max": 49
+    }
+   }
+  },
+  {
+   "id": "m4",
+   "author": "lena",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   }
+  },
+  {
+   "id": "m5",
+   "author": "lena",
+   "statement": "I hedge rarely: at most 22 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 22
+    }
+   }
+  },
+  {
+   "id": "m6",
+   "author": "lena",
+   "statement": "Never use stock model phrasing: delve, delves, delving, tapestry, a testament to, in today's fast-paced, ever-evolving, unlock the power, ….",
+   "measurement": {
+    "observer": "LEXICON",
+    "params": {
+     "terms": [
+      "delve",
+      "delves",
+      "delving",
+      "tapestry",
+      "a testament to",
+      "in today's fast-paced",
+      "ever-evolving",
+      "unlock the power",
+      "unleash the power",
+      "navigate the complexities",
+      "it's important to note",
+      "it is important to note",
+      "it's worth noting",
+      "embark on a journey",
+      "elevate your",
+      "a plethora of",
+      "in the realm of",
+      "the world of",
+      "game-changer",
+      "let's dive in"
+     ]
+    }
+   }
+  },
+  {
+   "id": "m7",
+   "author": "milo",
+   "statement": "I keep sentences short: a median under 7 words, and nine in ten under 12.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 7,
+     "p90Max": 12
+    }
+   }
+  },
+  {
+   "id": "m8",
+   "author": "milo",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   }
+  },
+  {
+   "id": "m9",
+   "author": "nora",
+   "statement": "I keep sentences short: a median under 16 words, and nine in ten under 22.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 16,
+     "p90Max": 22
+    }
+   }
+  },
+  {
+   "id": "m10",
+   "author": "nora",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   }
+  },
+  {
+   "id": "m11",
+   "author": "nora",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   }
+  },
+  {
+   "id": "m12",
+   "author": "otto",
+   "statement": "I keep sentences short: a median under 11 words, and nine in ten under 12.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 11,
+     "p90Max": 12
+    }
+   }
+  },
+  {
+   "id": "m13",
+   "author": "otto",
+   "statement": "I keep paragraphs to 3 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 3
+    }
+   }
+  },
+  {
+   "id": "m14",
+   "author": "otto",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,180 @@
+{
+ "admired": {
+  "xan": "everything",
+  "yara": "everything",
+  "zed": "everything"
+ },
+ "classes": {
+  "xan": [
+   "voice",
+   "pace"
+  ],
+  "yara": [
+   "voice",
+   "pace"
+  ],
+  "zed": [
+   "voice",
+   "pace"
+  ]
+ },
+ "answers": {
+  "1": "both",
+  "4": "B",
+  "5": "both",
+  "7": "both",
+  "8": "both"
+ },
+ "rules": [
+  {
+   "id": "p1",
+   "author": "xan",
+   "statement": "Write in the first person."
+  },
+  {
+   "id": "p2",
+   "author": "xan",
+   "statement": "Use contractions freely."
+  },
+  {
+   "id": "p3",
+   "author": "xan",
+   "statement": "Use British spelling."
+  },
+  {
+   "id": "p4",
+   "author": "xan",
+   "statement": "Write in the first person."
+  },
+  {
+   "id": "p5",
+   "author": "xan",
+   "statement": "Use contractions freely."
+  },
+  {
+   "id": "p6",
+   "author": "xan",
+   "statement": "Use British spelling."
+  },
+  {
+   "id": "m1",
+   "author": "xan",
+   "statement": "I keep sentences short: a median under 7 words, and nine in ten under 12.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 7,
+     "p90Max": 12
+    }
+   }
+  },
+  {
+   "id": "m2",
+   "author": "xan",
+   "statement": "I keep paragraphs to 2 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 2
+    }
+   }
+  },
+  {
+   "id": "p7",
+   "author": "yara",
+   "statement": "Write in the second person."
+  },
+  {
+   "id": "p8",
+   "author": "yara",
+   "statement": "Avoid contractions."
+  },
+  {
+   "id": "p9",
+   "author": "yara",
+   "statement": "Write in the second person."
+  },
+  {
+   "id": "p10",
+   "author": "yara",
+   "statement": "Avoid contractions."
+  },
+  {
+   "id": "m3",
+   "author": "yara",
+   "statement": "I keep sentences short: a median under 16 words, and nine in ten under 16.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 16,
+     "p90Max": 16
+    }
+   }
+  },
+  {
+   "id": "m4",
+   "author": "yara",
+   "statement": "I keep paragraphs to 3 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 3
+    }
+   }
+  },
+  {
+   "id": "p11",
+   "author": "zed",
+   "statement": "Write in the third person."
+  },
+  {
+   "id": "p12",
+   "author": "zed",
+   "statement": "Use American spelling."
+  },
+  {
+   "id": "p13",
+   "author": "zed",
+   "statement": "Write in the third person."
+  },
+  {
+   "id": "p14",
+   "author": "zed",
+   "statement": "Use American spelling."
+  },
+  {
+   "id": "m5",
+   "author": "zed",
+   "statement": "I keep sentences short: a median under 31 words, and nine in ten under 31.",
+   "measurement": {
+    "observer": "SENTENCE_LENGTH",
+    "params": {
+     "medianMax": 31,
+     "p90Max": 31
+    }
+   }
+  },
+  {
+   "id": "m6",
+   "author": "zed",
+   "statement": "I keep paragraphs to 4 sentences at most.",
+   "measurement": {
+    "observer": "PARAGRAPH_LENGTH",
+    "params": {
+     "maxSentences": 4
+    }
+   }
+  },
+  {
+   "id": "m7",
+   "author": "zed",
+   "statement": "I hedge rarely: at most 2 hedging words per thousand.",
+   "measurement": {
+    "observer": "HEDGE_RATE",
+    "params": {
+     "maxPer1000": 2
+    }
+   }
+  }
+ ]
+}
