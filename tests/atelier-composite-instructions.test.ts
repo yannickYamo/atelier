@@ -247,9 +247,10 @@ describe('a conflict the person answered, opened again by the guard', () => {
     // every conflict whose chosen side does not instruct and is held open is counted open, and is never shown as standing
     const dec = new Map(rec.decisions.map((d) => [d.id, d]));
     for (const c of rec.conflicts) {
-      const held = c.sides.some((s) => dec.get(s.id)?.outcome === 'OPEN') && !c.sides.some((s) => instructs(dec.get(s.id)));
-      if (held) expect(open).toContain(c.n);
+      // counted where the screen asks it: shown open, open again, or held open here
       const stand = standOf(c, dec.get(c.sides[0].id), dec.get(c.sides[1].id));
+      const held = stand.startsWith('→ open') || (stand.startsWith('→ neither instructs') && stand.includes(`--conflict ${c.n}=A`));
+      expect(open.includes(c.n), stand).toBe(held);
       if (open.includes(c.n)) expect(stand).not.toMatch(/^→ (?:both|kai|lena|nora|otto) /);
     }
     expect(openLine(rec)).toContain(`${openQuestions(rec).length} conflict(s) kept as open question(s)`);
