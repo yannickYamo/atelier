@@ -7,6 +7,20 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: steering never undoes what your rules hold
+
+- **A draft written again for your usual features alone keeps what a rule you require holds.** It was kept when it
+  broke no new required rule, even if it took one already broken further from holding: a ceiling of 5 asides per
+  1,000 words, brought nearer by two span rewrites, was delivered further out than before. Such a draft is now kept
+  only if no rule you require is newly broken and none already broken is further out, read on each text as it is,
+  by the same judgement every repair step is held to. One that would undo that work is recorded as not kept, with
+  the rule it would have moved.
+- **Each step is said as what it was.** A cut for length is said as a cut ("Cut for length: …", "the cut did not do
+  better"), never as a draft written again. A repair the budget stopped names the step it could not pay for (the
+  redraft, not "the rewrite"). A rule fixed without a model is credited to what was done ("m2 fixed without a model:
+  long paragraphs split"), not to span rewriting. A shape round the budget skipped under `--until-typical` is said on
+  screen in one line.
+
 ### Fixed: every repair step of a run is counted once
 
 - **One step counter per run.** The controller counted its own steps, while a draft that only ran long was cut, and a
