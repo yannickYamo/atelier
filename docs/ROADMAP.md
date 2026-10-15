@@ -76,7 +76,7 @@ is in [RESULTS](RESULTS.md).
 
 | Solution | State | The evidence, or the test that decides |
 |---|---|---|
-| A small model reads each draft for specifics; code decides whether each is supported | Shipped, qualified | All 46 planted inventions caught and 39 of 48 clean drafts left alone at its production settings ([v3 result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)) |
+| A small model reads each draft for specifics; code decides whether each is supported | Shipped, qualified | All 46 planted inventions caught and 39 of 48 clean drafts left alone at its production settings (false flags at most 30 in 100, one-sided 95% bound) ([v3 result](../studies/CLAIM_READER_V3_QUALIFICATION_RESULT.md)) |
 | Only a measured instrument may cut text | Shipped | An unqualified reader reports and never deletes ([decision 0003](decisions/0003-authority-by-measurement.md)) |
 
 ### 3. "Its answers are worse than a careful hand-written skill's"

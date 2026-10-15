@@ -174,6 +174,8 @@ export const SHAPE: Observer = {
     } else {
       spans = [{ start: at, end: at + body.length, text: body.slice(0, 80), why: `${v} ${unit}; your pieces run ${asked}: ${off} by ${by}` }];
     }
-    return { verdict: 'VIOLATED', spans, value: v, error, detail: `${v} ${unit} (${asked}): ${off} by ${by}` };
+    // A ceiling of none is said as none: "no hashtags; this has 3", not "3 hashtags (at most 0): long by 3".
+    const detail = hi === 0 && off === 'long' ? `no ${unit}; this has ${v}` : `${v} ${unit} (${asked}): ${off} by ${by}`;
+    return { verdict: 'VIOLATED', spans, value: v, error, detail };
   },
 };

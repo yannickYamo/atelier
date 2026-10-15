@@ -1,7 +1,8 @@
 // tests/atelier-step-reader-corpus.test.ts — THE READING OF CITATION AND TEST STEPS IS HELD TO A LABELLED CORPUS.
 //
 // `fixtures/readers/steps.jsonl` holds method steps, each labelled with what it asks of the work: a citation of the
-// lines it speaks of (LINES), one on every finding (LINES_EACH), a named test (NAMES_TEST), or none of these (null).
+// lines it speaks of (LINES), one on every finding (LINES_EACH), a named test (NAMES_TEST), the longest a paragraph may
+// run (PARAGRAPH_LENGTH:<sentences>), or none of these (null).
 // Forbidden and conditional wordings are in it beside the plain ones. `steps-baseline.json` is how the method reader
 // fares on each today. A change may move a step to `agree`; it may never move one away from it, and it may never give
 // a step a check its words do not ask for (a false check is the harmful error). Grow the corpus; never trim it.
@@ -9,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { methodProposals } from '../core/method/standard.js';
 
-type Label = 'LINES' | 'LINES_EACH' | 'NAMES_TEST' | null;
+type Label = 'LINES' | 'LINES_EACH' | 'NAMES_TEST' | `PARAGRAPH_LENGTH:${number}` | null;
 interface Item { id: string; step: string; sections: string[]; check: Label }
 type Fate = 'agree' | 'falseCheck' | 'wrongCheck' | 'miss';
 
@@ -22,6 +23,7 @@ export function readingOf(x: Item): Label {
   const reference = x.sections.map((s) => `## ${s}\nSomething here.\n`).join('\n');
   const m = methodProposals(`- ${x.step}\n`, { task: 'Review this change.', material: [{ name: 'diff', text: DIFF }], reference })[0]?.measurement;
   if (m?.observer === 'LINES') return m.params.perItem ? 'LINES_EACH' : 'LINES';
+  if (m?.observer === 'PARAGRAPH_LENGTH') return `PARAGRAPH_LENGTH:${Number(m.params.maxSentences)}`;
   return m?.observer === 'NAMES_TEST' ? 'NAMES_TEST' : null;
 }
 function fateOf(x: Item): Fate {

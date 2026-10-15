@@ -73,4 +73,4 @@ export const describeAuthors = (authors: AuthorMap, pieces: number): string =>
  * A PIECE AS IT IS SERVED: without its front matter. `author:`, `topic:` and the like are about the piece, not its
  * writing; served in a voice file they read as part of the author's prose, and a composite's names leak into drafts.
  */
-export const withoutFrontMatter = (text: string): string => text.replace(/^﻿?---\r?\n(?:[^\n]*\r?\n)*?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/, '').replace(/^\s*\n/, '');
+export const withoutFrontMatter = (text: string): string => text.replace(/^\uFEFF?---\r?\n(?:[^\n]*\r?\n)*?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/, '').replace(/^\s*\n/, '');

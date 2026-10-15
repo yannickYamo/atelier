@@ -87,7 +87,7 @@ const WORDS: Record<OnMiss, string> = { REDRAFT: 'written again', REWRITE: 'the 
 export function describePlan(plan: ExecutionPlan): string[] {
   return plan.rules.map((p) => {
     const reads = p.check ? `${p.check.coverage === 'FULL' ? 'checked' : 'checked in part'}${p.check.reads === 'BOUND_MATERIAL' ? ' against your material' : ''}` : 'no check';
-    const blocks = p.enforced ? 'blocks when it fails' : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'does not block: your examples dispute it' : p.notEnforced === 'RELATED_CHECK' ? 'does not block: it reads something near your rule, not the rule' : p.role === 'HABIT' ? 'does not block: a habit' : 'does not block';
+    const blocks = p.enforced ? 'blocks when it fails' : p.notEnforced === 'DISPUTED_BY_EXAMPLES' ? 'does not block: your examples dispute it' : p.notEnforced === 'RELATED_CHECK' ? 'does not block: it reads something near your rule, not the rule' : p.notEnforced === 'UNRATIFIED' ? 'does not block: nobody has confirmed it yet' : p.role === 'HABIT' ? 'does not block: a habit' : 'does not block';
     return `  ${p.id.padEnd(5)} ${p.role.toLowerCase().padEnd(10)} ${reads} · ${blocks} · on a miss: ${WORDS[p.onMiss]}\n        ${p.statement.replace(/\s+/g, ' ').slice(0, 110)}`;
   });
 }
