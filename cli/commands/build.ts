@@ -171,7 +171,8 @@ async function chooseVoice(L: store.StoreLayout, v: StandardVersion): Promise<Vo
   // A COMPOSITE (core/composite): pieces by several authors, and the owner's choice from each. Its voice is one piece
   // from every author something was taken from, within the budget, said as whose it is; no persona is derived, since
   // one read over every author's pieces would describe their average, which nobody chose.
-  const comp = loadSession().composite;
+  // This run's choice, or, rebuilt where the run is not at hand, the one kept with the skill.
+  const comp = loadSession().composite ?? store.getComposite(L);
   if (comp && (!voice || (reselect && voice.composite))) {
     const made = compositeVoice(comp, v, wordBudget ?? COMPACT_PIECE_BUDGET_WORDS, asked.form ?? (stored?.pieceForm ?? COMPACT_PIECE_FORM));
     if (made) {

@@ -65,9 +65,6 @@ export function detectAuthors(files: readonly { readonly id: string; readonly te
   return null;
 }
 
-/** The pieces of one author, in the order given. */
-export const piecesBy = (authors: AuthorMap, name: string, ids: readonly string[]): string[] => ids.filter((id) => authors.of[id] === name);
-
 /** One line for the build screen. */
 export const describeAuthors = (authors: AuthorMap, pieces: number): string =>
   `${pieces} piece(s) by ${authors.names.length} authors (${authors.how === 'FRONT_MATTER' ? 'author: in each piece' : authors.how === 'SUBFOLDERS' ? 'a folder per author' : '--authors'}): each is read on its own first. ${authors.names.join(', ')}.`;
