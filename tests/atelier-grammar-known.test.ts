@@ -4,7 +4,7 @@
 // certain, so no word is respelt by a keystroke model: "yeet", "vite", "mither", "cosy", "storey" stay as written in
 // either dialect, and a slip the checker cannot name ("tokwn") is listed with what it suggests. In-place spelling
 // fixes come only from the curated list of well-known misspellings, read by Atelier's own pass over the text, whatever
-// the engine calls the word ("untill" it reads as a word choice) and at a sentence's start ("Thsi"). No spelling moves
+// the engine calls the word ("comming", which it would respell "cumming") and at a sentence's start ("Thsi"). No spelling moves
 // between British and American English. And a reading with items listed never says "no mechanical error".
 //
 // The engine is real (harper.js) wherever a test reads text with it; the suite default is the stub (vitest.config.ts).
@@ -73,19 +73,19 @@ describe('spelling, with the real engine', () => {
     }
   });
   it('a known misspelling in lower case is corrected whatever the engine calls it; a capitalised one, even opening a sentence, is listed', () => {
-    expect(fixed('Please send the file untill Friday.', {})).toBe('Please send the file until Friday.');   // the engine reads "untill" as a word choice
+    expect(fixed('We are comming on Friday.', {})).toBe('We are coming on Friday.');   // the engine suggests "cumming"
     expect(fixed('We need to seperate the billing logic.', { dialect: ['american'] })).toBe('We need to separate the billing logic.');
-    for (const text of ['Untill then, we wait.', 'Thsi is the last time I touch that migration.', '# Recieve plan\n\nIt held. Recieve the rest.']) {
+    for (const text of ['Comming soon, we said.', 'Thsi is the last time I touch that migration.', '# Recieve plan\n\nIt held. Recieve the rest.']) {
       expect(fixed(text, {}), text).toBe(text);
       expect(readGrammar(text, {}).uncertain.some((u) => u.why.includes('may be a name')), text).toBe(true);
     }
   });
   it('a capitalised misspelling in mid-sentence may be a name: listed, not changed; so is one the author uses or a protected one', () => {
-    const name = readGrammar('We met Untill at the station.', {});
+    const name = readGrammar('We met Comming at the station.', {});
     expect(name.confirmed).toEqual([]);
-    expect(name.uncertain.find((u) => u.text === 'Untill')?.why).toMatch(/may be a name/);
-    expect(readGrammar('Our untill step runs nightly.', { vocabulary: ['untill'] }).confirmed).toEqual([]);
-    expect(fixed('Run `untill --now` and read untill.md first.', {})).toBe('Run `untill --now` and read untill.md first.');
+    expect(name.uncertain.find((u) => u.text === 'Comming')?.why).toMatch(/may be a name/);
+    expect(readGrammar('Our comming step runs nightly.', { vocabulary: ['comming'] }).confirmed).toEqual([]);
+    expect(fixed('Run `comming --now` and read comming.md first.', {})).toBe('Run `comming --now` and read comming.md first.');
   });
   it('no spelling moves between British and American English', () => {
     expect(fixed('The colour of the organisation changed.', { dialect: ['american'] })).toBe('The colour of the organisation changed.');
@@ -109,7 +109,7 @@ describe('the list of known misspellings', () => {
       expect(right, wrong).not.toBe(wrong);
       expect(knownMisspelling(wrong)).toBe(right);
     }
-    expect(knownMisspelling('Untill')).toBe('until');
+    expect(knownMisspelling('Comming')).toBe('coming');
     expect(knownMisspelling('thete')).toBeNull();
   });
   const AM = '/usr/share/dict/american-english'; const BR = '/usr/share/dict/british-english';

@@ -5,9 +5,14 @@
 // spelling, a word said twice, an older usage) is LISTED for the person to read, never changed. Correctness goes up;
 // the voice is untouched. Concretely, the only changes made in place are:
 //
-//   - a pronoun–verb agreement from the fixed table below ("they was", "you was", "I has", "he go");
-//   - "a" or "an" before a word that does not start with "h" and is not an acronym ("a essay", "an new bike");
-//   - a comma, semicolon, colon or full stop typed twice (",,"), and a space before punctuation ("done ?", "paw ,");
+//   - a pronoun–verb agreement from the fixed table below, which holds only pairings no variety uses ("he are",
+//     "she are", "I are"): "they was", "we was", "you was", "I has", "he go", "he have" are dialect grammar, listed;
+//   - "a" or "an" before a lower-case common English word that does not start with "h", is not read as letters in any
+//     case, and that the checker knows ("a essay", "an new bike"); before any other word ("an nda", "a usb stick",
+//     "an mri"), listed;
+//   - two commas after a word ("it,, and"), and a space before a comma or a full stop ("paw ,", "done ."); every
+//     other mark typed twice ("::" in "std::vector", ".." trailing off, ";;", "!!", "??") and a space before "!",
+//     "?", ":" or ";" (French spacing: "Bonjour !", "Q : Where") are listed;
 //   - a lower-case word on the curated list of well-known misspellings (./grammar-words.ts), each with its one
 //     correction ("definately", "recieve").
 //
@@ -34,7 +39,8 @@
 //   the author's variant  spelling is checked in the dialect the standard records; where none is recorded, only a
 //                       word misspelt in BOTH British and American English counts.
 //   intentional choices a fragment, an "And" or "But" opener, a one-word sentence, a lower-case styling, a word
-//                       repeated, two spaces after a full stop, "!!": none of these is changed.
+//                       repeated, two spaces after a full stop, "!!", "..", "::", French spacing: none of these is
+//                       changed.
 //   known misspellings  a spelling is changed only where the word is on the curated list of well-known misspellings,
 //                       found by this file's own pass over the text: whole words, outside the protected regions,
 //                       written in lower case. No guess at the word meant is ever made. Every other word the checker
@@ -42,9 +48,9 @@
 //                       split, a plural it would make a possessive) is listed, never changed, and no spelling is ever
 //                       converted between British and American English.
 //   the author's grammar  a pronoun agreement the author's own pieces use ("it don't") is their voice: not changed,
-//                       not listed. Without that evidence only the table's cases are corrected ("they was", "I has",
-//                       "he go"); vernacular ("it don't"), "there is" with a plural, and an error with no single
-//                       correction ("I is") are listed.
+//                       not listed. Without that evidence only the table's cases are corrected ("he are", "I are");
+//                       a dialect's agreement ("they was", "we was", "I has", "he go", "it don't"), "there is" with a
+//                       plural, and an error with no single correction ("I is") are listed.
 //   claims              a correction that would change a figure or a capitalised name is refused: it is listed
 //                       as uncertain with the reason, and nothing is changed.
 //
@@ -89,9 +95,11 @@ export const isGrammarNote = (c: { readonly requirementId: string; readonly obse
 // ── THE ALLOWED KINDS, AS A LIST ────────────────────────────────────────────────────────────────
 //
 // Rule names of the engine (harper.js 2.10) this file reads, each with the label the report uses. Nothing outside this
-// list is ever corrected, and of these only agreement (the table's cases), a/an (not before "h", not before an
-// acronym) and a space before a comma are corrected in place; the rest (`LISTED_RULES`) are always listed, under the
-// one rule at the head of this file. Added to only with a reason, here.
+// list is ever corrected, and of these exactly these are corrected in place: a spelling on the known list, an agreement
+// in the table ("he are", "she are", "I are"), a/an before a lower-case common word the checker knows (not in "h", not
+// read as letters), two commas after a word, and a space before a comma or a full stop. Everything else read here is
+// listed (`LISTED_RULES`, and the guards in `readGrammar`), under the one rule at the head of this file. Added to only
+// with a reason, here.
 export const MECHANICAL_RULES: Readonly<Record<string, string>> = {
   SpellCheck: 'spelling',
   PronounVerbAgreement: 'subject–verb agreement',
@@ -105,6 +113,8 @@ export const MECHANICAL_RULES: Readonly<Record<string, string>> = {
   // The two below are read here, not by the engine (`punctuationLints`): it has no rule for either.
   DoublePunctuation: 'double punctuation',
   SpaceBeforePunctuation: 'a space before punctuation',
+  RepeatedMark: 'a mark typed more than once',
+  SpaceBeforeMark: 'a space before a mark',
 };
 /**
  * Kinds read and always listed, each with why: every one has a legitimate reading somewhere. A word said twice is
@@ -115,6 +125,8 @@ const LISTED_RULES: Readonly<Record<string, string>> = {
   RepeatedWords: 'a word repeated: "had had", "that that" and "Bora Bora" are English, so it is listed, never collapsed',
   ItsContraction: '"its" may be the possessive the author meant',
   ThereIsAgreement: '"there is" before a plural is ordinary in speech and in several varieties',
+  RepeatedMark: '"::" is code ("std::vector"), ".." trails off, "!!" and "??" are emphasis: listed, never collapsed',
+  SpaceBeforeMark: 'a space before "!", "?", ":" or ";" is French and typographic spacing ("Bonjour !"): listed, never closed',
 };
 /** Engine categories allowed whole: a Typo is a fixed table of common slips ("teh"), held to the spelling guards. */
 const MECHANICAL_KINDS: ReadonlySet<string> = new Set(['Typo']);
@@ -168,7 +180,7 @@ export function protectedRanges(text: string): Range[] {
   add(/^[ \t]*(```|~~~)[^\n]*\n[\s\S]*?(?:\n[ \t]*\1[ \t]*(?:\n|$)|$)/gm);    // fenced code
   add(/`[^`\n]+`/g);                                                        // inline code
   add(/^[ \t]*>.*$/gm);                                                     // block quotes
-  add(/"[^"\n]{1,600}"|“[^”\n]{1,600}”|‘[^’\n]{1,600}’/g);                  // quotations
+  add(/"[^"\n]{1,600}"|“[^”\n]{1,600}”|‘[^’\n]{1,600}’|«[^»\n]{1,600}»|»[^«\n]{1,600}«|‹[^›\n]{1,600}›|„[^“”\n]{1,600}[“”]|‚[^‘’\n]{1,600}[‘’]/g); // quotations
   add(/\bhttps?:\/\/\S+|\bwww\.\S+/gi);                                    // URLs
   add(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g);                                    // email addresses
   add(/(?<![\w@])@\w+(?:[.-]\w+)*/g);                                      // @mentions
@@ -249,14 +261,22 @@ const AGREES: Readonly<Record<string, readonly string[]>> = {
   "hasn't": ['he', 'she', 'it'], "haven't": ['i', 'you', 'we', 'they'],
 };
 /**
- * The agreements corrected without asking: a slip in any register, never a dialect's grammar. "it don't", "he don't",
- * "I is", "it were" are not here: vernacular, a subjunctive, or an error with no one correction, they are listed.
+ * The agreements corrected without asking: a pairing no variety or register of English uses. Each row of the table it
+ * once held was read against the varieties, and only three are kept; when in doubt a row is listed. Listed, never
+ * changed, and why:
+ *   "they was", "we was", "you was"   the levelled past of "be": most British dialects, Appalachian, African American
+ *                                     and Caribbean English, and the eighteenth century's standard "you was".
+ *   "they is", "we is", "you is"      the levelled present of "be": Appalachian, Newfoundland, African American English.
+ *   "I has"                           the Northern Subject Rule and the narrative "I says, I has" of Northern English.
+ *   "he go", "she go", "he have",     a third person without "-s": East Anglian and African American English, and a
+ *   "she have"                        subjunctive or bare infinitive ("I suggest that he go", "we watched she go").
+ *   "it are", "it go", "it have"      "it" is as often an object before the next clause's verb ("the people who run it
+ *                                     are tired", "make it go", "the crew who built it have left") as a subject.
+ * Kept: "he are", "she are", "I are": no variety pairs these, and neither pronoun is an object form.
+ * "it don't", "he don't", "I is", "it were" are not here either: vernacular, a subjunctive, or an error with no one
+ * correction, they are listed.
  */
-const CLEAR_AGREEMENT: Readonly<Record<string, string>> = {
-  'they was': 'were', 'you was': 'were', 'we was': 'were', 'they is': 'are', 'you is': 'are', 'we is': 'are',
-  'he are': 'is', 'she are': 'is', 'it are': 'is', 'i has': 'have', 'i are': 'am',
-  'he go': 'goes', 'she go': 'goes', 'it go': 'goes', 'he have': 'has', 'she have': 'has', 'it have': 'has',
-};
+const CLEAR_AGREEMENT: Readonly<Record<string, string>> = { 'he are': 'is', 'she are': 'is', 'i are': 'am' };
 const AGREEMENT_RULES: ReadonlySet<string> = new Set(['PronounVerbAgreement', 'PronounInflectionBe', 'IAmAgreement', 'ThereIsAgreement']);
 const norm = (s: string): string => s.toLowerCase().replace(/’/g, '\'').replace(/\s+/g, ' ').trim();
 
@@ -288,33 +308,59 @@ const list = (p: Measurement['params'], k: string): readonly string[] => { const
 const dialectOf = (p: Measurement['params']): GrammarDialect | null => { const d = list(p, 'dialect')[0]; return d === 'american' || d === 'british' ? d : null; };
 
 /**
- * Two slips the engine has no rule for, read here: a comma, semicolon or colon typed twice (",,"), a full stop typed
- * twice where no ellipsis is meant ("end.." but not "..." or "...."), and a space before a semicolon, colon, full
- * stop, question or exclamation mark ("done ?"). "!!" and "?!" are emphasis and never counted; a colon or full stop
- * after a space that opens a smiley, a path or a figure is not one either. The comma's case is the engine's own.
+ * The punctuation slips the engine has no rule for, read here. Changed in place, because no register or variety writes
+ * them: two or more commas after a word and before a space ("it,, and"), and a space before a full stop that ends a
+ * word's sentence ("done ."; not a spaced ellipsis ". . ."). Listed, never changed, because each has a reading: a
+ * colon typed twice ("std::vector", "Vec::new", "Foo::Bar"), a full stop typed twice where no ellipsis is meant
+ * ("hmm.. not sure": a casual trailing-off), a semicolon twice, "!!" and "??" (emphasis), commas run into the next
+ * word ("a,,b": an empty field), and a space before "!", "?", ":" or ";" (French and typographic spacing: "Bonjour !",
+ * "Elle a dit : non"). A mark after a space that opens a smiley, a path or a figure is not read at all. The comma's
+ * own space is the engine's case (CommaFixes).
  */
 export function punctuationLints(text: string): GrammarLint[] {
   const out: GrammarLint[] = [];
-  for (const m of text.matchAll(/(?<=\p{L})([,;:])\1+(?![,;:])/gu)) {
-    out.push({ rule: 'DoublePunctuation', kind: 'Punctuation', message: `"${m[1]}" typed more than once`, start: m.index, end: m.index + m[0].length, replacement: m[1] });
+  const push = (rule: string, message: string, start: number, end: number, replacement: string): void => { out.push({ rule, kind: 'Punctuation', message, start, end, replacement }); };
+  for (const m of text.matchAll(/(?<=\p{L})([,;:!?])\1+/gu)) {
+    const inPlace = m[1] === ',' && /^(?:\s|$)/.test(text.slice(m.index + m[0].length));
+    push(inPlace ? 'DoublePunctuation' : 'RepeatedMark', `"${m[1]}" typed more than once`, m.index, m.index + m[0].length, m[1]);
   }
-  for (const m of text.matchAll(/(?<=\p{L})\.\.(?!\.)(?=\s|$)/gu)) {
-    out.push({ rule: 'DoublePunctuation', kind: 'Punctuation', message: 'a full stop typed twice', start: m.index, end: m.index + 2, replacement: '.' });
-  }
-  for (const m of text.matchAll(/(?<=\p{L})[ \t]+([;:.?!])(?=\s|$)/gu)) {
-    out.push({ rule: 'SpaceBeforePunctuation', kind: 'Punctuation', message: `a space before "${m[1]}"`, start: m.index, end: m.index + m[0].length, replacement: m[1] });
-  }
+  for (const m of text.matchAll(/(?<=\p{L})\.\.(?!\.)/gu)) push('RepeatedMark', 'a full stop typed twice', m.index, m.index + 2, '.');
+  for (const m of text.matchAll(/(?<=\p{L})[ \t]+\.(?=\s|$)(?![ \t]*\.)/gu)) push('SpaceBeforePunctuation', 'a space before "."', m.index, m.index + m[0].length, '.');
+  for (const m of text.matchAll(/(?<=\p{L})[ \t]+([;:?!])(?=\s|$)/gu)) push('SpaceBeforeMark', `a space before "${m[1]}"`, m.index, m.index + m[0].length, m[1]);
   return out;
 }
 
 /** Lints in the recorded dialect; with none recorded, spelling counts only where both dialects flag the same span. */
 function lintsFor(e: GrammarEngine, text: string, dialect: GrammarDialect | null): GrammarLint[] {
-  if (dialect) return [...e.lint(text, dialect), ...punctuationLints(text)];
+  return lintsAndUnknown(e, text, dialect).lints;
+}
+/** The lints, and every stretch the checker calls an unknown word in any dialect it read (for a/an: never certain). */
+function lintsAndUnknown(e: GrammarEngine, text: string, dialect: GrammarDialect | null): { lints: GrammarLint[]; unknown: Range[] } {
+  if (dialect) { const all = e.lint(text, dialect); return { lints: [...all, ...punctuationLints(text)], unknown: all.filter(SPELLING) }; }
   const us = e.lint(text, 'american'); const uk = e.lint(text, 'british');
   const key = (l: GrammarLint): string => `${l.rule}@${l.start}-${l.end}`;
   const ukKeys = new Set(uk.map(key));
-  return [...us.filter((l) => !SPELLING(l) || ukKeys.has(key(l))), ...punctuationLints(text)];
+  return { lints: [...us.filter((l) => !SPELLING(l) || ukKeys.has(key(l))), ...punctuationLints(text)], unknown: [...us, ...uk].filter(SPELLING) };
 }
+
+/**
+ * Common words also written as initials, where the letters read aloud take the other article: "an LED", "an SAT",
+ * "an SEC filing", "an SOS", "a US firm", "a SAFE note", "an FAT disk". Written in lower case, the article may be the author's
+ * reading of the letters: listed, never changed.
+ */
+const READ_AS_LETTERS: ReadonlySet<string> = new Set(['us', 'un', 'eu', 'led', 'sat', 'sec', 'fat', 'rest', 'safe', 'nice', 'mar', 'ram', 'sos']);
+/** A short word with the shape of a spoken word: an English onset, then vowels with at most two consonants between ("bike", "egg", "ox"; not "mph", "std", "mla"). */
+const SPOKEN_SHAPE = /^(?:[bcdfgjklmnpqrstvwxz]|bl|br|ch|cl|cr|dr|dw|fl|fr|gl|gr|kn|ph|pl|pr|qu|sc|sh|sk|sl|sm|sn|sp|st|sw|th|tr|tw|wh|wr)?(?:[aeiouy]+[bcdfghjklmnpqrstvwxz]{0,2})+$/;
+/**
+ * Whether "a" or "an" before this word is changed in place: a lower-case word, not in "h", not one read as letters in
+ * any case, and one the checker knows; and either one of the most common English words or, outside "u" (whose sound
+ * the checker guesses: "a urn" is its guess), a word of five letters or more, or a shorter one with a spoken word's
+ * shape. Anything else ("an nda", "a usb stick", "an mri", "an sms", "an mph", "a Euler") is listed: the article may
+ * follow how the author reads it aloud.
+ */
+const articleIsCertainBefore = (next: string, unknownWord: boolean): boolean =>
+  /^\p{Ll}+$/u.test(next) && !/^(?:h|an?$)/.test(next) && !READ_AS_LETTERS.has(next) && !unknownWord
+  && (COMMON_WORDS.has(next) || (!next.startsWith('u') && (next.length >= 5 || SPOKEN_SHAPE.test(next))));
 
 /** 1 for a lint of an allowed kind: on the same stretch, it is read before the engine's other notes, so it is the one kept. */
 const allowed = (l: GrammarLint): number => (l.rule in MECHANICAL_RULES || MECHANICAL_KINDS.has(l.kind) ? 1 : 0);
@@ -340,7 +386,8 @@ export function readGrammar(text: string, params: Measurement['params'], context
   const confirmed: Span[] = [...own.confirmed]; const uncertain: Span[] = [...own.uncertain];
   const listWords: readonly Range[] = [...own.confirmed, ...own.uncertain];
   const seen = new Set<string>();
-  for (const l of lintsFor(engine, text, dialectOf(params)).sort((a, b) => a.start - b.start || a.end - b.end || allowed(b) - allowed(a))) {
+  const { lints, unknown } = lintsAndUnknown(engine, text, dialectOf(params));
+  for (const l of lints.sort((a, b) => a.start - b.start || a.end - b.end || allowed(b) - allowed(a))) {
     if (l.end <= l.start || l.end > text.length) continue;
     const at = `${l.start}-${l.end}`;
     if (seen.has(at)) continue;
@@ -366,20 +413,24 @@ export function readGrammar(text: string, params: Measurement['params'], context
     if (AGREEMENT_RULES.has(l.rule)) {
       // The word before the verb is the subject the rule read: "they" in "they was".
       const before = /([\p{L}'’]+)\s+$/u.exec(text.slice(Math.max(0, l.start - 40), l.start))?.[1] ?? '';
-      const phrase = norm(`${before} ${problem}`);
+      // The engine's span is the verb ("are") or the pair ("I are"), the pair's fix the pair ("I am").
+      const pair = /^\s*[\p{L}'’]+\s+[\p{L}'’]+\s*$/u.test(problem);
+      const phrase = pair ? norm(problem) : norm(`${before} ${problem}`);
       if (constructions.has(phrase)) continue;                              // the author's own grammar: not even listed
       if (l.rule !== 'ThereIsAgreement') {
         const clear = CLEAR_AGREEMENT[phrase];
-        if (clear === undefined || fix === null || norm(fix) !== clear) { note('an agreement the author may intend (vernacular is voice), or one with no single correction'); continue; }
+        if (clear === undefined || fix === null || norm(fix) !== (pair ? `${phrase.split(' ')[0]} ${clear}` : clear)) { note('an agreement a variety of English uses (dialect is voice), or one with no single correction'); continue; }
       }
     }
     if (fix === null) { note('no correction the checker is sure of'); continue; }
     if (l.rule === 'AnA') {
       // "an historian", "an hotel": an older and still current usage. "a FAQ", "an MRI": read as letters or as a word.
-      const next = /^[\s*_"'“‘(]*([\p{L}\p{N}]+(?:[.'’-][\p{L}\p{N}]+)*)/u.exec(text.slice(l.end))?.[1] ?? '';
+      const m = /^([\s*_"'“‘(]*)([\p{L}\p{N}]+(?:[.'’-][\p{L}\p{N}]+)*)/u.exec(text.slice(l.end));
+      const next = m?.[2] ?? '';
+      const nextAt = { start: l.end + (m?.[1].length ?? 0), end: l.end + (m?.[1].length ?? 0) + next.length };
       if (!/^(?:a|an)$/i.test(problem) || !/^(?:a|an)$/i.test(fix)) { note('not one article for the other'); continue; }
       if (/^h/i.test(next)) { note('"a" or "an" before a word in h: "an historian" is a usage of its own'); continue; }
-      if (!next || /\d/.test(next) || /\p{Lu}/u.test(next.slice(1)) || /^\p{Lu}+$/u.test(next) || next.includes('.')) { note('"a" or "an" before an acronym or a figure: it depends on how it is read aloud'); continue; }
+      if (!articleIsCertainBefore(next, inside(unknown, nextAt))) { note('"a" or "an" before an acronym, a name, a figure or a word the checker does not know: it depends on how it is read aloud'); continue; }
       // The case of the article as written: "A essay" becomes "An essay", never "AN essay".
       fix = /^\p{Lu}/u.test(problem) ? fix[0].toUpperCase() + fix.slice(1).toLowerCase() : fix.toLowerCase();
     }
@@ -420,8 +471,8 @@ export const GRAMMAR: Observer = {
   id: 'GRAMMAR',
   describe: (p) => {
     const d = dialectOf(p);
-    return `no mechanical error with no legitimate reading: a known misspelling in lower case, a pronoun–verb agreement ("they was"), a/an, punctuation typed twice or after a space; `
-      + `a capitalised word, a word repeated, "an" before "h", any other word the checker does not know${d ? ` in ${d === 'british' ? 'British' : 'American'} English` : ''}, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched`;
+    return `no mechanical error with no legitimate reading: a known misspelling in lower case, an agreement no variety uses ("he are"), a/an before a lower-case common word, two commas, a space before a comma or a full stop; `
+      + `a capitalised word, a word repeated, a dialect's agreement ("they was"), "an" before "h" or a word read as letters, "::", "..", a space before "!", "?", ":" or ";", any other word the checker does not know${d ? ` in ${d === 'british' ? 'British' : 'American'} English` : ''}, and anything else it proposes, is only listed; code, quotations, addresses, figures and names are never touched`;
   },
   validate: (p) => {
     const d = list(p, 'dialect');
