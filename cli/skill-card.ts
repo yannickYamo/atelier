@@ -72,6 +72,8 @@ export function skillCardFor(L: store.StoreLayout, opts: { heldBack?: number; sk
       counted: live.filter((q) => q.measurement).length, read: live.filter((q) => !q.measurement).length,
       conditional: live.filter((q) => !isGeneralScope(q.appliesWhen)).length,
       needsMaterial: live.filter((q) => q.prerequisites?.length).length,
+      written: live.filter((q) => q.authority === 'EXPERT_AUTHORED').length,
+      unconfirmed: live.filter((q) => q.authority === 'DERIVED_UNRATIFIED').length,
     },
     claims: { instrument: sensor.instrument, qualified: sensor.qualified, answers, ...(unmeasured ? { unmeasured } : {}),
       measured: measured && !unmeasured ? { caught: measured.caught, planted: measured.planted, leftAlone: measured.leftAlone, clean: measured.clean, on: measured.on } : null },

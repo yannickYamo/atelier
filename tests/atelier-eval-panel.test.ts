@@ -41,7 +41,7 @@ describe('the panel', () => {
     const lines = p.split('\n');
     expect(lines[0]).toMatch(/^── Atelier · posts · release 96a48e75 · claude-opus-5 · 2 drafts ─+ \$0\.42 · 31 s ──$/);
     expect(lines[1]).toBe('  RESULT  CONFORMANT');
-    expect(p).toMatch(/PASS {2}invented claims {2}0 delivered · 1 cut.+claim reader .*caught 46\/46 planted, left 39\/48 clean alone \(false flags at most 30 in 100\), on product essays/);
+    expect(p).toMatch(/PASS {2}invented claims {2}0 delivered · 1 cut.+claim reader .*caught 46\/46 planted, left 39\/48 clean alone \(false flags at most 31 in 100\), on product essays/);
     expect(p).toMatch(/standard applied in full/);
     expect(p).toMatch(/6 waived|1 waived, each with a reason \(the material it needs is not bound\)/);
   });
@@ -80,7 +80,7 @@ describe('the panel', () => {
   it('fits the width it is given by wrapping, never by cutting, and colour only when asked', () => {
     const narrow = renderPanel(base, { width: 70 });
     for (const l of narrow.split('\n')) expect(l.length).toBeLessThanOrEqual(70);
-    expect(flat(narrow)).toContain('left 39/48 clean alone (false flags at most 30 in 100), on product essays');   // nothing cut
+    expect(flat(narrow)).toContain('left 39/48 clean alone (false flags at most 31 in 100), on product essays');   // nothing cut
     expect(renderPanel(base).includes(`${String.fromCharCode(27)}[`)).toBe(false);
     expect(renderPanel(base, { color: true }).includes(`${String.fromCharCode(27)}[32mPASS`)).toBe(true);
   });

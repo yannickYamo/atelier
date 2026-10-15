@@ -41,7 +41,7 @@ const BY_WORDS: readonly (readonly [TraitClass, RegExp])[] = [
   ['evidence', /\b(evidence|figure|figures|number|numbers|data|source|sources|cite|cites|citation|citations|example|examples|specific|specifics|detail|details|proof|statistic|statistics|quote|quotes|footnote|reference|references)\b/i],
   ['pace', /\b(sentence|sentences|paragraph|paragraphs|pace|pacing|rhythm|fragment|fragments|brisk|fast|slow|cadence|clipped|tempo)\b/i],
   ['structure', /\b(structure|structured|argument|arguments|section|sections|order|sequence|outline|heading|headings|list|lists|numbered|step|steps|close|closes|closing|end|ends|ending|conclusion|transition|transitions|moves)\b/i],
-  ['voice', /\b(tone|register|voice|formal|informal|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|word|words|phrasing|vocabulary|irony|understatement|slang|diction)\b/i],
+  ['voice', /\b(tone|register|voice|formal|informal|casual|conversational|chatty|relaxed|colloquial|impersonal|person|tense|contraction|contractions|first person|we|humou?r|wry|warm|dry|plain|jargon|hedge|hedges|hedging|spelling|dash|dashes|word|words|phrasing|vocabulary|irony|understatement|slang|diction)\b/i],
 ];
 
 /**
@@ -76,6 +76,8 @@ export interface TraitRow {
   readonly kind: TraitKind;
   /** the ids of the other authors' rules this one is shared with, or conflicts with */
   readonly with: readonly string[];
+  /** the same rule said again by the same author (a repeated reading): it stands and falls with this one */
+  readonly sameAs?: string;
 }
 
 export interface ConflictSide { readonly id: string; readonly author: string; readonly statement: string }
@@ -109,40 +111,183 @@ type Relation = 'SAME' | 'CONFLICT' | 'UNRELATED';
 /**
  * PLAINLY OPPOSED, WHATEVER ELSE THE TWO SAY. "Use contractions throughout, in a chatty register" against "Never use
  * contractions; keep a formal, precise register" share too few words to pass as one subject, and both would instruct
- * the writer. So a subject both name is compared on its own: the clause that names it says never (never, avoid, no,
- * without...) in one and not in the other. And a known pair of opposites on a subject both name (British against
- * American spelling, short against long paragraphs) is a conflict when each side holds one of the two and not both.
+ * the writer. So each statement is read for the subjects it names (headings, lists, contractions...) and the values it
+ * takes on a few known questions (tone, person, tense, spelling, length), each with the polarity of the words that
+ * govern it:
+ *
+ *   A NEGATION GOVERNS WHAT IT IS SAID OF, NOT ITS WHOLE CLAUSE. "Avoid headings" bans headings; "Avoid headings that
+ *   are questions" bans a kind of heading (scoped); "Never pad a list" bans padding; "Avoid contractions in headings"
+ *   is about headings only; "Avoid American spelling" asks for British; "never more than twenty words" is a cap.
+ *
+ * Opposed: a subject one bans and the other asks for, generally; or two values of one question that cannot both hold
+ * (casual against formal, first person against third, present tense against past).
  */
-const SUBJECT = /\b(contractions?|headings?|lists?|bullet(?:s| points?)?|first person|questions?|sources?|citations?|dash(?:es)?|emoji|jargon|footnotes?|anecdotes?|examples?|figures?|paragraphs?|sentences?|spellings?|exclamation marks?|semicolons?|tables?|hedg(?:e|es|ing))\b/gi;
-const CLAUSE_NEGATION = /\b(never|no|not|avoid|avoids|without|don't|do not|doesn't|rarely|none)\b/i;
-const OPPOSITES: readonly (readonly [RegExp, RegExp])[] = [
-  [/\bbritish\b/i, /\bamerican\b/i],
-  [/\b(short|shorter|brief|tight)\b/i, /\b(long|longer|run long|lengthy)\b/i],
-  [/\b(informal|chatty|casual|conversational)\b/i, /\bformal\b/i],
-  [/\bfirst person\b/i, /\bthird person\b/i],
+const SUBJECT = /\b(contractions?|headings?|lists?|bullet(?:s| points?)?|questions?|sources?|citations?|dash(?:es)?|emoji|jargon|footnotes?|anecdotes?|examples?|figures?|paragraphs?|sentences?|spellings?|exclamation marks?|semicolons?|tables?|hedg(?:e|es|ing))\b/gi;
+const CLAUSE_NEGATION = /^(never|no|not|avoid|avoids|without|don't|doesn't|rarely|none)$/i;
+/** Words that may sit between a negation and what it governs: "never use bullet lists", "with no lists", "never as I". */
+const FILLER = /^(use|using|uses|write|writing|include|including|put|add|any|a|an|the|ever|be|have|has|as|in|more|too|many|much|do|does)$/i;
+/** Words after a subject that narrow it to a kind of itself: "headings that are questions", "no source without a link". */
+const RESTRICT = /^(that|which|who|whose|with|without|unless|except|when|whenever|where|if|than)$/i;
+/** Prepositions that narrow a subject, unless what follows is the whole piece: "in headings" narrows, "in the piece" does not. */
+const PREPOSITION = /^(in|on|at|for|from|of|to|within|inside|under|across|about|after|before)$/i;
+const GENERAL_SCOPE = /^(?:the |a |an |any |your |my |this |each |every |all )?(?:piece|pieces|text|texts|writing|prose|draft|drafts|work|article|articles|post|posts|essay|essays|body|copy|it|them|general|places?|anywhere|everything)\b/i;
+const NUMBER_WORD = String.raw`(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|a dozen)`;
+/** A ceiling, not a ban: "never more than twenty words", "no paragraph should run past five sentences". */
+const CAP = new RegExp(String.raw`\b(?:more than|longer than|fewer than|less than|past|beyond|over|exceed(?:s|ing)?|above|up to)\s+${NUMBER_WORD}\b`, 'i');
+
+interface Dimension { readonly name: string; readonly values: readonly (readonly [string, RegExp])[]; readonly needsSubject?: true }
+const DIMENSIONS: readonly Dimension[] = [
+  { name: 'register', values: [['casual', /\b(casual|conversational|informal|chatty|relaxed|colloquial|like a friend)\b/gi], ['formal', /\b(formal|impersonal)\b/gi]] },
+  { name: 'person', values: [['first', /\bfirst[- ]person\b|\bas (?:I|we)\b|\bI\/we\b/gi], ['second', /\bsecond[- ]person\b|\bas you\b|\breader as you\b/gi],
+    ['third', /\bthird[- ]person\b|\bhe\/she\b|\bhe or she\b|\bas (?:he|she|they)\b/gi]] },
+  { name: 'tense', values: [['present', /\bpresent tense\b|\bin the present\b/gi], ['past', /\bpast tense\b|\bin the past\b/gi]] },
+  { name: 'spelling', values: [['british', /\bbritish\b/gi], ['american', /\bamerican\b/gi]] },
+  { name: 'length', needsSubject: true, values: [['short', /\b(short|shorter|brief|tight)\b/gi], ['long', /\b(long|longer|run long|lengthy)\b/gi]] },
 ];
-const singular = (w: string): string => w.toLowerCase().replace(/^bullet.*/, 'bullet').replace(/^hedg.*/, 'hedge').replace(/(?:es|s)$/, '').replace(/dash$/, 'dash');
-const subjectsOf = (s: string): Map<string, boolean> => {
-  const out = new Map<string, boolean>();
-  for (const clause of s.split(/[;:.!?]|,\s*(?:and|but)\b|\bbut\b/i)) {
-    for (const m of clause.matchAll(SUBJECT)) {
-      const k = singular(m[1]); const neg = CLAUSE_NEGATION.test(clause);
-      // A subject named twice keeps the first clause's polarity.
-      if (!out.has(k)) out.set(k, neg);
+
+/** One word as its subject: "sources" is source, "dashes" is dash, "bullet points" is bullet. */
+export const singular = (w: string): string => {
+  const x = w.toLowerCase().replace(/\s+/g, ' ');
+  if (x.startsWith("bullet")) return 'bullet';
+  if (x.startsWith("hedg")) return 'hedge';
+  if (/(?:ch|sh|ss|x|z)es$/.test(x)) return x.slice(0, -2);
+  return /[^s]s$/.test(x) ? x.slice(0, -1) : x;
+};
+
+type Polarity = 'pos' | 'neg' | 'scoped';
+interface Reading { readonly subjects: Map<string, Polarity>; readonly values: Map<string, { pos: Set<string>; neg: Set<string> }> }
+
+/** The polarity of every subject and value a statement names, clause by clause. */
+export function readPolarity(statement: string): Reading {
+  const subjects = new Map<string, Polarity>();
+  const values = new Map<string, { pos: Set<string>; neg: Set<string> }>();
+  const setSubject = (k: string, p: Polarity): void => {
+    const was = subjects.get(k);
+    // A subject said both ways keeps its general reading: a ban or an ask outranks a narrowed mention.
+    if (!was || (was === 'scoped' && p !== 'scoped')) subjects.set(k, p);
+  };
+  const setValue = (dim: Dimension, v: string, negated: boolean): void => {
+    const slot = values.get(dim.name) ?? { pos: new Set<string>(), neg: new Set<string>() };
+    values.set(dim.name, slot);
+    // A two-valued question negated is the other value: "avoid American spelling" asks for British.
+    if (negated && dim.values.length === 2) slot.pos.add(dim.values.find(([name]) => name !== v)?.[0] ?? v);
+    else (negated ? slot.neg : slot.pos).add(v);
+  };
+  for (const clause of statement.split(/[;:.!?]|,\s*(?:and|but)\b|\bbut\b/i)) {
+    const tokens = [...clause.matchAll(/[A-Za-z][A-Za-z'/-]*|\d+/g)].map((m) => ({ w: m[0], at: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
+    const subj = [...clause.matchAll(SUBJECT)].map((m) => ({ k: singular(m[1]), at: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
+    const vals = DIMENSIONS.flatMap((dim) => dim.values.flatMap(([v, re]) => [...clause.matchAll(re)].map((m) => ({ dim, v, at: m.index ?? 0, end: (m.index ?? 0) + m[0].length }))));
+    const k = tokens.findIndex((t) => CLAUSE_NEGATION.test(t.w) || (/^not$/i.test(t.w)));
+    const cap = k >= 0 && CAP.test(clause);
+    // The span a negation governs, [from, to): what is banned; `narrowFrom` on, what only narrows it.
+    let from = Infinity; let to = Infinity; let narrowFrom = Infinity; let phraseScoped = false;
+    if (k >= 0 && !cap) {
+      let j = k + 1;
+      while (j < tokens.length && FILLER.test(tokens[j].w) && !CLAUSE_NEGATION.test(tokens[j].w)) j++;
+      const head = tokens[j];
+      if (head) {
+        from = tokens[k].end;
+        const nominal = subj.some((x) => x.at === head.at) || vals.some((x) => x.at === head.at || (x.at < head.end && x.end > head.at));
+        if (!nominal) {
+          // A verb is negated ("never pad a list", "never end on a question"): what follows only narrows it.
+          to = head.end; narrowFrom = head.end; phraseScoped = true;
+        } else {
+          let e = j;
+          while (e < tokens.length && !RESTRICT.test(tokens[e].w) && !PREPOSITION.test(tokens[e].w) && !clause.slice(tokens[e - 1]?.end ?? 0, tokens[e].at).includes(',')) e++;
+          to = tokens[e - 1].end;
+          const next = tokens[e];
+          const comma = next ? clause.slice(to, next.at).includes(',') : true;
+          if (next && !comma && (RESTRICT.test(next.w) || (PREPOSITION.test(next.w) && !GENERAL_SCOPE.test(clause.slice(next.end).trim())))) { phraseScoped = true; narrowFrom = to; }
+        }
+      }
+    }
+    // A modifier said before a subject inside a ban ("long paragraphs", "American spelling") negates the modifier, and
+    // only narrows the subject.
+    const inBan = (x: { at: number }): boolean => x.at >= from && x.at < to;
+    const modified = new Set(subj.filter((x) => inBan(x) && vals.some((v) => inBan(v) && v.at < x.at && v.dim.name !== 'person')).map((x) => x.at));
+    const commaAfter = (at: number): boolean => Number.isFinite(to) && clause.slice(to, at).includes(',');
+    for (const x of subj) {
+      if (cap) { setSubject(x.k, 'scoped'); continue; }
+      if (inBan(x)) setSubject(x.k, modified.has(x.at) || phraseScoped ? 'scoped' : 'neg');
+      else if (x.at >= narrowFrom && !commaAfter(x.at)) setSubject(x.k, 'scoped');
+      else setSubject(x.k, 'pos');
+    }
+    for (const v of vals) {
+      if (inBan(v)) setValue(v.dim, v.v, true);
+      else if (v.at >= narrowFrom && !commaAfter(v.at)) continue;
+      else setValue(v.dim, v.v, false);
     }
   }
-  return out;
-};
+  return { subjects, values };
+}
+
 export function plainlyOpposed(a: string, b: string): boolean {
-  const sa = subjectsOf(a); const sb = subjectsOf(b);
-  const shared = [...sa.keys()].filter((k) => sb.has(k));
-  if (shared.some((k) => sa.get(k) !== sb.get(k))) return true;
-  if (!shared.length) return false;
-  return OPPOSITES.some(([x, y]) => {
-    const ax = x.test(a); const ay = y.test(a); const bx = x.test(b); const by = y.test(b);
-    return (ax && !ay && by && !bx) || (ay && !ax && bx && !by);
+  const ra = readPolarity(a); const rb = readPolarity(b);
+  const shared = [...ra.subjects.keys()].filter((k) => rb.subjects.has(k));
+  if (shared.some((k) => { const x = ra.subjects.get(k); const y = rb.subjects.get(k); return (x === 'pos' && y === 'neg') || (x === 'neg' && y === 'pos'); })) return true;
+  return DIMENSIONS.some((dim) => {
+    if (dim.needsSubject && !shared.length) return false;
+    const x = ra.values.get(dim.name); const y = rb.values.get(dim.name);
+    if (!x || !y) return false;
+    const meets = (p: Set<string>, q: Set<string>): boolean => [...p].some((v) => q.has(v));
+    if (meets(x.pos, y.neg) || meets(y.pos, x.neg)) return true;
+    return x.pos.size > 0 && y.pos.size > 0 && !meets(x.pos, y.pos);
   });
 }
+
+/** Whether a statement bans something outright (not a kind of it, not past a cap). */
+const bansOutright = (statement: string): boolean => {
+  const r = readPolarity(statement);
+  if ([...r.subjects.values()].includes('neg')) return true;
+  if ([...r.subjects.values()].includes('scoped')) return false;
+  return NEGATION.test(statement) && !CAP.test(statement);
+};
+
+/**
+ * A NUMBER A WORDED RULE SETS ON A COUNTED SUBJECT: sentences in a paragraph, words in a sentence. A ceiling ("two
+ * sentences at most", "no more than twenty words") or an allowance ("let a paragraph run to eight sentences": it may
+ * go that far). Null when the statement names no such number.
+ */
+interface Bound { readonly subject: 'paragraph' | 'sentence'; readonly kind: 'ceiling' | 'allowance' | 'floor'; readonly n: number }
+const NUM: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50 };
+const numOf = (x: string): number => (/^\d/.test(x) ? Number(x) : NUM[x.toLowerCase()]);
+export function boundOf(statement: string): Bound | null {
+  const N = String.raw`(\d+|${Object.keys(NUM).join('|')})`;
+  const unitFor = (subject: Bound['subject']): string => (subject === 'paragraph' ? 'sentences?' : 'words?');
+  for (const subject of ['paragraph', 'sentence'] as const) {
+    if (!new RegExp(String.raw`\b${subject}s?\b`, 'i').test(statement)) continue;
+    const u = unitFor(subject);
+    // A range, "two to four sentences": not one bound.
+    if (new RegExp(String.raw`\b${N}\s*(?:to|-|–)\s*${N}\s+${u}\b`, 'i').test(statement)) continue;
+    const allowance = new RegExp(String.raw`\b(?:run|runs|go|goes|stretch|stretches|extend|extends|grow|grows)\s+(?:to|up to)\s+${N}\s+${u}\b|\b(?:let|may|can|allow)\b[^.;]*?\bup to\s+${N}\s+${u}\b`, 'i').exec(statement);
+    if (allowance) return { subject, kind: 'allowance', n: numOf(allowance[1] ?? allowance[2]) };
+    const floor = new RegExp(String.raw`\b(?:at least|no fewer than|a minimum of)\s+${N}\s+${u}\b`, 'i').exec(statement);
+    if (floor) return { subject, kind: 'floor', n: numOf(floor[1]) };
+    const ceiling = new RegExp(String.raw`\b(?:at most|no more than|not more than|never more than|never exceed(?:s|ing)?|no longer than|under|fewer than|less than|a maximum of|up to|within|to)\s+${N}\s+${u}\b|\b${N}\s+${u}\s+(?:at most|or fewer|or less|max(?:imum)?)\b`, 'i').exec(statement);
+    const past = ceiling ? null : new RegExp(String.raw`\b(?:no|never|not)\b[^.;]*?\b(?:past|beyond|longer than|more than|over)\s+${N}\s+${u}\b`, 'i').exec(statement);
+    if (past) return { subject, kind: 'ceiling', n: numOf(past[1]) };
+    if (ceiling) {
+      const said = ceiling[0].toLowerCase(); const n0 = numOf(ceiling[1] ?? ceiling[2]);
+      return { subject, kind: 'ceiling', n: /^(?:under|fewer than|less than)/.test(said) ? n0 - 1 : n0 };
+    }
+  }
+  return null;
+}
+/** The bound a counted rule holds, on the same subjects. */
+const countedBound = (m: Measurement): Bound | null => {
+  if (m.observer === 'PARAGRAPH_LENGTH' && typeof m.params.maxSentences === 'number') return { subject: 'paragraph', kind: 'ceiling', n: m.params.maxSentences };
+  if (m.observer === 'SENTENCE_LENGTH' && typeof m.params.p90Max === 'number') return { subject: 'sentence', kind: 'ceiling', n: m.params.p90Max };
+  return null;
+};
+/** Two bounds on one subject: the same trait, opposed, or nothing either says of the other. */
+const boundsRelation = (x: Bound, y: Bound): Relation => {
+  if (x.subject !== y.subject) return 'UNRELATED';
+  const opposed = (c: Bound, o: Bound): boolean => (o.kind === 'allowance' || o.kind === 'floor') && o.n > c.n && !withinTolerance(c.n, o.n);
+  if (x.kind === 'ceiling' && y.kind === 'ceiling') return withinTolerance(x.n, y.n) ? 'SAME' : 'CONFLICT';
+  if (x.kind === 'ceiling') return opposed(x, y) ? 'CONFLICT' : 'UNRELATED';
+  if (y.kind === 'ceiling') return opposed(y, x) ? 'CONFLICT' : 'UNRELATED';
+  return 'UNRELATED';
+};
 
 /** How two rules of one class from two authors stand to each other. */
 export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'kind'>, b: Pick<Requirement, 'statement' | 'measurement' | 'kind'>): Relation {
@@ -157,12 +302,24 @@ export function relationOf(a: Pick<Requirement, 'statement' | 'measurement' | 'k
     if (!numeric.length) return 'SAME';
     return numeric.every((k) => withinTolerance(pa[k] as number, pb[k] as number)) ? 'SAME' : 'CONFLICT';
   }
-  if (a.measurement || b.measurement) return 'UNRELATED';
+  // A WORDED RULE AGAINST A COUNTED ONE, on a subject both put a number on: "let a paragraph run to eight sentences"
+  // against "3 sentences at most" is a conflict, whichever of the two is counted.
+  const counted = a.measurement ?? b.measurement;
+  if (counted) {
+    const worded = a.measurement ? b : a;
+    const cb = countedBound(counted); const wb = boundOf(worded.statement);
+    return cb && wb ? boundsRelation(cb, wb) : 'UNRELATED';
+  }
+  const ba = boundOf(a.statement); const bb = boundOf(b.statement);
+  if (ba && bb && boundsRelation(ba, bb) === 'CONFLICT') return 'CONFLICT';
   if (plainlyOpposed(a.statement, b.statement)) return 'CONFLICT';
   const wa = contentWords(a.statement); const wb = contentWords(b.statement);
   if (jaccard(wa, wb) < SAME_SUBJECT) return 'UNRELATED';
-  // The same subject, and one says never where the other says do: a conflict. (A boundary against a generative rule too.)
-  const na = NEGATION.test(a.statement) || a.kind === 'BOUNDARY'; const nb = NEGATION.test(b.statement) || b.kind === 'BOUNDARY';
+  // Both name a subject the polarity reading has already compared: the same subject, not opposed.
+  const ra = readPolarity(a.statement); const rb = readPolarity(b.statement);
+  if ([...ra.subjects.keys()].some((k) => rb.subjects.has(k))) return 'SAME';
+  // The same subject, and one bans outright where the other does not: a conflict. (A boundary against a generative rule too.)
+  const na = bansOutright(a.statement) || a.kind === 'BOUNDARY'; const nb = bansOutright(b.statement) || b.kind === 'BOUNDARY';
   return na === nb ? 'SAME' : 'CONFLICT';
 }
 
@@ -183,12 +340,14 @@ export function mergedMeasurement(a: Measurement | null | undefined, b: Measurem
     } else if (JSON.stringify(x ?? null) === JSON.stringify(y ?? null)) { if (x !== undefined) params[k] = x; }
     else return null;
   }
+  // A median's ceiling above the tail's describes no text: the range takes the tail at least as high as the median.
+  if (typeof params.medianMax === 'number' && typeof params.p90Max === 'number' && params.medianMax > params.p90Max) params.p90Max = params.medianMax;
   return { observer: a.observer, params };
 }
 
 /** What two conflicting rules disagree on, in a few words. */
 const labelOf = (a: Requirement, b: Requirement): string => {
-  const m = a.measurement;
+  const m = a.measurement ?? b.measurement;
   if (m) {
     const names: Readonly<Record<string, string>> = { PARAGRAPH_LENGTH: 'paragraph length', SENTENCE_LENGTH: 'sentence length', HEDGE_RATE: 'hedging', FRAGMENT_SHARE: 'fragments', OPENING: 'opening length', HEADINGS: 'headings', RHYTHM: 'rhythm' };
     return names[m.observer] ?? m.observer.toLowerCase().replace(/_/g, ' ');
@@ -207,7 +366,14 @@ const labelOf = (a: Requirement, b: Requirement): string => {
  */
 export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id: string) => string | undefined,
   lengthClassOf: (author: string) => ContextClass | null = () => null): TraitTable {
-  const items = proposals.flatMap((p) => { const author = sourceOf(p.requirementId); const classes = traitClassesOf(p); return author ? [{ p, author, cls: classes[0], classes }] : []; });
+  const all = proposals.flatMap((p) => { const author = sourceOf(p.requirementId); const classes = traitClassesOf(p); return author ? [{ p, author, cls: classes[0], classes }] : []; });
+  // ONE RULE SAID TWICE BY ONE AUTHOR (two readings that agreed) is one rule: paired once, so one disagreement is one
+  // conflict, not one per repetition. The repetition stands and falls with the first.
+  const keyOf = (x: (typeof all)[number]): string => JSON.stringify([x.author, x.p.statement.trim().toLowerCase().replace(/\s+/g, ' '), x.p.measurement ?? null]);
+  const firstOf = new Map<string, string>();
+  const sameAs = new Map<string, string>();
+  for (const x of all) { const k = keyOf(x); const f = firstOf.get(k); if (f) sameAs.set(x.p.requirementId, f); else firstOf.set(k, x.p.requirementId); }
+  const items = all.filter((x) => !sameAs.has(x.p.requirementId));
   const same = new Map<string, string[]>(); const conflict = new Map<string, string[]>();
   const conflicts: Conflict[] = [];
   const push = (m: Map<string, string[]>, k: string, v: string): void => { m.set(k, [...(m.get(k) ?? []), v]); };
@@ -226,13 +392,14 @@ export function buildTraitTable(proposals: readonly Requirement[], sourceOf: (id
       }
     }
   }
-  const rows: TraitRow[] = items.map(({ p, author, cls, classes }) => {
-    const id = p.requirementId;
+  const rows: TraitRow[] = all.map(({ p, author, cls, classes }) => {
+    const first = sameAs.get(p.requirementId);
+    const id = first ?? p.requirementId;
     const c = conflict.get(id) ?? []; const s = same.get(id) ?? [];
     const kind: TraitKind = c.length
       ? (conflicts.filter((x) => x.sides.some((side) => side.id === id)).every((x) => x.taskDependent) ? 'TASK_DEPENDENT' : 'CONFLICTING')
       : s.length ? 'SHARED' : 'UNIQUE';
-    return { id, author, cls, classes, kind, with: [...new Set([...c, ...s])] };
+    return { id: p.requirementId, author, cls, classes, kind, with: [...new Set([...c, ...s])], ...(first ? { sameAs: first } : {}) };
   });
   return { rows, conflicts };
 }

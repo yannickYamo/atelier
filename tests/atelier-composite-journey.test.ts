@@ -122,7 +122,7 @@ describe('atelier new on five pieces by five authors', () => {
 
   it('asks what the person likes about each before choosing anything, and builds nothing', () => {
     expect(first).toMatch(/Your skill is the combination you choose, so nothing is chosen yet/);
-    expect(first).toMatch(/--admire ada\.md="<what you like about it>"/);
+    expect(first).toMatch(/--admire Ada="<what you like about this author>"/);
     expect(builtAfter[0]).toBe(false);
   });
 

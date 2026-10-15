@@ -7,6 +7,44 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: a composite decides each rule once, and the person's words come first
+
+- **One outcome per rule, across every conflict it is in.** With three or more authors a rule sits in several pairwise
+  conflicts, and the last one written decided it: an explicit `--conflict 4=B` could be undone by admiration in
+  another conflict, and `--conflict 2=both` could produce nothing. Each rule is now decided once, in this order: an
+  explicit answer that sets it aside (it stays set aside, whatever another conflict says), an explicit answer for it,
+  "both" (one range rule, carried by one side, its wording restated to the limits it is checked against), admiration,
+  and otherwise open. A conflict nobody answered never instructs either side.
+- **The screen says what the build does.** Each conflict's line is read from the final outcome of its two rules: a
+  rule kept or set aside by the answer to another conflict says so, with that conflict's number, and a rule still open
+  names the conflict to answer. An admired author whose rules sit in conflicts is told which, not that nothing carries
+  what they liked.
+- **Tone, person and tense are compared.** Casual against formal, first against second or third person, and present
+  against past tense are conflicts.
+- **A negation is read for what it governs.** "Avoid headings that are questions", "Never pad a list", "Avoid
+  contractions in headings", "No source without a link" and "never more than twenty words" narrow or cap; they no
+  longer ban headings, lists, contractions or sources. "Avoid American spelling" agrees with "Use British spelling".
+- **Numbers on one subject are compared.** "Two sentences at most" against "let a paragraph run to eight sentences"
+  is a conflict, between two worded rules or between a worded rule and another author's counted band.
+- A rule one author's reading gave twice is one rule, paired once. "sources", "examples", "sentences" and "figures"
+  are read as their singular.
+- A sentence band never sets a median ceiling above its nine-in-ten ceiling, and a range made from two bands cannot.
+- With no model, an author whose pieces are below the counting floor is told so, with how much there was and what is
+  needed. The suggested `--admire` names an author.
+
+### Fixed: what a step, a screen and a card say is what is held
+
+- A step compiles to a ceiling on every paragraph only when it states a maximum for paragraphs in general. "Paragraphs
+  should never exceed three sentences" now does; a permission ("… are fine"), one named paragraph ("the Summary
+  paragraph"), another instruction in the same step, and a distance ("within three sentences of its claim") do not.
+- The method screen lists a rule read from the examples that blocks (the machine-writing moves, mechanical errors)
+  as required, not as "required only if you say so". The skill card says how many rules the owner wrote, how many were
+  read from their work and how many nobody confirmed, instead of "approved by you".
+- The claim reader's bound on 9 false flags in 48 is 0.304 and is shown as "at most 31 in 100": a ceiling is rounded
+  up.
+- `invoke --json` records the thinking setting its calls were sent with and the model that answered, as the provider
+  reported them. A comparison run's runtime rows carry that model, not the harness's `--model`.
+
 ### Fixed: your rules and your range never share a gate
 
 - **A rule you require is judged on the text as it is.** A REQUIRED feature rule ("at most 5 asides per 1,000 words")

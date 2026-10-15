@@ -22,7 +22,7 @@ import type { Requirement } from '../../core/state/canonical-state.js';
 import { isGeneralScope } from '../../core/state/canonical-state.js';
 import { extract } from '../../core/intake/extract.js';
 
-import { deriveMeasuredRules, piecesBreaking } from '../../core/observers/derive.js';
+import { deriveMeasuredRules, piecesBreaking, countedFloorOf, MIN_SENTENCES, MIN_PARAGRAPHS, MIN_WORDS } from '../../core/observers/derive.js';
 import { ensureGrammar, grammarMeasurement, termsOf, GRAMMAR_STATEMENT } from '../../core/observers/grammar.js';
 import type { Measurement } from '../../core/state/canonical-state.js';
 import { deriveContrastRules, contrastTopics } from '../../core/observers/contrast.js';
@@ -385,6 +385,8 @@ export async function discover(): Promise<void> {
       const words = own.map((t) => wordsOf(proseRegions(t).map((x) => x.text).join('\n\n')).length);
       lengthClass[name] = contextClassOf(Math.round(quantile(words, 0.5)));
       if (measured.length) console.log(`  ${measured.length} rule(s) counted from ${name}'s pieces alone: ${measured.map((m) => m.requirement.requirementId).join(', ')}.`);
+      // Nothing counted, and nothing read: why, said, so an author with too little is not mistaken for one with no habits.
+      else if (!r.proposals.length) console.log(`  nothing could be counted from ${name}'s ${aItems.length} piece(s) (${countedFloorOf(read.map((i) => i.text))}): an author is counted from at least ${MIN_SENTENCES} sentences, ${MIN_PARAGRAPHS} paragraphs or ${MIN_WORDS.toLocaleString('en-US')} words of their pieces read together, so each author needs more of their pieces, or longer ones, to be counted.`);
     }
     // NO MECHANICAL ERRORS, for the composite too: the owner's editorial rule, not any one author's trait. It names no
     // author, so it is no row of the trait table; read over every author's pieces (each one's own words are known), and
