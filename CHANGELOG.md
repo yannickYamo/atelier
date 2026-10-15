@@ -16,12 +16,10 @@ rewrite and a later draft was told only the range it had missed.
 - **A FEATURE miss points at its carrier sentences.** The sentences whose removal moves the value most toward the
   range are its spans, as many as cover the distance and never more than three, so a text nearer the range is pointed
   at fewer places. Every FEATURE miss carries a signed distance, in widths of its range: positive above, negative
-  below. This holds for every FEATURE rule, whatever its materiality, so the repair of a REQUIRED feature rule now
-  counts places the way other rules do: a miss pointed at two carriers where it was pointed at three is progress.
-  A rule newly broken is refused as before.
-- **"Never worse" reads the distance too.** A rewrite that leaves a feature rule broken in as many places but moves
-  its value further from the range by a tenth of a width or more is discarded, for every feature rule, enforced or
-  not. The count of places is capped, so without this a value could drift from one width out to three and pass.
+  below. This holds for every FEATURE rule, whatever its materiality: a repair needs a target. The one thing it
+  changes for a REQUIRED feature rule is that a miss pointed at fewer carriers after a rewrite counts as progress.
+  Whether a rewrite made such a rule worse is still read by its verdict alone, as before: never by how many carriers
+  a miss happens to be pointed at, and never by its distance.
 - **Notes state direction and distance.** A draft written again, and each later shape round, is told every miss with
   which way to move and about how far ("about 4.1 fewer parenthetical asides per 1,000 words", "about 51 words
   shorter"), not only what was missed.
@@ -30,8 +28,10 @@ rewrite and a later draft was told only the range it had missed.
   rewrites, the piece is written once more with the move named, one draft per round at most. The rules stay as the
   standard has them: a PREFERRED rule never fails the run, the evaluation record never reads it as enforced, and no
   rule is promoted. The note for such a miss says what your pieces usually do, in a block of its own, and never that
-  the method requires it. The run's call and dollar bounds are raised by exactly what the extra draft and its
-  rewrites may spend, and the record states what they were raised by.
+  the method requires it. For a graded feature alone, a rewrite that leaves its rule broken and moves the value
+  further from the range by a tenth of a width or more is discarded, read after allowing for a change in the text's
+  length (a shorter text raises every rate per 1,000 words). The run's call and dollar bounds are raised by exactly
+  what the extra draft and its rewrites may spend, and the record states what they were raised by.
 - **Recorded, on the invocation record and in `--json` (`graded`):** the features graded; how many a rewrite targeted
   and how many it moved toward the range; the drafts written again for them; the note lines sent; each feature's
   value before and after, with its range; the rewrites kept and refused, with reasons; and the calls and dollars the

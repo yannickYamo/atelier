@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { gradedRules, gradedTargets, withGraded, GRADED_PER_PASS } from '../core/loop/run-repair.js';
 import { acceptRepair, regressions, GRADED_STEP } from '../core/loop/repair.js';
-import { FEATURE } from '../core/observers/features.js';
+import { FEATURE, errorAtLength, LENGTH_DRIFT } from '../core/observers/features.js';
 import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
 import * as store from '../core/state/store.js';
 import type { GradedRecord } from '../core/state/canonical-state.js';
@@ -71,34 +71,68 @@ describe('acceptance: a graded feature nearer its band is progress; an enforced 
   });
 });
 
-describe('never worse reads the distance too: a feature drifting further from its band is a regression', () => {
+describe('never worse reads the distance of a GRADED feature, and only then: without the flag a FEATURE check is read by its verdict', () => {
   const graded = (id: string, error: number, spans = 3, enforced = true): RuleCheck => ({ ...check(id, error), enforced, result: { verdict: 'VIOLATED', value: 2, detail: '', error, spans: Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) } });
   const lex = (id: string, verdict: 'MET' | 'VIOLATED', spans = 1): RuleCheck => ({ requirementId: id, statement: id, materiality: 'REQUIRED', enforced: true, observer: 'LEXICON',
     result: { verdict, value: null, detail: '', spans: verdict === 'VIOLATED' ? Array.from({ length: spans }, (_, i) => ({ start: i, end: i + 1, text: 'x', why: '' })) : [] } });
-  it('g1 2.0 → 1.8 beside g2 1.0 → 3.0, three carriers each, is refused: the places did not grow, the distance did', () => {
+  const both = new Set(['g1', 'g2']);
+  it('g1 2.0 → 1.8 beside g2 1.0 → 3.0, three carriers each, both graded, is refused: the places did not grow, the distance did', () => {
     const before = reportOf([graded('g1', 2.0), graded('g2', 1.0)]); const after = reportOf([graded('g1', 1.8), graded('g2', 3.0)]);
-    expect(regressions(before, after)).toEqual(['g2']);
-    const v = acceptRepair(before, after, { graded: new Set(['g1', 'g2']) });
+    expect(regressions(before, after, both)).toEqual(['g2']);
+    const v = acceptRepair(before, after, { graded: both });
     expect(v.ok).toBe(false); expect(v.why).toMatch(/made g2 worse/);
   });
   it('a drift under the step is no regression; exactly the step is', () => {
-    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.05)]))).toEqual([]);
-    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.0 + GRADED_STEP)]))).toEqual(['g2']);
+    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.05)]), both)).toEqual([]);
+    expect(regressions(reportOf([graded('g2', 1.0)]), reportOf([graded('g2', 1.0 + GRADED_STEP)]), both)).toEqual(['g2']);
     // the sign is the side of the band; the distance is what is read
-    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', -1.3)]))).toEqual(['g2']);
-    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', 0.5)]))).toEqual([]);
+    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', -1.3)]), both)).toEqual(['g2']);
+    expect(regressions(reportOf([graded('g2', -1.0)]), reportOf([graded('g2', 0.5)]), both)).toEqual([]);
   });
-  it('read on every check that carries an error, enforced or not; a check with no error keeps the count of places as its only measure', () => {
-    expect(regressions(reportOf([graded('p', 1.0, 3, false)]), reportOf([graded('p', 2.0, 3, false)]))).toEqual(['p']);
+  it('FLAG ABSENT: a FEATURE check is read by its verdict alone, never by its distance or its count of carriers', () => {
+    // |error| 1.0 → 1.15 with equal verdicts: not a regression (a rewrite that cut 5% of the words raised every rate by 5%)
+    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 1.15, 3)]))).toEqual([]);
+    expect(regressions(reportOf([graded('f', 1.0, 3)]), reportOf([graded('f', 3.0, 3)]))).toEqual([]);
+    // two carriers to three at an equal value: a changed carrier distribution is never worse
+    expect(regressions(reportOf([graded('f', 1.0, 2)]), reportOf([graded('f', 1.0, 3)]))).toEqual([]);
+    expect(regressions(reportOf([graded('f', 1.0, 2, false)]), reportOf([graded('f', 0.8, 3, false)]))).toEqual([]);
+    // a FEATURE rule newly VIOLATED still is
+    expect(regressions(reportOf([{ ...check('f', 0, 'MET'), enforced: true }]), reportOf([graded('f', 0.3, 1)]))).toEqual(['f']);
+    // naming another check as graded reads nothing of this one
+    expect(regressions(reportOf([graded('f', 1.0, 2)]), reportOf([graded('f', 1.5, 3)]), new Set(['other']))).toEqual([]);
+    // a check with no error keeps the count of places as its measure
     expect(regressions(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 2)]))).toEqual([]);
     expect(regressions(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 3)]))).toEqual(['e']);
     expect(regressions(reportOf([lex('e', 'MET')]), reportOf([lex('e', 'VIOLATED')]))).toEqual(['e']);
   });
-  it('an enforced rule behaves as it did: fewer places is progress, as many is none, a drift in distance is refused', () => {
+  it('an enforced rule behaves as it did: fewer places is progress, as many is none; a feature drift beside it is refused only when that feature is graded', () => {
     expect(acceptRepair(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 1)])).ok).toBe(true);
     expect(acceptRepair(reportOf([lex('e', 'VIOLATED', 2)]), reportOf([lex('e', 'VIOLATED', 2)])).ok).toBe(false);
-    const v = acceptRepair(reportOf([lex('e', 'VIOLATED', 2), graded('f', 1.0)]), reportOf([lex('e', 'VIOLATED', 1), graded('f', 1.5)]));
+    const before = reportOf([lex('e', 'VIOLATED', 2), graded('f', 1.0)]); const after = reportOf([lex('e', 'VIOLATED', 1), graded('f', 1.5)]);
+    expect(acceptRepair(before, after)).toMatchObject({ ok: true, why: 'places breaking a REQUIRED rule: 5 → 4' });
+    const v = acceptRepair(before, after, { graded: new Set(['f']) });
     expect(v.ok).toBe(false); expect(v.why).toMatch(/made f worse/);
+  });
+  it('a graded rate is read at the new length: a shorter text with the count unchanged is no drift; a share or a value is read as it is', () => {
+    const colon = { feature: ['colon'], minValue: 2, maxValue: 3 };
+    // 3.0 per 1,000 over 1,000 words, the same count over 950 words: 3.158, an error of 0.158, so an after-value of 3.15 is no rise
+    expect(errorAtLength(colon, 3.0, 1000, 950)).toBeCloseTo(0.158, 3);
+    expect(errorAtLength(colon, 3.0, 1000, 1000)).toBe(0);
+    // under the drift the value is read as it is
+    expect(errorAtLength(colon, 3.0, 1000, Math.ceil(1000 / (1 + LENGTH_DRIFT)))).toBe(0);
+    expect(errorAtLength(colon, 3.0, 1000, 975)).toBeGreaterThan(0);
+    // a longer text lowers the rate the same count would show
+    expect(errorAtLength(colon, 3.3, 1000, 1100)).toBe(0);
+    expect(errorAtLength({ feature: ['question'], minValue: 0.1, maxValue: 0.2 }, 0.25, 1000, 900)).toBeCloseTo(0.5, 3);
+    expect(errorAtLength({ feature: ['sentenceP90'], minValue: 20, maxValue: 30 }, 32, 1000, 900)).toBeCloseTo(0.2, 3);
+  });
+  it('the acceptance names what it counted: graded rules, not REQUIRED, when only graded checks were broken', () => {
+    const met = { ...check('g', 0, 'MET'), enforced: true };
+    expect(acceptRepair(reportOf([graded('g', 2)]), reportOf([met]), { graded: new Set(['g']) }).why).toBe('graded rules broken: 1 → 0');
+    expect(acceptRepair(reportOf([graded('g', 2, 3)]), reportOf([graded('g', 1.95, 2)]), { graded: new Set(['g']) }).why).toBe('places breaking a graded rule: 3 → 2');
+    expect(acceptRepair(reportOf([graded('g', 2, 3)]), reportOf([graded('g', 1.95, 3)]), { graded: new Set(['g']) }).why).toBe('the rewrite fixed no graded rule');
+    expect(acceptRepair(reportOf([graded('g', 2), lex('e', 'VIOLATED')]), reportOf([met, lex('e', 'VIOLATED')]), { graded: new Set(['g']) }).why).toBe('REQUIRED or graded rules broken: 2 → 1');
+    expect(acceptRepair(reportOf([lex('e', 'VIOLATED')]), reportOf([lex('e', 'MET')])).why).toBe('REQUIRED rules broken: 1 → 0');
   });
 });
 
