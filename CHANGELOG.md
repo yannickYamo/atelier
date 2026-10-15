@@ -7,6 +7,34 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Fixed: several authors without a model, plain conflicts, and figures cut only for their digits
+
+- **Pieces by several authors are told apart without a model.** `atelier new` with no key on a folder whose pieces
+  say `author:` (or sit in a folder per author) pooled them into one author. Now it names the authors, counts each
+  one's pieces on their own, sorts the counts into the trait table, and shows the composite screen; what you say you
+  like about each is read by its words. Front matter is left out of every piece a skill serves, on every path.
+- **A figure in digits is cut only for its digits.** "Our survey found 40% of teams adopted it within two weeks"
+  against material saying 40% was cut, because "two" was read as an unsupported figure. Spelled counts are only ever
+  listed for you to check, and fewer idioms read as counts: a quoted count, "seven figures", "fifty-fifty", "their two
+  kids". "Three in ten" reads both numbers.
+- **Plain opposites between authors are conflicts.** "Use contractions" against "never use contractions", British
+  against American spelling, short against long paragraphs, headings against none: each is a conflict to answer,
+  where both used to instruct. The side you choose with `--conflict n=A` instructs, as what you admired does.
+  "Above all, the openings" no longer selects every trait when your lines are read by their words.
+- **A composite's length and pieces.** Its skill gives the chosen writers' length range, or none when they write
+  pieces of different lengths, and drops the one-author voice paragraph. `--piece-budget default` serves each
+  chosen writer's piece whole.
+- **A step about paragraph length is checked.** "Keep every paragraph to three sentences or fewer" is held as a
+  count, as the same habit of your examples is. "Name the A/B test that was run last quarter" is not a test to name.
+- **What the evaluation says.** A required rule nobody confirmed shows why it blocks nothing. The run card's counts
+  add up, with a check set aside for the run said apart. "No hashtags; this has 3" replaces "3 hashtags (at most 0):
+  long by 3", a band with no floor is said as a ceiling, and "Write between 120 and 400 words" reads as checked in
+  full.
+- **Tables and findings.** A table with no leading pipe, or inside a blockquote, keeps its dash cells as `-`. A
+  tab-indented sub-bullet carries on its finding.
+- The claim reader's "39 of 48 clean drafts left alone" carries its bound in the README and the roadmap. A
+  comparison run's runtime rows carry their thinking setting, or null with the reason.
+
 ### Changed: each repair step is chosen, sized to the miss, and the repair stops when it stops paying
 
 The repair loop ran a fixed number of passes at whatever was off: a correct draft a hair outside the author's range

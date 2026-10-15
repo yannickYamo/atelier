@@ -91,7 +91,7 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
     const min = Math.min(band[0], max);
     const said = id === 'longestSentence'
       ? `The longest sentence in my pieces runs ${lo === hi ? `${lo}` : `${lo} to ${hi}`} words; in a new piece it stays ${min > 0 ? `between ${min} and ${max}` : `at most ${max}`} words`
-      : `My pieces run ${lo === hi ? `${lo}` : `${lo} to ${hi}`} ${SHAPE_LABEL[id]}; a new piece stays between ${min} and ${max}`;
+      : `My pieces run ${lo === hi ? `${lo}` : `${lo} to ${hi}`} ${SHAPE_LABEL[id]}; a new piece ${min > 0 ? `stays between ${min} and ${max}` : max === 0 ? 'has none' : `has at most ${max}`}`;
     out.push({ shape: id, measurement: { observer: 'SHAPE', params: { shape: [id], ...(min > 0 ? { min } : {}), max, ...(id === 'characters' ? url : {}) } },
       statement: `${said}${limit !== null && max === limit ? ` (${limit} is the platform's limit)` : ''}.`,
       evidence: `${lo} to ${hi} ${id === 'longestSentence' ? 'words in the longest sentence' : SHAPE_LABEL[id]} over ${n} pieces`, ...requiredAt(SHAPE_REQUIRED_FROM),
