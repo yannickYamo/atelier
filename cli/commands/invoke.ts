@@ -13,7 +13,8 @@ import { refineToStandard, checkDraft, checkDraftAsync, enforceClaims, heavyCut,
 import { signalChecks, displacement } from '../../core/loop/graded.js';
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
-import { acts, verifyText, type VerifyReport } from '../../core/observers/verify.js';
+import { acts, notRun, verifyText, type VerifyReport } from '../../core/observers/verify.js';
+import { isGrammarNote, readGrammar, toCheckList } from '../../core/observers/grammar.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
@@ -250,9 +251,11 @@ export function requestLength(output: string, asked: StatedLength): { asked: str
 }
 
 /** Each rule as it fared on the delivered text, and the rules no check reads: the evaluation, rule by rule. */
-export function rulesFared(report: VerifyReport | null): { checked: { id: string; statement: string; materiality: string | null; verdict: string; detail: string }[]; unchecked: { id: string; statement: string }[] } | null {
+export function rulesFared(report: VerifyReport | null): { checked: { id: string; statement: string; materiality: string | null; verdict: string; detail: string; listed?: { text: string; why: string }[] }[]; unchecked: { id: string; statement: string }[] } | null {
   if (!report) return null;
-  return { checked: report.checked.map((c) => ({ id: c.requirementId, statement: c.statement ?? c.requirementId, materiality: c.materiality ?? null, verdict: c.result.verdict, detail: c.result.detail })),
+  // The grammar checker's uncertain constructions are listed item by item: each stretch, and why it was only listed.
+  return { checked: report.checked.map((c) => ({ id: c.requirementId, statement: c.statement ?? c.requirementId, materiality: c.materiality ?? null, verdict: c.result.verdict, detail: c.result.detail,
+    ...(isGrammarNote(c) ? { listed: c.result.spans.map((sp) => ({ text: sp.text, why: sp.why })) } : {}) })),
     unchecked: report.unchecked.map((u) => ({ id: u.requirementId, statement: u.statement })) };
 }
 
@@ -2003,8 +2006,18 @@ function reportDrift(report: RunReport, L: store.StoreLayout, sv: SkillVersion, 
 /** The counted checks and the invented-claim check: a rule still broken is always said, and so is a cut. */
 function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, checks: Checks): void {
   // A SKILL BUILT FROM A METHOD says on every run what of the method was held, by kind (core/eval/obligations.ts).
-  const held = std ? methodReading(std.requirements, verifyText(rec.skillName, std, rec.output, checks.context)) : null;
+  const verified = std ? verifyText(rec.skillName, std, rec.output, checks.context) : null;
+  const held = std && verified ? methodReading(std.requirements, verified) : null;
+  // A REQUIRED rule whose check did not run (the grammar checker switched off or not loaded) is not said to hold.
+  const notChecked = (verified?.checked ?? []).filter((c) => acts(c) && notRun(c)).map((c) => c.requirementId);
+  const holds = notChecked.length ? `every REQUIRED measured rule that could be checked holds; not checked: ${notChecked.join(', ')} (${verified?.checked.find((c) => c.requirementId === notChecked[0])?.result.detail ?? 'the check did not run'})` : 'every REQUIRED measured rule holds';
   if (held) report.say(methodLine(held));
+  // WHAT THE GRAMMAR CHECKER WAS UNSURE OF, item by item, on the run itself: listed, never changed.
+  for (const c of verified?.checked ?? []) {
+    const g = c.observer === 'GRAMMAR' && c.result.verdict !== 'NOT_APPLICABLE' ? std?.requirements.find((q) => q.requirementId === c.requirementId)?.measurement : undefined;
+    const unsure = g ? readGrammar(rec.output, g.params, checks.context).uncertain : [];
+    if (unsure.length) report.say(`Grammar, listed for you to check and never changed (${unsure.length}): ${toCheckList(unsure, unsure.length)}.`);
+  }
   if (rec.selection) report.detail(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);
   const repairOff = argv.includes('--no-repair');
   const r = rec.repair;
@@ -2023,13 +2036,13 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
     const others = r.violatedAfter.filter((x) => x !== INCONCLUSIVE);
     if (unconfirmed) report.say('Not checked, not passed: so many specifics were flagged at once that the check could not tell general knowledge from invention. They are left in and listed in the details; confirm each one, or bind your material (--with notes=<file>), before this is used.');
     if (others.length) report.say(`Still broken after repair: ${others.join(', ')}. ${r.why}`);
-    if (!r.violatedAfter.length && !heavy) report.say(`Checked: every REQUIRED measured rule holds${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : r.violatedBefore.includes('UNSOURCED') ? 'held once what could not be traced to your material was cut' : 'held once the draft was corrected'})` : ''}.`);
+    if (!r.violatedAfter.length && !heavy) report.say(`Checked: ${holds}${r.violatedBefore.length ? ` (${r.violatedBefore.join(', ')} ${r.passes ? 'fixed by rewriting only the spans that broke them' : r.violatedBefore.includes('UNSOURCED') ? 'held once what could not be traced to your material was cut' : 'held once the draft was corrected'})` : ''}.`);
     if (r.integrityReverted?.length) {
       report.detail(`${r.integrityReverted.length} rewrite(s) refused because they changed what the text claims; the original wording was kept:`);
       for (const k of r.integrityReverted) report.detail(`    ${k}`);
     }
   } else if (std?.requirements.some((q) => q.measurement) && !repairOff) {
-    report.say('Checked: every REQUIRED measured rule holds.');
+    report.say(`Checked: ${holds}.`);
   }
   // Which instrument read the draft for invented claims. A reader that failed mid-run, or an unqualified
   // one made to cut by override, is said; that an unqualified reader only reports is standing status.

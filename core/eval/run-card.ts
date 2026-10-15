@@ -55,7 +55,10 @@ function under(e: Entry): string[] {
 function rows(e: Entry, w: number): string[] {
   const whole = e.result !== 'PASS' && e.result !== 'NOT_APPLICABLE';
   const head = whole ? wrap(e.statement, w, '       ').map((l, i) => (i === 0 ? `    ${mark(e)}  ${l.trimStart()}` : l)) : [`    ${mark(e)}  ${clip(e.statement.replace(/\s+/g, ' '), w - 8)}`];
-  return [...head, ...under(e).flatMap((l) => (whole ? wrap(l, w, '         ') : [`         ${clip(l, w - 10)}`]))];
+  // A line that lists what to check (the grammar checker's uncertain constructions) is said in full: a count is never
+  // shown without what it counts.
+  const full = whole || (e.observation.evidence ?? '').includes('listed to check: ');
+  return [...head, ...under(e).flatMap((l) => (full ? wrap(l, w, '         ') : [`         ${clip(l, w - 10)}`]))];
 }
 
 /** Where the run stands, in one sentence that counts what was verified and what is left. */

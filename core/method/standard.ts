@@ -163,6 +163,8 @@ export interface MethodProposal {
    * (`tellOffers`). The only rule read off the examples that is required without the owner ruling on it.
    */
   readonly required?: true;
+  /** The platform's character limit, stated apart because some of the author's own pieces run past it: required, and not their habit. */
+  readonly platform?: true;
 }
 
 const SOURCING = /\b(?:cit(?:e|es|ed|ation)|sourc(?:e|es|ed|ing)|attribut\w+|referenc\w+)\b/i;
@@ -501,7 +503,9 @@ export function shortFormOffers(cases: readonly (Pick<GoldenCase, 'reference'> &
   const rates = pooledRateRules(texts).filter((r) => piecesBreaking(texts, r.measurement).length <= mayBreak);
   const met = (m: Measurement): string => { const k = piecesBreaking(texts, m).length; return k === 0 ? `all ${texts.length} of your examples meet it` : `all but ${k} of your ${texts.length} examples meet it`; };
   const proposals: MethodProposal[] = [
-    ...shapes.map((s): MethodProposal => ({ statement: s.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: s.measurement, conflict: null, counted: true,
+    ...shapes.filter((s) => s.platform).map((s): MethodProposal => ({ statement: s.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: s.measurement, conflict: null, counted: true,
+      onExample: `${s.evidence}: ${piecesBreaking(texts, s.measurement).map((i) => cases[i].id).join(', ')}`, required: true, platform: true })),
+    ...shapes.filter((s) => !s.platform).map((s): MethodProposal => ({ statement: s.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: s.measurement, conflict: null, counted: true,
       onExample: `${s.evidence}; ${met(s.measurement)}${s.required ? '' : `; read from ${texts.length} examples, ${s.more} more would let it block`}`, ...(s.required ? { required: true as const } : {}) })),
     ...rates.map((r): MethodProposal => ({ statement: r.statement, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: r.measurement, conflict: null, counted: true,
       onExample: `${r.evidence}; ${met(r.measurement)}; a rate chooses between drafts and never blocks` })),

@@ -11,8 +11,9 @@
 // everything else the engine proposes is UNCERTAIN: listed for the person to read, never repaired, never a rule
 // broken. The guards, in the order they run:
 //
-//   protected regions   code (fenced and inline), quotations and block quotes, URLs, paths and `path:line`
-//                       citations, figures and currency, front matter, link targets: never flagged.
+//   protected regions   code (fenced and inline), quotations and block quotes, URLs, email addresses, paths,
+//                       file names and `path:line` citations, figures and currency, front matter, link targets,
+//                       @mentions, #hashtags, $cashtags, emoji and ALL-CAPS tokens: never flagged.
 //   the author's words  a capitalised word (a name, a product), a word with a digit, a word the standard's own
 //                       terms or the request and material carry, a word the author's own pieces use (the rule's
 //                       `vocabulary`, read at build), a word the text itself uses three times or more.
@@ -21,6 +22,14 @@
 //   intentional choices a fragment, an "And" or "But" opener, a one-word sentence, a lower-case styling, a word
 //                       repeated for emphasis, two spaces after a full stop, "!!": none of these is in the list, and the
 //                       repetition guard keeps "very very" and "no no".
+//   certain spelling    a spelling fix is made only where the slip is certain: a well-known misspelling with its
+//                       one correction ("recieve"), or one neighbouring key away from exactly one of the most common
+//                       English words (./grammar-words.ts). Any other word the checker does not know (a coinage,
+//                       slang, a word of one dialect, a closed compound it would split, a plural it would make a
+//                       possessive) is listed, never changed.
+//   the author's grammar  a pronoun agreement the author's own pieces use ("it don't") is their voice: not changed,
+//                       not listed. Without that evidence only the clear cases are corrected ("they was", "I has",
+//                       "he go"); vernacular ("it don't") and an error with no correction ("I is") are listed.
 //   claims              a correction that would change a figure or a capitalised name is refused: it is listed
 //                       as uncertain with the reason, and nothing is changed.
 //
@@ -31,6 +40,7 @@ import type { Measurement } from '../state/canonical-state.js';
 import type { Observer, Span, CheckContext } from './registry.js';
 import { findPattern } from './style.js';
 import { numbersIn } from '../loop/integrity.js';
+import { MISSPELLINGS, COMMON_WORDS } from './grammar-words.js';
 
 export type GrammarDialect = 'american' | 'british';
 
@@ -135,6 +145,13 @@ export function protectedRanges(text: string): Range[] {
   add(/^[ \t]*>.*$/gm);                                                     // block quotes
   add(/"[^"\n]{1,600}"|“[^”\n]{1,600}”|‘[^’\n]{1,600}’/g);                  // quotations
   add(/\bhttps?:\/\/\S+|\bwww\.\S+/gi);                                    // URLs
+  add(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g);                                    // email addresses
+  add(/(?<![\w@])@\w+(?:[.-]\w+)*/g);                                      // @mentions
+  add(/(?<![\w&#])#[\p{L}\p{N}_]+/gu);                                       // #hashtags
+  add(/(?<!\w)\$[A-Za-z][A-Za-z.]{0,9}\b/g);                                 // $cashtags
+  add(/(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\u{FE0F}|\u{200D}|\p{Emoji_Modifier}|\p{Extended_Pictographic})*/gu); // emoji
+  add(/(?<![\w.-])[\w-]+\.(?:md|mdx|txt|ts|tsx|js|jsx|mjs|cjs|mts|json|ya?ml|toml|py|rb|go|rs|java|kt|c|h|cpp|cs|sh|css|scss|html?|xml|csv|tsv|pdf|docx?|xlsx?|pptx?|png|jpe?g|gif|svg|webp|mp[34]|mov|zip|tar|gz|log|ini|env|lock|sql)\b/gi); // file names
+  add(/(?<![\p{L}\p{N}'’])\p{Lu}[\p{Lu}\p{N}_&'’-]*\p{Lu}(?![\p{L}\p{N}])/gu);  // ALL-CAPS tokens
   add(/\]\([^)\n]*\)/g);                                                   // link targets
   add(/(?<![\w/])[\w.-]+(?:\/[\w.-]+)+(?::\d+(?:-\d+)?)?/g);               // paths, and path:line citations
   add(/\b[\w-]+\.[a-z]{1,6}:\d+(?:-\d+)?\b/gi);                           // file:line
@@ -163,6 +180,79 @@ function distance(a: string, b: string): number {
 /** The capitalised words of a span that read as names: not opening a sentence is not known here, so the article and pronoun list is the only exemption. */
 const namesOf = (s: string): string[] => (s.match(/\b[A-Z][\w'’-]*/g) ?? []).map((w) => w.replace(/['’]s$/, '')).filter((w) => w.length > 1 && !NOT_NAMES.has(w.toLowerCase()));
 const bare = (w: string): string => w.toLowerCase().replace(/['’]/g, '');
+
+// ── WHEN A SPELLING FIX IS CERTAIN ──────────────────────────────────────────────────────────────
+
+/** Each letter's neighbours on a QWERTY keyboard: a slip of the finger lands on one of these. */
+const KEYS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+const NEIGHBOURS: ReadonlyMap<string, string> = new Map(KEYS.flatMap((row, r) => row.split('').map((ch, i): [string, string] => {
+  const near = [row[i - 1], row[i + 1], KEYS[r - 1]?.[i], KEYS[r - 1]?.[i + 1], KEYS[r + 1]?.[i], KEYS[r + 1]?.[i - 1]].filter((x): x is string => !!x);
+  return [ch, near.join('')];
+})));
+const adjacent = (a: string, b: string): boolean => b !== '' && (a === b || (NEIGHBOURS.get(a)?.includes(b) ?? false));
+
+/** The common words one slip away from `w`: a letter struck on a neighbouring key, or an extra letter struck beside the right one. */
+function slipsOf(w: string): string[] {
+  const out = new Set<string>();
+  for (let i = 0; i < w.length; i++) {
+    for (const k of (NEIGHBOURS.get(w[i]) ?? '').split('')) { const c = w.slice(0, i) + k + w.slice(i + 1); if (COMMON_WORDS.has(c)) out.add(c); }
+    const dropped = w.slice(0, i) + w.slice(i + 1);
+    // (A final "s" is never the extra letter: "learnings" is a plural the list lacks, not "learning" mistyped.)
+    if (!(i === w.length - 1 && w[i] === 's') && COMMON_WORDS.has(dropped) && (adjacent(w[i], w[i - 1] ?? '') || adjacent(w[i], w[i + 1] ?? ''))) out.add(dropped);
+  }
+  return [...out];
+}
+
+/**
+ * The one correction of a word whose slip is certain, or null. Certain: a well-known misspelling with its one
+ * correction, or a lower-case word of four letters or more, not itself common, one neighbouring key away from exactly
+ * one of the most common English words. Everything else is the author's to judge.
+ */
+export function certainSpelling(word: string): string | null {
+  const w = word.toLowerCase().replace(/’/g, '\'');
+  if (Object.hasOwn(MISSPELLINGS, w)) return MISSPELLINGS[w];
+  if (!/^[a-z]{4,}$/.test(w) || COMMON_WORDS.has(w)) return null;
+  const slips = slipsOf(w);
+  return slips.length === 1 ? slips[0] : null;
+}
+
+// ── PRONOUN AGREEMENT: THE CLEAR CASES, AND THE AUTHOR'S OWN ────────────────────────────────────
+
+const PRONOUNS = ['i', 'you', 'we', 'they', 'he', 'she', 'it'] as const;
+/** For each verb form, the pronouns standard English pairs it with. A pairing outside these is non-standard. */
+const AGREES: Readonly<Record<string, readonly string[]>> = {
+  am: ['i'], is: ['he', 'she', 'it'], are: ['you', 'we', 'they'], was: ['i', 'he', 'she', 'it'], were: ['you', 'we', 'they'],
+  has: ['he', 'she', 'it'], have: ['i', 'you', 'we', 'they'], does: ['he', 'she', 'it'], "doesn't": ['he', 'she', 'it'],
+  do: ['i', 'you', 'we', 'they'], "don't": ['i', 'you', 'we', 'they'], goes: ['he', 'she', 'it'], go: ['i', 'you', 'we', 'they'],
+  "isn't": ['he', 'she', 'it'], "aren't": ['you', 'we', 'they'], "wasn't": ['i', 'he', 'she', 'it'], "weren't": ['you', 'we', 'they'],
+  "hasn't": ['he', 'she', 'it'], "haven't": ['i', 'you', 'we', 'they'],
+};
+/**
+ * The agreements corrected without asking: a slip in any register, never a dialect's grammar. "it don't", "he don't",
+ * "I is", "it were" are not here: vernacular, a subjunctive, or an error with no one correction, they are listed.
+ */
+const CLEAR_AGREEMENT: Readonly<Record<string, string>> = {
+  'they was': 'were', 'you was': 'were', 'we was': 'were', 'they is': 'are', 'you is': 'are', 'we is': 'are',
+  'he are': 'is', 'she are': 'is', 'it are': 'is', 'i has': 'have', 'i are': 'am',
+  'he go': 'goes', 'she go': 'goes', 'it go': 'goes', 'he have': 'has', 'she have': 'has', 'it have': 'has',
+};
+const AGREEMENT_RULES: ReadonlySet<string> = new Set(['PronounVerbAgreement', 'PronounInflectionBe', 'IAmAgreement', 'ThereIsAgreement']);
+const norm = (s: string): string => s.toLowerCase().replace(/’/g, '\'').replace(/\s+/g, ' ').trim();
+
+/** Every non-standard pronoun–verb pairing the author's pieces use ("it don't"), lower-case: their grammar, never corrected. */
+export function authorConstructions(texts: readonly string[]): string[] {
+  const out = new Set<string>();
+  const re = new RegExp(`\\b(${PRONOUNS.join('|')})\\s+(${Object.keys(AGREES).map((v) => v.replace(/'/g, "['’]")).join('|')})(?![\\p{L}'’])`, 'giu');
+  for (const t of texts) {
+    const prose = t.replace(/^[ \t]*(```|~~~)[^\n]*\n[\s\S]*?(?:\n[ \t]*\1[ \t]*(?:\n|$)|$)/gm, '').replace(/`[^`\n]+`/g, '');
+    for (const m of prose.matchAll(re)) {
+      const p = m[1].toLowerCase(); const v = norm(m[2]);
+      // ("if it were" is a subjunctive, not a habit of grammar: never recorded, and never corrected either.)
+      if (!(AGREES[v] ?? []).includes(p) && v !== 'were') out.add(`${p} ${v}`);
+    }
+  }
+  return [...out].sort();
+}
 
 // ── THE READING ─────────────────────────────────────────────────────────────────────────────────
 
@@ -216,7 +306,8 @@ const READING_CACHE = 16;
 export function readGrammar(text: string, params: Measurement['params'], context?: CheckContext): GrammarReading {
   if (!engine) return { confirmed: [], uncertain: [] };
   const vocabulary = list(params, 'vocabulary');
-  const cacheKey = `${dialectOf(params) ?? '?'}|${vocabulary.join(',')}|${context?.request ?? ''}|${(context?.material ?? []).map((m) => m.name).join(',')}|${text}`;
+  const constructions = new Set(list(params, 'constructions').map(norm));
+  const cacheKey = `${dialectOf(params) ?? '?'}|${vocabulary.join(',')}|${[...constructions].join(',')}|${context?.request ?? ''}|${(context?.material ?? []).map((m) => m.name).join(',')}|${text}`;
   const had = READINGS.get(cacheKey);
   if (had) return had;
   const protectedIn = protectedRanges(text);
@@ -236,16 +327,29 @@ export function readGrammar(text: string, params: Measurement['params'], context
     const span = (why: string, replacement?: string): Span => ({ start: l.start, end: l.end, text: problem, why, ...(replacement !== undefined ? { replacement } : {}) });
     const note = (why: string): void => { uncertain.push(span(`${why} (${l.rule}: ${l.message.replace(/\s+/g, ' ').trim()})`)); };
     if (label === null) { note('the checker proposes a change this rule does not make'); continue; }   // (c) not in the list
-    const fix = l.replacement;
+    let fix = l.replacement;
     if (SPELLING(l)) {
       const word = problem.trim();
       if (/^[A-Z]/.test(word) || /[A-Z]/.test(word.slice(1)) || /\d/.test(word)) { note('a name, an acronym or a coined word is the author\'s'); continue; }
       if (known.has(bare(word).replace(/[’]/g, '\''))) { note('a word of the author\'s own, or one the request or material carries'); continue; }
       if ((counts.get(word.toLowerCase()) ?? 0) >= 3) { note('used three times or more: a spelling the author chooses'); continue; }
-      if (fix === null || fix === '' || /[A-Z]/.test(fix)) { note('no correction the checker is sure of'); continue; }
-      const same = bare(word) === bare(fix);                                 // "dont" → "don't": an apostrophe put back
-      if (!same && distance(bare(word), bare(fix)) > 2) { note('the correction is another word, not this one spelt right'); continue; }
+      // Certain or listed: a coinage, slang, a word of one dialect, a split or an apostrophe the checker proposes is
+      // never the slip it takes it for often enough to change unasked.
+      const sure = certainSpelling(word);
+      if (sure === null) { note(`a word the checker does not know${fix && !/\s/.test(fix) && distance(bare(word), bare(fix)) <= 2 ? ` (it suggests "${fix}")` : ''}`); continue; }
+      fix = sure;
     }
+    if (AGREEMENT_RULES.has(l.rule)) {
+      // The word before the verb is the subject the rule read: "they" in "they was".
+      const before = /([\p{L}'’]+)\s+$/u.exec(text.slice(Math.max(0, l.start - 40), l.start))?.[1] ?? '';
+      const phrase = norm(`${before} ${problem}`);
+      if (constructions.has(phrase)) continue;                              // the author's own grammar: not even listed
+      if (l.rule !== 'ThereIsAgreement') {
+        const clear = CLEAR_AGREEMENT[phrase];
+        if (clear === undefined || fix === null || norm(fix) !== clear) { note('an agreement the author may intend (vernacular is voice), or one with no single correction'); continue; }
+      }
+    }
+    if (fix === null) { note('no correction the checker is sure of'); continue; }
     if (l.rule === 'RepeatedWords') {
       const words = lowerWords(problem);
       if (words.length !== 2 || words[0] !== words[1]) { note('not one word twice'); continue; }
@@ -274,6 +378,13 @@ const kindsOf = (spans: readonly Span[]): string => {
   return [...n].map(([k, c]) => (c > 1 ? `${k} ×${c}` : k)).join(', ');
 };
 
+/**
+ * What the checker was unsure of, in one line: each stretch with why it is only listed. Said wherever the count is
+ * said (a run's panel, its report, the --json record), so a count is never shown without what it counts.
+ */
+export const toCheckList = (spans: readonly Span[], most = 8): string =>
+  spans.slice(0, most).map((u) => `"${u.text.trim()}" (${u.why.replace(/ \([A-Za-z]+: [\s\S]*\)$/, '')})`).join('; ') + (spans.length > most ? `; and ${spans.length - most} more` : '');
+
 export const GRAMMAR: Observer = {
   id: 'GRAMMAR',
   describe: (p) => {
@@ -290,11 +401,10 @@ export const GRAMMAR: Observer = {
     const status = grammarStatus();
     if (!status.ready) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${GRAMMAR_NOT_RUN}: ${status.reason}` };
     const r = readGrammar(text, p, context);
-    const toCheck = r.uncertain.length ? `; ${r.uncertain.length} construction(s) the checker is unsure of, listed to check` : '';
+    const toCheck = r.uncertain.length ? `; ${r.uncertain.length} construction(s) the checker is unsure of, listed to check: ${toCheckList(r.uncertain)}` : '';
     if (!r.confirmed.length) return { verdict: 'MET', spans: [], value: 0, error: 0, detail: `no mechanical error${toCheck}` };
-    const fixable = r.confirmed.filter((s) => s.replacement !== undefined).length;
     return { verdict: 'VIOLATED', spans: r.confirmed, value: r.confirmed.length, error: r.confirmed.length,
-      detail: `${r.confirmed.length} mechanical error(s): ${kindsOf(r.confirmed)}${fixable < r.confirmed.length ? ` (${r.confirmed.length - fixable} with no correction the checker is sure of: the sentence is rewritten for it)` : ''}${toCheck}` };
+      detail: `${r.confirmed.length} mechanical error(s): ${kindsOf(r.confirmed)}${toCheck}` };
   },
 };
 
@@ -315,8 +425,9 @@ export function dialectOfPieces(texts: readonly string[]): GrammarDialect | null
 /**
  * THE AUTHOR'S OWN WORDS: every word the engine would call misspelt in the author's finished pieces, lower-cased, in
  * one sorted list. A coinage, a term of their trade, a name written lower-case: theirs, and never flagged in new work.
- * `terms` adds words the standard's other rules name (a substitution's right side, a term rate's list). Empty when
- * the engine is not loaded: then nothing is claimed about their vocabulary either.
+ * `terms` adds words the standard's other rules name (a substitution's right side, a term rate's list). With the
+ * engine off or failed, every word of the pieces that is not one of the most common English words is kept instead
+ * (a wider list, never a narrower one), so a later run with the engine never "corrects" the author's own terms.
  */
 export function authorVocabulary(texts: readonly string[], dialect: GrammarDialect | null, terms: readonly string[] = []): string[] {
   const out = new Set<string>(terms.flatMap(lowerWords));
@@ -329,6 +440,12 @@ export function authorVocabulary(texts: readonly string[], dialect: GrammarDiale
         if (/^[\p{L}][\p{L}'’-]*$/u.test(word)) out.add(word.toLowerCase().replace(/[’]/g, '\''));
       }
     }
+  } else {
+    for (const t of texts) {
+      for (const w of lowerWords(t)) {
+        for (const part of [w, ...w.split('-')]) { const x = part.replace(/^['-]+|['-]+$/g, ''); if (x && !COMMON_WORDS.has(x)) out.add(x); }
+      }
+    }
   }
   return [...out].sort();
 }
@@ -337,7 +454,8 @@ export function authorVocabulary(texts: readonly string[], dialect: GrammarDiale
 export function grammarMeasurement(texts: readonly string[], terms: readonly string[] = []): Measurement {
   const dialect = dialectOfPieces(texts);
   const vocabulary = authorVocabulary(texts, dialect, terms);
-  return { observer: 'GRAMMAR', params: { ...(dialect ? { dialect: [dialect] } : {}), ...(vocabulary.length ? { vocabulary } : {}) } };
+  const constructions = authorConstructions(texts);
+  return { observer: 'GRAMMAR', params: { ...(dialect ? { dialect: [dialect] } : {}), ...(vocabulary.length ? { vocabulary } : {}), ...(constructions.length ? { constructions } : {}) } };
 }
 
 /** The words a standard's other measured rules name: never a misspelling in new work. */

@@ -59,6 +59,8 @@ export interface ShapeBandRule {
   readonly more: number;
   /** the band's ceiling is the platform's limit (the format's or the owner's), not the pieces' own range */
   readonly limited?: true;
+  /** the platform's limit stated on its own, because some of the author's pieces run past it: a platform rule, not their habit */
+  readonly platform?: true;
 }
 
 /** Shapes held on both sides: how big the piece is. */
@@ -85,7 +87,16 @@ export function shapeBandRules(texts: readonly string[], opts: { readonly limit?
     const xs = of(id); const lo = Math.min(...xs); const hi = Math.max(...xs);
     const band = id === 'characters' || id === 'words' ? ownLengthBand([lo, hi]) : countBand(lo, hi);
     if (!band) continue;
-    const limit = id === 'characters' && opts.limit ? opts.limit : null;
+    // A LIMIT SOME OF THE AUTHOR'S OWN PIECES RUN PAST is not folded into their band: the band stays their habit, as
+    // every piece shows it, and the limit is stated beside it as the platform's rule.
+    const past = id === 'characters' && opts.limit ? hi > opts.limit : false;
+    if (past && opts.limit) {
+      const n = xs.filter((x) => x > (opts.limit ?? Infinity)).length;
+      out.push({ shape: id, measurement: { observer: 'SHAPE', params: { shape: [id], max: opts.limit, ...url } },
+        statement: `At most ${opts.limit} characters: the platform's limit.`,
+        evidence: `${n} of ${xs.length} examples run past it (they run ${lo} to ${hi} characters)`, required: true, more: 0, limited: true, platform: true });
+    }
+    const limit = id === 'characters' && opts.limit && !past ? opts.limit : null;
     const max = limit !== null ? Math.min(band[1], limit) : band[1];
     // A floor of nothing says nothing: the longest sentence of a piece is held by its ceiling alone.
     const min = Math.min(band[0], max);
@@ -141,7 +152,7 @@ export function shortFormSummary(texts: readonly string[], shapes: readonly Shap
 
 /** The same limits in one line, for the short build screen; the lines of `shortFormLimits` are the long account. */
 export function shortFormBrief(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string {
-  const blocking = shapes.filter((s) => s.required).length; const waiting = shapes.filter((s) => !s.required);
+  const blocking = shapes.filter((s) => s.required && !s.platform).length; const waiting = shapes.filter((s) => !s.required);
   const more = waiting.length ? Math.max(...waiting.map((s) => s.more)) : 0;
   const bands = answers ? 'no band of shape (answers take their length from the request)'
     : `${blocking} shape band${blocking === 1 ? '' : 's'} required${waiting.length ? `, ${waiting.length} shown until ${more} more example${more === 1 ? '' : 's'}` : ''}`;
@@ -157,7 +168,7 @@ export function shortFormBrief(texts: readonly string[], shapes: readonly ShapeB
 export function shortFormLimits(texts: readonly string[], shapes: readonly ShapeBandRule[], rates: readonly PooledRateRule[], limit: { readonly chars: number; readonly from: string } | null, answers = false): string[] {
   const out = [shortFormSummary(texts)];
   if (answers) out.push('These answer requests: their length and shape follow the request, so no band of either is held.');
-  const blocking = shapes.filter((s) => s.required); const waiting = shapes.filter((s) => !s.required);
+  const blocking = shapes.filter((s) => s.required && !s.platform); const waiting = shapes.filter((s) => !s.required);
   if (blocking.length) out.push(`${blocking.length} shape band${blocking.length === 1 ? '' : 's'} read from ${texts.length} examples, every example meets ${blocking.length === 1 ? 'it' : 'them'}: required.`);
   for (const more of [...new Set(waiting.map((s) => s.more))].sort((a, b) => a - b)) {
     const these = waiting.filter((s) => s.more === more);
