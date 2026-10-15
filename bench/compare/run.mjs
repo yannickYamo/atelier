@@ -226,9 +226,17 @@ function filteredIn(stderr) {
 // THE THINKING SETTING OF A RUNTIME ROW, LIKE EVERY OTHER ROW'S. Taken from the run's own record where it says (a build
 // that records it); otherwise null, with the reason, so a study never reads a missing field as "no thinking".
 function thinkingOf(rec) {
-  const said = rec?.thinking ?? rec?.eval?.thinking;
+  const said = rec && Object.hasOwn(rec, 'thinking') ? rec.thinking : rec?.eval?.thinking;
   return said === 'disabled' || said === 'enabled' ? { thinking: said }
-    : { thinking: null, thinkingReason: rec ? 'the run record does not say what thinking setting its calls were sent with' : 'the run left no record' };
+    : rec && said === null ? { thinking: null, thinkingReason: 'the provider did not report sending a thinking setting on every call of the run' }
+      : { thinking: null, thinkingReason: rec ? 'the run record does not say what thinking setting its calls were sent with' : 'the run left no record' };
+}
+
+// THE MODEL A RUNTIME ROW WAS WRITTEN BY: the one its own record says answered, never the harness's --model, which a
+// runtime's own arguments may override. Null, with the reason, when the record does not say.
+function runtimeModelOf(rec) {
+  return typeof rec?.model === 'string' && rec.model ? { model: rec.model }
+    : { model: null, modelReason: rec ? 'the run record does not say which model answered' : 'the run left no record' };
 }
 
 function runtimeArm(t) {
@@ -248,11 +256,11 @@ function runtimeArm(t) {
     // three runs and a refused task was never recorded. It is written as a row with no response and its reasons.
     if (done.status === 3 && /not delivered \(strict delivery\)/.test(done.stderr ?? '')) {
       const why = /not delivered \(strict delivery\): (.*?)\. The text is kept/s.exec(done.stderr ?? '')?.[1] ?? 'not conformant';
-      return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
+      return { response: null, refused: why.split('; '), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null, state: rec?.eval?.record?.state ?? null };
     }
     // A model call inside the run that a provider filtered or the model declined: a FILTERED row, never retried.
     const blocked = done.status !== 0 ? filteredIn(done.stderr ?? '') : null;
-    if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), ...thinkingOf(rec), cost: rec?.costUsd ?? null };
+    if (blocked) return { response: null, filtered: blocked, ...ledgerOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec?.costUsd ?? null };
     // A BLOCKED RUN IS A DELIVERED ANSWER WITH ITS VERDICT, NOT A FAILED CALL. `invoke --json` exits 1 when the work it
     // delivered is BLOCKED, as `run` does; the record is complete and is the row. Retrying it would pay for the same run
     // three times and then end the arm.
@@ -263,14 +271,17 @@ function runtimeArm(t) {
     // THE REVIEW AS DELIVERED (`output`, after repair), NOT `answer`: `answer` adds a footer of specifics not found in the
     // material ("check before you use this"), which only this arm writes. Judged, it names the arm, and no one posts a
     // review that ends that way. The list is kept beside the response as to_check, for the study and never the judge.
-    return { response: String(rec.output ?? '').trim(), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
+    return { response: String(rec.output ?? '').trim(), ...ledgerOf(rec), ...signalsOf(rec), ...thinkingOf(rec), ...runtimeModelOf(rec), cost: rec.costUsd ?? null, state: rec.eval?.record?.state ?? null };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
 // The fields only some rows carry: the self-review's check, Atelier's verdict and its own check signals, the thinking
 // setting the call was sent with (model arms; the runtime arm's calls go through the same provider), and wall time.
 const extraOf = (r) => ({ ...(r.review ? { review: r.review } : {}), ...(r.state ? { atelier_state: r.state } : {}), ...(r.signals ? r.signals : {}),
-  ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), ...(r.thinkingReason ? { thinking_reason: r.thinkingReason } : {}), seconds: r.seconds });
+  ...(r.thinking !== undefined ? { thinking: r.thinking } : {}), ...(r.thinkingReason ? { thinking_reason: r.thinkingReason } : {}),
+  ...(r.modelReason ? { model_reason: r.modelReason } : {}), seconds: r.seconds });
+// The model on a row: a runtime row's from its own record; every other arm's is the harness's, which it was sent to.
+const modelOfRow = (r) => (kind === 'atelier-runtime' ? r.model ?? null : model);
 let filtered = 0;
 
 const done = new Set(existsSync(out) ? readJsonl(out).map((r) => `${r.case_id}\u0000${r.trial}\u0000${r.condition}\u0000${r.runner}`) : []);
@@ -333,14 +344,14 @@ for (let trial = 1; trial <= trials; trial++) {
     if (r.filtered) filtered += 1;
     // A CALL WHOSE COST IS NOT KNOWN STOPS THE RUN: adding 0 for it is how a cap stopped binding. The answer is kept.
     if (typeof r.cost !== 'number') {
-      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model, arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) })}\n`);
+      appendFileSync(out, `${JSON.stringify({ case_id: t.id, trial, condition, runner: RUNNER, response: r.response, usage: r.usage, cost_usd: null, model: modelOfRow(r), arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null, skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) })}\n`);
       console.error(`stopped: ${t.id} came back with no cost, so the cap could not hold. Its answer is recorded; fix the price and rerun.`); process.exit(4);
     }
     // an estimate is never evidence of what a call costs: it does not raise the allowance kept for the next one
     spent += r.cost; if (!r.costEstimated) perCall = Math.max(perCall, r.cost);
     const row = { case_id: t.id, trial, condition, runner: RUNNER, response: r.response, ...(r.refused ? { delivered: false, reasons: r.refused } : {}),
       ...(r.filtered ? { delivered: false, filtered: r.filtered, ...(r.filteredCall ? { filtered_call: r.filteredCall } : {}) } : {}),
-      usage: r.usage, cost_usd: r.cost, ...(r.costEstimated ? { cost_estimated: true } : {}), model,
+      usage: r.usage, cost_usd: r.cost, ...(r.costEstimated ? { cost_estimated: true } : {}), model: modelOfRow(r),
       arm: kind === 'skill' ? `skill:${armArg}` : arm, max_tokens: maxTokens, placement: kind === 'skill' ? placement : null,
       skill_sha256: skillSha, tasks_sha256: tasksSha, split, calls: r.calls === undefined ? 1 : r.calls, ...extraOf(r) };
     appendFileSync(out, `${JSON.stringify(row)}\n`);

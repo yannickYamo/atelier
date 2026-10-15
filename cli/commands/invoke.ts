@@ -76,7 +76,7 @@ import { version } from '../help.js';
 import { writeAtomic } from '../../core/state/fs-atomic.js';
 import { compareBindings, describeMismatch, describeNewSurface, detectResolvedModelDrift, bindingHash } from '../../core/runtime/binding.js';
 import { resolve as resolvePath } from 'node:path';
-import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor } from '../runtime.js';
+import { sha, DATA, VALUED_OPTIONS, die, argv, flag, clientAndBinding, describeBinding, numericFlag, positional, boundResources, boundMaterial, assertSkillName, runFile, clientFor, callsSeen, thinkingOfCalls } from '../runtime.js';
 
 /**
  * What a skill serves, resolved once and shared.
@@ -777,6 +777,9 @@ async function invokeRun(machine: 'json' | 'answer' | null): Promise<void> {
       // Every rule of the standard as it fared on the text delivered, in the owner's words: what `atelier run` shows.
       rules: rulesFared((delivered as Delivered | null)?.report ?? null),
       withheld: rec.delivery.withheldRules ?? [], report: report.lines, eval: evaluation,
+      // as the provider said: the model that answered the writer's calls, and the thinking setting the run's calls were sent with
+      model: [...new Set(callsSeen().filter((c) => c.role === 'target').map((c) => c.modelId))].join(', ') || (rec.observedRuntime?.resolvedModel ?? binding.requestedModel),
+      thinking: thinkingOfCalls(callsSeen()),
       // what a short-form request set down as not applying, said once (core/observers/short-form.ts)
       ...(transfer ? { note: transfer.said } : {}),
       ...(rec.fidelity ? { fidelity: { release: rec.fidelity.release, inBand: rec.fidelity.reading?.inBand ?? null, measured: rec.fidelity.reading?.measured ?? null,

@@ -66,3 +66,18 @@
 {"id": "s066", "step": "Paragraphs of more than three sentences need a heading.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
 {"id": "s067", "step": "Keep paragraphs between 2 and 4 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
 {"id": "s068", "step": "Paragraphs run 2 to 4 sentences. A one-sentence paragraph is allowed once per post.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s069", "step": "Hold each paragraph to four sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:4"}
+{"id": "s070", "step": "Paragraphs should never exceed three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:3"}
+{"id": "s071", "step": "Limit paragraphs to 2 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:2"}
+{"id": "s072", "step": "No paragraph may have more than five sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:5"}
+{"id": "s073", "step": "Keep paragraphs to one to three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s074", "step": "Paragraphs: 3-5 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s075", "step": "Write paragraphs of three to five sentences each.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s076", "step": "Paragraphs of fewer than two sentences are fine.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s077", "step": "Number the paragraphs, and keep the summary to two sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s078", "step": "Split the review into paragraphs, one per file, each under 6 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": "PARAGRAPH_LENGTH:5"}
+{"id": "s079", "step": "Quote no more than three sentences from any paragraph of the spec.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s080", "step": "End each paragraph within three sentences of its claim.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s081", "step": "Keep the Summary paragraph under 3 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s082", "step": "A paragraph should make one point in two or three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s083", "step": "A paragraph may run to four sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}

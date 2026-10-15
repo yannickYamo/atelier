@@ -995,8 +995,11 @@ describe('through the binary: a writing skill is served compact by default, the 
     // With a context judge on, the request is read before any draft is written. The ledger starts where the run's
     // budget does, so that first call is counted too: the lines' calls are the calls the backend served.
     const before = await calls();
-    const ran = JSON.parse(run(data, proj, 'invoke', '--skill', 'voice', '--json', '--claims', 'model', '--claims-model', 'scripted', 'Write a short post about a decision we made.')) as { invocationId: string; costUsd: number; eval: EvalSummary };
+    const ran = JSON.parse(run(data, proj, 'invoke', '--skill', 'voice', '--json', '--claims', 'model', '--claims-model', 'scripted', 'Write a short post about a decision we made.')) as { invocationId: string; costUsd: number; eval: EvalSummary; model?: string; thinking?: string | null };
     const served = (await calls()) - before;
+    // what the calls were sent with, as the provider said: a backend that reports no thinking setting is null, not a guess
+    expect(ran).toHaveProperty('thinking', null);
+    expect(typeof ran.model === 'string' && ran.model.length > 0).toBe(true);
     const lines = ran.eval.spend ?? [];
     expect(served).toBeGreaterThan(2);
     expect(lines.reduce((n, l) => n + l.calls, 0)).toBe(served);

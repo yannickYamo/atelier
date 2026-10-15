@@ -380,6 +380,24 @@ export const baseUrlFor = (role: Role): string =>
  * flags would drift the first time a flag changed, and the record would then describe a configuration
  * that never ran — the precise failure the binding exists to catch.
  */
+/**
+ * WHAT EVERY CALL THIS PROCESS MADE WAS SENT WITH, AS ITS PROVIDER SAID: the role, the model that answered, and the
+ * thinking setting. A record that says what thinking its calls used reads it here, never from what was asked for.
+ */
+export interface CallSeen { readonly role: Role; readonly modelId: string; readonly thinkingSent: 'disabled' | null | undefined }
+const seenCalls: CallSeen[] = [];
+export const callsSeen = (): readonly CallSeen[] => seenCalls;
+/** The thinking setting a run's calls were sent with: 'disabled' when every call that says said so; null otherwise. */
+export const thinkingOfCalls = (calls: readonly CallSeen[]): 'disabled' | null =>
+  calls.length > 0 && calls.every((c) => c.thinkingSent === 'disabled') ? 'disabled' : null;
+const observed = (role: Role, client: InferenceClient): InferenceClient => ({
+  complete: async (req) => {
+    const r = await client.complete(req);
+    seenCalls.push({ role, modelId: r.modelId, thinkingSent: r.thinkingSent });
+    return r;
+  },
+});
+
 export function clientAndBinding(role: Role, modelOverride?: string): { client: InferenceClient; binding: RuntimeBinding } {
   const provider = providerFor(role);
   const model = modelOverride ?? modelFor(role);
@@ -393,7 +411,7 @@ export function clientAndBinding(role: Role, modelOverride?: string): { client: 
 
   if (provider === 'anthropic') {
     return {
-      client: new AnthropicInferenceClient(model, undefined, priceOverride ?? priceFor(ANTHROPIC_PRICING, model), temperature),
+      client: observed(role, new AnthropicInferenceClient(model, undefined, priceOverride ?? priceFor(ANTHROPIC_PRICING, model), temperature)),
       binding: { providerAdapter: 'anthropic', backend: 'api.anthropic.com', requestedModel: model,
         structuredOutput: 'NATIVE_TOOL_USE', parameters, runtimeProfile: null },
     };
@@ -412,12 +430,12 @@ export function clientAndBinding(role: Role, modelOverride?: string): { client: 
   // was enforced or merely requested are two configurations, and their evidence is not interchangeable.
   parameters.strictSchema = strictSchema;
   return {
-    client: new OpenAICompatibleInferenceClient({
+    client: observed(role, new OpenAICompatibleInferenceClient({
       modelId: model, baseUrl, structuredOutput, temperature, tokenLimitParam, strictSchema,
       ...(priceOverride ? { pricing: priceOverride } : {}),
       apiKey: apiKeyEnv ? process.env[apiKeyEnv] : undefined,
       backendName: backend?.name,
-    }),
+    })),
     binding: { providerAdapter: 'openai-compatible', backend: backend?.name ?? baseUrl, requestedModel: model,
       structuredOutput, parameters, runtimeProfile: null },
   };
