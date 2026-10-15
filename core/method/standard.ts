@@ -35,6 +35,7 @@ import { citesLines } from '../loop/locators.js';
 import { deriveMeasuredRules, piecesBreaking } from '../observers/derive.js';
 import { machineTellRule } from '../observers/contrast.js';
 import { PATTERN_LABEL } from '../observers/style.js';
+import { grammarMeasurement, grammarStatus, piecesWithErrors, termsOf, GRAMMAR_STATEMENT } from '../observers/grammar.js';
 import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
@@ -441,6 +442,22 @@ export function tellOffers(cases: readonly (Pick<GoldenCase, 'reference'> & { re
     if (held(dash)) out.push({ statement: `Keep ${PATTERN_LABEL.EM_DASH} to at most ${t.dashCap} per 1,000 words, as the examples do.`, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement: dash, onExample: of(dash), conflict: null, counted: true, required: true });
   }
   return out;
+}
+
+/**
+ * NO MECHANICAL ERRORS, ON THIS PATH TOO (../observers/grammar.ts). The one editorial rule every author holds, stated
+ * once on every build and required by default; the owner demotes it like any rule. Read from the examples: the
+ * dialect they spell in, and every word the checker would call misspelt in them, which is their vocabulary and is
+ * never flagged in new work. Offered whether or not the engine loaded: with none, every check says so, and the rule
+ * stands for the day one is wired in.
+ */
+export function grammarOffer(cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[], others: readonly MethodProposal[] = []): MethodProposal[] {
+  const pieces = cases.map((c) => c.reference).filter((t) => t.trim());
+  const measurement = grammarMeasurement(pieces, termsOf(others));
+  const status = grammarStatus();
+  const broken = status.ready ? piecesWithErrors(pieces, measurement) : 0;
+  const onExample = !status.ready ? `not read: ${status.reason}` : broken ? `${broken} of ${pieces.length} example(s) carry a mechanical error beyond their own vocabulary` : `${pieces.length} of ${pieces.length} example(s) hold it; their own words are never flagged`;
+  return [{ statement: GRAMMAR_STATEMENT, origin: 'SHOWN_BY_EXAMPLE', obligation: 'DELIVERABLE', measurement, onExample, conflict: null, counted: true, required: true }];
 }
 
 export function countedOffers(stated: readonly MethodProposal[], cases: readonly (Pick<GoldenCase, 'reference'> & { readonly id: string })[]): MethodProposal[] {
