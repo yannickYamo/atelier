@@ -11,14 +11,15 @@ import { isMarkup } from '../observers/visible.js';
 import { acts, type VerifyReport } from '../observers/verify.js';
 import { paragraphSentences, wordsOf } from '../observers/text.js';
 import { protectedRanges } from '../observers/grammar.js';
+import { numbersIn, namesIn } from './integrity.js';
 import type { Span } from '../observers/registry.js';
 
 /**
  * MECHANICAL ERRORS, CORRECTED IN PLACE. Each span the grammar rule flagged with a correction (core/observers/grammar.ts)
  * is replaced by exactly that correction, last first so earlier offsets stay true; a span with none is left for the
  * sentence rewrite. Nothing outside a span changes, no span inside a protected region is touched (the observer never
- * flags one; this checks again on the text it has), and the whole text's word count moves by no more than the
- * corrections themselves. Returns the text and how many spans were corrected.
+ * flags one; this checks again on the text it has), the whole text's word count moves by no more than the
+ * corrections themselves, and its figures and names are the same after as before (./integrity.ts). Returns the text and how many spans were corrected.
  */
 export function correctMechanicalErrors(text: string, spans: readonly Span[]): { text: string; corrected: number } {
   const guarded = protectedRanges(text);
@@ -34,6 +35,11 @@ export function correctMechanicalErrors(text: string, spans: readonly Span[]): {
   }
   // The bound, read on the result: a correction may move the count by its own words and no more.
   if (Math.abs(wordsOf(out).length - wordsOf(text).length) > allowed) return { text, corrected: 0 };
+  // And the claims, read on the whole text: every figure as it was, and no name lost. The observer refuses such a
+  // correction lint by lint; this holds the sum of them to the same line, so nothing they claimed can move.
+  const figures = (t: string): string => [...numbersIn(t)].sort().join('|');
+  const kept = new Set(namesIn(out));
+  if (figures(out) !== figures(text) || namesIn(text).some((n) => !kept.has(n))) return { text, corrected: 0 };
   return { text: out, corrected };
 }
 

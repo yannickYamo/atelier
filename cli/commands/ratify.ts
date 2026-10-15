@@ -399,10 +399,11 @@ export function parseMeasure(spec: string): Measurement {
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
     FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels', 'options'],
-    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'] };
+    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'],
+    GRAMMAR: ['dialect', 'vocabulary'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
   // Word lists, "|"-separated: TERM_RATE:terms=but|so,minPer1000=4. Kept as written, lower-cased.
-  const LIST_KEYS = new Set(['terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
+  const LIST_KEYS = new Set(['vocabulary', 'terms', 'numerator', 'denominator', 'avoid', 'sections', 'any', 'starts', 'columns', 'options']);
   // Number lists, "/"-separated: DISTRIBUTION:edges=8/20/35,shares=0.3/0.4/0.2/0.1,tolerance=0.2.
   const NUMBER_LIST_KEYS = new Set(['edges', 'shares']);
   const params: Record<string, number | string[] | number[]> = observer === 'LEXICON'
@@ -416,6 +417,8 @@ export function parseMeasure(spec: string): Measurement {
       if (TEXT_KEYS.has(k)) return [k, [k === 'prefer' ? v : v.trim().toUpperCase()]];
       // A feature id is case-sensitive (core/observers/features.ts), and its band may sit below zero.
       if (k === 'feature') return [k, [v.trim()]];
+      // A dialect is a word the grammar observer reads lower-case: GRAMMAR:dialect=british.
+      if (k === 'dialect') return [k, [v.trim().toLowerCase()]];
       if (observer === 'FEATURE') {
         if (!/^-?\d+(\.\d+)?$/.test(v.trim())) die(`--measure: "${kv}" is not name=number`);
         return [k, Number(v)];
