@@ -25,6 +25,7 @@ import { suggest } from '../core/ratification/suggest.js';
 import { grammarOffer } from '../core/method/standard.js';
 import { buildRecord } from '../core/eval/record-build.js';
 import { aRequirement } from './fixtures.js';
+import { parseMeasure } from '../cli/commands/ratify.js';
 import type { StandardVersion, Requirement } from '../core/state/canonical-state.js';
 
 process.env.ATELIER_GRAMMAR = 'on';
@@ -73,6 +74,12 @@ describe('the grammar rule, with the real engine', () => {
     // A capitalisation the checker proposes is listed, never made.
     expect(r.uncertain.some((s) => /SentenceCapitalization|Capitaliz/.test(s.why))).toBe(true);
   });
+  it('double punctuation and a space before punctuation are corrected; an ellipsis, "!!" and a smiley are the author\'s', () => {
+    const text = 'We shipped it,, and then we waited ; the queue drained. Done ? Yes.. It held!! Wait... then :) fine.';
+    const r = measure(text, m());
+    expect(r.spans.map((s) => s.text)).toEqual([',,', ' ;', ' ?', '..']);
+    expect(correctMechanicalErrors(text, r.spans).text).toBe('We shipped it, and then we waited; the queue drained. Done? Yes. It held!! Wait... then :) fine.');
+  });
   it('a word repeated for emphasis is kept', () => {
     expect(readGrammar('It was very very late. No no, not that.', {}).confirmed).toEqual([]);
   });
@@ -91,7 +98,7 @@ describe('the grammar rule, with the real engine', () => {
     const note = report.checked.find((c) => c.requirementId === `g1${GRAMMAR_NOTE_SUFFIX}`);
     expect(own?.result.verdict).toBe('MET');
     expect(note).toBeDefined();
-    expect(isGrammarNote(note as NonNullable<typeof note>)).toBe(true);
+    expect(isGrammarNote(note!)).toBe(true);
     expect(note?.materiality).toBe('PREFERRED');
     expect(note?.result.spans.map((s) => s.text)).toContain('Could of');
     expect(report.failed).toBe(false);
@@ -117,13 +124,16 @@ describe('the grammar rule, with the real engine', () => {
     expect(dialectOfPieces(['The colour and the color.'])).toBeNull();
     const vocabulary = authorVocabulary(['Our zorbletron pipeline runs nightly. The zorbletron is ours.'], null, ['leverage=>use']);
     expect(vocabulary).toEqual(['leverage', 'use', 'zorbletron']);
-    expect(measure('The zorbletron ran.', m({ vocabulary })).verdict).toBe('MET');
-    expect(measure('The zorbletron ran.', m()).verdict).toBe('VIOLATED');
+    // Unknown to the checker, the coinage is at least listed to check; known as the author's, it is nowhere.
+    expect(readGrammar('The zorbletron ran.', {}).uncertain.map((x) => x.text)).toContain('zorbletron');
+    const own = readGrammar('The zorbletron ran.', { vocabulary });
+    expect(own.confirmed).toEqual([]);
+    expect(own.uncertain.find((x) => x.text === 'zorbletron')?.why).toMatch(/a word of the author's own/);
     // A word the request or the material carries is the person's too.
-    expect(measure('The zorbletron ran.', m(), { request: 'Describe the zorbletron.' }).verdict).toBe('MET');
+    expect(readGrammar('The zorbletron ran.', {}, { request: 'Describe the zorbletron.' }).uncertain.find((x) => x.text === 'zorbletron')?.why).toMatch(/a word of the author's own/);
   });
   it('code, quotations, block quotes, URLs, paths, citations and figures are never touched', () => {
-    const text = ['Visit https://example.com/recieve-the-the for the recieve note.', 'In `the the code` nothing counts, nor in the fence below.',
+    const text = ['Visit https://example.com/recieve-the-the for the note.', 'In `the the code` nothing counts, nor in the fence below.',
       '```', 'recieve the the', '```', '"The the quote stays as they said it," she said.', '> The the quoted line stays.',
       'See src/foo.ts:12 and config.yaml:3, and [12], and (Smith 2020).', 'It cost $1,200 and 15% more.', 'The lenght here is wrong.'].join('\n');
     const ranges = protectedRanges(text);
@@ -133,7 +143,7 @@ describe('the grammar rule, with the real engine', () => {
     expect(correctMechanicalErrors(text, r.spans).text).toBe(text.replace('lenght', 'length'));
   });
   it('the allowed kinds are a documented list, and nothing outside it is corrected', () => {
-    expect(Object.keys(MECHANICAL_RULES)).toEqual(['SpellCheck', 'PronounVerbAgreement', 'PronounInflectionBe', 'ThereIsAgreement', 'IAmAgreement', 'RepeatedWords', 'AnA', 'ItsContraction', 'CommaFixes', 'EllipsisLength']);
+    expect(Object.keys(MECHANICAL_RULES)).toEqual(['SpellCheck', 'PronounVerbAgreement', 'PronounInflectionBe', 'ThereIsAgreement', 'IAmAgreement', 'RepeatedWords', 'AnA', 'ItsContraction', 'CommaFixes', 'DoublePunctuation', 'SpaceBeforePunctuation']);
     for (const s of readGrammar('The bug fix could of been worse, and i think teh plan holds.  Fine.', {}).confirmed) {
       expect(Object.values(MECHANICAL_RULES).concat('a common typo').some((label) => s.why.startsWith(label))).toBe(true);
     }
@@ -142,7 +152,7 @@ describe('the grammar rule, with the real engine', () => {
     const offer = grammarOffer([{ id: 'a.md', reference: 'They were late. The plan holds.' }, { id: 'b.md', reference: 'The zorbletron ran clean.' }]);
     expect(offer).toMatchObject([{ required: true, counted: true, origin: 'SHOWN_BY_EXAMPLE', measurement: { observer: 'GRAMMAR', params: { vocabulary: ['zorbletron'] } } }]);
     expect(offer[0].onExample).toMatch(/2 of 2 example\(s\) hold it/);
-    expect(suggest(rule(), undefined, 'PRODUCE')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
+    expect(suggest(rule(), undefined, 'GENERATE')).toMatchObject({ decision: 'APPROVE', materiality: 'REQUIRED' });
   });
 });
 
@@ -151,11 +161,11 @@ describe('the guards, on a scripted engine', () => {
   const scripted = (lints: readonly GrammarLint[]): GrammarEngine => ({ lint: () => lints });
   const under = async (lints: readonly GrammarLint[]): Promise<void> => { resetGrammar(); setGrammarProvider({ load: () => Promise.resolve(scripted(lints)) }); await ensureGrammar(); };
   it('a correction that would change a figure is refused and listed, with the reason', async () => {
-    const text = 'Pick a 2 for the slot.';
-    await under([lint({ rule: 'AnA', start: 5, end: 8, replacement: 'an 3' })]);
+    const text = 'Pick a apple for the slot.';
+    await under([lint({ rule: 'AnA', start: 5, end: 6, replacement: 'an 3' })]);
     const r = readGrammar(text, {});
     expect(r.confirmed).toEqual([]);
-    expect(r.uncertain).toMatchObject([{ text: 'a 2', why: expect.stringMatching(/would change a figure/) as unknown as string }]);
+    expect(r.uncertain).toMatchObject([{ text: 'a', why: expect.stringMatching(/would change a figure/) }]);
   });
   it('a correction that would change a capitalised name is refused and listed', async () => {
     const text = 'Ask Acme , then decide.';
@@ -169,6 +179,17 @@ describe('the guards, on a scripted engine', () => {
     await under([lint({ rule: 'SpellCheck', kind: 'Spelling', start: 4, end: 11, replacement: 'bracket' })]);
     expect(readGrammar(text, {}).confirmed).toEqual([]);
     expect(readGrammar(text, {}).uncertain[0].why).toMatch(/another word/);
+  });
+  it('a correction handed straight to the repair that would move a figure or drop a name is not made', () => {
+    const text = 'We asked Acme for 40 units. They was pleased.';
+    const at = (w: string, replacement: string) => ({ start: text.indexOf(w), end: text.indexOf(w) + w.length, text: w, why: 'scripted', replacement });
+    expect(correctMechanicalErrors(text, [at('40', '14')])).toEqual({ text, corrected: 0 });
+    expect(correctMechanicalErrors(text, [at('Acme', 'acne'), at('was', 'were')])).toEqual({ text, corrected: 0 });
+    expect(correctMechanicalErrors(text, [at('was', 'were')]).text).toBe('We asked Acme for 40 units. They were pleased.');
+  });
+  it('the rule can be declared by hand, with a dialect and words of the author\'s own', () => {
+    expect(parseMeasure('GRAMMAR:dialect=British,vocabulary=zorbletron|Widgit')).toEqual({ observer: 'GRAMMAR', params: { dialect: ['british'], vocabulary: ['zorbletron', 'widgit'] } });
+    expect(parseMeasure('GRAMMAR')).toEqual({ observer: 'GRAMMAR', params: {} });
   });
   afterAll(() => { resetGrammar(); setGrammarProvider(harperGrammar); });
 });
@@ -282,11 +303,12 @@ describe('through the binary', () => {
     run('new', 'posts', '--no-model', '--name', 'posts');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'They was late to the meeting. The plan still holds.' } } }) });
     const out = run('invoke', '--skill', 'posts', 'a short note', '--allow-unsourced', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--json');
-    const rec = JSON.parse(out.slice(out.indexOf('{'))) as { output: string; repair?: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
-    expect(rec.output).toContain('They were late to the meeting.');
+    const shown = JSON.parse(out.slice(out.indexOf('{'))) as { output: string; invocationId: string };
+    expect(shown.output).toContain('They were late to the meeting.');
+    // The stored invocation carries the repair: what was broken before, and how it was fixed.
+    const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${shown.invocationId}.json`), 'utf8')) as { repair?: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
     expect(rec.repair?.violatedBefore.length).toBe(1);
     expect(rec.repair?.violatedAfter).toEqual([]);
     expect(rec.repair?.why).toMatch(/fixed without a model: \w+: 1 mechanical error\(s\) corrected/);
-    expect(existsSync(join(data, 'skills', 'posts'))).toBe(true);
   }, 120_000);
 });

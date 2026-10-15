@@ -19,7 +19,7 @@
 //   the author's variant  spelling is checked in the dialect the standard records; where none is recorded, only a
 //                       word misspelt in BOTH British and American English counts.
 //   intentional choices a fragment, an "And" or "But" opener, a one-word sentence, a lower-case styling, a word
-//                       repeated for emphasis, two spaces after a full stop: none of these is in the list, and the
+//                       repeated for emphasis, two spaces after a full stop, "!!": none of these is in the list, and the
 //                       repetition guard keeps "very very" and "no no".
 //   claims              a correction that would change a figure or a capitalised name is refused: it is listed
 //                       as uncertain with the reason, and nothing is changed.
@@ -76,7 +76,9 @@ export const MECHANICAL_RULES: Readonly<Record<string, string>> = {
   AnA: 'the article a/an',
   ItsContraction: 'a missing apostrophe',
   CommaFixes: 'a space before a comma',
-  EllipsisLength: 'double punctuation',
+  // The two below are read here, not by the engine (`punctuationLints`): it has no rule for either.
+  DoublePunctuation: 'double punctuation',
+  SpaceBeforePunctuation: 'a space before punctuation',
 };
 /** Engine categories allowed whole: a Typo is a fixed table of common slips ("teh"), held to the spelling guards. */
 const MECHANICAL_KINDS: ReadonlySet<string> = new Set(['Typo']);
@@ -175,14 +177,37 @@ export interface GrammarReading {
 const list = (p: Measurement['params'], k: string): readonly string[] => { const v = p[k]; return Array.isArray(v) && v.every((x): x is string => typeof x === 'string') ? v : []; };
 const dialectOf = (p: Measurement['params']): GrammarDialect | null => { const d = list(p, 'dialect')[0]; return d === 'american' || d === 'british' ? d : null; };
 
+/**
+ * Two slips the engine has no rule for, read here: a comma, semicolon or colon typed twice (",,"), a full stop typed
+ * twice where no ellipsis is meant ("end.." but not "..." or "...."), and a space before a semicolon, colon, full
+ * stop, question or exclamation mark ("done ?"). "!!" and "?!" are emphasis and never counted; a colon or full stop
+ * after a space that opens a smiley, a path or a figure is not one either. The comma's case is the engine's own.
+ */
+export function punctuationLints(text: string): GrammarLint[] {
+  const out: GrammarLint[] = [];
+  for (const m of text.matchAll(/(?<=\p{L})([,;:])\1+(?![,;:])/gu)) {
+    out.push({ rule: 'DoublePunctuation', kind: 'Punctuation', message: `"${m[1]}" typed more than once`, start: m.index, end: m.index + m[0].length, replacement: m[1] });
+  }
+  for (const m of text.matchAll(/(?<=\p{L})\.\.(?!\.)(?=\s|$)/gu)) {
+    out.push({ rule: 'DoublePunctuation', kind: 'Punctuation', message: 'a full stop typed twice', start: m.index, end: m.index + 2, replacement: '.' });
+  }
+  for (const m of text.matchAll(/(?<=\p{L})[ \t]+([;:.?!])(?=\s|$)/gu)) {
+    out.push({ rule: 'SpaceBeforePunctuation', kind: 'Punctuation', message: `a space before "${m[1]}"`, start: m.index, end: m.index + m[0].length, replacement: m[1] });
+  }
+  return out;
+}
+
 /** Lints in the recorded dialect; with none recorded, spelling counts only where both dialects flag the same span. */
 function lintsFor(e: GrammarEngine, text: string, dialect: GrammarDialect | null): GrammarLint[] {
-  if (dialect) return [...e.lint(text, dialect)];
+  if (dialect) return [...e.lint(text, dialect), ...punctuationLints(text)];
   const us = e.lint(text, 'american'); const uk = e.lint(text, 'british');
   const key = (l: GrammarLint): string => `${l.rule}@${l.start}-${l.end}`;
   const ukKeys = new Set(uk.map(key));
-  return us.filter((l) => !SPELLING(l) || ukKeys.has(key(l)));
+  return [...us.filter((l) => !SPELLING(l) || ukKeys.has(key(l))), ...punctuationLints(text)];
 }
+
+/** 1 for a lint of an allowed kind: on the same stretch, it is read before the engine's other notes, so it is the one kept. */
+const allowed = (l: GrammarLint): number => (l.rule in MECHANICAL_RULES || MECHANICAL_KINDS.has(l.kind) ? 1 : 0);
 
 // The same text is read by the rule's line and by the list of what to check: read once.
 const READINGS = new Map<string, GrammarReading>();
@@ -201,7 +226,7 @@ export function readGrammar(text: string, params: Measurement['params'], context
   for (const w of lowerWords(text)) counts.set(w, (counts.get(w) ?? 0) + 1);
   const confirmed: Span[] = []; const uncertain: Span[] = [];
   const seen = new Set<string>();
-  for (const l of lintsFor(engine, text, dialectOf(params)).sort((a, b) => a.start - b.start || a.end - b.end)) {
+  for (const l of lintsFor(engine, text, dialectOf(params)).sort((a, b) => a.start - b.start || a.end - b.end || allowed(b) - allowed(a))) {
     if (l.end <= l.start || l.end > text.length) continue;
     const at = `${l.start}-${l.end}`;
     if (seen.has(at)) continue;
@@ -232,11 +257,12 @@ export function readGrammar(text: string, params: Measurement['params'], context
       if (numbersIn(problem).join('|') !== numbersIn(fix).join('|')) { note('the correction would change a figure'); continue; }
       const kept = new Set(namesOf(fix).map(bare));
       if (namesOf(problem).some((n) => !kept.has(bare(n)) && !(l.rule === 'RepeatedWords'))) { note('the correction would change a name'); continue; }
-      if (/\n/.test(fix)) { note('the correction spans a line break'); continue; }
+      if (fix.includes('\n')) { note('the correction spans a line break'); continue; }
     }
     confirmed.push(span(fix === null ? `${label}: ${l.message.replace(/\s+/g, ' ').trim()}` : `${label}: "${problem.trim()}" → "${fix.trim() || '(removed)'}"`, fix ?? undefined));
   }
-  const reading: GrammarReading = { confirmed, uncertain };
+  // A finding the rule acts on is not also listed to check: the engine's own note on the same stretch goes.
+  const reading: GrammarReading = { confirmed, uncertain: uncertain.filter((u) => !inside(confirmed, u)) };
   if (READINGS.size >= READING_CACHE) { const oldest = READINGS.keys().next(); if (!oldest.done) READINGS.delete(oldest.value); }
   READINGS.set(cacheKey, reading);
   return reading;

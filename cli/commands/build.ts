@@ -25,6 +25,7 @@ import { moveEvidence, readHoldsBack, ownerWrote, HOLDS_BACK } from '../../core/
 import { normalizeClass } from '../../core/observers/doc-class.js';
 import { selectContrastPairs, contrastFor } from '../../core/compiler/contrast-examples.js';
 import { verifyText } from '../../core/observers/verify.js';
+import { ensureGrammar } from '../../core/observers/grammar.js';
 import { piecesBreaking, fitToCorpus } from '../../core/observers/derive.js';
 import { allowed, fewestToMove, CORPUS_SET_SHARE, CORPUS_RULE_SHARE } from '../../core/ratification/suggest.js';
 import { amendToFit } from './amend.js';
@@ -412,6 +413,7 @@ export async function build(nameArg?: string, opts: { closing?: boolean } = {}):
         die('--exemplar names a piece that was reserved to test the skill blind. Pick one discovery was allowed to read.');
       }
       // The exemplar is what the model imitates, so it should meet the standard it illustrates.
+      await ensureGrammar(v);
       const report = verifyText(name, v, text);
       // (Less the rules read against its material, which is not part of the exemplar.)
       const broken = report.checked.filter((c) => c.result.verdict === 'VIOLATED' && targetOf(c.observer ?? '') !== 'BOUND_MATERIAL');
