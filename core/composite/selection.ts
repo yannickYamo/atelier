@@ -710,9 +710,12 @@ function standingOf(x: AnsweredConflict, da: CompositeDecision | undefined, db: 
 
 /**
  * WHETHER THE PIECE'S LENGTH IS LEFT OPEN: a rule on it (a worded length of the whole piece, or a count of its words)
- * sits in a conflict nobody answered, so neither side instructs. The build then states no length of its own.
+ * sits in a conflict nobody answered, so neither side instructs; or the request names the length (./infer.ts). The
+ * build then states no length of its own.
  */
 export function pieceLengthOpen(c: CompositeRecord, ruleOf: (id: string) => Pick<Requirement, 'statement' | 'measurement'> | undefined): boolean {
+  // The request names the length: it is the request's, and the build states none of its own.
+  if (c.inference?.requestLength) return true;
   return c.decisions.some((d) => {
     if (d.outcome !== 'OPEN') return false;
     const r = ruleOf(d.id);

@@ -2,9 +2,10 @@
 //
 // Two authors, against a scripted backend. Ada asks for headings and for a column of crisp fragments; Bram for continuous
 // prose with no headings and for sentences that earn their subordinate clauses. The keywords see the headings conflict;
-// only a reading sees that fragments and subordinate clauses cannot both be followed. The person answers the headings
-// conflict for Ada, then makes Bram's rule required with --set: their latest word wins, the screen says so, and only it
-// ships. The model's pair is asked on the screen and neither side of it ships. A rebuild asks the model nothing.
+// only a reading sees that fragments and subordinate clauses cannot both be followed. Nothing is asked: each pair is
+// settled by which side is more characteristic, the model's pair recorded with where it came from, and exactly one side
+// of each ships. A person who makes Bram's rule required with --set outranks the inference, and only it ships. A rebuild
+// asks the model nothing.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -58,43 +59,50 @@ const run = (data: string, proj: string, ...args: string[]): string => {
 };
 const contradictionCalls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies.filter((b) => b.includes('"emit_contradictions"')).length;
 
+const whatToDo = (md: string): string => md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
+const project = (): { data: string; proj: string } => {
+  const base = mkdtempSync(join(tmpdir(), 'atelier-instructions-'));
+  const data = join(base, 'data'); const proj = join(base, 'proj');
+  mkdirSync(join(proj, 'writers'), { recursive: true });
+  for (const [f, t] of Object.entries(PIECES)) writeFileSync(join(proj, 'writers', f), t);
+  return { data, proj };
+};
+const skillOf = (proj: string): string => { const f = join(proj, '.claude', 'skills', 'mix', 'SKILL.md'); return existsSync(f) ? readFileSync(f, 'utf8') : ''; };
+
 describe('a composite\'s final instructions', () => {
-  let first = ''; let second = ''; let md = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0; let proj = ''; let data = '';
+  let first = ''; let second = ''; let md = ''; let md2 = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0;
+  let comp: { conflicts: { provenance?: string; reason?: string; resolvedBy: string; answer: string | null; settledWhy?: string }[] } = { conflicts: [] };
   beforeAll(async () => {
-    const base = mkdtempSync(join(tmpdir(), 'atelier-instructions-'));
-    data = join(base, 'data'); proj = join(base, 'proj');
-    mkdirSync(join(proj, 'writers'), { recursive: true });
-    for (const [f, t] of Object.entries(PIECES)) writeFileSync(join(proj, 'writers', f), t);
-    first = run(data, proj, 'new', 'writers', 'a weekly newsletter', '--name', 'mix', '--admire', 'Ada=everything', '--admire', 'Bram=everything');
-    const n = /\n {2}(\d+)\. headings[^\n]*\n {6}A {2}Ada: Use headings/.exec(first)?.[1] ?? 'missing';
-    const session = readdirSync(join(data, 'sessions')).map((f) => JSON.parse(readFileSync(join(data, 'sessions', f), 'utf8')) as { proposals?: { requirementId: string; statement: string }[] })[0];
-    const id = session?.proposals?.find((p) => p.statement === PROSE)?.requirementId ?? 'missing';
-    second = run(data, proj, 'new', 'writers', '--accept', '--conflict', `${n}=A`, '--set', `${id}=required`);
-    const skill = join(proj, '.claude', 'skills', 'mix', 'SKILL.md');
-    md = existsSync(skill) ? readFileSync(skill, 'utf8') : '';
+    const one = project();
+    first = run(one.data, one.proj, 'new', 'writers', 'a weekly newsletter', '--name', 'mix');
+    md = skillOf(one.proj);
+    comp = existsSync(join(one.data, 'skills', 'mix', 'composite.json')) ? JSON.parse(readFileSync(join(one.data, 'skills', 'mix', 'composite.json'), 'utf8')) as typeof comp : comp;
     callsAfterBuild = await contradictionCalls();
-    run(data, proj, 'build', '--name', 'mix');
+    run(one.data, one.proj, 'build', '--name', 'mix');
     callsAfterRebuild = await contradictionCalls();
-  });
-  it('the model\'s pair is an open question on the screen, from where it came, and neither side instructs', () => {
+    // the same pieces, with the person's word on Bram's rule given on the call that builds
+    const session = readdirSync(join(one.data, 'sessions')).map((f) => JSON.parse(readFileSync(join(one.data, 'sessions', f), 'utf8')) as { proposals?: { requirementId: string; statement: string }[] })[0];
+    const id = session?.proposals?.find((p) => p.statement === PROSE)?.requirementId ?? 'missing';
+    const two = project();
+    second = run(two.data, two.proj, 'new', 'writers', 'a weekly newsletter', '--name', 'mix', '--set', `${id}=required`);
+    md2 = skillOf(two.proj);
+  }, 300_000);
+  it('the model\'s pair is settled by which side is more characteristic, recorded with where it came from, and only one side instructs', () => {
     expect(first).not.toMatch(/^EXIT/);
-    expect(first).toContain(`(read by the model at build: ${REASON})`);
-    expect(first).not.toContain('checked by keyword only');
-    const whatToDo = md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
-    expect(whatToDo).not.toContain(FRAGMENTS);
-    expect(whatToDo).not.toContain(CLAUSES);
+    expect(first).not.toMatch(/What do you like|--conflict|open question/);
+    expect(first).not.toContain('found by keyword only');
+    const pair = comp.conflicts.find((c) => c.provenance === 'read by the model at build');
+    expect(pair).toMatchObject({ reason: REASON, resolvedBy: 'INFERENCE', answer: expect.stringMatching(/^[AB]$/) as unknown });
+    expect([FRAGMENTS, CLAUSES].filter((r) => whatToDo(md).includes(r))).toHaveLength(1);
+    expect([HEADINGS, PROSE].filter((r) => whatToDo(md).includes(r))).toHaveLength(1);
   });
-  it('--set after an answer: the screen says so in one line, and only the rule it made required ships', () => {
+  it('--set outranks the inference: only the rule it made required ships', () => {
     expect(second).not.toMatch(/^EXIT/);
-    expect(second.split('\n').filter((l) => /^--set p\d+=required: Bram's "Write in continuous prose/.test(l))).toHaveLength(1);
-    expect(second).toMatch(/your --set is your latest word, so p\d+ is set aside\./);
-    const whatToDo = md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
-    expect(whatToDo).toContain(PROSE);
-    expect(whatToDo).not.toContain(HEADINGS);
+    expect(whatToDo(md2)).toContain(PROSE);
+    expect(whatToDo(md2)).not.toContain(HEADINGS);
   });
   it('the reading is kept with the run: a rebuild asks the model nothing', () => {
     expect(callsAfterBuild).toBeGreaterThan(0);
     expect(callsAfterRebuild).toBe(callsAfterBuild);
   });
 });
-

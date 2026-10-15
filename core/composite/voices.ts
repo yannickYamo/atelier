@@ -125,7 +125,7 @@ function gap(a: Vec, b: Vec, floors: readonly number[]): number | null {
 function floorsOf(vs: readonly (Vec | null)[], least: number): number[] {
   const first = vs.find((v): v is Vec => v !== null);
   if (!first) return [];
-  return first.map((_, i) => Math.max(least, 0.1 * mean(vs.flatMap((v) => (v && v[i] !== null ? [Math.abs(v[i] as number)] : [])))));
+  return first.map((_, i) => Math.max(least, 0.1 * mean(vs.flatMap((v) => (v && v[i] !== null ? [Math.abs(v[i])] : [])))));
 }
 
 /** The distance matrix between the pieces: the mean over the blocks both can be read on. */

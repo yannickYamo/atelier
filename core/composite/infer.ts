@@ -87,9 +87,8 @@ export function weighTraits(table: TraitTable, proposals: readonly Requirement[]
     conflictWith.set(a.id, new Set([...(conflictWith.get(a.id) ?? []), b.id]));
     conflictWith.set(b.id, new Set([...(conflictWith.get(b.id) ?? []), a.id]));
   }
-  const rows = table.rows.filter((r) => !r.sameAs && byId.has(r.id));
-  const weighed = rows.map((r) => {
-    const p = byId.get(r.id) as Requirement;
+  const rows = table.rows.flatMap((r) => { const p = r.sameAs ? undefined : byId.get(r.id); return p ? [{ r, p }] : []; });
+  const weighed = rows.map(({ r, p }) => {
     const m = metaOf(r.id);
     // CONSISTENCY
     let consistency: number; let consistencyBasis: string;
@@ -187,7 +186,7 @@ export function settledClashes(record: CompositeRecord): SettledClash[] {
   return record.conflicts.map((c) => {
     const [a, b] = c.sides;
     const side = (x: typeof a): { id: string; voice: string } => ({ id: x.id, voice: x.author });
-    if (c.settledWhy && /request names the length/.test(c.settledWhy)) return { n: c.n, label: c.label, stands: [], aside: [side(a), side(b)], by: 'REQUEST', why: c.settledWhy };
+    if (c.settledWhy?.includes('request names the length')) return { n: c.n, label: c.label, stands: [], aside: [side(a), side(b)], by: 'REQUEST', why: c.settledWhy };
     if (c.answer === null) return { n: c.n, label: c.label, stands: [], aside: [], by: 'OPEN', why: 'left open by your --conflict answer "later"' };
     if (c.answer === 'both') return { n: c.n, label: c.label, stands: [side(a), side(b)], aside: [], by: 'ANSWER', why: 'you answered both' };
     const [win, lose] = c.answer === 'A' ? [a, b] : [b, a];
@@ -216,7 +215,7 @@ export function buildLine(record: CompositeRecord, authors: AuthorMap, weights: 
   const method = weights.some((x) => x.method && record.decisions.some((d) => d.id === x.id && d.outcome === 'SELECTED'));
   const noun = authors.how === 'INFERRED' ? 'voices' : 'writers';
   return `Combined ${authors.names.length} ${noun}: ${parts.join(', ') || 'nothing distinctive enough to take from any of them'}`
-    + `${method ? `; what every one of them does kept as method` : ''}`
+    + (method ? '; what every one of them does kept as method' : '')
     + `${settled ? `; ${settled} clash${settled === 1 ? '' : 'es'} settled by which was more characteristic` : ''}. Say \`atelier fix\` to change any of it.`;
 }
 

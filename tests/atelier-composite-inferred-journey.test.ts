@@ -109,7 +109,7 @@ describe('atelier new on ten pieces by five unnamed voices, with a model', () =>
   it('builds in one call, says one line, and asks nothing', () => {
     expect(existsSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'))).toBe(true);
     expect(out).not.toMatch(QUESTIONS);
-    const lines = out.split('\n').filter((l) => /^Combined /.test(l));
+    const lines = out.split('\n').filter((l) => l.startsWith("Combined "));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/^Combined 5 voices: .+ from the first, .+; 1 clash settled by which was more characteristic\. Say `atelier fix` to change any of it\.$/);
     expect(lines[0]).toBe(inf.line);
@@ -175,7 +175,7 @@ describe('the same ten pieces with no model set up', () => {
     expect(out).toMatch(/5 voices found in 10 pieces/);
     for (const v of ['voice 1', 'voice 2', 'voice 3', 'voice 4', 'voice 5']) expect(out).toMatch(new RegExp(`rule\\(s\\) counted from ${v}'s pieces alone`));
     expect(out).not.toMatch(QUESTIONS);
-    expect(out.split('\n').filter((l) => /^Combined 5 voices: /.test(l))).toHaveLength(1);
+    expect(out.split('\n').filter((l) => l.startsWith("Combined 5 voices: "))).toHaveLength(1);
     expect(existsSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'))).toBe(true);
     const inf = JSON.parse(readFileSync(runsFile(data, 'composite-inference.json'), 'utf8')) as Inference;
     // counted traits only, each weighed on its own voice's pieces

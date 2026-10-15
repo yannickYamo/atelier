@@ -1,9 +1,10 @@
 // tests/atelier-composite-journey.test.ts — "HERE ARE FIVE EXAMPLES FROM DIFFERENT AUTHORS", THROUGH THE SHIPPED BINARY.
 //
 // `atelier new` on a folder of five pieces, each by an invented author named in its front matter, against a scripted
-// backend that answers each author's reading with that author's own rules. Discovery reads each author alone; the
-// person says what they like about each; the composite screen shows what is taken from whom and the conflict; accepting
-// builds a skill whose voice is that combination. A rebuild, and the same answers in a fresh project, change nothing.
+// backend that answers each author's reading with that author's own rules. Discovery reads each author alone; what is
+// taken from each is inferred (each one's most characteristic rules), the clash between two of them is settled by which
+// side is more characteristic, and the skill is built in the same call, asking nothing. A rebuild, and the same pieces
+// in a fresh project, change nothing.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -78,7 +79,6 @@ const folder = (proj: string): string => {
   for (const [f, t] of Object.entries(PIECES)) writeFileSync(join(dir, f), t);
   return dir;
 };
-const ADMIRE = ['--admire', 'ada.md=the way it opens', '--admire', 'bea.md=how deep the evidence goes', '--admire', 'Cal=the speed of it', '--admire', 'eli.md=the story at the start'];
 const PURPOSE = 'an essay that combines what I like about each of these';
 const runsFile = (data: string, name: string): string => { const r = join(data, 'runs'); const d = readdirSync(r).find((x) => existsSync(join(r, x, name))); return d ? join(r, d, name) : ''; };
 const skillFiles = (proj: string, name: string): Record<string, string> => {
@@ -92,14 +92,11 @@ describe('atelier new on five pieces by five authors', () => {
   const data = mkdtempSync(join(tmpdir(), 'atelier-mix-data-'));
   const proj = mkdtempSync(join(tmpdir(), 'atelier-mix-proj-'));
   const dir = folder(proj);
-  let first = ''; let second = ''; let third = '';
-  const builtAfter: boolean[] = [];
+  let first = '';
   const built = (): boolean => existsSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'));
   beforeAll(() => {
-    first = run(data, proj, 'new', dir, PURPOSE, '--name', 'mix'); builtAfter.push(built());
-    second = run(data, proj, 'new', dir, ...ADMIRE); builtAfter.push(built());
-    third = run(data, proj, 'new', dir, '--accept');
-    if (process.env.COMPOSITE_DUMP) writeFileSync(process.env.COMPOSITE_DUMP, [first, second, third, readFileSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'), 'utf8')].join('\n=====\n'));
+    first = run(data, proj, 'new', dir, PURPOSE, '--name', 'mix');
+    if (process.env.COMPOSITE_DUMP) writeFileSync(process.env.COMPOSITE_DUMP, [first, readFileSync(join(proj, '.claude', 'skills', 'mix', 'SKILL.md'), 'utf8')].join('\n=====\n'));
   }, 300_000);
 
   it('says the pieces are by several authors, each read on its own first, and holds none back', () => {
@@ -120,58 +117,43 @@ describe('atelier new on five pieces by five authors', () => {
     expect(table.conflicts.some((c) => c.label === 'paragraph length' && c.sides.map((s) => s.author).sort().join() === 'Ada,Bea')).toBe(true);
   });
 
-  it('asks what the person likes about each before choosing anything, and builds nothing', () => {
-    expect(first).toMatch(/Your skill is the combination you choose, so nothing is chosen yet/);
-    expect(first).toMatch(/--admire Ada="<what you like about this author>"/);
-    expect(builtAfter[0]).toBe(false);
+  it('builds the combination in one call, says one line, and asks nothing', () => {
+    expect(built()).toBe(true);
+    expect(first).not.toMatch(/What do you like|--admire|--conflict|Nothing was decided|open question/);
+    const lines = first.split('\n').filter((l) => l.startsWith("Combined "));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^Combined 5 writers: openings[^,]* from Ada, [^,]*evidence handling[^,]* from Bea, [^,]*pace[^,]* from Cal, [^,]*tone and word choice[^,]* from Dee, openings[^,]* from Eli; \d+ clashes settled by which was more characteristic\. Say `atelier fix` to change any of it\.$/);
   });
 
-  it('shows one composite screen: what comes from whom, the conflict, and what is left', () => {
-    expect(second).toMatch(/From Ada: openings/);
-    expect(second).toMatch(/From Bea: evidence and its depth/);
-    expect(second).toMatch(/From Cal: pacing and paragraph construction/);
-    expect(second).toMatch(/From Eli: openings/);
-    expect(second).toMatch(/Dee: nothing said, so nothing is taken from this author alone/);
-    expect(second).toMatch(/\d\. paragraph length[^\n]*\n {6}A {2}Ada: Never let a paragraph run past two sentences\. {3}\(reads as: at most 2 sentences in a paragraph\)\n {6}B {2}Bea: Let a paragraph run to eight sentences[^\n]*\n {6}→ open: neither instructs/);
-    expect(second).toMatch(/Nothing was decided/);
-    expect(builtAfter[1]).toBe(false);
-  });
-
-  it('accepting builds the combination: a composite voice, one excerpt from each chosen author, labelled as theirs', () => {
-    expect(third).toMatch(/Your composite is recorded/);
-    expect(third).toMatch(/conflict\(s\) kept as open question\(s\)/);
+  it('a composite voice, one excerpt from each chosen author, labelled as theirs; what is most characteristic of each instructs', () => {
     const files = skillFiles(proj, 'mix');
     const md = files['SKILL.md'];
     expect(md).toMatch(/My voice is a composite/);
-    expect(md).toMatch(/- From Ada: openings\. Taken as: "Open with a question the reader is already asking"/);
-    expect(md).toMatch(/- From Bea: evidence and its depth/);
-    expect(md).not.toMatch(/- From Dee/);
-    // what the person selected INSTRUCTS: in the served skill's instructions, not only in a list of what is shown
+    expect(md).toMatch(/- From Ada: openings[^\n]*Taken as: "Open with a question the reader is already asking"/);
+    expect(md).toMatch(/- From Bea: [^\n]*evidence and its depth/);
     const todo = /## What to do\n([\s\S]*?)\n## /.exec(md)?.[1] ?? '';
     expect(todo).toMatch(/Open with a question the reader is already asking\./);           // A's opening
     expect(todo).toMatch(/Back every claim with a cited figure and its source\./);          // B's evidence
     expect(todo).toMatch(/Keep the pace fast with sentence fragments\./);                   // C's pacing
     expect(todo).toMatch(/Open on a short scene from a story, then turn to the point\./);   // E's opening, four of five lack it
-    // an unselected unique trait of an admired author stays a habit: shown, never instructed
-    expect(todo).not.toMatch(/line of dialogue/);
-    expect(md).toMatch(/Moves I sometimes make[\s\S]*Close on the line of dialogue that started it\./);
-    // and nothing from the author nobody admired, nor either side of the open conflict, instructs
-    expect(todo).not.toMatch(/contractions|paragraph run/);
-    // the ruling says whose word it is
+    expect(todo).toMatch(/Never use contractions; keep a formal register\./);              // D's register: nobody has to say they like it
+    // the two paragraph lengths clash: exactly one of them instructs, never both
+    const sides = [/Never let a paragraph run past two sentences\./, /Let a paragraph run to eight sentences/].filter((re) => re.test(todo));
+    expect(sides).toHaveLength(1);
+    // the ruling says it was inferred, and from whom
     const ledgers = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? ledgers(join(dir, e.name)) : /ledger/i.test(join(dir, e.name)) ? [readFileSync(join(dir, e.name), 'utf8')] : []));
-    expect(ledgers(join(data, 'skills', 'mix')).join('\n')).toMatch(/selected by you from Ada \(ada\.md\)/);
+    expect(ledgers(join(data, 'skills', 'mix')).join('\n')).toMatch(/inferred from Ada \(ada\.md\)/);
     const voices = Object.entries(files).filter(([f]) => f.startsWith('voice-'));
-    const whose = voices.map(([, t]) => /^\[voice-\d+\] [^\n]*?piece by (\w+)/.exec(t)?.[1]).sort();
-    expect(whose).toEqual(['Ada', 'Bea', 'Cal', 'Eli']);
-    // Dee's piece is not served, and the record says what was chosen from whom
-    expect(voices.some(([, t]) => t.includes('protocol requires'))).toBe(false);
-    const comp = JSON.parse(readFileSync(join(data, 'skills', 'mix', 'composite.json'), 'utf8')) as { decisions: { id: string; outcome: string; author: string }[]; conflicts: { answer: string | null }[] };
-    expect(comp.decisions.find((d) => d.author === 'Dee' && d.id.startsWith('p'))?.outcome).toBe('REJECTED');
-    expect(comp.conflicts.some((c) => c.answer === null)).toBe(true);
+    const whose = voices.map(([, t]) => /^\[voice-\d+\] [^\n]*?piece by (\w+)/.exec(t)?.[1]);
+    expect(whose.length).toBeGreaterThanOrEqual(4);
+    for (const w of whose) expect(['Ada', 'Bea', 'Cal', 'Dee', 'Eli']).toContain(w);
+    // every clash is settled, one way, with its reason
+    const comp = JSON.parse(readFileSync(join(data, 'skills', 'mix', 'composite.json'), 'utf8')) as { conflicts: { answer: string | null; resolvedBy: string; settledWhy?: string }[] };
+    expect(comp.conflicts.length).toBeGreaterThan(0);
+    for (const c of comp.conflicts) expect(c).toMatchObject({ resolvedBy: 'INFERENCE', answer: expect.stringMatching(/^[AB]$/) as unknown, settledWhy: expect.any(String) as unknown });
   });
 
   it('the composite carries the owner\'s editorial rule, REQUIRED, from no single author', () => {
-    expect(second).toMatch(/Every author: g1 {2}No mechanical errors: spelling, agreement, punctuation\. {2}\(REQUIRED/);
     const dir = join(data, 'skills', 'mix', 'standards');
     const std = readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')) as { requirements: { measurement?: { observer: string }; materiality: string; authority: string; statement: string }[] });
     const g = std.flatMap((v) => v.requirements).filter((r) => r.measurement?.observer === 'GRAMMAR');
@@ -193,10 +175,10 @@ describe('atelier new on five pieces by five authors', () => {
     expect(skillFiles(proj, 'mix')).toEqual(before);
   });
 
-  it('the same answers in a fresh project give the same composite and the same served files', () => {
+  it('the same pieces in a fresh project give the same composite and the same served files', () => {
     const d2 = mkdtempSync(join(tmpdir(), 'atelier-mix-data-')); const p2 = mkdtempSync(join(tmpdir(), 'atelier-mix-proj-'));
-    const out = run(d2, p2, 'new', folder(p2), PURPOSE, '--name', 'mix', ...ADMIRE, '--accept');
-    expect(out).toMatch(/From Ada: openings/);   // shown before it is recorded
+    const out = run(d2, p2, 'new', folder(p2), PURPOSE, '--name', 'mix');
+    expect(out).toMatch(/^Combined 5 writers: /m);
     expect(readFileSync(join(d2, 'skills', 'mix', 'composite.json'), 'utf8')).toBe(readFileSync(join(data, 'skills', 'mix', 'composite.json'), 'utf8'));
     const a = skillFiles(proj, 'mix'); const b = skillFiles(p2, 'mix');
     const stamp = (t: string): string => t.replace(/^mintedAt: .*$/m, '');

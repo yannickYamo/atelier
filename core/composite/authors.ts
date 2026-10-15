@@ -2,14 +2,14 @@
 //
 // "Here are five examples from different authors. I love different things about them." Read as one author,
 // such a folder gives the average of five writers, which is the one voice nobody asked for. So the authors are
-// told apart before anything reads the pieces, from three declarations and no guess:
+// told apart before anything reads the pieces. Here, from three declarations:
 //
 //   front matter     `author: Ada` at the top of a piece
 //   subfolders       ada/one.md, bea/two.md: a folder per author
 //   --authors        a list of files, each by an author of its own
 //
-// A folder with none of these is one author, exactly as it always was. Nothing here reads the prose: a
-// difference in style is never taken for a difference in author.
+// Nothing here reads the prose. A declaration always wins; with none at all, `atelier new` groups the pieces by how
+// they are written (./voices.ts), and a folder that does not split is one author, exactly as it always was.
 
 /** INFERRED: no author was declared, and the pieces were grouped by how they are written (./voices.ts). */
 export type AuthorsHow = 'FRONT_MATTER' | 'SUBFOLDERS' | 'LISTED' | 'INFERRED';

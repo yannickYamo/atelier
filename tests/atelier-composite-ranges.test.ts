@@ -8,7 +8,7 @@
 //   a pair the model read as contradicting, one side already held open by another such pair, left the other side
 //   instructing, and the screen printed "→ sol ()" or credited an answer the person never gave to that pair;
 //   the count of open questions was not the number the screen showed open;
-//   `--conflict` given after the skill was built was dropped without a word.
+//   `--conflict` (now a hidden expert override) given after the skill was built was dropped without a word.
 // Since then, two authors' lengths on one measure are asked whether or not their ranges meet: only two counted bands are
 // judged by their numbers (tests/atelier-composite-length-asked.test.ts).
 import { describe, it, expect } from 'vitest';
@@ -19,7 +19,7 @@ import { join, resolve } from 'node:path';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
 import { buildTraitTable, relationOf, type TraitClass, TRAIT_CLASSES } from '../core/composite/traits.js';
 import { composeSelection, describeComposite, instructs, openQuestions, standOf, type CompositeAuthor, type CompositeRecord, type ConflictAnswer, type ModelPair } from '../core/composite/selection.js';
-import { openLine, KEYWORD_ONLY_LINE } from '../cli/commands/composite.js';
+import { openLine, KEYWORD_ONLY_NOTE } from '../cli/commands/composite.js';
 
 const rule = (id: string, statement: string, measurement: Measurement | null = null): Requirement => ({
   requirementId: id, statement, appliesWhen: 'GENERAL', kind: 'GENERATIVE', authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
@@ -220,11 +220,11 @@ describe('the count of open questions is the number the screen shows open', () =
   });
 });
 
-// ── 5. WHAT THE KEYLESS SCREEN CANNOT SEE, SAID ─────────────────────────────────────────────────
-describe('the keyless screen line', () => {
+// ── 5. WHAT THE KEYLESS BUILD CANNOT SEE, SAID ──────────────────────────────────────────────────
+describe('the keyless build note', () => {
   it('says a whole-piece structure rule may still sit beside a structure it rules out', () => {
-    expect(KEYWORD_ONLY_LINE).toMatch(/^Contradictions between authors are checked by keyword only/);
-    expect(KEYWORD_ONLY_LINE).toContain('a whole-piece structure rule may still sit beside a structure it rules out');
+    expect(KEYWORD_ONLY_NOTE).toMatch(/^clashes between voices were found by keyword only/);
+    expect(KEYWORD_ONLY_NOTE).toContain('a whole-piece structure rule may still sit beside a structure it rules out');
   });
 });
 
@@ -249,14 +249,13 @@ describe('--conflict after the skill is built', () => {
       return `EXIT:${err.status}\n${err.stderr ?? ''}${err.stdout ?? ''}`;
     }
   };
-  run('new', 'writers', 'a harbour column', '--name', 'late');
-  const builtOut = run('new', 'writers', '--admire', 'ada.md=how it opens', '--admire', 'cal.md=the long sentences', '--accept');
-  const after = run('new', 'writers', '--accept', '--conflict', '1=A');
+  const builtOut = run('new', 'writers', 'a harbour column', '--name', 'late', '--admire', 'ada.md=how it opens');
+  const after = run('new', 'writers', '--conflict', '1=A');
   it('says plainly that the answer was not applied, and how to rebuild with it', () => {
-    expect(builtOut).toContain('Your composite is recorded');
+    expect(builtOut).toMatch(/^Combined 2 writers: /m);
     expect(after).toContain('Continuing the run already in this project (state BUILT).');
-    expect(after).toContain('--conflict 1=A: not applied. This skill is already built, with the answers given when you accepted it; an answer after the build needs a rebuild with the answer.');
+    expect(after).toContain('--conflict 1=A: not applied. This skill is already built, with every clash settled when it was combined; an answer after the build needs a rebuild with the answer.');
     expect(after).toContain('    atelier abort\n');
-    expect(after).toContain("    atelier new writers 'a harbour column' --name late --admire 'Ada=how it opens' --admire 'Cal=the long sentences' --accept --conflict 1=A\n");
+    expect(after).toContain("    atelier new writers 'a harbour column' --name late --admire 'Ada=how it opens' --conflict 1=A\n");
   });
 });

@@ -2,9 +2,10 @@
 //
 // Two authors, against a scripted backend. Ada asks for at least eight hundred words; Bram to keep it to a quick read,
 // which names no number the quantity grammar can read. The model, reading the final instructions once, reads Bram's
-// rule as at most 500 words. The two readings disagree, so the screen says the rule is read two ways, and the pair the
-// model's reading cannot follow is asked: neither side instructs. The piece's length is then left open, so the skill
-// states no length band of its own. The reading is kept with the run: a rebuild asks the model nothing.
+// rule as at most 500 words. The two readings disagree, so the record says the rule is read two ways, and the pair the
+// model's reading cannot follow is settled by which side is more characteristic: exactly one length instructs. When the
+// request names the length itself, neither does, and the skill states no length band of its own. The reading is kept
+// with the run: a rebuild asks the model nothing.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -65,36 +66,46 @@ const findFile = (dir: string, name: string): string | null => {
   return null;
 };
 
+const build = (request: string): { data: string; proj: string; out: string; md: string; comp: { notes?: string[]; conflicts: { provenance?: string; reason?: string; resolvedBy: string; answer: string | null }[] } } => {
+  const base = mkdtempSync(join(tmpdir(), 'atelier-quantity-'));
+  const data = join(base, 'data'); const proj = join(base, 'proj');
+  mkdirSync(join(proj, 'writers'), { recursive: true });
+  for (const [f, t] of Object.entries(PIECES)) writeFileSync(join(proj, 'writers', f), t);
+  const out = run(data, proj, 'new', 'writers', request, '--name', 'mix');
+  const skill = join(proj, '.claude', 'skills', 'mix', 'SKILL.md');
+  const c = join(data, 'skills', 'mix', 'composite.json');
+  return { data, proj, out, md: existsSync(skill) ? readFileSync(skill, 'utf8') : '', comp: existsSync(c) ? JSON.parse(readFileSync(c, 'utf8')) as ReturnType<typeof build>['comp'] : { conflicts: [] } };
+};
+const whatToDo = (md: string): string => md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
+
 describe('a rule whose numbers the model reads differently from its words', () => {
-  let first = ''; let md = ''; let stored = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0;
+  let first: ReturnType<typeof build>; let asked: ReturnType<typeof build>; let stored = ''; let callsAfterBuild = 0; let callsAfterRebuild = 0;
   beforeAll(async () => {
-    const base = mkdtempSync(join(tmpdir(), 'atelier-quantity-'));
-    const data = join(base, 'data'); const proj = join(base, 'proj');
-    mkdirSync(join(proj, 'writers'), { recursive: true });
-    for (const [f, t] of Object.entries(PIECES)) writeFileSync(join(proj, 'writers', f), t);
-    first = run(data, proj, 'new', 'writers', 'a weekly newsletter', '--name', 'mix', '--admire', 'Ada=everything', '--admire', 'Bram=everything');
-    run(data, proj, 'new', 'writers', '--accept');
-    const skill = join(proj, '.claude', 'skills', 'mix', 'SKILL.md');
-    md = existsSync(skill) ? readFileSync(skill, 'utf8') : '';
-    const f = findFile(data, 'composite-contradictions.json');
+    first = build('a weekly newsletter');
+    const f = findFile(first.data, 'composite-contradictions.json');
     stored = f ? readFileSync(f, 'utf8') : '';
     callsAfterBuild = await contradictionCalls();
-    run(data, proj, 'build', '--name', 'mix');
+    run(first.data, first.proj, 'build', '--name', 'mix');
     callsAfterRebuild = await contradictionCalls();
+    asked = build('a weekly newsletter of about 600 words');
+  }, 300_000);
+  it('the record says the rule is read two ways, and the pair its reading cannot follow is settled, asking nothing', () => {
+    expect(first.out).not.toMatch(/^EXIT/);
+    expect(first.out).not.toMatch(/--conflict|open question|What do you like/);
+    expect(first.comp.notes?.join('\n')).toMatch(/read two ways: p\d+ "Keep it to a quick read\." is no quantity by its words, and at most 500 words in the piece by the model/);
+    expect(first.comp.notes?.join('\n')).not.toMatch(/read two ways: p\d+ "Write at least eight hundred words\."/);
+    const pair = first.comp.conflicts.find((c) => c.provenance === 'read by the model at build');
+    expect(pair).toMatchObject({ resolvedBy: 'INFERENCE', reason: expect.stringMatching(/^p\d+ read two ways/) as unknown });
   });
-  it('the screen says the rule is read two ways, and asks the pair its reading cannot follow', () => {
-    expect(first).not.toMatch(/^EXIT/);
-    expect(first).toMatch(/read two ways: p\d+ "Keep it to a quick read\." is no quantity by its words, and at most 500 words in the piece by the model/);
-    expect(first).toMatch(/\(read by the model at build: p\d+ read two ways/);
-    expect(first).not.toMatch(/read two ways: p\d+ "Write at least eight hundred words\."/);
-  });
-  it('neither side instructs, and the skill states no length band of its own', () => {
-    expect(md).not.toBe('');
-    const whatToDo = md.slice(md.indexOf('## What to do'), md.indexOf('## What not to do'));
-    expect(whatToDo).not.toContain(LONG);
-    expect(whatToDo).not.toContain(QUICK);
-    expect(whatToDo).toContain(OPEN_Q);
-    expect(md).not.toMatch(/My pieces of this kind run about/);
+  it('exactly one length instructs; with a length in the request, neither does and the skill states no band of its own', () => {
+    expect(first.md).not.toBe('');
+    expect([LONG, QUICK].filter((r) => whatToDo(first.md).includes(r))).toHaveLength(1);
+    expect(whatToDo(first.md)).toContain(OPEN_Q);
+    expect(asked.out).not.toMatch(/^EXIT/);
+    expect(whatToDo(asked.md)).not.toContain(LONG);
+    expect(whatToDo(asked.md)).not.toContain(QUICK);
+    expect(whatToDo(asked.md)).toContain(OPEN_Q);
+    expect(asked.md).not.toMatch(/My pieces of this kind run about/);
   });
   it('the reading is kept with the run, and a rebuild asks the model nothing', () => {
     expect(JSON.parse(stored)).toMatchObject({ via: 'MODEL', quantities: expect.arrayContaining([expect.objectContaining({ quantity: { measure: 'piece', unit: 'words', min: null, max: 500 } })]) });
