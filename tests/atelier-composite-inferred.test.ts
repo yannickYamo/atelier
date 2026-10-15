@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Measurement, Requirement } from '../core/state/canonical-state.js';
-import { groupByStyle, authorship, voicesAsAuthors, describeVoices, MIN_SILHOUETTE, MIN_VOICE_GAP } from '../core/composite/voices.js';
+import { groupByStyle, authorship, voicesAsAuthors, describeVoices, MIN_VOICE_GAP } from '../core/composite/voices.js';
 import { buildTraitTable } from '../core/composite/traits.js';
 import { weighTraits, inferredChoice, inferenceRecord, buildLine, likingIn, type WeighMeta } from '../core/composite/infer.js';
 import { composeSelection, instructs, settleByWeight, type CompositeAuthor } from '../core/composite/selection.js';
@@ -25,11 +25,12 @@ describe('the voices are found in the writing', () => {
     expect(g.groups.map((x) => [...x.pieces])).toEqual(FIVE_GROUPS.map((x) => [...x]));
     expect(g.groups.map((x) => x.name)).toEqual(['voice 1', 'voice 2', 'voice 3', 'voice 4', 'voice 5']);
     expect(g.silhouette).not.toBeNull();
-    expect(g.confidence).toBe(g.silhouette);
-    expect(g.confidence).toBeGreaterThanOrEqual(MIN_SILHOUETTE);
-    // the number chosen is the cut with the best silhouette among those tried
-    expect(Math.max(...g.tried.filter((t) => t.valid).map((t) => t.silhouette))).toBe(g.silhouette);
-    expect(describeVoices(g, 10)).toMatch(/^5 voices found in 10 pieces, by how they are written \(confidence 0\.\d\d\)/);
+    // the confidence is the share of shuffled reference folders the cut beat: here every one of them
+    expect(g.confidence).toBe(1);
+    // the cut taken is the strongest of those tried
+    expect(g.tried.filter((t) => t.valid)).toHaveLength(1);
+    expect(Math.max(...g.tried.filter((t) => t.alike).map((t) => t.silhouette))).toBe(g.silhouette);
+    expect(describeVoices(g, 10)).toMatch(/^5 voices found in 10 pieces, by how they are written \(confidence 1\.00\)/);
   });
   it('the order the folder is listed in changes nothing', () => {
     const forward = groupByStyle(pieces(FIVE_VOICES));
@@ -58,7 +59,6 @@ describe('the voices are found in the writing', () => {
     // twenty pieces of ten-word sentences and four of sixteen: a silhouette near 1, and almost no distance between them
     const even = (n: number): string => Array.from({ length: 10 }, () => Array.from({ length: 3 }, () => `${Array.from({ length: n - 1 }, () => 'stone').join(' ')} end.`).join(' ')).join('\n\n');
     const g = groupByStyle(Array.from({ length: 24 }, (_, i) => ({ id: `p${String(i).padStart(2, '0')}.md`, text: even(i < 20 ? 10 : 16) })));
-    expect(g.tried.find((t) => t.k === 2)?.silhouette).toBeGreaterThan(MIN_SILHOUETTE);
     expect(g.tried.find((t) => t.k === 2)?.gap).toBeLessThan(MIN_VOICE_GAP);
     expect(g.groups).toHaveLength(1);
   });

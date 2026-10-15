@@ -5,8 +5,9 @@
 // writer, never by format. The expected groupings are fixed by how the fixtures were written
 // (tests/fixtures/composite/mixed-format.ts and five-voices.ts), not read off the code.
 import { describe, it, expect } from 'vitest';
-import { groupByStyle, authorship, styleDistances } from '../core/composite/voices.js';
+import { groupByStyle, authorship, styleDistances, splitDecision } from '../core/composite/voices.js';
 import { FIVE_VOICES, FIVE_GROUPS } from './fixtures/composite/five-voices.js';
+import { ONE_WRITER_MANY_TOPICS, TWO_NATURAL_WRITERS, TWO_NATURAL_GROUPS, MINORITY_WRITER, ONE_WRITER_TWO_SUBJECTS } from './fixtures/composite/natural-writers.js';
 import { ESSAYS_AND_LISTS, ESSAYS_AND_POSTS, TWEETS_AND_ONE_LONG, POSTS_THREADS_LISTS, TWO_ESSAYISTS, TWO_ESSAYISTS_GROUPS, TWO_POSTERS }
   from './fixtures/composite/mixed-format.js';
 
@@ -71,5 +72,56 @@ describe('writers are still told apart by how they write', () => {
     const folder = { ...pick(TWO_ESSAYISTS, ['pell-1.md', 'pell-2.md', 'quist-1.md', 'quist-2.md']),
       ...pick(TWO_POSTERS, ['pell-post-1.md', 'pell-post-2.md', 'quist-post-1.md', 'quist-post-2.md']) };
     expect(sortedGroups(folder)).toEqual([['pell-1.md', 'pell-2.md', 'pell-post-1.md', 'pell-post-2.md'], ['quist-1.md', 'quist-2.md', 'quist-post-1.md', 'quist-post-2.md']]);
+  });
+});
+
+describe('the split is read against the folder itself, on writers with natural variation', () => {
+  it('one writer across twelve topics and three lengths is one voice', () => {
+    expect(groupByStyle(pieces(ONE_WRITER_MANY_TOPICS)).groups).toHaveLength(1);
+  });
+  it('two writers on the same topics split by writer, with every piece placed', () => {
+    const g = groupByStyle(pieces(TWO_NATURAL_WRITERS));
+    expect(g.groups.map((x) => [...x.pieces].sort())).toEqual(TWO_NATURAL_GROUPS.map((x) => [...x].sort()));
+    expect(g.confidence).toBe(1);
+  });
+  it('a writer with three pieces among nine of another is still found', () => {
+    const g = groupByStyle(pieces(MINORITY_WRITER));
+    expect(g.groups.map((x) => [...x.pieces].sort())).toEqual([Object.keys(MINORITY_WRITER).filter((k) => k.startsWith('mara')).sort(), Object.keys(MINORITY_WRITER).filter((k) => k.startsWith('theo')).sort()]);
+  });
+  it('the same folder groups the same way in any order', () => {
+    expect(groupByStyle(pieces(TWO_NATURAL_WRITERS).reverse())).toEqual(groupByStyle(pieces(TWO_NATURAL_WRITERS)));
+  });
+});
+
+describe('the decision, guard by guard (hand-set values)', () => {
+  // thirty reference folders: fifteen at 0.04 and fifteen at 0.06, so their mean is 0.05 and their spread 0.01
+  const nulls = [...Array(15).fill(0.04), ...Array(15).fill(0.06)] as number[];
+  const strong = { silhouette: 0.2, gap: 0.3, alike: true, thinnest: 1000 };
+  it('a cut far above every reference, wide apart and with enough text in each voice is a split, sure as the references allow', () => {
+    expect(splitDecision(strong, nulls)).toEqual({ split: true, confidence: 1 });
+  });
+  it('voices closer than the gap floor are one writer, however clean the cut', () => {
+    expect(splitDecision({ ...strong, gap: 0.2 }, nulls).split).toBe(false);
+  });
+  it('a cut fewer than four spreads above the references is one writer', () => {
+    // (0.085 - 0.05) / 0.01 = 3.5
+    expect(splitDecision({ ...strong, silhouette: 0.085 }, nulls).split).toBe(false);
+  });
+  it('a cut some reference matches is one writer, even far above their mean', () => {
+    // 29 references at 0.04 and 0.06, one at 0.21: the mean is 0.0553, the spread 0.0285, so the cut sits 5.1 above
+    const withOne = [...Array(15).fill(0.04), ...Array(14).fill(0.06), 0.21] as number[];
+    expect(splitDecision(strong, withOne).split).toBe(false);
+  });
+  it('voices that can only be told apart by their format are one writer', () => {
+    expect(splitDecision({ ...strong, alike: false }, nulls).split).toBe(false);
+  });
+  it('a voice too thin to read is one voice, said with no confidence either way', () => {
+    expect(splitDecision({ ...strong, thinnest: 300 }, nulls)).toEqual({ split: false, confidence: 0.5 });
+  });
+  it('a folder that came close to splitting is not reported as surely one voice', () => {
+    expect(splitDecision({ ...strong, gap: 0.2 }, nulls).confidence).toBeCloseTo(0.2, 6);
+  });
+  it('one writer on two subjects with their own vocabulary is one voice', () => {
+    expect(groupByStyle(pieces(ONE_WRITER_TWO_SUBJECTS)).groups).toHaveLength(1);
   });
 });
