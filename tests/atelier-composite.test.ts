@@ -21,10 +21,10 @@ import { decisionsFor, parseAdmire, parseConflictAnswers } from '../cli/commands
 import type { Suggestion } from '../core/ratification/suggest.js';
 
 const rule = (id: string, statement: string, measurement: Measurement | null = null, kind: Requirement['kind'] = 'GENERATIVE'): Requirement => ({
-  requirementId: id, statement, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance: 'BEHAVIOUR_INFERRED',
+  requirementId: id, statement, appliesWhen: 'GENERAL', kind, authority: 'DERIVED_UNRATIFIED', provenance: 'MACHINE_DISCOVERED',
   evidence: null, evidenceItemId: null, wouldBeAbsentIf: null, materiality: null, realizationTolerance: null, outputShape: null,
   ...(measurement ? { measurement } : {}),
-} as Requirement);
+});
 
 // Each author's proposals, as discovery reads them one author at a time (ids numbered across authors).
 const PROPOSALS: readonly (readonly [string, Requirement])[] = [
