@@ -60,7 +60,7 @@ export function describeMethod(ps: readonly MethodProposal[], cls: string): stri
     return m ? `checks for: ${propositionOf(m)}; ` : '';
   };
   block('Checked on every output: what the work must contain', of('DELIVERABLE'), (p) => `${looksFor(p)}your example: ${p.onExample ?? 'held'}${beside(p)}`);
-  block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? 'checks for: every path:line cited is a line of the material with something on it (for a diff, a line the change adds); ' : ''}your example: ${p.onExample ?? 'held'}${beside(p)}`);
+  block('Checked against the material: what the work must be made from', of('EXECUTION'), (p) => `${p.measurement?.observer === 'LINES' ? `checks for: ${propositionOf(p.measurement)} (for a diff, a line the change adds); ` : ''}your example: ${p.onExample ?? 'held'}${beside(p)}`);
   block('Judgement: shown to the writer, reported as not measured', of('JUDGEMENT'), () => '');
   block('Shown by your example, and not in your method: shown to the writer, required only if you say so', shown, (p) => `${LABEL[p.obligation]}; your example: ${p.onExample ?? 'held'}`);
   block('Counted from your examples, and not in your method: how they are written. Shown to the writer and used to choose between drafts; required only if you say so', counted, (p) => `${looksFor(p)}${p.onExample ?? 'held'}`);

@@ -19,7 +19,7 @@ import type { Measurement, ObserverId } from '../state/canonical-state.js';
 import { TERM_RATE, RATIO, DISTRIBUTION, RHYTHM } from './balance.js';
 import { OPENING, CLOSING, HEADINGS, PRESENCE } from './structure.js';
 import { FEATURE } from './features.js';
-import { TABLE, CITED, LINES, LENGTH } from './obligations.js';
+import { TABLE, CITED, LINES, LENGTH, NAMES_TEST } from './obligations.js';
 import { GRAMMAR } from './grammar.js';
 import { findPattern, PATTERN_LABEL, PATTERN_IDS, proseWords, styleDistanceDocs, authorSelfMargins, type PatternId } from './style.js';
 
@@ -260,8 +260,8 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
   // ── What must be there: sections, mentions, figures, how the close starts (./structure.ts) ────
   PRESENCE,
   FEATURE,
-  // ── What a method requires of the work: a table, and figures the writer was given (./obligations.ts) ──
-  TABLE, CITED, LINES, LENGTH,
+  // ── What a method requires of the work: a table, figures the writer was given, lines it cites, a test it names (./obligations.ts) ──
+  TABLE, CITED, LINES, LENGTH, NAMES_TEST,
   // ── Mechanical errors: spelling, agreement, punctuation, by an engine the process wires in (./grammar.ts) ──
   GRAMMAR,
 };

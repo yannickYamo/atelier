@@ -22,7 +22,7 @@
  {
   "id": "code-review-11",
   "coverage": "PARTIAL",
-  "unchecked": "whether each item carries a citation, and whether the cited line is the right one"
+  "unchecked": "whether the cited line supports the claim"
  },
  {
   "id": "code-review-21",
