@@ -2437,8 +2437,18 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   const repairOff = argv.includes('--no-repair');
   const r = rec.repair;
   if (r) {
+    // A RULE THAT BECAME UNMEASURABLE DID NOT COME TO HOLD. A repair that shortened the text below what a check can read
+    // leaves the rule not measured, and this line says so rather than counting it as held.
+    const finalVerdict = new Map((verified?.checked ?? []).map((c) => [c.requirementId, c.result.verdict]));
+    const unmeasured = r.violatedBefore.filter((id) => !r.violatedAfter.includes(id) && finalVerdict.get(id) === 'NOT_APPLICABLE');
+    const nowHold = r.violatedBefore.filter((id) => !r.violatedAfter.includes(id) && !unmeasured.includes(id));
+    const outcome = [
+      ...(r.violatedAfter.length ? [`still broken: ${r.violatedAfter.join(', ')}`] : []),
+      ...(unmeasured.length ? [`not measured on the text delivered: ${unmeasured.join(', ')}`] : []),
+      ...(nowHold.length ? [r.violatedAfter.length || unmeasured.length ? `now hold: ${nowHold.join(', ')}` : 'all now hold'] : []),
+    ];
     report.detail(`checked against the standard: ${r.violatedBefore.length} REQUIRED rule(s) broken in the draft (${r.violatedBefore.join(', ')}); `
-      + `${r.passes} rewrite pass(es) of only the spans that broke them; ${r.violatedAfter.length ? `still broken: ${r.violatedAfter.join(', ')}` : 'all now hold'}.`);
+      + `${r.passes} rewrite pass(es) of only the spans that broke them; ${outcome.join('; ') || 'nothing to repair'}.`);
     if (r.graded) {
       report.detail(`graded features (never a failure): ${r.graded.features.join(', ') || 'none'}; ${r.graded.targeted} targeted by a rewrite, ${nearerRange(r.graded).length} observed nearer your range; `
         + `${r.graded.redrafts} draft(s) written again for them; ${r.graded.edits.accepted} rewrite(s) kept, ${r.graded.edits.rejected} not; ${r.graded.calls} call(s), $${r.graded.costUsd.toFixed(4)}, on their account`

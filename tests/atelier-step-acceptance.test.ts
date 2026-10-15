@@ -80,6 +80,11 @@ describe.skipIf(!existsSync(CLI))('through the binary, with the material bound',
     expect(out.eval.result.conformant).toBe(false);
     expect(err).not.toMatch(/c4, x1 held/);
     expect(err).not.toMatch(/every REQUIRED measured rule holds/);
+    // the record's own detail line says the same: not measured, never "all now hold"
+    const detail = JSON.stringify((out as unknown as { report?: unknown }).report ?? '');
+    expect(detail).not.toMatch(/all now hold/);
+    expect(detail).toMatch(/not measured on the text delivered: [^"]*c4/);
+    expect(detail).toMatch(/not measured on the text delivered: [^"]*x1/);
     // the invented claim is still cut, and the paragraph it filled leaves no empty one behind
     expect(out.output ?? '').not.toMatch(/3,400 rpm/);
     expect(out.output ?? '').not.toMatch(/\n[ \t]*\n[ \t]*\n/);
