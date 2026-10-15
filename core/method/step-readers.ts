@@ -209,6 +209,8 @@ function paragraphLength(step: string): Measurement | null {
   if (/\b(?:at least|no fewer than|minimum|a minimum of)\b/i.test(t)) return null;
   // A negation is read only as "no paragraph …", "no more than", "no longer than".
   if (negated(t.replace(/\bno (?:paragraph|more than|longer than)\b/gi, ' '))) return null;
+  // "Paragraphs run 2 to 4 sentences": a range has a floor, which the check does not hold.
+  if (new RegExp(String.raw`\b${SMALL_N}\s*(?:to|-|–|and)\s*${SMALL_N}\s+sentences?\b`, 'i').test(t) || /\bbetween\b/i.test(t)) return null;
   // "three paragraphs of two sentences": a count of paragraphs is a count of something else.
   if (new RegExp(String.raw`\b${SMALL_N}\s+paragraphs?\b`, 'i').test(t)) return null;
   // Every number the step gives is the one read: two counts of sentences are a judgement.

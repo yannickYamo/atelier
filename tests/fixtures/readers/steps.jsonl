@@ -65,3 +65,4 @@
 {"id": "s065", "step": "Never write a paragraph of three sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
 {"id": "s066", "step": "Paragraphs of more than three sentences need a heading.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
 {"id": "s067", "step": "Keep paragraphs between 2 and 4 sentences.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
+{"id": "s068", "step": "Paragraphs run 2 to 4 sentences. A one-sentence paragraph is allowed once per post.", "sections": ["Summary", "Findings", "Blocking Issues", "Test", "Verdict"], "check": null}
