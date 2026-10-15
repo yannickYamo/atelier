@@ -17,3 +17,8 @@ export function invokeRecord(run) {
   }
   return JSON.parse(raw);
 }
+
+/** What a bench item keeps of an invoke record beside its text: the run, what broke, and the state it ended in (BLOCKED or not). */
+export function itemMeta(j) {
+  return { invocationId: j.invocationId, rulesBroken: j.rulesBroken, cut: j.cut, toCheck: j.toCheck, fidelity: j.fidelity ?? null, state: j?.eval?.record?.state ?? null };
+}

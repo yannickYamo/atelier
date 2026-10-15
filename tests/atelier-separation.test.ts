@@ -27,6 +27,7 @@ import { planFor } from '../core/plan/execution-plan.js';
 import { verifyText, type RuleCheck, type VerifyReport } from '../core/observers/verify.js';
 import { methodReading, methodLine } from '../core/eval/obligations.js';
 import type { ControllerDecisionRecord, GradedRecord, Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import { expectOneCounter } from './one-counter.js';
 
 const reportOf = (checked: RuleCheck[], failed = false): VerifyReport => ({ skill: 's', standardVersionHash: 'h', checked, unchecked: [], conditional: [], failed });
 const input = (over: Partial<ControllerInput> = {}): ControllerInput => ({ enforced: [], claims: 0, length: null, graded: [], grammar: null,
@@ -102,12 +103,14 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
   const handed = (output: string) => ({ output, report: reportOf([]), repair: { passes: 0, violatedBefore: [], violatedAfter: [], originalOutputHash: 'h', why: 'w',
     controller: controllerRecord([step('carrier-rewrite', 'kept', 0.4, ['x1']), { ...step('redraft', 'handed to a redraft', 0, ['x1']), observed: { movement: 0, calls: 0, usd: 0 } }], 'handed to a redraft', true) } });
   it('the second draft is refined with the first draft\'s steps and the redraft as its history; the redraft records 14 → 4.78 as 9.22', async () => {
-    const histories: (readonly ControllerDecisionRecord[])[] = [];
-    const go = withRedraft(async (t) => (t === 'first' ? handed(t) : noRepair(t)), { notes: [], redraft: async () => 'second',
+    const histories: (readonly ControllerDecisionRecord[])[] = []; let drafts = 0;
+    const go = withRedraft(async (t) => (t === 'first' ? handed(t) : noRepair(t)), { notes: [], redraft: async () => { drafts += 1; return 'second'; },
       unmet: (d) => (d.output === 'first' ? [far(14)] : [far(4.78)]),
       check: () => reportOf([]),
       resume: async (t, h) => { histories.push(h); return noRepair(t); } });
     const d = await go('first');
+    // the scripted first draft's own carrier rewrite, and the draft written here
+    expectOneCounter(d.repair?.controller, 1 + drafts);
     expect(histories).toHaveLength(1);
     expect(histories[0].map((x) => `${x.action}|${x.outcome}`)).toEqual(['carrier-rewrite|kept', 'redraft|handed to a redraft', 'redraft|kept']);
     expect(histories[0][2].observed.movement).toBe(9.22);
@@ -126,18 +129,21 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
     const withResume = withRedraft(async (t) => handed(t), { notes: [], redraft: async () => 'x', unmet: () => [], resume: async (t) => { resumed += 1; return noRepair(t); } });
     const a = await withResume('first');
     expect(resumed).toBe(1);
+    expectOneCounter(a.repair?.controller, 1);
     expect(askedForRedraft(a.repair?.controller)).toBe(false);
     expect(a.repair?.controller?.handedToRedraft).not.toBe(true);
     const bare = await withRedraft(async (t) => handed(t), { notes: [], redraft: async () => 'x', unmet: () => [] })('first');
     expect(askedForRedraft(bare.repair?.controller)).toBe(false);
+    expectOneCounter(bare.repair?.controller, 1);
     expect(bare.repair?.controller?.stoppedBecause).toMatch(/no draft could be written again$/);
   });
   it('a redraft no nearer as written is not refined; the smaller steps go on the first draft and the line says what they left', async () => {
-    const notes: string[] = []; const refined: string[] = [];
-    const go = withRedraft(async (t) => { refined.push(t); return t === 'first' ? handed(t) : noRepair(t); }, { notes, redraft: async () => 'second',
+    const notes: string[] = []; const refined: string[] = []; let drafts = 0;
+    const go = withRedraft(async (t) => { refined.push(t); return t === 'first' ? handed(t) : noRepair(t); }, { notes, redraft: async () => { drafts += 1; return 'second'; },
       unmet: (d) => (d.output === 'resumed' ? [] : [far(3)]), check: () => reportOf([]),
       resume: async () => noRepair('resumed') });
     const d = await go('first');
+    expectOneCounter(d.repair?.controller, 1 + drafts);
     expect(refined).toEqual(['first']);
     expect(d.output).toBe('resumed');
     expect(notes.join(' ')).toMatch(/one more draft did not do better, so the first is kept\. After the smaller steps that followed, none of them is left\.$/);
@@ -145,7 +151,9 @@ describe('(c) (d) (e) one cap per run, no hand-off without a redraft, the real m
   it('a length beside a habit: the habit is still only what the pieces usually do', async () => {
     const notes: string[] = [];
     const length: Unmet = { id: 'length', statement: 'Write it at the length my pieces run: 369 to 437 words', detail: '179 words, 122 too few', off: 122, whole: true };
-    await withRedraft(async (t) => noRepair(t), { notes, redraft: async () => 'second', unmet: () => [length, far(2)] })('first');
+    let drafts = 0;
+    const d = await withRedraft(async (t) => noRepair(t), { notes, redraft: async () => { drafts += 1; return 'second'; }, unmet: () => [length, far(2)] })('first');
+    expectOneCounter(d.repair?.controller, drafts);
     expect(notes.join(' ')).toMatch(/2 thing\(s\) the work requires or your pieces usually do/);
   });
 });
@@ -163,8 +171,9 @@ describe('a method\'s ban is a span rule: rewritten in place, never "left out"',
   it('through the loop: the first step is a rewrite of its span, and the ban holds', async () => {
     const plain = 'The harbour opens at nine and the ferry crosses the bay at ten on most days of the year.';
     const text = `${Array.from({ length: 6 }, () => plain).join(' ')} We simply walk down to the pier.`;
-    const client = { complete: () => ok({ replacements: [{ id: 1, text: 'We walk down to the pier.' }] }) };
+    const client = { calls: 0, complete: () => { client.calls += 1; return ok({ replacements: [{ id: 1, text: 'We walk down to the pier.' }] }); } };
     const r = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'd', v, text, 2, { guardClaims: false });
+    expectOneCounter(r.repair?.controller, client.calls);
     expect(r.repair?.controller?.decisions[0]).toMatchObject({ action: 'rewrite', targets: ['x1'], outcome: 'kept' });
     expect(r.report.failed).toBe(false);
   });
@@ -224,8 +233,9 @@ describe('SIGNAL ids never reach a record the person may read', () => {
     const text = Array.from({ length: 6 }, (_, p) => Array.from({ length: 4 }, (_, i) => (i === 0 || (p < 3 && i === 2) ? aside : plain)).join(' ')).join('\n\n');
     const v = { standardVersionHash: 's', requirements: [] } as unknown as StandardVersion;
     const profile = { version: 1, corpusHash: 'c', detector: null, hash: 'h', bands: [{ id: 'parenthesis', cls: 'all', band: [0, 8], median: 4, spread: 2, n: 8, role: 'SIGNAL', auc: 0.9 }] } as never;
-    const client = { complete: () => ok({ replacements: [1, 2, 3].map((id) => ({ id, text: 'The rule holds here and it holds there too, most of the time at least.' })) }) };
+    const client = { calls: 0, complete: () => { client.calls += 1; return ok({ replacements: [1, 2, 3].map((id) => ({ id, text: 'The rule holds here and it holds there too, most of the time at least.' })) }); } };
     const r = await refineToStandard(client, { spentUsd: 0, capUsd: 1 }, 'd', v, text, 2, { graded: 'all', gradedProfile: profile, guardClaims: false });
+    expectOneCounter(r.repair?.controller, client.calls);
     const targets = (r.repair?.controller?.decisions ?? []).flatMap((d) => d.targets);
     expect(targets.length).toBeGreaterThan(0);
     expect(targets.every((t) => !t.startsWith('signal'))).toBe(true);
@@ -260,6 +270,9 @@ describe.skipIf(!existsSync(CLI))('end to end: the separation held on a real run
   };
   const model = (): string[] => ['--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted'];
   const script = (body: unknown) => fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify(body) });
+  // the repair calls the backend answered: each span or carrier rewrite, and each draft written again or trimmed
+  const repairCalls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies
+    .filter((b) => b.includes('emit_replacements') || b.includes('<earlier-draft>')).length;
   const add = (statement: string, materiality: string, measure: string) => run('add', '--statement', statement, '--kind', 'BOUNDARY', '--applies-when', 'GENERAL', '--materiality', materiality, '--measure', measure);
   interface Out { output: string; controller: { decisions: ControllerDecisionRecord[]; stoppedBecause: string; handedToRedraft?: boolean } }
   beforeAll(async () => {
@@ -276,7 +289,9 @@ describe.skipIf(!existsSync(CLI))('end to end: the separation held on a real run
     await script({ byTool: { emit_piece: { piece }, emit_replacements: { replacements: [1, 2, 3].map((id, i) => ({ id, text: i === 0 ? 'We met the team at the office.' : 'We met the team (briefly).' })) } } });
     add('At most 5 parenthetical asides per 1,000 words.', 'REQUIRED', 'FEATURE:feature=parenthesis,minValue=0,maxValue=5');
     run('ratify-close', '--work-type', 'writing'); run('build', '--name', 'asides');
+    const before = await repairCalls();
     const out = JSON.parse(run('invoke', '--skill', 'asides', 'write a note', '--json', '--allow-unsourced', ...model())) as Out;
+    expectOneCounter(out.controller as never, await repairCalls() - before);
     const p = { feature: ['parenthesis'], minValue: 0, maxValue: 5 };
     expect(Math.abs(FEATURE.observe(out.output, p).error ?? 0)).toBeLessThanOrEqual(Math.abs(FEATURE.observe(piece, p).error ?? 0));
     expect(out.controller.decisions.find((d) => d.action === 'rewrite')).toMatchObject({ outcome: 'not kept', observed: { note: 'the rewrite made x1 worse' } });
@@ -291,7 +306,9 @@ describe.skipIf(!existsSync(CLI))('end to end: the separation held on a real run
     await script({ when: [{ contains: '<earlier-draft>', answer: { piece: d2 } }], byTool: { emit_piece: { piece: d1 }, emit_replacements: { replacements: [] } } });
     add('Few asides in parentheses.', 'PREFERRED', 'FEATURE:feature=parenthesis,minValue=0,maxValue=2');
     run('ratify-close', '--work-type', 'writing'); run('build', '--name', 'asides');
+    const before = await repairCalls();
     const out = JSON.parse(run('invoke', '--skill', 'asides', 'write a note', '--json', '--allow-unsourced', ...model())) as Out;
+    expectOneCounter(out.controller as never, await repairCalls() - before);
     const c = out.controller;
     expect(c.handedToRedraft).not.toBe(true);
     expect(c.stoppedBecause).not.toMatch(/^handed to a redraft/);

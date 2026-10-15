@@ -34,7 +34,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, cpSync
 import { join, resolve, basename, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { invokeRecord } from './invoke-json.mjs';
+import { invokeRecord, itemMeta } from './invoke-json.mjs';
 import { factLedger, factCoverage, authorFactDensity } from '../../dist/core/loop/fact-ledger.js';
 import { buildProfile, readFidelity } from '../../dist/core/fidelity/profile.js';
 import { trainDetector, scoreDetector } from '../../dist/core/fidelity/stylometry.js';
@@ -272,7 +272,8 @@ async function generate() {
         // a BLOCKED run exits 1 with its record on stdout: that record is kept (./invoke-json.mjs)
         const j = invokeRecord(() => execFileSync('node', [CLI, 'invoke', '--skill', `b6-${x.reg}`, '--json', '--no-taste', '--model', MODEL, ...priceFlags(w), ...extra, brief], { cwd: proj, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
         text = j.output; cost = j.costUsd ?? 0;
-        meta = { invocationId: j.invocationId, rulesBroken: j.rulesBroken, cut: j.cut, toCheck: j.toCheck, fidelity: j.fidelity ?? null };
+        // the state is kept with the item: a BLOCKED run's text is counted knowing it was blocked
+        meta = itemMeta(j);
       }
       budget.spentUsd += cost;
       // The record first, the text last: the text's existence is what marks the item done.

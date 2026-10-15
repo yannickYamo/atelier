@@ -13,6 +13,7 @@ import type { ControllerDecisionRecord, StandardVersion } from '../core/state/ca
 import type { FidelityProfile } from '../core/fidelity/types.js';
 import { setGrammarProvider, resetGrammar, ensureGrammar } from '../core/observers/grammar.js';
 import { stubGrammar } from '../providers/grammar.js';
+import { expectOneCounter } from './one-counter.js';
 
 const input = (over: Partial<ControllerInput> = {}): ControllerInput => ({ enforced: [], claims: 0, length: null, graded: [], grammar: null,
   budget: { usdLeft: 1, callsLeft: null }, history: [], observedUsdPerCall: {}, can: { redraft: true, rewrite: true }, unreachable: new Set(), ...over });
@@ -192,6 +193,7 @@ describe('through the loop', () => {
     const writer = scripted([reps('x')]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 1.3), text, 2, opts());
     expect(writer.calls).toBe(0);
+    expectOneCounter(r.repair?.controller, writer.calls);
     expect(r.output).toBe(text);
     expect(r.repair?.passes).toBe(0);
     expect(r.repair?.controller).toEqual({ policy: 'bounded-v1', decisions: [], stoppedBecause: 'every enforced rule holds and no graded miss is over 0.5 band widths', callsUsed: 0, usdUsed: 0 });
@@ -202,6 +204,7 @@ describe('through the loop', () => {
     const writer = scripted([reps('x')]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3, [conclusion]), text, 2, opts({ controller: { redraft: true } }));
     expect(writer.calls).toBe(0);
+    expectOneCounter(r.repair?.controller, writer.calls);
     expect(r.repair?.controller?.decisions.map((d) => [d.action, d.targets, d.outcome])).toEqual([['redraft', ['r1'], 'handed to a redraft']]);
     expect(r.repair?.controller?.stoppedBecause).toMatch(/^handed to a redraft: 1 enforced rule\(s\) need something the draft does not have/);
   });
@@ -211,6 +214,7 @@ describe('through the loop', () => {
     const writer = scripted([reps(asideS.replace(/[()]/g, ''))]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }));
     const ctl = r.repair!.controller!;
+    expectOneCounter(ctl, writer.calls, [failedRedraft]);
     expect(ctl.decisions[0]).toMatchObject({ action: 'carrier-rewrite', targets: ['p1'], outcome: 'kept' });
     expect(ctl.decisions[0].why).toMatch(/switched to it because redraft on p1 not kept \(one more draft did not do better\)/);
     expect(ctl.decisions[0].observed.movement).toBeGreaterThan(0);
@@ -225,6 +229,7 @@ describe('through the loop', () => {
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }));
     const ledger = spendBetween(before, processSpendByPurpose()).filter((l) => l.purpose === 'repair' || l.purpose === 'graded');
     const ctl = r.repair!.controller!;
+    expectOneCounter(ctl, writer.calls, [failedRedraft]);
     expect(ctl.decisions.map((d) => [d.action, d.outcome])).toEqual([['carrier-rewrite', 'not kept']]);
     expect(ctl.decisions[0]).toMatchObject({ targets: ['p1'], expectedCostUsd: 0.05 });
     expect(ctl.stoppedBecause).toBe('every action tried failed on what is left: p1 (redraft, carrier-rewrite)');
@@ -242,6 +247,7 @@ describe('through the loop', () => {
     // the writer turns the asides of the carrier sentences it is given into commas, every word kept: the rate falls
     const writer = scripted([reps('The rule holds here, as it did last year, and it holds there too, most of the time, at least.')]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, v0 / 2, [g1]), faulty, 2, opts());
+    expectOneCounter(r.repair?.controller, writer.calls);
     const steps = r.repair!.controller!.decisions.map((d) => [d.action, d.targets, d.outcome]);
     expect(steps[0]).toEqual(['carrier-rewrite', ['p1'], 'kept']);
     const at = steps.findIndex((d) => d[0] === 'grammar');
@@ -268,6 +274,7 @@ describe('through the loop', () => {
     const writer = scripted([reps('x')]);
     const r = await refineToStandard(writer, { spentUsd: 0.99, capUsd: 1 }, 'd', stdWith(0, value / 2), text, 2, opts());
     expect(writer.calls).toBe(0);
+    expectOneCounter(r.repair?.controller, writer.calls);
     expect(r.repair?.controller?.stoppedBecause).toMatch(/^the budget: carrier-rewrite would cost about \$0.05/);
     expect(r.repair?.controller?.decisions).toEqual([]);
   });
@@ -277,6 +284,7 @@ describe('through the loop', () => {
     const writer = scripted([reps('x')]);
     const r = await refineToStandard(writer, { spentUsd: 0.99, capUsd: 1 }, 'd', stdWith(0, value / 2), text, 2, opts({ gradedProfile: profile }));
     expect(writer.calls).toBe(0);
+    expectOneCounter(r.repair?.controller, writer.calls);
     const first = r.repair?.controller?.decisions[0];
     expect(first).toMatchObject({ action: 'operators', targets: ['p1'], outcome: 'kept', expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
     expect(first?.why).toMatch(/^the budget: carrier-rewrite would cost about \$0\.05.*; the operators still run, no model/);
@@ -284,6 +292,8 @@ describe('through the loop', () => {
     expect((r.output.match(/\(/g) ?? []).length).toBeLessThan((text.match(/\(/g) ?? []).length);
   });
   it('the same draft and settings give the same steps', async () => {
+    const writer = scripted([reps(asideS)]);
+    expectOneCounter((await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }))).repair?.controller, writer.calls, [failedRedraft]);
     const run = () => refineToStandard(scripted([reps(asideS)]), { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, value / 3), text, 2, opts({ controller: { redraft: true, history: [failedRedraft] } }));
     expect((await run()).repair?.controller).toEqual((await run()).repair?.controller);
   });

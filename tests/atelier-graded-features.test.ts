@@ -19,6 +19,7 @@ import { FEATURE, errorAtLength, LENGTH_DRIFT } from '../core/observers/features
 import type { VerifyReport, RuleCheck } from '../core/observers/verify.js';
 import * as store from '../core/state/store.js';
 import type { GradedRecord, ControllerRecord } from '../core/state/canonical-state.js';
+import { expectOneCounter } from './one-counter.js';
 
 const rule = (id: string, feature: string, materiality = 'PREFERRED', extra: Record<string, unknown> = {}) => ({ requirementId: id, statement: `${feature} in range.`, materiality, authority: 'USER_ADOPTED', appliesWhen: 'GENERAL',
   measurement: { observer: 'FEATURE', params: { feature: [feature], minValue: 1, maxValue: 3 } }, ...extra });
@@ -29,10 +30,12 @@ const reportOf = (checked: RuleCheck[]): VerifyReport => ({ skill: 's', standard
 describe('which rules are graded, and which checks a pass is pointed at', () => {
   const std = { requirements: [rule('a', 'colon'), rule('b', 'parenthesis'), rule('c', 'parenthesis'), rule('d', 'question', 'REQUIRED'), rule('e', 'italic', 'PREFERRED', { authority: 'EXPERT_REJECTED' }),
     { requirementId: 'f', statement: 'no leverage', materiality: 'REQUIRED', measurement: { observer: 'LEXICON', params: { terms: ['leverage'] } } }] } as never;
-  it('nothing without the option; the named features, or all FEATURE rules; never a rejected rule or another observer', () => {
+  it('nothing without the option; the named features, or all FEATURE rules; never a rejected rule, a REQUIRED one or another observer', () => {
     expect(gradedRules(std, undefined).size).toBe(0);
     expect([...gradedRules(std, ['parenthesis']).entries()]).toEqual([['b', 'parenthesis'], ['c', 'parenthesis']]);
-    expect([...gradedRules(std, 'all').keys()]).toEqual(['a', 'b', 'c', 'd']);
+    // d is the owner's REQUIRED feature rule: enforced, never graded
+    expect([...gradedRules(std, 'all').keys()]).toEqual(['a', 'b', 'c']);
+    expect(gradedRules(std, ['question']).size).toBe(0);
     expect(gradedRules(std, ['nope']).size).toBe(0);
   });
   it('the broken graded checks, the largest |error| first, at most three FEATURES a pass (two rules on one feature count once)', () => {
@@ -309,6 +312,7 @@ describe('through the loop: a far-out signal is rewritten on its carriers, recor
     const writer = scripted([reps(asideS.replace(/[()]/g, ''))]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, far, 2, { graded: 'all', gradedProfile: p, guardClaims: false });
     expect(writer.calls).toBeGreaterThan(0);
+    expectOneCounter(r.repair?.controller, writer.calls);
     expect((r.output.match(/\(/g) ?? []).length).toBeLessThan((far.match(/\(/g) ?? []).length);
     expect(r.report.checked.some((c) => c.requirementId.startsWith(SIGNAL_PREFIX))).toBe(false);
     expect(r.report.failed).toBe(false);
@@ -326,6 +330,7 @@ describe('through the loop: a far-out signal is rewritten on its carriers, recor
     const p = profileOf([bandOf('parenthesis', [0, 5]), bandOf('colon', [0, 8])]);
     const writer = scripted([reps(asideS.replace(/[()]/g, '').replace(/ and it holds/, ': and it holds').replace(/ too /, ': too '))]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, far, 2, { graded: 'all', gradedProfile: p, guardClaims: false });
+    expectOneCounter(r.repair?.controller, writer.calls);
     expect(r.output).toBe(far);
     // the steering step's refusal is on its own record; the run's why still says the draft holds every rule
     expect(r.repair?.controller?.decisions.some((d) => d.outcome === 'not kept' && (d.observed.note ?? '').startsWith("it displaced what your pieces hold"))).toBe(true);
@@ -338,6 +343,7 @@ describe('through the loop: a far-out signal is rewritten on its carriers, recor
     const writer = scripted([reps('x')]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', v, pieceOf(12), 2, { graded: 'all', gradedProfile: p, guardClaims: false });
     expect(writer.calls).toBe(0);
+    expectOneCounter(r.repair?.controller, writer.calls);
     expect(r.repair?.graded).toMatchObject({ targeted: 0, steered: [] });
   });
   it('with no profile and no FEATURE rule, nothing is graded and no record is made', async () => {
@@ -360,6 +366,9 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
   const run = (...a: string[]): string => execFileSync('node', [CLI, ...a], { encoding: 'utf8', cwd: proj, env });
   const invoke = (...extra: string[]) => JSON.parse(run('invoke', '--skill', 'asides', 'write a note', '--json', '--allow-unsourced', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', ...extra)) as
     { output: string; graded?: GradedRecord; report: string[]; eval: { spend?: { purpose: string; calls: number; usd: number }[]; record?: { state: string; entries: { id: string; required: boolean; result: string }[] } } };
+  // the repair calls the backend answered: each span or carrier rewrite, and each draft written again or trimmed
+  const repairCalls = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies
+    .filter((b) => b.includes('emit_replacements') || b.includes('<earlier-draft>')).length;
   const rewritesSent = async (): Promise<number> => ((await (await fetch(`http://127.0.0.1:${port}/__log`)).json()) as { bodies: string[] }).bodies.filter((b) => b.includes('emit_replacements')).length;
   beforeAll(async () => {
     if (!existsSync(CLI)) throw new Error('build first');
@@ -378,6 +387,7 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     const before = await rewritesSent();
     const out = invoke('--graded', 'none');
     expect(await rewritesSent()).toBe(before);
+    expectOneCounter((out as { controller?: ControllerRecord }).controller, 0);
     expect(out.output).toBe(draft);
     expect(out.graded).toBeUndefined();
     // nothing required fails on this skill: whatever is left for a person to read, the state is not BLOCKED
@@ -398,9 +408,10 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
   });
   it('with no flag: the carriers are rewritten, the JSON and the record carry graded, and the state is what --graded none gives', async () => {
     const plainRun = invoke('--graded', 'none');
-    const before = await rewritesSent();
+    const before = await rewritesSent(); const sent = await repairCalls();
     const out = invoke();
     expect(await rewritesSent()).toBeGreaterThan(before);
+    expectOneCounter((out as { controller?: ControllerRecord }).controller, await repairCalls() - sent);
     expect(out.output).not.toBe(draft);
     expect((out.output.match(/\(/g) ?? []).length).toBeLessThan((draft.match(/\(/g) ?? []).length);
     expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 1, repaired: 1, steered: ['parenthesis'] });
@@ -442,10 +453,11 @@ describe('through the binary: a graded miss is repaired on its carriers and leav
     // eight aside sentences: about 34 per 1,000 against a band of 2 to 9, about 3.6 widths out: over 1.5, so a redraft
     const far = Array.from({ length: 8 }, (_, i) => Array.from({ length: 3 }, (_, k) => ((i * 3 + k) % 3 === 0 ? aside : plain)).join(' ')).join('\n\n');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: far }, emit_replacements: { replacements: replacements(3) } } }) });
-    const before = await rewritesSent();
+    const before = await rewritesSent(); const sent = await repairCalls();
     const out = invoke();
     // the scripted writer returns the same piece, which is no nearer; the first draft's carriers are then rewritten
     expect(await rewritesSent()).toBeGreaterThan(before);
+    expectOneCounter((out as { controller?: ControllerRecord }).controller, await repairCalls() - sent);
     const parens = (t: string): number => (t.match(/\(/g) ?? []).length;
     expect(parens(out.output)).toBeLessThan(parens(far));
     expect(out.graded).toMatchObject({ features: ['parenthesis'], targeted: 1, repaired: 1 });

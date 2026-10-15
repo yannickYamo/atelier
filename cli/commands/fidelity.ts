@@ -248,7 +248,7 @@ const describeSettings = (s: ImplementationSettings): string =>
 export function describeControllerSettings(c: ImplementationSettings['controller']): string[] {
   const s = controllerSettings(c);
   const effects = Object.entries(s.effects);
-  return [`repair controller: at least ${s.minGainPerUsd} band width(s) expected per dollar, at most ${s.maxActions} step(s) a draft, ${s.extraDraft ? 'one more draft when an enforced rule still fails' : 'no extra draft'}${c ? '' : ' (the defaults)'}`,
+  return [`repair controller: at least ${s.minGainPerUsd} band width(s) expected per dollar, at most ${s.maxActions} step(s) a run, ${s.extraDraft ? 'one more draft when an enforced rule still fails' : 'no extra draft'}${c ? '' : ' (the defaults)'}`,
     effects.length ? `  measured effects: ${effects.map(([a, e]) => `${a} ${e?.movement} a target for $${e?.usdPerAction.toFixed(4)} (n=${e?.n})`).join('; ')}`
       : '  measured effects: none yet (a release made after runs with repair steps records them)'];
 }
