@@ -6,6 +6,10 @@
 // code, quotations, addresses and citations are never touched; an engine that cannot load leaves the check
 // unverified with its reason; a skill built before this rule rebuilds to the same bytes; a new build carries it REQUIRED.
 //
+// By default a grammar finding is only listed (core/observers/grammar.ts); the in-place set these cases hold is what
+// `--fix-grammar` applies, so the blocks that test it switch it on (`setGrammarFixing`) and put it back. The default,
+// list-only reading is held in tests/atelier-grammar-listonly.test.ts, and through the binary at the end of this file.
+//
 // The engine is real (harper.js, offline) and loaded once for this file: the suite sets it aside elsewhere
 // (vitest.config.ts) because its dictionary costs seconds a process. Nothing here calls a model.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -16,7 +20,7 @@ import { join, resolve } from 'node:path';
 import { measure } from '../core/observers/registry.js';
 import { verifyText } from '../core/observers/verify.js';
 import { setGrammarProvider, ensureGrammar, resetGrammar, readGrammar, protectedRanges, dialectOfPieces, authorVocabulary, grammarStatus,
-  MECHANICAL_RULES, GRAMMAR_NOT_RUN, GRAMMAR_OFF, GRAMMAR_NOTE_SUFFIX, isGrammarNote, type GrammarEngine, type GrammarLint } from '../core/observers/grammar.js';
+  MECHANICAL_RULES, GRAMMAR_NOT_RUN, GRAMMAR_OFF, GRAMMAR_NOTE_SUFFIX, isGrammarNote, setGrammarFixing, type GrammarEngine, type GrammarLint } from '../core/observers/grammar.js';
 import { harperGrammar } from '../providers/harper.js';
 import { grammarProvider, stubGrammar } from '../providers/grammar.js';
 import { correctMechanicalErrors, mechanicalFixes } from '../core/loop/mechanical-repair.js';
@@ -38,8 +42,9 @@ const standard = (...rules: Requirement[]): StandardVersion => ({ standardVersio
   authorityState: 'RATIFIED', mintedAt: '2026-10-14T00:00:00Z', supersedes: null, reason: null });
 const m = (params: Record<string, readonly string[]> = {}) => ({ observer: 'GRAMMAR' as const, params });
 
-describe('the grammar rule, with the real engine', () => {
-  beforeAll(async () => { resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
+describe('the grammar rule, with the real engine, under --fix-grammar', () => {
+  beforeAll(async () => { setGrammarFixing(true); resetGrammar(); setGrammarProvider(harperGrammar); await ensureGrammar(); expect(grammarStatus().ready).toBe(true); }, 60_000);
+  afterAll(() => { setGrammarFixing(false); });
 
   it('an unintended subject–verb agreement error is found, with its correction, and corrected in place', () => {
     const text = 'He are late to the meeting. The plan still holds.';
@@ -49,7 +54,7 @@ describe('the grammar rule, with the real engine', () => {
     expect(r.spans[0].why).toMatch(/subject–verb agreement/);
     expect(r.error).toBe(1);
     const fixed = correctMechanicalErrors(text, r.spans);
-    expect(fixed).toEqual({ text: 'He is late to the meeting. The plan still holds.', corrected: 1 });
+    expect(fixed).toEqual({ text: 'He is late to the meeting. The plan still holds.', corrected: 1, changes: ['"are" → "is"'] });
     expect(measure(fixed.text, m()).verdict).toBe('MET');
   });
   it('a wrong article and a space before a comma are corrected; a repeated word and a missing apostrophe are listed; nothing else moves', () => {
@@ -57,6 +62,7 @@ describe('the grammar rule, with the real engine', () => {
     const out = correctMechanicalErrors(text, measure(text, m()).spans);
     expect(out.text).toBe('The the team shipped a bug fix. Its a plain gain, isnt it? Really, it is.');
     expect(out.corrected).toBe(2);
+    expect(out.changes).toEqual(['"an" → "a"', '"Really ," → "Really,"']);
     const listed = readGrammar(text, {}).uncertain.map((u) => u.text);
     expect(listed).toEqual(expect.arrayContaining(['The the', 'Its', 'isnt']));
   });
@@ -66,7 +72,7 @@ describe('the grammar rule, with the real engine', () => {
     const before = verifyText('g', v, text);
     const fixed = mechanicalFixes(v, before, text);
     expect(fixed.text).toBe('He is late to the meeting. The plan still holds.');
-    expect(fixed.fixed).toEqual(['g1: 1 mechanical error(s) corrected']);
+    expect(fixed.fixed).toEqual(['g1: 1 mechanical error(s) corrected: "are" → "is"']);
     const after = verifyText('g', v, fixed.text);
     expect(acceptRepair(before, after, { wordsAdded: true })).toMatchObject({ ok: true });
   });
@@ -163,7 +169,8 @@ describe('the grammar rule, with the real engine', () => {
   });
 });
 
-describe('the guards, on a scripted engine', () => {
+describe('the guards, on a scripted engine, under --fix-grammar', () => {
+  beforeAll(() => { setGrammarFixing(true); });
   const lint = (l: Partial<GrammarLint> & Pick<GrammarLint, 'rule' | 'start' | 'end'>): GrammarLint => ({ kind: 'Grammar', message: 'scripted', replacement: null, ...l });
   const scripted = (lints: readonly GrammarLint[]): GrammarEngine => ({ lint: () => lints });
   const under = async (lints: readonly GrammarLint[]): Promise<void> => { resetGrammar(); setGrammarProvider({ load: () => Promise.resolve(scripted(lints)) }); await ensureGrammar(); };
@@ -190,15 +197,15 @@ describe('the guards, on a scripted engine', () => {
   it('a correction handed straight to the repair that would move a figure or drop a name is not made', () => {
     const text = 'We asked Acme for 40 units. They was pleased.';
     const at = (w: string, replacement: string) => ({ start: text.indexOf(w), end: text.indexOf(w) + w.length, text: w, why: 'scripted', replacement });
-    expect(correctMechanicalErrors(text, [at('40', '14')])).toEqual({ text, corrected: 0 });
-    expect(correctMechanicalErrors(text, [at('Acme', 'acne'), at('was', 'were')])).toEqual({ text, corrected: 0 });
+    expect(correctMechanicalErrors(text, [at('40', '14')])).toEqual({ text, corrected: 0, changes: [] });
+    expect(correctMechanicalErrors(text, [at('Acme', 'acne'), at('was', 'were')])).toEqual({ text, corrected: 0, changes: [] });
     expect(correctMechanicalErrors(text, [at('was', 'were')]).text).toBe('We asked Acme for 40 units. They were pleased.');
   });
   it('the rule can be declared by hand, with a dialect and words of the author\'s own', () => {
     expect(parseMeasure('GRAMMAR:dialect=British,vocabulary=zorbletron|Widgit')).toEqual({ observer: 'GRAMMAR', params: { dialect: ['british'], vocabulary: ['zorbletron', 'widgit'] } });
     expect(parseMeasure('GRAMMAR')).toEqual({ observer: 'GRAMMAR', params: {} });
   });
-  afterAll(() => { resetGrammar(); setGrammarProvider(harperGrammar); });
+  afterAll(() => { setGrammarFixing(false); resetGrammar(); setGrammarProvider(harperGrammar); });
 });
 
 describe('the suite\'s fixed checker (ATELIER_GRAMMAR=stub)', () => {
@@ -206,21 +213,21 @@ describe('the suite\'s fixed checker (ATELIER_GRAMMAR=stub)', () => {
     expect(grammarProvider({ ATELIER_GRAMMAR: 'stub' })).toBe(stubGrammar);
     expect(grammarProvider({})).toBe(harperGrammar);
   });
-  it('reads clean text as MET and its known slips as confirmed errors with corrections', async () => {
-    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
+  it('reads clean text as MET and, under --fix-grammar, its known slips as confirmed errors with corrections', async () => {
+    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar(); setGrammarFixing(true);
     try {
       expect(measure('They were late to the meeting. The plan still holds.', m())).toMatchObject({ verdict: 'MET', detail: 'no mechanical error' });
       const r = measure('They was late. We recieve the the report.', m());
       expect(r.verdict).toBe('VIOLATED');
       // A repeated word is listed, never collapsed: "the the" stays for the person to read; so is a dialect's "they was".
       expect(correctMechanicalErrors('They was late. We recieve the the report.', r.spans).text).toBe('They was late. We receive the the report.');
-    } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
+    } finally { setGrammarFixing(false); resetGrammar(); setGrammarProvider(harperGrammar); }
   });
 });
 
 describe('a short output from a standard read from long pieces', () => {
-  it('keeps the grammar rule: it is no band counted off long pieces, and it is applied to the short output', async () => {
-    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
+  it('keeps the grammar rule: it is no band counted off long pieces, and it is applied to the short output (under --fix-grammar)', async () => {
+    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar(); setGrammarFixing(true);
     try {
       const band = aRequirement({ requirementId: 'm1', statement: 'Sentences run to a median of 18 words.', kind: 'BOUNDARY', materiality: 'PREFERRED',
         measurement: { observer: 'SENTENCE_LENGTH', params: { medianMax: 18, p90Max: 30 } } });
@@ -232,7 +239,7 @@ describe('a short output from a standard read from long pieces', () => {
       expect(short.checked.find((c) => c.requirementId === 'g1')?.result).toMatchObject({ verdict: 'VIOLATED', spans: [{ text: 'recieve', replacement: 'receive' }] });
       expect(short.failed).toBe(true);
       expect(checkDraft('g', v, 'We receive it today. Ship it.', { guardClaims: false, doesNotApply: transfer!.doesNotApply }).checked.find((c) => c.requirementId === 'g1')?.result.verdict).toBe('MET');
-    } finally { resetGrammar(); setGrammarProvider(harperGrammar); }
+    } finally { setGrammarFixing(false); resetGrammar(); setGrammarProvider(harperGrammar); }
   });
 });
 
@@ -307,7 +314,7 @@ describe('through the binary', () => {
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('a new build from pieces carries the rule REQUIRED and ratified; verify holds a draft to it and lists what is uncertain', () => {
+  it('a new build from pieces carries the rule REQUIRED and ratified; verify lists what it finds, and with --fix-grammar holds a draft to it', () => {
     const { data, proj, run, tryRun } = seed('new');
     mkdirSync(join(proj, 'posts'));
     PIECES.forEach((p, i) => { writeFileSync(join(proj, 'posts', `p${i + 1}.md`), p); });
@@ -317,7 +324,14 @@ describe('through the binary', () => {
     expect(g).toMatchObject({ statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'EXPERT_RATIFIED', appliesWhen: 'GENERAL' });
     expect(readFileSync(join(proj, '.claude', 'skills', 'posts', 'SKILL.md'), 'utf8')).toContain('No mechanical errors');
     writeFileSync(join(proj, 'draft.md'), 'He are late to the meeting, and the bug fix landed. The plan still holds.');
-    const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced');
+    // By default the finding is listed, the rule is the person's to read, and nothing blocks.
+    const listed = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced');
+    expect(listed.code).toBe(0);
+    expect(listed.out).toMatch(new RegExp(`to check {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
+    expect(listed.out).toMatch(/listed for you to check: 2 possible slips: "are" \(subject–verb agreement: "are" → "is"\)/);
+    expect(listed.out).toMatch(/NEEDS REVIEW/);
+    expect(listed.out).not.toMatch(/FAIL {2}/);
+    const r = tryRun('verify', '--skill', 'posts', 'draft.md', '--allow-unsourced', '--fix-grammar');
     expect(r.code).toBe(1);
     expect(r.out).toMatch(new RegExp(`FAIL {2}${g?.requirementId ?? 'g'} {2}No mechanical errors`));
     expect(r.out).toMatch(/1 mechanical error\(s\): subject–verb agreement; 1 listed to check/);
@@ -347,19 +361,19 @@ describe('through the binary', () => {
     expect(first.toString()).not.toContain('No mechanical errors');
   }, 120_000);
 
-  it('a run corrects the error without a model, records the fix, and the delivered text carries it', async () => {
+  it('with --fix-grammar a run corrects the error without a model, records the fix, and the delivered text carries it', async () => {
     const { data, proj, run } = seed('run');
     mkdirSync(join(proj, 'posts'));
     PIECES.forEach((p, i) => { writeFileSync(join(proj, 'posts', `p${i + 1}.md`), p); });
     run('new', 'posts', '--no-model', '--name', 'posts');
     await fetch(`http://127.0.0.1:${port}/__set`, { method: 'POST', body: JSON.stringify({ byTool: { emit_piece: { piece: 'He are late to the meeting. The plan still holds.' } } }) });
-    const out = run('invoke', '--skill', 'posts', 'a short note', '--allow-unsourced', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--json');
+    const out = run('invoke', '--skill', 'posts', 'a short note', '--allow-unsourced', '--fix-grammar', '--provider', 'openai-compatible', '--base-url', `http://127.0.0.1:${port}`, '--model', 'scripted', '--json');
     const shown = JSON.parse(out.slice(out.indexOf('{'))) as { output: string; invocationId: string };
     expect(shown.output).toContain('He is late to the meeting.');
     // The stored invocation carries the repair: what was broken before, and how it was fixed.
     const rec = JSON.parse(readFileSync(join(data, 'skills', 'posts', 'invocations', `${shown.invocationId}.json`), 'utf8')) as { repair?: { why: string; violatedBefore: string[]; violatedAfter: string[] } };
     expect(rec.repair?.violatedBefore.length).toBe(1);
     expect(rec.repair?.violatedAfter).toEqual([]);
-    expect(rec.repair?.why).toMatch(/fixed without a model: \w+: 1 mechanical error\(s\) corrected/);
+    expect(rec.repair?.why).toMatch(/fixed without a model: \w+: 1 mechanical error\(s\) corrected: "are" → "is"/);
   }, 120_000);
 });

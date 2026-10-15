@@ -1,0 +1,160 @@
+C	Copy the sample into a .env file and fill in your keys.
+C	Copy the sample into an .env file and fill in your keys.
+C	Save the sheet as a .csv and mail it to me.
+C	Save the sheet as an .xlsx before you share it.
+C	The tool writes an .md file beside each page.
+C	Export it to a .json first, then commit.
+C	Call the script with an -o flag that points at the folder.
+C	The index showed a .5 rise over the year.
+C	Prices moved by an .8 point after the change.
+C	Grade a eggs cost a little more at the market.
+C	Plan a is cheaper, and plan b is faster.
+C	Part a asks about the tides and part b about the moon.
+C	Section a of the form asks for your address.
+C	Let the variable a equal two for this example.
+C	If a is even, the loop stops early.
+C	Point a and point b are four metres apart.
+C	Type a and press return to accept the default.
+C	Vitamin a is found in carrots and leafy greens.
+C	Hepatitis a is spread through food and water.
+C	Tune the top string down from a until it stops buzzing.
+C	The tune climbs from a up to e and then rests.
+C	In row a, enter the totals for each month.
+C	Ask her whether a or b is the larger number.
+C	In Spanish, a is a preposition that often means to.
+C	Il y a un chat sur le toit, she told the class in French.
+C	Il y a une heure que je t'attends, he wrote on the card.
+C	Vamos a ir a la playa el sábado.
+C	Voy a usar el coche de mi hermano mañana.
+C	Fomos a uma festa na casa da Ana.
+C	Volvieron a otra ciudad después de la boda.
+C	It was a one-off, and we will not do it again.
+C	It was a once-a-year trip to the coast.
+C	She found a used bike for half the price.
+C	He owns a unicorn mug and a ukulele.
+C	The coin is a euro, not a pound.
+C	We need a uniform rule for every team.
+C	It is a useful habit to label your jars.
+C	A user can reset the password from the app.
+C	The farmer sold a ewe and two lambs.
+C	He spoke at a union meeting on Friday.
+C	They want a utility that renames photos.
+C	She bought an urn for the garden.
+C	We hired an it guy for the new office.
+C	She works as an or nurse at the city hospital.
+C	He spent ten years as an er doctor before teaching.
+C	My cousin is an rn on the night shift.
+C	They drove an rv across three states.
+C	Her son got an sat score he was proud of.
+C	The charity is a uk-based group that plants trees.
+C	He met an fbi agent at the conference.
+C	We bought an fm radio for the kitchen.
+C	Plot it on an x-axis that runs from zero to ten.
+C	I would not wish such an one on my worst rival.
+C	The old charter speaks of an union between the two towns.
+C	The query runs an sql join on two tables.
+C	Paste in an url and the page will fetch it.
+C	The ouija board was a gift from an aunt.
+C	Lower case a and upper case A look nothing alike.
+C	The row reads alice,,30 because the middle field is empty.
+C	Destructure it as const [first,,third] = items and skip the middle one.
+C	Call it as foo(a,,c) to leave the second argument out.
+C	The export shows red,,blue where the colour is missing.
+C	um,, that one is not mine, sorry
+C	ok,, so here is the thing about the party
+C	well,, i guess we can try again tomorrow
+C	Leave the field blank and the line becomes name,,email in the file.
+C	He wrote ,,hallo'' on the card the way his grandmother did.
+C	The dose went up by .5 mg on Tuesday.
+C	Set the opacity to .8 and save the file.
+C	She hit .312 last season and led the team.
+C	The rate fell by .25 percent in March.
+C	Run git add . and then commit the change.
+C	Type ls . to list the current folder.
+C	Build the image with docker build . from the project root.
+C	Start the server with node . and open the browser.
+C	Files ending in .md are skipped by the linter.
+C	Dotfiles such as .bashrc and .vimrc live in your home folder.
+C	Add the folder to .gitignore before you push.
+C	The .com boom ended in a long winter for start-ups.
+C	She registered a .org address for the club.
+C	The site moved to the .uk domain last year.
+C	I waited . . . and waited . . . and nobody came.
+C	Well . . . maybe we should ask first.
+C	I don't know ...
+C	and then ... nothing at all
+C	Loading ...
+C	rain , then rain , then nothing .
+C	a breath , a pause , a breath
+C	the gulls ,\nthe wet stones ,\nthe long grey line of the sea .
+C	In Morse code, s is . . . and o is - - -.
+C	The total in the old ledger was written 1 ,000 by mistake.
+C	Go to https://example.org/help/start .
+C	Write to help@example.org .
+C	The setting lives in /etc/hosts .
+C	Set the flag to `true` .
+C	The answer is 42 .
+C	Great work today 🙂 .
+C	Chain the calls like this:\n  items\n    .filter(isOpen)\n    .map(toRow)
+C	The pattern a .* b matches anything between the two letters.
+C	In Python you can write print(a , b) and it still runs.
+C	The emoticon ( ._. ) means I feel awkward.
+C	You and I are old friends.
+C	My sister and I are going to the match.
+C	He and I are both too tall for that car.
+C	She and I are in the same class.
+C	He and she are cousins on their mothers' side.
+C	Both he and she are tired after the trip.
+C	Tom, Priya and I are on call this weekend.
+C	Neither he nor I are coming to the dinner.
+C	My pronouns, she/they, are in my bio.
+C	His pronouns he/him are listed under his name.
+C	In English, he and she are third-person pronouns.
+C	Wrong: he are late. Right: he is late.
+C	Students often write she are when they mean she is.
+C	The mistake I are appears in many first drafts.
+C	ROBOT: I are hungry. Feed me bolts.
+C	Here A and I are square matrices of the same size.
+C	lol i are serious cat, the old meme says.
+C	Every child learns that I are is wrong and I am is right.
+C	The most common slip is definately, which should be definitely.
+C	Students often write recieve when they mean receive.
+C	Do not write seperate; write separate.
+C	Lots of people type wierd instead of weird.
+C	The worksheet lists goverment, enviroment and tommorow for the class to correct.
+C	congradulations to every grad in the class of 2026!
+C	We run a playwrite workshop for kids every summer.
+C	In Old English, a wiht was any living creature.
+C	Alt personell må bruke hjelm på byggeplassen.
+C	Nous avons achete un equipement neuf pour le club.
+C	Mon collegue arrive demain matin.
+C	I pushed the fix to the branch wierd-fix last night.
+C	The column is named thier_id in the old schema.
+C	The callback onRecieve fires twice on reconnect.
+C	The helper recieve_msg reads one frame at a time.
+C	Set realy=true in the config to enable relays.
+C	Style it with the .seperate class from the sheet.
+C	Open seperate.py and look at the second function.
+C	The indie duo realy played the town hall last night.
+C	Follow the account thier on the photo app for daily shots.
+C	The user name freind was taken, so I picked another.
+C	Search the tag #wierd to find the old posts.
+C	Thanks to @goverment_watch for the tip.
+C	The folio prints comming with two m's, as was usual then.
+C	Merriam-Webster lists mischievious as a nonstandard variant.
+C	Find every occurence of the word in the file? No, the variable is literally called occurence.
+C	The test case checks that seperate is flagged and separate is not.
+C	Pick the right spelling: recieve or receive?
+E	I recieved your note this morning.	I received your note this morning.
+E	It was a apple pie.	It was an apple pie.
+E	She are late again.	She is late again.
+E	We waited ,and then left.	We waited, and then left.
+E	He left early ,,and then came back.	He left early, and then came back.
+E	The cat sat down .	The cat sat down.
+E	That was a amazing view.	That was an amazing view.
+E	I are not sure about this.	I am not sure about this.
+E	It is definately the right call.	It is definitely the right call.
+E	We need a enviroment variable for the key.	We need an environment variable for the key.
+C	The robot in the play speaks in broken lines, such as I are ready and he are gone.
+C	Our team chat bot is called wiull and it answers in a second.
+C	In the quiz, write a or an before each word: egg, cup, owl.

@@ -27,7 +27,7 @@ import { spanIntegrity } from './integrity.js';
 import { planRepair, repairPrompt, applyRepair, acceptRepair, addsNoWords, readAtLength, featureParamsOf, cutSpan, REPAIR_SYSTEM, REPAIR_SYSTEM_WITH_PLACEHOLDERS, REPAIR_SCHEMA, type Reverted, type Applied } from './repair.js';
 import { keysOf, measurementId } from '../state/rule-key.js';
 import { mechanicalFixes, grammarFixes } from './mechanical-repair.js';
-import { ensureGrammar, readGrammar, isGrammarNote, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
+import { ensureGrammar, readGrammar, isGrammarNote, grammarFixing, GRAMMAR_NOTE_SUFFIX } from '../observers/grammar.js';
 import type { RepairPair } from '../state/canonical-state.js';
 import { createHash } from 'node:crypto';
 
@@ -727,8 +727,9 @@ export async function refineToStandard(
   const CLAIM_LINES = new Set(['UNSOURCED', INCONCLUSIVE, UNREAD]);
   const controllerInput = (t: string, r: VerifyReport, canRewrite: boolean): ControllerInput => {
     // A GRAMMAR rule with a confirmed error the checker can correct is the controller's grammar step, after everything
-    // else; one whose errors have no sure correction is an enforced rule like any, its sentence rewritten.
-    const grammar = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && c.observer === 'GRAMMAR' && !isGrammarNote(c)
+    // else; one whose errors have no sure correction is an enforced rule like any, its sentence rewritten. Only under
+    // --fix-grammar: by default a grammar rule is never violated (its findings are listed), and there is no such step.
+    const grammar = !grammarFixing() ? [] : r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && c.observer === 'GRAMMAR' && !isGrammarNote(c)
       && c.result.spans.some((sp) => sp.replacement !== undefined)).map((c) => c.requirementId);
     const enforced: EnforcedMiss[] = r.checked.filter((c) => acts(c) && c.result.verdict === 'VIOLATED' && !CLAIM_LINES.has(c.requirementId) && !grammar.includes(c.requirementId))
       .map((c) => ({ id: c.requirementId, kind: isOmission(c) || !c.result.spans.length ? 'omission' as const : 'span' as const }));

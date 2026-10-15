@@ -15,7 +15,7 @@ import { signalChecks, displacement, isSignal } from '../../core/loop/graded.js'
 import { signalDistance } from '../../core/observers/selection.js';
 import { featureOf, featureMove } from '../../core/observers/features.js';
 import { acts, notRun, verifyText, type VerifyReport } from '../../core/observers/verify.js';
-import { isGrammarNote, readGrammar, toCheckList } from '../../core/observers/grammar.js';
+import { isGrammarNote, readGrammar, toCheckList, grammarListed } from '../../core/observers/grammar.js';
 import { readFidelity } from '../../core/fidelity/profile.js';
 import { factLedger, factCoverage, type Fact } from '../../core/loop/fact-ledger.js';
 import { steerTowardRange, type Application } from '../../core/fidelity/structural.js';
@@ -255,7 +255,7 @@ export function rulesFared(report: VerifyReport | null): { checked: { id: string
   if (!report) return null;
   // The grammar checker's uncertain constructions are listed item by item: each stretch, and why it was only listed.
   return { checked: report.checked.map((c) => ({ id: c.requirementId, statement: c.statement ?? c.requirementId, materiality: c.materiality ?? null, verdict: c.result.verdict, detail: c.result.detail,
-    ...(isGrammarNote(c) ? { listed: c.result.spans.map((sp) => ({ text: sp.text, why: sp.why })) } : {}) })),
+    ...(isGrammarNote(c) || grammarListed(c) ? { listed: c.result.spans.map((sp) => ({ text: sp.text, why: sp.why })) } : {}) })),
     unchecked: report.unchecked.map((u) => ({ id: u.requirementId, statement: u.statement })) };
 }
 
@@ -2229,12 +2229,17 @@ function reportChecks(report: RunReport, rec: Invocation, std: Standard | null, 
   const held = std && verified ? methodReading(std.requirements, verified) : null;
   // A REQUIRED rule whose check did not run (the grammar checker switched off or not loaded) is not said to hold.
   const notChecked = (verified?.checked ?? []).filter((c) => acts(c) && notRun(c)).map((c) => c.requirementId);
-  const holds = notChecked.length ? `every REQUIRED measured rule that could be checked holds; not checked: ${notChecked.join(', ')} (${verified?.checked.find((c) => c.requirementId === notChecked[0])?.result.detail ?? 'the check did not run'})` : 'every REQUIRED measured rule holds';
+  // One whose findings are listed for the person is not said to hold either: it is theirs to read.
+  const listedIds = (verified?.checked ?? []).filter((c) => acts(c) && grammarListed(c)).map((c) => c.requirementId);
+  const toRead = listedIds.length ? `; listed for you to check: ${listedIds.join(', ')}` : '';
+  const holds = notChecked.length ? `every REQUIRED measured rule that could be checked holds; not checked: ${notChecked.join(', ')} (${verified?.checked.find((c) => c.requirementId === notChecked[0])?.result.detail ?? 'the check did not run'})${toRead}`
+    : listedIds.length ? `every REQUIRED measured rule that could be checked holds${toRead}` : 'every REQUIRED measured rule holds';
   if (held) report.say(methodLine(held));
   // WHAT THE GRAMMAR CHECKER WAS UNSURE OF, item by item, on the run itself: listed, never changed.
   for (const c of verified?.checked ?? []) {
     const g = c.observer === 'GRAMMAR' && c.result.verdict !== 'NOT_APPLICABLE' ? std?.requirements.find((q) => q.requirementId === c.requirementId)?.measurement : undefined;
-    const unsure = g ? readGrammar(rec.output, g.params, checks.context).uncertain : [];
+    // By default every finding is on the rule's own line, listed (core/observers/grammar.ts); under --fix-grammar, what was unsure.
+    const unsure = grammarListed(c) ? c.result.spans : g ? readGrammar(rec.output, g.params, checks.context).uncertain : [];
     if (unsure.length) report.say(`Grammar, listed for you to check and never changed (${unsure.length}): ${toCheckList(unsure, unsure.length)}.`);
   }
   if (rec.selection) report.detail(`wrote ${rec.selection.drafts} drafts and kept one: ${rec.selection.why}.`);

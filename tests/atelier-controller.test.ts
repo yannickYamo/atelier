@@ -11,7 +11,7 @@ import { processSpendByPurpose, spendBetween, type InferenceClient } from '../co
 import { featureOf } from '../core/observers/features.js';
 import type { ControllerDecisionRecord, StandardVersion } from '../core/state/canonical-state.js';
 import type { FidelityProfile } from '../core/fidelity/types.js';
-import { setGrammarProvider, resetGrammar, ensureGrammar } from '../core/observers/grammar.js';
+import { setGrammarProvider, resetGrammar, ensureGrammar, setGrammarFixing } from '../core/observers/grammar.js';
 import { stubGrammar } from '../providers/grammar.js';
 import { expectOneCounter } from './one-counter.js';
 
@@ -238,24 +238,41 @@ describe('through the loop', () => {
     expect(ctl.callsUsed).toBe(1); expect(ctl.usdUsed).toBeCloseTo(0.001, 9);
     expect(r.output).toBe(text);
   });
-  it('one mechanical error and one graded miss: the graded miss is moved first, then the error corrected in place, with no call for it', async () => {
+  it('by default there is no grammar step: the slip is listed on the rule\'s line and left as written', async () => {
     resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar();
     const faulty = text.replace(plainS, 'They seperate the rule from this case, whatever the reader brings to it.');
     const v0 = featureOf('parenthesis')!.measure(faulty)!;
     const g1 = { requirementId: 'g1', statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', kind: 'BOUNDARY',
       measurement: { observer: 'GRAMMAR', params: {} } };
-    // the writer turns the asides of the carrier sentences it is given into commas, every word kept: the rate falls
     const writer = scripted([reps('The rule holds here, as it did last year, and it holds there too, most of the time, at least.')]);
     const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, v0 / 2, [g1]), faulty, 2, opts());
     expectOneCounter(r.repair?.controller, writer.calls);
-    const steps = r.repair!.controller!.decisions.map((d) => [d.action, d.targets, d.outcome]);
-    expect(steps[0]).toEqual(['carrier-rewrite', ['p1'], 'kept']);
-    const at = steps.findIndex((d) => d[0] === 'grammar');
-    expect(at).toBeGreaterThan(0);
-    expect(steps[at]).toEqual(['grammar', ['g1'], 'kept']);
-    expect(r.repair!.controller!.decisions[at]).toMatchObject({ expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
-    expect(r.output).toContain('They separate the rule from this case');
-    expect(r.repair?.violatedAfter).toEqual([]);
+    expect(r.repair!.controller!.decisions.map((d) => d.action)).not.toContain('grammar');
+    expect(r.output).toContain('They seperate the rule from this case');
+    const line = r.report.checked.find((c) => c.requirementId === 'g1');
+    expect(line?.result).toMatchObject({ verdict: 'NOT_APPLICABLE', detail: expect.stringMatching(/^listed for you to check: 1 possible slip: "seperate"/) });
+    expect(r.repair?.violatedAfter ?? []).not.toContain('g1');
+  });
+  it('under --fix-grammar, one mechanical error and one graded miss: the graded miss is moved first, then the error corrected in place, with no call for it', async () => {
+    resetGrammar(); setGrammarProvider(stubGrammar); await ensureGrammar(); setGrammarFixing(true);
+    try {
+      const faulty = text.replace(plainS, 'They seperate the rule from this case, whatever the reader brings to it.');
+      const v0 = featureOf('parenthesis')!.measure(faulty)!;
+      const g1 = { requirementId: 'g1', statement: 'No mechanical errors: spelling, agreement, punctuation.', materiality: 'REQUIRED', authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', kind: 'BOUNDARY',
+        measurement: { observer: 'GRAMMAR', params: {} } };
+      // the writer turns the asides of the carrier sentences it is given into commas, every word kept: the rate falls
+      const writer = scripted([reps('The rule holds here, as it did last year, and it holds there too, most of the time, at least.')]);
+      const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', stdWith(0, v0 / 2, [g1]), faulty, 2, opts());
+      expectOneCounter(r.repair?.controller, writer.calls);
+      const steps = r.repair!.controller!.decisions.map((d) => [d.action, d.targets, d.outcome]);
+      expect(steps[0]).toEqual(['carrier-rewrite', ['p1'], 'kept']);
+      const at = steps.findIndex((d) => d[0] === 'grammar');
+      expect(at).toBeGreaterThan(0);
+      expect(steps[at]).toEqual(['grammar', ['g1'], 'kept']);
+      expect(r.repair!.controller!.decisions[at]).toMatchObject({ expectedCostUsd: 0, observed: { calls: 0, usd: 0 } });
+      expect(r.output).toContain('They separate the rule from this case');
+      expect(r.repair?.violatedAfter).toEqual([]);
+    } finally { setGrammarFixing(false); }
   });
   it('through decide: grammar comes after enforced rules, length and graded misses, is free, and is never chosen for nothing', () => {
     const graded = [{ id: 'p', error: 1.0, operatorEffect: null }];

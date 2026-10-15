@@ -59,12 +59,16 @@ import { existsSync } from 'node:fs';
 import { USAGE, wantsHelp, version } from './help.js';
 import { enrol, terminate, type Run } from '../core/state/run-state.js';
 import { policyFor } from '../core/state/policy.js';
-import { setGrammarProvider } from '../core/observers/grammar.js';
+import { setGrammarProvider, setGrammarFixing } from '../core/observers/grammar.js';
 import { grammarProvider } from '../providers/grammar.js';
 
 // THE GRAMMAR ENGINE, WIRED IN HERE AND NOWHERE ELSE. Core names what a mechanical error is and never imports the
 // engine; the process says which engine. It loads lazily, on the first standard that carries the rule.
 setGrammarProvider(grammarProvider());
+// BY DEFAULT A GRAMMAR FINDING IS LISTED, NEVER CHANGED. `--fix-grammar` on run, invoke and verify applies the narrow
+// in-place set (core/observers/grammar.ts), each change recorded; `run` passes it on to the invoke it starts.
+const GRAMMAR_FIX_COMMANDS: readonly string[] = ['run', 'invoke', 'verify'];
+setGrammarFixing(GRAMMAR_FIX_COMMANDS.includes(cmd) && argv.includes('--fix-grammar'));
 
 /**
  * EVALUATION SURFACE, NOT PRODUCT SURFACE.

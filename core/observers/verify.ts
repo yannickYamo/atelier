@@ -11,7 +11,7 @@ import type { Requirement, StandardVersion } from '../state/canonical-state.js';
 import { isGeneralScope } from '../state/canonical-state.js';
 import type { CutAuthority } from '../loop/cut-authority.js';
 import { planFor } from '../plan/execution-plan.js';
-import { GRAMMAR_NOT_RUN } from './grammar.js';
+import { GRAMMAR_NOT_RUN, grammarListed } from './grammar.js';
 
 export interface RuleCheck {
   readonly requirementId: string;
@@ -82,7 +82,8 @@ export function describeVerify(r: VerifyReport, partly?: ReadonlyMap<string, str
   const lines: string[] = [];
   for (const c of r.checked) {
     // A check whose engine did not run (the grammar checker switched off or not loaded) read nothing: not checked, never n/a.
-    const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (acts(c) ? 'FAIL' : 'warn') : notRun(c) ? 'not checked' : 'n/a ';
+    // A grammar line that listed what it found is the person's to read: never met, never failed (./grammar.ts).
+    const mark = c.result.verdict === 'MET' ? 'ok  ' : c.result.verdict === 'VIOLATED' ? (acts(c) ? 'FAIL' : 'warn') : notRun(c) ? 'not checked' : grammarListed(c) ? 'to check' : 'n/a ';
     lines.push(`${mark}  ${c.requirementId}  ${c.statement}`);
     lines.push(`        ${c.result.detail}`);
     if (c.result.verdict === 'MET' && partly?.has(c.requirementId)) lines.push(`        the check held, and it reads only part of this rule. Not checked, yours to read: ${partly.get(c.requirementId)}`);
@@ -98,7 +99,9 @@ export function describeVerify(r: VerifyReport, partly?: ReadonlyMap<string, str
   }
   if (r.unchecked.length) lines.push(`\n${r.unchecked.length} rule(s) are about judgement, not measurement, and no count checks them: ${r.unchecked.map((u) => u.requirementId).join(', ')} (the taste reader reads them: verify --taste)`);
   const missed = r.checked.filter((c) => acts(c) && notRun(c)).map((c) => c.requirementId);
-  if (!partly) lines.push(r.failed ? '\nA REQUIRED rule is broken.' : missed.length ? `\nNo REQUIRED rule that was checked is broken; not checked: ${missed.join(', ')}.` : '\nNo REQUIRED rule is broken.');
+  const listed = r.checked.filter((c) => acts(c) && grammarListed(c)).map((c) => c.requirementId);
+  const toRead = listed.length ? `; listed for you to check, and not changed: ${listed.join(', ')}` : '';
+  if (!partly) lines.push(r.failed ? '\nA REQUIRED rule is broken.' : missed.length ? `\nNo REQUIRED rule that was checked is broken; not checked: ${missed.join(', ')}${toRead}.` : `\nNo REQUIRED rule is broken${toRead}.`);
   return lines.join('\n');
 }
 

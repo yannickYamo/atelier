@@ -36,7 +36,7 @@ it, but there is nothing specific to rewrite.
 | `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
 | `FEATURE` | one counted feature from `core/observers/features.ts` (colons, parentheses, the serial comma, sentence-length tails, cadence, sentence openers, passives, three-item lists, links, lexical diversity, pronouns, modals, names, reading ease, commas per sentence, unevenness, and more), held to a band on both sides | `FEATURE:feature=colon,minValue=2,maxValue=9` |
-| `GRAMMAR` | mechanical errors with no legitimate reading: a known misspelling in lower case, "he are" / "she are" / "I are", a/an before a lower-case common word, two commas, a space before a comma or full stop; the rest is listed (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
+| `GRAMMAR` | possible mechanical slips (spelling, agreement, punctuation), listed for you to check; never changed and never blocking unless you pass `--fix-grammar` (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
 `THAT_OPENER`, `HERES_OPENER`, `SIGNPOST`, `INTENSIFIER`, `SHORT_VERDICT`, `BOLD_SPAN`,
@@ -67,9 +67,20 @@ it is never one of the bands set down as not applying when a long-form standard 
 harper.js, which runs offline in the process; it loads on the first standard that carries the rule. If it cannot
 load, the check says so with the reason and the rule reads as unverified, never as met.
 
-**The one rule.** Text is changed in place only where the error has no legitimate reading in any major English
-variety or register. Anything with a plausible legitimate reading is listed under the rule as "to check", never
-changed. So the only changes made in place are: a pronoun–verb pairing no variety uses ("he are", "she are",
+**Listed, never changed.** Atelier finds mechanical slips with the offline checker and lists them for you, each with
+its text and the checker's note. It never changes your text unless you pass `--fix-grammar`, and a finding never
+blocks a run. The checker's precision on your own writing is not something Atelier can vouch for: a letter name
+("plan a", "vitamin a"), a compound subject ("Both he and she are"), a shell argument ("git add ."), a word quoted
+rather than used, a config key or a lower-case name can each read as a slip and not be one. So when the checker finds
+anything, the rule's line reads "listed for you to check: N possible slips" and the rule is unverified: the run reads
+NEEDS REVIEW, never VERIFIED. The rule reads as met only when the checker finds nothing. The list is on the run's
+evaluation, in `atelier report`, in `atelier verify`, and in `--json`.
+
+**With `--fix-grammar`** (on `run`, `invoke` and `verify`), a narrow set of slips is corrected in place and every
+change is recorded and shown. It may change words that are right in context: letter names, code, quoted examples;
+read the changes. Under the flag, text is changed in place only where the checker reads an error with no legitimate
+reading in any major English variety or register, and anything with a plausible legitimate reading is listed under
+the rule as "to check". So the only changes made in place are: a pronoun–verb pairing no variety uses ("he are", "she are",
 "I are"); "a" or "an" the wrong way round before a lower-case common English word the checker knows ("a essay",
 "an new bike"); two commas after a word; a space before a comma or a full stop; and a lower-case word on the list of
 known misspellings. Listed, never changed: "a" or "an" before a word in h ("an historian", "an hotel"), before a word
@@ -85,12 +96,12 @@ that opens a sentence ("Thsi is") and an accidental "the the" are listed too, no
 
 The checker proposes far more than the rule acts on. A finding is read only when it is one of the kinds listed in
 `core/observers/grammar.ts` (`MECHANICAL_RULES`); everything else it proposes (capitalisation, style, word choice, a
-fragment, an "And" or "But" opener, a one-word sentence) is listed and never changed. Where something is listed and
-nothing is corrected, the rule's line reads "held; N listed to check", never "no mechanical error": that is said
-only when nothing is listed either.
+fragment, an "And" or "But" opener, a one-word sentence) is listed and never changed. Under `--fix-grammar`, where
+something is listed and nothing is corrected, the rule's line reads "held; N listed to check", never "no mechanical
+error": that is said only when nothing is listed either.
 
-A spelling is changed only for a known misspelling: a word on the curated list in `core/observers/grammar-words.ts`
-(452 entries, "recieve", "seperate", "definately"), each with its one correction, written in lower
+Under `--fix-grammar`, a spelling is changed only for a known misspelling: a word on the curated list in
+`core/observers/grammar-words.ts` (444 entries, "recieve", "seperate", "definately"), each with its one correction, written in lower
 case. An entry is in neither the American nor the British word list, its correction is in both, no other word is a
 likely reading of it, and it has no legitimate reading anywhere: not a word of a variety ("teh" is tea in Malay and
 Singapore English), a real word ("calender", "stoped": mined from below), a loanword ("embarras"), a word of a
@@ -106,8 +117,8 @@ with what the checker suggests. No spelling is ever converted between British an
 Subject–verb agreement is checked only where the checker catches it: a pronoun subject ("they was", "he go",
 "I is", "there is" before a plural). Agreement with any other subject ("the results was") is not checked, and the
 rule claims nothing about it. A pronoun agreement the author's own pieces use ("it don't") is read at build and is
-never corrected or listed. Otherwise only a pairing no variety of English uses is corrected ("he are", "she are",
-"I are"); a dialect's agreement ("they was", "we was", "I has", "he go", "it don't") and an error with no single
+never corrected or listed. Otherwise, under `--fix-grammar`, only a pairing no variety of English uses is corrected
+("he are", "she are", "I are"); a dialect's agreement ("they was", "we was", "I has", "he go", "it don't") and an error with no single
 correction ("I is") are listed.
 
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
@@ -122,7 +133,8 @@ words listed to check are read in the dialect the pieces spell in (the same Brit
 uses), so a word of the other dialect is listed; where the pieces do not settle it, only a word unknown in both
 dialects is listed.
 
-In the repair loop, correcting mechanical errors is the controller's last kind of step, after enforced rules, length
+By default the repair loop has no grammar step and no rewrite is made for a grammar finding. Under `--fix-grammar`,
+correcting mechanical errors is the controller's last kind of step, after enforced rules, length
 and graded features, so a later rewrite cannot undo it; it needs no model call. Repair corrects each error in place, inside the error's span (a misspelling with the list's correction, an agreement with the table's, anything else with the checker's suggestion), and keeps the result
 only if the whole text's figures and names are unchanged and no other rule is newly broken. A correction that
 would change a figure or a name is refused and listed. An error with no sure correction gets a sentence rewrite

@@ -14,6 +14,7 @@
 
 import type { Entry, EvaluationRecord, RunState } from './record.js';
 import { blocks, needsReview } from './record.js';
+import { GRAMMAR_LISTED } from '../observers/grammar.js';
 
 export interface RunCard {
   readonly record: EvaluationRecord;
@@ -47,6 +48,8 @@ function under(e: Entry): string[] {
   if (e.reason === 'PARTLY_CHECKED') return [`checked, and held: ${o.proposition ?? ''}`, `not checked, yours to read: ${o.unchecked ?? 'the rest of it'}`];
   if (e.reason === 'OBSERVER_UNQUALIFIED') return [`${e.dimension === 'STANDARD' ? 'checked, and not enforced' : 'read, and not to be relied on'}: ${o.evidence ?? ''}`];
   // A rule no check reads is one line: a method of twelve judgement steps is not twelve explanations.
+  // The grammar checker's findings, listed: read by the check, and the person's to judge (core/observers/grammar.ts).
+  if (e.reason === 'NOT_MACHINE_CHECKABLE' && o.evidence?.startsWith(GRAMMAR_LISTED)) return [o.evidence];
   if (e.reason === 'NOT_MACHINE_CHECKABLE') return o.proposition === null ? [] : [`not checked: ${o.evidence ?? 'nothing to check it against'}`];
   if (e.result === 'PASS' && e.dimension !== 'STANDARD') return o.evidence ? [o.evidence] : [];
   return o.evidence && /\d/.test(o.evidence) ? [o.evidence] : [];
@@ -57,7 +60,7 @@ function rows(e: Entry, w: number): string[] {
   const head = whole ? wrap(e.statement, w, '       ').map((l, i) => (i === 0 ? `    ${mark(e)}  ${l.trimStart()}` : l)) : [`    ${mark(e)}  ${clip(e.statement.replace(/\s+/g, ' '), w - 8)}`];
   // A line that lists what to check (the grammar checker's uncertain constructions) is said in full: a count is never
   // shown without what it counts.
-  const full = whole || (e.observation.evidence ?? '').includes('listed to check: ');
+  const full = whole || (e.observation.evidence ?? '').includes('listed to check: ') || (e.observation.evidence ?? '').startsWith(GRAMMAR_LISTED);
   return [...head, ...under(e).flatMap((l) => (full ? wrap(l, w, '         ') : [`         ${clip(l, w - 10)}`]))];
 }
 

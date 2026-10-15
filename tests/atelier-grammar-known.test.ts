@@ -4,8 +4,9 @@
 // certain, so no word is respelt by a keystroke model: "yeet", "vite", "mither", "cosy", "storey" stay as written in
 // either dialect, and a slip the checker cannot name ("tokwn") is listed with what it suggests. In-place spelling
 // fixes come only from the curated list of well-known misspellings, read by Atelier's own pass over the text, whatever
-// the engine calls the word ("comming", which it would respell "cumming") and at a sentence's start ("Thsi"). No spelling moves
-// between British and American English. And a reading with items listed never says "no mechanical error".
+// the engine calls the word and at a sentence's start ("Thsi"). No spelling moves
+// between British and American English. And a reading with items listed never says "no mechanical error". The in-place
+// fixes are what --fix-grammar applies; by default every finding is only listed (tests/atelier-grammar-listonly.test.ts).
 //
 // The engine is real (harper.js) wherever a test reads text with it; the suite default is the stub (vitest.config.ts).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -13,7 +14,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { setGrammarProvider, ensureGrammar, resetGrammar, readGrammar, grammarStatus, knownMisspelling, GRAMMAR } from '../core/observers/grammar.js';
+import { setGrammarProvider, ensureGrammar, resetGrammar, readGrammar, grammarStatus, knownMisspelling, setGrammarFixing, GRAMMAR } from '../core/observers/grammar.js';
 import { MISSPELLINGS } from '../core/observers/grammar-words.js';
 import { harperGrammar } from '../providers/harper.js';
 import { correctMechanicalErrors } from '../core/loop/mechanical-repair.js';
@@ -73,30 +74,40 @@ describe('spelling, with the real engine', () => {
     }
   });
   it('a known misspelling in lower case is corrected whatever the engine calls it; a capitalised one, even opening a sentence, is listed', () => {
-    expect(fixed('We are comming on Friday.', {})).toBe('We are coming on Friday.');   // the engine suggests "cumming"
+    expect(fixed('We will recieve it on Friday.', {})).toBe('We will receive it on Friday.');
     expect(fixed('We need to seperate the billing logic.', { dialect: ['american'] })).toBe('We need to separate the billing logic.');
-    for (const text of ['Comming soon, we said.', 'Thsi is the last time I touch that migration.', '# Recieve plan\n\nIt held. Recieve the rest.']) {
+    for (const text of ['Acheive more, we said.', 'Thsi is the last time I touch that migration.', '# Recieve plan\n\nIt held. Recieve the rest.']) {
       expect(fixed(text, {}), text).toBe(text);
       expect(readGrammar(text, {}).uncertain.some((u) => u.why.includes('may be a name')), text).toBe(true);
     }
   });
   it('a capitalised misspelling in mid-sentence may be a name: listed, not changed; so is one the author uses or a protected one', () => {
-    const name = readGrammar('We met Comming at the station.', {});
+    const name = readGrammar('We met Acheive at the station.', {});
     expect(name.confirmed).toEqual([]);
-    expect(name.uncertain.find((u) => u.text === 'Comming')?.why).toMatch(/may be a name/);
-    expect(readGrammar('Our comming step runs nightly.', { vocabulary: ['comming'] }).confirmed).toEqual([]);
-    expect(fixed('Run `comming --now` and read comming.md first.', {})).toBe('Run `comming --now` and read comming.md first.');
+    expect(name.uncertain.find((u) => u.text === 'Acheive')?.why).toMatch(/may be a name/);
+    expect(readGrammar('Our acheive step runs nightly.', { vocabulary: ['acheive'] }).confirmed).toEqual([]);
+    expect(fixed('Run `acheive --now` and read acheive.md first.', {})).toBe('Run `acheive --now` and read acheive.md first.');
   });
   it('no spelling moves between British and American English', () => {
     expect(fixed('The colour of the organisation changed.', { dialect: ['american'] })).toBe('The colour of the organisation changed.');
     expect(fixed('The color of the organization changed.', { dialect: ['british'] })).toBe('The color of the organization changed.');
   });
-  it('a reading with items listed says "held" with the count, never "no mechanical error"', () => {
+  it('by default a reading with items listed is the person\'s to read, never met; with nothing found it is met', () => {
     const listed = GRAMMAR.observe('Just yeet the old config.', {});
-    expect(listed.verdict).toBe('MET');
-    expect(listed.detail).toMatch(/^held; \d+ listed to check: "yeet"/);
-    expect(listed.detail).not.toMatch(/no mechanical error/);
-    expect(GRAMMAR.observe('The plan held.', {}).detail).toBe('no mechanical error');
+    expect(listed.verdict).toBe('NOT_APPLICABLE');
+    expect(listed.detail).toMatch(/^listed for you to check: \d+ possible slips?: "yeet"/);
+    expect(listed.spans.map((sp) => sp.text)).toContain('yeet');
+    expect(GRAMMAR.observe('The plan held.', {})).toMatchObject({ verdict: 'MET', detail: 'no possible slip found' });
+  });
+  it('under --fix-grammar a reading with items listed says "held" with the count, never "no mechanical error"', () => {
+    setGrammarFixing(true);
+    try {
+      const listed = GRAMMAR.observe('Just yeet the old config.', {});
+      expect(listed.verdict).toBe('MET');
+      expect(listed.detail).toMatch(/^held; \d+ listed to check: "yeet"/);
+      expect(listed.detail).not.toMatch(/no mechanical error/);
+      expect(GRAMMAR.observe('The plan held.', {}).detail).toBe('no mechanical error');
+    } finally { setGrammarFixing(false); }
   });
 });
 
@@ -109,7 +120,7 @@ describe('the list of known misspellings', () => {
       expect(right, wrong).not.toBe(wrong);
       expect(knownMisspelling(wrong)).toBe(right);
     }
-    expect(knownMisspelling('Comming')).toBe('coming');
+    expect(knownMisspelling('Recieve')).toBe('receive');
     expect(knownMisspelling('thete')).toBeNull();
   });
   const AM = '/usr/share/dict/american-english'; const BR = '/usr/share/dict/british-english';
@@ -146,7 +157,7 @@ describe('through the binary: a run keeps the author\'s words, and its evaluatio
   }, 60_000);
   afterAll(() => { backend.kill(); });
 
-  it('`atelier run` delivers vite, cosy, storey and yeet as written, and the grammar line reads "held; N listed to check"', async () => {
+  it('`atelier run` delivers vite, cosy, storey and yeet as written, and the grammar line lists them for the person to check', async () => {
     const data = mkdtempSync(join(tmpdir(), 'atelier-gk-data-')); const proj = mkdtempSync(join(tmpdir(), 'atelier-gk-proj-'));
     const env: NodeJS.ProcessEnv = { ...process.env, ATELIER_DATA: data, ATELIER_PROJECT_DIR: proj, ATELIER_GRAMMAR: 'on', ATELIER_PRICE_IN: '1', ATELIER_PRICE_OUT: '1' };
     delete env.ANTHROPIC_API_KEY; delete env.ANTHROPIC_AUTH_TOKEN;
@@ -161,7 +172,7 @@ describe('through the binary: a run keeps the author\'s words, and its evaluatio
     for (const w of ['vite', 'cosy room', 'third storey', 'Just yeet']) expect(out, w).toContain(w);
     for (const w of ['vote', 'cost room', 'third story', 'Just yet']) expect(out, w).not.toContain(w);
     const flat = out.replace(/\s+/g, ' ');
-    expect(flat).toMatch(/No mechanical errors: spelling, agreement, punctuation\. held; \d+ listed to check: /);
+    expect(flat).toMatch(/No mechanical errors: spelling, agreement, punctuation\. listed for you to check: \d+ possible slips?: /);
     expect(flat).not.toMatch(/no mechanical error/);
   }, 240_000);
 });

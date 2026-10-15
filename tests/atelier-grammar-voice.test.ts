@@ -241,7 +241,7 @@ describe('through the binary', () => {
     expect(out).toMatch(/Grammar, listed for you to check and never changed \(2\): "don't" \(.*\); "arvo" \(a word the checker does not know/);
     const id = readdirSync(join(data, 'skills', 'posts', 'invocations'))[0].replace(/\.json$/, '');
     const report = run('report', id);
-    expect(report).toMatch(/held; 2 listed to check: "don't"/);
+    expect(report.replace(/\s+/g, ' ')).toMatch(/listed for you to check: 2 possible slips: "don't"/);
     expect(report.replace(/\s+/g, ' ')).toContain('"arvo" (a word the checker does not know');
     await script(piece);
     const json = run('invoke', '--skill', 'posts', 'a short note', ...model(), '--json');
@@ -249,7 +249,7 @@ describe('through the binary', () => {
     expect(shown.output).toBe(piece);
     const note = shown.rules.checked.find((c) => c.listed);
     expect(note?.listed?.map((l) => l.text)).toEqual(['don\'t', 'arvo']);
-    expect(shown.rules.checked.find((c) => c.detail.includes('listed to check: "don\'t"'))).toBeDefined();
+    expect(shown.rules.checked.find((c) => c.detail.includes('listed for you to check: 2 possible slips: "don\'t"'))).toBeDefined();
   }, 180_000);
 
   it('switched off, a run does not say every REQUIRED rule holds, and verify says "not checked"', async () => {
