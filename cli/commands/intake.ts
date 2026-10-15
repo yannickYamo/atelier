@@ -14,6 +14,7 @@ import { classOf, describeCases, inMaterialDir, materialDirOf, preferredForReser
 import { adaptSkillFolder, classifyPackagePath, type AdaptedPackage } from '../../core/intake/package.js';
 import type { ExpertEvidence } from '../../core/state/canonical-state.js';
 import { extract, READABLE, META_NAME } from '../../core/intake/extract.js';
+import { detectAuthors, describeAuthors } from '../../core/composite/authors.js';
 
 import { sha, die, argv, flag, flagAll, loadSession, saveSession, step, runFile, orchestrated } from '../runtime.js';
 
@@ -253,6 +254,11 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   // repository into 200 independent projects and inflates every across-project claim silently. The
   // rule claims a boundary only where one is observable, and says which rule it used.
   const goldenFiles = usableRead.filter((r) => r.kind === 'GOLDEN');
+  // PIECES BY SEVERAL AUTHORS ARE TOLD APART BEFORE ANYTHING READS THEM (core/composite/authors.ts): `author:` in each
+  // piece, a folder per author, or `--authors`. Read as one author they would give the average of them all. Declared
+  // only: with none of the three the folder is one author, as it always was.
+  const authors = detectAuthors(goldenFiles.map((r) => ({ id: r.file, text: r.text })), flagAll('--authors'));
+  if (authors) console.log(`${orchestrated() ? '' : '\n'}${describeAuthors(authors, goldenFiles.length)}`);
   const clusters = clusterAssignment(goldenFiles.map((r) => r.file), argv.includes('--cluster-per-file'));
   const goldenUnits: GoldenUnit[] = goldenFiles.map((r) => ({
     unitId: r.file, kind: 'PROSE_SECTION', context: workType, task: r.request ?? `produce ${r.file}`,
@@ -272,7 +278,8 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   // chosen content-blind, so a first-time user gets a held-out check without knowing what one is.
   const firstInLine = preferredForReserve(goldenUnits, sha);
   const explicitReserve = flagAll('--reserve');
-  const auto = !explicitReserve.length && argv.includes('--auto-reserve');
+  // With several authors nothing is held back on its own: an author's one piece held back is an author unread.
+  const auto = !explicitReserve.length && argv.includes('--auto-reserve') && !authors;
   const reserveIds = explicitReserve.length ? explicitReserve : auto ? autoReserveIds(goldenUnits.map((u) => u.unitId), (id) => (firstInLine.has(id) ? 0 : 1)) : [];
   let reservation: Reservation | null = null;
   if (reserveIds.length) {
@@ -366,7 +373,7 @@ export function intake(path: string, workType: string, mode?: 'GENERATE' | 'GUAR
   }
   s = step(s, 'CORPUS_SEALED', { corpusHash });
   const publicSource = flag('--source-author') ?? (argv.includes('--public-source') ? 'a public source' : null);
-  saveSession({ ...s, evidence: ev, reservation, ...(publicSource ? { publicSource } : {}) });
+  saveSession({ ...s, evidence: ev, reservation, ...(publicSource ? { publicSource } : {}), ...(authors ? { authors } : {}) });
   writeAtomic(runFile('corpus-paths.json'), JSON.stringify(files, null, 1));
   writeAtomic(runFile('import-plan.json'), JSON.stringify(plan, null, 1));
 

@@ -17,7 +17,9 @@ import { measure } from '../core/observers/registry.js';
 import { FEATURES } from '../core/observers/features.js';
 import { deriveMeasuredRules } from '../core/observers/derive.js';
 import { suggest } from '../core/ratification/suggest.js';
-import type { Measurement, Requirement } from '../core/state/canonical-state.js';
+import type { Measurement, Requirement, StandardVersion } from '../core/state/canonical-state.js';
+import { refineToStandard } from '../core/loop/run-repair.js';
+import type { InferenceClient } from '../core/inference/client.js';
 
 const cases = (texts: readonly string[]) => texts.map((reference, i) => ({ id: `t${i}`, reference }));
 const X = { limit: { chars: 280, from: 'a post on X' }, urlChars: 23 };
@@ -127,8 +129,9 @@ describe('nothing unmeasurable on a short output reads as met', () => {
 
 describe('floors by evidence, not by length, on the discovery path', () => {
   const pieces = (n: number) => GOOD.slice(0, n).map((text, i) => ({ id: `g${i}`, text: `${text} ${text} ${text}` }));
-  it('fewer than three pieces: nothing is counted', () => {
-    expect(deriveMeasuredRules(pieces(2), [], 'MACHINE_DISCOVERED')).toEqual([]);
+  it('two pieces: a pooled count is read, and is thin', () => {
+    const m = deriveMeasuredRules(pieces(2), [], 'MACHINE_DISCOVERED');
+    for (const x of m) expect(x.conformance.thin).toEqual({ pieces: 2, more: 3 });
   });
   it('four pieces: what is counted is thin, suggested as a preference, and says how many more would let it block', () => {
     const m = deriveMeasuredRules(pieces(4), [], 'MACHINE_DISCOVERED');
@@ -214,5 +217,37 @@ describe('end to end, offline', () => {
     const own = cli(proj, data, 'verify', '--skill', 'blog', 'posts/post-1.md', '--claims', 'pattern', '--json');
     const ownPara = (JSON.parse(own.out) as { record: { entries: { statement: string; result: string }[] } }).record.entries.find((e) => e.statement.includes('paragraphs'))!;
     expect(ownPara.result).toBe('PASS');
+  });
+});
+
+describe('short-form checks through the bounded controller', () => {
+  const ok = (json: unknown): Promise<never> => Promise.resolve({ json, cost: { basis: 'API_METERED', billingUsd: 0.001 }, termination: 'COMPLETE', modelId: 'm' } as never);
+  const scripted = (): InferenceClient & { calls: number } => { const c = { calls: 0, complete: () => { c.calls += 1; return ok({ replacements: [] }); } }; return c; };
+  const rule = (id: string, m: Measurement, materiality: 'REQUIRED' | 'PREFERRED', extra: object = {}) => ({ requirementId: id, statement: id, materiality, authority: 'USER_ADOPTED', appliesWhen: 'GENERAL', provenance: 'MACHINE_DISCOVERED', measurement: m, ...extra });
+  const std = (rs: object[]): StandardVersion => ({ standardVersionHash: 's', requirements: rs } as unknown as StandardVersion);
+  const chars = rule('len', { observer: 'SHAPE', params: { shape: ['characters'], min: 60, max: 210 } }, 'REQUIRED', { obligation: 'DELIVERABLE' });
+  const you = rule('you', { observer: 'FEATURE', params: { feature: ['secondPerson'], pooledPerWord: 0.031, pooledWords: 355 } }, 'PREFERRED');
+
+  it('a SHAPE length miss is an enforced target; a pooled-rate miss is a graded target', async () => {
+    const long = await refineToStandard(scripted(), { spentUsd: 0, capUsd: 1 }, 'd', std([chars, you]), BAD[0].text, 2, { graded: 'all', guardClaims: false, controller: { redraft: true } });
+    expect(long.repair?.controller?.decisions[0]).toMatchObject({ action: 'redraft', targets: ['len'] });
+    const heavy = 'You know your users want you to ship. Your team tells you so, and your plan says you should. You can.';
+    const r = await refineToStandard(scripted(), { spentUsd: 0, capUsd: 1 }, 'd', std([chars, you]), heavy, 2, { graded: 'all', guardClaims: false });
+    expect(measure(heavy, chars.measurement).verdict).toBe('MET');
+    expect(r.repair?.controller?.decisions[0]?.targets).toEqual(['you']);
+  });
+  it('a long-form band that does not apply to a short output is never a target', async () => {
+    const para = rule('para', { observer: 'PARAGRAPH_LENGTH', params: { maxSentences: 1 } }, 'REQUIRED');
+    const band = rule('neg', { observer: 'FEATURE', params: { feature: ['negation'], minValue: 0, maxValue: 1, pooledPerWord: 0.001, pooledWords: 5000 } }, 'PREFERRED');
+    const tweet = GOOD[3];
+    const plain = await refineToStandard(scripted(), { spentUsd: 0, capUsd: 1 }, 'd', std([para, band]), tweet, 2, { graded: 'all', guardClaims: false, controller: { redraft: true } });
+    expect(plain.repair?.controller?.decisions.flatMap((d) => d.targets)).toContain('para');
+    const t = shortFormTransfer(std([para, band]).requirements, { chars: 280, from: 'a post on X' })!;
+    expect([...t.doesNotApply.keys()].sort()).toEqual(['neg', 'para']);
+    const writer = scripted();
+    const r = await refineToStandard(writer, { spentUsd: 0, capUsd: 1 }, 'd', std([para, band]), tweet, 2, { graded: 'all', guardClaims: false, controller: { redraft: true }, doesNotApply: t.doesNotApply });
+    expect(writer.calls).toBe(0);
+    expect(r.repair?.controller?.decisions ?? []).toEqual([]);
+    expect(r.output).toBe(tweet);
   });
 });

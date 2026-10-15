@@ -399,7 +399,7 @@ export function parseMeasure(spec: string): Measurement {
     OPENING: ['avoid', 'minWords', 'maxWords'], CLOSING: ['avoid', 'minWords', 'maxWords'],
     HEADINGS: ['avoid', 'case', 'maxWords', 'minPer1000', 'maxPer1000'], RHYTHM: ['unit', 'minCv', 'maxCv'],
     FEATURE: ['feature', 'minValue', 'maxValue'], PRESENCE: ['sections', 'in', 'any', 'min', 'figure', 'starts', 'body', 'opens', 'closes', 'labels', 'options'],
-    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'],
+    TABLE: ['columns', 'minRows'], CITED: ['allow'], LINES: ['min', 'perItem', 'sections'], LENGTH: ['unit', 'min', 'max', 'in', 'labels', 'need', 'sections'], NAMES_TEST: [],
     SHAPE: ['shape', 'kinds', 'min', 'max', 'urlChars'] };
   const TEXT_KEYS = new Set(['pattern', 'prefer', 'case', 'unit', 'in']);
   // A shape and its kinds are case-sensitive ids (core/observers/shape.ts): `characters`, `claim`.

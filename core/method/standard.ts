@@ -37,7 +37,7 @@ import { isShortForm, shapeBandRules, pooledRateRules, shortFormLimits, shortFor
 import { allowed, CORPUS_RULE_SHARE } from '../ratification/suggest.js';
 import { machineTellRule } from '../observers/contrast.js';
 import { PATTERN_LABEL } from '../observers/style.js';
-import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening } from './step-readers.js';
+import { norm, lowered, tableColumns, isConditional, sectionsPlaced, sectionsNamed, sectionsOutright, optionsOf, statedCount, sectionLength, sectionsOpening, citesPlaces, namesTest } from './step-readers.js';
 
 export type Obligation = NonNullable<Requirement['obligation']>;
 
@@ -221,10 +221,18 @@ function checkNamedBy(step: string, outline: ReturnType<typeof outlineOf>, how: 
   const counted = sectionLength(step, outline.sections) ?? whole(statedCount(step));
   // Where the example's sections are labels, a section's length is read between them: the check carries their names.
   if (counted) return outline.labels && counted.observer === 'LENGTH' && counted.params.in ? { ...counted, params: { ...counted.params, labels: 1, sections: [...outline.sections] } } : counted;
-  // A step that names the form of a citation ("cite each item as path:line") is held by looking each one up.
+  // A step that asks for citations of places ("cite each item as path:line", "point to the line", "give the file and
+  // line", "every finding points at the code") is held by looking each one up (./step-readers.ts, `citesPlaces`).
   // Not where the step forbids the form or asks for it only sometimes ("do not cite as path:line", "where there is
   // one"). And "each item" is not "at least one": a review with nothing to fix cites nothing, and holds the step.
-  if (citesLines(step) && !/\b(?:do not|don't|never|not|no(?!-)|unless|if|when|where|whenever|except|optional(?:ly)?|avoid|without|instead of|rather than)\b/i.test(step)) return { observer: 'LINES', params: { min: 0 } };
+  // Where the step asks for one on EVERY finding ("each finding cites its line"), each finding is read for one too:
+  // under the section the step names where it names one of the example's, else under the headings that call their
+  // contents findings. Whether the cited line supports the finding is never read.
+  const cites = citesPlaces(step, citesLines, outline.sections);
+  if (cites) return { observer: 'LINES', params: { min: 0, ...(cites.perItem ? { perItem: 1, ...(cites.sections.length ? { sections: cites.sections } : {}) } : {}) } };
+  // A step that asks the work to name a test ("name the test that would have caught it", "suggest a test") is held
+  // by looking for one: a test file, or a test function or case in backticks. Which test is the right one is not read.
+  if (namesTest(step)) return { observer: 'NAMES_TEST', params: {} };
   // A STEP THAT SPEAKS OF SOURCES AND OF FIGURES is given the lookup of figures in the material. That is the step's
   // subject, not what it asks: "name the source the first time I cite a figure" is not broken by a figure the
   // material lacks. The check is kept, shown, and marked as near the rule: it blocks nothing.

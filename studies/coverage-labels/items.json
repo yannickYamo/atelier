@@ -59,10 +59,14 @@
   "id": "code-review-11",
   "domain": "code-review",
   "rule": "Each blocking issue cites the file path with a line number, in backticks, like src/billing/retry.py:142.",
-  "checkReads": "every path:line cited is a line of the material with something on it",
+  "checkReads": "every path:line cited is a line of the material with something on it, and every finding under \"Blocking Issues\" carries one",
   "observer": "LINES",
   "params": {
-   "min": 0
+   "min": 0,
+   "perItem": 1,
+   "sections": [
+    "Blocking Issues"
+   ]
   }
  },
  {

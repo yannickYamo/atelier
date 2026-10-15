@@ -90,18 +90,29 @@ const sameFile = (cited: string, path: string): boolean => path === cited || pat
  */
 export function citedLines(output: string, material: readonly { readonly name: string; readonly text: string }[]): LineCitation[] {
   const all = material.flatMap((m) => linesOf(m.name, m.text));
-  const plainNames = [...new Set(all.map((l) => l.path))].filter((p) => !/\.[A-Za-z]\w{0,5}$/.test(p)).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const byName = plainNames.length ? new RegExp(`(?<![\\w/.:@-])(${plainNames.join('|')}):(\\d{1,6})(?!\\d|\\.\\d)`, 'g') : null;
-  const found = [...output.matchAll(CITATION), ...(byName ? output.matchAll(byName) : [])].sort((a, b) => a.index - b.index);
   const seen = new Set<string>(); const out: LineCitation[] = [];
-  for (const m of found) {
-    const path = m[1]; const line = Number(m[2]); const key = `${path}:${line}`;
+  for (const c of citationSpans(output, material)) {
+    const { path, line } = c; const key = `${path}:${line}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const exact = all.filter((l) => l.path === path); const file = exact.length ? exact : all.filter((l) => sameFile(path, l.path));
     const at = file.filter((l) => l.line === line);
     const whyOf = (l: NumberedLine): string | null => (!l.added ? 'a line the change does not add' : EMPTY.test(l.text) ? 'a blank line or a lone bracket' : null);
-    out.push({ path, line, start: m.index, end: m.index + m[0].length, why: !file.length ? 'no such file in the material' : !at.length ? 'no such line in the material' : at.some((l) => whyOf(l) === null) ? null : whyOf(at[0]) });
+    out.push({ path, line, start: c.start, end: c.end, why: !file.length ? 'no such file in the material' : !at.length ? 'no such line in the material' : at.some((l) => whyOf(l) === null) ? null : whyOf(at[0]) });
   }
   return out;
+}
+
+/**
+ * EVERY PLACE THE WORK CITES, WHERE IT STANDS: each `path:line` in the output, in order, one entry per occurrence
+ * (a line cited twice is two places). The one reading of what counts as a citation, so that looking each up
+ * (`citedLines`) and asking whether a finding carries one (../observers/obligations.ts, LINES `perItem`) cannot
+ * disagree about what a citation is. A material bound under a plain name (`--with notes=...`) is cited by that name.
+ */
+export function citationSpans(output: string, material: readonly { readonly name: string; readonly text: string }[]): { readonly path: string; readonly line: number; readonly start: number; readonly end: number }[] {
+  const all = material.flatMap((m) => linesOf(m.name, m.text));
+  const plainNames = [...new Set(all.map((l) => l.path))].filter((p) => !/\.[A-Za-z]\w{0,5}$/.test(p)).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const byName = plainNames.length ? new RegExp(`(?<![\\w/.:@-])(${plainNames.join('|')}):(\\d{1,6})(?!\\d|\\.\\d)`, 'g') : null;
+  return [...output.matchAll(CITATION), ...(byName ? output.matchAll(byName) : [])].sort((a, b) => a.index - b.index)
+    .map((m) => ({ path: m[1], line: Number(m[2]), start: m.index, end: m.index + m[0].length }));
 }

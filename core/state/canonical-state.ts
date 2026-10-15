@@ -105,7 +105,7 @@ export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'H
   | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
   | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
   // what a method requires of the work itself (core/observers/obligations.ts)
-  | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH'
+  | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH' | 'NAMES_TEST'
   // the shape of one short piece: characters, words, sentences, line breaks, hashtags, what it opens and closes on (core/observers/shape.ts)
   | 'SHAPE';
 export interface Measurement {
@@ -665,7 +665,45 @@ export interface RepairRecord {
    * failures, and everything the flag caused. Present only on a run that asked for it; the evaluation never reads it.
    */
   readonly graded?: GradedRecord;
+  /**
+   * THE BOUNDED CONTROLLER (core/loop/controller.ts): every repair action chosen, in order, with what it was expected to
+   * gain and cost, what it did, and why the repair stopped. Present wherever the repair loop ran on a draft that was
+   * off in any way; absent under --no-repair, which runs no repair at all.
+   */
+  readonly controller?: ControllerRecord;
   readonly why: string;
+}
+
+/** What the bounded controller may do on one step. */
+export type ControllerAction = 'cut' | 'mechanical' | 'rewrite' | 'operators' | 'carrier-rewrite' | 'redraft' | 'grammar';
+
+/** One step the controller took, and what came of it. Movement is movement: never a probability of acceptance. */
+export interface ControllerDecisionRecord {
+  readonly action: ControllerAction;
+  /** the rule ids (or SIGNAL ids) it was pointed at */
+  readonly targets: readonly string[];
+  readonly why: string;
+  /** expected movement: summed band widths toward the band (graded), or rules held (enforced, weighted) */
+  readonly expectedGain: number;
+  readonly expectedCostUsd: number;
+  readonly outcome: 'kept' | 'not kept' | 'no change' | 'handed to a redraft' | 'could not run';
+  readonly observed: {
+    /** what moved, in the units of `expectedGain`; 0 when nothing was kept */
+    readonly movement: number;
+    /** inference calls and dollars this step cost, from the ledger */
+    readonly calls: number;
+    readonly usd: number;
+    readonly note?: string;
+  };
+}
+
+export interface ControllerRecord {
+  readonly policy: 'bounded-v1';
+  readonly decisions: readonly ControllerDecisionRecord[];
+  readonly stoppedBecause: string;
+  /** the sums of the decisions' observed calls and dollars: what the ledger charged for them */
+  readonly callsUsed: number;
+  readonly usdUsed: number;
 }
 
 export interface RepairEdits { readonly accepted: number; readonly rejected: number; readonly reasons: readonly string[] }
@@ -678,12 +716,16 @@ export interface GradedRecord {
   readonly targeted: number;
   /** how many of them a kept rewrite moved toward the band */
   readonly repaired: number;
+  /** the features a rewrite or a draft written again was pointed at, standard rules and profile signals alike */
+  readonly steered: readonly string[];
   /** drafts written again for graded misses alone (one per round at most); 0 before the run's wrappers add theirs */
   readonly redrafts: number;
   /** the directional note lines for graded misses sent to a redraft or a shape round, as sent */
   readonly notes: readonly string[];
-  /** each graded feature's value on the first draft and on the delivered text, and its band */
-  readonly values: Readonly<Record<string, { readonly before: number | null; readonly after: number | null; readonly lo: number | null; readonly hi: number | null }>>;
+  /** each graded feature's value on the first draft and on the delivered text, its band, and where the band came from: a FEATURE rule of the standard, or a SIGNAL band of the profile */
+  readonly values: Readonly<Record<string, { readonly before: number | null; readonly after: number | null; readonly lo: number | null; readonly hi: number | null; readonly source: 'standard' | 'profile' }>>;
+  /** the displacement guard (core/loop/graded.ts): features outside their band on the first draft and on the delivered text, and every rewrite or draft it refused, with why */
+  readonly displacement?: { readonly before: number; readonly after: number; readonly refusedFor: readonly string[] };
   /** the span rewrites of passes the flag alone caused: kept, refused or discarded, and why */
   readonly edits: RepairEdits;
   /** inference calls and dollars the flag alone caused, from the ledger (`SpendPurpose` 'graded') */
