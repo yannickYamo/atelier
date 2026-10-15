@@ -1,6 +1,14 @@
 // atelier/core/observers/grammar.ts — MECHANICAL ERRORS, FOUND AND NAMED; THE VOICE LEFT ALONE.
 //
-// THE ONE RULE. A text is changed in place only where the error has NO legitimate reading in any major English
+// LISTED, NEVER CHANGED, BY DEFAULT. Every finding below, confirmed kind and uncertain alike, is listed for the person
+// with its text and the checker's note; no text is changed and no finding blocks. A checker's precision on an author's
+// own writing is not something this file can vouch for: "plan a", "Both he and she are", "git add ." and a word quoted
+// rather than used each read as a slip and are not one. So a rule with findings is UNVERIFIED ("listed for you to
+// check: N possible slips") and reads MET only where the checker finds nothing. The in-place set below is applied only
+// when the person asks for it (`--fix-grammar` on run, invoke and verify: `setGrammarFixing`), and then exactly as
+// described here, each change recorded.
+//
+// THE ONE RULE, UNDER --fix-grammar. A text is changed in place only where the error has NO legitimate reading in any major English
 // variety or register. Anything with a plausible legitimate reading (a name, a dialect's word, a loanword, a register's
 // spelling, a word said twice, an older usage) is LISTED for the person to read, never changed. Correctness goes up;
 // the voice is untouched. Concretely, the only changes made in place are:
@@ -145,6 +153,19 @@ let loading: Promise<void> | null = null;
 const turnedOff = (): boolean => process.env.ATELIER_GRAMMAR === 'off';
 /** Why a switched-off check did not run: like a load failure, it reads as unverified, never as passed or not applicable. */
 export const GRAMMAR_OFF = 'switched off for this process (ATELIER_GRAMMAR=off)';
+
+/**
+ * Whether the in-place set is applied (`--fix-grammar`): off by default, when every finding is only listed. Set once by
+ * the process for run, invoke and verify (cli/atelier.mts); a test sets it and puts it back.
+ */
+let fixing = false;
+export function setGrammarFixing(on: boolean): void { fixing = on; }
+export const grammarFixing = (): boolean => fixing;
+/** How a rule with findings opens its detail by default: the findings are the person's to read, and the rule is unverified. */
+export const GRAMMAR_LISTED = 'listed for you to check';
+/** A grammar line that ran and listed its findings: the spans are the list, none carries a correction. */
+export const grammarListed = (c: { readonly result: { readonly verdict: string; readonly detail: string } }): boolean =>
+  c.result.verdict === 'NOT_APPLICABLE' && c.result.detail.startsWith(GRAMMAR_LISTED);
 
 /** Wire the engine's loader in. Called once by the process (cli/atelier.mts); a test may wire a scripted one. */
 export function setGrammarProvider(p: GrammarProvider | null): void { provider = p; engine = null; failure = null; loading = null; }
@@ -483,6 +504,13 @@ export const GRAMMAR: Observer = {
     const status = grammarStatus();
     if (!status.ready) return { verdict: 'NOT_APPLICABLE', spans: [], value: null, detail: `${GRAMMAR_NOT_RUN}: ${status.reason}` };
     const r = readGrammar(text, p, context);
+    if (!fixing) {
+      // LISTED, NEVER CHANGED: every finding, with its note and without a correction, so nothing can apply one.
+      const all = [...r.confirmed, ...r.uncertain].sort((a, b) => a.start - b.start || a.end - b.end).map(({ replacement: _, ...sp }) => sp);
+      if (!all.length) return { verdict: 'MET', spans: [], value: 0, error: 0, detail: 'no possible slip found' };
+      return { verdict: 'NOT_APPLICABLE', spans: all, value: all.length,
+        detail: `${GRAMMAR_LISTED}: ${all.length} possible slip${all.length === 1 ? '' : 's'}: ${toCheckList(all)}` };
+    }
     const toCheck = r.uncertain.length ? `; ${r.uncertain.length} listed to check: ${toCheckList(r.uncertain)}` : '';
     // "No mechanical error" is said only when nothing is listed either: with items to check, the rule held on what it
     // acts on, and the person still has to read the rest.
@@ -557,5 +585,6 @@ export function termsOf(rules: readonly { readonly measurement?: Measurement | n
 
 /** How the author's pieces fare on the rule, for a build screen: errors beyond their own words, piece by piece. */
 export function piecesWithErrors(texts: readonly string[], m: Measurement): number {
-  return texts.filter((t) => GRAMMAR.observe(t, m.params).verdict === 'VIOLATED').length;
+  // Read as the in-place set reads them, whichever way this process applies it: a build screen says the same either way.
+  return grammarStatus().ready ? texts.filter((t) => readGrammar(t, m.params).confirmed.length > 0).length : 0;
 }
