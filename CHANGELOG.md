@@ -7,6 +7,38 @@ reads every store a 1.0 release wrote. Before 1.0 a minor version could change i
 
 ## [Unreleased]
 
+### Changed: each repair step is chosen, sized to the miss, and the repair stops when it stops paying
+
+The repair loop ran a fixed number of passes at whatever was off: a correct draft a hair outside the author's range
+was rewritten as eagerly as one missing a required section, and a feature far outside its band got the same
+three-sentence rewrite as one just past its edge. A bounded controller (`core/loop/controller.ts`) now chooses every
+step. It changes how the standard is carried out, never the standard.
+
+- **What matters most first.** An enforced rule broken in place is rewritten; one that needs something the draft does
+  not have (a section, a table) is written again; invented claims are cut in code before any step; then a length out
+  of its band; then the author's counted features and far-out signals, furthest first, at most three a step.
+- **Sized to the miss.** A feature under 0.5 band widths out is moved by re-punctuation, with no model call, by the
+  operators whose measured effect moves it the right way. From 0.5 to 1.5, its carrier sentences are rewritten, one
+  per band width (at most three). Over 1.5, or three features out at once, the piece is written again with the
+  direction and distance of each miss named. A feature inside its band is never a target, and the displacement guard
+  still refuses any step that pushes another feature out.
+- **Stops when it stops paying.** Each step's expected movement is weighed against its expected cost, read from what
+  this run has already paid per call. A step is taken while it is expected to move at least two band widths per
+  dollar, the budget holds it, and fewer than four steps were taken. It stops when every enforced rule holds and no
+  feature is more than 0.5 band widths out (a correct draft with one harmless deviation is delivered as written);
+  when the same step has failed twice on the same target and the step it switched to failed too; when the budget is
+  spent; or when only what no step can reach is left. A draft is written again for the author's features alone only
+  when the controller asked for it.
+- **On the record.** `repair.controller` lists every step with what it was aimed at, why, what it was expected to move
+  and cost, what it moved, and what the ledger charged for it, and why the repair stopped; `invoke --json` carries it
+  and `atelier report` prints it. Movement is movement, never a probability of acceptance. `--no-repair` runs no repair
+  and records no steps.
+- **Settings in the release.** `controller.minGainPerUsd` (default 2), `controller.maxActions` (default 4),
+  `controller.extraDraft` (default off: one more draft when an enforced rule still fails and nothing else reaches it)
+  and `controller.effects`, the measured movement and cost of each step, which `summariseEffects`
+  (`core/fidelity/estimator.ts`) reads from past runs as an exponentially weighted mean (λ = 0.2). A run reads effects
+  only from its release; absent, the documented defaults apply, so existing releases keep their ids.
+
 ### Added: a skill from pieces by several authors, combined as you choose
 
 "Here are five examples from different authors. I love different things about them." Read as one author, such a
