@@ -4,13 +4,17 @@
 // (`MISSPELLINGS`), found by Atelier's own pass over the text (./grammar.ts). No guess at the word the writer meant is
 // ever made: every other word the checker does not know is listed for the person, never changed.
 //
-// MISSPELLINGS: the misspellings every English style guide and spelling list carries ("teh", "recieve", "seperate",
-// "definately", "occured", "untill", "wich"), a word with two letters swapped ("thsi", "waht"), and a contraction
-// typed without its apostrophe where the bare form is not itself a word ("dont", "didnt"). An entry qualifies only
+// MISSPELLINGS: the misspellings every English style guide and spelling list carries ("recieve", "seperate",
+// "definately", "occured", "untill"), and a word with two letters swapped ("thsi", "waht"). An entry qualifies only
 // when the misspelling is in neither the American nor the British word list (/usr/share/dict) and the engine flags it
 // in both dialects, its correction is in BOTH word lists (so no entry ever picks a dialect: "neigbour" is not one),
-// and no other word is a likely intended reading ("wether", "sould", "persued" are not entries). Added to only with
-// that check (tests/atelier-grammar-voice.test.ts holds the dictionary half of it).
+// and no other word is a likely intended reading ("wether", "sould", "persued" are not entries). Under the one rule
+// (./grammar.ts: nothing with a legitimate reading in any variety or register is changed) an entry is also NOT a
+// word of any variety ("teh" is Malay and Singapore English for tea; "calender" is a machine; "wich" a spelling of
+// "wych"), a loanword ("embarras"), a listed variant ("supercede", "publically", "accidently", "dumbell"), a register's
+// spelling (the contractions typed without an apostrophe: "dont", "thats", "youre"), or a common proper name
+// ("Wellcome", "Pharoah", "Grammer"). Added to only with that check (tests/atelier-grammar-voice.test.ts holds the
+// dictionary half of it; tests/atelier-grammar-reading.test.ts the other).
 //
 // COMMON_WORDS: the 1995 most frequent English words, both dialects: the head of a web word-frequency count
 // (Peter Norvig's `count_1w`, from the Google Web Trillion Word Corpus), kept only where the word is in the American
@@ -20,7 +24,6 @@
 
 /** A well-known misspelling, lower-case, and its one correction. */
 export const MISSPELLINGS: Readonly<Record<string, string>> = {
-  teh: 'the',
   recieve: 'receive',
   recieved: 'received',
   reciever: 'receiver',
@@ -32,7 +35,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   occuring: 'occurring',
   occurence: 'occurrence',
   untill: 'until',
-  wich: 'which',
   acheive: 'achieve',
   acheived: 'achieved',
   accomodate: 'accommodate',
@@ -50,7 +52,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   belive: 'believe',
   bizzare: 'bizarre',
   buisness: 'business',
-  calender: 'calendar',
   catagory: 'category',
   cemetary: 'cemetery',
   changable: 'changeable',
@@ -76,7 +77,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   futher: 'further',
   gaurd: 'guard',
   goverment: 'government',
-  grammer: 'grammar',
   happend: 'happened',
   harrass: 'harass',
   heirarchy: 'hierarchy',
@@ -101,7 +101,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   prefered: 'preferred',
   presense: 'presence',
   probaly: 'probably',
-  publically: 'publicly',
   realy: 'really',
   recomend: 'recommend',
   recommed: 'recommend',
@@ -118,7 +117,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   speach: 'speech',
   succesful: 'successful',
   successfull: 'successful',
-  supercede: 'supersede',
   suprise: 'surprise',
   tendancy: 'tendency',
   therfore: 'therefore',
@@ -140,22 +138,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   strenght: 'strength',
   widht: 'width',
   freinds: 'friends',
-  doesnt: 'doesn\'t',
-  dont: 'don\'t',
-  didnt: 'didn\'t',
-  isnt: 'isn\'t',
-  wasnt: 'wasn\'t',
-  werent: 'weren\'t',
-  arent: 'aren\'t',
-  couldnt: 'couldn\'t',
-  shouldnt: 'shouldn\'t',
-  wouldnt: 'wouldn\'t',
-  havent: 'haven\'t',
-  hasnt: 'hasn\'t',
-  hadnt: 'hadn\'t',
-  youre: 'you\'re',
-  theyre: 'they\'re',
-  thats: 'that\'s',
   abberation: 'aberration',
   abcense: 'absence',
   abscence: 'absence',
@@ -165,7 +147,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   accademic: 'academic',
   acceptible: 'acceptable',
   accesible: 'accessible',
-  accidently: 'accidentally',
   accomodated: 'accommodated',
   accomodating: 'accommodating',
   accompanyed: 'accompanied',
@@ -260,7 +241,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   convienient: 'convenient',
   convinient: 'convenient',
   correspondance: 'correspondence',
-  couldve: 'could\'ve',
   critisism: 'criticism',
   decison: 'decision',
   definate: 'definite',
@@ -277,9 +257,7 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   dissapointment: 'disappointment',
   dissappear: 'disappear',
   dissappointed: 'disappointed',
-  dosent: 'doesn\'t',
   drunkeness: 'drunkenness',
-  dumbell: 'dumbbell',
   easilly: 'easily',
   ecstacy: 'ecstasy',
   efficency: 'efficiency',
@@ -288,7 +266,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   embarassed: 'embarrassed',
   embarassing: 'embarrassing',
   embarassment: 'embarrassment',
-  embarras: 'embarrass',
   enought: 'enough',
   enviromental: 'environmental',
   enviroments: 'environments',
@@ -302,7 +279,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   excellant: 'excellent',
   excercise: 'exercise',
   exhilerate: 'exhilarate',
-  existant: 'existent',
   experianced: 'experienced',
   explaination: 'explanation',
   explenation: 'explanation',
@@ -339,7 +315,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   imediately: 'immediately',
   immitate: 'imitate',
   importent: 'important',
-  incidently: 'incidentally',
   independance: 'independence',
   indispensible: 'indispensable',
   infomation: 'information',
@@ -353,7 +328,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   intresting: 'interesting',
   irrelevent: 'irrelevant',
   irresistable: 'irresistible',
-  itll: 'it\'ll',
   knowlegde: 'knowledge',
   knowlegeable: 'knowledgeable',
   knwo: 'know',
@@ -376,12 +350,10 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   mispelled: 'misspelled',
   mispelling: 'misspelling',
   morgage: 'mortgage',
-  mustnt: 'mustn\'t',
   mysefl: 'myself',
   neccesary: 'necessary',
   neccessarily: 'necessarily',
   necessery: 'necessary',
-  neednt: 'needn\'t',
   neice: 'niece',
   nuisanse: 'nuisance',
   occasionaly: 'occasionally',
@@ -391,7 +363,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   ocurred: 'occurred',
   offical: 'official',
   offically: 'officially',
-  ofthe: 'of the',
   omision: 'omission',
   oppertunity: 'opportunity',
   oppurtunities: 'opportunities',
@@ -414,7 +385,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   perseverence: 'perseverance',
   personell: 'personnel',
   persue: 'pursue',
-  pharoah: 'pharaoh',
   plagerism: 'plagiarism',
   playwrite: 'playwright',
   poeple: 'people',
@@ -466,11 +436,9 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   sentense: 'sentence',
   seperated: 'separated',
   seperation: 'separation',
-  sergent: 'sergeant',
   severeal: 'several',
   shedule: 'schedule',
   shoudl: 'should',
-  shouldve: 'should\'ve',
   similarily: 'similarly',
   simpley: 'simply',
   somehting: 'something',
@@ -497,9 +465,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   tehy: 'they',
   temperture: 'temperature',
   temprature: 'temperature',
-  theres: 'there\'s',
-  theyll: 'they\'ll',
-  theyve: 'they\'ve',
   thnig: 'thing',
   thouroughly: 'thoroughly',
   thsi: 'this',
@@ -522,8 +487,6 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   vehical: 'vehicle',
   vigourous: 'vigorous',
   visable: 'visible',
-  wellcome: 'welcome',
-  weve: 'we\'ve',
   whcih: 'which',
   wherre: 'where',
   wierdness: 'weirdness',
@@ -531,14 +494,11 @@ export const MISSPELLINGS: Readonly<Record<string, string>> = {
   withold: 'withhold',
   wiull: 'will',
   woudl: 'would',
-  wouldve: 'would\'ve',
   writen: 'written',
   wroking: 'working',
   wtih: 'with',
   yeild: 'yield',
-  youll: 'you\'ll',
   youself: 'yourself',
-  youve: 'you\'ve',
 };
 
 /** The most common English words, lower-case, both dialects. */

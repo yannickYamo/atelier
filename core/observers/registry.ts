@@ -132,7 +132,7 @@ const OBSERVERS: Readonly<Record<ObserverId, Observer>> = {
       const over = ps.filter((x) => x.sentences > max)
         .map((x) => ({ start: x.start, end: x.start + x.text.length, text: x.text, why: `${x.sentences} sentences, over ${max}` }));
       return { verdict: over.length ? 'VIOLATED' : 'MET', spans: over, value: Math.max(...ps.map((x) => x.sentences)),
-        detail: over.length ? `${over.length} paragraph(s) over ${max} sentences` : `longest ${Math.max(...ps.map((x) => x.sentences))} sentences` };
+        detail: over.length ? `${over.length} paragraph(s) over ${max} sentences` : ((n) => `longest ${n} sentence${n === 1 ? '' : 's'}`)(Math.max(...ps.map((x) => x.sentences))) };
     },
   },
   HEDGE_RATE: {

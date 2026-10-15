@@ -36,7 +36,7 @@ it, but there is nothing specific to rewrite.
 | `RHYTHM` | how much sentence, paragraph or section lengths vary (standard deviation over mean): pace, not length | `RHYTHM:unit=SENTENCE,minCv=0.4` |
 | `STYLE_DISTANCE` | Burrows' Delta: closer to the author's function-word profile than to the model's | computed by discovery, never declared by hand |
 | `FEATURE` | one counted feature from `core/observers/features.ts` (colons, parentheses, the serial comma, sentence-length tails, cadence, sentence openers, passives, three-item lists, links, lexical diversity, pronouns, modals, names, reading ease, commas per sentence, unevenness, and more), held to a band on both sides | `FEATURE:feature=colon,minValue=2,maxValue=9` |
-| `GRAMMAR` | mechanical errors: a known misspelling, subject–verb agreement, a word repeated by accident, a/an, a missing apostrophe in a contraction, double punctuation, a space before punctuation (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
+| `GRAMMAR` | mechanical errors with no legitimate reading: a known misspelling in lower case, a pronoun–verb agreement slip, a/an, double punctuation, a space before punctuation; the rest is listed (see below) | `GRAMMAR:dialect=british,vocabulary=zorbletron\|widgit` |
 
 Named patterns for `PATTERN_RATE`: `EM_DASH`, `SPACED_HYPHEN`, `SEMICOLON`, `NOT_X_ITS_Y`,
 `THAT_OPENER`, `HERES_OPENER`, `SIGNPOST`, `INTENSIFIER`, `SHORT_VERDICT`, `BOLD_SPAN`,
@@ -67,23 +67,34 @@ it is never one of the bands set down as not applying when a long-form standard 
 harper.js, which runs offline in the process; it loads on the first standard that carries the rule. If it cannot
 load, the check says so with the reason and the rule reads as unverified, never as met.
 
-The checker proposes far more than the rule acts on. A finding counts only when it is one of these kinds, listed
-in `core/observers/grammar.ts` (`MECHANICAL_RULES`): spelling, subject–verb agreement,
-a word repeated by accident, a/an, a missing
-apostrophe in a standard contraction, double punctuation, a space before punctuation. Everything else it proposes
-(capitalisation, style, word choice, a fragment, an "And" or "But" opener, a one-word sentence) is listed under
-the rule as "to check" and never changed. Where something is listed and nothing is corrected, the rule's line reads
-"held; N listed to check", never "no mechanical error": that is said only when nothing is listed either.
+**The one rule.** Text is changed in place only where the error has no legitimate reading in any major English
+variety or register. Anything with a plausible legitimate reading is listed under the rule as "to check", never
+changed. So the only changes made in place are: a pronoun–verb agreement slip from a fixed table ("they was",
+"you was", "I has", "he go"); "a" or "an" the wrong way round, except before a word in h ("an historian", "an hotel")
+or an acronym ("a FAQ", "an MRI"), which depend on how it is said; a comma, semicolon, colon or full stop typed twice;
+a space before punctuation; and a lower-case word on the list of known misspellings. Listed, never changed: every
+capitalised word, at a sentence's start as anywhere else ("Wellcome", "Pharoah", "Untill Then", "Teh Hong Piow"); every
+word said twice ("had had", "that that", "Bora Bora", "mahi mahi", "tsk tsk"); "its" where "it's" may be meant;
+"there is" before a plural; and every word the checker does not know. The price is paid knowingly: a misspelling
+that opens a sentence ("Thsi is") and an accidental "the the" are listed too, not fixed.
+
+The checker proposes far more than the rule acts on. A finding is read only when it is one of the kinds listed in
+`core/observers/grammar.ts` (`MECHANICAL_RULES`); everything else it proposes (capitalisation, style, word choice, a
+fragment, an "And" or "But" opener, a one-word sentence) is listed and never changed. Where something is listed and
+nothing is corrected, the rule's line reads "held; N listed to check", never "no mechanical error": that is said
+only when nothing is listed either.
 
 A spelling is changed only for a known misspelling: a word on the curated list in `core/observers/grammar-words.ts`
-(over 500 entries, "recieve", "untill", "seperate", "dont"), each with its one correction. An entry is in neither the
-American nor the British word list, its correction is in both, and no other word is a likely reading of it. Atelier
-finds these words itself, whole words outside the never-flagged regions, whatever the checker calls them, and keeps
-their case: lower case, or a capital where the word opens a sentence ("Untill" becomes "Until"). No other spelling is
-ever changed, because a guess at the word a writer meant is never certain: a typo the list does not name ("tokwn"),
-a coinage, slang ("yeet"), a tool's name ("vite"), a word of either dialect ("cosy", "storey"), a closed compound the
-checker would split, a plural it would make possessive. Each is listed with what the checker suggests. No spelling is
-ever converted between British and American English.
+(over 450 entries, "recieve", "untill", "seperate", "definately"), each with its one correction, written in lower
+case. An entry is in neither the American nor the British word list, its correction is in both, no other word is a
+likely reading of it, and it has no legitimate reading anywhere: not a word of a variety ("teh" is tea in Malay and
+Singapore English), a real word ("calender"), a loanword ("embarras"), a listed variant ("supercede"), a register's
+spelling (a contraction typed without its apostrophe: "dont", "thats", "youre") or a common proper name
+("Wellcome"). Atelier finds these words itself, whole words outside the never-flagged regions, whatever the checker
+calls them. No other spelling is ever changed, because a guess at the word a writer meant is never certain: a typo
+the list does not name ("tokwn"), a coinage, slang ("yeet"), a tool's name ("vite"), a word of either dialect
+("cosy", "storey"), a closed compound the checker would split, a plural it would make possessive. Each is listed
+with what the checker suggests. No spelling is ever converted between British and American English.
 
 Subject–verb agreement is checked only where the checker catches it: a pronoun subject ("they was", "he go",
 "I is", "there is" before a plural). Agreement with any other subject ("the results was") is not checked, and the
@@ -93,18 +104,18 @@ vernacular ("it don't") and an error with no single correction ("I is") are list
 
 Never flagged: code and inline code, quotations and block quotes, URLs and link targets, paths and `path:line`
 citations, file names, email addresses, @mentions, #hashtags, $cashtags, emoji, ALL-CAPS tokens, figures and
-currency, front matter, capitalised words (names, products, acronyms; a known misspelling capitalised in
-mid-sentence is listed, since it may be a name), words the
+currency, front matter, capitalised words (names, products, acronyms; a known misspelling with a capital is
+listed, wherever it stands, since it may be a name), words the
 standard's other rules name, words of the request and the bound material, words the author's own pieces use (with the checker off at build, every word of theirs that is not a common
 English word), a
-word the text uses three times or more, and a word doubled for emphasis ("very very"). These guards hold for a known
+word the text uses three times or more, and a word said twice ("very very", "had had"). These guards hold for a known
 misspelling too: one the author's pieces or the request use, or one used three times, is listed, not changed. The
 words listed to check are read in the dialect the pieces spell in (the same British/American count the style check
 uses), so a word of the other dialect is listed; where the pieces do not settle it, only a word unknown in both
 dialects is listed.
 
 In the repair loop, correcting mechanical errors is the controller's last kind of step, after enforced rules, length
-and graded features, so a later rewrite cannot undo it; it needs no model call. Repair corrects each error in place, inside the error's span (a misspelling with the list's correction, anything else with the checker's suggestion), and keeps the result
+and graded features, so a later rewrite cannot undo it; it needs no model call. Repair corrects each error in place, inside the error's span (a misspelling with the list's correction, an agreement with the table's, anything else with the checker's suggestion), and keeps the result
 only if the whole text's figures and names are unchanged and no other rule is newly broken. A correction that
 would change a figure or a name is refused and listed. An error with no sure correction gets a sentence rewrite
 told to fix only that error. `ATELIER_GRAMMAR=off` switches the check off for a process; the rule then reads as not

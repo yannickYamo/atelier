@@ -29,6 +29,8 @@ import { proposalsAcross, countedOffers, tellOffers, grammarOffer, stepsOf, shor
 import { shortFormOptions, type ShortFormOptions } from '../../core/observers/short-form.js';
 import { ensureGrammar } from '../../core/observers/grammar.js';
 import { readCase, corpusFiles } from '../corpus.js';
+import { shortFormFolder } from './intake.js';
+import { MIN_GOLDEN_CHARS } from '../../core/discovery/chain/corpus-import.js';
 import { withoutFrontMatter } from '../../core/composite/authors.js';
 import { observesOf, propositionOf, type Observes } from '../../core/eval/observes.js';
 import { planFor, describePlan } from '../../core/plan/execution-plan.js';
@@ -147,16 +149,25 @@ export function kindOfWork(note: string, name: string, declared: string | undefi
  * (not a file about the work, not a piece's material, not the method note itself if it is kept there, not a hidden
  * file). Every piece is what a check is held against (core/method/standard.ts, `acrossExamples`), and with three
  * or more they are served with the skill and their lengths recorded, as for a skill built from a folder.
+ * A stub in a folder of long pieces (under MIN_GOLDEN_CHARS) is left out and named, as a build with a model leaves it
+ * out; where the folder is short-form (by `--class`, or by the pieces' own lengths), every piece is an example.
  */
 function readExamples(goldenPath: string, notePath: string): { folder: string | null; cases: GoldenCase[] } {
   const folder = statSync(resolve(goldenPath)).isDirectory() ? resolve(goldenPath) : null;
   const files = folder ? corpusFiles(folder).filter((f) => resolve(f) !== resolve(notePath) && !basename(f).startsWith('.')).sort() : [resolve(goldenPath)];
   if (!files.length) die(`${goldenPath} holds no example that can be read.`);
   const said: string[] = [];
-  const cases = files.map((f) => readCase(f, (line) => { said.push(folder ? `${basename(f)}: ${line}` : line); })).filter((c) => c.reference.trim());
+  const read = files.map((f) => ({ file: f, c: readCase(f, (line) => { said.push(folder ? `${basename(f)}: ${line}` : line); }) })).filter((x) => x.c.reference.trim());
+  const cases = read.map((x) => x.c);
   for (const line of [...new Set(said)].slice(0, 6)) console.log(line);
   if (!cases.length) die(`${goldenPath} is empty.`);
-  return { folder, cases };
+  if (!folder || shortFormFolder(cases.map((c) => c.reference), flag('--class'))) return { folder, cases };
+  const stubs = read.filter((x) => x.c.reference.trim().length < MIN_GOLDEN_CHARS);
+  // Never fail on the person's folder: where every piece is that short, every piece is kept.
+  if (!stubs.length || stubs.length === read.length) return { folder, cases };
+  console.log(`Too short to read as finished work (${MIN_GOLDEN_CHARS}+ characters), left out:`);
+  for (const x of stubs) console.log(`  ${basename(x.file)}  (${x.c.reference.trim().length} chars)`);
+  return { folder, cases: read.filter((x) => !stubs.includes(x)).map((x) => x.c) };
 }
 
 /** `--limit <chars>`, or the limit of the format `--class` names (core/observers/short-form.ts, `shortFormOptions`). */

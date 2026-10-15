@@ -72,18 +72,18 @@ describe('spelling, with the real engine', () => {
       }
     }
   });
-  it('a known misspelling is corrected whatever the engine calls it, its case kept at a sentence\'s start', () => {
+  it('a known misspelling in lower case is corrected whatever the engine calls it; a capitalised one, even opening a sentence, is listed', () => {
     expect(fixed('Please send the file untill Friday.', {})).toBe('Please send the file until Friday.');   // the engine reads "untill" as a word choice
-    expect(fixed('Untill then, we wait.', {})).toBe('Until then, we wait.');
-    expect(fixed('Thsi is the last time I touch that migration.', {})).toBe('This is the last time I touch that migration.');
-    expect(fixed('# Teh plan\n\nIt held. Teh rest followed.', {})).toBe('# The plan\n\nIt held. The rest followed.');
-    expect(fixed('He dont know the password.', { dialect: ['british'] })).toBe('He don\'t know the password.');
     expect(fixed('We need to seperate the billing logic.', { dialect: ['american'] })).toBe('We need to separate the billing logic.');
+    for (const text of ['Untill then, we wait.', 'Thsi is the last time I touch that migration.', '# Recieve plan\n\nIt held. Recieve the rest.']) {
+      expect(fixed(text, {}), text).toBe(text);
+      expect(readGrammar(text, {}).uncertain.some((u) => u.why.includes('may be a name')), text).toBe(true);
+    }
   });
   it('a capitalised misspelling in mid-sentence may be a name: listed, not changed; so is one the author uses or a protected one', () => {
-    const name = readGrammar('We met Teh at the station.', {});
+    const name = readGrammar('We met Untill at the station.', {});
     expect(name.confirmed).toEqual([]);
-    expect(name.uncertain.find((u) => u.text === 'Teh')?.why).toMatch(/may be a name/);
+    expect(name.uncertain.find((u) => u.text === 'Untill')?.why).toMatch(/may be a name/);
     expect(readGrammar('Our untill step runs nightly.', { vocabulary: ['untill'] }).confirmed).toEqual([]);
     expect(fixed('Run `untill --now` and read untill.md first.', {})).toBe('Run `untill --now` and read untill.md first.');
   });
