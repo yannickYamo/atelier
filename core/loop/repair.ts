@@ -94,8 +94,9 @@ export function planRepair(text: string, report: VerifyReport,
     // which takes the figure out and claims nothing in its place. Held to keep every figure, the rewrite that cut it
     // was refused and the figure delivered; so that figure, and only it, is what the rewrite may lose.
     // Nor is a citation that is no line of the material: the right number is on the page the writer was given, not
-    // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another.
-    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES') continue;
+    // in the sentence, and a rewrite that only has the sentence can drop the citation or guess another. Nor is a
+    // test the work never named: an omission has no span to rewrite.
+    if (c.obligation === 'DELIVERABLE' || c.observer === 'LINES' || c.observer === 'NAMES_TEST') continue;
     for (const sp of c.result.spans) {
       // A span that IS a paragraph (the paragraph-length rule) is rewritten as one; any other span
       // grows to whole sentences at BOTH ends. A span that ends inside the next sentence ("The fix is not

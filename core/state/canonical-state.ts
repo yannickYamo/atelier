@@ -105,7 +105,7 @@ export type ObserverId = 'LEXICON' | 'SENTENCE_LENGTH' | 'PARAGRAPH_LENGTH' | 'H
   | 'PATTERN_RATE' | 'FRAGMENT_SHARE' | 'STYLE_DISTANCE' | 'TERM_RATE' | 'RATIO' | 'DISTRIBUTION'
   | 'OPENING' | 'CLOSING' | 'HEADINGS' | 'RHYTHM' | 'FEATURE' | 'PRESENCE'
   // what a method requires of the work itself (core/observers/obligations.ts)
-  | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH';
+  | 'TABLE' | 'CITED' | 'LINES' | 'LENGTH' | 'NAMES_TEST';
 export interface Measurement {
   readonly observer: ObserverId;
   readonly params: Readonly<Record<string, number | readonly string[] | readonly number[]>>;

@@ -46,8 +46,8 @@ export const goldenCase = (id: string, reference: string, task: string | null = 
   return { id, task: asked, material: kept, reference, caseClass: classOf(asked, kept) };
 };
 
-/** What a source is often kept as, beside the formats a piece is read from: read as the text it is. Nothing else is read as material. */
-export const MATERIAL_TEXT = ['.csv', '.tsv', '.json', '.jsonl', '.yaml', '.yml', '.xml', '.html', '.htm'] as const;
+/** What a source is often kept as, beside the formats a piece is read from (a change under review as a `.diff` or `.patch`): read as the text it is. Nothing else is read as material. */
+export const MATERIAL_TEXT = ['.csv', '.tsv', '.json', '.jsonl', '.yaml', '.yml', '.xml', '.html', '.htm', '.diff', '.patch'] as const;
 
 /** A folder named `<example>.material` beside an example holds that example's material. */
 export const MATERIAL_DIR = /\.material$/i;

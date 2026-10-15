@@ -240,3 +240,62 @@ export function statedCount(step: string): Measurement | null {
   const counts = countsIn(step);
   return counts.length ? wholeLength(step, counts) : edgeWords(step) ?? bannedWords(step);
 }
+
+// ── A STEP ABOUT CITING PLACES IN THE CODE, AND ONE ABOUT NAMING A TEST ───────────────────────────────
+//
+// "Cite each item as path:line" named the form, and was the only wording read as a step about citing. Owners write
+// the same step a dozen ways ("point to the line", "reference the changed line", "give the file and line", "every
+// finding points at the code"), and each left to judgement is a review whose citations nobody looked up. Read here
+// by what the step asks (a verb of citing with the line as its object, or a file and its line), never by the word
+// "line" alone: "Start with a Summary line" cites nothing. A step that forbids the form or asks for it only sometimes
+// is a judgement about when, as before.
+
+/** A step that forbids, or conditions: "do not cite…", "where there is one", "if a finding is about code". */
+export const FORBIDS_OR_CONDITIONS = /\b(?:do not|don't|never|not|no(?!-)|unless|if|when|where|whenever|except|optional(?:ly)?|avoid|without|instead of|rather than)\b/i;
+/**
+ * A line as the thing cited: "the line", "its line", "the changed line", "line numbers", "lines in the diff". Not a
+ * line that is a part of the writing ("the first line", "the bottom line", "one line") nor another noun the word
+ * starts ("line manager", "line items", "line count").
+ */
+const A_CITED_LINE = String.raw`(?:\b(?:the|its|their|each|every|a|that|only)\s+(?:(?:exact|changed|specific|offending|relevant|added|new|modified|precise)\s+)?lines?\b(?!\s+(?:manager|items?|counts?|breaks?|spacing|lengths?|of\s+(?:the\s+|your\s+|a\s+)?(?:poem|email|letter|song|story|verse|post|essay|speech|piece)))|\b(?:file|path)(?:\s+(?:name|path))?\s+(?:and|with|plus|,)\s+(?:the\s+|a\s+|its\s+)?lines?(?:\s+numbers?)?\b(?!\s+(?:counts?|items?|manager|breaks?|lengths?))|\blines?\s+numbers?\b|\blines?\s+(?:in|of|from)\s+the\s+(?:diff|change|code|patch|file|source)\b)`;
+/** A verb of citing, with such a line as its object: "cite the line", "point to the exact line", "reference the changed line", "quote the line". */
+const CITES_A_LINE = new RegExp(String.raw`\b(?:cit(?:e|es|ed|ing)|referenc(?:e|es|ed|ing)|point(?:s|ed|ing)?\s+(?:to|at)|quot(?:e|es|ed|ing))\b[^.;]*?${A_CITED_LINE}`, 'i');
+/** A verb of giving, with a file and its line as its object: "give the file and line", "the file path with a line number". Not "line count", "line items". */
+const GIVES_FILE_AND_LINE = /\b(?:giv(?:e|es|ing)|nam(?:e|es|ing)|stat(?:e|es|ing)|includ(?:e|es|ing)|say|says|writ(?:e|es|ing)|carr(?:y|ies|ying)|with|show|shows)\b[^.;]*?\b(?:file|path|filename)(?:\s+(?:name|path))?\s+(?:and|with|plus|,)\s+(?:the\s+|a\s+|its\s+)?lines?(?:\s+numbers?)?\b(?!\s+(?:counts?|items?|manager|breaks?|lengths?))/i;
+/** The things a review is made of, which a step may ask to cite one by one. */
+const AN_ITEM = String.raw`(?:findings?|claims?|issues?|comments?|items?|remarks?|points?|risks?|problems?|defects?|suggestions?|nits?|bullets?)`;
+/** "Every finding points at the code", "each claim about the code points to the line". */
+const EACH_POINTS_AT = new RegExp(String.raw`\b(?:every|each|all|any)\s+(?:[\w-]+\s+){0,3}?${AN_ITEM}\b[^.;]*?\bpoints?\s+(?:at|to)\s+(?:the\s+|its\s+|a\s+)?(?:code|lines?|diff|change|source)\b`, 'i');
+/** A step that asks for a citation on each thing, not somewhere: "every finding", "each blocking issue", "for every comment". */
+const PER_ITEM = new RegExp(String.raw`\b(?:every|each|all|per)\s+(?:[\w-]+\s+){0,3}?${AN_ITEM}\b`, 'i');
+
+/**
+ * IS THE STEP ABOUT CITING PLACES IN WHAT THE WRITER WAS GIVEN, and does it ask for one on every item? Null where it
+ * is not, or where it forbids or conditions the citing. `citesLines` (../loop/locators.ts) reads the named form;
+ * the other wordings are read here. `sections`: the example's sections, so that "each Blocking issue cites…" is
+ * read as the items under Blocking Issues and nowhere else.
+ */
+export function citesPlaces(step: string, cites: (t: string) => boolean, sections: readonly string[] = []): { perItem: boolean; sections: string[] } | null {
+  if (FORBIDS_OR_CONDITIONS.test(step)) return null;
+  if (!(cites(step) || CITES_A_LINE.test(step) || GIVES_FILE_AND_LINE.test(step) || EACH_POINTS_AT.test(step))) return null;
+  const perItem = PER_ITEM.test(step);
+  return { perItem, sections: perItem ? sectionsMentioned(step, sections) : [] };
+}
+
+/** The example's sections a step speaks of by name, in any case, singular or plural: "each Blocking issue" names Blocking Issues. */
+export function sectionsMentioned(step: string, sections: readonly string[]): string[] {
+  const low = lowered(step);
+  const forms = (sec: string): string[] => { const n = norm(sec); return [...new Set([n, n.replace(/s\b/g, ''), n.replace(/(?<=\w)$/, 's')])]; };
+  return sections.filter((sec) => norm(sec).length >= 3 && forms(sec).some((f) => low.includes(` ${f} `)));
+}
+
+/**
+ * IS THE STEP ABOUT NAMING A TEST? "Name the test that would have caught it", "suggest a test for each fix", "write
+ * the test's name". A verb of naming or proposing, then "test" as what is named, followed by what a named test is
+ * followed by ("that would…", "for each fix", the sentence's end). Not a test's table, column, results or environment
+ * ("add the test results", "name the test environment"), not how tests are written ("write tests in plain
+ * language"), and not where the step forbids or conditions it ("say which test if it does").
+ */
+const NAMES_A_TEST = new RegExp(String.raw`\b(?:nam(?:e|es|ing)|add(?:s|ed|ing)?|writ(?:e|es|ing)|propos(?:e|es|ing)|suggest(?:s|ed|ing)?)\b[^.;]*?\btests?`
+  + String.raw`(?:(?:'s)?\s+names?\b|(?:\s+(?:cases?|functions?))?(?=\s+(?:that|which|for|to|covering|catching|would|could|named|called|of)\b|\s*[.,;:)]|\s*$))`, 'i');
+export const namesTest = (step: string): boolean => NAMES_A_TEST.test(step) && !FORBIDS_OR_CONDITIONS.test(step);
